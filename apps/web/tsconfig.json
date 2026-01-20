@@ -19,7 +19,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@feed/database": ["../../packages/database/index.ts"],
+      "@feed/shared": ["../../packages/shared/index.ts"],
+      "@feed/ui": ["../../packages/ui/index.ts"]
     }
   },
   "include": [
