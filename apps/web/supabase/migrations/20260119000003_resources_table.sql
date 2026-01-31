@@ -45,7 +45,7 @@ CREATE TYPE resource_status AS ENUM (
 
 -- Resources table
 CREATE TABLE public.resources (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
   category resource_category NOT NULL DEFAULT 'other',

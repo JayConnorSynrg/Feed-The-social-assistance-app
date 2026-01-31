@@ -29,7 +29,7 @@ CREATE TYPE submission_status AS ENUM (
 
 -- Form templates table
 CREATE TABLE public.form_templates (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   form_type form_type NOT NULL,
   description TEXT,
@@ -79,7 +79,7 @@ CREATE POLICY "Admins can manage form templates"
 
 -- Form submissions table
 CREATE TABLE public.form_submissions (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   template_id UUID REFERENCES public.form_templates(id) ON DELETE RESTRICT NOT NULL,
 
@@ -207,7 +207,7 @@ CREATE TRIGGER update_secure_profiles_updated_at
 
 -- User documents table
 CREATE TABLE public.user_documents (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   submission_id UUID REFERENCES public.form_submissions(id) ON DELETE SET NULL,
 

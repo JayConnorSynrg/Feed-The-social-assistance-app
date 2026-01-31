@@ -11,7 +11,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load environment variables
 dotenv.config({ path: resolve(__dirname, '../.env.local') });
@@ -79,11 +84,11 @@ const TEST_USERS = [
 const TEST_RESOURCES = [
   {
     name: 'LA Food Bank - Central Location',
-    category: 'food_assistance',
+    category: 'food',
     address_line1: '1734 E 41st St',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90058',
+    zip_code: '90058',
     phone: '(323) 234-3030',
     email: 'info@lafoodbank.org',
     website: 'https://www.lafoodbank.org',
@@ -111,7 +116,7 @@ const TEST_RESOURCES = [
     address_line1: '1665 E 103rd St',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90002',
+    zip_code: '90002',
     phone: '(323) 541-1411',
     email: 'contact@stjohns.org',
     website: 'https://www.wellchild.org',
@@ -135,11 +140,11 @@ const TEST_RESOURCES = [
   },
   {
     name: 'PATH - Hollywood Homeless Services',
-    category: 'housing_assistance',
+    category: 'housing',
     address_line1: '5627 Hollywood Blvd',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90028',
+    zip_code: '90028',
     phone: '(323) 644-2200',
     email: 'info@epath.org',
     website: 'https://www.epath.org',
@@ -163,11 +168,11 @@ const TEST_RESOURCES = [
   },
   {
     name: 'LA County DPSS - CalWORKs Office',
-    category: 'government_assistance',
+    category: 'financial',
     address_line1: '3175 W 6th St',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90020',
+    zip_code: '90020',
     phone: '(866) 613-3777',
     website: 'https://dpss.lacounty.gov',
     description: 'CalWORKs, CalFresh, Medi-Cal, and General Relief enrollment',
@@ -190,11 +195,11 @@ const TEST_RESOURCES = [
   },
   {
     name: 'Legal Aid Foundation of Los Angeles',
-    category: 'legal_services',
+    category: 'legal',
     address_line1: '1102 S Crenshaw Blvd',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90019',
+    zip_code: '90019',
     phone: '(800) 399-4529',
     email: 'info@lafla.org',
     website: 'https://lafla.org',
@@ -218,11 +223,11 @@ const TEST_RESOURCES = [
   },
   {
     name: 'LADWP Utility Assistance Program',
-    category: 'utility_assistance',
+    category: 'utilities',
     address_line1: '111 N Hope St',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90012',
+    zip_code: '90012',
     phone: '(800) 342-5397',
     website: 'https://www.ladwp.com',
     description: 'LIHEAP and utility discount programs for low-income households',
@@ -249,7 +254,7 @@ const TEST_RESOURCES = [
     address_line1: '215 W 6th St',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90014',
+    zip_code: '90014',
     phone: '(213) 744-7300',
     website: 'https://www.edd.ca.gov',
     description: 'Job search assistance, training programs, and unemployment services',
@@ -276,7 +281,7 @@ const TEST_RESOURCES = [
     address_line1: '7843 Lankershim Blvd',
     city: 'North Hollywood',
     state: 'CA',
-    zip: '91605',
+    zip_code: '91605',
     phone: '(818) 982-4091',
     website: 'https://lafh.org',
     description: 'Mental health counseling and crisis intervention services',
@@ -300,11 +305,11 @@ const TEST_RESOURCES = [
   // Pending resource for moderation testing
   {
     name: 'Community Resource Center (Pending Review)',
-    category: 'general_assistance',
+    category: 'other',
     address_line1: '123 Test Street',
     city: 'Los Angeles',
     state: 'CA',
-    zip: '90001',
+    zip_code: '90001',
     phone: '(555) 123-4567',
     description: 'A user-submitted resource pending admin review',
     services_offered: ['General assistance'],
@@ -320,25 +325,15 @@ const TEST_RESOURCES = [
 // Test posts for feed
 const TEST_POSTS = [
   {
-    content: 'Just got approved for CalFresh! The application was easier than I thought. Happy to help anyone with questions about the process.',
-    post_type: 'text'
-  },
+    content: 'Just got approved for CalFresh! The application was easier than I thought. Happy to help anyone with questions about the process.'  },
   {
-    content: 'Found this amazing food pantry near downtown LA. They have fresh produce every Tuesday and Thursday. No documentation required!',
-    post_type: 'text'
-  },
+    content: 'Found this amazing food pantry near downtown LA. They have fresh produce every Tuesday and Thursday. No documentation required!'  },
   {
-    content: 'PSA: The DPSS office on 6th St has much shorter wait times if you go right when they open at 7:30am. Got my Medi-Cal renewal done in under an hour.',
-    post_type: 'text'
-  },
+    content: 'PSA: The DPSS office on 6th St has much shorter wait times if you go right when they open at 7:30am. Got my Medi-Cal renewal done in under an hour.'  },
   {
-    content: 'Looking for recommendations for a free legal clinic that helps with housing issues. Facing eviction and need advice.',
-    post_type: 'text'
-  },
+    content: 'Looking for recommendations for a free legal clinic that helps with housing issues. Facing eviction and need advice.'  },
   {
-    content: 'Great news! LA County is offering emergency rental assistance again. Application opens next Monday. Will share the link when it goes live.',
-    post_type: 'text'
-  }
+    content: 'Great news! LA County is offering emergency rental assistance again. Application opens next Monday. Will share the link when it goes live.'  }
 ];
 
 async function seedTestUsers() {
@@ -406,14 +401,24 @@ async function seedResources() {
     try {
       const { latitude, longitude, ...resourceData } = resource;
 
+      // Check if resource already exists
+      const { data: existing } = await supabase
+        .from('resources')
+        .select('id')
+        .eq('name', resource.name)
+        .single();
+
+      if (existing) {
+        console.log(`  ⚠️  Resource "${resource.name}" already exists, skipping`);
+        continue;
+      }
+
       // Create resource with PostGIS location
-      const { error } = await supabase.from('resources').upsert({
+      const { error } = await supabase.from('resources').insert({
         ...resourceData,
         location: `POINT(${longitude} ${latitude})`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'name'
       });
 
       if (error) {
@@ -441,7 +446,6 @@ async function seedPosts(users: { email: string; id: string }[]) {
       const { error } = await supabase.from('posts').insert({
         user_id: recipientUser.id,
         content: post.content,
-        post_type: post.post_type,
         created_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString() // Random time in last 7 days
       });
 
