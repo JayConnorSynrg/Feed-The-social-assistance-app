@@ -109,3 +109,4 @@ google-services.json
 *.code-workspace
 .history/
 .ionide/
+.vercel
