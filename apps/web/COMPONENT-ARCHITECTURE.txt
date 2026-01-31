@@ -1,0 +1,385 @@
+================================================================================
+FEED PLATFORM - COMPONENT ARCHITECTURE OVERVIEW
+================================================================================
+
+PROJECT STRUCTURE:
+  apps/web/
+  ├── src/
+  │   ├── app/               [Pages & Routes]
+  │   │   ├── (auth)        [Login/Signup]
+  │   │   ├── (admin)       [Moderation]
+  │   │   ├── (dashboard)   [Main app routes]
+  │   │   └── profile/      [Public profiles]
+  │   ├── components/        [React Components]
+  │   │   ├── chat/         [AI Chat Interface]
+  │   │   ├── dashboard/    [Dashboard Layout & Cards]
+  │   │   ├── documents/    [Document Management]
+  │   │   ├── feed/         [Social Feed]
+  │   │   ├── forms/        [Dynamic Forms]
+  │   │   ├── map/          [Mapbox Integration]
+  │   │   ├── notifications/[Alerts & Reminders]
+  │   │   ├── profile/      [User Profile]
+  │   │   ├── resources/    [Resource Submissions]
+  │   │   └── ui/           [Base UI Components]
+  │   ├── hooks/            [React Hooks]
+  │   ├── lib/              [Utilities & Business Logic]
+  │   └── providers/        [Context Providers]
+  ├── public/               [Static Assets]
+  └── COMPONENT-MAP.md      [THIS FILE - Component mapping]
+
+================================================================================
+COMPONENT LAYERS
+================================================================================
+
+Layer 1: UI Components (Foundational)
+├── shadcn/ui (Current)
+│   ├── Button, Input, Card, Select, Checkbox, Avatar, etc.
+│   └── Location: apps/web/src/components/ui/
+├── Kibo UI (Recommended additions)
+│   ├── Pill (Navigation), Banner (Alerts), Dialog Stack (Modals)
+│   ├── Combobox (Search), Dropzone (Upload), Tags (Multi-select)
+│   ├── Status (Badges), List (Data), Reel (Cards)
+│   └── Install: npm install @kibocorp/ui-*
+└── Custom Components (Domain-specific)
+    ├── SignatureCanvas, MapView, ChatInterface
+    └── Location: apps/web/src/components/*/
+
+Layer 2: Feature Components (Mid-level)
+├── ChatInterface
+│   ├── ChatBubble (Kibo Reel option)
+│   ├── QuickActionPills (Kibo Pill)
+│   ├── SystemPromptSelector
+│   └── CrisisBanner (Kibo Banner)
+├── MapView
+│   ├── ResourceMarkers (Mapbox layer)
+│   ├── ClusterManager (Supercluster)
+│   ├── SearchPanel (Kibo Combobox)
+│   └── LocationZoom
+├── FeedComponent
+│   ├── PostCard (Kibo Reel option)
+│   ├── PostComposer (Kibo Editor option)
+│   ├── CommentThread
+│   └── InfiniteScroll
+└── FormRenderer
+    ├── TextInput, SelectField, CheckboxField
+    ├── DatePicker (Kibo Mini Calendar)
+    ├── FileUpload (Kibo Dropzone)
+    ├── SignatureField (Custom)
+    └── ConditionalFieldGroup
+
+Layer 3: Page Components (High-level)
+├── DashboardLayout
+│   ├── Header (Kibo Pill nav)
+│   ├── Sidebar navigation
+│   ├── Content area
+│   └── StatCards (Kibo Status)
+├── ChatPage
+│   ├── ChatInterface
+│   ├── FlowSelector (Kibo Pill)
+│   └── GuidedFlow runner
+├── ResourcesPage
+│   ├── MapView
+│   ├── SearchPanel
+│   └── ResourceForm
+├── ApplicationsPage
+│   ├── ApplicationList (Kibo List)
+│   ├── ApplicationCard (Kibo Status)
+│   └── DetailModal (Kibo Dialog Stack)
+├── DocumentsPage
+│   ├── DocumentUpload (Kibo Dropzone)
+│   ├── DocumentList
+│   └── ViewerModal (Kibo Dialog Stack)
+├── FormsPage
+│   ├── FormTemplateList
+│   ├── FormRenderer
+│   └── SubmissionTracker
+└── SettingsPage
+    ├── ProfileForm
+    ├── AvatarUpload (Kibo Dropzone)
+    └── PreferencePanel
+
+================================================================================
+KIBO COMPONENT INTEGRATION MAP
+================================================================================
+
+PHASE 1 - FOUNDATION (Navigation & Core)
+┌─────────────────────────────────────────────┐
+│ Kibo: Pill         → Navigation items        │
+│ Kibo: Banner       → Crisis alerts           │
+│ Kibo: Dialog Stack → Modals & overlays       │
+│ Install: npm install @kibocorp/ui-{pill,banner,dialog-stack}
+└─────────────────────────────────────────────┘
+
+PHASE 2 - FEATURES (Content Display)
+┌─────────────────────────────────────────────┐
+│ Kibo: Status       → Status badges/metrics   │
+│ Kibo: Reel         → Feed posts & cards      │
+│ Kibo: List         → Data lists              │
+│ Kibo: Avatar Stack → User profiles           │
+│ Kibo: Relative Time → Smart timestamps       │
+│ Install: npm install @kibocorp/ui-{status,reel,list,avatar-stack,relative-time}
+└─────────────────────────────────────────────┘
+
+PHASE 3 - FORMS (Input Enhancement)
+┌─────────────────────────────────────────────┐
+│ Kibo: Combobox     → Search & select inputs  │
+│ Kibo: Dropzone     → File uploads            │
+│ Kibo: Tags         → Multi-select            │
+│ Kibo: Mini Calendar→ Date picking            │
+│ Kibo: Choicebox    → Checkboxes/radios       │
+│ Kibo: Announcement → Form alerts             │
+│ Kibo: Image Zoom   → Document previews       │
+│ Install: npm install @kibocorp/ui-{combobox,dropzone,tags,mini-calendar,choicebox,announcement,image-zoom}
+└─────────────────────────────────────────────┘
+
+PHASE 4 - ADVANCED (Data & Analytics)
+┌─────────────────────────────────────────────┐
+│ Kibo: Contribution Graph → Impact metrics    │
+│ Kibo: Editor       → Rich text editing       │
+│ Kibo: Rating       → User feedback           │
+│ Kibo: Table        → Data tables             │
+│ Install: npm install @kibocorp/ui-{contribution-graph,editor,rating,table}
+└─────────────────────────────────────────────┘
+
+NOT APPLICABLE TO KIBO
+┌─────────────────────────────────────────────┐
+│ ❌ Mapbox GL JS    → External map library    │
+│ ❌ Signature Canvas → Native Canvas API      │
+│ ❌ Chat Streaming  → SSE server logic        │
+│ ❌ Realtime Sub    → Supabase feature        │
+│ ❌ Encryption      → Web Crypto API          │
+└─────────────────────────────────────────────┘
+
+================================================================================
+FILE IMPACT SUMMARY
+================================================================================
+
+When implementing Kibo components, these files will be affected:
+
+PHASE 1:
+  ✏️  apps/web/src/components/dashboard/dashboard-layout.tsx
+  ✏️  apps/web/src/components/chat/chat-interface.tsx
+  ✏️  apps/web/src/components/*/modal-*.tsx (all modals)
+
+PHASE 2:
+  ✏️  apps/web/src/components/feed/post-card.tsx
+  ✏️  apps/web/src/components/dashboard/application-*.tsx
+  ✏️  apps/web/src/components/dashboard/stat-card.tsx
+  ✏️  apps/web/src/components/profile/avatar.tsx
+  ✏️  apps/web/src/components/*/notification-*.tsx
+
+PHASE 3:
+  ✏️  apps/web/src/components/forms/dynamic-form-renderer.tsx
+  ✏️  apps/web/src/components/documents/document-upload.tsx
+  ✏️  apps/web/src/components/forms/autofill-banner.tsx
+  ✏️  apps/web/src/components/documents/document-viewer.tsx
+
+PHASE 4:
+  ✏️  apps/web/src/app/(dashboard)/dashboard/page.tsx
+  ✏️  apps/web/src/components/feed/post-composer.tsx
+  ✏️  apps/web/src/components/dashboard/application-list.tsx
+
+================================================================================
+DATA FLOW WITH COMPONENTS
+================================================================================
+
+USER INTERACTION → COMPONENT → STATE → SUPABASE → REALTIME UPDATE
+
+Example: Chat Flow
+┌────────────────┐
+│ User Message   │
+│ → Input field  │
+└────────┬───────┘
+         │
+┌────────▼────────────┐
+│ Validate input      │
+│ (client-side)       │
+└────────┬────────────┘
+         │
+┌────────▼──────────────────┐
+│ useChat hook               │
+│ → Streaming response       │
+│ → SSE parser              │
+│ → Update UI (Reel cards)  │
+└────────┬──────────────────┘
+         │
+┌────────▼──────────────┐
+│ OpenRouter API        │
+│ (Edge Function proxy) │
+└────────┬──────────────┘
+         │
+┌────────▼──────────────┐
+│ LLM Response (stream) │
+│ → Render in Reel      │
+└───────────────────────┘
+
+Example: Form Submission Flow
+┌────────────────┐
+│ Form Input     │
+│ (Kibo Combobox,│
+│  Dropzone,etc) │
+└────────┬───────┘
+         │
+┌────────▼────────────┐
+│ Validate Schema     │
+│ (Zod)               │
+└────────┬────────────┘
+         │
+┌────────▼──────────────┐
+│ useFormSubmission     │
+│ → Encrypt sensitive   │
+│ → Upload files        │
+│ → Save to Supabase    │
+└────────┬──────────────┘
+         │
+┌────────▼──────────────┐
+│ Notification         │
+│ (Kibo Banner)        │
+│ → Success/error      │
+└──────────────────────┘
+
+Example: Resource Discovery Flow
+┌─────────────────┐
+│ User Location   │
+│ (Geolocation)   │
+└────────┬────────┘
+         │
+┌────────▼──────────────┐
+│ MapView Component      │
+│ (Mapbox GL JS)        │
+│ → Center on location  │
+└────────┬──────────────┘
+         │
+┌────────▼──────────────┐
+│ Search Panel          │
+│ (Kibo Combobox)       │
+│ → Query resources     │
+└────────┬──────────────┘
+         │
+┌────────▼──────────────┐
+│ useViewportResources  │
+│ (custom hook)         │
+│ → Fetch viewport data │
+└────────┬──────────────┘
+         │
+┌────────▼──────────────┐
+│ Resource Layer        │
+│ → Add markers         │
+│ → Cluster view        │
+│ → Click detail modal  │
+│ (Kibo Dialog Stack)   │
+└──────────────────────┘
+
+================================================================================
+BUILD & PERFORMANCE OPTIMIZATION
+================================================================================
+
+Tree-shaking: Use individual imports
+  ✅ import { Pill } from '@kibocorp/ui/pill'
+  ❌ import { Pill } from '@kibocorp/ui'
+
+Code Splitting: Lazy-load heavy components
+  import dynamic from 'next/dynamic'
+  const Editor = dynamic(() => import('@kibocorp/ui/editor'))
+
+Bundle Analysis:
+  npm run build && npm run analyze
+  Expected impact per Kibo component: ~2-5KB gzipped
+
+Performance Targets:
+  - First Contentful Paint: < 2s
+  - Largest Contentful Paint: < 3s
+  - Cumulative Layout Shift: < 0.1
+  - Lighthouse score: > 90
+
+================================================================================
+MIGRATION WORKFLOW
+================================================================================
+
+Step 1: Install Kibo package group
+  → npm install @kibocorp/ui-{pill,banner,dialog-stack}
+
+Step 2: Update component imports
+  FROM: import { Button } from '@/components/ui/button'
+  TO:   import { Pill } from '@kibocorp/ui/pill'
+
+Step 3: Update component props
+  Verify Kibo API differs from shadcn/ui
+  Test on multiple viewports
+
+Step 4: Test & validate
+  ✅ npm run type-check
+  ✅ npm run build
+  ✅ npm run dev (manual testing)
+  ✅ Keyboard nav & accessibility
+  ✅ Mobile responsiveness
+
+Step 5: Update docs
+  Update this COMPONENT-MAP.md file
+  Add component example to stories/docs
+
+Step 6: Commit & PR
+  One Kibo component per commit
+  Include before/after screenshots
+
+================================================================================
+DECISION TREE: Keep Custom vs Use Kibo
+================================================================================
+
+Does the component need:
+├─ External library integration (Mapbox, Canvas, etc)?
+│  └─ YES → Keep CUSTOM
+│
+├─ Complex state management specific to FEED?
+│  └─ YES → Keep CUSTOM
+│
+├─ Design system compliance & WCAG accessibility?
+│  └─ YES → Use KIBO
+│
+├─ Simple UI display (nav, buttons, cards)?
+│  └─ YES → Use KIBO
+│
+├─ Standard form input (text, select, date)?
+│  └─ YES → Use KIBO (Combobox, Mini Calendar, etc)
+│
+└─ Performance critical hot path?
+   └─ YES → Test both, measure bundle impact
+
+================================================================================
+REFERENCE FILES
+================================================================================
+
+Primary: /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/COMPONENT-MAP.md
+  → Full detailed mapping with code examples
+
+Quick Ref: /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/COMPONENT-MAP-QUICK-REF.md
+  → Quick lookup table by use case
+
+Architecture: /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/COMPONENT-ARCHITECTURE.txt
+  → This file - visual overview
+
+Phase State: /specs/001-feed-platform/.phase-state.json
+  → Development progress tracking
+
+Ralph Loop: /specs/001-feed-platform/ralph-loop-checklist.md
+  → Agent development checklist
+
+Tailwind Config: /apps/web/tailwind.config.ts
+  → Design tokens & theme
+
+================================================================================
+QUESTIONS? CONTACT
+================================================================================
+
+Project: FEED - Mutual Aid Resource Sharing Platform
+Maintainer: FEED Development Team
+Last Updated: 2026-01-30
+Document Version: 1.0.0
+
+For updates to this architecture, edit:
+  /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/COMPONENT-ARCHITECTURE.txt
+
+For detailed component info, see:
+  /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/COMPONENT-MAP.md
+
+================================================================================
