@@ -262,7 +262,7 @@ function MetricTile({
   action
 }: MetricTileProps) {
   return (
-    <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm">
+    <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <h3 className="text-sm font-medium text-stone-600">{title}</h3>
@@ -645,16 +645,16 @@ function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) 
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    <div className="flex flex-col md:flex-row gap-4">
       {/* Left Column - Welcome Card (spans full height) */}
-      <div className="lg:w-[280px] flex-shrink-0">
+      <div className="w-full md:w-[280px] flex-shrink-0">
         <WelcomeCard userName={userName} userRole={userRole} />
       </div>
 
       {/* Right Column - 2x2 Grid of metric cards */}
-      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
         {/* Top Left - Impact Overview (list style) */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm">
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-stone-600">Impact overview</h3>
             <ExternalLink className="w-4 h-4 text-stone-400" />
@@ -676,7 +676,7 @@ function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) 
         <MetricTile {...bottomRowMetrics[userRole][0]} />
 
         {/* Bottom Right - Contribution list */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm">
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px]">
           <h3 className="text-sm font-medium text-stone-600 mb-3">Your contribution</h3>
           <div className="space-y-2">
             {bottomRowMetrics[userRole][1].subtitle?.split('\n').map((line, i) => {
@@ -776,35 +776,48 @@ export function FeedShell({
         style={{ backgroundImage: `url(${backgroundImage})` }}
       />
 
-      {/* Floating card container */}
-      <div className="relative min-h-screen flex items-center justify-center p-4 md:p-8">
-        <div className="w-full max-w-7xl bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+      {/* Main layout container - Two separate floating cards with gap */}
+      <div className="relative min-h-screen flex flex-col p-4 md:p-8 gap-4 md:gap-6 overflow-y-auto">
+        {/* CONTAINER 1: Interactive Content (Header + Sidebar + Content Panel) */}
+        <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
           {/* Top Navigation - Fixed */}
           <TopNav isAuthenticated={isAuthenticated} userName={userName} />
 
-          {/* Main Content Area - Scrollable */}
+          {/* Main Content Area */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left Icon Sidebar - Desktop Only */}
             <div className="hidden md:block">
               <IconSidebar />
             </div>
 
-            {/* Scrollable Content Container */}
-            <div className="flex-1 overflow-y-auto">
-              {/* Interactive Content Panel - Separate bordered area */}
-              <div className="p-6">
-                <div className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm">
-                  {children}
-                </div>
-              </div>
-
-              {/* Metrics Section - Below interactive area */}
-              <div className="px-6 pb-6">
-                <MetricsSection userRole={userRole} userFocus={userFocus} userName={userName} />
+            {/* Interactive Content Panel */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm min-h-[300px]">
+                {children}
               </div>
             </div>
           </div>
         </div>
+
+        {/* CONTAINER 2: Metrics Dashboard (Separate floating card) */}
+        <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden">
+          <div className="flex">
+            {/* Left Icon Sidebar continuation - Desktop Only (visual continuity) */}
+            <div className="hidden md:flex w-14 flex-shrink-0 border-r border-stone-200/50 bg-white items-center justify-center py-4">
+              <div className="w-8 h-8 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-[#4a5d23]" />
+              </div>
+            </div>
+
+            {/* Metrics Section */}
+            <div className="flex-1 p-6">
+              <MetricsSection userRole={userRole} userFocus={userFocus} userName={userName} />
+            </div>
+          </div>
+        </div>
+
+        {/* Spacer for mobile bottom nav */}
+        <div className="h-20 md:hidden" />
       </div>
 
       {/* Mobile Bottom Navigation */}
