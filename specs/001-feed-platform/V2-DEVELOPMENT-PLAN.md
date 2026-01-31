@@ -50,6 +50,60 @@ Based on the concept design with light cream tones:
 
 ---
 
+## User Roles Architecture
+
+The platform supports multiple user types with role-based content visibility:
+
+### Role Types
+
+| Role | Description | Primary Actions |
+|------|-------------|-----------------|
+| `recipient` | Seeking food/assistance | Find resources, apply for benefits, upload documents |
+| `donor` | Donating food/resources | Track donations, view impact, find drop-off locations |
+| `volunteer` | Community volunteer | Find events, log hours, connect with agencies |
+| `agency` | Nonprofit organization | Manage clients, process applications, update resources |
+| `program` | Government program | Process applications, manage eligibility, report metrics |
+| `admin` | Platform administrator | Moderation, analytics, system configuration |
+
+### Focus Areas
+
+Users can specify their focus to filter relevant content:
+
+| Focus | Description |
+|-------|-------------|
+| `food` | Food assistance, pantries, meals |
+| `housing` | Housing assistance, shelters, rent help |
+| `healthcare` | Medical services, prescriptions, mental health |
+| `employment` | Job assistance, training, resume help |
+| `community` | General community support, events |
+| `donations` | Donating resources, volunteering |
+
+### Role-Based Visibility
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ SIDEBAR ICONS (filtered by role)                            │
+│                                                             │
+│ All Roles:    Overview, Chat, Map, Feed, Settings          │
+│ + recipient:  Applications, Documents, Forms               │
+│ + agency:     Applications, Documents, Forms               │
+│ + program:    Applications, Documents, Forms               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ METRIC TILES (filtered by role)                             │
+│                                                             │
+│ recipient:    Welcome, App Progress, Resources Saved       │
+│ donor:        Donations, Meals Provided, Impact Score      │
+│ volunteer:    Hours, Events Joined                         │
+│ agency:       Clients, Apps Received, Processing Time      │
+│ program:      Clients, Apps Received, Processing Time      │
+│ ALL:          Community Impact, Resources, Active Programs │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Phase Structure
 
 ### Phase A: Panel Completion (UI/UX Focus)
