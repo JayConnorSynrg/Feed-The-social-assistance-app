@@ -76,6 +76,46 @@ FOR each task:
 
 ---
 
+## Architecture Constraints
+
+### Single-Page Application (SPA) Model - MANDATORY
+
+**CRITICAL: FEED uses a Single-Page Application architecture with panel switching.**
+
+The app renders at `/` with all panels switching via sidebar buttons within `FeedShell`.
+
+**DO NOT:**
+- Create separate route pages for panels (e.g., `/chat`, `/map`, `/feed`)
+- Implement URL-based routing that navigates away from the root page
+- Create `(feed)/` or similar route groups for panel content
+- Use `router.push()` to navigate between panels
+
+**DO:**
+- Keep all panel content in `apps/web/src/components/panels/`
+- Use `usePanelContext()` and `setActivePanel()` for panel switching
+- Render panels via `PanelRenderer` in `apps/web/src/app/page.tsx`
+- Maintain the floating card layout with wheat field background
+
+**Panel Architecture:**
+```
+apps/web/src/app/page.tsx          # Root page with PanelRenderer
+apps/web/src/components/layout/feed-shell.tsx  # Shell with sidebar
+apps/web/src/components/panels/    # All panel components
+  ├── index.tsx                    # Panel exports
+  ├── chat-panel.tsx
+  ├── map-panel.tsx
+  ├── overview-panel.tsx
+  ├── feed-panel.tsx
+  ├── settings-panel.tsx
+  ├── applications-panel.tsx
+  ├── documents-panel.tsx
+  └── forms-panel.tsx
+```
+
+**Existing (dashboard) routes at `apps/web/src/app/(dashboard)/` are LEGACY and should NOT be used for the main app flow.**
+
+---
+
 ## Phase Exit Criteria
 
 **Phase transitions require ALL criteria met:**
