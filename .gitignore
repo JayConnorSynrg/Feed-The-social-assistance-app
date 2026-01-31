@@ -58,3 +58,54 @@ android/app/build/
 # Misc
 *.pem
 .cache/
+
+# Security - NEVER commit these
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.jks
+credentials.json
+service-account*.json
+*-credentials.json
+secrets.yaml
+secrets.yml
+.secrets/
+vault/
+
+# Sensitive data files
+*.sql.gz
+*.dump
+backups/
+exports/
+
+# Debug and profiling
+*.heapsnapshot
+*.cpuprofile
+.clinic/
+
+# Local development
+.env*.local
+*.local.json
+local-config.json
+
+# Playwright test artifacts (not needed in repo)
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# Claude/AI artifacts
+.claude/projects/
+
+# Mobile signing (NEVER commit)
+*.keystore
+*.mobileprovision
+GoogleService-Info.plist
+google-services.json
+
+# Editor/OS specific
+*.sublime-*
+*.code-workspace
+.history/
+.ionide/
