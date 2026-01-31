@@ -13,9 +13,17 @@ interface ViewState {
   zoom: number
 }
 
+interface Bounds {
+  west: number
+  south: number
+  east: number
+  north: number
+}
+
 interface MapViewProps {
   initialViewState?: ViewState
   onViewStateChange?: (viewState: ViewState) => void
+  onBoundsChange?: (bounds: Bounds) => void
   onMapLoad?: () => void
   children?: React.ReactNode
   className?: string
@@ -30,6 +38,7 @@ const DEFAULT_VIEW_STATE: ViewState = {
 export function MapView({
   initialViewState = DEFAULT_VIEW_STATE,
   onViewStateChange,
+  onBoundsChange,
   onMapLoad,
   children,
   className = '',
@@ -37,6 +46,21 @@ export function MapView({
   const mapRef = useRef<MapRef>(null)
   const [viewState, setViewState] = useState<ViewState>(initialViewState)
   const [isLoading, setIsLoading] = useState(true)
+
+  const getBounds = useCallback((): Bounds | null => {
+    const map = mapRef.current?.getMap()
+    if (!map) return null
+
+    const bounds = map.getBounds()
+    if (!bounds) return null
+
+    return {
+      west: bounds.getWest(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      north: bounds.getNorth(),
+    }
+  }, [])
 
   const handleMove = useCallback(
     (evt: ViewStateChangeEvent) => {
@@ -46,10 +70,24 @@ export function MapView({
     [onViewStateChange]
   )
 
+  const handleMoveEnd = useCallback(() => {
+    const bounds = getBounds()
+    if (bounds) {
+      onBoundsChange?.(bounds)
+    }
+  }, [getBounds, onBoundsChange])
+
   const handleLoad = useCallback(() => {
     setIsLoading(false)
     onMapLoad?.()
-  }, [onMapLoad])
+    // Emit initial bounds after load
+    setTimeout(() => {
+      const bounds = getBounds()
+      if (bounds) {
+        onBoundsChange?.(bounds)
+      }
+    }, 100)
+  }, [onMapLoad, getBounds, onBoundsChange])
 
   if (!MAPBOX_TOKEN || MAPBOX_TOKEN.includes('placeholder')) {
     return (
@@ -75,6 +113,7 @@ export function MapView({
         ref={mapRef}
         {...viewState}
         onMove={handleMove}
+        onMoveEnd={handleMoveEnd}
         onLoad={handleLoad}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/streets-v12"

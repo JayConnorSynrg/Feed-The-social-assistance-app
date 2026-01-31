@@ -92,20 +92,13 @@ export function ResourcesContent({ initialResources }: ResourcesContentProps) {
     [viewState.zoom]
   )
 
-  // Update bounds when map moves
-  const handleMoveEnd = useCallback(() => {
-    // In a real implementation, we'd get bounds from the map ref
-    // For now, approximate based on zoom and center
-    const latDelta = 180 / Math.pow(2, viewState.zoom)
-    const lngDelta = 360 / Math.pow(2, viewState.zoom)
-
-    setBounds([
-      viewState.longitude - lngDelta,
-      viewState.latitude - latDelta,
-      viewState.longitude + lngDelta,
-      viewState.latitude + latDelta,
-    ])
-  }, [viewState])
+  // Update bounds when map moves - now receives actual bounds from MapView
+  const handleBoundsChange = useCallback(
+    (newBounds: { west: number; south: number; east: number; north: number }) => {
+      setBounds([newBounds.west, newBounds.south, newBounds.east, newBounds.north])
+    },
+    []
+  )
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
@@ -164,6 +157,7 @@ export function ResourcesContent({ initialResources }: ResourcesContentProps) {
             <MapView
               initialViewState={viewState}
               onViewStateChange={handleViewStateChange}
+              onBoundsChange={handleBoundsChange}
               onMapLoad={handleMapLoad}
               className="h-full"
             >
