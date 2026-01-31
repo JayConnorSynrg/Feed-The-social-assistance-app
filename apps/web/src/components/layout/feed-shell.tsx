@@ -322,150 +322,375 @@ function MetricTile({
 }
 
 // ============================================
-// METRICS SECTION (Role-Based)
+// WELCOME CARD (Large left card with gauge)
+// ============================================
+interface WelcomeCardProps {
+  userName?: string
+  userRole: UserRole
+}
+
+function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
+  const today = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  // Different messaging based on role
+  const roleLabels: Record<UserRole, { title: string; metric: string }> = {
+    recipient: { title: 'Our community impact', metric: '48%' },
+    donor: { title: 'Your giving impact', metric: '89%' },
+    volunteer: { title: 'Your volunteer impact', metric: '72%' },
+    agency: { title: 'Client outcomes', metric: '65%' },
+    program: { title: 'Program effectiveness', metric: '78%' },
+    admin: { title: 'Platform health', metric: '94%' },
+  }
+
+  const { title, metric } = roleLabels[userRole]
+
+  return (
+    <div className="bg-[#f8f6f1] rounded-xl p-5 border border-stone-200/50 shadow-sm h-full flex flex-col">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-lg font-semibold text-stone-800">Welcome back, {userName}!</h3>
+        <ExternalLink className="w-4 h-4 text-stone-400" />
+      </div>
+      <p className="text-xs text-stone-400 mb-4">{today}</p>
+
+      <p className="text-sm text-stone-600 mb-2">{title}</p>
+
+      {/* Large percentage with mini line chart */}
+      <div className="flex-1 flex items-end justify-between">
+        <div>
+          <p className="text-5xl font-bold text-stone-800">{metric}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="px-2 py-0.5 bg-[#4a5d23] text-white text-xs rounded font-medium">High</span>
+            <div className="flex items-center text-xs text-stone-500">
+              <span className="w-8 h-px bg-stone-300 mr-1"></span>
+              60
+            </div>
+          </div>
+        </div>
+
+        {/* Mini sparkline chart */}
+        <div className="flex items-end gap-1 h-16">
+          {[30, 45, 35, 55, 40, 65, 50, 70, 55, 75, 60, 80].map((h, i) => (
+            <div
+              key={i}
+              className="w-1.5 bg-[#4a5d23]/40 rounded-full"
+              style={{ height: `${h}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// METRICS SECTION (Role-Based with Layout)
 // ============================================
 interface MetricsSectionProps {
   userRole: UserRole
   userFocus: UserFocus[]
+  userName?: string
 }
 
-function MetricsSection({ userRole, userFocus }: MetricsSectionProps) {
-  // Define all available metric tiles with role/focus visibility
-  const allMetrics: MetricTileProps[] = [
-    // RECIPIENT METRICS
-    {
-      title: 'Welcome back!',
-      subtitle: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-      value: '48%',
-      icon: TrendingUp,
-      chart: 'line',
-      trend: { value: 12, positive: true },
-      roles: ['recipient'],
-    },
-    {
-      title: 'Applications progress',
-      value: '33%',
-      icon: Target,
-      chart: 'ring',
-      progress: 33,
-      action: { label: 'View applications', href: '/?panel=applications' },
-      roles: ['recipient'],
-    },
-    {
-      title: 'Resources saved',
-      value: '12',
-      subtitle: 'Near your location',
-      icon: Heart,
-      chart: 'bar',
-      progress: 75,
-      roles: ['recipient'],
-    },
+function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) {
+  // Top row metrics (Impact overview style)
+  const topRowMetrics: Record<UserRole, MetricTileProps[]> = {
+    recipient: [
+      {
+        title: 'Impact overview',
+        value: '',
+        icon: ExternalLink,
+        roles: ['recipient'],
+      },
+      {
+        title: 'Applications progress',
+        value: '33%',
+        icon: Target,
+        chart: 'ring',
+        progress: 33,
+        roles: ['recipient'],
+      },
+    ],
+    donor: [
+      {
+        title: 'Impact overview',
+        value: '',
+        icon: ExternalLink,
+        roles: ['donor'],
+      },
+      {
+        title: 'Tax deductions',
+        value: '$2,450',
+        icon: Award,
+        chart: 'ring',
+        progress: 75,
+        roles: ['donor'],
+      },
+    ],
+    volunteer: [
+      {
+        title: 'Impact overview',
+        value: '',
+        icon: ExternalLink,
+        roles: ['volunteer'],
+      },
+      {
+        title: 'Hours this month',
+        value: '48',
+        icon: Target,
+        chart: 'ring',
+        progress: 80,
+        roles: ['volunteer'],
+      },
+    ],
+    agency: [
+      {
+        title: 'Impact overview',
+        value: '',
+        icon: ExternalLink,
+        roles: ['agency'],
+      },
+      {
+        title: 'Processing rate',
+        value: '89%',
+        icon: Target,
+        chart: 'ring',
+        progress: 89,
+        roles: ['agency'],
+      },
+    ],
+    program: [
+      {
+        title: 'Impact overview',
+        value: '',
+        icon: ExternalLink,
+        roles: ['program'],
+      },
+      {
+        title: 'Approval rate',
+        value: '72%',
+        icon: Target,
+        chart: 'ring',
+        progress: 72,
+        roles: ['program'],
+      },
+    ],
+    admin: [
+      {
+        title: 'System health',
+        value: '',
+        icon: ExternalLink,
+        roles: ['admin'],
+      },
+      {
+        title: 'Uptime',
+        value: '99.9%',
+        icon: Target,
+        chart: 'ring',
+        progress: 99,
+        roles: ['admin'],
+      },
+    ],
+  }
 
-    // DONOR METRICS
-    {
-      title: 'Your donations',
-      subtitle: 'This month',
-      value: '23',
-      icon: HandHeart,
-      chart: 'line',
-      trend: { value: 18, positive: true },
-      roles: ['donor'],
-    },
-    {
-      title: 'Meals provided',
-      value: '156',
-      subtitle: 'Through your contributions',
-      icon: Utensils,
-      trend: { value: 24, positive: true },
-      roles: ['donor'],
-    },
-    {
-      title: 'Impact score',
-      value: '89%',
-      icon: Award,
-      chart: 'ring',
-      progress: 89,
-      roles: ['donor'],
-    },
+  // Bottom row metrics (Contribution style)
+  const bottomRowMetrics: Record<UserRole, MetricTileProps[]> = {
+    recipient: [
+      {
+        title: 'Resources accessed',
+        subtitle: 'this week',
+        value: '7%',
+        icon: TrendingUp,
+        chart: 'bar',
+        progress: 7,
+        roles: ['recipient'],
+      },
+      {
+        title: 'Your contribution',
+        value: '',
+        subtitle: 'Events joined: 12\nArticles read: 6\nActions completed: 83',
+        icon: Award,
+        roles: ['recipient'],
+      },
+    ],
+    donor: [
+      {
+        title: 'Meals provided',
+        subtitle: 'this month',
+        value: '156',
+        icon: Utensils,
+        chart: 'bar',
+        progress: 65,
+        roles: ['donor'],
+      },
+      {
+        title: 'Your contribution',
+        value: '',
+        subtitle: 'Donations: 23\nFood drives: 4\nVolunteer hours: 12',
+        icon: HandHeart,
+        roles: ['donor'],
+      },
+    ],
+    volunteer: [
+      {
+        title: 'People helped',
+        subtitle: 'this month',
+        value: '34',
+        icon: Users,
+        chart: 'bar',
+        progress: 55,
+        roles: ['volunteer'],
+      },
+      {
+        title: 'Your contribution',
+        value: '',
+        subtitle: 'Events: 7\nHours: 48\nImpact score: 89',
+        icon: Award,
+        roles: ['volunteer'],
+      },
+    ],
+    agency: [
+      {
+        title: 'Clients served',
+        subtitle: 'this week',
+        value: '89',
+        icon: Users,
+        chart: 'bar',
+        progress: 72,
+        roles: ['agency'],
+      },
+      {
+        title: 'Program metrics',
+        value: '',
+        subtitle: 'Applications: 156\nApproved: 89\nPending: 34',
+        icon: ClipboardList,
+        roles: ['agency'],
+      },
+    ],
+    program: [
+      {
+        title: 'Applications processed',
+        subtitle: 'this week',
+        value: '234',
+        icon: ClipboardList,
+        chart: 'bar',
+        progress: 82,
+        roles: ['program'],
+      },
+      {
+        title: 'Program metrics',
+        value: '',
+        subtitle: 'Approved: 189\nDenied: 23\nPending: 45',
+        icon: Target,
+        roles: ['program'],
+      },
+    ],
+    admin: [
+      {
+        title: 'Active users',
+        subtitle: 'today',
+        value: '1,234',
+        icon: Users,
+        chart: 'bar',
+        progress: 78,
+        roles: ['admin'],
+      },
+      {
+        title: 'Platform metrics',
+        value: '',
+        subtitle: 'Errors: 0\nLatency: 45ms\nLoad: 23%',
+        icon: TrendingUp,
+        roles: ['admin'],
+      },
+    ],
+  }
 
-    // VOLUNTEER METRICS
-    {
-      title: 'Hours volunteered',
-      value: '48',
-      subtitle: 'This month',
-      icon: Users,
-      trend: { value: 15, positive: true },
-      roles: ['volunteer'],
-    },
-    {
-      title: 'Events joined',
-      value: '7',
-      icon: Target,
-      action: { label: 'Find events', href: '/?panel=feed' },
-      roles: ['volunteer'],
-    },
-
-    // AGENCY/PROGRAM METRICS
-    {
-      title: 'Active clients',
-      value: '1,540',
-      icon: Users,
-      trend: { value: 8, positive: true },
-      roles: ['agency', 'program'],
-    },
-    {
-      title: 'Applications received',
-      value: '89',
-      subtitle: 'This week',
-      icon: ClipboardList,
-      trend: { value: 12, positive: true },
-      roles: ['agency', 'program'],
-    },
-    {
-      title: 'Processing time',
-      value: '2.3d',
-      subtitle: 'Average',
-      icon: TrendingUp,
-      chart: 'bar',
-      progress: 65,
-      roles: ['agency', 'program'],
-    },
-
-    // COMMUNITY METRICS (visible to all)
-    {
-      title: 'Community impact',
-      value: '12,480',
-      subtitle: 'People helped this year',
-      icon: Leaf,
-      trend: { value: 33, positive: true },
-    },
-    {
-      title: 'Resources available',
-      value: '324',
-      subtitle: 'In your area',
-      icon: Building2,
-      action: { label: 'Browse map', href: '/?panel=map' },
-    },
-    {
-      title: 'Active programs',
-      value: '47',
-      icon: Package,
-    },
-  ]
-
-  // Filter metrics based on role and focus
-  const visibleMetrics = allMetrics.filter((metric) => {
-    // If no roles specified, show to everyone
-    if (!metric.roles) return true
-    // Check if user's role matches
-    return metric.roles.includes(userRole)
-  })
+  // Impact overview list items based on role
+  const impactItems: Record<UserRole, { label: string; value: string }[]> = {
+    recipient: [
+      { label: 'Trees planted', value: '12,480' },
+      { label: 'Waste reduced', value: '320 tons' },
+      { label: 'Active volunteers', value: '1,540' },
+      { label: 'Projects supported', value: '38' },
+    ],
+    donor: [
+      { label: 'Meals funded', value: '45,230' },
+      { label: 'Families helped', value: '2,340' },
+      { label: 'Food rescued (lbs)', value: '12,500' },
+      { label: 'Partner agencies', value: '47' },
+    ],
+    volunteer: [
+      { label: 'Total volunteer hours', value: '8,450' },
+      { label: 'Events completed', value: '156' },
+      { label: 'People served', value: '4,230' },
+      { label: 'Active volunteers', value: '1,540' },
+    ],
+    agency: [
+      { label: 'Clients served', value: '12,480' },
+      { label: 'Applications processed', value: '3,420' },
+      { label: 'Resources distributed', value: '8,900' },
+      { label: 'Partner programs', value: '23' },
+    ],
+    program: [
+      { label: 'Total applications', value: '15,670' },
+      { label: 'Benefits distributed', value: '$2.4M' },
+      { label: 'Active recipients', value: '8,920' },
+      { label: 'Partner agencies', value: '47' },
+    ],
+    admin: [
+      { label: 'Total users', value: '45,230' },
+      { label: 'Daily active', value: '12,480' },
+      { label: 'Resources listed', value: '324' },
+      { label: 'Transactions', value: '156K' },
+    ],
+  }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {visibleMetrics.map((metric, index) => (
-        <MetricTile key={index} {...metric} />
-      ))}
+    <div className="flex flex-col lg:flex-row gap-4">
+      {/* Left Column - Welcome Card (spans full height) */}
+      <div className="lg:w-[280px] flex-shrink-0">
+        <WelcomeCard userName={userName} userRole={userRole} />
+      </div>
+
+      {/* Right Column - 2x2 Grid of metric cards */}
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Top Left - Impact Overview (list style) */}
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-stone-600">Impact overview</h3>
+            <ExternalLink className="w-4 h-4 text-stone-400" />
+          </div>
+          <div className="space-y-2">
+            {impactItems[userRole].map((item, i) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span className="text-stone-500">• {item.label}</span>
+                <span className="font-medium text-stone-700">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top Right - Ring chart metric */}
+        <MetricTile {...topRowMetrics[userRole][1]} />
+
+        {/* Bottom Left - Bar chart metric */}
+        <MetricTile {...bottomRowMetrics[userRole][0]} />
+
+        {/* Bottom Right - Contribution list */}
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm">
+          <h3 className="text-sm font-medium text-stone-600 mb-3">Your contribution</h3>
+          <div className="space-y-2">
+            {bottomRowMetrics[userRole][1].subtitle?.split('\n').map((line, i) => {
+              const [label, value] = line.split(': ')
+              return (
+                <div key={i} className="flex justify-between text-sm">
+                  <span className="text-stone-500">{label}</span>
+                  <span className="font-medium text-stone-700">{value}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -575,14 +800,7 @@ export function FeedShell({
 
               {/* Metrics Section - Below interactive area */}
               <div className="px-6 pb-6">
-                <div className="mb-4">
-                  <h2 className="text-sm font-medium text-stone-500 uppercase tracking-wide">
-                    {userRole === 'donor' ? 'Your Impact' :
-                     userRole === 'agency' || userRole === 'program' ? 'Program Metrics' :
-                     'Your Progress & Community'}
-                  </h2>
-                </div>
-                <MetricsSection userRole={userRole} userFocus={userFocus} />
+                <MetricsSection userRole={userRole} userFocus={userFocus} userName={userName} />
               </div>
             </div>
           </div>
