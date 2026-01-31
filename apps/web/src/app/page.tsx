@@ -7,8 +7,11 @@ import React from 'react'
 import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
 import { ChatPanel } from '@/components/panels/chat-panel'
 import { MapPanel } from '@/components/panels/map-panel'
+import { OverviewPanel } from '@/components/panels/overview-panel'
+import { FeedPanel } from '@/components/panels/feed-panel'
+import { SettingsPanel } from '@/components/panels/settings-panel'
 
-// Placeholder panels for unbuilt features
+// Placeholder panels for unbuilt features (Phase 2)
 function PlaceholderPanel({ title, description }: { title: string; description: string }) {
   return (
     <div className="h-full flex flex-col">
@@ -36,6 +39,9 @@ function PanelRenderer() {
   const { activePanel, setActivePanel } = usePanelContext()
 
   switch (activePanel) {
+    case 'overview':
+      return <OverviewPanel onNavigateToPanel={(panel) => setActivePanel(panel as any)} />
+
     case 'chat':
       return <ChatPanel onNavigateToMap={() => setActivePanel('map')} />
 
@@ -43,13 +49,12 @@ function PanelRenderer() {
       return <MapPanel />
 
     case 'feed':
-      return (
-        <PlaceholderPanel
-          title="Community Feed"
-          description="Connect with others in your community"
-        />
-      )
+      return <FeedPanel />
 
+    case 'settings':
+      return <SettingsPanel />
+
+    // Phase 2 panels (coming soon)
     case 'applications':
       return (
         <PlaceholderPanel
@@ -74,17 +79,8 @@ function PanelRenderer() {
         />
       )
 
-    case 'settings':
-      return (
-        <PlaceholderPanel
-          title="Settings"
-          description="Manage your account preferences"
-        />
-      )
-
-    case 'overview':
     default:
-      return <ChatPanel onNavigateToMap={() => setActivePanel('map')} />
+      return <OverviewPanel onNavigateToPanel={(panel) => setActivePanel(panel as any)} />
   }
 }
 
