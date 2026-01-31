@@ -5,9 +5,8 @@
 // Based on concept: Single-page app with persistent shell and dynamic content area
 // V2: Separated interactive area from metrics, role-based content visibility
 
-import React, { useState, createContext, useContext } from 'react'
+import React, { useState, createContext, useContext, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import {
   MessageSquare,
   Map,
@@ -740,6 +739,19 @@ interface FeedShellProps {
   backgroundImage?: string
 }
 
+// Valid panel names for URL hash routing
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'feed', 'applications', 'documents', 'forms', 'settings']
+
+// Get panel from URL hash (e.g., #chat -> 'chat')
+function getPanelFromHash(): PanelType {
+  if (typeof window === 'undefined') return 'chat'
+  const hash = window.location.hash.slice(1) // Remove #
+  if (hash && VALID_PANELS.includes(hash as PanelType)) {
+    return hash as PanelType
+  }
+  return 'chat' // Default panel
+}
+
 export function FeedShell({
   children,
   isAuthenticated = false,
@@ -748,18 +760,41 @@ export function FeedShell({
   userFocus: initialFocus = ['food'],
   backgroundImage = '/images/wheat-field-bg.jpg',
 }: FeedShellProps) {
-  const [activePanel, setActivePanel] = useState<PanelType>('chat')
   const [userRole, setUserRole] = useState<UserRole>(initialRole)
   const [userFocus, setUserFocus] = useState<UserFocus[]>(initialFocus)
-  const pathname = usePathname()
 
-  // Sync URL to panel state
-  React.useEffect(() => {
-    const panelFromPath = pathname.split('/')[1] as PanelType
-    if (SIDEBAR_ICONS.some((item) => item.panel === panelFromPath)) {
-      setActivePanel(panelFromPath)
+  // Initialize panel from URL hash (client-side only)
+  const [activePanel, setActivePanelState] = useState<PanelType>('chat')
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Initialize from hash on mount
+  useEffect(() => {
+    setActivePanelState(getPanelFromHash())
+    setIsInitialized(true)
+  }, [])
+
+  // Wrapped setActivePanel that also updates URL hash
+  const setActivePanel = useCallback((panel: PanelType) => {
+    setActivePanelState(panel)
+    // Update URL hash without triggering navigation (SPA model)
+    if (typeof window !== 'undefined') {
+      const newHash = `#${panel}`
+      if (window.location.hash !== newHash) {
+        window.history.pushState(null, '', newHash)
+      }
     }
-  }, [pathname])
+  }, [])
+
+  // Listen for browser back/forward (hashchange event)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const panelFromHash = getPanelFromHash()
+      setActivePanelState(panelFromHash)
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
 
   return (
     <ShellContext.Provider value={{
