@@ -71,18 +71,18 @@ function LoginForm() {
         backgroundRepeat: 'no-repeat',
       }}
     >
-      {/* Overlay for better readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-amber-50/70 via-amber-50/50 to-green-50/60" />
+      {/* Overlay for better readability - sage/olive tones */}
+      <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-md relative z-10 bg-amber-50/95 backdrop-blur-sm border-amber-200/50 shadow-xl">
+      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-green-700">Welcome to FEED</CardTitle>
-          <CardDescription className="text-amber-800/80">
+          <CardTitle className="text-2xl font-bold text-lime-800">Welcome to FEED</CardTitle>
+          <CardDescription className="text-stone-600">
             Sign in to access resources and connect with your community
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4 bg-stone-50/50 mx-4 rounded-lg p-4 -mt-2">
+        <CardContent className="space-y-4 bg-lime-50/30 mx-4 rounded-lg p-4 -mt-2">
           {error && (
             <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
               {error}
@@ -91,7 +91,7 @@ function LoginForm() {
 
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-amber-900">
+              <label htmlFor="email" className="text-sm font-medium text-stone-700">
                 Email
               </label>
               <Input
@@ -102,12 +102,12 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
-                className="bg-white/80 border-amber-300 focus:border-green-500 focus:ring-green-500/20"
+                className="bg-white/90 border-lime-300 focus:border-lime-600 focus:ring-lime-500/20"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-amber-900">
+              <label htmlFor="password" className="text-sm font-medium text-stone-700">
                 Password
               </label>
               <Input
@@ -118,7 +118,7 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
-                className="bg-white/80 border-amber-300 focus:border-green-500 focus:ring-green-500/20"
+                className="bg-white/90 border-lime-300 focus:border-lime-600 focus:ring-lime-500/20"
               />
             </div>
 
@@ -133,10 +133,10 @@ function LoginForm() {
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-amber-300" />
+              <span className="w-full border-t border-lime-300" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-stone-50/80 px-2 text-amber-700">
+              <span className="bg-lime-50/80 px-2 text-stone-500">
                 Or continue with
               </span>
             </div>
@@ -145,7 +145,7 @@ function LoginForm() {
           <div className="grid grid-cols-2 gap-4">
             <Button
               variant="outline"
-              className="border-amber-300 bg-white/80 hover:bg-amber-100 text-amber-900"
+              className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
               onClick={() => handleOAuthLogin('google')}
               disabled={loading}
             >
@@ -171,7 +171,7 @@ function LoginForm() {
             </Button>
             <Button
               variant="outline"
-              className="border-amber-300 bg-white/80 hover:bg-amber-100 text-amber-900"
+              className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
               onClick={() => handleOAuthLogin('apple')}
               disabled={loading}
             >
@@ -187,12 +187,12 @@ function LoginForm() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-2 text-center text-sm pt-4">
-          <Link href="/forgot-password" className="text-amber-700 hover:text-green-700">
+          <Link href="/forgot-password" className="text-stone-500 hover:text-lime-700">
             Forgot your password?
           </Link>
-          <div className="text-amber-800/70">
+          <div className="text-stone-500">
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-green-700 font-medium hover:underline">
+            <Link href="/signup" className="text-lime-700 font-medium hover:underline">
               Sign up
             </Link>
           </div>
@@ -213,7 +213,7 @@ export default function LoginPage() {
           backgroundPosition: 'center',
         }}
       >
-        <div className="bg-amber-50/90 p-6 rounded-lg animate-pulse text-amber-800">Loading...</div>
+        <div className="bg-stone-50/90 p-6 rounded-lg animate-pulse text-stone-700">Loading...</div>
       </div>
     }>
       <LoginForm />

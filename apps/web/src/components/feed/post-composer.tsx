@@ -1,204 +1,309 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { ImagePlus, X, Loader2 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useState, useCallback } from 'react'
+import { X, Send, Link2, Globe, Users, HandHeart, HelpCircle, Image as ImageIcon, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
-import type { Profile } from '@feed/database'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface PostComposerProps {
-  user: Profile | null
-  onPostCreated?: () => void
+  isOpen: boolean
+  onClose: () => void
+  onSubmit: (post: PostData) => Promise<void>
+  userName?: string
+  userAvatar?: string
 }
 
-const MAX_CHARS = 500
+interface PostData {
+  content: string
+  type: 'offer' | 'request'
+  category?: string
+  publishTo: 'community' | 'embed'
+  imageUrl?: string
+}
 
-export function PostComposer({ user, onPostCreated }: PostComposerProps) {
+const RESOURCE_CATEGORIES = [
+  'Food',
+  'Housing',
+  'Healthcare',
+  'Employment',
+  'Transportation',
+  'Childcare',
+  'Legal Aid',
+  'Financial',
+  'Education',
+  'Other',
+]
+
+export function PostComposer({
+  isOpen,
+  onClose,
+  onSubmit,
+  userName = 'Community Member',
+}: PostComposerProps) {
   const [content, setContent] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [postType, setPostType] = useState<'offer' | 'request'>('offer')
+  const [publishTo, setPublishTo] = useState<'community' | 'embed'>('community')
+  const [category, setCategory] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [embedCode, setEmbedCode] = useState('')
+  const [copied, setCopied] = useState(false)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient()
+  const handleSubmit = useCallback(async () => {
+    if (!content.trim()) return
 
-  const getInitials = (name: string | null | undefined) => {
-    if (!name) return '?'
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image must be less than 5MB')
-        return
-      }
-      setImageFile(file)
-      setImagePreview(URL.createObjectURL(file))
-      setError(null)
-    }
-  }
-
-  const removeImage = () => {
-    setImageFile(null)
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview)
-    }
-    setImagePreview(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  const handleSubmit = async () => {
-    if (!content.trim() && !imageFile) return
-    if (!user) {
-      setError('You must be logged in to post')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
+    setIsSubmitting(true)
     try {
-      let imageUrl: string | null = null
+      await onSubmit({
+        content,
+        type: postType,
+        category: category || undefined,
+        publishTo,
+      })
 
-      // Upload image if present
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop()
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('post-images')
-          .upload(fileName, imageFile)
-
-        if (uploadError) throw uploadError
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('post-images')
-          .getPublicUrl(fileName)
-
-        imageUrl = publicUrl
+      // If embed was selected, generate embed code
+      if (publishTo === 'embed') {
+        const embedSnippet = `<div class="feed-embed" data-type="${postType}" data-category="${category}">
+  <blockquote>${content}</blockquote>
+  <cite>— ${userName} on FEED</cite>
+  <a href="https://feedapp.community/share/${Date.now()}" target="_blank">View on FEED</a>
+</div>`
+        setEmbedCode(embedSnippet)
+      } else {
+        // Reset and close for community posts
+        setContent('')
+        setPostType('offer')
+        setCategory('')
+        onClose()
       }
-
-      // Create post
-      const { error: postError } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          content: content.trim(),
-          image_url: imageUrl,
-        } as never)
-
-      if (postError) throw postError
-
-      // Reset form
-      setContent('')
-      removeImage()
-      onPostCreated?.()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create post')
+    } catch (error) {
+      console.error('Failed to submit post:', error)
     } finally {
-      setLoading(false)
+      setIsSubmitting(false)
     }
-  }
+  }, [content, postType, category, publishTo, onSubmit, onClose, userName])
 
-  const charsRemaining = MAX_CHARS - content.length
-  const isOverLimit = charsRemaining < 0
+  const handleCopyEmbed = useCallback(() => {
+    navigator.clipboard.writeText(embedCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [embedCode])
+
+  const handleClose = useCallback(() => {
+    setContent('')
+    setPostType('offer')
+    setCategory('')
+    setPublishTo('community')
+    setEmbedCode('')
+    onClose()
+  }, [onClose])
+
+  if (!isOpen) return null
 
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="flex gap-3">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={user?.avatar_url || undefined} alt={user?.full_name || 'User'} />
-            <AvatarFallback>{getInitials(user?.full_name)}</AvatarFallback>
-          </Avatar>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 transition-opacity"
+        onClick={handleClose}
+      />
 
-          <div className="flex-1">
-            <textarea
-              placeholder="What's on your mind?"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full min-h-[80px] resize-none bg-transparent border-none outline-none placeholder:text-muted-foreground"
-              disabled={loading}
-            />
+      {/* Slide-out Panel */}
+      <div
+        className={`fixed right-0 top-0 h-full w-full max-w-md bg-gradient-to-b from-stone-50 to-lime-50/50 shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-lime-200/50 bg-white/80">
+          <h2 className="text-lg font-semibold text-stone-800">Create Post</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            className="text-stone-500 hover:text-stone-700 hover:bg-stone-100"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
-            {imagePreview && (
-              <div className="relative mt-2 rounded-lg overflow-hidden inline-block">
-                <img
-                  src={imagePreview}
-                  alt="Upload preview"
-                  className="max-h-48 rounded-lg"
-                />
-                <button
-                  onClick={removeImage}
-                  className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-black/70"
-                  disabled={loading}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {error && (
-              <p className="text-sm text-destructive mt-2">{error}</p>
-            )}
-
-            <div className="flex items-center justify-between mt-3 pt-3 border-t">
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                  disabled={loading}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={loading}
-                >
-                  <ImagePlus className="h-4 w-4 mr-1" />
-                  Photo
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span
-                  className={`text-sm ${
-                    isOverLimit
-                      ? 'text-destructive'
-                      : charsRemaining < 50
-                      ? 'text-yellow-500'
-                      : 'text-muted-foreground'
-                  }`}
-                >
-                  {charsRemaining}
-                </span>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading || isOverLimit || (!content.trim() && !imageFile)}
-                >
-                  {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Post
-                </Button>
-              </div>
+        <div className="p-4 space-y-5 overflow-y-auto h-[calc(100%-4rem)]">
+          {/* Post Type Toggle */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-stone-700">What would you like to do?</label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={postType === 'offer' ? 'default' : 'outline'}
+                onClick={() => setPostType('offer')}
+                className={`flex items-center gap-2 ${
+                  postType === 'offer'
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'border-lime-300 text-stone-700 hover:bg-lime-50'
+                }`}
+              >
+                <HandHeart className="h-4 w-4" />
+                Offer Help
+              </Button>
+              <Button
+                type="button"
+                variant={postType === 'request' ? 'default' : 'outline'}
+                onClick={() => setPostType('request')}
+                className={`flex items-center gap-2 ${
+                  postType === 'request'
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : 'border-amber-300 text-stone-700 hover:bg-amber-50'
+                }`}
+              >
+                <HelpCircle className="h-4 w-4" />
+                Request Help
+              </Button>
             </div>
           </div>
+
+          {/* Category */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-stone-700">Category (optional)</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-lime-300 bg-white/80 text-stone-800 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+            >
+              <option value="">Select a category...</option>
+              {RESOURCE_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat.toLowerCase()}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Content */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-stone-700">Your Message</label>
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder={
+                postType === 'offer'
+                  ? "Describe what you're offering to the community..."
+                  : "Describe what kind of help you're looking for..."
+              }
+              className="min-h-[120px] bg-white/80 border-lime-300 focus:border-green-500 focus:ring-green-500/30 text-stone-800 placeholder:text-stone-400"
+            />
+            <p className="text-xs text-stone-500">{content.length}/500 characters</p>
+          </div>
+
+          {/* Add Image (placeholder) */}
+          <Button
+            variant="outline"
+            className="w-full border-dashed border-lime-300 text-stone-600 hover:bg-lime-50"
+          >
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Add Image (coming soon)
+          </Button>
+
+          {/* Publish To */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-stone-700">Share to</label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={publishTo === 'community' ? 'default' : 'outline'}
+                onClick={() => setPublishTo('community')}
+                className={`flex items-center gap-2 ${
+                  publishTo === 'community'
+                    ? 'bg-stone-800 hover:bg-stone-900 text-white'
+                    : 'border-stone-300 text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                Community
+              </Button>
+              <Button
+                type="button"
+                variant={publishTo === 'embed' ? 'default' : 'outline'}
+                onClick={() => setPublishTo('embed')}
+                className={`flex items-center gap-2 ${
+                  publishTo === 'embed'
+                    ? 'bg-stone-800 hover:bg-stone-900 text-white'
+                    : 'border-stone-300 text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                <Link2 className="h-4 w-4" />
+                Get Embed
+              </Button>
+            </div>
+            <p className="text-xs text-stone-500">
+              {publishTo === 'community'
+                ? 'Post will be visible to all FEED community members'
+                : 'Generate an embed code to share on other platforms'}
+            </p>
+          </div>
+
+          {/* Embed Code Result */}
+          {embedCode && (
+            <Card className="bg-stone-100/80 border-stone-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-stone-700">
+                  <Globe className="h-4 w-4" />
+                  Embed Code Generated
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="bg-white rounded-md p-3 font-mono text-xs text-stone-600 overflow-x-auto">
+                  <pre className="whitespace-pre-wrap">{embedCode}</pre>
+                </div>
+                <Button
+                  onClick={handleCopyEmbed}
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-stone-300"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-2 text-green-600" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy to Clipboard
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Submit Button */}
+          <Button
+            onClick={handleSubmit}
+            disabled={!content.trim() || isSubmitting}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3"
+          >
+            {isSubmitting ? (
+              'Posting...'
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                {publishTo === 'community' ? 'Post to Community' : 'Generate Embed'}
+              </>
+            )}
+          </Button>
+
+          {/* Social Integration Notice */}
+          <div className="text-center p-3 bg-lime-100/50 rounded-lg border border-lime-200">
+            <p className="text-xs text-stone-600">
+              <Globe className="h-3 w-3 inline mr-1" />
+              Direct social media integration coming soon!
+              <br />
+              Connect Facebook, Twitter, Instagram, and more.
+            </p>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </>
   )
 }
