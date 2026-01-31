@@ -9,8 +9,8 @@ export { MapPanel } from './map-panel'
 export { OverviewPanel } from './overview-panel'
 export { FeedPanel } from './feed-panel'
 export { SettingsPanel } from './settings-panel'
+export { DocumentsPanel } from './documents-panel'
 
-// Role-restricted panels (Phase 2 - coming soon)
-// export { ApplicationsPanel } from './applications-panel'
-// export { DocumentsPanel } from './documents-panel'
-// export { FormsPanel } from './forms-panel'
+// Role-restricted panels (Phase 2)
+export { ApplicationsPanel } from './applications-panel'
+export { FormsPanel } from './forms-panel'

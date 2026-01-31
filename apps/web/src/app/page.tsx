@@ -10,6 +10,9 @@ import { MapPanel } from '@/components/panels/map-panel'
 import { OverviewPanel } from '@/components/panels/overview-panel'
 import { FeedPanel } from '@/components/panels/feed-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
+import { ApplicationsPanel } from '@/components/panels/applications-panel'
+import { DocumentsPanel } from '@/components/panels/documents-panel'
+import { FormsPanel } from '@/components/panels/forms-panel'
 
 // Placeholder panels for unbuilt features (Phase 2)
 function PlaceholderPanel({ title, description }: { title: string; description: string }) {
@@ -54,30 +57,15 @@ function PanelRenderer() {
     case 'settings':
       return <SettingsPanel />
 
-    // Phase 2 panels (coming soon)
+    // Phase 2 panels (role-restricted)
     case 'applications':
-      return (
-        <PlaceholderPanel
-          title="My Applications"
-          description="Track your benefit applications"
-        />
-      )
+      return <ApplicationsPanel />
 
     case 'documents':
-      return (
-        <PlaceholderPanel
-          title="Documents"
-          description="Manage your uploaded documents"
-        />
-      )
+      return <DocumentsPanel />
 
     case 'forms':
-      return (
-        <PlaceholderPanel
-          title="Forms"
-          description="Fill out benefit applications"
-        />
-      )
+      return <FormsPanel />
 
     default:
       return <OverviewPanel onNavigateToPanel={(panel) => setActivePanel(panel as any)} />
