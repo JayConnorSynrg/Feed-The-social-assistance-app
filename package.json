@@ -12,7 +12,9 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "federation:generate-keys": "npx ts-node scripts/federation/generate-keypair.ts",
+    "federation:register-local": "npx ts-node scripts/federation/register-local-instance.ts"
   },
   "devDependencies": {
     "turbo": "^2.0.0"
