@@ -226,6 +226,12 @@ async function fetchResourceFromPartner(
 
 /**
  * Process webhook event
+ *
+ * SECURITY NOTE: Uses service role key for legitimate admin access.
+ * This route is NOT user-facing - it receives webhooks from external federation instances.
+ * Authentication is via HMAC signature verification (line 460) not user sessions.
+ *
+ * TODO: Move to Supabase Edge Function to avoid exposing service role in Next.js API routes
  */
 async function processWebhookEvent(
   payload: WebhookPayload,
@@ -346,6 +352,9 @@ async function processWebhookEvent(
 
 /**
  * Log webhook receipt to federation_sync_log
+ *
+ * SECURITY NOTE: Uses service role key for admin logging.
+ * TODO: Move to Supabase Edge Function
  */
 async function logWebhook(
   instanceId: string,

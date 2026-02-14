@@ -61,6 +61,12 @@ export async function verifyFederationRequest(
   request: NextRequest,
   body?: string
 ): Promise<VerificationResult> {
+  // SECURITY NOTE: Uses service role key to verify federation instances.
+  // This function validates HTTP signatures from external federation peers.
+  // It needs admin access to look up instance public keys and update last_seen_at.
+  //
+  // TODO: Move to Supabase Edge Function or create a dedicated RPC function
+  // that can verify signatures without exposing service role key to Next.js
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 

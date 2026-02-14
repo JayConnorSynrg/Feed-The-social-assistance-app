@@ -14,17 +14,19 @@ function extractDomainFromUrl(url: string): string {
 
 async function getResourceCount(): Promise<number | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey) {
     return null;
   }
 
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createClient(supabaseUrl, anonKey);
+    // Count only approved, public resources (RLS will enforce this)
     const { count, error } = await supabase
       .from('resources')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'approved');
 
     if (error) {
       console.error('Failed to fetch resource count:', error);

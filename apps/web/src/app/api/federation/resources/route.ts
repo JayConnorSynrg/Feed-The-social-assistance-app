@@ -145,7 +145,12 @@ async function getResources(
   // Parse query parameters
   const { since, category, limit, cursor } = parseQueryParams(request)
 
-  // Create Supabase client with service role
+  // SECURITY NOTE: Uses service role key for legitimate admin access.
+  // This route is protected by HTTP signature verification (withFederationAuth wrapper).
+  // Only verified federation instances can access this endpoint.
+  // Returns only approved, verified resources (see WHERE clause line 175).
+  //
+  // TODO: Move to Supabase Edge Function to avoid exposing service role in Next.js API routes
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)

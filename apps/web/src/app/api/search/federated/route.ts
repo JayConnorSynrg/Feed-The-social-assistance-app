@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { Database } from '@feed/database'
 
 type ResourceRow = Database['public']['Tables']['resources']['Row']
@@ -244,6 +244,18 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
   try {
+    // Create authenticated Supabase client (respects RLS)
+    const supabase = await createAuthClient()
+
+    // Verify user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - please sign in to search' },
+        { status: 401 }
+      )
+    }
+
     // Parse request body
     const body: SearchRequest = await request.json()
 
@@ -261,11 +273,6 @@ export async function POST(request: NextRequest) {
       include_federated = true,
       max_results = 50,
     } = body
-
-    // Create Supabase client with service role
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-    const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
     // Search local resources
     let localResults: UnifiedResource[] = []
