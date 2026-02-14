@@ -35,3 +35,7 @@ export * from './lib/auto-resolver';
 export * from './lib/result-ranker';
 export * from './lib/realtime-federated-query';
 export * from './lib/search-metrics';
+
+// Federation discovery & advanced sync
+export * from './lib/peer-recommender';
+export * from './lib/incremental-sync';
