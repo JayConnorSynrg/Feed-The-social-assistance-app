@@ -185,7 +185,7 @@ export default function FederationAdminPage() {
           is_local: false,
           public_key: fetchedMetadata.public_key as string,
           status: 'active',
-          metadata: fetchedMetadata.metadata || {}
+          metadata: (fetchedMetadata.metadata || null) as never
         }
         const { data: newInstance, error: instanceError } = await supabase
           .from('federated_instances')
