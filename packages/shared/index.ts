@@ -39,3 +39,12 @@ export * from './lib/search-metrics';
 // Federation discovery & advanced sync
 export * from './lib/peer-recommender';
 export * from './lib/incremental-sync';
+
+// Federation security & hardening
+export * from './lib/content-filter';
+export * from './lib/abuse-detector';
+export * from './lib/security-logger';
+
+// Federation performance
+export * from './lib/federation-cache';
+export * from './lib/federation-pool';
