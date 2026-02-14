@@ -15,3 +15,12 @@ export * from './lib/federation-config';
 // Federation protocol
 export * from './lib/http-signatures';
 export * from './lib/federation-client';
+
+// Federation trust system
+export * from './lib/trust-calculator';
+export * from './lib/trust-levels';
+export * from './lib/trust-event-logger';
+
+// Federation health & quality
+export * from './lib/uptime-calculator';
+export * from './lib/data-quality-scorer';

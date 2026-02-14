@@ -41,8 +41,8 @@ interface FederatedInstance {
   instance_name: string
   is_local: boolean
   public_key: string
-  status: 'active' | 'suspended' | 'blocked'
-  metadata: Record<string, unknown>
+  status: string
+  metadata: unknown
   last_seen_at: string | null
   created_at: string
 }
@@ -52,11 +52,11 @@ interface FederationPeer {
   local_instance_id: string
   remote_instance_id: string
   trust_score: number
-  trust_level: 'untrusted' | 'pending' | 'trusted' | 'verified' | 'core'
+  trust_level: string
   federation_enabled: boolean
   auto_sync_enabled: boolean
   sync_interval_minutes: number
-  shared_resource_categories: string[]
+  shared_resource_categories: string[] | null
   notes: string | null
   remote_instance?: FederatedInstance
 }
@@ -179,16 +179,17 @@ export default function FederationAdminPage() {
         remoteInstanceId = existingInstance.id
       } else {
         // Create new federated instance record
+        const instanceData = {
+          instance_url: newPartnerUrl,
+          instance_name: newPartnerName || (fetchedMetadata.instance_name as string),
+          is_local: false,
+          public_key: fetchedMetadata.public_key as string,
+          status: 'active',
+          metadata: fetchedMetadata.metadata || {}
+        }
         const { data: newInstance, error: instanceError } = await supabase
           .from('federated_instances')
-          .insert({
-            instance_url: newPartnerUrl,
-            instance_name: newPartnerName || fetchedMetadata.instance_name,
-            is_local: false,
-            public_key: fetchedMetadata.public_key as string,
-            status: 'active',
-            metadata: fetchedMetadata.metadata || {}
-          })
+          .insert(instanceData)
           .select()
           .single()
 
@@ -516,7 +517,7 @@ export default function FederationAdminPage() {
                     <TableCell>
                       <Switch
                         checked={peer.federation_enabled}
-                        onCheckedChange={(checked) => toggleFederation(peer.id, checked)}
+                        onCheckedChange={(checked: boolean) => toggleFederation(peer.id, checked)}
                       />
                     </TableCell>
                     <TableCell>
