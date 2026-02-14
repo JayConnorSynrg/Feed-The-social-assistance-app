@@ -30,3 +30,8 @@ export * from './lib/resource-transformer';
 export * from './lib/resource-deduplicator';
 export * from './lib/conflict-detector';
 export * from './lib/auto-resolver';
+
+// Federation search
+export * from './lib/result-ranker';
+export * from './lib/realtime-federated-query';
+export * from './lib/search-metrics';
