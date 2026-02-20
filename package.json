@@ -22,5 +22,8 @@
   "packageManager": "npm@10.0.0",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0"
   }
 }

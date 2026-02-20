@@ -13,10 +13,25 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.90.1'
 
-// CORS headers for HTTP requests
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// CORS configuration - restrict to app domains
+const ALLOWED_ORIGINS = [
+  Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'capacitor://localhost',  // Mobile app (iOS)
+  'http://localhost',       // Mobile app (Android webview)
+  'ionic://localhost',      // Ionic dev
+]
+
+// Get CORS headers with validated origin
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0] // Default to APP_URL
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Credentials': 'true',
+  }
 }
 
 // Configuration
@@ -184,6 +199,9 @@ async function fetch211Data(
  * Main handler
  */
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })

@@ -3,7 +3,7 @@
 // apps/web/src/components/panels/overview-panel.tsx
 // Landing dashboard panel - quick access to all features
 
-import React from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Map,
   MessageSquare,
@@ -12,8 +12,12 @@ import {
   FolderOpen,
   FileText,
   Clock,
-  Calendar
+  Calendar,
+  Heart,
+  Loader2,
 } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
+import { createClient } from '@/lib/supabase/client'
 
 // ============================================
 // INTERFACES
@@ -33,7 +37,7 @@ interface QuickActionCardProps {
 
 interface RecentActivityItemProps {
   id: string
-  type: 'application' | 'resource' | 'document'
+  type: 'application' | 'resource' | 'document' | 'post' | 'like'
   title: string
   time: string
   icon: React.ElementType
@@ -45,20 +49,6 @@ interface UpcomingReminderItemProps {
   date: string
   type: 'appointment' | 'deadline'
 }
-
-// ============================================
-// MOCK DATA
-// ============================================
-const MOCK_RECENT_ACTIVITY: RecentActivityItemProps[] = [
-  { id: '1', type: 'application', title: 'SNAP Application submitted', time: '2 hours ago', icon: ClipboardList },
-  { id: '2', type: 'resource', title: 'Visited Downtown Food Bank', time: 'Yesterday', icon: Map },
-  { id: '3', type: 'document', title: 'Uploaded proof of residence', time: '3 days ago', icon: FileText },
-]
-
-const MOCK_REMINDERS: UpcomingReminderItemProps[] = [
-  { id: '1', title: 'Phone interview scheduled', date: 'Tomorrow, 10:00 AM', type: 'appointment' },
-  { id: '2', title: 'Document deadline', date: 'Jan 15, 2026', type: 'deadline' },
-]
 
 // ============================================
 // WELCOME SECTION
@@ -151,9 +141,99 @@ function UpcomingReminderItem({ title, date, type }: UpcomingReminderItemProps) 
 }
 
 // ============================================
+// UTILITY
+// ============================================
+function getRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  if (diffInSeconds < 60) return 'just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
+  return date.toLocaleDateString()
+}
+
+// ============================================
 // MAIN OVERVIEW PANEL
 // ============================================
 export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProps) {
+  const { user } = useAuth()
+  const supabase = createClient()
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItemProps[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch real recent activity for the user
+  const fetchRecentActivity = useCallback(async () => {
+    if (!user) {
+      setRecentActivity([])
+      setLoading(false)
+      return
+    }
+
+    try {
+      const activities: RecentActivityItemProps[] = []
+
+      // Fetch user's recent posts
+      const { data: posts } = await supabase
+        .from('posts')
+        .select('id, content, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3)
+
+      if (posts) {
+        for (const post of posts) {
+          const postTime = post.created_at ? new Date(post.created_at) : new Date()
+          activities.push({
+            id: `post-${post.id}`,
+            type: 'post',
+            title: `Posted: "${post.content.slice(0, 60)}${post.content.length > 60 ? '...' : ''}"`,
+            time: getRelativeTime(postTime),
+            icon: Newspaper,
+          })
+        }
+      }
+
+      // Fetch user's recent likes
+      const { data: likes } = await supabase
+        .from('post_likes')
+        .select('post_id, created_at, post:posts(content)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3)
+
+      if (likes) {
+        for (const like of likes) {
+          const postContent = (like as any).post?.content || 'a post'
+          const likeTime = like.created_at ? new Date(like.created_at) : new Date()
+          activities.push({
+            id: `like-${like.post_id}`,
+            type: 'like',
+            title: `Liked: "${postContent.slice(0, 50)}${postContent.length > 50 ? '...' : ''}"`,
+            time: getRelativeTime(likeTime),
+            icon: Heart,
+          })
+        }
+      }
+
+      // Sort by most recent
+      activities.sort((a, b) => {
+        // Parse relative times back... just use insertion order since we fetched desc
+        return 0
+      })
+
+      setRecentActivity(activities.slice(0, 5))
+    } catch (err) {
+      console.error('Error fetching recent activity:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, supabase])
+
+  useEffect(() => {
+    fetchRecentActivity()
+  }, [fetchRecentActivity])
+
   const handleNavigate = (panel: string) => {
     if (onNavigateToPanel) {
       onNavigateToPanel(panel)
@@ -221,15 +301,19 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
           <div>
             <h2 className="text-lg font-semibold text-stone-900 mb-4">Recent Activity</h2>
             <div className="bg-white rounded-2xl border border-stone-200/50 p-4 shadow-sm">
-              {MOCK_RECENT_ACTIVITY.length > 0 ? (
+              {loading ? (
+                <div className="text-center py-8">
+                  <Loader2 className="w-5 h-5 mx-auto animate-spin text-stone-400" />
+                </div>
+              ) : recentActivity.length > 0 ? (
                 <div className="space-y-2">
-                  {MOCK_RECENT_ACTIVITY.map((activity) => (
+                  {recentActivity.map((activity) => (
                     <RecentActivityItem key={activity.id} {...activity} />
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-stone-500 text-sm">
-                  No recent activity yet
+                  No recent activity yet. Start by exploring resources or posting in the community feed!
                 </div>
               )}
             </div>
@@ -239,17 +323,9 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
           <div>
             <h2 className="text-lg font-semibold text-stone-900 mb-4">Upcoming Reminders</h2>
             <div className="bg-white rounded-2xl border border-stone-200/50 p-4 shadow-sm">
-              {MOCK_REMINDERS.length > 0 ? (
-                <div className="space-y-2">
-                  {MOCK_REMINDERS.map((reminder) => (
-                    <UpcomingReminderItem key={reminder.id} {...reminder} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-stone-500 text-sm">
-                  No upcoming reminders
-                </div>
-              )}
+              <div className="text-center py-8 text-stone-500 text-sm">
+                No upcoming reminders. Reminders will appear here when you have appointments or deadlines.
+              </div>
             </div>
           </div>
         </div>

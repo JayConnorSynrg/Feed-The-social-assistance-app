@@ -1,10 +1,10 @@
 'use client'
 
 // apps/web/src/components/panels/map-panel.tsx
-// Resource Map panel - shows resources on a map with list and detail view
-// Three-column layout: Resource List | Map | Resource Details
+// Resource Map panel - shows resources on an interactive Mapbox map
+// Three-column layout: Resource List | Interactive Map | Resource Details
 
-import React, { useState } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   Search,
   Filter,
@@ -12,112 +12,65 @@ import {
   Phone,
   Globe,
   Clock,
-  ChevronRight,
   Navigation,
   Star,
   CheckCircle,
   X,
+  List,
+  Map as MapIcon,
+  Loader2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { MapView, ResourceMarker, ClusterMarker, type ViewState, type Resource } from '@/components/map'
+import { useCluster } from '@/hooks/use-cluster'
+import { useViewportResources } from '@/hooks/use-viewport-resources'
+import { useGeolocation } from '@/hooks/use-geolocation'
 
 // ============================================
 // TYPES
 // ============================================
-interface Resource {
-  id: string
-  name: string
-  category: string
-  address: string
-  city: string
+interface MapResource extends Resource {
+  zip_code?: string
+  is_verified?: boolean
   distance?: string
-  phone?: string
-  website?: string
   hours?: string
-  isVerified?: boolean
   rating?: number
   status?: 'open' | 'closed' | 'unknown'
 }
 
-// ============================================
-// MOCK DATA
-// ============================================
-const MOCK_RESOURCES: Resource[] = [
-  {
-    id: '1',
-    name: 'LA Regional Food Bank',
-    category: 'Food',
-    address: '1734 E 41st Street',
-    city: 'Los Angeles',
-    distance: '2.3 mi',
-    phone: '(323) 234-3030',
-    website: 'lafoodbank.org',
-    hours: 'Mon-Fri: 8AM-5PM',
-    isVerified: true,
-    rating: 4.8,
-    status: 'open',
-  },
-  {
-    id: '2',
-    name: 'PATH Housing Services',
-    category: 'Housing',
-    address: '340 N Madison Ave',
-    city: 'Los Angeles',
-    distance: '3.1 mi',
-    phone: '(323) 644-2200',
-    hours: '24/7 Emergency',
-    isVerified: true,
-    rating: 4.5,
-    status: 'open',
-  },
-  {
-    id: '3',
-    name: 'Community Health Center',
-    category: 'Healthcare',
-    address: '1500 S Central Ave',
-    city: 'Los Angeles',
-    distance: '4.2 mi',
-    phone: '(213) 555-0123',
-    hours: 'Mon-Sat: 9AM-6PM',
-    isVerified: true,
-    rating: 4.3,
-    status: 'closed',
-  },
-  {
-    id: '4',
-    name: 'WorkSource Career Center',
-    category: 'Employment',
-    address: '4060 Whittier Blvd',
-    city: 'Los Angeles',
-    distance: '5.8 mi',
-    phone: '(323) 887-7000',
-    hours: 'Mon-Fri: 8AM-5PM',
-    isVerified: false,
-    rating: 4.1,
-    status: 'open',
-  },
-]
+// DEMO_RESOURCES removed - now using real Supabase data via useViewportResources
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Food: 'bg-orange-100 text-orange-700',
-  Housing: 'bg-blue-100 text-blue-700',
-  Healthcare: 'bg-red-100 text-red-700',
-  Employment: 'bg-green-100 text-green-700',
-  Education: 'bg-purple-100 text-purple-700',
-  Legal: 'bg-yellow-100 text-yellow-700',
+  food: 'bg-orange-100 text-orange-700',
+  housing: 'bg-blue-100 text-blue-700',
+  healthcare: 'bg-red-100 text-red-700',
+  employment: 'bg-green-100 text-green-700',
+  education: 'bg-purple-100 text-purple-700',
+  legal: 'bg-yellow-100 text-yellow-700',
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  food: 'Food',
+  housing: 'Housing',
+  healthcare: 'Healthcare',
+  employment: 'Employment',
+  education: 'Education',
+  legal: 'Legal',
 }
 
 // ============================================
 // RESOURCE LIST ITEM
 // ============================================
 interface ResourceListItemProps {
-  resource: Resource
+  resource: MapResource
   isSelected: boolean
   onClick: () => void
 }
 
 function ResourceListItem({ resource, isSelected, onClick }: ResourceListItemProps) {
   const categoryColor = CATEGORY_COLORS[resource.category] || 'bg-gray-100 text-gray-700'
+  const categoryLabel = CATEGORY_LABELS[resource.category] || resource.category
 
   return (
     <button
@@ -132,12 +85,12 @@ function ResourceListItem({ resource, isSelected, onClick }: ResourceListItemPro
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-medium text-sm line-clamp-1">{resource.name}</h3>
-            {resource.isVerified && (
+            {resource.is_verified && (
               <CheckCircle className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             )}
           </div>
           <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${categoryColor}`}>
-            {resource.category}
+            {categoryLabel}
           </span>
         </div>
         <span
@@ -171,12 +124,14 @@ function ResourceListItem({ resource, isSelected, onClick }: ResourceListItemPro
 // RESOURCE DETAIL PANEL
 // ============================================
 interface ResourceDetailProps {
-  resource: Resource
+  resource: MapResource
   onClose: () => void
+  onGetDirections: () => void
 }
 
-function ResourceDetail({ resource, onClose }: ResourceDetailProps) {
+function ResourceDetail({ resource, onClose, onGetDirections }: ResourceDetailProps) {
   const categoryColor = CATEGORY_COLORS[resource.category] || 'bg-gray-100 text-gray-700'
+  const categoryLabel = CATEGORY_LABELS[resource.category] || resource.category
 
   return (
     <div className="h-full flex flex-col">
@@ -185,12 +140,12 @@ function ResourceDetail({ resource, onClose }: ResourceDetailProps) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h2 className="font-semibold">{resource.name}</h2>
-            {resource.isVerified && (
+            {resource.is_verified && (
               <CheckCircle className="w-4 h-4 text-primary" />
             )}
           </div>
           <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
-            {resource.category}
+            {categoryLabel}
           </span>
         </div>
         <button
@@ -201,13 +156,20 @@ function ResourceDetail({ resource, onClose }: ResourceDetailProps) {
         </button>
       </div>
 
+      {/* Description */}
+      {resource.description && (
+        <p className="text-sm text-muted-foreground mb-4">{resource.description}</p>
+      )}
+
       {/* Details */}
       <div className="space-y-3 flex-1">
         <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
           <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
           <div>
-            <p className="text-sm">{resource.address}</p>
-            <p className="text-sm text-muted-foreground">{resource.city}</p>
+            <p className="text-sm">{resource.address_line1}</p>
+            <p className="text-sm text-muted-foreground">
+              {resource.city}, {resource.state} {resource.zip_code}
+            </p>
           </div>
         </div>
 
@@ -223,8 +185,8 @@ function ResourceDetail({ resource, onClose }: ResourceDetailProps) {
         {resource.website && (
           <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
             <Globe className="w-4 h-4 text-muted-foreground" />
-            <a href={`https://${resource.website}`} className="text-sm hover:text-primary" target="_blank">
-              {resource.website}
+            <a href={resource.website} className="text-sm hover:text-primary" target="_blank" rel="noopener noreferrer">
+              {resource.website.replace('https://', '')}
             </a>
           </div>
         )}
@@ -239,64 +201,18 @@ function ResourceDetail({ resource, onClose }: ResourceDetailProps) {
 
       {/* Actions */}
       <div className="pt-4 space-y-2">
-        <Button className="w-full" size="sm">
+        <Button className="w-full" size="sm" onClick={onGetDirections}>
           <Navigation className="w-4 h-4 mr-2" />
           Get Directions
         </Button>
-        <Button variant="outline" className="w-full" size="sm">
+        <Button
+          variant="outline"
+          className="w-full"
+          size="sm"
+          onClick={() => alert('Bookmarking coming soon!')}
+        >
           Save Resource
         </Button>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// MAP PLACEHOLDER
-// ============================================
-function MapPlaceholder({ resources }: { resources: Resource[] }) {
-  return (
-    <div className="h-full bg-muted/30 rounded-xl relative overflow-hidden">
-      {/* Fake map background */}
-      <div className="absolute inset-0 opacity-50">
-        <div className="w-full h-full" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.1'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }} />
-      </div>
-
-      {/* Map markers */}
-      {resources.map((resource, idx) => (
-        <div
-          key={resource.id}
-          className="absolute"
-          style={{
-            left: `${20 + (idx * 15)}%`,
-            top: `${30 + (idx * 10)}%`,
-          }}
-        >
-          <div className="relative">
-            <MapPin className="w-8 h-8 text-primary fill-primary" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full text-[10px] font-bold flex items-center justify-center shadow">
-              {idx + 1}
-            </span>
-          </div>
-        </div>
-      ))}
-
-      {/* Map location label */}
-      <div className="absolute top-4 left-4 bg-card/90 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow flex items-center gap-2">
-        <MapPin className="w-4 h-4 text-primary" />
-        <span className="text-sm font-medium">Los Angeles</span>
-      </div>
-
-      {/* Zoom controls */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-1">
-        <button className="w-8 h-8 bg-card/90 backdrop-blur-sm rounded-lg shadow flex items-center justify-center hover:bg-card">
-          +
-        </button>
-        <button className="w-8 h-8 bg-card/90 backdrop-blur-sm rounded-lg shadow flex items-center justify-center hover:bg-card">
-          −
-        </button>
       </div>
     </div>
   )
@@ -307,13 +223,116 @@ function MapPlaceholder({ resources }: { resources: Resource[] }) {
 // ============================================
 export function MapPanel() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
-  const [filterOpen, setFilterOpen] = useState(false)
+  const [selectedResource, setSelectedResource] = useState<MapResource | null>(null)
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map')
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false)
+  const [viewState, setViewState] = useState<ViewState>({
+    longitude: -118.2437, // Default: Los Angeles
+    latitude: 34.0522,
+    zoom: 11,
+  })
+  const [bounds, setBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null)
+  const [hasAutocentered, setHasAutocentered] = useState(false)
 
-  const filteredResources = MOCK_RESOURCES.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.category.toLowerCase().includes(searchQuery.toLowerCase())
+  // Real geolocation
+  const { position, getCurrentPosition } = useGeolocation()
+
+  // Auto-center on user location once
+  useEffect(() => {
+    if (!hasAutocentered) {
+      getCurrentPosition()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (position && !hasAutocentered) {
+      setViewState({
+        longitude: position.coords.longitude,
+        latitude: position.coords.latitude,
+        zoom: 12,
+      })
+      setHasAutocentered(true)
+    }
+  }, [position, hasAutocentered])
+
+  // Real Supabase resources query
+  const { resources: realResources, loading: resourcesLoading } = useViewportResources({
+    bounds,
+    enabled: !!bounds,
+  })
+
+  // Map real resources to MapResource interface
+  const mapResources: MapResource[] = useMemo(() => {
+    return realResources.map((r) => ({
+      ...r,
+      hours: r.hours_of_operation
+        ? Object.entries(r.hours_of_operation).map(([day, hours]) => `${day}: ${hours}`).join(', ')
+        : undefined,
+    }))
+  }, [realResources])
+
+  // Filter resources by search query and category
+  const filteredResources = useMemo(() => {
+    let filtered = mapResources
+    if (selectedCategory) {
+      filtered = filtered.filter((r) => r.category === selectedCategory)
+    }
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((r) =>
+        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+    return filtered
+  }, [searchQuery, selectedCategory, mapResources])
+
+  // Use clustering for map markers
+  const clusters = useCluster({
+    resources: filteredResources,
+    zoom: viewState.zoom,
+    bounds: bounds ? [bounds.west, bounds.south, bounds.east, bounds.north] : null,
+  })
+
+  const handleViewStateChange = useCallback((newViewState: ViewState) => {
+    setViewState(newViewState)
+  }, [])
+
+  const handleBoundsChange = useCallback(
+    (newBounds: { west: number; south: number; east: number; north: number }) => {
+      setBounds(newBounds)
+    },
+    []
   )
+
+  const handleResourceSelect = useCallback((resource: MapResource) => {
+    setSelectedResource(resource)
+    // Pan to selected resource
+    setViewState({
+      longitude: resource.longitude,
+      latitude: resource.latitude,
+      zoom: 14,
+    })
+  }, [])
+
+  const handleClusterClick = useCallback(
+    (clusterId: number, longitude: number, latitude: number) => {
+      setViewState({
+        longitude,
+        latitude,
+        zoom: Math.min(viewState.zoom + 2, 18),
+      })
+    },
+    [viewState.zoom]
+  )
+
+  const handleGetDirections = useCallback(() => {
+    if (selectedResource) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${selectedResource.latitude},${selectedResource.longitude}`
+      window.open(url, '_blank')
+    }
+  }, [selectedResource])
 
   return (
     <div className="h-full flex gap-4">
@@ -321,7 +340,27 @@ export function MapPanel() {
       <div className="w-72 flex-shrink-0 flex flex-col">
         {/* Search Header */}
         <div className="mb-4">
-          <h2 className="font-semibold mb-2">Resources</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold">Resources</h2>
+            <div className="flex gap-1">
+              <Button
+                variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode('map')}
+              >
+                <MapIcon className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode('list')}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -333,13 +372,36 @@ export function MapPanel() {
               />
             </div>
             <Button
-              variant="outline"
+              variant={showCategoryFilter ? 'secondary' : 'outline'}
               size="icon"
-              onClick={() => setFilterOpen(!filterOpen)}
+              onClick={() => setShowCategoryFilter(!showCategoryFilter)}
             >
               <Filter className="w-4 h-4" />
             </Button>
           </div>
+          {showCategoryFilter && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className={`px-2 py-1 rounded-full text-[10px] font-medium transition-colors ${
+                  !selectedCategory ? 'bg-[#4a5d23] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                All
+              </button>
+              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedCategory(selectedCategory === key ? null : key)}
+                  className={`px-2 py-1 rounded-full text-[10px] font-medium transition-colors ${
+                    selectedCategory === key ? 'bg-[#4a5d23] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Resource List */}
@@ -349,15 +411,57 @@ export function MapPanel() {
               key={resource.id}
               resource={resource}
               isSelected={selectedResource?.id === resource.id}
-              onClick={() => setSelectedResource(resource)}
+              onClick={() => handleResourceSelect(resource)}
             />
           ))}
+          {resourcesLoading && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
+              <p className="text-xs">Loading resources...</p>
+            </div>
+          )}
+          {!resourcesLoading && filteredResources.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No resources found</p>
+              <p className="text-xs mt-1">Pan the map to search this area</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Center: Map */}
-      <div className="flex-1">
-        <MapPlaceholder resources={filteredResources} />
+      {/* Center: Interactive Map */}
+      <div className="flex-1 rounded-xl overflow-hidden">
+        <MapView
+          initialViewState={viewState}
+          onViewStateChange={handleViewStateChange}
+          onBoundsChange={handleBoundsChange}
+          className="h-full"
+        >
+          {clusters.map((cluster) =>
+            cluster.isCluster ? (
+              <ClusterMarker
+                key={cluster.id}
+                longitude={cluster.longitude}
+                latitude={cluster.latitude}
+                pointCount={cluster.pointCount!}
+                onClick={() =>
+                  handleClusterClick(
+                    cluster.clusterId!,
+                    cluster.longitude,
+                    cluster.latitude
+                  )
+                }
+              />
+            ) : (
+              <ResourceMarker
+                key={cluster.id}
+                resource={cluster.resource!}
+                onClick={() => handleResourceSelect(cluster.resource as MapResource)}
+              />
+            )
+          )}
+        </MapView>
       </div>
 
       {/* Right Panel: Resource Details (conditional) */}
@@ -366,6 +470,7 @@ export function MapPanel() {
           <ResourceDetail
             resource={selectedResource}
             onClose={() => setSelectedResource(null)}
+            onGetDirections={handleGetDirections}
           />
         </div>
       )}

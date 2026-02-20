@@ -72,7 +72,7 @@ export function FeedList({ initialPosts = [] }: FeedListProps) {
         if (entries[0].isIntersecting && hasMore && !loading) {
           const lastPost = posts[posts.length - 1]
           if (lastPost) {
-            fetchPosts(lastPost.created_at)
+            fetchPosts(lastPost.created_at ?? undefined)
           }
         }
       },

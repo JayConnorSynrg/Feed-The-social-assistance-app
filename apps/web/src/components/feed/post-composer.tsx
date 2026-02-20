@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { X, Send, Link2, Globe, Users, HandHeart, HelpCircle, Image as ImageIcon, Copy, Check } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import { X, Send, Link2, Globe, Users, HandHeart, HelpCircle, Image as ImageIcon, Copy, Check, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { createClient } from '@/lib/supabase/client'
+import { getAppUrl } from '@/lib/utils/url'
+import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
+import { useCsrfToken } from '@/hooks/use-csrf-token'
+import { sanitizeInput, validateFileUpload } from '@/lib/security'
 
 interface PostComposerProps {
   isOpen: boolean
@@ -49,40 +53,144 @@ export function PostComposer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [embedCode, setEmbedCode] = useState('')
   const [copied, setCopied] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
+
+  // Security hooks
+  const { token: csrfToken } = useCsrfToken()
+  const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
+    limiterType: 'formSubmit',
+    onRateLimited: () => setError('Too many posts. Please wait a moment before trying again.'),
+  })
+  const { execute: executeFileUpload, isLimited: isFileUploadLimited } = useRateLimitedAction({
+    limiterType: 'fileUpload',
+    onRateLimited: () => setError('Too many file uploads. Please wait before uploading again.'),
+  })
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file
+      const validation = validateFileUpload(file, {
+        maxSizeMB: 5,
+        allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+      })
+
+      if (!validation.valid) {
+        setError(validation.error || 'Invalid file')
+        return
+      }
+
+      setError(null)
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }, [])
+
+  const handleRemoveImage = useCallback(() => {
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [])
+
+  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
+    return executeFileUpload(async () => {
+      setIsUploadingImage(true)
+      try {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+        const filePath = `post-images/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('public')
+          .upload(filePath, file)
+
+        if (uploadError) {
+          console.error('Image upload error:', uploadError)
+          setError('Failed to upload image')
+          return null
+        }
+
+        const { data } = supabase.storage.from('public').getPublicUrl(filePath)
+        return data.publicUrl
+      } catch (error) {
+        console.error('Image upload failed:', error)
+        setError('Image upload failed')
+        return null
+      } finally {
+        setIsUploadingImage(false)
+      }
+    })
+  }, [supabase, executeFileUpload])
 
   const handleSubmit = useCallback(async () => {
     if (!content.trim()) return
+    setError(null)
 
-    setIsSubmitting(true)
-    try {
-      await onSubmit({
-        content,
-        type: postType,
-        category: category || undefined,
-        publishTo,
-      })
+    // Execute with rate limiting
+    const result = await executeRateLimited(async () => {
+      setIsSubmitting(true)
+      try {
+        // Sanitize content
+        const sanitizedContent = sanitizeInput(content)
 
-      // If embed was selected, generate embed code
-      if (publishTo === 'embed') {
-        const embedSnippet = `<div class="feed-embed" data-type="${postType}" data-category="${category}">
-  <blockquote>${content}</blockquote>
+        let imageUrl: string | undefined
+
+        // Upload image if selected
+        if (imageFile) {
+          const uploadedUrl = await uploadImage(imageFile)
+          if (uploadedUrl) {
+            imageUrl = uploadedUrl
+          }
+        }
+
+        await onSubmit({
+          content: sanitizedContent,
+          type: postType,
+          category: category || undefined,
+          publishTo,
+          imageUrl,
+        })
+
+        // If embed was selected, generate embed code
+        if (publishTo === 'embed') {
+          const embedSnippet = `<div class="feed-embed" data-type="${postType}" data-category="${category}">
+  <blockquote>${sanitizedContent}</blockquote>
   <cite>— ${userName} on FEED</cite>
-  <a href="https://feedapp.community/share/${Date.now()}" target="_blank">View on FEED</a>
+  <a href="${getAppUrl()}/s/post/${Date.now()}" target="_blank">View on FEED</a>
 </div>`
-        setEmbedCode(embedSnippet)
-      } else {
-        // Reset and close for community posts
-        setContent('')
-        setPostType('offer')
-        setCategory('')
-        onClose()
+          setEmbedCode(embedSnippet)
+        } else {
+          // Reset and close for community posts
+          setContent('')
+          setPostType('offer')
+          setCategory('')
+          setError(null)
+          onClose()
+        }
+      } catch (error) {
+        console.error('Failed to submit post:', error)
+        setError('Failed to submit post. Please try again.')
+      } finally {
+        setIsSubmitting(false)
       }
-    } catch (error) {
-      console.error('Failed to submit post:', error)
-    } finally {
+    })
+
+    if (!result) {
       setIsSubmitting(false)
     }
-  }, [content, postType, category, publishTo, onSubmit, onClose, userName])
+  }, [content, postType, category, publishTo, onSubmit, onClose, userName, executeRateLimited, imageFile, uploadImage])
 
   const handleCopyEmbed = useCallback(() => {
     navigator.clipboard.writeText(embedCode)
@@ -96,6 +204,9 @@ export function PostComposer({
     setCategory('')
     setPublishTo('community')
     setEmbedCode('')
+    setImageFile(null)
+    setImagePreview(null)
+    setError(null)
     onClose()
   }, [onClose])
 
@@ -129,6 +240,23 @@ export function PostComposer({
         </div>
 
         <div className="p-4 space-y-5 overflow-y-auto h-[calc(100%-4rem)]">
+          {/* CSRF Token */}
+          <input type="hidden" name="csrf_token" value={csrfToken || ''} />
+
+          {/* Error Display */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Rate Limit Warning */}
+          {isLimited && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+              You are posting too quickly. Please wait a moment before trying again.
+            </div>
+          )}
+
           {/* Post Type Toggle */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-stone-700">What would you like to do?</label>
@@ -195,14 +323,54 @@ export function PostComposer({
             <p className="text-xs text-stone-500">{content.length}/500 characters</p>
           </div>
 
-          {/* Add Image (placeholder) */}
-          <Button
-            variant="outline"
-            className="w-full border-dashed border-lime-300 text-stone-600 hover:bg-lime-50"
-          >
-            <ImageIcon className="h-4 w-4 mr-2" />
-            Add Image (coming soon)
-          </Button>
+          {/* Add Image */}
+          <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            {imagePreview ? (
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full h-48 object-cover rounded-lg border border-lime-300"
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-dashed border-lime-300 text-stone-600 hover:bg-lime-50"
+                disabled={isUploadingImage}
+              >
+                {isUploadingImage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Add Image
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
 
           {/* Publish To */}
           <div className="space-y-2">
@@ -280,11 +448,13 @@ export function PostComposer({
           {/* Submit Button */}
           <Button
             onClick={handleSubmit}
-            disabled={!content.trim() || isSubmitting}
+            disabled={!content.trim() || isSubmitting || isLimited}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3"
           >
             {isSubmitting ? (
               'Posting...'
+            ) : isLimited ? (
+              'Please wait...'
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" />
@@ -293,13 +463,11 @@ export function PostComposer({
             )}
           </Button>
 
-          {/* Social Integration Notice */}
+          {/* Share Options Info */}
           <div className="text-center p-3 bg-lime-100/50 rounded-lg border border-lime-200">
             <p className="text-xs text-stone-600">
               <Globe className="h-3 w-3 inline mr-1" />
-              Direct social media integration coming soon!
-              <br />
-              Connect Facebook, Twitter, Instagram, and more.
+              Share your post with the community or copy the embed code to share on your website or blog.
             </p>
           </div>
         </div>

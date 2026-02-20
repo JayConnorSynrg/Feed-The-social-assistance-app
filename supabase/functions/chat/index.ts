@@ -24,11 +24,28 @@ const RATE_LIMIT = {
   maxRequests: 20, // 20 requests per minute per user
 }
 
-// CORS headers for cross-origin requests
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// CORS configuration - restrict to app domains
+const ALLOWED_ORIGINS = [
+  Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'capacitor://localhost',  // Mobile app (iOS)
+  'http://localhost',       // Mobile app (Android webview)
+  'ionic://localhost',      // Ionic dev
+]
+
+// Get CORS headers with validated origin
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0] // Default to APP_URL
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+  }
 }
 
 interface ChatMessage {
@@ -120,7 +137,8 @@ async function callOpenRouter(
 
 async function handleStreamingResponse(
   openRouterResponse: Response,
-  modelUsed: string
+  modelUsed: string,
+  corsHeaders: Record<string, string>
 ): Promise<Response> {
   const reader = openRouterResponse.body?.getReader()
   if (!reader) {
@@ -182,7 +200,8 @@ async function handleStreamingResponse(
 
 async function handleNonStreamingResponse(
   openRouterResponse: Response,
-  modelUsed: string
+  modelUsed: string,
+  corsHeaders: Record<string, string>
 ): Promise<Response> {
   const data = await openRouterResponse.json()
   const content = data.choices?.[0]?.message?.content || ''
@@ -244,6 +263,9 @@ async function tryModelWithFallback(
 }
 
 serve(async (req: Request) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -330,9 +352,9 @@ serve(async (req: Request) => {
 
     // Return response (streaming or non-streaming)
     if (stream) {
-      return handleStreamingResponse(openRouterResponse, modelUsed)
+      return handleStreamingResponse(openRouterResponse, modelUsed, corsHeaders)
     } else {
-      return handleNonStreamingResponse(openRouterResponse, modelUsed)
+      return handleNonStreamingResponse(openRouterResponse, modelUsed, corsHeaders)
     }
   } catch (error) {
     console.error('Chat function error:', error)

@@ -4,10 +4,15 @@
 // Community Feed panel - posts, updates, and interactions from mutual aid community
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
-import React, { useState } from 'react'
-import { Heart, MessageCircle, Share2, Send, User } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Heart, MessageCircle, Share2, Send, User, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
+import { sanitizeInput } from '@/lib/security'
+import { createClient } from '@/lib/supabase/client'
+import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
+import { useAuth } from '@/hooks/use-auth'
 
 // ============================================
 // TYPES
@@ -25,51 +30,7 @@ interface Post {
 
 type FilterType = 'all' | 'following' | 'mine' | 'announcements'
 
-// ============================================
-// MOCK DATA
-// ============================================
-const MOCK_POSTS: Post[] = [
-  {
-    id: '1',
-    author: { name: 'Community Kitchen', role: 'Organization' },
-    content: 'Free hot meals available today from 12-2pm at 123 Main St. All are welcome! 🍲',
-    timestamp: new Date(Date.now() - 3600000),
-    likes: 24,
-    comments: 5,
-    isLiked: false,
-    category: 'announcement'
-  },
-  {
-    id: '2',
-    author: { name: 'Maria G.', role: 'Community Member' },
-    content: 'Looking for recommendations for affordable childcare in the downtown area. Any suggestions?',
-    timestamp: new Date(Date.now() - 7200000),
-    likes: 8,
-    comments: 12,
-    isLiked: true,
-    category: 'request'
-  },
-  {
-    id: '3',
-    author: { name: 'James T.', role: 'Volunteer' },
-    content: 'I have extra winter coats (sizes M-XL) to donate. DM me if you or someone you know needs one!',
-    timestamp: new Date(Date.now() - 86400000),
-    likes: 45,
-    comments: 8,
-    isLiked: false,
-    category: 'offer'
-  },
-  {
-    id: '4',
-    author: { name: 'FEED Admin', role: 'Platform' },
-    content: 'New resources added! Check out the updated food bank listings in your area. 📍',
-    timestamp: new Date(Date.now() - 172800000),
-    likes: 67,
-    comments: 3,
-    isLiked: true,
-    category: 'announcement'
-  }
-]
+// MOCK_POSTS removed - now fetching from Supabase
 
 const CATEGORY_COLORS: Record<Post['category'], string> = {
   announcement: 'bg-blue-100 text-blue-700',
@@ -140,15 +101,36 @@ interface CreatePostCardProps {
 
 function CreatePostCard({ onPost }: CreatePostCardProps) {
   const [content, setContent] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = () => {
+  const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
+    limiterType: 'formSubmit',
+    onRateLimited: () => setError('Posting too quickly. Please wait a moment.'),
+  })
+
+  const handleSubmit = async () => {
     if (!content.trim()) return
-    onPost(content)
-    setContent('')
+    setError(null)
+
+    const result = await executeRateLimited(async () => {
+      // Sanitize content before posting
+      const sanitizedContent = sanitizeInput(content)
+      onPost(sanitizedContent)
+      setContent('')
+    })
+
+    if (!result) {
+      // Rate limited - error is already set
+    }
   }
 
   return (
     <div className="mb-4 p-4 rounded-xl bg-[#faf9f6] border border-stone-200">
+      {error && (
+        <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+          {error}
+        </div>
+      )}
       <div className="flex gap-3">
         {/* User Avatar */}
         <div className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0">
@@ -160,13 +142,14 @@ function CreatePostCard({ onPost }: CreatePostCardProps) {
           <Input
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            onKeyDown={(e) => e.key === 'Enter' && !isLimited && handleSubmit()}
             placeholder="Share an update, request, or offer..."
             className="flex-1 bg-white"
+            disabled={isLimited}
           />
           <Button
             onClick={handleSubmit}
-            disabled={!content.trim()}
+            disabled={!content.trim() || isLimited}
             size="icon"
             className="rounded-lg"
           >
@@ -287,47 +270,190 @@ interface FeedPanelProps {
 }
 
 export function FeedPanel({ userId }: FeedPanelProps) {
-  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS)
+  const [posts, setPosts] = useState<Post[]>([])
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+  const [loading, setLoading] = useState(true)
+  const { user, isAuthenticated } = useAuth()
+  const supabase = createClient()
 
-  const handleCreatePost = (content: string) => {
-    const newPost: Post = {
-      id: Date.now().toString(),
-      author: { name: 'You', role: 'Community Member' },
-      content,
-      timestamp: new Date(),
-      likes: 0,
-      comments: 0,
-      isLiked: false,
-      category: 'update',
+  // Fetch posts from Supabase
+  const fetchPosts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*, user:profiles(id, full_name, avatar_url, is_admin)')
+        .eq('is_hidden', false)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+
+      // Get like counts and user-liked status
+      const postIds = (data || []).map((p: any) => p.id)
+      let likeCounts: Record<string, number> = {}
+      let userLikes: Set<string> = new Set()
+
+      if (postIds.length > 0) {
+        // Get like counts
+        const { data: likes } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .in('post_id', postIds)
+
+        if (likes) {
+          for (const like of likes) {
+            likeCounts[like.post_id] = (likeCounts[like.post_id] || 0) + 1
+          }
+        }
+
+        // Check which posts the current user liked
+        if (user) {
+          const { data: myLikes } = await supabase
+            .from('post_likes')
+            .select('post_id')
+            .in('post_id', postIds)
+            .eq('user_id', user.id)
+
+          if (myLikes) {
+            for (const like of myLikes) {
+              userLikes.add(like.post_id)
+            }
+          }
+        }
+
+        // Get comment counts
+        const { data: comments } = await supabase
+          .from('post_comments')
+          .select('post_id')
+          .in('post_id', postIds)
+          .eq('is_hidden', false)
+
+        const commentCounts: Record<string, number> = {}
+        if (comments) {
+          for (const comment of comments) {
+            commentCounts[comment.post_id] = (commentCounts[comment.post_id] || 0) + 1
+          }
+        }
+
+        // Transform to Post interface
+        const transformed: Post[] = (data || []).map((row: any) => ({
+          id: row.id,
+          author: {
+            name: row.user?.full_name || 'Anonymous',
+            avatar: row.user?.avatar_url || undefined,
+            role: row.user?.is_admin ? 'Admin' : 'Community Member',
+          },
+          content: row.content,
+          timestamp: new Date(row.created_at),
+          likes: likeCounts[row.id] || 0,
+          comments: commentCounts[row.id] || 0,
+          isLiked: userLikes.has(row.id),
+          category: row.is_pinned ? 'announcement' : 'update',
+        }))
+
+        setPosts(transformed)
+      } else {
+        setPosts([])
+      }
+    } catch (err) {
+      console.error('Error fetching posts:', err)
+    } finally {
+      setLoading(false)
     }
-    setPosts([newPost, ...posts])
+  }, [supabase, user])
+
+  // Initial fetch
+  useEffect(() => {
+    fetchPosts()
+  }, [fetchPosts])
+
+  // Real-time updates
+  useRealtimeFeed({
+    onInsert: (newPost) => {
+      // Refetch to get full data with joins
+      fetchPosts()
+    },
+    onUpdate: () => fetchPosts(),
+    onDelete: (postId) => {
+      setPosts(prev => prev.filter(p => p.id !== postId))
+    },
+    enabled: true,
+  })
+
+  const handleCreatePost = async (content: string) => {
+    if (!user) return
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          content,
+        })
+
+      if (error) throw error
+      // Real-time subscription will handle adding the post
+    } catch (err) {
+      console.error('Error creating post:', err)
+    }
   }
 
-  const handleLike = (postId: string) => {
-    setPosts(posts.map(post =>
-      post.id === postId
-        ? { ...post, isLiked: !post.isLiked, likes: post.isLiked ? post.likes - 1 : post.likes + 1 }
-        : post
+  const handleLike = async (postId: string) => {
+    if (!user) return
+
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+
+    // Optimistic update
+    setPosts(posts.map(p =>
+      p.id === postId
+        ? { ...p, isLiked: !p.isLiked, likes: p.isLiked ? p.likes - 1 : p.likes + 1 }
+        : p
     ))
+
+    try {
+      if (post.isLiked) {
+        await supabase
+          .from('post_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id)
+      } else {
+        await supabase
+          .from('post_likes')
+          .insert({ post_id: postId, user_id: user.id })
+      }
+    } catch (err) {
+      // Revert optimistic update
+      setPosts(posts.map(p =>
+        p.id === postId
+          ? { ...p, isLiked: post.isLiked, likes: post.likes }
+          : p
+      ))
+    }
   }
 
   const handleComment = (postId: string) => {
-    // Placeholder for comment functionality
+    // TODO: Open comment thread
     console.log('Comment on post:', postId)
   }
 
   const handleShare = (postId: string) => {
-    // Placeholder for share functionality
-    console.log('Share post:', postId)
+    if (navigator.share) {
+      navigator.share({
+        title: 'FEED Community Post',
+        url: `${window.location.origin}/post/${postId}`,
+      }).catch(() => {})
+    }
   }
 
-  // Filter posts based on active filter
+  // Filter posts
   const filteredPosts = posts.filter(post => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'announcements') return post.category === 'announcement'
-    if (activeFilter === 'mine') return post.author.name === 'You'
-    if (activeFilter === 'following') return post.author.role !== 'You' // Mock filter
+    if (activeFilter === 'mine') return post.author.name === (user ? 'You' : '')
     return true
   })
 
@@ -337,11 +463,16 @@ export function FeedPanel({ userId }: FeedPanelProps) {
       <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
 
       {/* Create Post Card */}
-      <CreatePostCard onPost={handleCreatePost} />
+      {isAuthenticated && <CreatePostCard onPost={handleCreatePost} />}
 
       {/* Scrollable Feed */}
       <div className="flex-1 overflow-y-auto space-y-3">
-        {filteredPosts.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
+            <p className="text-sm">Loading posts...</p>
+          </div>
+        ) : filteredPosts.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <p className="text-sm">No posts to show</p>
             <p className="text-xs mt-1">Be the first to share something!</p>

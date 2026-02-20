@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatDistanceToNow } from 'date-fns'
-import { Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react'
+import { Heart, MessageCircle, Share2, MoreHorizontal, Check } from 'lucide-react'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { generateShareUrl } from '@/lib/utils/url'
 import type { Post, Profile } from '@feed/database'
 
 interface PostCardProps {
@@ -31,12 +32,36 @@ export function PostCard({
 }: PostCardProps) {
   const [liked, setLiked] = useState(isLiked)
   const [likes, setLikes] = useState(likeCount)
+  const [shareConfirm, setShareConfirm] = useState(false)
 
   const handleLike = () => {
     setLiked(!liked)
     setLikes(liked ? likes - 1 : likes + 1)
     onLike?.(post.id)
   }
+
+  const handleShare = useCallback(async () => {
+    const url = generateShareUrl('post', post.id)
+    const shareData = {
+      title: `${post.user?.full_name || 'Someone'} on FEED`,
+      text: post.content.length > 100 ? post.content.slice(0, 97) + '...' : post.content,
+      url,
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch {
+        // User cancelled or share failed — ignore
+      }
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(url)
+      setShareConfirm(true)
+      setTimeout(() => setShareConfirm(false), 2000)
+    }
+
+    onShare?.(post.id)
+  }, [post.id, post.content, post.user?.full_name, onShare])
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return '?'
@@ -48,7 +73,8 @@ export function PostCard({
       .slice(0, 2)
   }
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | null) => {
+    if (!date) return ''
     return formatDistanceToNow(new Date(date), { addSuffix: true })
   }
 
@@ -115,8 +141,12 @@ export function PostCard({
             <MessageCircle className="h-4 w-4 mr-1" />
             {commentCount > 0 && <span>{commentCount}</span>}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => onShare?.(post.id)}>
-            <Share2 className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={handleShare}>
+            {shareConfirm ? (
+              <Check className="h-4 w-4 text-green-600" />
+            ) : (
+              <Share2 className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </CardFooter>

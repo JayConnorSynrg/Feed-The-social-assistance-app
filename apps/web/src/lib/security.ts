@@ -202,7 +202,8 @@ export const secureCookie = {
 }
 
 /**
- * Password strength validator
+ * Password strength validator (Client-side)
+ * Note: Server-side validation via /validate-password Edge Function is authoritative
  */
 export function validatePasswordStrength(password: string): {
   valid: boolean
@@ -212,10 +213,11 @@ export function validatePasswordStrength(password: string): {
   const feedback: string[] = []
   let score = 0
 
-  if (password.length >= 8) score++
-  else feedback.push('Password must be at least 8 characters')
-
+  // Government-grade minimum: 12 characters (upgraded from 8)
   if (password.length >= 12) score++
+  else feedback.push('Password must be at least 12 characters')
+
+  if (password.length >= 16) score++
 
   if (/[a-z]/.test(password)) score++
   else feedback.push('Add lowercase letters')
@@ -227,20 +229,47 @@ export function validatePasswordStrength(password: string): {
   else feedback.push('Add numbers')
 
   if (/[^a-zA-Z0-9]/.test(password)) score++
-  else feedback.push('Add special characters')
+  else feedback.push('Add special characters (!@#$%^&*)')
 
   // Check for common patterns
-  const commonPatterns = ['123456', 'password', 'qwerty', 'abc123']
+  const commonPatterns = ['123456', 'password', 'qwerty', 'abc123', '12345678']
   if (commonPatterns.some(p => password.toLowerCase().includes(p))) {
     score = Math.max(0, score - 2)
     feedback.push('Avoid common password patterns')
   }
 
   return {
-    valid: score >= 4 && password.length >= 8,
+    valid: score >= 4 && password.length >= 12,
     score,
     feedback,
   }
+}
+
+/**
+ * Server-side password validation via Edge Function
+ * Use this for final validation before account creation/password changes
+ */
+export async function validatePasswordServer(
+  password: string,
+  email?: string,
+  username?: string
+): Promise<{
+  valid: boolean
+  score: number
+  strength: string
+  feedback: string[]
+}> {
+  const response = await fetch('/api/auth/validate-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, email, username }),
+  })
+
+  if (!response.ok) {
+    throw new Error('Password validation failed')
+  }
+
+  return response.json()
 }
 
 /**

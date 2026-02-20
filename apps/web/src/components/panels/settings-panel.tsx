@@ -4,7 +4,8 @@
 // Settings panel - User preferences, account settings, and profile management
 // Two-column layout: Settings Navigation | Settings Content
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   User,
   Bell,
@@ -19,9 +20,14 @@ import {
   Phone,
   MapPin,
   CheckCircle,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
+import { SecurityActivity } from '@/components/security/security-activity'
+import { useAuth } from '@/hooks/use-auth'
+import { createClient } from '@/lib/supabase/client'
 
 // ============================================
 // TYPES
@@ -59,15 +65,12 @@ interface SettingsData {
   }
 }
 
-// ============================================
-// MOCK DATA
-// ============================================
-const INITIAL_SETTINGS: SettingsData = {
+const DEFAULT_SETTINGS: SettingsData = {
   profile: {
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '(555) 123-4567',
-    location: 'San Francisco, CA'
+    name: '',
+    email: '',
+    phone: '',
+    location: ''
   },
   notifications: {
     emailUpdates: true,
@@ -221,9 +224,10 @@ function InputRow({ label, icon: Icon, value, onChange, type = 'text', disabled 
 interface ProfileSectionProps {
   profile: SettingsData['profile']
   onUpdate: (profile: SettingsData['profile']) => void
+  saving?: boolean
 }
 
-function ProfileSection({ profile, onUpdate }: ProfileSectionProps) {
+function ProfileSection({ profile, onUpdate, saving }: ProfileSectionProps) {
   const [editMode, setEditMode] = useState(false)
   const [localProfile, setLocalProfile] = useState(profile)
 
@@ -297,11 +301,15 @@ function ProfileSection({ profile, onUpdate }: ProfileSectionProps) {
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} className="flex-1">
-              <Save className="w-4 h-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSave} className="flex-1" disabled={saving}>
+              {saving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {saving ? 'Saving...' : 'Save Changes'}
             </Button>
-            <Button variant="outline" onClick={handleCancel} className="flex-1">
+            <Button variant="outline" onClick={handleCancel} className="flex-1" disabled={saving}>
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
@@ -433,6 +441,110 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
 // ACCOUNT SECTION
 // ============================================
 function AccountSection() {
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [showMFAEnrollment, setShowMFAEnrollment] = useState(false)
+  const [showMFADisable, setShowMFADisable] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const { signOut } = useAuth()
+  const router = useRouter()
+
+  // Check MFA status on mount
+  useEffect(() => {
+    const checkMFAStatus = async () => {
+      const { mfaService } = await import('@/lib/mfa')
+      const enabled = await mfaService.isMFAEnabled()
+      setMfaEnabled(enabled)
+    }
+    checkMFAStatus()
+  }, [])
+
+  const handleEnableMFA = () => {
+    setShowMFAEnrollment(true)
+  }
+
+  const handleMFAEnrollmentSuccess = () => {
+    setShowMFAEnrollment(false)
+    setMfaEnabled(true)
+  }
+
+  const handleDisableMFA = async () => {
+    setLoading(true)
+    try {
+      const { mfaService } = await import('@/lib/mfa')
+      const factors = await mfaService.listFactors()
+      const verifiedFactor = factors.find(f => f.status === 'verified')
+
+      if (verifiedFactor) {
+        const success = await mfaService.unenrollTOTP(verifiedFactor.id)
+        if (success) {
+          setMfaEnabled(false)
+          setShowMFADisable(false)
+        }
+      }
+    } catch (error) {
+      console.error('Error disabling MFA:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true)
+    setDeleteError(null)
+
+    // Use an AbortController with a 30-second timeout so the fetch is not
+    // cancelled by component unmount or Next.js route transitions.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setDeleteError('No active session. Please sign in again.')
+        setDeleteLoading(false)
+        return
+      }
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        }
+      )
+
+      clearTimeout(timeoutId)
+
+      const body = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(body.error || body.message || `Request failed: ${res.status}`)
+      }
+
+      // Account deleted — sign out and redirect
+      await signOut()
+      router.push('/login')
+    } catch (err) {
+      clearTimeout(timeoutId)
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete account')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   return (
     <SettingsSection
       title="Account Settings"
@@ -443,7 +555,11 @@ function AccountSection() {
         <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
           <div className="flex items-center justify-between mb-2">
             <p className="font-medium text-sm">Password</p>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/forgot-password')}
+            >
               Change
             </Button>
           </div>
@@ -451,6 +567,75 @@ function AccountSection() {
             Last changed 3 months ago
           </p>
         </div>
+
+        {/* Two-Factor Authentication */}
+        {!showMFAEnrollment ? (
+          <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="font-medium text-sm">Two-Factor Authentication</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {mfaEnabled ? 'Enabled - Your account is protected' : 'Add an extra layer of security'}
+                </p>
+              </div>
+              {mfaEnabled ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMFADisable(true)}
+                  >
+                    Disable
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEnableMFA}
+                >
+                  Enable
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-white rounded-xl border-2 border-[#4a5d23]">
+            <MFAEnrollment
+              onSuccess={handleMFAEnrollmentSuccess}
+              onCancel={() => setShowMFAEnrollment(false)}
+            />
+          </div>
+        )}
+
+        {/* Disable MFA Confirmation */}
+        {showMFADisable && (
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+            <p className="font-medium text-sm text-amber-900 mb-2">Disable Two-Factor Authentication?</p>
+            <p className="text-xs text-amber-800 mb-3">
+              Your account will be less secure without 2FA. Are you sure?
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisableMFA}
+                disabled={loading}
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                {loading ? 'Disabling...' : 'Yes, Disable'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMFADisable(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Connected Accounts */}
         <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
@@ -471,15 +656,62 @@ function AccountSection() {
           </div>
         </div>
 
+        {/* Security Activity */}
+        <div className="p-4 bg-white rounded-xl border border-stone-200">
+          <SecurityActivity />
+        </div>
+
         {/* Delete Account */}
         <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-          <p className="font-medium text-sm text-red-900 mb-1">Delete Account</p>
-          <p className="text-xs text-red-700 mb-3">
-            Permanently delete your account and all data
-          </p>
-          <Button variant="outline" size="sm" className="text-red-600 border-red-300 hover:bg-red-100">
-            Delete Account
-          </Button>
+          {!showDeleteConfirm ? (
+            <>
+              <p className="font-medium text-sm text-red-900 mb-1">Delete Account</p>
+              <p className="text-xs text-red-700 mb-3">
+                Permanently delete your account and all data
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-100"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Delete Account
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-sm text-red-900 mb-1">Are you sure? This cannot be undone.</p>
+              <p className="text-xs text-red-700 mb-3">
+                All your posts, messages, and personal data will be permanently removed.
+              </p>
+              {deleteError && (
+                <p className="text-xs text-red-800 bg-red-100 rounded px-2 py-1 mb-3">{deleteError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 border-red-300 hover:bg-red-100"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? (
+                    <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Deleting...</>
+                  ) : (
+                    'Yes, delete everything'
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteError(null) }}
+                  disabled={deleteLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </SettingsSection>
@@ -527,30 +759,124 @@ function AccessibilitySection({ accessibility, onUpdate }: AccessibilitySectionP
 }
 
 // ============================================
+// LOCAL PREFERENCES (notifications, privacy, accessibility)
+// ============================================
+const PREFS_KEY = 'feed-settings-prefs'
+
+function loadLocalPrefs(): Omit<SettingsData, 'profile'> {
+  if (typeof window === 'undefined') {
+    return {
+      notifications: DEFAULT_SETTINGS.notifications,
+      privacy: DEFAULT_SETTINGS.privacy,
+      accessibility: DEFAULT_SETTINGS.accessibility,
+    }
+  }
+  try {
+    const stored = localStorage.getItem(PREFS_KEY)
+    if (stored) return JSON.parse(stored)
+  } catch {}
+  return {
+    notifications: DEFAULT_SETTINGS.notifications,
+    privacy: DEFAULT_SETTINGS.privacy,
+    accessibility: DEFAULT_SETTINGS.accessibility,
+  }
+}
+
+function saveLocalPrefs(prefs: Omit<SettingsData, 'profile'>) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+  } catch {}
+}
+
+// ============================================
 // MAIN SETTINGS PANEL
 // ============================================
 export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
-  const [settings, setSettings] = useState<SettingsData>(INITIAL_SETTINGS)
+  const { user, profile, refreshSession } = useAuth()
+  const supabase = createClient()
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
-  const updateProfile = (profile: SettingsData['profile']) => {
-    setSettings({ ...settings, profile })
+  // Build profile settings from auth data
+  const profileSettings: SettingsData['profile'] = {
+    name: (profile as any)?.full_name || '',
+    email: user?.email || '',
+    phone: (profile as any)?.phone || '',
+    location: [
+      (profile as any)?.location_city,
+      (profile as any)?.location_state
+    ].filter(Boolean).join(', ') || '',
   }
 
+  // Local preferences (notifications, privacy, accessibility)
+  const [localPrefs, setLocalPrefs] = useState(loadLocalPrefs)
+
+  const updateProfile = useCallback(async (newProfile: SettingsData['profile']) => {
+    if (!user) return
+    setSaving(true)
+    setSaveMessage(null)
+
+    // Parse location into city/state
+    const locationParts = newProfile.location.split(',').map(s => s.trim())
+    const city = locationParts[0] || null
+    const state = locationParts[1] || null
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: newProfile.name,
+          location_city: city,
+          location_state: state,
+          phone: newProfile.phone,
+        } as any)
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      // Refresh auth to pick up new profile
+      await refreshSession()
+      setSaveMessage('Profile updated successfully')
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (err) {
+      console.error('Error saving profile:', err)
+      setSaveMessage('Failed to save changes')
+      setTimeout(() => setSaveMessage(null), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }, [user, supabase, refreshSession])
+
   const updateNotifications = (notifications: SettingsData['notifications']) => {
-    setSettings({ ...settings, notifications })
+    const updated = { ...localPrefs, notifications }
+    setLocalPrefs(updated)
+    saveLocalPrefs(updated)
   }
 
   const updatePrivacy = (privacy: SettingsData['privacy']) => {
-    setSettings({ ...settings, privacy })
+    const updated = { ...localPrefs, privacy }
+    setLocalPrefs(updated)
+    saveLocalPrefs(updated)
   }
 
   const updateAccessibility = (accessibility: SettingsData['accessibility']) => {
-    setSettings({ ...settings, accessibility })
+    const updated = { ...localPrefs, accessibility }
+    setLocalPrefs(updated)
+    saveLocalPrefs(updated)
   }
 
   return (
     <div className="h-full flex gap-6">
+      {/* Save Status */}
+      {saveMessage && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg ${
+          saveMessage.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`}>
+          {saveMessage}
+        </div>
+      )}
+
       {/* Left Navigation */}
       <div className="w-12 sm:w-48 flex-shrink-0">
         <div className="space-y-1">
@@ -569,19 +895,19 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl">
           {activeSection === 'profile' && (
-            <ProfileSection profile={settings.profile} onUpdate={updateProfile} />
+            <ProfileSection profile={profileSettings} onUpdate={updateProfile} saving={saving} />
           )}
           {activeSection === 'notifications' && (
-            <NotificationSection notifications={settings.notifications} onUpdate={updateNotifications} />
+            <NotificationSection notifications={localPrefs.notifications} onUpdate={updateNotifications} />
           )}
           {activeSection === 'privacy' && (
-            <PrivacySection privacy={settings.privacy} onUpdate={updatePrivacy} />
+            <PrivacySection privacy={localPrefs.privacy} onUpdate={updatePrivacy} />
           )}
           {activeSection === 'account' && (
             <AccountSection />
           )}
           {activeSection === 'accessibility' && (
-            <AccessibilitySection accessibility={settings.accessibility} onUpdate={updateAccessibility} />
+            <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
           )}
         </div>
       </div>

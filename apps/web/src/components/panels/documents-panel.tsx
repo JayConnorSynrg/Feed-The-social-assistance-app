@@ -4,7 +4,7 @@
 // Documents Panel - Secure document management for uploaded files
 // Supports drag-and-drop upload, categorization, and document actions
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   FileText,
   Image,
@@ -22,9 +22,15 @@ import {
   X,
   Plus,
   ChevronRight,
+  Lock,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { EncryptedUpload } from '@/components/documents/encrypted-upload'
+import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
+import { useAuthContext } from '@/providers/auth-provider'
+import { createClient } from '@/lib/supabase/client'
 
 // ============================================
 // TYPES
@@ -39,6 +45,7 @@ interface Document {
   size: number // in bytes
   uploadedAt: Date
   thumbnailUrl?: string
+  isEncrypted?: boolean
 }
 
 interface DocumentsPanelProps {
@@ -179,77 +186,7 @@ function DocumentsHeader({ documentCount, searchQuery, onSearchChange }: Documen
   )
 }
 
-// ============================================
-// UPLOAD ZONE
-// ============================================
-interface UploadZoneProps {
-  onUpload: (files: FileList) => void
-}
-
-function UploadZone({ onUpload }: UploadZoneProps) {
-  const [isDragging, setIsDragging] = useState(false)
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    if (e.dataTransfer.files.length > 0) {
-      onUpload(e.dataTransfer.files)
-    }
-  }, [onUpload])
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      onUpload(e.target.files)
-    }
-  }, [onUpload])
-
-  return (
-    <div
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`
-        relative mb-6 p-6 rounded-xl border-2 border-dashed transition-all cursor-pointer
-        ${isDragging
-          ? 'border-[#4a5d23] bg-[#4a5d23]/5'
-          : 'border-stone-300 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee]'
-        }
-      `}
-    >
-      <input
-        type="file"
-        multiple
-        onChange={handleFileSelect}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-      />
-      <div className="flex flex-col items-center text-center">
-        <div className={`
-          w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors
-          ${isDragging ? 'bg-[#4a5d23] text-white' : 'bg-[#4a5d23]/10 text-[#4a5d23]'}
-        `}>
-          <Upload className="w-6 h-6" />
-        </div>
-        <p className="font-medium text-stone-900 mb-1">
-          {isDragging ? 'Drop files here' : 'Upload Documents'}
-        </p>
-        <p className="text-xs text-stone-500">
-          Drag and drop or click to browse. PDF, Images, Word files supported.
-        </p>
-      </div>
-    </div>
-  )
-}
+// Note: Upload zone removed - using EncryptedUpload component instead
 
 // ============================================
 // CATEGORY TABS
@@ -359,9 +296,10 @@ interface DocumentCardProps {
   onView: (doc: Document) => void
   onDownload: (doc: Document) => void
   onDelete: (doc: Document) => void
+  isDownloading?: boolean
 }
 
-function DocumentCard({ document, onView, onDownload, onDelete }: DocumentCardProps) {
+function DocumentCard({ document, onView, onDownload, onDelete, isDownloading }: DocumentCardProps) {
   const [showActions, setShowActions] = useState(false)
 
   const getDocumentIcon = () => {
@@ -407,8 +345,11 @@ function DocumentCard({ document, onView, onDownload, onDelete }: DocumentCardPr
 
         {/* Document Info */}
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm text-stone-900 truncate mb-1">
+          <h3 className="font-medium text-sm text-stone-900 truncate mb-1 flex items-center gap-2">
             {document.name}
+            {document.isEncrypted && (
+              <Lock className="w-3 h-3 text-[#4a5d23]" aria-label="Encrypted" />
+            )}
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${categoryConfig.color}`}>
@@ -433,6 +374,7 @@ function DocumentCard({ document, onView, onDownload, onDelete }: DocumentCardPr
             size="icon"
             onClick={() => onView(document)}
             className="h-8 w-8 text-stone-500 hover:text-[#4a5d23] hover:bg-[#4a5d23]/10"
+            disabled={isDownloading}
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -441,14 +383,20 @@ function DocumentCard({ document, onView, onDownload, onDelete }: DocumentCardPr
             size="icon"
             onClick={() => onDownload(document)}
             className="h-8 w-8 text-stone-500 hover:text-[#4a5d23] hover:bg-[#4a5d23]/10"
+            disabled={isDownloading}
           >
-            <Download className="w-4 h-4" />
+            {isDownloading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onDelete(document)}
             className="h-8 w-8 text-stone-500 hover:text-red-600 hover:bg-red-50"
+            disabled={isDownloading}
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -510,9 +458,55 @@ function EmptyState({ category, searchQuery }: EmptyStateProps) {
 // MAIN DOCUMENTS PANEL
 // ============================================
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
-  const [documents, setDocuments] = useState<Document[]>(MOCK_DOCUMENTS)
+  const { user } = useAuthContext()
+  const { downloadFile, deleteFile, isDownloading } = useEncryptedUpload()
+  const [documents, setDocuments] = useState<Document[]>([])
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  // Load documents from database
+  useEffect(() => {
+    const loadDocuments = async () => {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const supabase = createClient()
+        const { data, error } = await supabase
+          .from('user_documents')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error loading documents:', error)
+          return
+        }
+
+        const mappedDocs: Document[] = (data || []).map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
+          category: (doc.category || 'other') as DocumentCategory,
+          size: doc.original_size || doc.file_size || 0,
+          uploadedAt: new Date(doc.created_at || Date.now()),
+          isEncrypted: doc.is_encrypted || false,
+        }))
+
+        setDocuments(mappedDocs)
+      } catch (err) {
+        console.error('Failed to load documents:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDocuments()
+  }, [user?.id])
 
   // Calculate document counts per category
   const documentCounts = documents.reduce<Record<DocumentCategory, number>>(
@@ -532,31 +526,87 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     return matchesCategory && matchesSearch
   })
 
-  // Handlers
-  const handleUpload = (files: FileList) => {
-    const newDocs: Document[] = Array.from(files).map((file, index) => ({
-      id: `new-${Date.now()}-${index}`,
-      name: file.name,
-      type: file.type.includes('pdf') ? 'pdf' : file.type.includes('image') ? 'image' : 'word',
-      category: 'other' as DocumentCategory,
-      size: file.size,
-      uploadedAt: new Date(),
-    }))
-    setDocuments([...newDocs, ...documents])
+  // Handler for upload completion
+  const handleUploadComplete = useCallback(() => {
+    // Reload documents after upload
+    const loadDocuments = async () => {
+      if (!user?.id) return
+
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('user_documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const mappedDocs: Document[] = data.map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
+          category: (doc.category || 'other') as DocumentCategory,
+          size: doc.original_size || doc.file_size || 0,
+          uploadedAt: new Date(doc.created_at || Date.now()),
+          isEncrypted: doc.is_encrypted || false,
+        }))
+        setDocuments(mappedDocs)
+      }
+    }
+
+    loadDocuments()
+  }, [user?.id])
+
+  const handleView = async (doc: Document) => {
+    // Download and view in new tab
+    try {
+      setDownloadingId(doc.id)
+      const file = await downloadFile(doc.id)
+      const url = URL.createObjectURL(file)
+      window.open(url, '_blank')
+      // Clean up object URL after some time
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch (err) {
+      console.error('Failed to view document:', err)
+      alert('Failed to view document. Please ensure your vault is unlocked.')
+    } finally {
+      setDownloadingId(null)
+    }
   }
 
-  const handleView = (doc: Document) => {
-    console.log('View document:', doc.name)
-    // Placeholder for view functionality
+  const handleDownload = async (doc: Document) => {
+    try {
+      setDownloadingId(doc.id)
+      const file = await downloadFile(doc.id)
+
+      // Create download link
+      const url = URL.createObjectURL(file)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to download document:', err)
+      alert('Failed to download document. Please ensure your vault is unlocked.')
+    } finally {
+      setDownloadingId(null)
+    }
   }
 
-  const handleDownload = (doc: Document) => {
-    console.log('Download document:', doc.name)
-    // Placeholder for download functionality
-  }
+  const handleDelete = async (doc: Document) => {
+    if (!confirm(`Are you sure you want to delete "${doc.name}"?`)) {
+      return
+    }
 
-  const handleDelete = (doc: Document) => {
-    setDocuments(documents.filter((d) => d.id !== doc.id))
+    try {
+      await deleteFile(doc.id)
+      setDocuments(documents.filter((d) => d.id !== doc.id))
+    } catch (err) {
+      console.error('Failed to delete document:', err)
+      alert('Failed to delete document.')
+    }
   }
 
   return (
@@ -577,8 +627,12 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           onSearchChange={setSearchQuery}
         />
 
-        {/* Upload Zone */}
-        <UploadZone onUpload={handleUpload} />
+        {/* Encrypted Upload Zone */}
+        <EncryptedUpload
+          category={activeCategory === 'all' ? 'other' : activeCategory}
+          onUploadComplete={handleUploadComplete}
+          className="mb-6"
+        />
 
         {/* Category Tabs (Mobile/Tablet) */}
         <div className="lg:hidden">
@@ -591,7 +645,11 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
 
         {/* Documents Grid/List */}
         <div className="flex-1 overflow-y-auto">
-          {filteredDocuments.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
+            </div>
+          ) : filteredDocuments.length === 0 ? (
             <EmptyState category={activeCategory} searchQuery={searchQuery} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -602,6 +660,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
                   onView={handleView}
                   onDownload={handleDownload}
                   onDelete={handleDelete}
+                  isDownloading={downloadingId === doc.id}
                 />
               ))}
             </div>

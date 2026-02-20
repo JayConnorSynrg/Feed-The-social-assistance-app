@@ -19,6 +19,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Module-level singleton - avoids re-creating on every render
+let _supabase: ReturnType<typeof createClient> | null = null
+function getSupabase() {
+  if (!_supabase) _supabase = createClient()
+  return _supabase
+}
+
 interface AuthProviderProps {
   children: ReactNode
 }
@@ -30,30 +37,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<AuthError | null>(null)
 
-  const supabase = createClient()
+  // Initialize auth state once on mount
+  useEffect(() => {
+    const supabase = getSupabase()
 
-  // Fetch user profile
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
+    const fetchProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
 
-    if (error) {
-      console.error('Error fetching profile:', error)
-      return null
+      if (error) {
+        console.error('Error fetching profile:', error)
+        return null
+      }
+      return data as Profile
     }
 
-    return data as Profile
-  }, [supabase])
-
-  // Initialize auth state
-  useEffect(() => {
     const initAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
-
         if (error) throw error
 
         if (session?.user) {
@@ -71,9 +75,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     initAuth()
 
-    // Listen for auth changes
+    // Listen for auth changes (single listener for the whole app)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      async (_event, newSession) => {
         if (newSession?.user) {
           const userProfile = await fetchProfile(newSession.user.id)
           setUser(newSession.user)
@@ -91,34 +95,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase, fetchProfile])
+  }, []) // Empty deps - runs once on mount
 
   // Sign out
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await getSupabase().auth.signOut()
     if (error) {
       setError(error)
     }
-  }, [supabase])
+  }, [])
 
   // Refresh session
   const refreshSession = useCallback(async () => {
+    const supabase = getSupabase()
     const { data: { session: newSession }, error } = await supabase.auth.refreshSession()
     if (error) {
       setError(error)
     } else if (newSession) {
-      const userProfile = await fetchProfile(newSession.user.id)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', newSession.user.id)
+        .single()
       setUser(newSession.user)
       setSession(newSession)
-      setProfile(userProfile)
+      setProfile(profileData as Profile)
     }
-  }, [supabase, fetchProfile])
+  }, [])
 
   // Update profile
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     if (!user) return
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('profiles')
       .update(updates as never)
       .eq('id', user.id)
@@ -130,7 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     setProfile(data as Profile)
-  }, [supabase, user])
+  }, [user])
 
   const value: AuthContextType = {
     user,

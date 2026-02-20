@@ -89,7 +89,7 @@ export function useViewportResources({
 
         // Filter by category if specified
         if (category) {
-          query = query.eq('category', category)
+          query = query.eq('category', category as never)
         }
 
         // Note: For proper geospatial queries, we'd use PostGIS

@@ -1,13 +1,15 @@
 'use client'
 
 // apps/web/src/components/panels/chat-panel.tsx
-// AI Chat interface panel - the main landing view
-// "Hi, This is Feed. What can we help you gather today?"
+// AI Chat interface panel - wired to real Supabase edge function via useChat hook
 
-import React, { useState } from 'react'
-import { Send, Sparkles, Users, CalendarClock, Search, Apple, Building2, Heart, FileText } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
+import { Send, Sparkles, Users, CalendarClock, Search, Apple, Building2, Heart, FileText, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useChat, type ChatMessage } from '@/hooks/use-chat'
+import { useAuth } from '@/hooks/use-auth'
 
 // ============================================
 // FEATURE CARDS
@@ -74,16 +76,14 @@ function QuickTag({ label, icon: Icon, onClick, isActive }: QuickTagProps) {
 }
 
 // ============================================
-// CHAT MESSAGE
+// CHAT MESSAGE COMPONENT
 // ============================================
-interface ChatMessageProps {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp?: Date
+interface ChatMessageViewProps {
+  message: ChatMessage
 }
 
-function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
-  const isUser = role === 'user'
+function ChatMessageView({ message }: ChatMessageViewProps) {
+  const isUser = message.role === 'user'
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -94,13 +94,40 @@ function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
             : 'bg-muted rounded-bl-md'
         }`}
       >
-        <p className="text-sm">{content}</p>
-        {timestamp && (
-          <p className={`text-[10px] mt-1 ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
+        <p className="text-sm whitespace-pre-wrap">{message.content || (message.isStreaming ? '' : '')}</p>
+        {message.isStreaming && !message.content && (
+          <div className="flex gap-1">
+            <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
+            <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:100ms]" />
+            <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:200ms]" />
+          </div>
         )}
+        <div className="flex items-center gap-2 mt-1">
+          {message.timestamp && (
+            <p className={`text-[10px] ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+          {message.model && !isUser && (
+            <p className="text-[10px] text-muted-foreground">
+              via {message.model.split('/').pop()}
+            </p>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ============================================
+// SIGN IN PROMPT
+// ============================================
+function SignInPrompt() {
+  return (
+    <div className="flex items-center justify-center p-4 bg-amber-50 rounded-lg border border-amber-200">
+      <p className="text-sm text-amber-700">
+        Please <Link href="/login" className="font-medium underline">sign in</Link> to chat with FEED Assistant.
+      </p>
     </div>
   )
 }
@@ -115,32 +142,30 @@ interface ChatPanelProps {
 export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessageProps[]>([])
-  const [isTyping, setIsTyping] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { isAuthenticated } = useAuth()
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return
+  const {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    stopStreaming,
+  } = useChat({
+    flow: 'general',
+    onError: (err) => console.error('Chat error:', err),
+  })
 
-    // Add user message
-    const userMessage: ChatMessageProps = {
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, userMessage])
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isLoading) return
+    const message = inputValue
     setInputValue('')
-
-    // Simulate AI response
-    setIsTyping(true)
-    setTimeout(() => {
-      const assistantMessage: ChatMessageProps = {
-        role: 'assistant',
-        content: `I can help you find resources related to "${inputValue}". Would you like me to search for nearby services or check your eligibility for assistance programs?`,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsTyping(false)
-    }, 1500)
+    await sendMessage(message)
   }
 
   const handleTagClick = (tag: string) => {
@@ -151,6 +176,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const handleFeatureClick = (feature: string) => {
     if (feature === 'resources' && onNavigateToMap) {
       onNavigateToMap()
+    } else if (isAuthenticated) {
+      sendMessage(`Help me with ${feature}`)
     } else {
       setInputValue(`Help me with ${feature}`)
     }
@@ -201,19 +228,27 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             />
           </div>
 
+          {!isAuthenticated && <SignInPrompt />}
+
           {/* Chat Input */}
-          <div className="w-full space-y-3">
+          <div className="w-full space-y-3 mt-4">
+            {error && (
+              <div className="p-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                {error.message}
+              </div>
+            )}
             <div className="relative">
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ask me anything about benefits, resources, or assistance..."
+                placeholder={isAuthenticated ? 'Ask me anything about benefits, resources, or assistance...' : 'Sign in to start chatting...'}
                 className="pr-12 py-6 rounded-xl bg-[#f8f6f1] border-stone-200"
+                disabled={!isAuthenticated}
               />
               <Button
                 onClick={handleSend}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || isLoading || !isAuthenticated}
                 size="icon"
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
               >
@@ -241,21 +276,20 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
         <>
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto py-4">
-            {messages.map((msg, idx) => (
-              <ChatMessage key={idx} {...msg} />
+            {messages.map((msg) => (
+              <ChatMessageView key={msg.id} message={msg} />
             ))}
-            {isTyping && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce delay-100" />
-                    <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce delay-200" />
-                  </div>
-                </div>
-              </div>
-            )}
+            <div ref={messagesEndRef} />
           </div>
+
+          {/* Error display */}
+          {error && (
+            <div className="px-4 pb-2">
+              <div className="p-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                {error.message}
+              </div>
+            </div>
+          )}
 
           {/* Chat Input (Sticky at bottom) */}
           <div className="border-t pt-4 space-y-3">
@@ -267,14 +301,25 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
                 placeholder="Type your message..."
                 className="pr-12 py-4 rounded-xl"
               />
-              <Button
-                onClick={handleSend}
-                disabled={!inputValue.trim()}
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
+              {isLoading ? (
+                <Button
+                  onClick={stopStreaming}
+                  size="icon"
+                  variant="outline"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
+                >
+                  <Square className="w-3 h-3" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSend}
+                  disabled={!inputValue.trim()}
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              )}
             </div>
 
             {/* Quick Tags */}

@@ -10,19 +10,19 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Name search (most common search field)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_name_trgm
+CREATE INDEX IF NOT EXISTS idx_federated_resources_name_trgm
   ON federated_resources USING GIN (name gin_trgm_ops);
 
 -- Description search
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_desc_trgm
+CREATE INDEX IF NOT EXISTS idx_federated_resources_desc_trgm
   ON federated_resources USING GIN (description gin_trgm_ops);
 
 -- Resource type for category filtering
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_type
+CREATE INDEX IF NOT EXISTS idx_federated_resources_type
   ON federated_resources (resource_type);
 
 -- Composite index for source instance lookups
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_source
+CREATE INDEX IF NOT EXISTS idx_federated_resources_source
   ON federated_resources (source_instance_id, source_resource_id);
 
 -- =============================================
@@ -30,22 +30,22 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_source
 -- =============================================
 
 -- Lat/lng index for geographic queries using btree (for range scans)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_lat
+CREATE INDEX IF NOT EXISTS idx_federated_resources_lat
   ON federated_resources (latitude) WHERE latitude IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_lng
+CREATE INDEX IF NOT EXISTS idx_federated_resources_lng
   ON federated_resources (longitude) WHERE longitude IS NOT NULL;
 
 -- Composite lat/lng for bounding box queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_resources_geo
+CREATE INDEX IF NOT EXISTS idx_federated_resources_geo
   ON federated_resources (latitude, longitude)
   WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 -- Same for local resources
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_resources_name_trgm
+CREATE INDEX IF NOT EXISTS idx_resources_name_trgm
   ON resources USING GIN (name gin_trgm_ops);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_resources_desc_trgm
+CREATE INDEX IF NOT EXISTS idx_resources_desc_trgm
   ON resources USING GIN (description gin_trgm_ops);
 
 -- =============================================
@@ -53,11 +53,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_resources_desc_trgm
 -- =============================================
 
 -- Status filter (frequently used in queries)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_instances_status
+CREATE INDEX IF NOT EXISTS idx_federated_instances_status
   ON federated_instances (status);
 
 -- Domain lookup
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_instances_url
+CREATE INDEX IF NOT EXISTS idx_federated_instances_url
   ON federated_instances (instance_url);
 
 -- =============================================
@@ -65,11 +65,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federated_instances_url
 -- =============================================
 
 -- Active peer lookup
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federation_peers_enabled
+CREATE INDEX IF NOT EXISTS idx_federation_peers_enabled
   ON federation_peers (federation_enabled) WHERE federation_enabled = true;
 
 -- Peer trust score for ranking
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federation_peers_trust
+CREATE INDEX IF NOT EXISTS idx_federation_peers_trust
   ON federation_peers (trust_score DESC);
 
 -- =============================================
@@ -77,11 +77,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federation_peers_trust
 -- =============================================
 
 -- Recent syncs by peer
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federation_sync_log_peer_time
+CREATE INDEX IF NOT EXISTS idx_federation_sync_log_peer_time
   ON federation_sync_log (peer_id, started_at DESC);
 
 -- Failed syncs for monitoring
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_federation_sync_log_status
+CREATE INDEX IF NOT EXISTS idx_federation_sync_log_status
   ON federation_sync_log (sync_status) WHERE sync_status = 'failed';
 
 -- =============================================
@@ -99,7 +99,7 @@ SELECT
   fp.id AS peer_id,
   fp.trust_score,
   fp.federation_enabled,
-  fp.last_sync_at,
+  fp.updated_at AS last_sync_at,
   COALESCE(fr_counts.resource_count, 0) AS resource_count,
   COALESCE(sl_stats.total_syncs, 0) AS total_syncs,
   COALESCE(sl_stats.successful_syncs, 0) AS successful_syncs,
@@ -109,9 +109,9 @@ SELECT
     ELSE ROUND((COALESCE(sl_stats.successful_syncs, 0)::numeric / sl_stats.total_syncs) * 100, 2)
   END AS sync_success_rate,
   CASE
-    WHEN fp.trust_score >= 80 THEN 'high'
-    WHEN fp.trust_score >= 50 THEN 'medium'
-    WHEN fp.trust_score >= 20 THEN 'low'
+    WHEN fp.trust_score >= 0.80 THEN 'high'
+    WHEN fp.trust_score >= 0.50 THEN 'medium'
+    WHEN fp.trust_score >= 0.20 THEN 'low'
     ELSE 'untrusted'
   END AS trust_level
 FROM federated_instances fi
@@ -125,7 +125,7 @@ LEFT JOIN (
   SELECT
     peer_id,
     COUNT(*) AS total_syncs,
-    COUNT(*) FILTER (WHERE sync_status = 'completed') AS successful_syncs,
+    COUNT(*) FILTER (WHERE sync_status = 'success') AS successful_syncs,
     COUNT(*) FILTER (WHERE sync_status = 'failed') AS failed_syncs
   FROM federation_sync_log
   WHERE started_at > NOW() - INTERVAL '30 days'

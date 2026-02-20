@@ -36,36 +36,87 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Check MFA assurance level for authenticated users
+  if (user) {
+    try {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      const currentLevel = data?.currentLevel
+      const nextLevel = data?.nextLevel
+
+      // If user has MFA enrolled but hasn't completed verification in this session
+      if (nextLevel === 'aal2' && currentLevel === 'aal1') {
+        // Redirect to login with MFA step for protected routes
+        const protectedRoutes = ['/', '/onboarding', '/settings']
+        const isProtectedRoute = protectedRoutes.some(route => pathname === route || pathname.startsWith(route))
+
+        if (isProtectedRoute && pathname !== '/login') {
+          const redirectUrl = new URL('/login', request.url)
+          redirectUrl.searchParams.set('redirectTo', pathname)
+          redirectUrl.searchParams.set('step', 'mfa')
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
+    } catch (error) {
+      // MFA check failed, continue with normal flow
+      console.error('MFA check error:', error)
+    }
+  }
+
   // Public routes that don't require authentication
   const publicRoutes = [
-    '/',
     '/login',
     '/signup',
     '/auth/callback',
     '/auth/confirm',
     '/forgot-password',
     '/reset-password',
+    '/about',
+    '/mission',
+    '/blog',
+    '/resources',
+    '/demo',
   ]
+
+  // Root SPA - if authenticated, check onboarding completion
+  if (pathname === '/') {
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .single()
+
+      // Redirect to onboarding if not completed (and profile exists)
+      if (profile && !(profile as any).onboarding_completed) {
+        return NextResponse.redirect(new URL('/onboarding', request.url))
+      }
+    }
+    return supabaseResponse
+  }
 
   // Check if the current path is a public route
   const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith('/api/auth')
+    (route) => pathname === route || pathname.startsWith('/api/')
   )
 
-  // Check if path starts with protected routes
-  const protectedPaths = ['/dashboard', '/feed', '/resources', '/forms', '/profile', '/settings']
-  const isProtectedRoute = protectedPaths.some((path) => pathname.startsWith(path))
+  // Onboarding is accessible only to authenticated users
+  if (pathname === '/onboarding') {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    return supabaseResponse
+  }
 
-  // Redirect unauthenticated users trying to access protected routes
-  if (isProtectedRoute && !user) {
+  // Redirect authenticated users away from auth pages to root
+  if (user && (pathname === '/login' || pathname === '/signup')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Protected routes require auth
+  if (!isPublicRoute && !user) {
     const redirectUrl = new URL('/login', request.url)
     redirectUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(redirectUrl)
-  }
-
-  // Redirect authenticated users away from auth pages
-  if (user && (pathname === '/login' || pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/feed', request.url))
   }
 
   return supabaseResponse
@@ -73,14 +124,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - api routes that don't need auth
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|images/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

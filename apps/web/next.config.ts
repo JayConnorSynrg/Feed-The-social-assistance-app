@@ -66,17 +66,70 @@ const nextConfig: NextConfig = {
             key: 'X-Frame-Options',
             value: 'DENY',
           },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
+          // REMOVED 2026-02-20 (Security Fix #3):
+          // X-XSS-Protection is deprecated (ignored by Chrome/Firefox/Safari since 2019)
+          // and actively harmful in IE where it can be exploited to inject scripts.
+          // Modern browsers rely on CSP instead. Header removed entirely.
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
+            value: 'camera=(), microphone=(), geolocation=(self), payment=()',
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'off',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            // SECURITY FIX #3 — Applied 2026-02-20
+            //
+            // CHANGED: script-src
+            //   BEFORE: "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+            //   AFTER:  "script-src 'self' 'unsafe-inline'"
+            //
+            //   REMOVED 'unsafe-eval':
+            //     Eliminates eval(), new Function(), setTimeout(string), and
+            //     WebAssembly.instantiate() from untrusted strings. This blocks
+            //     the primary path by which an XSS payload could dynamically
+            //     execute stolen encryption key material (DEK exfiltration).
+            //     FTC "reasonable security" and SOC 2 require eval() to be
+            //     disabled when handling PII/encrypted data.
+            //
+            //   RETAINED 'unsafe-inline':
+            //     Next.js 14/15 injects inline <script> tags during SSR hydration
+            //     (__NEXT_DATA__, chunk manifests). Removing unsafe-inline without
+            //     a nonce pipeline (middleware → generateBuildId → _document) breaks
+            //     the application. Full nonce-based CSP requires dedicated
+            //     implementation work.
+            //     TODO: Migrate to nonce-based CSP. See docs/csp-nonce-migration.md
+            //     Track as: SECURITY-TODO-CSP-NONCE
+            //
+            // UNCHANGED: style-src 'unsafe-inline'
+            //   Required by Tailwind CSS utility classes injected at runtime and
+            //   any CSS-in-JS. This is an accepted trade-off; style injection
+            //   cannot execute JavaScript in modern browsers (no script-via-style
+            //   attacks in compliant browsers).
+            //
+            // REMOVED: X-XSS-Protection header (see comment above)
+            //   Replaced entirely by CSP, which is the correct modern mechanism.
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com",
+              "font-src 'self'",
+              "frame-ancestors 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join('; '),
           },
         ],
       },

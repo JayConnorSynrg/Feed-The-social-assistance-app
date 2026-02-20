@@ -16,7 +16,6 @@ import {
   ClipboardList,
   Settings,
   Home,
-  ChevronDown,
   LogIn,
   UserPlus,
   Menu,
@@ -83,12 +82,11 @@ export const usePanelContext = () => {
 // ============================================
 // NAVIGATION CONFIG
 // ============================================
-const TOP_NAV_ITEMS = [
-  { href: '/', label: 'Home' },
-  { href: '/about', label: 'About us' },
-  { href: '/mission', label: 'Our mission', hasDropdown: true },
-  { href: '/blog', label: 'Blog' },
-  { href: '/resources', label: 'Resources' },
+const TOP_NAV_ITEMS: { label: string; panel?: PanelType; href?: string }[] = [
+  { label: 'Home', panel: 'overview' },
+  { label: 'AI Assistant', panel: 'chat' },
+  { label: 'Resources', panel: 'map' },
+  { label: 'Community', panel: 'feed' },
 ]
 
 const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string; roles?: UserRole[] }[] = [
@@ -108,43 +106,58 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
 interface TopNavProps {
   isAuthenticated?: boolean
   userName?: string
+  onSignOut?: () => void
 }
 
-function TopNav({ isAuthenticated = false, userName }: TopNavProps) {
+function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { activePanel, setActivePanel } = useShellContext()
 
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-white flex-shrink-0">
       {/* Logo */}
-      <Link href="/" className="flex items-center gap-2">
+      <button onClick={() => setActivePanel('overview')} className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-[#4a5d23]/20 flex items-center justify-center">
           <span className="text-[#4a5d23] font-bold text-sm">F</span>
         </div>
         <span className="font-semibold text-stone-800 hidden sm:inline">FEED</span>
-      </Link>
+      </button>
 
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center gap-6">
         {TOP_NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="text-sm text-stone-500 hover:text-stone-800 transition-colors flex items-center gap-1"
+          <button
+            key={item.label}
+            onClick={() => item.panel && setActivePanel(item.panel)}
+            className={`text-sm transition-colors flex items-center gap-1 ${
+              item.panel === activePanel
+                ? 'text-[#4a5d23] font-medium'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
           >
             {item.label}
-            {item.hasDropdown && <ChevronDown className="w-3 h-3" />}
-          </Link>
+          </button>
         ))}
       </nav>
 
       {/* Auth Buttons */}
       <div className="flex items-center gap-3">
         {isAuthenticated ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-sm text-stone-500 hidden sm:inline">
-              Welcome, {userName}
+              {userName}
             </span>
-            <div className="w-8 h-8 rounded-full bg-[#4a5d23]/20" />
+            <div className="w-8 h-8 rounded-full bg-[#4a5d23]/20 flex items-center justify-center text-xs font-medium text-[#4a5d23]">
+              {userName?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                Sign out
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -180,14 +193,18 @@ function TopNav({ isAuthenticated = false, userName }: TopNavProps) {
         <div className="absolute top-16 left-0 right-0 bg-white border-b shadow-lg md:hidden z-50">
           <nav className="flex flex-col p-4 gap-2">
             {TOP_NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm py-2 px-4 rounded-lg hover:bg-stone-100"
-                onClick={() => setMobileMenuOpen(false)}
+              <button
+                key={item.label}
+                className={`text-sm py-2 px-4 rounded-lg text-left ${
+                  item.panel === activePanel ? 'bg-[#4a5d23]/10 text-[#4a5d23] font-medium' : 'hover:bg-stone-100'
+                }`}
+                onClick={() => {
+                  if (item.panel) setActivePanel(item.panel)
+                  setMobileMenuOpen(false)
+                }}
               >
                 {item.label}
-              </Link>
+              </button>
             ))}
           </nav>
         </div>
@@ -737,6 +754,7 @@ interface FeedShellProps {
   userRole?: UserRole
   userFocus?: UserFocus[]
   backgroundImage?: string
+  onSignOut?: () => void
 }
 
 // Valid panel names for URL hash routing
@@ -759,6 +777,7 @@ export function FeedShell({
   userRole: initialRole = 'recipient',
   userFocus: initialFocus = ['food'],
   backgroundImage = '/images/wheat-field-bg.jpg',
+  onSignOut,
 }: FeedShellProps) {
   const [userRole, setUserRole] = useState<UserRole>(initialRole)
   const [userFocus, setUserFocus] = useState<UserFocus[]>(initialFocus)
@@ -816,7 +835,7 @@ export function FeedShell({
         {/* CONTAINER 1: Interactive Content (Header + Sidebar + Content Panel) */}
         <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
           {/* Top Navigation - Fixed */}
-          <TopNav isAuthenticated={isAuthenticated} userName={userName} />
+          <TopNav isAuthenticated={isAuthenticated} userName={userName} onSignOut={onSignOut} />
 
           {/* Main Content Area */}
           <div className="flex flex-1 overflow-hidden">

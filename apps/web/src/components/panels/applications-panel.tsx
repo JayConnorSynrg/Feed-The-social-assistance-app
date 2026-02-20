@@ -587,7 +587,10 @@ function EmptyState() {
       <p className="text-sm text-muted-foreground mb-6 max-w-sm">
         Start your journey by applying for benefits. We'll help you track every step of the process.
       </p>
-      <Button className="bg-[#4a5d23] hover:bg-[#3d4d1c]">
+      <Button
+        className="bg-[#4a5d23] hover:bg-[#3d4d1c]"
+        onClick={() => alert('Program directory coming soon! Use the AI Assistant to find programs you may qualify for.')}
+      >
         Browse Available Programs
         <ArrowRight className="w-4 h-4 ml-2" />
       </Button>
@@ -625,15 +628,18 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   })
 
   const handleViewDetails = (id: string) => {
-    console.log('View details for application:', id)
+    const app = filteredApplications.find(a => a.id === id)
+    if (app) {
+      setExpandedId(expandedId === id ? null : id)
+    }
   }
 
-  const handleUploadDocument = (applicationId: string, actionId: string) => {
-    console.log('Upload document for application:', applicationId, 'action:', actionId)
+  const handleUploadDocument = (_applicationId: string, _actionId: string) => {
+    alert('Document upload coming soon! For now, use the Documents panel to manage your files.')
   }
 
-  const handleContactSupport = (id: string) => {
-    console.log('Contact support for application:', id)
+  const handleContactSupport = (_id: string) => {
+    alert('Support contact coming soon! Please email support@feedapp.org for assistance.')
   }
 
   const handleToggleExpand = (id: string) => {

@@ -44,9 +44,25 @@ interface HealthCheckResult {
   error_message?: string
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// CORS configuration - restrict to app domains
+const ALLOWED_ORIGINS = [
+  Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'capacitor://localhost',  // Mobile app (iOS)
+  'http://localhost',       // Mobile app (Android webview)
+  'ionic://localhost',      // Ionic dev
+]
+
+// Get CORS headers with validated origin
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0] // Default to APP_URL
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Credentials': 'true',
+  }
 }
 
 // Thresholds
@@ -60,6 +76,9 @@ const UNHEALTHY_PENALTY = -0.01
 const MAX_TRUST_CHANGE_PER_CHECK = 0.02
 
 serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })

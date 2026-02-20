@@ -487,23 +487,20 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const [submissions] = useState<FormSubmission[]>(MOCK_SUBMISSIONS)
 
   // Handlers
-  const handleStartForm = (templateId: string) => {
-    console.log('Starting form:', templateId)
-    // TODO: Navigate to form filling page
+  const handleStartForm = (_templateId: string) => {
+    alert('Form builder coming soon! Use the AI Assistant to help you fill out applications.')
   }
 
-  const handleContinueForm = (formId: string) => {
-    console.log('Continuing form:', formId)
-    // TODO: Navigate to form filling page with saved data
+  const handleContinueForm = (_formId: string) => {
+    alert('Form builder coming soon! Your draft has been saved.')
   }
 
   const handleDeleteDraft = (formId: string) => {
     setInProgress(inProgress.filter(f => f.id !== formId))
   }
 
-  const handleViewSubmission = (submissionId: string) => {
-    console.log('Viewing submission:', submissionId)
-    // TODO: Navigate to submission details page
+  const handleViewSubmission = (_submissionId: string) => {
+    alert('Submission details coming soon!')
   }
 
   return (
