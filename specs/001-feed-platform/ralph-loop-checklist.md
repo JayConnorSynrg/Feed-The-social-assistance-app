@@ -5,10 +5,10 @@ created: "2026-01-19"
 last_updated: "2026-02-22"
 status: "IN_PROGRESS"
 current_phase: 7
-current_task: "P7-T1"
+current_task: "P7-T11"
 total_phases: 7
 total_tasks: 98
-completed_tasks: 86
+completed_tasks: 96
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -1145,7 +1145,7 @@ npx cap sync && npx cap run ios
 ---
 
 ### P7-T1: Rotate Exposed Secrets (CRITICAL SECURITY)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T1
 - **Severity**: 🚨 CRITICAL
 - **Dependencies**: None (do immediately)
@@ -1168,15 +1168,15 @@ npx cap sync && npx cap run ios
   cat .gitignore | grep env.local                  # Verify in gitignore
   ```
 - **Acceptance Criteria**:
-  - [ ] All secrets rotated in dashboards
-  - [ ] `.env.local` removed from git tracking
-  - [ ] `.env.local` in `.gitignore`
-  - [ ] New secrets set in production environment
+  - [x] All secrets rotated in dashboards
+  - [x] `.env.local` removed from git tracking
+  - [x] `.env.local` in `.gitignore`
+  - [x] New secrets set in production environment
 
 ---
 
 ### P7-T2: Fix middleware.ts Profile Query (CRITICAL)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T2
 - **Severity**: 🚨 CRITICAL
 - **Dependencies**: None
@@ -1206,14 +1206,14 @@ npx cap sync && npx cap run ios
   cd apps/web && npm run type-check  # No type errors
   ```
 - **Acceptance Criteria**:
-  - [ ] `.maybeSingle()` used instead of `.single()`
-  - [ ] Null profile treated as onboarding incomplete
-  - [ ] OAuth signup users redirected to onboarding (not crash)
+  - [x] `.maybeSingle()` used instead of `.single()`
+  - [x] Null profile treated as onboarding incomplete
+  - [x] OAuth signup users redirected to onboarding (not crash)
 
 ---
 
 ### P7-T3: Fix auth-provider.tsx Profile Query (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T3
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: None
@@ -1235,13 +1235,13 @@ npx cap sync && npx cap run ios
   cd apps/web && npm run type-check
   ```
 - **Acceptance Criteria**:
-  - [ ] `.maybeSingle()` used in fetchProfile
-  - [ ] null profile handled gracefully (user still authenticated)
+  - [x] `.maybeSingle()` used in fetchProfile
+  - [x] null profile handled gracefully (user still authenticated)
 
 ---
 
 ### P7-T4: Delete proxy.ts Dead Code (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T4
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: None
@@ -1260,13 +1260,13 @@ npx cap sync && npx cap run ios
   ls apps/web/src/middleware.ts  # Should exist
   ```
 - **Acceptance Criteria**:
-  - [ ] `proxy.ts` deleted
-  - [ ] `middleware.ts` still present and correct
+  - [x] `proxy.ts` deleted
+  - [x] `middleware.ts` still present and correct
 
 ---
 
 ### P7-T5: Add Global Error Page (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T5
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: None
@@ -1300,15 +1300,15 @@ npx cap sync && npx cap run ios
   cd apps/web && npm run type-check && npm run build
   ```
 - **Acceptance Criteria**:
-  - [ ] `error.tsx` created at app root level
-  - [ ] Displays friendly error message
-  - [ ] Has "Try again" and "Go home" options
-  - [ ] Build passes
+  - [x] `error.tsx` created at app root level
+  - [x] Displays friendly error message
+  - [x] Has "Try again" and "Go home" options
+  - [x] Build passes
 
 ---
 
 ### P7-T6: Add React Error Boundary to FeedShell (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T6
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: P7-T5
@@ -1323,14 +1323,14 @@ npx cap sync && npx cap run ios
   cd apps/web && npm run type-check
   ```
 - **Acceptance Criteria**:
-  - [ ] Panel errors are contained (shell stays mounted)
-  - [ ] Error boundary shows retry option
-  - [ ] Other panels still work when one fails
+  - [x] Panel errors are contained (shell stays mounted)
+  - [x] Error boundary shows retry option
+  - [x] Other panels still work when one fails
 
 ---
 
 ### P7-T7: TypeScript Zero-Error Verification (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T7
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: P7-T2, P7-T3, P7-T5, P7-T6
@@ -1343,13 +1343,13 @@ npx cap sync && npx cap run ios
   ```
 - **Validation**: Output must show `0 errors` or `Found 0 errors`
 - **Acceptance Criteria**:
-  - [ ] `npm run type-check` exits with code 0
-  - [ ] Zero TypeScript errors
+  - [x] `npm run type-check` exits with code 0
+  - [x] Zero TypeScript errors
 
 ---
 
 ### P7-T8: Production Build Verification (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T8
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: P7-T7
@@ -1365,15 +1365,15 @@ npx cap sync && npx cap run ios
   ls apps/web/.next/  # .next directory should exist after build
   ```
 - **Acceptance Criteria**:
-  - [ ] `npm run build` exits with code 0
-  - [ ] No missing environment variable warnings
-  - [ ] All routes compile successfully
-  - [ ] Bundle sizes are reasonable (< 500KB per route)
+  - [x] `npm run build` exits with code 0
+  - [x] No missing environment variable warnings
+  - [x] All routes compile successfully
+  - [x] Bundle sizes are reasonable (< 500KB per route)
 
 ---
 
 ### P7-T9: Database Migration Verification (HIGH)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T9
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: P7-T1 (new secrets required)
@@ -1393,14 +1393,14 @@ npx cap sync && npx cap run ios
   - Check Supabase dashboard > Database > Migrations for applied migrations
   - Test that new user signup auto-creates a profiles row
 - **Acceptance Criteria**:
-  - [ ] All 15 migrations applied to production
-  - [ ] Profile trigger active (test with new signup)
-  - [ ] UPDATE RLS policy on profiles confirmed
+  - [x] All 15 migrations applied to production
+  - [x] Profile trigger active (test with new signup)
+  - [x] UPDATE RLS policy on profiles confirmed
 
 ---
 
 ### P7-T10: Create .env.example (MEDIUM)
-- [ ] **Status**: PENDING
+- [x] **Status**: COMPLETE
 - **ID**: P7-T10
 - **Severity**: 📋 MEDIUM
 - **Dependencies**: P7-T1
@@ -1429,9 +1429,9 @@ npx cap sync && npx cap run ios
   cat apps/web/.env.example  # Verify no real values committed
   ```
 - **Acceptance Criteria**:
-  - [ ] `.env.example` created with all required vars
-  - [ ] No actual secret values in the file
-  - [ ] Comments explain where to get each value
+  - [x] `.env.example` created with all required vars
+  - [x] No actual secret values in the file
+  - [x] Comments explain where to get each value
 
 ---
 

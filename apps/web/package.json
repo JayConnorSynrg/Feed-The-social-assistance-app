@@ -10,6 +10,7 @@
     "dev:test": "NEXT_PUBLIC_TEST_MODE=true next dev",
     "build": "next build",
     "start": "next start",
+    "type-check": "tsc --noEmit",
     "lint": "eslint",
     "seed": "npx ts-node --esm scripts/seed-test-data.ts",
     "test:e2e": "echo 'E2E tests not yet configured'"

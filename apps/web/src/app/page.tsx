@@ -17,6 +17,43 @@ import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { FormsPanel } from '@/components/panels/forms-panel'
 import { useAuth } from '@/hooks/use-auth'
 
+// Panel-level error boundary — shell stays mounted if a panel throws
+class PanelErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('Panel error:', error.message, info.componentStack)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
+          <div className="text-3xl">🌾</div>
+          <p className="text-stone-600 text-sm">This panel encountered an error.</p>
+          <button
+            className="text-xs text-lime-700 underline"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // Dynamic Panel Renderer - renders content based on active panel
 function PanelRenderer() {
   const { activePanel, setActivePanel } = usePanelContext()
@@ -108,7 +145,9 @@ export default function HomePage() {
       onSignOut={signOut}
       backgroundImage="/images/wheat-field-bg.jpg"
     >
-      <PanelRenderer />
+      <PanelErrorBoundary>
+        <PanelRenderer />
+      </PanelErrorBoundary>
     </FeedShell>
   )
 }
