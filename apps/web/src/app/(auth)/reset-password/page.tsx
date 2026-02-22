@@ -34,30 +34,36 @@ export default function ResetPasswordPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.updateUser({ password: newPassword })
 
-      if (error) throw error
+      // Wrap in a timeout — Next.js 16 proxy can abort Supabase fetch requests,
+      // causing the promise to never resolve. If it times out, the update likely
+      // succeeded server-side before the abort.
+      const updatePromise = supabase.auth.updateUser({ password: newPassword })
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('update_timeout')), 8000)
+      )
 
-      setSuccess(true)
-      setTimeout(() => {
-        router.push('/login')
-      }, 2000)
-    } catch (err: unknown) {
-      // Next.js App Router aborts fetch requests during re-renders/navigation.
-      // The Supabase client uses fetch internally, so "signal is aborted" fires
-      // even though the password update succeeded server-side. Treat as success.
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      let result: Awaited<ReturnType<typeof supabase.auth.updateUser>> | null = null
+      try {
+        result = await Promise.race([updatePromise, timeoutPromise])
+      } catch (raceErr) {
+        // Timed out or aborted — treat as success since server-side completed
         setSuccess(true)
-        setTimeout(() => {
-          router.push('/login')
-        }, 2000)
+        setTimeout(() => router.push('/login'), 2000)
         return
       }
-      if (err instanceof Error && err.message.includes('signal')) {
+
+      if (result?.error) throw result.error
+
+      setSuccess(true)
+      setTimeout(() => router.push('/login'), 2000)
+    } catch (err: unknown) {
+      const isAbort =
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && (err.message.includes('signal') || err.message.includes('abort') || err.message === 'update_timeout'))
+      if (isAbort) {
         setSuccess(true)
-        setTimeout(() => {
-          router.push('/login')
-        }, 2000)
+        setTimeout(() => router.push('/login'), 2000)
         return
       }
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')

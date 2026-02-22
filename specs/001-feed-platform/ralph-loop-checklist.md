@@ -1,13 +1,13 @@
 ---
 feature: "FEED Platform"
-version: "1.0.0"
+version: "1.1.0"
 created: "2026-01-19"
-last_updated: "2026-01-30"
+last_updated: "2026-02-22"
 status: "IN_PROGRESS"
-current_phase: 6
-current_task: "P6-T8"
-total_phases: 6
-total_tasks: 87
+current_phase: 7
+current_task: "P7-T1"
+total_phases: 7
+total_tasks: 98
 completed_tasks: 86
 ---
 
@@ -67,11 +67,13 @@ WHEN all tasks in a phase are [x]:
 | 3 | Form System | 16 | 15 | COMPLETE* |
 | 4 | AI Assistant | 11 | 10 | COMPLETE* |
 | 5 | Case Management | 12 | 11 | COMPLETE* |
-| 6 | Polish & Launch | 8 | 7 | IN_PROGRESS |
+| 6 | Polish & Launch | 8 | 7 | COMPLETE** |
+| 7 | Production Hardening | 11 | 0 | IN_PROGRESS |
 
-**Overall Progress**: 86 / 87 tasks (99%)
+**Overall Progress**: 86 / 98 tasks (88%)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
+**P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
 
 ---
 
@@ -1134,6 +1136,367 @@ npx cap sync && npx cap run ios
 
 ---
 
+## PHASE 7: Production Hardening (Discovered 2026-02-22 via full codebase recon)
+
+> **Context**: Full codebase reconnaissance (3 parallel sub-agents) discovered critical bugs
+> blocking production readiness. All tasks in this phase must be completed before launch.
+> Tasks are ordered by severity: CRITICAL → HIGH → MEDIUM.
+
+---
+
+### P7-T1: Rotate Exposed Secrets (CRITICAL SECURITY)
+- [ ] **Status**: PENDING
+- **ID**: P7-T1
+- **Severity**: 🚨 CRITICAL
+- **Dependencies**: None (do immediately)
+- **Problem**: `apps/web/.env.local` is committed to git and contains production secrets:
+  - `SUPABASE_SERVICE_ROLE_KEY` (full DB admin access)
+  - `SUPABASE_ACCESS_TOKEN` (CLI token)
+  - `NEXT_PUBLIC_MAPBOX_TOKEN` (billable API)
+- **Fix**:
+  1. Rotate SUPABASE_SERVICE_ROLE_KEY at https://supabase.com/dashboard/project/ndtpovonpadugthmcntl/settings/api
+  2. Rotate SUPABASE_ACCESS_TOKEN at https://supabase.com/dashboard/account/tokens
+  3. Rotate Mapbox token at https://account.mapbox.com/access-tokens
+  4. Remove `.env.local` from git history or add to `.gitignore`:
+     ```bash
+     echo ".env.local" >> .gitignore && git rm --cached apps/web/.env.local
+     ```
+  5. Update Vercel/hosting environment variables with new keys
+- **Validation**:
+  ```bash
+  git log --all --full-history -- "**/.env.local"  # Verify removed from tracking
+  cat .gitignore | grep env.local                  # Verify in gitignore
+  ```
+- **Acceptance Criteria**:
+  - [ ] All secrets rotated in dashboards
+  - [ ] `.env.local` removed from git tracking
+  - [ ] `.env.local` in `.gitignore`
+  - [ ] New secrets set in production environment
+
+---
+
+### P7-T2: Fix middleware.ts Profile Query (CRITICAL)
+- [ ] **Status**: PENDING
+- **ID**: P7-T2
+- **Severity**: 🚨 CRITICAL
+- **Dependencies**: None
+- **Problem**: `apps/web/src/middleware.ts` line ~83 uses `.single()` to query profiles:
+  ```typescript
+  const { data: profile } = await supabase.from('profiles').select('onboarding_completed').eq('id', user.id).single()
+  ```
+  `.single()` throws an error if no row exists. OAuth signup users have no profile row
+  until onboarding completes, so hitting `/` after OAuth signup crashes middleware.
+- **Fix** in `apps/web/src/middleware.ts`:
+  ```typescript
+  // Change .single() to .maybeSingle()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('onboarding_completed')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  // Treat null profile (no row) as needing onboarding
+  if (!profile || !(profile as any).onboarding_completed) {
+    return NextResponse.redirect(new URL('/onboarding', request.url))
+  }
+  ```
+- **File**: `apps/web/src/middleware.ts`
+- **Validation**:
+  ```bash
+  cd apps/web && npm run type-check  # No type errors
+  ```
+- **Acceptance Criteria**:
+  - [ ] `.maybeSingle()` used instead of `.single()`
+  - [ ] Null profile treated as onboarding incomplete
+  - [ ] OAuth signup users redirected to onboarding (not crash)
+
+---
+
+### P7-T3: Fix auth-provider.tsx Profile Query (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T3
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: None
+- **Problem**: `apps/web/src/providers/auth-provider.tsx` fetchProfile uses `.single()`.
+  If profile row doesn't exist yet (new OAuth user), the query throws instead of returning null.
+  This causes auth state to be stuck in an error state.
+- **Fix** in `apps/web/src/providers/auth-provider.tsx`:
+  ```typescript
+  // Change .single() to .maybeSingle()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle()  // Returns null if no row, not an error
+  ```
+- **File**: `apps/web/src/providers/auth-provider.tsx`
+- **Validation**:
+  ```bash
+  cd apps/web && npm run type-check
+  ```
+- **Acceptance Criteria**:
+  - [ ] `.maybeSingle()` used in fetchProfile
+  - [ ] null profile handled gracefully (user still authenticated)
+
+---
+
+### P7-T4: Delete proxy.ts Dead Code (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T4
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: None
+- **Problem**: `apps/web/src/proxy.ts` is an incorrectly-named copy of middleware.ts.
+  Next.js only loads `middleware.ts` — `proxy.ts` does nothing and causes confusion.
+  The file was created in a previous session to replace middleware.ts (incorrectly).
+  `middleware.ts` has been restored and is correct; proxy.ts should be deleted.
+- **Fix**:
+  ```bash
+  rm apps/web/src/proxy.ts
+  ```
+- **File**: `apps/web/src/proxy.ts` (delete)
+- **Validation**:
+  ```bash
+  ls apps/web/src/proxy.ts  # Should not exist
+  ls apps/web/src/middleware.ts  # Should exist
+  ```
+- **Acceptance Criteria**:
+  - [ ] `proxy.ts` deleted
+  - [ ] `middleware.ts` still present and correct
+
+---
+
+### P7-T5: Add Global Error Page (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T5
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: None
+- **Problem**: No `error.tsx` in `apps/web/src/app/`. Unhandled exceptions show a
+  blank page or Next.js default error. Required for production.
+- **Fix**: Create `apps/web/src/app/error.tsx`:
+  ```typescript
+  'use client'
+  import { useEffect } from 'react'
+  import { Button } from '@/components/ui/button'
+
+  export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+    useEffect(() => { console.error(error) }, [error])
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+        <div className="text-center space-y-4 p-8">
+          <h2 className="text-2xl font-bold text-stone-800">Something went wrong</h2>
+          <p className="text-stone-500">An unexpected error occurred. Please try again.</p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => reset()} className="bg-lime-600 hover:bg-lime-700">Try again</Button>
+            <Button variant="outline" onClick={() => window.location.href = '/'}>Go home</Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  ```
+- **File**: `apps/web/src/app/error.tsx` (new)
+- **Validation**:
+  ```bash
+  cd apps/web && npm run type-check && npm run build
+  ```
+- **Acceptance Criteria**:
+  - [ ] `error.tsx` created at app root level
+  - [ ] Displays friendly error message
+  - [ ] Has "Try again" and "Go home" options
+  - [ ] Build passes
+
+---
+
+### P7-T6: Add React Error Boundary to FeedShell (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T6
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: P7-T5
+- **Problem**: `feed-shell.tsx` has no error boundary around panel content.
+  If any panel component throws (e.g., ChatPanel, MapPanel), the entire app unmounts.
+  Need to wrap `PanelRenderer` in an error boundary so only the panel crashes, not the shell.
+- **Fix**: In `apps/web/src/app/page.tsx`, wrap PanelRenderer with the built-in
+  Next.js ErrorBoundary or a custom one that shows a panel-level error message with retry.
+- **File**: `apps/web/src/app/page.tsx`
+- **Validation**:
+  ```bash
+  cd apps/web && npm run type-check
+  ```
+- **Acceptance Criteria**:
+  - [ ] Panel errors are contained (shell stays mounted)
+  - [ ] Error boundary shows retry option
+  - [ ] Other panels still work when one fails
+
+---
+
+### P7-T7: TypeScript Zero-Error Verification (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T7
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: P7-T2, P7-T3, P7-T5, P7-T6
+- **Description**: Run TypeScript type-check and fix all errors. This is a hard gate —
+  production builds cannot have type errors.
+- **Commands**:
+  ```bash
+  cd apps/web && npm run type-check 2>&1 | tee /tmp/type-check-output.txt
+  wc -l /tmp/type-check-output.txt
+  ```
+- **Validation**: Output must show `0 errors` or `Found 0 errors`
+- **Acceptance Criteria**:
+  - [ ] `npm run type-check` exits with code 0
+  - [ ] Zero TypeScript errors
+
+---
+
+### P7-T8: Production Build Verification (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T8
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: P7-T7
+- **Description**: Run full production build and verify it completes without errors.
+  Check for missing env vars, import issues, or configuration problems.
+- **Commands**:
+  ```bash
+  cd apps/web && npm run build 2>&1 | tail -30
+  ```
+- **Expected**: Build completes, shows page/route tree, no errors
+- **Validation**:
+  ```bash
+  ls apps/web/.next/  # .next directory should exist after build
+  ```
+- **Acceptance Criteria**:
+  - [ ] `npm run build` exits with code 0
+  - [ ] No missing environment variable warnings
+  - [ ] All routes compile successfully
+  - [ ] Bundle sizes are reasonable (< 500KB per route)
+
+---
+
+### P7-T9: Database Migration Verification (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T9
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: P7-T1 (new secrets required)
+- **Description**: Verify all critical migrations are applied to production Supabase instance.
+  Key migrations to verify:
+  - `20260219000000_create_profile_trigger.sql` — auto-creates profile on signup
+  - `20260220100000_fix_profiles_update_policy.sql` — adds UPDATE RLS to profiles
+  - `20260220000001_security_compliance_fixes.sql` — US privacy law compliance
+- **Commands**:
+  ```bash
+  # List migration status
+  npx supabase db push --dry-run
+  # Push any pending migrations
+  npx supabase db push
+  ```
+- **Validation**:
+  - Check Supabase dashboard > Database > Migrations for applied migrations
+  - Test that new user signup auto-creates a profiles row
+- **Acceptance Criteria**:
+  - [ ] All 15 migrations applied to production
+  - [ ] Profile trigger active (test with new signup)
+  - [ ] UPDATE RLS policy on profiles confirmed
+
+---
+
+### P7-T10: Create .env.example (MEDIUM)
+- [ ] **Status**: PENDING
+- **ID**: P7-T10
+- **Severity**: 📋 MEDIUM
+- **Dependencies**: P7-T1
+- **Description**: Create `.env.example` with all required env vars (no actual values).
+  Needed for deployment documentation and developer onboarding.
+- **File**: `apps/web/.env.example` (new)
+- **Content**:
+  ```bash
+  # Supabase (get from https://supabase.com/dashboard/project/<ref>/settings/api)
+  NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=
+  SUPABASE_SERVICE_ROLE_KEY=  # Server-side only, never expose to client
+
+  # Mapbox (get from https://account.mapbox.com/access-tokens)
+  NEXT_PUBLIC_MAPBOX_TOKEN=
+
+  # App URL (set to production domain in prod)
+  NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+  # Optional
+  NEXT_PUBLIC_INSTANCE_NAME=FEED
+  CAPACITOR_BUILD=false  # Set true for mobile static export
+  ```
+- **Validation**:
+  ```bash
+  cat apps/web/.env.example  # Verify no real values committed
+  ```
+- **Acceptance Criteria**:
+  - [ ] `.env.example` created with all required vars
+  - [ ] No actual secret values in the file
+  - [ ] Comments explain where to get each value
+
+---
+
+### P7-T11: Auth Flow End-to-End Test (HIGH)
+- [ ] **Status**: PENDING
+- **ID**: P7-T11
+- **Severity**: ⚠️ HIGH
+- **Dependencies**: P7-T2, P7-T3, P7-T9
+- **Description**: Manually test the complete auth flow on production/staging:
+  1. Email signup → email confirmation → onboarding → main app
+  2. OAuth signup (Google) → onboarding → main app
+  3. Password reset flow
+  4. Login with email/password
+  5. MFA enrollment and verification (if MFA enabled)
+- **Test Cases**:
+  ```
+  Test 1 - Email Signup:
+    1. Go to /signup, fill form, submit
+    2. Check email, click confirmation link
+    3. Complete onboarding (all 4 steps)
+    4. Verify redirected to / and panels load
+
+  Test 2 - OAuth Signup:
+    1. Go to /signup, click Google
+    2. Complete OAuth flow
+    3. Verify redirected to /onboarding (not /)
+    4. Complete onboarding
+    5. Verify redirected to /
+
+  Test 3 - Password Reset:
+    1. Go to /forgot-password, enter email
+    2. Check email, click reset link
+    3. Enter new password
+    4. Verify redirected to /login
+
+  Test 4 - Login:
+    1. Go to /login, enter credentials
+    2. Verify redirected to / or redirectTo URL
+    3. Verify profile loads correctly
+  ```
+- **Acceptance Criteria**:
+  - [ ] Email signup flow completes without errors
+  - [ ] OAuth signup flow completes without errors
+  - [ ] Password reset completes without errors
+  - [ ] Login redirects correctly
+  - [ ] No console errors during any flow
+
+---
+
+## PHASE 7 EXIT CRITERIA
+
+- [ ] All secrets rotated and `.env.local` removed from git tracking
+- [ ] `middleware.ts` uses `.maybeSingle()` (no crash on missing profile)
+- [ ] `auth-provider.tsx` uses `.maybeSingle()`
+- [ ] `proxy.ts` deleted
+- [ ] `error.tsx` created and working
+- [ ] Error boundary wraps panel content
+- [ ] `npm run type-check` passes (0 errors)
+- [ ] `npm run build` passes
+- [ ] All migrations applied to production DB
+- [ ] `.env.example` created
+- [ ] Auth flow works end-to-end (all 4 test cases)
+
+---
+
 ## AGENT SELF-PROMPTING TEMPLATES
 
 ### Starting a Session
@@ -1182,6 +1545,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-19 | Initial checklist creation |
+| 1.1.0 | 2026-02-22 | Added Phase 7: Production Hardening (11 tasks). Discovered via full codebase recon: exposed secrets, middleware .single() crash, missing error boundaries, dead proxy.ts code. |
 
 ---
 

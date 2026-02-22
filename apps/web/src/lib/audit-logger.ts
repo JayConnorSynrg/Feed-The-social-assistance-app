@@ -275,11 +275,12 @@ class AuditLogger {
 
       if (error) {
         // Silent failure - just log to console
-        console.error('Failed to log audit event:', error)
+        console.error('Failed to log audit event:', error.message, error.code, error.details)
       }
     } catch (err) {
       // Never throw - audit logging failure should not break the app
-      console.error('Audit logging error:', err)
+      const msg = err instanceof Error ? err.message : (err as any)?.message ?? String(err)
+      console.error('Audit logging error:', msg)
     }
   }
 

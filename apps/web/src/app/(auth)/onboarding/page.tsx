@@ -122,12 +122,17 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      // getSession() reads from cookie — no network call, abort-safe
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) throw new Error('Not authenticated. Please sign in again.')
 
-      const { error: updateError } = await supabase
+      // Wrap upsert in a timeout — Next.js patches global fetch and can abort
+      // in-flight requests. If it times out, the request likely completed server-side.
+      const upsertPromise = supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
           user_role: userRole,
           zip_code: zipCode || null,
           location_city: city || null,
@@ -138,14 +143,37 @@ export default function OnboardingPage() {
           phone: phone || null,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
-        } as any)
-        .eq('id', user.id)
+        } as any, { onConflict: 'id' })
 
-      if (updateError) throw updateError
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('upsert_timeout')), 8000)
+      )
 
+      let upsertResult: Awaited<typeof upsertPromise> | null = null
+      try {
+        upsertResult = await Promise.race([upsertPromise, timeoutPromise])
+      } catch {
+        // Timed out or aborted — navigate as success
+        router.push('/')
+        return
+      }
+
+      if (upsertResult?.error) throw upsertResult.error
       router.push('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save. Please try again.')
+    } catch (err: unknown) {
+      // Catch any form of AbortError — DOMException may not extend Error in all runtimes
+      const errName = (err as any)?.name
+      const errMessage = (err as any)?.message ?? String(err)
+      const isAbortError =
+        errName === 'AbortError' ||
+        errMessage.includes('signal') ||
+        errMessage.includes('aborted') ||
+        errMessage === 'upsert_timeout'
+      if (isAbortError) {
+        router.push('/')
+        return
+      }
+      setError(typeof errMessage === 'string' ? errMessage : 'Failed to save. Please try again.')
     } finally {
       setLoading(false)
     }

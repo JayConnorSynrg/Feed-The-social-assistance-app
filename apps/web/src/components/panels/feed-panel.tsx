@@ -357,8 +357,9 @@ export function FeedPanel({ userId }: FeedPanelProps) {
       } else {
         setPosts([])
       }
-    } catch (err) {
-      console.error('Error fetching posts:', err)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : (err as any)?.message ?? JSON.stringify(err)
+      console.error('Error fetching posts:', msg, err)
     } finally {
       setLoading(false)
     }

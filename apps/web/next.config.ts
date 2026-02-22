@@ -125,6 +125,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com",
+              "worker-src blob:",
               "font-src 'self'",
               "frame-ancestors 'none'",
               "base-uri 'self'",
