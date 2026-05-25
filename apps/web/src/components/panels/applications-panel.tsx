@@ -3,7 +3,7 @@
 // apps/web/src/components/panels/applications-panel.tsx
 // Applications Panel - Track benefit applications, view status, and manage required actions
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   ClipboardList,
   Clock,
@@ -18,8 +18,10 @@ import {
   Calendar,
   Building2,
   ArrowRight,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useApplications, type Application as HookApplication, type ApplicationStatus as HookApplicationStatus } from '@/hooks/use-applications'
 
 // ============================================
 // TYPES
@@ -62,119 +64,97 @@ interface ApplicationsPanelProps {
 }
 
 // ============================================
-// MOCK DATA
+// ADAPTER: Hook Application → Panel Application
 // ============================================
-const MOCK_APPLICATIONS: Application[] = [
-  {
-    id: '1',
-    programName: 'SNAP Benefits',
-    programType: 'food',
-    status: 'action_required',
-    submissionDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    lastUpdated: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    stepsCompleted: 3,
-    totalSteps: 5,
-    caseNumber: 'SNAP-2026-001234',
-    assignedWorker: 'Maria Johnson',
-    requiredActions: [
-      {
-        id: 'a1',
-        title: 'Upload Proof of Income',
-        description: 'Please provide your last 30 days of pay stubs or income statement.',
-        deadline: '2026-02-07',
-        type: 'document',
-      },
-      {
-        id: 'a2',
-        title: 'Verify Address',
-        description: 'Upload a utility bill or lease agreement showing current address.',
-        type: 'document',
-      },
-    ],
-    timeline: [
-      { id: 't1', label: 'Application Submitted', status: 'completed', date: 'Jan 24, 2026' },
-      { id: 't2', label: 'Documents Received', status: 'completed', date: 'Jan 25, 2026' },
-      { id: 't3', label: 'Initial Review', status: 'completed', date: 'Jan 27, 2026' },
-      { id: 't4', label: 'Additional Documents Needed', status: 'current', date: 'Jan 30, 2026' },
-      { id: 't5', label: 'Final Decision', status: 'pending' },
-    ],
-  },
-  {
-    id: '2',
-    programName: 'Medicaid',
-    programType: 'healthcare',
-    status: 'under_review',
-    submissionDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-    lastUpdated: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    stepsCompleted: 4,
-    totalSteps: 6,
-    caseNumber: 'MED-2026-005678',
-    requiredActions: [],
-    timeline: [
-      { id: 't1', label: 'Application Submitted', status: 'completed', date: 'Jan 17, 2026' },
-      { id: 't2', label: 'Eligibility Check', status: 'completed', date: 'Jan 19, 2026' },
-      { id: 't3', label: 'Documents Verified', status: 'completed', date: 'Jan 22, 2026' },
-      { id: 't4', label: 'Income Verification', status: 'completed', date: 'Jan 25, 2026' },
-      { id: 't5', label: 'Final Review', status: 'current', date: 'Jan 28, 2026' },
-      { id: 't6', label: 'Decision', status: 'pending' },
-    ],
-  },
-  {
-    id: '3',
-    programName: 'LIHEAP (Energy Assistance)',
-    programType: 'utilities',
-    status: 'approved',
-    submissionDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    lastUpdated: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    stepsCompleted: 4,
-    totalSteps: 4,
-    caseNumber: 'LIHEAP-2026-009876',
-    requiredActions: [],
-    timeline: [
-      { id: 't1', label: 'Application Submitted', status: 'completed', date: 'Jan 1, 2026' },
-      { id: 't2', label: 'Documents Reviewed', status: 'completed', date: 'Jan 5, 2026' },
-      { id: 't3', label: 'Eligibility Confirmed', status: 'completed', date: 'Jan 10, 2026' },
-      { id: 't4', label: 'Benefit Approved', status: 'completed', date: 'Jan 26, 2026' },
-    ],
-  },
-  {
-    id: '4',
-    programName: 'Section 8 Housing Voucher',
-    programType: 'housing',
-    status: 'denied',
-    submissionDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-    lastUpdated: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
-    stepsCompleted: 3,
-    totalSteps: 5,
-    caseNumber: 'HCV-2025-012345',
-    requiredActions: [],
-    timeline: [
-      { id: 't1', label: 'Application Submitted', status: 'completed', date: 'Dec 2, 2025' },
-      { id: 't2', label: 'Waitlist Placement', status: 'completed', date: 'Dec 5, 2025' },
-      { id: 't3', label: 'Initial Review', status: 'completed', date: 'Dec 10, 2025' },
-      { id: 't4', label: 'Denied - Over Income Limit', status: 'completed', date: 'Dec 17, 2025' },
-    ],
-  },
-  {
-    id: '5',
-    programName: 'TANF Cash Assistance',
-    programType: 'cash',
-    status: 'submitted',
-    submissionDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    lastUpdated: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    stepsCompleted: 1,
-    totalSteps: 5,
-    caseNumber: 'TANF-2026-002468',
-    requiredActions: [],
-    timeline: [
-      { id: 't1', label: 'Application Submitted', status: 'completed', date: 'Jan 29, 2026' },
-      { id: 't2', label: 'Initial Review', status: 'current' },
-      { id: 't3', label: 'Documents Verification', status: 'pending' },
-      { id: 't4', label: 'Interview Scheduled', status: 'pending' },
-      { id: 't5', label: 'Decision', status: 'pending' },
-    ],
-  },
+const TIMELINE_STEPS: readonly string[] = [
+  'Application Submitted',
+  'Documents Reviewed',
+  'Eligibility Check',
+  'Final Review',
+  'Decision',
 ]
+
+function deriveProgramType(templateName: string): Application['programType'] {
+  const lower = templateName.toLowerCase()
+  if (lower.includes('snap') || lower.includes('food') || lower.includes('wic')) return 'food'
+  if (lower.includes('medicaid') || lower.includes('health')) return 'healthcare'
+  if (lower.includes('section 8') || lower.includes('housing')) return 'housing'
+  if (lower.includes('liheap') || lower.includes('energy') || lower.includes('utilit')) return 'utilities'
+  if (lower.includes('tanf') || lower.includes('cash') || lower.includes('ssi')) return 'cash'
+  return 'food'
+}
+
+function deriveSteps(status: HookApplicationStatus): { completed: number; total: number } {
+  switch (status) {
+    case 'draft': return { completed: 0, total: 5 }
+    case 'submitted': return { completed: 1, total: 5 }
+    case 'under_review': return { completed: 2, total: 5 }
+    case 'additional_info_needed': return { completed: 2, total: 5 }
+    case 'approved': return { completed: 5, total: 5 }
+    case 'denied': return { completed: 3, total: 5 }
+    case 'appealed': return { completed: 3, total: 5 }
+    case 'closed': return { completed: 5, total: 5 }
+    default: return { completed: 0, total: 5 }
+  }
+}
+
+function mapHookStatus(status: HookApplicationStatus): ApplicationStatus {
+  switch (status) {
+    case 'additional_info_needed': return 'action_required'
+    case 'draft': return 'submitted'
+    case 'appealed': return 'under_review'
+    case 'closed': return 'approved'
+    default: return status as ApplicationStatus
+  }
+}
+
+function buildTimeline(status: HookApplicationStatus, submittedDate: Date): TimelineStep[] {
+  const steps = deriveSteps(status)
+  return TIMELINE_STEPS.map((label, index) => {
+    let stepStatus: TimelineStep['status'] = 'pending'
+    let date: string | undefined
+
+    if (index < steps.completed) {
+      stepStatus = 'completed'
+      const stepDate = new Date(submittedDate.getTime() + index * 2 * 24 * 60 * 60 * 1000)
+      date = stepDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    } else if (index === steps.completed) {
+      stepStatus = 'current'
+    }
+
+    return { id: `t${index + 1}`, label, status: stepStatus, date }
+  })
+}
+
+function adaptApplication(hookApp: HookApplication): Application {
+  const submissionDate = new Date(hookApp.submitted_at ?? hookApp.created_at)
+  const mappedStatus = mapHookStatus(hookApp.status)
+  const steps = deriveSteps(hookApp.status)
+
+  const requiredActions: RequiredAction[] = hookApp.status === 'additional_info_needed'
+    ? [{
+        id: `action-${hookApp.id}`,
+        title: 'Additional Information Required',
+        description: hookApp.notes ?? 'Please provide the requested documentation to continue processing your application.',
+        type: 'document' as const,
+      }]
+    : []
+
+  return {
+    id: hookApp.id,
+    programName: hookApp.template_name,
+    programType: deriveProgramType(hookApp.template_name),
+    status: mappedStatus,
+    submissionDate,
+    lastUpdated: new Date(hookApp.last_updated),
+    stepsCompleted: steps.completed,
+    totalSteps: steps.total,
+    caseNumber: hookApp.case_number ?? undefined,
+    assignedWorker: undefined,
+    requiredActions,
+    timeline: buildTimeline(hookApp.status, submissionDate),
+  }
+}
 
 // ============================================
 // STATUS CONFIGURATION
@@ -589,7 +569,7 @@ function EmptyState() {
       </p>
       <Button
         className="bg-[#4a5d23] hover:bg-[#3d4d1c]"
-        onClick={() => alert('Program directory coming soon! Use the AI Assistant to find programs you may qualify for.')}
+        onClick={() => { /* TODO: Navigate to Forms panel to browse available programs */ }}
       >
         Browse Available Programs
         <ArrowRight className="w-4 h-4 ml-2" />
@@ -602,9 +582,12 @@ function EmptyState() {
 // MAIN APPLICATIONS PANEL
 // ============================================
 export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
-  const [applications] = useState<Application[]>(MOCK_APPLICATIONS)
+  const { applications: hookApps, isLoading, error, deleteApplication } = useApplications()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  // Adapt hook data to panel types
+  const applications = useMemo(() => hookApps.map(adaptApplication), [hookApps])
 
   // Calculate filter counts
   const counts: Record<FilterType, number> = {
@@ -635,15 +618,34 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   }
 
   const handleUploadDocument = (_applicationId: string, _actionId: string) => {
-    alert('Document upload coming soon! For now, use the Documents panel to manage your files.')
+    // TODO: Wire to Documents panel upload flow
   }
 
   const handleContactSupport = (_id: string) => {
-    alert('Support contact coming soon! Please email support@feedapp.org for assistance.')
+    // TODO: Wire to support/chat panel
   }
 
   const handleToggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
+        <p className="text-sm text-muted-foreground">Loading applications...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <AlertTriangle className="w-8 h-8 text-orange-500" />
+        <p className="text-sm text-stone-700 font-medium">Failed to load applications</p>
+        <p className="text-xs text-muted-foreground">{error.message}</p>
+      </div>
+    )
   }
 
   return (

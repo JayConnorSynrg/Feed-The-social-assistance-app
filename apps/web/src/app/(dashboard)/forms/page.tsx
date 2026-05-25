@@ -185,7 +185,7 @@ export default function FormsPage() {
 
   // Get template name by ID
   const getTemplateName = (templateId: string): string | undefined => {
-    return templates.find((t) => t.id === templateId)?.name
+    return templates.find((t) => t.id === templateId)?.name ?? undefined
   }
 
   return (
@@ -257,7 +257,7 @@ export default function FormsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {templates.map((template) => (
-                <TemplateCard key={template.id} template={template} />
+                <TemplateCard key={template.id} template={template.schema} />
               ))}
             </div>
           )}

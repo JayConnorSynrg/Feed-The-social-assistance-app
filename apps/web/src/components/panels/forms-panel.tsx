@@ -4,7 +4,7 @@
 // Forms Panel - Browse, fill out, and submit benefit application forms
 // Tabs: Available Forms, In Progress, Submitted
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   FileText,
   Clock,
@@ -20,6 +20,9 @@ import {
   ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
+import { useUserSubmissions } from '@/hooks/use-form-submission'
+import type { FormSubmission as HookFormSubmission } from '@/hooks/use-form-submission'
 
 // ============================================
 // TYPES
@@ -58,96 +61,75 @@ interface FormSubmission {
 }
 
 // ============================================
-// MOCK DATA
+// ADAPTERS: Hook data → Panel types
 // ============================================
-const MOCK_FORM_TEMPLATES: FormTemplate[] = [
-  {
-    id: 'snap-1',
-    name: 'SNAP Application',
-    description: 'Supplemental Nutrition Assistance Program (Food Stamps) helps eligible low-income individuals and families buy food.',
-    estimatedTime: 45,
-    requiredDocs: ['Photo ID', 'Proof of Income', 'Proof of Residence', 'Social Security Card'],
-    category: 'food',
-  },
-  {
-    id: 'medicaid-1',
-    name: 'Medicaid Application',
-    description: 'Apply for Medicaid health coverage for eligible individuals and families with limited income.',
-    estimatedTime: 60,
-    requiredDocs: ['Photo ID', 'Proof of Income', 'Proof of Citizenship', 'Tax Returns'],
-    category: 'healthcare',
-  },
-  {
-    id: 'wic-1',
-    name: 'WIC Program',
-    description: 'Women, Infants, and Children program provides nutrition assistance for pregnant women, new mothers, and children under 5.',
-    estimatedTime: 30,
-    requiredDocs: ['Photo ID', 'Proof of Income', 'Proof of Pregnancy or Child Age', 'Proof of Residence'],
-    category: 'food',
-  },
-  {
-    id: 'liheap-1',
-    name: 'LIHEAP Application',
-    description: 'Low Income Home Energy Assistance Program helps pay heating and cooling bills.',
-    estimatedTime: 25,
-    requiredDocs: ['Photo ID', 'Utility Bill', 'Proof of Income', 'Lease Agreement'],
-    category: 'utilities',
-  },
-  {
-    id: 'section8-1',
-    name: 'Section 8 Housing',
-    description: 'Housing Choice Voucher Program provides rental assistance for low-income families.',
-    estimatedTime: 90,
-    requiredDocs: ['Photo ID', 'Birth Certificates', 'Social Security Cards', 'Proof of Income', 'Bank Statements'],
-    category: 'housing',
-  },
-]
+function deriveCategoryFromName(name: string | null): FormTemplate['category'] {
+  if (!name) return 'benefits'
+  const lower = name.toLowerCase()
+  if (lower.includes('snap') || lower.includes('food') || lower.includes('wic')) return 'food'
+  if (lower.includes('medicaid') || lower.includes('health')) return 'healthcare'
+  if (lower.includes('section 8') || lower.includes('housing')) return 'housing'
+  if (lower.includes('liheap') || lower.includes('energy') || lower.includes('utilit')) return 'utilities'
+  return 'benefits'
+}
 
-const MOCK_IN_PROGRESS: FormInProgressData[] = [
-  {
-    id: 'draft-1',
-    templateId: 'snap-1',
-    templateName: 'SNAP Application',
-    progress: 65,
-    lastSaved: new Date(Date.now() - 86400000), // 1 day ago
-    category: 'food',
-  },
-  {
-    id: 'draft-2',
-    templateId: 'medicaid-1',
-    templateName: 'Medicaid Application',
-    progress: 25,
-    lastSaved: new Date(Date.now() - 259200000), // 3 days ago
-    category: 'healthcare',
-  },
-]
+function adaptTemplate(row: FormTemplateWithMeta): FormTemplate {
+  const schema = row.schema
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? schema.description ?? '',
+    estimatedTime: schema.metadata?.estimatedTime ?? 30,
+    requiredDocs: schema.metadata?.requiredDocuments ?? [],
+    category: (row.category as FormTemplate['category']) ?? deriveCategoryFromName(row.name),
+  }
+}
 
-const MOCK_SUBMISSIONS: FormSubmission[] = [
-  {
-    id: 'sub-1',
-    templateId: 'liheap-1',
-    templateName: 'LIHEAP Application',
-    submittedAt: new Date(Date.now() - 604800000), // 7 days ago
-    status: 'under-review',
-    category: 'utilities',
-  },
-  {
-    id: 'sub-2',
-    templateId: 'wic-1',
-    templateName: 'WIC Program',
-    submittedAt: new Date(Date.now() - 1209600000), // 14 days ago
-    status: 'approved',
-    category: 'food',
-  },
-  {
-    id: 'sub-3',
-    templateId: 'section8-1',
-    templateName: 'Section 8 Housing',
-    submittedAt: new Date(Date.now() - 2592000000), // 30 days ago
-    status: 'needs-info',
-    category: 'housing',
-  },
-]
+function mapSubmissionStatus(status: string): FormSubmission['status'] {
+  switch (status) {
+    case 'draft': return 'pending'
+    case 'submitted': return 'pending'
+    case 'processing': return 'under-review'
+    case 'approved': return 'approved'
+    case 'rejected': return 'denied'
+    case 'archived': return 'approved'
+    default: return 'pending'
+  }
+}
+
+function adaptSubmission(
+  sub: HookFormSubmission,
+  templateMap: Map<string, FormTemplateWithMeta>
+): FormSubmission {
+  const tmpl = templateMap.get(sub.templateId)
+  return {
+    id: sub.id,
+    templateId: sub.templateId,
+    templateName: tmpl?.name ?? 'Unknown Form',
+    submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : new Date(sub.createdAt),
+    status: mapSubmissionStatus(sub.status),
+    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+  }
+}
+
+function adaptDraft(
+  sub: HookFormSubmission,
+  templateMap: Map<string, FormTemplateWithMeta>
+): FormInProgressData {
+  const tmpl = templateMap.get(sub.templateId)
+  // Estimate progress from filled data fields
+  const dataKeys = Object.keys(sub.data || {}).length
+  const progress = Math.min(Math.round((dataKeys / Math.max(dataKeys + 3, 5)) * 100), 95)
+
+  return {
+    id: sub.id,
+    templateId: sub.templateId,
+    templateName: tmpl?.name ?? 'Unknown Form',
+    progress,
+    lastSaved: new Date(sub.updatedAt),
+    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+  }
+}
 
 // ============================================
 // CATEGORY COLORS
@@ -482,25 +464,73 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
 // ============================================
 export function FormsPanel({ userId }: FormsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('available')
-  const [templates] = useState<FormTemplate[]>(MOCK_FORM_TEMPLATES)
-  const [inProgress, setInProgress] = useState<FormInProgressData[]>(MOCK_IN_PROGRESS)
-  const [submissions] = useState<FormSubmission[]>(MOCK_SUBMISSIONS)
+
+  // Live data hooks
+  const { templates: rawTemplates, loading: templatesLoading, error: templatesError } = useFormTemplates()
+  const { submissions: rawSubmissions, loading: submissionsLoading, error: submissionsError, refresh: refreshSubmissions } = useUserSubmissions()
+
+  // Build a template lookup map
+  const templateMap = useMemo(() => {
+    const map = new Map<string, FormTemplateWithMeta>()
+    for (const t of rawTemplates) map.set(t.id, t)
+    return map
+  }, [rawTemplates])
+
+  // Adapt hook data to panel types
+  const templates = useMemo(() => rawTemplates.map(adaptTemplate), [rawTemplates])
+
+  const { inProgress, submissions } = useMemo(() => {
+    const drafts: FormInProgressData[] = []
+    const submitted: FormSubmission[] = []
+
+    for (const sub of rawSubmissions) {
+      if (sub.status === 'draft') {
+        drafts.push(adaptDraft(sub, templateMap))
+      } else {
+        submitted.push(adaptSubmission(sub, templateMap))
+      }
+    }
+    return { inProgress: drafts, submissions: submitted }
+  }, [rawSubmissions, templateMap])
+
+  const isLoading = templatesLoading || submissionsLoading
+  const error = templatesError || submissionsError
 
   // Handlers
   const handleStartForm = (_templateId: string) => {
-    alert('Form builder coming soon! Use the AI Assistant to help you fill out applications.')
+    // TODO: Navigate to form builder with selected template
   }
 
   const handleContinueForm = (_formId: string) => {
-    alert('Form builder coming soon! Your draft has been saved.')
+    // TODO: Navigate to form builder with draft loaded
   }
 
-  const handleDeleteDraft = (formId: string) => {
-    setInProgress(inProgress.filter(f => f.id !== formId))
+  const handleDeleteDraft = async (formId: string) => {
+    // TODO: Wire to delete submission via hook; for now refresh list
+    await refreshSubmissions()
   }
 
   const handleViewSubmission = (_submissionId: string) => {
-    alert('Submission details coming soon!')
+    // TODO: Navigate to submission detail view
+  }
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
+        <p className="text-sm text-muted-foreground">Loading forms...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <AlertCircle className="w-8 h-8 text-orange-500" />
+        <p className="text-sm text-stone-700 font-medium">Failed to load forms</p>
+        <p className="text-xs text-muted-foreground">{error}</p>
+      </div>
+    )
   }
 
   return (

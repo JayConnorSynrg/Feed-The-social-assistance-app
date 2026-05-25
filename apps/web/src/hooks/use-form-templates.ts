@@ -18,13 +18,22 @@ interface FormTemplateRow {
   created_by: string | null
 }
 
+export interface FormTemplateWithMeta {
+  id: string
+  name: string
+  description: string | null
+  category: string | null
+  schema: FormTemplateSchema
+}
+
 interface UseFormTemplatesState {
-  templates: FormTemplateSchema[]
+  templates: FormTemplateWithMeta[]
   loading: boolean
   error: string | null
 }
 
 interface UseFormTemplatesReturn extends UseFormTemplatesState {
+  /** @deprecated Use templates[].schema instead for full row metadata */
   getTemplate: (id: string) => Promise<FormTemplateSchema | null>
   createTemplate: (template: FormTemplateSchema) => Promise<string | null>
   updateTemplate: (id: string, template: Partial<FormTemplateSchema>) => Promise<boolean>
@@ -78,7 +87,13 @@ export function useFormTemplates(
 
       if (error) throw error
 
-      const templates = ((data || []) as FormTemplateRow[]).map((row) => row.schema)
+      const templates: FormTemplateWithMeta[] = ((data || []) as FormTemplateRow[]).map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        category: row.category,
+        schema: row.schema,
+      }))
 
       setState({
         templates,

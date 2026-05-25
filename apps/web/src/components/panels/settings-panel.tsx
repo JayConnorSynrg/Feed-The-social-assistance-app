@@ -438,6 +438,27 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
 }
 
 // ============================================
+// RELATIVE TIME HELPER
+// ============================================
+function getRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHr = Math.floor(diffMin / 60)
+  const diffDays = Math.floor(diffHr / 24)
+  const diffMonths = Math.floor(diffDays / 30)
+  const diffYears = Math.floor(diffDays / 365)
+
+  if (diffSec < 60) return 'just now'
+  if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`
+  if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`
+  if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`
+  return `${diffYears} year${diffYears !== 1 ? 's' : ''} ago`
+}
+
+// ============================================
 // ACCOUNT SECTION
 // ============================================
 function AccountSection() {
@@ -451,10 +472,13 @@ function AccountSection() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // Password last-changed timestamp
+  const [passwordLastChanged, setPasswordLastChanged] = useState<string | null>(null)
+
   const { signOut } = useAuth()
   const router = useRouter()
 
-  // Check MFA status on mount
+  // Check MFA status + fetch password timestamp on mount
   useEffect(() => {
     const checkMFAStatus = async () => {
       const { mfaService } = await import('@/lib/mfa')
@@ -462,6 +486,21 @@ function AccountSection() {
       setMfaEnabled(enabled)
     }
     checkMFAStatus()
+
+    const fetchPasswordTimestamp = async () => {
+      try {
+        const res = await fetch('/api/auth/password-last-changed')
+        if (res.ok) {
+          const { last_changed } = await res.json()
+          if (last_changed) {
+            setPasswordLastChanged(getRelativeTime(new Date(last_changed)))
+          }
+        }
+      } catch {
+        // Silently fall back to null — UI shows fallback text
+      }
+    }
+    fetchPasswordTimestamp()
   }, [])
 
   const handleEnableMFA = () => {
@@ -564,7 +603,7 @@ function AccountSection() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Last changed 3 months ago
+            {passwordLastChanged ? `Last changed ${passwordLastChanged}` : 'Loading...'}
           </p>
         </div>
 
@@ -800,12 +839,12 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
 
   // Build profile settings from auth data
   const profileSettings: SettingsData['profile'] = {
-    name: (profile as any)?.full_name || '',
+    name: profile?.full_name || '',
     email: user?.email || '',
-    phone: (profile as any)?.phone || '',
+    phone: profile?.phone || '',
     location: [
-      (profile as any)?.location_city,
-      (profile as any)?.location_state
+      profile?.location_city,
+      profile?.location_state
     ].filter(Boolean).join(', ') || '',
   }
 
@@ -830,7 +869,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
           location_city: city,
           location_state: state,
           phone: newProfile.phone,
-        } as any)
+        })
         .eq('id', user.id)
 
       if (error) throw error

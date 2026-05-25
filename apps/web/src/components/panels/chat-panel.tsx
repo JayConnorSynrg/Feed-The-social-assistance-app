@@ -5,16 +5,19 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { Send, Sparkles, Users, CalendarClock, Search, Apple, Building2, Heart, FileText, Square } from 'lucide-react'
+import { Send, Sparkles, Search, Apple, Building2, Heart, FileText, Square, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useChat, type ChatMessage } from '@/hooks/use-chat'
 import { useAuth } from '@/hooks/use-auth'
+import { GuidedFlowComponent } from '@/components/chat/guided-flow'
+import { resourceFinderFlow, eligibilityCheckerFlow, formHelpFlow } from '@/lib/ai/guided-flows'
+import type { GuidedFlow } from '@/lib/ai/guided-flows'
 
 // ============================================
-// FEATURE CARDS
+// FLOW SELECTION CARD
 // ============================================
-interface FeatureCardProps {
+interface FlowCardProps {
   icon: React.ElementType
   iconBg: string
   title: string
@@ -22,7 +25,7 @@ interface FeatureCardProps {
   onClick?: () => void
 }
 
-function FeatureCard({ icon: Icon, iconBg, title, description, onClick }: FeatureCardProps) {
+function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardProps) {
   return (
     <button
       onClick={onClick}
@@ -156,6 +159,16 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     onError: (err) => console.error('Chat error:', err),
   })
 
+  // Guided flow state
+  const [selectedFlow, setSelectedFlow] = useState<GuidedFlow | null>(null)
+
+  const handleFlowSelect = (flow: GuidedFlow) => setSelectedFlow(flow)
+  const handleFlowComplete = (answers: Record<string, string>, aiResponse: string) => {
+    sendMessage(aiResponse)
+    setSelectedFlow(null)
+  }
+  const handleFlowCancel = () => setSelectedFlow(null)
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -176,6 +189,12 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const handleFeatureClick = (feature: string) => {
     if (feature === 'resources' && onNavigateToMap) {
       onNavigateToMap()
+    } else if (feature === 'resources') {
+      handleFlowSelect(resourceFinderFlow)
+    } else if (feature === 'eligibility') {
+      handleFlowSelect(eligibilityCheckerFlow)
+    } else if (feature === 'forms') {
+      handleFlowSelect(formHelpFlow)
     } else if (isAuthenticated) {
       sendMessage(`Help me with ${feature}`)
     } else {
@@ -185,6 +204,19 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
   // Show greeting or chat thread
   const showGreeting = messages.length === 0
+
+  // Render guided flow if one is selected
+  if (selectedFlow) {
+    return (
+      <div className="h-full flex flex-col">
+        <GuidedFlowComponent
+          flow={selectedFlow}
+          onComplete={handleFlowComplete}
+          onCancel={handleFlowCancel}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -203,28 +235,28 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             </p>
           </div>
 
-          {/* Feature Cards */}
+          {/* Guided Flow Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-8">
-            <FeatureCard
+            <FlowCard
               icon={Sparkles}
               iconBg="bg-yellow-100 text-yellow-600"
               title="Find Resources"
               description="Discover local food banks, housing assistance, healthcare, and more near you."
               onClick={() => handleFeatureClick('resources')}
             />
-            <FeatureCard
-              icon={Users}
+            <FlowCard
+              icon={CheckCircle}
               iconBg="bg-blue-100 text-blue-600"
-              title="Connect & Share"
-              description="Stay connected, share ideas, and get support from your community."
-              onClick={() => handleFeatureClick('community')}
+              title="Check Eligibility"
+              description="See what benefits programs you may qualify for based on your situation."
+              onClick={() => handleFeatureClick('eligibility')}
             />
-            <FeatureCard
-              icon={CalendarClock}
+            <FlowCard
+              icon={FileText}
               iconBg="bg-green-100 text-green-600"
-              title="Apply for Benefits"
-              description="Get help applying for SNAP, Medicaid, housing assistance, and other programs."
-              onClick={() => handleFeatureClick('benefits')}
+              title="Get Help with Forms"
+              description="Get guided help understanding and completing benefit applications."
+              onClick={() => handleFeatureClick('forms')}
             />
           </div>
 
