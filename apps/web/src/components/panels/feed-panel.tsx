@@ -265,11 +265,7 @@ function PostCard({ post, onLike, onComment, onShare }: PostCardProps) {
 // ============================================
 // MAIN FEED PANEL
 // ============================================
-interface FeedPanelProps {
-  userId?: string
-}
-
-export function FeedPanel({ userId }: FeedPanelProps) {
+export function FeedPanel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
