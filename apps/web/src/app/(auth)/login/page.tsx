@@ -12,6 +12,7 @@ import { useCsrfToken } from '@/hooks/use-csrf-token'
 import { MFAVerify } from '@/components/auth/mfa-verify'
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
+import { logger } from '@/lib/logger'
 
 function LoginForm() {
   const router = useRouter()
@@ -54,6 +55,7 @@ function LoginForm() {
     // Execute with rate limiting
     const result = await executeRateLimited(async () => {
       setLoading(true)
+      const timer = logger.time('auth.login')
       try {
         // 1. Check server-side account lockout BEFORE attempting login
         const lockoutCheck = await fetch('/api/auth/check-lockout', {
@@ -128,9 +130,11 @@ function LoginForm() {
         }
 
         // No MFA required or already verified
+        timer.end({ step: 'email_login', email })
         router.push(redirectTo)
         router.refresh()
       } catch (err) {
+        timer.error(err, { step: 'email_login' })
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
@@ -186,7 +190,7 @@ function LoginForm() {
       {/* Overlay for better readability - sage/olive tones */}
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         {!showMFA ? (
           <>
             <CardHeader className="text-center">

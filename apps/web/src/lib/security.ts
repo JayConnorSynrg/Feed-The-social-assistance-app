@@ -203,7 +203,6 @@ export const secureCookie = {
 
 /**
  * Password strength validator (Client-side)
- * Note: Server-side validation via /validate-password Edge Function is authoritative
  */
 export function validatePasswordStrength(password: string): {
   valid: boolean
@@ -243,33 +242,6 @@ export function validatePasswordStrength(password: string): {
     score,
     feedback,
   }
-}
-
-/**
- * Server-side password validation via Edge Function
- * Use this for final validation before account creation/password changes
- */
-export async function validatePasswordServer(
-  password: string,
-  email?: string,
-  username?: string
-): Promise<{
-  valid: boolean
-  score: number
-  strength: string
-  feedback: string[]
-}> {
-  const response = await fetch('/api/auth/validate-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, email, username }),
-  })
-
-  if (!response.ok) {
-    throw new Error('Password validation failed')
-  }
-
-  return response.json()
 }
 
 /**

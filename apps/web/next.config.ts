@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig: NextConfig = {
   // Enable static export for Capacitor builds
   // Note: Dynamic routes will need to be handled differently
@@ -93,13 +95,19 @@ const nextConfig: NextConfig = {
             //   BEFORE: "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
             //   AFTER:  "script-src 'self' 'unsafe-inline'"
             //
-            //   REMOVED 'unsafe-eval':
+            //   REMOVED 'unsafe-eval' (production):
             //     Eliminates eval(), new Function(), setTimeout(string), and
             //     WebAssembly.instantiate() from untrusted strings. This blocks
             //     the primary path by which an XSS payload could dynamically
             //     execute stolen encryption key material (DEK exfiltration).
             //     FTC "reasonable security" and SOC 2 require eval() to be
             //     disabled when handling PII/encrypted data.
+            //
+            //   RE-ENABLED 'unsafe-eval' (development only):
+            //     React 19 + Next.js 16 dev mode requires eval() for Fast
+            //     Refresh, error overlays, and React DevTools integration.
+            //     Conditioned on NODE_ENV === 'development'; production builds
+            //     never include it.
             //
             //   RETAINED 'unsafe-inline':
             //     Next.js 14/15 injects inline <script> tags during SSR hydration
@@ -121,7 +129,7 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com",

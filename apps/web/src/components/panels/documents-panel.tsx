@@ -52,60 +52,6 @@ interface DocumentsPanelProps {
   userId?: string
 }
 
-// ============================================
-// MOCK DATA
-// ============================================
-const MOCK_DOCUMENTS: Document[] = [
-  {
-    id: '1',
-    name: 'Drivers_License.pdf',
-    type: 'pdf',
-    category: 'id',
-    size: 245760, // 240 KB
-    uploadedAt: new Date(Date.now() - 86400000 * 2), // 2 days ago
-  },
-  {
-    id: '2',
-    name: 'Pay_Stub_January.pdf',
-    type: 'pdf',
-    category: 'income',
-    size: 156000, // 152 KB
-    uploadedAt: new Date(Date.now() - 86400000 * 5), // 5 days ago
-  },
-  {
-    id: '3',
-    name: 'Lease_Agreement_2025.pdf',
-    type: 'pdf',
-    category: 'residence',
-    size: 1024000, // 1 MB
-    uploadedAt: new Date(Date.now() - 86400000 * 10), // 10 days ago
-  },
-  {
-    id: '4',
-    name: 'Medical_Records.pdf',
-    type: 'pdf',
-    category: 'medical',
-    size: 512000, // 500 KB
-    uploadedAt: new Date(Date.now() - 86400000 * 15), // 15 days ago
-  },
-  {
-    id: '5',
-    name: 'Passport_Photo.jpg',
-    type: 'image',
-    category: 'id',
-    size: 2048000, // 2 MB
-    uploadedAt: new Date(Date.now() - 86400000 * 3), // 3 days ago
-  },
-  {
-    id: '6',
-    name: 'Utility_Bill_December.png',
-    type: 'image',
-    category: 'residence',
-    size: 890000, // 869 KB
-    uploadedAt: new Date(Date.now() - 86400000 * 7), // 7 days ago
-  },
-]
-
 const CATEGORY_CONFIG: Record<DocumentCategory, { label: string; icon: React.ElementType; color: string }> = {
   all: { label: 'All Documents', icon: FolderOpen, color: 'bg-stone-100 text-stone-600' },
   id: { label: 'ID Documents', icon: CreditCard, color: 'bg-blue-100 text-blue-600' },

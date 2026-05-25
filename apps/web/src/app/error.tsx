@@ -24,7 +24,7 @@ export default function GlobalError({
       }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
-      <div className="relative z-10 text-center space-y-4 bg-stone-50/95 backdrop-blur-sm border border-lime-200/60 rounded-2xl p-10 shadow-xl max-w-md w-full">
+      <div className="relative z-10 text-center space-y-4 bg-stone-50/95 text-stone-800 backdrop-blur-sm border border-lime-200/60 rounded-2xl p-10 shadow-xl max-w-md w-full">
         <div className="text-4xl">🌾</div>
         <h2 className="text-2xl font-bold text-stone-800">Something went wrong</h2>
         <p className="text-stone-500 text-sm">

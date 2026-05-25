@@ -399,7 +399,11 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
       setState((prev) => ({ ...prev, saving: true, error: null }))
 
       try {
-        const updates: Record<string, unknown> = {
+        const updates: {
+          status: SubmissionStatus
+          updated_at: string
+          notes?: string | null
+        } = {
           status,
           updated_at: new Date().toISOString(),
         }
@@ -407,11 +411,6 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
         if (notes !== undefined) {
           updates.notes = notes
         }
-
-        // TODO: Add processed_at field to form_submissions table if needed
-        // if (status === 'approved' || status === 'rejected') {
-        //   updates.processed_at = new Date().toISOString()
-        // }
 
         const { error } = await supabase
           .from('form_submissions')

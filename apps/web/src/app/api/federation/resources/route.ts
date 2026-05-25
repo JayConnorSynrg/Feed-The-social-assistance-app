@@ -156,137 +156,42 @@ async function getResources(
   const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
   try {
-    // Build query - use raw SQL for PostGIS lat/lng extraction
-    // Only return approved, public resources
-    let query = `
-      SELECT
-        id,
-        name,
-        description,
-        category,
-        address_line1,
-        city,
-        state,
-        zip_code,
-        phone,
-        email,
-        website,
-        hours_of_operation,
-        updated_at,
-        created_at,
-        ST_Y(location::geometry) as latitude,
-        ST_X(location::geometry) as longitude
-      FROM resources
-      WHERE status = 'approved'
-        AND is_verified = true
-    `
+    // Query approved, verified resources via standard query builder
+    let resourceQuery = supabase
+      .from('resources')
+      .select('*')
+      .eq('status', 'approved')
+      .eq('is_verified', true)
+      .order('id', { ascending: true })
+      .limit(limit + 1)
 
-    const params: (string | number)[] = []
-    let paramIndex = 1
-
-    // Filter by since timestamp
     if (since) {
-      query += ` AND updated_at > $${paramIndex}`
-      params.push(since.toISOString())
-      paramIndex++
+      resourceQuery = resourceQuery.gt('updated_at', since.toISOString())
     }
 
-    // Filter by category
     if (category) {
-      query += ` AND category = $${paramIndex}`
-      params.push(category)
-      paramIndex++
+      resourceQuery = resourceQuery.eq('category', category as never)
     }
 
-    // Filter by cursor (pagination)
     if (cursor) {
-      query += ` AND id > $${paramIndex}`
-      params.push(cursor)
-      paramIndex++
+      resourceQuery = resourceQuery.gt('id', cursor)
     }
 
-    // Order by ID for stable pagination
-    query += ' ORDER BY id ASC'
-
-    // Limit (fetch one extra to check if there are more)
-    query += ` LIMIT $${paramIndex}`
-    params.push(limit + 1)
-
-    // Execute query via raw SQL (fallback if exec_sql RPC doesn't exist)
-    const { data, error } = await supabase.rpc('exec_sql' as never, {
-      sql: query,
-      params,
-    } as never)
+    const { data, error } = await resourceQuery
 
     if (error) {
-      // Fallback to standard query without lat/lng extraction
-      let fallbackQuery = supabase
-        .from('resources')
-        .select('*')
-        .eq('status', 'approved')
-        .eq('is_verified', true)
-        .order('id', { ascending: true })
-        .limit(limit + 1)
-
-      if (since) {
-        fallbackQuery = fallbackQuery.gt('updated_at', since.toISOString())
-      }
-
-      if (category) {
-        fallbackQuery = fallbackQuery.eq('category', category as never)
-      }
-
-      if (cursor) {
-        fallbackQuery = fallbackQuery.gt('id', cursor)
-      }
-
-      const { data: fallbackData, error: fallbackError } = await fallbackQuery
-
-      if (fallbackError) {
-        console.error('Resource query error:', fallbackError)
-        return NextResponse.json(
-          { error: 'Failed to fetch resources', details: fallbackError.message },
-          { status: 500 }
-        )
-      }
-
-      const rows = (fallbackData || []) as ResourceRow[]
-      const hasMore = rows.length > limit
-      const results = rows.slice(0, limit)
-
-      // Get total count (approximate for performance)
-      const { count } = await supabase
-        .from('resources')
-        .select('*', { count: 'estimated', head: true })
-        .eq('status', 'approved')
-        .eq('is_verified', true)
-
-      const response: ResourcesResponse = {
-        resources: results.map((row) => toFederationResource(row)),
-        cursor: hasMore
-          ? Buffer.from(results[results.length - 1].id).toString('base64')
-          : null,
-        has_more: hasMore,
-        total: count || 0,
-      }
-
-      return NextResponse.json(response, {
-        status: 200,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Signature, Digest',
-          'Content-Type': 'application/json',
-        },
-      })
+      console.error('Resource query error:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch resources', details: error.message },
+        { status: 500 }
+      )
     }
 
-    // Process results from raw SQL
-    const rows = (data || []) as Array<ResourceRow & { latitude?: number; longitude?: number }>
+    const rows = (data || []) as ResourceRow[]
     const hasMore = rows.length > limit
     const results = rows.slice(0, limit)
 
-    // Get total count
+    // Get total count (approximate for performance)
     const { count } = await supabase
       .from('resources')
       .select('*', { count: 'estimated', head: true })

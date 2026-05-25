@@ -115,11 +115,9 @@ export async function setupVault(
       dek_iv: result.dekIV,
       encryption_version: 1,
       vault_created_at: new Date().toISOString(),
-      encrypted_data: '{}', // Will be populated with actual data later
       // Zero-knowledge verification (replaces legacy key_check)
       verification_ciphertext: arrayBufferToBase64(verificationCiphertext),
       verification_iv: arrayBufferToBase64(verificationIv.buffer as ArrayBuffer),
-      version: 1,
     })
 
   if (error) {

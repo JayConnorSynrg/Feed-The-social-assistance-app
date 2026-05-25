@@ -75,7 +75,7 @@ function PanelRenderer() {
       return <MapPanel />
 
     case 'feed':
-      return <FeedPanel userId={user?.id} />
+      return <FeedPanel />
 
     case 'settings':
       return <SettingsPanel />

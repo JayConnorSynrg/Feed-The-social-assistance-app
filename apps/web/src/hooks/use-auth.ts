@@ -9,19 +9,3 @@ import { useAuthContext } from '@/providers/auth-provider'
 export function useAuth() {
   return useAuthContext()
 }
-
-// Convenience hooks
-export function useUser() {
-  const { user, loading, error } = useAuth()
-  return { user, loading, error }
-}
-
-export function useSession() {
-  const { session, loading, error, refreshSession } = useAuth()
-  return { session, loading, error, refreshSession }
-}
-
-export function useIsAuthenticated() {
-  const { isAuthenticated, loading } = useAuth()
-  return { isAuthenticated, loading }
-}

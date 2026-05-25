@@ -13,16 +13,15 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  // In production, you'd check for admin role here
-  // const { data: profile } = await supabase
-  //   .from('profiles')
-  //   .select('role')
-  //   .eq('id', user.id)
-  //   .single()
-  //
-  // if (profile?.role !== 'admin') {
-  //   redirect('/')
-  // }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.is_admin) {
+    redirect('/')
+  }
 
   return <>{children}</>
 }

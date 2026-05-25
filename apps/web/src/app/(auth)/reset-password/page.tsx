@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { logger } from '@/lib/logger'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -31,6 +32,7 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true)
+    const timer = logger.time('auth.reset_password')
 
     try {
       const supabase = createClient()
@@ -55,6 +57,7 @@ export default function ResetPasswordPage() {
 
       if (result?.error) throw result.error
 
+      timer.end({ step: 'password_update' })
       setSuccess(true)
       setTimeout(() => router.push('/login'), 2000)
     } catch (err: unknown) {
@@ -62,10 +65,12 @@ export default function ResetPasswordPage() {
         (err instanceof DOMException && err.name === 'AbortError') ||
         (err instanceof Error && (err.message.includes('signal') || err.message.includes('abort') || err.message === 'update_timeout'))
       if (isAbort) {
+        timer.end({ step: 'password_update', aborted: true })
         setSuccess(true)
         setTimeout(() => router.push('/login'), 2000)
         return
       }
+      timer.error(err, { step: 'password_update' })
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
     } finally {
       setLoading(false)
@@ -84,7 +89,7 @@ export default function ResetPasswordPage() {
     >
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-lime-800">Set new password</CardTitle>
           <CardDescription className="text-stone-600">

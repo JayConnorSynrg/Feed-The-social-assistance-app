@@ -106,7 +106,7 @@ Deno.test('Should generate valid HMAC-SHA256 signature', async () => {
     timestamp: '2026-02-14T12:00:00Z',
   }
 
-  const testSecret = 'test-secret-key-1234567890abcdef1234567890abcdef1234567890ab'
+  const testSecret = Deno.env.get('TEST_HMAC_SECRET') || 'test-secret'
   const encoder = new TextEncoder()
 
   const key = await crypto.subtle.importKey(

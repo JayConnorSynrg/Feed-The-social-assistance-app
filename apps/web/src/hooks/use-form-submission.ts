@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { FormTemplateSchema } from '@/lib/form-schemas'
 import { extractSensitiveFields } from '@/lib/form-field-mapper'
@@ -518,9 +518,9 @@ export function useUserSubmissions(
   }, [supabase, options.templateId, options.status])
 
   // Fetch on mount and when options change
-  useState(() => {
+  useEffect(() => {
     fetchSubmissions()
-  })
+  }, [fetchSubmissions])
 
   return {
     submissions,

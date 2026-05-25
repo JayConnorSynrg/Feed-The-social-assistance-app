@@ -11,6 +11,7 @@ import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
 import { useCsrfToken } from '@/hooks/use-csrf-token'
 import { usePasswordStrength } from '@/hooks/use-password-strength'
 import { sanitizeInput } from '@/lib/security'
+import { logger } from '@/lib/logger'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -70,6 +71,7 @@ export default function SignupPage() {
     // Execute with rate limiting
     const result = await executeRateLimited(async () => {
       setLoading(true)
+      const timer = logger.time('auth.signup')
       try {
         // Sanitize user input
         const sanitizedName = sanitizeInput(fullName)
@@ -93,15 +95,18 @@ export default function SignupPage() {
           return
         }
 
+        timer.end({ step: 'email_signup' })
         setSuccess(true)
       } catch (err: unknown) {
         if (
           (err instanceof DOMException && err.name === 'AbortError') ||
           (err instanceof Error && err.message.includes('signal'))
         ) {
+          timer.end({ step: 'email_signup', aborted: true })
           setSuccess(true)
           return
         }
+        timer.error(err, { step: 'email_signup' })
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
@@ -168,7 +173,7 @@ export default function SignupPage() {
       >
         <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-        <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+        <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-lime-800">Check Your Email</CardTitle>
             <CardDescription className="text-stone-600">
@@ -229,7 +234,7 @@ export default function SignupPage() {
       {/* Overlay for better readability - sage/olive tones */}
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-lime-800">Join FEED</CardTitle>
           <CardDescription className="text-stone-600">

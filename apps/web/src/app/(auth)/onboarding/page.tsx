@@ -3,11 +3,13 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/providers/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 const ROLE_OPTIONS = [
   {
@@ -57,6 +59,7 @@ type Step = 1 | 2 | 3 | 4
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { user: authUser, loading: authLoading } = useAuthContext()
 
   const [step, setStep] = useState<Step>(1)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
@@ -120,60 +123,99 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setLoading(true)
     setError(null)
+    const timer = logger.time('auth.onboarding.complete')
 
     try {
-      // getSession() reads from cookie — no network call, abort-safe
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      if (!user) throw new Error('Not authenticated. Please sign in again.')
+      // Use the user from AuthProvider context exclusively.
+      // NEVER call getSession() here — it acquires a navigator lock that
+      // can deadlock against AuthProvider's own initialization, especially
+      // under React Strict Mode's double-mount cycle. If the context has
+      // no user after auth loading completes, redirect to login.
+      const userId = authUser?.id
+      if (!userId) {
+        if (authLoading) {
+          // Auth still initializing — retry after a short delay rather
+          // than calling getSession() which would deadlock.
+          setLoading(false)
+          setError('Still loading your account. Please try again in a moment.')
+          return
+        }
+        // Auth finished loading but no user — session expired or invalid.
+        router.push('/login')
+        return
+      }
 
-      // Wrap upsert in a timeout — Next.js patches global fetch and can abort
-      // in-flight requests. If it times out, the request likely completed server-side.
+      const profileData = {
+        id: userId,
+        user_role: userRole,
+        zip_code: zipCode || null,
+        location_city: city || null,
+        location_state: state || null,
+        latitude: latitude,
+        longitude: longitude,
+        needs: selectedNeeds,
+        phone: phone || null,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      } as any
+
+      // Upsert with a timeout — Next.js patches global fetch and can abort
+      // in-flight requests. If the timeout fires, the server-side write
+      // likely completed before the abort.
       const upsertPromise = supabase
         .from('profiles')
-        .upsert({
-          id: user.id,
-          user_role: userRole,
-          zip_code: zipCode || null,
-          location_city: city || null,
-          location_state: state || null,
-          latitude: latitude,
-          longitude: longitude,
-          needs: selectedNeeds,
-          phone: phone || null,
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        } as any, { onConflict: 'id' })
+        .upsert(profileData, { onConflict: 'id' })
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('upsert_timeout')), 8000)
+        setTimeout(() => reject(new Error('upsert_timeout')), 10_000)
       )
 
-      let upsertResult: Awaited<typeof upsertPromise> | null = null
+      let upsertError: { message: string } | null = null
       try {
-        upsertResult = await Promise.race([upsertPromise, timeoutPromise])
-      } catch {
-        // Timed out or aborted — navigate as success
+        const result = await Promise.race([upsertPromise, timeoutPromise])
+        upsertError = result.error
+      } catch (raceErr: unknown) {
+        const msg = (raceErr as any)?.message ?? ''
+        const isAbortOrTimeout =
+          (raceErr as any)?.name === 'AbortError' ||
+          msg.includes('signal') ||
+          msg.includes('aborted') ||
+          msg === 'upsert_timeout'
+
+        if (!isAbortOrTimeout) throw raceErr
+        // Abort or timeout — the upsert likely succeeded server-side.
+        // Navigate and let middleware verify.
+        logger.warn('auth.onboarding.upsert_aborted', { reason: msg })
+      }
+
+      if (upsertError) {
+        logger.error('auth.onboarding.upsert_failed', upsertError, { userId })
+        throw new Error(upsertError.message)
+      }
+
+      // Navigate immediately — the middleware at '/' will verify
+      // onboarding_completed and redirect back here if the write
+      // didn't commit. Skipping a verify SELECT avoids a second
+      // round-trip that can hang on Next.js fetch abort or lock
+      // contention.
+      timer.end({ step: 'complete', userId })
+      router.push('/')
+    } catch (err: unknown) {
+      const msg = (err as any)?.message ?? String(err)
+      const isAbort =
+        (err as any)?.name === 'AbortError' ||
+        (typeof msg === 'string' && (msg.includes('signal') || msg.includes('aborted')))
+
+      if (isAbort) {
+        // Abort errors mean the whole operation was interrupted.
+        // The upsert may have succeeded — navigate and let middleware decide.
+        logger.warn('auth.onboarding.outer_abort', { message: msg })
         router.push('/')
         return
       }
 
-      if (upsertResult?.error) throw upsertResult.error
-      router.push('/')
-    } catch (err: unknown) {
-      // Catch any form of AbortError — DOMException may not extend Error in all runtimes
-      const errName = (err as any)?.name
-      const errMessage = (err as any)?.message ?? String(err)
-      const isAbortError =
-        errName === 'AbortError' ||
-        errMessage.includes('signal') ||
-        errMessage.includes('aborted') ||
-        errMessage === 'upsert_timeout'
-      if (isAbortError) {
-        router.push('/')
-        return
-      }
-      setError(typeof errMessage === 'string' ? errMessage : 'Failed to save. Please try again.')
+      timer.error(err, { step: 'handleComplete' })
+      setError(typeof msg === 'string' ? msg : 'Failed to save. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -194,7 +236,7 @@ export default function OnboardingPage() {
     >
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-lg relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+      <Card className="w-full max-w-lg relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-lime-800">
             {step === 1 && "I'm here to..."}
@@ -268,7 +310,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={handleComplete}
-                disabled={loading}
+                disabled={loading || authLoading}
                 className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors"
               >
                 Find out how to help Feed.
@@ -439,15 +481,15 @@ export default function OnboardingPage() {
                 <Button
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                   onClick={handleComplete}
-                  disabled={loading}
+                  disabled={loading || authLoading}
                 >
-                  {loading ? 'Saving...' : 'Get Started'}
+                  {loading ? 'Saving...' : authLoading ? 'Loading...' : 'Get Started'}
                 </Button>
               </div>
 
               <button
                 onClick={handleComplete}
-                disabled={loading}
+                disabled={loading || authLoading}
                 className="w-full text-center text-sm text-stone-400 hover:text-stone-600"
               >
                 Skip for now

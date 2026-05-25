@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User, Session, AuthError } from '@supabase/supabase-js'
-import type { Profile } from '@feed/database'
+import type { Profile, Database } from '@feed/database'
+
+type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 
 interface AuthContextType {
   user: User | null
@@ -14,7 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
-  updateProfile: (updates: Partial<Profile>) => Promise<void>
+  updateProfile: (updates: ProfileUpdate) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -57,18 +59,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const initAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
-        if (error) throw error
+        // Race getSession() against a 5-second timeout. getSession() acquires
+        // a navigator lock internally; under React Strict Mode's double-mount
+        // the lock can stall for several seconds (lock steal after 5s). If it
+        // exceeds our timeout, keep loading=true and let the onAuthStateChange
+        // listener resolve auth state when the session is eventually available.
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+        ])
 
-        if (session?.user) {
-          const userProfile = await fetchProfile(session.user.id)
-          setUser(session.user)
-          setSession(session)
-          setProfile(userProfile)
+        if (sessionResult && 'data' in sessionResult) {
+          const { data: { session }, error } = sessionResult
+          if (error) throw error
+
+          if (session?.user) {
+            const userProfile = await fetchProfile(session.user.id)
+            setUser(session.user)
+            setSession(session)
+            setProfile(userProfile)
+          }
+          // Session resolved (user or no user) — done loading
+          setLoading(false)
+        } else {
+          // Timed out — keep loading=true so the UI shows a loading state
+          // instead of falsely rendering as unauthenticated. The
+          // onAuthStateChange listener will set loading=false once the
+          // session resolves.
+          console.warn('AuthProvider: getSession() timed out after 5s, deferring to onAuthStateChange')
         }
       } catch (err) {
         setError(err as AuthError)
-      } finally {
         setLoading(false)
       }
     }
@@ -77,12 +98,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Listen for auth changes (single listener for the whole app)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
+      async (event, newSession) => {
         if (newSession?.user) {
-          const userProfile = await fetchProfile(newSession.user.id)
           setUser(newSession.user)
           setSession(newSession)
-          setProfile(userProfile)
+
+          // Only fetch profile on events that indicate a new/changed user.
+          // TOKEN_REFRESHED fires every ~hour and doesn't change the user —
+          // re-fetching the profile on each refresh is unnecessary DB load.
+          if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+            const userProfile = await fetchProfile(newSession.user.id)
+            setProfile(userProfile)
+          }
         } else {
           setUser(null)
           setSession(null)
@@ -92,8 +119,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     )
 
+    // Safety valve: if loading is still true after 10s (getSession timed out
+    // at 5s AND onAuthStateChange hasn't fired), force loading=false so the
+    // UI isn't stuck on a spinner indefinitely. The user will appear
+    // unauthenticated, but can manually refresh or log in.
+    const maxLoadingTimer = setTimeout(() => {
+      setLoading((current) => {
+        if (current) {
+          console.warn('AuthProvider: max loading timeout (10s) reached, forcing loading=false')
+        }
+        return false
+      })
+    }, 10_000)
+
     return () => {
       subscription.unsubscribe()
+      clearTimeout(maxLoadingTimer)
     }
   }, []) // Empty deps - runs once on mount
 
@@ -124,12 +165,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   // Update profile
-  const updateProfile = useCallback(async (updates: Partial<Profile>) => {
+  const updateProfile = useCallback(async (updates: ProfileUpdate) => {
     if (!user) return
 
     const { data, error } = await getSupabase()
       .from('profiles')
-      .update(updates as never)
+      .update(updates)
       .eq('id', user.id)
       .select()
       .single()

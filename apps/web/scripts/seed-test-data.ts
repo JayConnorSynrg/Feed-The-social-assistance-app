@@ -22,10 +22,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 })
 
 // Test user data (matches mock-users.ts)
+const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD || 'TestPassword123!'
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'TestPassword123!'
+
 const TEST_USERS = [
   {
     email: 'maria.garcia@test.feedapp.com',
-    password: 'TestUser123!',
+    password: TEST_USER_PASSWORD,
     profile: {
       username: 'maria_garcia',
       full_name: 'Maria Garcia',
@@ -36,7 +39,7 @@ const TEST_USERS = [
   },
   {
     email: 'james.wilson@test.feedapp.com',
-    password: 'TestUser123!',
+    password: TEST_USER_PASSWORD,
     profile: {
       username: 'james_wilson',
       full_name: 'James Wilson',
@@ -47,7 +50,7 @@ const TEST_USERS = [
   },
   {
     email: 'sarah.johnson@test.feedapp.com',
-    password: 'TestUser123!',
+    password: TEST_USER_PASSWORD,
     profile: {
       username: 'sarah_johnson',
       full_name: 'Sarah Johnson',
@@ -58,7 +61,7 @@ const TEST_USERS = [
   },
   {
     email: 'david.chen@test.feedapp.com',
-    password: 'TestUser123!',
+    password: TEST_USER_PASSWORD,
     profile: {
       username: 'david_chen',
       full_name: 'David Chen',
@@ -69,7 +72,7 @@ const TEST_USERS = [
   },
   {
     email: 'admin@test.feedapp.com',
-    password: 'AdminTest123!',
+    password: TEST_ADMIN_PASSWORD,
     profile: {
       username: 'feed_admin',
       full_name: 'FEED Administrator',
@@ -406,13 +409,12 @@ async function main() {
     await seedFormTemplates()
 
     console.log('\n✨ Seeding complete!')
-    console.log('\nTest user credentials:')
+    console.log('\nTest user emails:')
     console.log('------------------------')
     for (const user of TEST_USERS) {
       console.log(`Email: ${user.email}`)
-      console.log(`Password: ${user.password}`)
-      console.log('')
     }
+    console.log('\nPasswords sourced from TEST_USER_PASSWORD / TEST_ADMIN_PASSWORD env vars (or defaults).')
   } catch (error) {
     console.error('\n❌ Seeding failed:', error)
     process.exit(1)

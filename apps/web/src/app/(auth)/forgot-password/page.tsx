@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { logger } from '@/lib/logger'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -17,6 +18,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    const timer = logger.time('auth.forgot_password')
 
     try {
       const supabase = createClient()
@@ -26,6 +28,7 @@ export default function ForgotPasswordPage() {
 
       if (error) throw error
 
+      timer.end({ step: 'reset_request' })
       setSubmitted(true)
     } catch (err: unknown) {
       // Next.js App Router aborts fetch during re-renders — treat abort as success
@@ -33,9 +36,11 @@ export default function ForgotPasswordPage() {
         (err instanceof DOMException && err.name === 'AbortError') ||
         (err instanceof Error && err.message.includes('signal'))
       ) {
+        timer.end({ step: 'reset_request', aborted: true })
         setSubmitted(true)
         return
       }
+      timer.error(err, { step: 'reset_request' })
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
     } finally {
       setLoading(false)
@@ -54,7 +59,7 @@ export default function ForgotPasswordPage() {
     >
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
 
-      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 backdrop-blur-sm border-lime-200/60 shadow-xl">
+      <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-lime-800">Reset your password</CardTitle>
           <CardDescription className="text-stone-600">
