@@ -524,7 +524,7 @@ function FeedSection() {
         </Button>
         {expanded && (
           <div className="h-[500px] border rounded-xl overflow-hidden bg-white p-4 overflow-y-auto">
-            <FeedPanel />
+            <FeedPanel userId={user?.id} />
           </div>
         )}
       </CardContent>
