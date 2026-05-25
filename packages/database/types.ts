@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       account_lockouts: {
@@ -118,6 +143,92 @@ export type Database = {
           user_agent?: string | null
         }
         Relationships: []
+      }
+      community_stats: {
+        Row: {
+          active_users: number
+          applications_submitted: number
+          id: string
+          posts_created: number
+          resources_accessed: number
+          stat_date: string
+          updated_at: string
+        }
+        Insert: {
+          active_users?: number
+          applications_submitted?: number
+          id?: string
+          posts_created?: number
+          resources_accessed?: number
+          stat_date: string
+          updated_at?: string
+        }
+        Update: {
+          active_users?: number
+          applications_submitted?: number
+          id?: string
+          posts_created?: number
+          resources_accessed?: number
+          stat_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      device_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      favorites: {
+        Row: {
+          created_at: string
+          id: string
+          resource_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          resource_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          resource_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       federated_instances: {
         Row: {
@@ -236,6 +347,13 @@ export type Database = {
             referencedRelation: "federated_instances"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "federated_resources_source_instance_id_fkey"
+            columns: ["source_instance_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["instance_id"]
+          },
         ]
       }
       federation_health_checks: {
@@ -271,6 +389,13 @@ export type Database = {
             referencedRelation: "federated_instances"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "federation_health_checks_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["instance_id"]
+          },
         ]
       }
       federation_peers: {
@@ -287,6 +412,7 @@ export type Database = {
           trust_level: string
           trust_score: number
           updated_at: string
+          webhook_enabled: boolean
         }
         Insert: {
           auto_sync_enabled?: boolean
@@ -301,6 +427,7 @@ export type Database = {
           trust_level?: string
           trust_score?: number
           updated_at?: string
+          webhook_enabled?: boolean
         }
         Update: {
           auto_sync_enabled?: boolean
@@ -315,6 +442,7 @@ export type Database = {
           trust_level?: string
           trust_score?: number
           updated_at?: string
+          webhook_enabled?: boolean
         }
         Relationships: [
           {
@@ -325,11 +453,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "federation_peers_local_instance_id_fkey"
+            columns: ["local_instance_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["instance_id"]
+          },
+          {
             foreignKeyName: "federation_peers_remote_instance_id_fkey"
             columns: ["remote_instance_id"]
             isOneToOne: false
             referencedRelation: "federated_instances"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "federation_peers_remote_instance_id_fkey"
+            columns: ["remote_instance_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["instance_id"]
           },
         ]
       }
@@ -381,6 +523,13 @@ export type Database = {
             referencedRelation: "federation_peers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "federation_sync_log_peer_id_fkey"
+            columns: ["peer_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["peer_id"]
+          },
         ]
       }
       federation_trust_events: {
@@ -431,6 +580,70 @@ export type Database = {
             referencedRelation: "federation_peers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "federation_trust_events_peer_id_fkey"
+            columns: ["peer_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["peer_id"]
+          },
+        ]
+      }
+      federation_webhook_log: {
+        Row: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          delivery_status: string
+          error_message: string | null
+          event_type: string
+          http_status_code: number | null
+          id: string
+          peer_id: string
+          resource_id: string
+          resource_type: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          error_message?: string | null
+          event_type: string
+          http_status_code?: number | null
+          id?: string
+          peer_id: string
+          resource_id: string
+          resource_type: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          error_message?: string | null
+          event_type?: string
+          http_status_code?: number | null
+          id?: string
+          peer_id?: string
+          resource_id?: string
+          resource_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "federation_webhook_log_peer_id_fkey"
+            columns: ["peer_id"]
+            isOneToOne: false
+            referencedRelation: "federation_peers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "federation_webhook_log_peer_id_fkey"
+            columns: ["peer_id"]
+            isOneToOne: false
+            referencedRelation: "federation_trust_overview"
+            referencedColumns: ["peer_id"]
+          },
         ]
       }
       follows: {
@@ -458,17 +671,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "follows_following_id_fkey"
             columns: ["following_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       form_submissions: {
         Row: {
+          agency_name: string | null
           agency_reference_number: string | null
+          case_number: string | null
           completion_percentage: number | null
           created_at: string | null
           current_step: number | null
@@ -493,7 +722,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agency_name?: string | null
           agency_reference_number?: string | null
+          case_number?: string | null
           completion_percentage?: number | null
           created_at?: string | null
           current_step?: number | null
@@ -518,7 +749,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agency_name?: string | null
           agency_reference_number?: string | null
+          case_number?: string | null
           completion_percentage?: number | null
           created_at?: string | null
           current_step?: number | null
@@ -555,6 +788,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -610,6 +850,39 @@ export type Database = {
         }
         Relationships: []
       }
+      impact_metrics: {
+        Row: {
+          actions_completed: number
+          co2_saved_kg: number
+          events_joined: number
+          id: string
+          trees_planted: number
+          updated_at: string
+          user_id: string
+          waste_reduced_kg: number
+        }
+        Insert: {
+          actions_completed?: number
+          co2_saved_kg?: number
+          events_joined?: number
+          id?: string
+          trees_planted?: number
+          updated_at?: string
+          user_id: string
+          waste_reduced_kg?: number
+        }
+        Update: {
+          actions_completed?: number
+          co2_saved_kg?: number
+          events_joined?: number
+          id?: string
+          trees_planted?: number
+          updated_at?: string
+          user_id?: string
+          waste_reduced_kg?: number
+        }
+        Relationships: []
+      }
       mfa_backup_codes: {
         Row: {
           code_hash: string
@@ -630,6 +903,42 @@ export type Database = {
           created_at?: string
           id?: string
           used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          application_id: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          link: string | null
+          message: string
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          message: string
+          title: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          message?: string
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
           user_id?: string
         }
         Relationships: []
@@ -708,6 +1017,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "post_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       post_likes: {
@@ -739,6 +1055,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -782,6 +1105,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -793,12 +1123,19 @@ export type Database = {
           id: string
           is_admin: boolean | null
           is_verified: boolean | null
+          latitude: number | null
           location_city: string | null
           location_state: string | null
+          longitude: number | null
+          needs: Json | null
+          onboarding_completed: boolean | null
           paypal_email: string | null
+          phone: string | null
           updated_at: string | null
+          user_role: string | null
           username: string | null
           venmo_username: string | null
+          zip_code: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -808,12 +1145,19 @@ export type Database = {
           id: string
           is_admin?: boolean | null
           is_verified?: boolean | null
+          latitude?: number | null
           location_city?: string | null
           location_state?: string | null
+          longitude?: number | null
+          needs?: Json | null
+          onboarding_completed?: boolean | null
           paypal_email?: string | null
+          phone?: string | null
           updated_at?: string | null
+          user_role?: string | null
           username?: string | null
           venmo_username?: string | null
+          zip_code?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -823,12 +1167,52 @@ export type Database = {
           id?: string
           is_admin?: boolean | null
           is_verified?: boolean | null
+          latitude?: number | null
           location_city?: string | null
           location_state?: string | null
+          longitude?: number | null
+          needs?: Json | null
+          onboarding_completed?: boolean | null
           paypal_email?: string | null
+          phone?: string | null
           updated_at?: string | null
+          user_role?: string | null
           username?: string | null
           venmo_username?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      reminders: {
+        Row: {
+          application_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_completed: boolean
+          remind_at: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_completed?: boolean
+          remind_at: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_completed?: boolean
+          remind_at?: string
+          title?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -861,6 +1245,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_bookmarks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -968,13 +1359,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "resources_moderated_by_fkey"
+            columns: ["moderated_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "resources_submitted_by_fkey"
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "resources_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      snap_retailers: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          id: string
+          incentive_program: string | null
+          last_synced_at: string
+          location: unknown
+          retailer_id: string | null
+          retailer_name: string
+          retailer_type: string | null
+          state: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          incentive_program?: string | null
+          last_synced_at?: string
+          location?: unknown
+          retailer_id?: string | null
+          retailer_name: string
+          retailer_type?: string | null
+          state?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          incentive_program?: string | null
+          last_synced_at?: string
+          location?: unknown
+          retailer_id?: string | null
+          retailer_name?: string
+          retailer_type?: string | null
+          state?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
       }
       spatial_ref_sys: {
         Row: {
@@ -1082,6 +1532,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_secure_profiles: {
@@ -1119,6 +1576,8 @@ export type Database = {
           residential_address_iv: string | null
           updated_at: string | null
           vault_created_at: string | null
+          verification_ciphertext: string | null
+          verification_iv: string | null
           wrapped_dek: string | null
         }
         Insert: {
@@ -1155,6 +1614,8 @@ export type Database = {
           residential_address_iv?: string | null
           updated_at?: string | null
           vault_created_at?: string | null
+          verification_ciphertext?: string | null
+          verification_iv?: string | null
           wrapped_dek?: string | null
         }
         Update: {
@@ -1191,6 +1652,8 @@ export type Database = {
           residential_address_iv?: string | null
           updated_at?: string | null
           vault_created_at?: string | null
+          verification_ciphertext?: string | null
+          verification_iv?: string | null
           wrapped_dek?: string | null
         }
         Relationships: [
@@ -1199,6 +1662,13 @@ export type Database = {
             columns: ["id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_secure_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1241,6 +1711,26 @@ export type Database = {
       }
     }
     Views: {
+      federation_trust_overview: {
+        Row: {
+          failed_syncs: number | null
+          federation_enabled: boolean | null
+          instance_id: string | null
+          instance_name: string | null
+          instance_url: string | null
+          last_sync_at: string | null
+          peer_id: string | null
+          registered_at: string | null
+          resource_count: number | null
+          status: string | null
+          successful_syncs: number | null
+          sync_success_rate: number | null
+          total_syncs: number | null
+          trust_level: string | null
+          trust_score: number | null
+        }
+        Relationships: []
+      }
       geography_columns: {
         Row: {
           coord_dimension: number | null
@@ -1280,6 +1770,42 @@ export type Database = {
           f_table_schema?: unknown
           srid?: number | null
           type?: string | null
+        }
+        Relationships: []
+      }
+      public_profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          is_verified: boolean | null
+          location_city: string | null
+          location_state: string | null
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          location_city?: string | null
+          location_state?: string | null
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          location_city?: string | null
+          location_state?: string | null
+          username?: string | null
         }
         Relationships: []
       }
@@ -1425,6 +1951,7 @@ export type Database = {
       cleanup_expired_lockouts: { Args: never; Returns: undefined }
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       cleanup_old_login_attempts: { Args: never; Returns: undefined }
+      cleanup_old_webhook_logs: { Args: never; Returns: number }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
@@ -1558,12 +2085,34 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       get_instance_uptime: { Args: { instance_id: string }; Returns: number }
+      get_recent_webhook_failures: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          error_message: string
+          event_type: string
+          peer_name: string
+          resource_id: string
+        }[]
+      }
       get_stale_federated_resources: {
         Args: { hours_threshold?: number }
         Returns: {
           hours_since_sync: number
           resource_id: string
           source_instance_url: string
+        }[]
+      }
+      get_webhook_stats: {
+        Args: { p_hours_ago?: number; p_peer_id: string }
+        Returns: {
+          avg_attempts: number
+          failed_deliveries: number
+          retried_deliveries: number
+          success_rate: number
+          successful_deliveries: number
+          total_deliveries: number
         }[]
       }
       gettransactionid: { Args: never; Returns: unknown }
@@ -1592,6 +2141,32 @@ export type Database = {
         Returns: string
       }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      nearby_federated_resources: {
+        Args: {
+          radius_miles?: number
+          resource_category?: string
+          result_limit?: number
+          search_lat: number
+          search_lng: number
+        }
+        Returns: {
+          address_line1: string
+          city: string
+          description: string
+          distance_miles: number
+          id: string
+          latitude: number
+          longitude: number
+          name: string
+          phone: string
+          resource_type: string
+          source_instance_id: string
+          state: string
+          trust_score: number
+          website: string
+          zip_code: string
+        }[]
+      }
       nearby_resources: {
         Args: { lat: number; lng: number; radius_miles?: number }
         Returns: {
@@ -1631,6 +2206,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      notify_federation_webhook: {
+        Args: {
+          p_event_type: string
+          p_resource_id: string
+          p_resource_type: string
+        }
+        Returns: undefined
       }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
@@ -1672,6 +2255,7 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      refresh_federation_trust_overview: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       st_3dclosestpoint: {
@@ -2280,6 +2864,14 @@ export type Database = {
         | "disability"
         | "childcare"
         | "general"
+      notification_type:
+        | "status_update"
+        | "deadline_reminder"
+        | "action_required"
+        | "document_request"
+        | "approval"
+        | "denial"
+        | "general"
       resource_category:
         | "food"
         | "housing"
@@ -2448,6 +3040,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       form_type: [
@@ -2460,6 +3055,15 @@ export const Constants = {
         "unemployment",
         "disability",
         "childcare",
+        "general",
+      ],
+      notification_type: [
+        "status_update",
+        "deadline_reminder",
+        "action_required",
+        "document_request",
+        "approval",
+        "denial",
         "general",
       ],
       resource_category: [
