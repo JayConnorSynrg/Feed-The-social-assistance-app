@@ -1,95 +1,49 @@
 'use client'
-
-// apps/web/src/app/(app)/page.tsx
-// Main FEED app page with new floating card layout
-// This is the single-page app entry point
-
 import React from 'react'
-import { FeedShell, usePanelContext, ContentPanel } from '@/components/layout/feed-shell'
-import { ChatPanel } from '@/components/panels/chat-panel'
-import { MapPanel } from '@/components/panels/map-panel'
+import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
+import { useAuthContext } from '@/providers/auth-provider'
+import {
+  ChatPanel,
+  MapPanel,
+  OverviewPanel,
+  FeedPanel,
+  SettingsPanel,
+  DocumentsPanel,
+  ApplicationsPanel,
+  FormsPanel,
+} from '@/components/panels'
 
-// Placeholder panels for unbuilt features
-function PlaceholderPanel({ title, description }: { title: string; description: string }) {
-  return (
-    <ContentPanel title={title} subtitle={description}>
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-muted rounded-2xl mx-auto mb-4 flex items-center justify-center">
-            <span className="text-2xl">🚧</span>
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Coming Soon</h2>
-          <p className="text-muted-foreground">
-            This feature is under development. Check back soon!
-          </p>
-        </div>
-      </div>
-    </ContentPanel>
-  )
-}
-
-// Dynamic Panel Renderer
 function PanelRenderer() {
   const { activePanel, setActivePanel } = usePanelContext()
 
   switch (activePanel) {
     case 'chat':
       return <ChatPanel onNavigateToMap={() => setActivePanel('map')} />
-
     case 'map':
       return <MapPanel />
-
     case 'feed':
-      return (
-        <PlaceholderPanel
-          title="Community Feed"
-          description="Connect with others in your community"
-        />
-      )
-
+      return <FeedPanel />
     case 'applications':
-      return (
-        <PlaceholderPanel
-          title="My Applications"
-          description="Track your benefit applications"
-        />
-      )
-
+      return <ApplicationsPanel />
     case 'documents':
-      return (
-        <PlaceholderPanel
-          title="Documents"
-          description="Manage your uploaded documents"
-        />
-      )
-
+      return <DocumentsPanel />
     case 'forms':
-      return (
-        <PlaceholderPanel
-          title="Forms"
-          description="Fill out benefit applications"
-        />
-      )
-
+      return <FormsPanel />
     case 'settings':
-      return (
-        <PlaceholderPanel
-          title="Settings"
-          description="Manage your account preferences"
-        />
-      )
-
+      return <SettingsPanel />
     case 'overview':
     default:
-      return <ChatPanel onNavigateToMap={() => setActivePanel('map')} />
+      return <OverviewPanel onNavigateToPanel={setActivePanel as (panel: string) => void} />
   }
 }
 
-// Main Page Component
 export default function FeedAppPage() {
+  const { isAuthenticated, profile, user } = useAuthContext()
+
   return (
     <FeedShell
-      isAuthenticated={false}
+      isAuthenticated={isAuthenticated}
+      userName={(profile as any)?.full_name || user?.email || undefined}
       backgroundImage="/images/wheat-field-bg.jpg"
     >
       <PanelRenderer />
