@@ -276,13 +276,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }
       } catch (err) {
         const error = err as Error
-        console.error('[CHAT] Error:', error.message, error)
 
-        // Don't report abort errors
-        if (error.name === 'AbortError') {
+        // Abort errors are expected in Next.js — suppress before console.error
+        if (error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('signal')) {
+          console.log('[CHAT] Stream aborted (expected in Next.js)')
           setMessages(prev => prev.filter(m => m.id !== assistantMessage.id))
           return
         }
+
+        console.error('[CHAT] Error:', error.message, error)
 
         setError(error)
         onError?.(error)
