@@ -15,6 +15,7 @@ import { SettingsPanel } from '@/components/panels/settings-panel'
 import { ApplicationsPanel } from '@/components/panels/applications-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { FormsPanel } from '@/components/panels/forms-panel'
+import { MessagesPanel } from '@/components/panels/messages-panel'
 import { useAuth } from '@/hooks/use-auth'
 
 // Panel-level error boundary — shell stays mounted if a panel throws
@@ -72,7 +73,18 @@ function PanelRenderer() {
       return <ChatPanel onNavigateToMap={() => setActivePanel('map')} />
 
     case 'map':
-      return <MapPanel />
+      return (
+        <MapPanel
+          onNavigateToChat={(resourceContext) => {
+            setActivePanel('chat' as any)
+            // resourceContext carries the resource name for the chat panel
+            // ChatPanel reads from sessionStorage on mount if needed
+            if (resourceContext) {
+              sessionStorage.setItem('chat:initialContext', `I need help with: ${resourceContext}`)
+            }
+          }}
+        />
+      )
 
     case 'feed':
       return <FeedPanel />
@@ -89,6 +101,9 @@ function PanelRenderer() {
 
     case 'forms':
       return <FormsPanel />
+
+    case 'messages':
+      return <MessagesPanel />
 
     default:
       return (

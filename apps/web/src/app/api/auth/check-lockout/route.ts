@@ -1,9 +1,22 @@
 // API Route: Account Lockout Check
-// Proxies to Supabase Edge Function for server-side lockout validation
+// Queries account_lockouts and auth_login_attempts tables directly via service role.
+// This route fires pre-login (no user JWT), so it cannot call auth-guard edge function.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerClient } from '@supabase/supabase-js'
 import { withRateLimit } from '@/middleware/federation-rate-limit'
 import { logger } from '@/lib/logger'
+import type { Database } from '@feed/database'
+
+const MAX_ATTEMPTS = 5
+const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+
+function getServiceClient() {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export const POST = withRateLimit(async (req: NextRequest) => {
   const timer = logger.time('auth.check-lockout')
@@ -12,62 +25,95 @@ export const POST = withRateLimit(async (req: NextRequest) => {
     const { action, email, ip_address, user_agent, success, failure_reason } = body
 
     if (!email) {
-      return NextResponse.json(
-        { error: 'Email is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
     if (!action) {
-      return NextResponse.json(
-        { error: 'Action is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Action is required' }, { status: 400 })
     }
 
-    // Get client IP if not provided
     const clientIp = ip_address || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
     const clientUserAgent = user_agent || req.headers.get('user-agent')
 
-    // Call Supabase Edge Function
-    const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/auth-guard`
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        action,
+    const supabase = getServiceClient()
+
+    // --- Record attempt (non-blocking) ---
+    if (action === 'record_attempt') {
+      await supabase.from('auth_login_attempts').insert({
         email,
         ip_address: clientIp,
         user_agent: clientUserAgent,
-        success,
-        failure_reason,
-      }),
-    })
-
-    if (!response.ok) {
-      logger.error('Edge Function call failed', new Error(`HTTP ${response.status}`), {
-        status: response.status,
+        success: success ?? false,
+        failure_reason: failure_reason ?? null,
       })
-      throw new Error('Edge Function call failed')
+
+      // On successful login, clear any active lockout
+      if (success) {
+        await supabase.from('account_lockouts').delete().eq('email', email)
+        timer.end({ action, email })
+        return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS })
+      }
+
+      // Count failures in rolling 15-minute window
+      const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
+      const { count } = await supabase
+        .from('auth_login_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('email', email)
+        .eq('success', false)
+        .gte('created_at', windowStart)
+
+      const failures = count ?? 0
+
+      if (failures >= MAX_ATTEMPTS) {
+        const lockedUntil = new Date(Date.now() + WINDOW_MS).toISOString()
+        await supabase.from('account_lockouts').upsert({
+          email,
+          locked_until: lockedUntil,
+          attempt_count: failures,
+          last_attempt_at: new Date().toISOString(),
+        })
+        timer.end({ action, email, isLocked: true })
+        return NextResponse.json({ isLocked: true, remainingAttempts: 0, lockedUntil })
+      }
+
+      timer.end({ action, email, isLocked: false })
+      return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS - failures })
     }
 
-    const result = await response.json()
-    timer.end({
-      user_ip: req.headers.get('x-forwarded-for') ?? undefined,
-      action: body.action,
-      email: body.email,
+    // --- Check lockout status (action === 'check') ---
+    const { data: lockout } = await supabase
+      .from('account_lockouts')
+      .select('locked_until, attempt_count')
+      .eq('email', email)
+      .single()
+
+    if (lockout && new Date(lockout.locked_until) > new Date()) {
+      timer.end({ action, email, isLocked: true })
+      return NextResponse.json({
+        isLocked: true,
+        remainingAttempts: 0,
+        lockedUntil: lockout.locked_until,
+      })
+    }
+
+    // Lockout expired or never set — count recent failures for remainingAttempts
+    const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
+    const { count } = await supabase
+      .from('auth_login_attempts')
+      .select('id', { count: 'exact', head: true })
+      .eq('email', email)
+      .eq('success', false)
+      .gte('created_at', windowStart)
+
+    const failures = count ?? 0
+    timer.end({ action, email, isLocked: false })
+    return NextResponse.json({
+      isLocked: false,
+      remainingAttempts: Math.max(0, MAX_ATTEMPTS - failures),
     })
-    return NextResponse.json(result)
   } catch (error) {
-    timer.error(error, {
-      user_ip: req.headers.get('x-forwarded-for') ?? undefined,
-    })
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    timer.error(error, { user_ip: req.headers.get('x-forwarded-for') ?? undefined })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }, 'resource-api')

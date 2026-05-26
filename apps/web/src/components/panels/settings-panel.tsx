@@ -143,7 +143,7 @@ function SettingsSection({ title, description, children }: SettingsSectionProps)
       <div className="mb-4">
         <h3 className="font-semibold text-lg mb-1">{title}</h3>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm text-stone-600">{description}</p>
         )}
       </div>
       <div className="space-y-4">
@@ -169,7 +169,7 @@ function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
       <div className="flex-1">
         <p className="font-medium text-sm mb-0.5">{label}</p>
         {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-xs text-stone-600">{description}</p>
         )}
       </div>
       <button
@@ -204,7 +204,7 @@ function InputRow({ label, icon: Icon, value, onChange, type = 'text', disabled 
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium flex items-center gap-2">
-        {Icon && <Icon className="w-4 h-4 text-muted-foreground" />}
+        {Icon && <Icon className="w-4 h-4 text-stone-600" />}
         {label}
       </label>
       <Input
@@ -260,7 +260,7 @@ function ProfileSection({ profile, onUpdate, saving }: ProfileSectionProps) {
         </div>
         <div className="flex-1">
           <p className="font-medium">{profile.name}</p>
-          <p className="text-sm text-muted-foreground">{profile.email}</p>
+          <p className="text-sm text-stone-600">{profile.email}</p>
         </div>
         {!editMode && (
           <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>
@@ -319,14 +319,14 @@ function ProfileSection({ profile, onUpdate, saving }: ProfileSectionProps) {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              <p className="text-xs text-stone-600 mb-1 flex items-center gap-1">
                 <Phone className="w-3 h-3" />
                 Phone
               </p>
               <p className="text-sm font-medium">{profile.phone}</p>
             </div>
             <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              <p className="text-xs text-stone-600 mb-1 flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
                 Location
               </p>
@@ -602,7 +602,7 @@ function AccountSection() {
               Change
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-stone-600">
             {passwordLastChanged ? `Last changed ${passwordLastChanged}` : 'Loading...'}
           </p>
         </div>
@@ -613,7 +613,7 @@ function AccountSection() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="font-medium text-sm">Two-Factor Authentication</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-stone-600 mt-1">
                   {mfaEnabled ? 'Enabled - Your account is protected' : 'Add an extra layer of security'}
                 </p>
               </div>
@@ -683,11 +683,11 @@ function AccountSection() {
             <div className="flex items-center justify-between p-2 bg-white rounded-lg">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-semibold text-blue-600">G</span>
+                  <span className="text-xs font-semibold text-blue-800">G</span>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Google</p>
-                  <p className="text-xs text-muted-foreground">Connected</p>
+                  <p className="text-xs text-stone-600">Connected</p>
                 </div>
               </div>
               <CheckCircle className="w-4 h-4 text-green-600" />

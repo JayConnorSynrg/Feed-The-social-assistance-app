@@ -60,6 +60,7 @@ interface ChatRequest {
   systemPrompt?: string
   temperature?: number
   maxTokens?: number
+  location?: { city?: string; state?: string; lat?: number; lng?: number }
 }
 
 interface RateLimitEntry {
@@ -262,6 +263,101 @@ async function tryModelWithFallback(
   throw lastError || new Error('All models failed')
 }
 
+async function searchResources(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  query: string,
+  location: { city?: string; state?: string } | null,
+  messages: ChatMessage[]
+): Promise<string> {
+  const sections: string[] = []
+  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY')
+
+  // Run DB query and Firecrawl /search in parallel
+  const t0 = Date.now()
+
+  const [dbResult, searchResult] = await Promise.all([
+    // DB query
+    (async () => {
+      try {
+        let q = supabaseClient
+          .from('resources')
+          .select('name, description, category, address_line1, city, state, phone, website')
+          .eq('status', 'approved')
+          .limit(10)
+        if (location?.state) q = q.eq('state', location.state)
+        const { data } = await q
+        return data || []
+      } catch { return [] }
+    })(),
+    // Firecrawl /search
+    (async () => {
+      if (!firecrawlKey) return []
+      try {
+        const searchQuery = location?.city
+          ? `free community assistance ${query} ${location.city} ${location.state || ''}`
+          : `free community assistance ${query}`
+        const resp = await fetch('https://api.firecrawl.dev/v1/search', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: searchQuery, limit: 5 }),
+        })
+        if (!resp.ok) return []
+        const data = await resp.json()
+        return data.success ? (data.data || []) : []
+      } catch { return [] }
+    })(),
+  ])
+
+  console.log(`[CHAT] Resource search: ${Date.now() - t0}ms (DB: ${dbResult.length} results, Web: ${searchResult.length} results)`)
+
+  // Enrich local resources with web URLs when website is null
+  // deno-lint-ignore no-explicit-any
+  const enrichedLocalResources = dbResult.map((r: any) => {
+    if (r.website) return r
+    const nameLower = r.name.toLowerCase()
+    // deno-lint-ignore no-explicit-any
+    const match = searchResult.find((web: any) => {
+      const titleLower = (web.title || '').toLowerCase()
+      return titleLower.includes(nameLower) ||
+             nameLower.includes(titleLower.replace(/\s*[-|:–].*/,'').trim()) ||
+             nameLower.split(/\s+/).filter((w: string) => w.length > 3 && titleLower.includes(w)).length >= 2
+    })
+    if (match?.url) {
+      return { ...r, website: match.url }
+    }
+    return r
+  })
+
+  // Process DB results (website field now enriched from web results where available)
+  if (enrichedLocalResources.length > 0) {
+    sections.push('LOCAL RESOURCES (from our database):')
+    // deno-lint-ignore no-explicit-any
+    for (const r of enrichedLocalResources) {
+      sections.push(`- ${r.name} | ${r.address_line1 || ''}, ${r.city || ''} ${r.state || ''} | Phone: ${r.phone || 'N/A'} | Website: ${r.website || 'N/A'} | Category: ${r.category}`)
+    }
+  }
+
+  // Track which web results were already matched to a local resource
+  // deno-lint-ignore no-explicit-any
+  const matchedWebUrls = new Set(enrichedLocalResources.map((r: any) => r.website).filter(Boolean))
+
+  // Process Firecrawl /search results — only those not already merged into a local resource
+  if (searchResult.length > 0) {
+    // deno-lint-ignore no-explicit-any
+    const unmatched = searchResult.filter((r: any) => !matchedWebUrls.has(r.url))
+    if (unmatched.length > 0) {
+      sections.push('\nWEB RESULTS (from internet search):')
+      // deno-lint-ignore no-explicit-any
+      for (const r of unmatched) {
+        sections.push(`- ${r.title} | ${r.url} | ${r.description || ''}`)
+      }
+    }
+  }
+
+  return sections.join('\n')
+}
+
 serve(async (req: Request) => {
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin)
@@ -326,6 +422,7 @@ serve(async (req: Request) => {
       systemPrompt,
       temperature = 0.7,
       maxTokens = 1024,
+      location,
     } = body
 
     // Validate messages
@@ -336,12 +433,37 @@ serve(async (req: Request) => {
       })
     }
 
+    // Build Supabase client for resource queries (service role for RLS bypass on approved resources)
+    const supabaseClient = SUPABASE_URL && SUPABASE_SERVICE_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+      : null
+
+    // RAG: search resources when the user message contains resource-related keywords
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop()
+    let resourceContext = ''
+    if (lastUserMsg && supabaseClient) {
+      const searchKeywords = ['food', 'shelter', 'housing', 'health', 'clinic', 'legal', 'job', 'employment', 'help', 'resource', 'bank', 'pantry', 'assistance', 'benefit', 'snap', 'medicaid', 'utility', 'rent']
+      const msgLower = lastUserMsg.content.toLowerCase()
+      const isResourceQuery = searchKeywords.some(kw => msgLower.includes(kw))
+
+      if (isResourceQuery) {
+        resourceContext = await searchResources(supabaseClient, lastUserMsg.content, location || null, messages)
+      }
+    }
+
+    // Build enriched system prompt, appending verified resource data when available
+    let enrichedSystemPrompt = systemPrompt || ''
+    if (resourceContext) {
+      enrichedSystemPrompt += `\n\n--- AVAILABLE RESOURCES (verified data) ---\n${resourceContext}\n\nWhen mentioning ANY resource, you MUST wrap it in double brackets with pipe-separated fields like this:\n[[Resource Name|Full Address|Phone Number|Website URL]]\nOr with an apply link:\n[[Resource Name|Full Address|Phone Number|Website URL|Apply URL]]\nExample: [[Vermont Foodbank|123 Main St, Rutland VT 05701|802-555-1234|www.vtfoodbank.org]]\nWhen a resource in the data above includes "Apply: <url>", include that URL as the 5th field.\nEvery resource MUST use this exact format. The app converts these into clickable cards for the user.\nONLY include FREE community resources. Never recommend paid services.\nAlways prefer local database resources first. Include the resource's phone number and address when available.\nThe Website URL field should be the SPECIFIC page about the service, NOT the organization's homepage. For example, use broc.org/food-shelf-rutland-county instead of broc.org. Direct the user to the exact page where they can get help.`
+    }
+
     // Prepend system prompt if provided
-    const fullMessages: ChatMessage[] = systemPrompt
-      ? [{ role: 'system', content: systemPrompt }, ...messages]
+    const fullMessages: ChatMessage[] = enrichedSystemPrompt
+      ? [{ role: 'system', content: enrichedSystemPrompt }, ...messages]
       : messages
 
     // Call OpenRouter with fallback
+    const tLLM = Date.now()
     const { response: openRouterResponse, model: modelUsed } = await tryModelWithFallback(
       fullMessages,
       model,
@@ -349,6 +471,7 @@ serve(async (req: Request) => {
       temperature,
       maxTokens
     )
+    console.log(`[CHAT] LLM first token: ${Date.now() - tLLM}ms (model: ${modelUsed})`)
 
     // Return response (streaming or non-streaming)
     if (stream) {

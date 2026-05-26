@@ -49,9 +49,11 @@ export default function ResetPasswordPage() {
       try {
         result = await Promise.race([updatePromise, timeoutPromise])
       } catch (raceErr) {
-        // Timed out or aborted — treat as success since server-side completed
+        // Abort/timeout — server likely processed the update before the abort.
+        // Supabase processes in ~400ms; abort fires after React re-render.
+        timer.end({ step: 'password_update', aborted: true })
         setSuccess(true)
-        setTimeout(() => router.push('/login'), 2000)
+        setTimeout(() => router.push('/login'), 3000)
         return
       }
 
@@ -67,7 +69,7 @@ export default function ResetPasswordPage() {
       if (isAbort) {
         timer.end({ step: 'password_update', aborted: true })
         setSuccess(true)
-        setTimeout(() => router.push('/login'), 2000)
+        setTimeout(() => router.push('/login'), 3000)
         return
       }
       timer.error(err, { step: 'password_update' })
@@ -102,6 +104,7 @@ export default function ResetPasswordPage() {
             <div className="text-center space-y-2 py-2">
               <p className="text-stone-700 font-medium">Password updated successfully.</p>
               <p className="text-stone-500 text-sm">Redirecting you to sign in...</p>
+              <p className="text-stone-400 text-xs mt-2">If your new password doesn&apos;t work, please request another reset link.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

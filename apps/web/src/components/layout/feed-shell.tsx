@@ -7,6 +7,7 @@
 
 import React, { useState, createContext, useContext, useCallback, useEffect } from 'react'
 import Link from 'next/link'
+import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
 import {
   MessageSquare,
   Map,
@@ -52,7 +53,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview'
+type PanelType = 'chat' | 'map' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -61,6 +62,8 @@ interface ShellContextType {
   setUserRole: (role: UserRole) => void
   userFocus: UserFocus[]
   setUserFocus: (focus: UserFocus[]) => void
+  panelParams: Record<string, unknown>
+  setPanelParams: (params: Record<string, unknown>) => void
 }
 
 const ShellContext = createContext<ShellContextType>({
@@ -70,13 +73,15 @@ const ShellContext = createContext<ShellContextType>({
   setUserRole: () => {},
   userFocus: ['food'],
   setUserFocus: () => {},
+  panelParams: {},
+  setPanelParams: () => {},
 })
 
 export const useShellContext = () => useContext(ShellContext)
 // Legacy export for backwards compatibility
 export const usePanelContext = () => {
-  const { activePanel, setActivePanel } = useContext(ShellContext)
-  return { activePanel, setActivePanel }
+  const { activePanel, setActivePanel, panelParams, setPanelParams } = useContext(ShellContext)
+  return { activePanel, setActivePanel, panelParams, setPanelParams }
 }
 
 // ============================================
@@ -97,6 +102,7 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
   { panel: 'documents', icon: FolderOpen, label: 'Documents', roles: ['recipient', 'agency', 'program'] },
   { panel: 'forms', icon: FileText, label: 'Forms', roles: ['recipient', 'agency', 'program'] },
+  { panel: 'messages' as PanelType, icon: MessageSquare, label: 'Messages' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -161,21 +167,21 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
           </div>
         ) : (
           <>
-            <Link
+            <a
               href="/login"
               className="text-sm px-4 py-2 rounded-lg border border-stone-300 hover:bg-stone-50 transition-colors hidden sm:inline-flex items-center gap-2 text-stone-700"
             >
               <LogIn className="w-4 h-4" />
               Log In
-            </Link>
-            <Link
+            </a>
+            <a
               href="/signup"
               className="text-sm px-4 py-2 rounded-lg bg-[#4a5d23] text-white hover:bg-[#3d4d1c] transition-colors inline-flex items-center gap-2"
             >
               <UserPlus className="w-4 h-4" />
               Sign Up
               <span className="hidden sm:inline">→</span>
-            </Link>
+            </a>
           </>
         )}
 
@@ -225,7 +231,7 @@ function IconSidebar() {
   )
 
   return (
-    <aside className="w-14 flex flex-col items-center py-4 gap-2 border-r border-stone-200/50 bg-white flex-shrink-0">
+    <aside className="w-14 flex flex-col items-center py-4 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
       {visibleIcons.map(({ panel, icon: Icon, label }) => {
         const isActive = activePanel === panel
         return (
@@ -758,7 +764,7 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'feed', 'applications', 'documents', 'forms', 'settings']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages']
 
 // Get panel from URL hash (e.g., #chat -> 'chat')
 function getPanelFromHash(): PanelType {
@@ -781,6 +787,7 @@ export function FeedShell({
 }: FeedShellProps) {
   const [userRole, setUserRole] = useState<UserRole>(initialRole)
   const [userFocus, setUserFocus] = useState<UserFocus[]>(initialFocus)
+  const [panelParams, setPanelParams] = useState<Record<string, unknown>>({})
 
   // Initialize panel from URL hash (client-side only)
   const [activePanel, setActivePanelState] = useState<PanelType>('chat')
@@ -822,7 +829,9 @@ export function FeedShell({
       userRole,
       setUserRole,
       userFocus,
-      setUserFocus
+      setUserFocus,
+      panelParams,
+      setPanelParams,
     }}>
       {/* Full-screen nature background */}
       <div
@@ -833,20 +842,20 @@ export function FeedShell({
       {/* Main layout container - Two separate floating cards with gap */}
       <div className="relative min-h-screen flex flex-col p-4 md:p-8 gap-4 md:gap-6 overflow-y-auto">
         {/* CONTAINER 1: Interactive Content (Header + Sidebar + Content Panel) */}
-        <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col" style={{ height: 'max(400px, calc(100vh - 250px))' }}>
           {/* Top Navigation - Fixed */}
           <TopNav isAuthenticated={isAuthenticated} userName={userName} onSignOut={onSignOut} />
 
           {/* Main Content Area */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left Icon Sidebar - Desktop Only */}
-            <div className="hidden md:block">
+            <div className="hidden md:flex">
               <IconSidebar />
             </div>
 
             {/* Interactive Content Panel */}
-            <div className="flex-1 p-6 overflow-y-auto">
-              <div className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm min-h-[300px]">
+            <div className="flex-1 px-6 pt-6 pb-0 overflow-y-auto">
+              <div className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm h-full flex flex-col">
                 {children}
               </div>
             </div>
@@ -876,6 +885,7 @@ export function FeedShell({
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav />
+      <VolunteerResourceFAB />
     </ShellContext.Provider>
   )
 }

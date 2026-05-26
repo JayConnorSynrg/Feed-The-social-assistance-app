@@ -80,13 +80,11 @@ export function MapView({
   const handleLoad = useCallback(() => {
     setIsLoading(false)
     onMapLoad?.()
-    // Emit initial bounds after load
-    setTimeout(() => {
-      const bounds = getBounds()
-      if (bounds) {
-        onBoundsChange?.(bounds)
-      }
-    }, 100)
+    // Emit initial bounds immediately — getBounds() is safe once onLoad fires
+    const bounds = getBounds()
+    if (bounds) {
+      onBoundsChange?.(bounds)
+    }
   }, [onMapLoad, getBounds, onBoundsChange])
 
   if (!MAPBOX_TOKEN || MAPBOX_TOKEN.includes('placeholder')) {

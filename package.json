@@ -24,6 +24,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.1.0",
+    "playwright": "^1.60.0"
   }
 }

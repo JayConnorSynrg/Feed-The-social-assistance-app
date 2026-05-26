@@ -43,6 +43,7 @@ interface Resource {
   hours_of_operation?: Record<string, string> | null
   latitude: number
   longitude: number
+  is_volunteer_resource?: boolean
 }
 
 interface ResourceMarkerProps {

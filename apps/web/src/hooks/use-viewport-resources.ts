@@ -38,7 +38,34 @@ interface ResourceRow {
   phone: string | null
   website: string | null
   hours_of_operation: Record<string, string> | null
-  location: { coordinates?: [number, number] } | null
+  // Supabase REST returns PostGIS GEOGRAPHY as EWKB hex string; may also be GeoJSON in tests
+  location: string | { coordinates?: [number, number] } | null
+  is_volunteer_resource: boolean | null
+}
+
+/**
+ * Parse an EWKB hex string (PostGIS GEOGRAPHY Point) into [lng, lat].
+ * EWKB layout for a Point with SRID:
+ *   byte  0      : endianness (01 = LE)
+ *   bytes 1-4    : type (01000020 with SRID flag)
+ *   bytes 5-8    : SRID (e.g. 4326)
+ *   bytes 9-16   : X = longitude (float64)
+ *   bytes 17-24  : Y = latitude  (float64)
+ * Minimum 25 bytes → 50 hex chars.
+ */
+function parseEWKBPoint(hex: string): [number, number] | null {
+  if (!hex || typeof hex !== 'string' || hex.length < 50) return null
+  try {
+    const bytes = new Uint8Array(hex.match(/.{2}/g)!.map((b) => parseInt(b, 16)))
+    const view = new DataView(bytes.buffer)
+    const littleEndian = bytes[0] === 1
+    const lng = view.getFloat64(9, littleEndian)
+    const lat = view.getFloat64(17, littleEndian)
+    if (isNaN(lng) || isNaN(lat)) return null
+    return [lng, lat]
+  } catch {
+    return null
+  }
 }
 
 export function useViewportResources({
@@ -69,7 +96,7 @@ export function useViewportResources({
 
       try {
         // Build the query
-        let query = supabase
+        let query = (supabase as any)
           .from('resources')
           .select(`
             id,
@@ -82,7 +109,8 @@ export function useViewportResources({
             phone,
             website,
             hours_of_operation,
-            location
+            location,
+            is_volunteer_resource
           `)
           .eq('status', 'approved')
           .limit(limit)
@@ -108,8 +136,14 @@ export function useViewportResources({
           let latitude = 0
           let longitude = 0
 
-          if (row.location && row.location.coordinates) {
-            ;[longitude, latitude] = row.location.coordinates
+          if (row.location) {
+            const coords =
+              typeof row.location === 'string'
+                ? parseEWKBPoint(row.location)
+                : (row.location.coordinates ?? null)
+            if (coords) {
+              ;[longitude, latitude] = coords
+            }
           }
 
           return {
@@ -125,6 +159,7 @@ export function useViewportResources({
             hours_of_operation: row.hours_of_operation,
             latitude,
             longitude,
+            is_volunteer_resource: row.is_volunteer_resource ?? false,
           }
         }).filter((r) => r.latitude !== 0 && r.longitude !== 0)
 

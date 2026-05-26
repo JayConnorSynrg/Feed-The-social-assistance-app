@@ -193,13 +193,27 @@ export default function OnboardingPage() {
         throw new Error(upsertError.message)
       }
 
-      // Navigate immediately — the middleware at '/' will verify
-      // onboarding_completed and redirect back here if the write
-      // didn't commit. Skipping a verify SELECT avoids a second
-      // round-trip that can hang on Next.js fetch abort or lock
-      // contention.
+      // Verify the write committed before navigating — prevents the
+      // redirect loop where middleware sees onboarding_completed=false
+      // and sends the user back here.
+      try {
+        const { data: verify } = await supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', userId)
+          .maybeSingle()
+        if (!verify?.onboarding_completed) {
+          logger.warn('auth.onboarding.verify_failed', { userId, verify })
+          // Retry the upsert once
+          await supabase.from('profiles').upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
+        }
+      } catch {
+        // Verification failed — navigate anyway, middleware will catch
+      }
+
       timer.end({ step: 'complete', userId })
       router.push('/')
+      router.refresh()
     } catch (err: unknown) {
       const msg = (err as any)?.message ?? String(err)
       const isAbort =

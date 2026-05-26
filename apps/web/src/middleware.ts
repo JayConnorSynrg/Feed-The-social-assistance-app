@@ -84,10 +84,11 @@ export async function middleware(request: NextRequest) {
         .from('profiles')
         .select('onboarding_completed')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
-      // Redirect to onboarding if not completed (and profile exists)
-      if (profile && !(profile as any).onboarding_completed) {
+      // Only redirect to onboarding if profile EXISTS and onboarding is explicitly false
+      // If profile is null (no row yet), let the user through — they'll onboard naturally
+      if (profile && profile.onboarding_completed === false) {
         return NextResponse.redirect(new URL('/onboarding', request.url))
       }
     }

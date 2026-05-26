@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { createClient } from '@/lib/supabase/client'
 import type { User, Session, AuthError } from '@supabase/supabase-js'
 import type { Profile, Database } from '@feed/database'
+import { logger } from '@/lib/logger'
 
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 
@@ -57,6 +58,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return data as Profile
     }
 
+    const mountTime = Date.now()
+
     const initAuth = async () => {
       try {
         // Race getSession() against a 5-second timeout. getSession() acquires
@@ -64,6 +67,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // the lock can stall for several seconds (lock steal after 5s). If it
         // exceeds our timeout, keep loading=true and let the onAuthStateChange
         // listener resolve auth state when the session is eventually available.
+        const getSessionStart = Date.now()
+        logger.info('auth.getSession.start')
         const sessionResult = await Promise.race([
           supabase.auth.getSession(),
           new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
@@ -73,6 +78,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const { data: { session }, error } = sessionResult
           if (error) throw error
 
+          logger.info('auth.getSession.resolved', { duration_ms: Date.now() - getSessionStart, hasSession: !!session })
+
           if (session?.user) {
             const userProfile = await fetchProfile(session.user.id)
             setUser(session.user)
@@ -81,12 +88,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
           // Session resolved (user or no user) — done loading
           setLoading(false)
+          logger.info('auth.ready', { duration_ms: Date.now() - mountTime, isAuthenticated: !!session?.user })
         } else {
           // Timed out — keep loading=true so the UI shows a loading state
           // instead of falsely rendering as unauthenticated. The
           // onAuthStateChange listener will set loading=false once the
           // session resolves.
-          console.warn('AuthProvider: getSession() timed out after 5s, deferring to onAuthStateChange')
+          logger.warn('auth.getSession.timeout', { timeout_ms: 5000 })
         }
       } catch (err) {
         setError(err as AuthError)
@@ -99,6 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Listen for auth changes (single listener for the whole app)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        logger.info('auth.stateChange', { event, hasSession: !!newSession })
         if (newSession?.user) {
           setUser(newSession.user)
           setSession(newSession)
@@ -116,6 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setProfile(null)
         }
         setLoading(false)
+        logger.info('auth.ready', { duration_ms: Date.now() - mountTime, isAuthenticated: !!newSession?.user })
       }
     )
 
@@ -126,7 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const maxLoadingTimer = setTimeout(() => {
       setLoading((current) => {
         if (current) {
-          console.warn('AuthProvider: max loading timeout (10s) reached, forcing loading=false')
+          logger.warn('auth.safetyValve', { totalWait_ms: 10000 })
         }
         return false
       })

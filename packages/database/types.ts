@@ -174,6 +174,44 @@ export type Database = {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          requester_id: string
+          resource_id: string
+          status: Database["public"]["Enums"]["conversation_status"]
+          updated_at: string
+          volunteer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          requester_id: string
+          resource_id: string
+          status?: Database["public"]["Enums"]["conversation_status"]
+          updated_at?: string
+          volunteer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          requester_id?: string
+          resource_id?: string
+          status?: Database["public"]["Enums"]["conversation_status"]
+          updated_at?: string
+          volunteer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_tokens: {
         Row: {
           created_at: string
@@ -883,6 +921,41 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mfa_backup_codes: {
         Row: {
           code_hash: string
@@ -1271,6 +1344,7 @@ export type Database = {
           hours_of_operation: Json | null
           id: string
           is_verified: boolean | null
+          is_volunteer_resource: boolean
           languages_served: string[] | null
           last_verified_at: string | null
           location: unknown
@@ -1302,6 +1376,7 @@ export type Database = {
           hours_of_operation?: Json | null
           id?: string
           is_verified?: boolean | null
+          is_volunteer_resource?: boolean
           languages_served?: string[] | null
           last_verified_at?: string | null
           location?: unknown
@@ -1333,6 +1408,7 @@ export type Database = {
           hours_of_operation?: Json | null
           id?: string
           is_verified?: boolean | null
+          is_volunteer_resource?: boolean
           languages_served?: string[] | null
           last_verified_at?: string | null
           location?: unknown
@@ -2183,6 +2259,7 @@ export type Database = {
           hours_of_operation: Json | null
           id: string
           is_verified: boolean | null
+          is_volunteer_resource: boolean
           languages_served: string[] | null
           last_verified_at: string | null
           location: unknown
@@ -2256,6 +2333,19 @@ export type Database = {
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
+      set_resource_location: {
+        Args: {
+          p_external_id: string
+          p_lat: number
+          p_lng: number
+          p_source: string
+        }
+        Returns: undefined
+      }
+      set_resource_location_by_id: {
+        Args: { p_id: string; p_lat: number; p_lng: number }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       st_3dclosestpoint: {
@@ -2853,6 +2943,7 @@ export type Database = {
       }
     }
     Enums: {
+      conversation_status: "pending" | "active" | "declined" | "cancelled"
       form_type:
         | "snap"
         | "medicaid"
@@ -2897,6 +2988,13 @@ export type Database = {
         | "211_api"
         | "admin_added"
         | "partner_org"
+        | "osm"
+        | "snap"
+        | "hrsa"
+        | "hud"
+        | "headstart"
+        | "cdc"
+        | "samhsa"
       resource_status: "pending" | "approved" | "rejected" | "archived"
       submission_status:
         | "draft"
@@ -3045,6 +3143,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      conversation_status: ["pending", "active", "declined", "cancelled"],
       form_type: [
         "snap",
         "medicaid",
@@ -3092,6 +3191,13 @@ export const Constants = {
         "211_api",
         "admin_added",
         "partner_org",
+        "osm",
+        "snap",
+        "hrsa",
+        "hud",
+        "headstart",
+        "cdc",
+        "samhsa",
       ],
       resource_status: ["pending", "approved", "rejected", "archived"],
       submission_status: [

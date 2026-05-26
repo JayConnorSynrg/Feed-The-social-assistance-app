@@ -79,13 +79,199 @@ function QuickTag({ label, icon: Icon, onClick, isActive }: QuickTagProps) {
 }
 
 // ============================================
-// CHAT MESSAGE COMPONENT
+// URL LINKIFIER
 // ============================================
-interface ChatMessageViewProps {
-  message: ChatMessage
+function linkifyText(text: string, keyPrefix: string): React.ReactNode[] {
+  const urlRegex = /(https?:\/\/[^\s\])>,]+)/g
+  const parts: React.ReactNode[] = []
+  let lastIdx = 0
+  let match
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(<span key={`${keyPrefix}-t-${lastIdx}`}>{text.slice(lastIdx, match.index)}</span>)
+    }
+    const url = match[1]
+    const display = url.replace(/^https?:\/\//, '').slice(0, 40)
+    const truncated = url.length > 48
+    parts.push(
+      <a
+        key={`${keyPrefix}-u-${match.index}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[#4a5d23] underline hover:text-[#3d4e1c] break-all"
+      >
+        {display}{truncated ? '...' : ''}
+      </a>
+    )
+    lastIdx = match.index + match[0].length
+  }
+
+  if (lastIdx < text.length) {
+    parts.push(<span key={`${keyPrefix}-t-${lastIdx}`}>{text.slice(lastIdx)}</span>)
+  }
+
+  return parts.length > 0 ? parts : [<span key={`${keyPrefix}-plain`}>{text}</span>]
 }
 
-function ChatMessageView({ message }: ChatMessageViewProps) {
+// ============================================
+// MESSAGE CONTENT PARSER
+// ============================================
+function parseMessageContent(content: string): React.ReactNode[] {
+  if (!content) return []
+
+  const parts: React.ReactNode[] = []
+  const regex = /\[\[(?:(RESOURCE|WEBRESULT):)?([^\]]*\|[^\]]*)\]\]/g
+  let lastIndex = 0
+  let match
+
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      const textSegment = content.slice(lastIndex, match.index)
+      parts.push(
+        <span key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+          {linkifyText(textSegment, `seg-${lastIndex}`)}
+        </span>
+      )
+    }
+
+    const type = match[1] || 'RESOURCE'  // Default to RESOURCE if no prefix
+    const data = match[2].split('|').map((s) => s.trim())
+
+    if (type === 'RESOURCE') {
+      const [name, address, phone, website, applyUrl] = data
+      parts.push(
+        <div
+          key={`resource-${match.index}`}
+          className="my-2 p-3 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 transition-colors"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-base text-stone-900 truncate">{name}</h4>
+              {address && <p className="text-sm text-stone-600 mt-0.5">{address}</p>}
+              {phone && phone !== 'N/A' && phone !== 'null' && (
+                <a
+                  href={`tel:${phone}`}
+                  className="text-xs text-[#4a5d23] hover:underline mt-0.5 block"
+                >
+                  {phone}
+                </a>
+              )}
+            </div>
+            <div className="flex gap-1 flex-shrink-0">
+              {applyUrl && applyUrl !== 'N/A' && applyUrl !== 'null' && applyUrl !== 'undefined' && (
+                <a
+                  href={applyUrl.startsWith('http') ? applyUrl : `https://${applyUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 text-xs rounded-lg bg-[#c2410c] text-white hover:bg-[#9a3412] transition-colors font-medium"
+                >
+                  Apply
+                </a>
+              )}
+              {website && website !== 'N/A' && website !== 'null' && (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-1 text-xs rounded-lg bg-[#4a5d23] text-white hover:bg-[#3d4e1c] transition-colors"
+                >
+                  Visit
+                </a>
+              )}
+              {address && (
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-1 text-xs rounded-lg bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
+                >
+                  Directions
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    } else if (type === 'WEBRESULT') {
+      const [title, url] = data
+      parts.push(
+        <a
+          key={`web-${match.index}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="my-1.5 p-2.5 rounded-lg border border-blue-100 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-2 group block"
+        >
+          <div className="w-5 h-5 rounded bg-blue-200 flex items-center justify-center flex-shrink-0">
+            <svg
+              className="w-3 h-3 text-blue-700"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-blue-900 group-hover:underline truncate block">
+              {title}
+            </span>
+            <span className="text-xs text-blue-600 truncate block">{url}</span>
+          </div>
+        </a>
+      )
+    }
+
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < content.length) {
+    const trailingSegment = content.slice(lastIndex)
+    parts.push(
+      <span key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+        {linkifyText(trailingSegment, `seg-${lastIndex}`)}
+      </span>
+    )
+  }
+
+  if (parts.length === 0) {
+    return [
+      <span key="plain" className="whitespace-pre-wrap">
+        {content}
+      </span>,
+    ]
+  }
+
+  return parts
+}
+
+function postProcessResourceMarkers(
+  content: string,
+  injectedResources?: string[]
+): string {
+  if (!injectedResources || injectedResources.length === 0) return content
+  if (content.includes('[[RESOURCE:') || content.includes('[[WEBRESULT:')) return content
+  return content
+}
+
+// ============================================
+// CHAT MESSAGE COMPONENT
+// ============================================
+const QUICK_REPLIES = ['Find more resources', 'Get directions', 'Check my eligibility', 'Talk to someone']
+
+interface ChatMessageViewProps {
+  message: ChatMessage
+  onQuickReply?: (text: string) => void
+}
+
+function ChatMessageView({ message, onQuickReply }: ChatMessageViewProps) {
   const isUser = message.role === 'user'
 
   return (
@@ -97,7 +283,13 @@ function ChatMessageView({ message }: ChatMessageViewProps) {
             : 'bg-muted rounded-bl-md'
         }`}
       >
-        <p className="text-sm whitespace-pre-wrap">{message.content || (message.isStreaming ? '' : '')}</p>
+        <div className="text-base">
+          {message.content
+            ? parseMessageContent(message.content)
+            : message.isStreaming
+            ? null
+            : null}
+        </div>
         {message.isStreaming && !message.content && (
           <div className="flex gap-1">
             <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
@@ -117,6 +309,19 @@ function ChatMessageView({ message }: ChatMessageViewProps) {
             </p>
           )}
         </div>
+        {message.role === 'assistant' && !message.isStreaming && onQuickReply && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {QUICK_REPLIES.map((option) => (
+              <button
+                key={option}
+                onClick={() => onQuickReply(option)}
+                className="px-3 py-1.5 text-sm rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:border-[#4a5d23] hover:text-[#4a5d23] transition-colors"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -309,7 +514,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto py-4">
             {messages.map((msg) => (
-              <ChatMessageView key={msg.id} message={msg} />
+              <ChatMessageView key={msg.id} message={msg} onQuickReply={sendMessage} />
             ))}
             <div ref={messagesEndRef} />
           </div>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
 import { useVault } from '@/contexts/vault-context'
 import { logPredefinedEvent } from '@/lib/audit-logger'
+import { VaultUnlockModal } from '@/components/vault'
 
 interface EncryptedUploadProps {
   category: string
@@ -24,6 +25,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
   const { uploadFile, isUploading, progress, error, clearError } = useEncryptedUpload()
   const { isUnlocked } = useVault()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -122,17 +124,31 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
   // Show vault locked message if vault is not unlocked
   if (!isUnlocked) {
     return (
-      <div className={`p-6 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 ${className}`}>
-        <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center mb-3">
-            <Lock className="w-6 h-6" />
+      <>
+        <div className={`p-6 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 ${className}`}>
+          <div className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center mb-3">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h3 className="font-medium text-stone-900 mb-1">Vault Locked</h3>
+            <p className="text-sm text-stone-500 mb-4">
+              Unlock your vault to upload encrypted documents
+            </p>
+            <button
+              onClick={() => setShowUnlockModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4e1c] transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+              Unlock Vault
+            </button>
           </div>
-          <h3 className="font-medium text-stone-900 mb-1">Vault Locked</h3>
-          <p className="text-sm text-stone-500">
-            Please unlock your vault to upload encrypted documents
-          </p>
         </div>
-      </div>
+        <VaultUnlockModal
+          open={showUnlockModal}
+          onOpenChange={setShowUnlockModal}
+          onSuccess={() => setShowUnlockModal(false)}
+        />
+      </>
     )
   }
 

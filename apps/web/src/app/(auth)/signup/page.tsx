@@ -83,7 +83,7 @@ export default function SignupPage() {
             data: {
               full_name: sanitizedName,
             },
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=/onboarding`,
+            emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding`,
           },
         })
 
@@ -96,6 +96,14 @@ export default function SignupPage() {
         }
 
         timer.end({ step: 'email_signup' })
+
+        // Check if Supabase auto-confirmed the user (mailer_autoconfirm is on)
+        // When auto-confirmed, email_confirmed_at is set immediately and no email is sent
+        if (data.user?.email_confirmed_at) {
+          router.push('/onboarding')
+          return
+        }
+
         setSuccess(true)
       } catch (err: unknown) {
         if (
@@ -128,7 +136,7 @@ export default function SignupPage() {
         type: 'signup',
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=/onboarding`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding`,
         },
       })
 

@@ -3,6 +3,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
+import type { Database } from '@feed/database'
+
+// Module-level singleton — same pattern as auth-provider.tsx.
+// Prevents a new client reference on every render, which would
+// invalidate all useCallback dep arrays and cause an infinite loop.
+let _supabase: ReturnType<typeof createClient> | null = null
+function getSupabase() {
+  if (!_supabase) _supabase = createClient()
+  return _supabase
+}
 
 export type ApplicationStatus =
   | 'draft'
@@ -81,7 +92,28 @@ export function getStatusDisplay(status: ApplicationStatus) {
   return STATUS_DISPLAY[status] || STATUS_DISPLAY.draft
 }
 
+// Type for the list query result row (form_submissions + joined form_templates)
+type FormSubmissionRow = {
+  id: string
+  user_id: string
+  template_id: string
+  status: string
+  submitted_at: string | null
+  updated_at: string
+  created_at: string
+  notes: string | null
+  form_templates: { name: string } | null
+}
+
+// Type for the single-record query result (includes data + schema)
+type SingleSubmissionRow = FormSubmissionRow & {
+  data: unknown
+  form_templates: { name: string; schema: unknown } | null
+}
+
 export function useApplications(): UseApplicationsReturn {
+  const { user, loading: authLoading } = useAuth()
+
   const [applications, setApplications] = useState<Application[]>([])
   const [stats, setStats] = useState<ApplicationStats>({
     total: 0,
@@ -94,8 +126,6 @@ export function useApplications(): UseApplicationsReturn {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-
-  const supabase = createClient()
 
   const calculateStats = useCallback((apps: Application[]): ApplicationStats => {
     return {
@@ -110,16 +140,22 @@ export function useApplications(): UseApplicationsReturn {
   }, [])
 
   const refreshApplications = useCallback(async () => {
+    // Auth hasn't resolved yet or the user is logged out — clear loading and
+    // bail. The useEffect below re-runs when user changes, so this will
+    // automatically retry once auth resolves.
+    if (authLoading || !user) {
+      setIsLoading(false)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      const supabase = getSupabase()
 
-      // Fetch applications with document count
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: apps, error: fetchError } = await (supabase as any)
+      // Fetch applications with joined template name
+      const { data: apps, error: fetchError } = await supabase
         .from('form_submissions')
         .select(`
           id,
@@ -139,21 +175,8 @@ export function useApplications(): UseApplicationsReturn {
 
       if (fetchError) throw fetchError
 
-      // Define the type for the Supabase query result
-      type FormSubmissionRow = {
-        id: string
-        user_id: string
-        template_id: string
-        status: string
-        submitted_at: string | null
-        updated_at: string
-        created_at: string
-        notes: string | null
-        form_templates: { name: string } | null
-      }
-
       // Transform data
-      const transformedApps: Application[] = ((apps || []) as FormSubmissionRow[]).map(app => ({
+      const transformedApps: Application[] = ((apps || []) as unknown as FormSubmissionRow[]).map(app => ({
         id: app.id,
         user_id: app.user_id,
         template_id: app.template_id,
@@ -163,11 +186,11 @@ export function useApplications(): UseApplicationsReturn {
         last_updated: app.updated_at,
         created_at: app.created_at,
         notes: app.notes,
-        deadline: null, // Would come from a separate field
-        case_number: null, // Would come from a separate field
-        agency_name: null, // Would come from template
-        documents_count: 0, // Would be a subquery
-        timeline: [], // Loaded separately
+        deadline: null,
+        case_number: null,
+        agency_name: null,
+        documents_count: 0,
+        timeline: [],
       }))
 
       setApplications(transformedApps)
@@ -177,12 +200,11 @@ export function useApplications(): UseApplicationsReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, calculateStats])
+  }, [user, authLoading, calculateStats])
 
   const getApplication = useCallback(async (id: string): Promise<Application | null> => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await getSupabase()
         .from('form_submissions')
         .select(`
           id,
@@ -205,21 +227,7 @@ export function useApplications(): UseApplicationsReturn {
       if (fetchError) throw fetchError
       if (!data) return null
 
-      // Type the data explicitly
-      type SingleSubmissionRow = {
-        id: string
-        user_id: string
-        template_id: string
-        status: string
-        submitted_at: string | null
-        updated_at: string
-        created_at: string
-        notes: string | null
-        data: unknown
-        form_templates: { name: string; schema: unknown } | null
-      }
-
-      const typedData = data as SingleSubmissionRow
+      const typedData = data as unknown as SingleSubmissionRow
 
       return {
         id: typedData.id,
@@ -241,15 +249,18 @@ export function useApplications(): UseApplicationsReturn {
       console.error('Error fetching application:', err)
       return null
     }
-  }, [supabase])
+  }, [])
 
   const updateStatus = useCallback(async (id: string, status: ApplicationStatus, note?: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    // Cast status to the DB enum type — ApplicationStatus is a superset of
+    // submission_status (the DB enum). Values outside the DB enum will be
+    // rejected at the DB level, not silently swallowed here.
+    type DBStatus = Database['public']['Enums']['submission_status']
+    const { error: updateError } = await getSupabase()
       .from('form_submissions')
       .update({
-        status,
-        notes: note || undefined,
+        status: status as DBStatus,
+        ...(note !== undefined && { notes: note }),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -257,7 +268,7 @@ export function useApplications(): UseApplicationsReturn {
     if (updateError) throw updateError
 
     await refreshApplications()
-  }, [supabase, refreshApplications])
+  }, [refreshApplications])
 
   const addNote = useCallback(async (id: string, note: string) => {
     const app = applications.find(a => a.id === id)
@@ -267,8 +278,7 @@ export function useApplications(): UseApplicationsReturn {
       ? `${existingNotes}\n\n[${timestamp}]\n${note}`
       : `[${timestamp}]\n${note}`
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await getSupabase()
       .from('form_submissions')
       .update({
         notes: newNotes,
@@ -279,7 +289,7 @@ export function useApplications(): UseApplicationsReturn {
     if (updateError) throw updateError
 
     await refreshApplications()
-  }, [supabase, applications, refreshApplications])
+  }, [applications, refreshApplications])
 
   const setDeadline = useCallback(async (id: string, deadline: Date) => {
     // Would update a deadline field - for now, add to notes
@@ -292,8 +302,7 @@ export function useApplications(): UseApplicationsReturn {
   }, [addNote])
 
   const deleteApplication = useCallback(async (id: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: deleteError } = await (supabase as any)
+    const { error: deleteError } = await getSupabase()
       .from('form_submissions')
       .delete()
       .eq('id', id)
@@ -301,12 +310,15 @@ export function useApplications(): UseApplicationsReturn {
     if (deleteError) throw deleteError
 
     await refreshApplications()
-  }, [supabase, refreshApplications])
+  }, [refreshApplications])
 
-  // Initial load
+  // Load applications once auth resolves, and re-run whenever the authenticated
+  // user changes (e.g., sign-in, sign-out, account switch).
+  // refreshApplications already guards on authLoading/user internally, so this
+  // dependency array is the authoritative trigger for re-fetching.
   useEffect(() => {
     refreshApplications()
-  }, [refreshApplications])
+  }, [refreshApplications, user?.id, authLoading])
 
   return {
     applications,

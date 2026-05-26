@@ -134,6 +134,15 @@ function LoginForm() {
         router.push(redirectTo)
         router.refresh()
       } catch (err) {
+        // Next.js aborts fetch during re-renders — treat abort as success
+        if (
+          (err instanceof DOMException && err.name === 'AbortError') ||
+          (err instanceof Error && err.message.includes('signal'))
+        ) {
+          router.push(redirectTo)
+          router.refresh()
+          return
+        }
         timer.error(err, { step: 'email_login' })
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {

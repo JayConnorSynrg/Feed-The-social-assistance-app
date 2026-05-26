@@ -4,6 +4,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey } from '@/lib/ai/system-prompts'
+import { useAuth } from '@/hooks/use-auth'
 
 export interface ChatMessage {
   id: string
@@ -44,6 +45,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [error, setError] = useState<Error | null>(null)
   const [currentModel, setCurrentModel] = useState<string | null>(null)
   const [currentFlow, setCurrentFlow] = useState<SystemPromptKey>(initialFlow)
+
+  const { profile } = useAuth()
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const supabase = createClient()
@@ -101,8 +104,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       try {
         // Get auth token
+        console.log('[CHAT] Getting session...')
         const { data: { session } } = await supabase.auth.getSession()
+        console.log('[CHAT] Session:', session ? 'valid' : 'null', 'token length:', session?.access_token?.length)
         if (!session?.access_token) {
+          console.error('[CHAT] No session — user not authenticated')
           throw new Error('Please sign in to use the chat')
         }
 
@@ -116,8 +122,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         abortControllerRef.current = new AbortController()
 
         // Call Edge Function
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`
+        console.log('[CHAT] Fetching:', url, 'with', messages.length, 'messages')
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
+          url,
           {
             method: 'POST',
             headers: {
@@ -131,14 +139,30 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               stream: true,
               temperature: 0.7,
               maxTokens: 1024,
+              location: profile ? {
+                city: profile.location_city,
+                state: profile.location_state,
+                lat: profile.latitude,
+                lng: profile.longitude,
+              } : null,
             }),
             signal: abortControllerRef.current.signal,
           }
         )
 
+        console.log('[CHAT] Response status:', response.status, response.statusText)
+
         if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || `Request failed: ${response.status}`)
+          const errorText = await response.text()
+          console.error('[CHAT] Error response:', response.status, errorText)
+          let errorMessage = `Request failed: ${response.status}`
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            // errorText is not JSON — use as-is
+          }
+          throw new Error(errorMessage)
         }
 
         // Handle streaming response
@@ -147,13 +171,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw new Error('No response body')
         }
 
+        console.log('[CHAT] Starting stream reader...')
         const decoder = new TextDecoder()
         let accumulatedContent = ''
+        let firstChunk = true
+        let streamDone = false
 
         try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
+
+            if (firstChunk) {
+              console.log('[CHAT] First chunk received')
+              firstChunk = false
+            }
 
             const chunk = decoder.decode(value, { stream: true })
             const lines = chunk.split('\n').filter(line => line.trim() !== '')
@@ -164,6 +196,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
                 if (data === '[DONE]') {
                   // Streaming complete
+                  console.log('[CHAT] Stream complete, final content length:', accumulatedContent.length)
+                  streamDone = true
                   setMessages(prev =>
                     prev.map(m =>
                       m.id === assistantMessage.id
@@ -202,6 +236,20 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                   if (parsed.type === 'error') {
                     throw new Error(parsed.error)
                   }
+
+                  // Non-streaming fallback: single JSON response with content field
+                  if (parsed.content && parsed.type === undefined) {
+                    console.log('[CHAT] Non-streaming response:', parsed)
+                    accumulatedContent = parsed.content
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === assistantMessage.id
+                          ? { ...m, content: accumulatedContent, isStreaming: false }
+                          : m
+                      )
+                    )
+                    streamDone = true
+                  }
                 } catch (parseError) {
                   // Skip malformed JSON
                   if (parseError instanceof Error && parseError.message !== 'error') {
@@ -214,8 +262,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         } finally {
           reader.releaseLock()
         }
+
+        // Guard: if stream ended without [DONE], close the streaming state so dots don't persist
+        if (!streamDone) {
+          console.warn('[CHAT] Stream ended without [DONE] — forcing isStreaming=false, content length:', accumulatedContent.length)
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessage.id
+                ? { ...m, content: accumulatedContent || 'No response received.', isStreaming: false }
+                : m
+            )
+          )
+        }
       } catch (err) {
         const error = err as Error
+        console.error('[CHAT] Error:', error.message, error)
 
         // Don't report abort errors
         if (error.name === 'AbortError') {
@@ -226,7 +287,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         setError(error)
         onError?.(error)
 
-        // Update message with error state
+        // Update message with error state — always clear isStreaming so dots don't persist
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantMessage.id

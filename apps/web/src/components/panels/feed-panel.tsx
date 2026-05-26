@@ -19,7 +19,7 @@ import { useAuth } from '@/hooks/use-auth'
 // ============================================
 interface Post {
   id: string
-  author: { name: string; avatar?: string; role: string }
+  author: { id: string; name: string; avatar?: string; role: string }
   content: string
   timestamp: Date
   likes: number
@@ -269,16 +269,18 @@ export function FeedPanel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const { user, isAuthenticated } = useAuth()
   const supabase = createClient()
 
   // Fetch posts from Supabase
   const fetchPosts = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const { data, error } = await supabase
         .from('posts')
-        .select('*, user:profiles(id, full_name, avatar_url, is_admin)')
+        .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_admin)')
         .eq('is_hidden', false)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
@@ -286,76 +288,73 @@ export function FeedPanel() {
 
       if (error) throw error
 
-      // Get like counts and user-liked status
-      const postIds = (data || []).map((p: any) => p.id)
+      const rows = data || []
+      const postIds = rows.map((p: any) => p.id)
+
       let likeCounts: Record<string, number> = {}
       let userLikes: Set<string> = new Set()
+      let commentCounts: Record<string, number> = {}
 
       if (postIds.length > 0) {
-        // Get like counts
-        const { data: likes } = await supabase
-          .from('post_likes')
-          .select('post_id')
-          .in('post_id', postIds)
+        // Fetch all three in parallel — eliminates sequential N+1 waterfall
+        const [likesResult, myLikesResult, commentsResult] = await Promise.all([
+          supabase
+            .from('post_likes')
+            .select('post_id')
+            .in('post_id', postIds),
+          user
+            ? supabase
+                .from('post_likes')
+                .select('post_id')
+                .in('post_id', postIds)
+                .eq('user_id', user.id)
+            : Promise.resolve({ data: [] }),
+          supabase
+            .from('post_comments')
+            .select('post_id')
+            .in('post_id', postIds)
+            .eq('is_hidden', false),
+        ])
 
-        if (likes) {
-          for (const like of likes) {
+        if (likesResult.data) {
+          for (const like of likesResult.data) {
             likeCounts[like.post_id] = (likeCounts[like.post_id] || 0) + 1
           }
         }
-
-        // Check which posts the current user liked
-        if (user) {
-          const { data: myLikes } = await supabase
-            .from('post_likes')
-            .select('post_id')
-            .in('post_id', postIds)
-            .eq('user_id', user.id)
-
-          if (myLikes) {
-            for (const like of myLikes) {
-              userLikes.add(like.post_id)
-            }
+        if (myLikesResult.data) {
+          for (const like of myLikesResult.data) {
+            userLikes.add(like.post_id)
           }
         }
-
-        // Get comment counts
-        const { data: comments } = await supabase
-          .from('post_comments')
-          .select('post_id')
-          .in('post_id', postIds)
-          .eq('is_hidden', false)
-
-        const commentCounts: Record<string, number> = {}
-        if (comments) {
-          for (const comment of comments) {
+        if (commentsResult.data) {
+          for (const comment of commentsResult.data) {
             commentCounts[comment.post_id] = (commentCounts[comment.post_id] || 0) + 1
           }
         }
-
-        // Transform to Post interface
-        const transformed: Post[] = (data || []).map((row: any) => ({
-          id: row.id,
-          author: {
-            name: row.user?.full_name || 'Anonymous',
-            avatar: row.user?.avatar_url || undefined,
-            role: row.user?.is_admin ? 'Admin' : 'Community Member',
-          },
-          content: row.content,
-          timestamp: new Date(row.created_at),
-          likes: likeCounts[row.id] || 0,
-          comments: commentCounts[row.id] || 0,
-          isLiked: userLikes.has(row.id),
-          category: row.is_pinned ? 'announcement' : 'update',
-        }))
-
-        setPosts(transformed)
-      } else {
-        setPosts([])
       }
+
+      // Transform to Post interface (runs even when postIds is empty)
+      const transformed: Post[] = rows.map((row: any) => ({
+        id: row.id,
+        author: {
+          id: row.user?.id || '',
+          name: row.user?.full_name || 'Anonymous',
+          avatar: row.user?.avatar_url || undefined,
+          role: row.user?.is_admin ? 'Admin' : 'Community Member',
+        },
+        content: row.content,
+        timestamp: new Date(row.created_at),
+        likes: likeCounts[row.id] || 0,
+        comments: commentCounts[row.id] || 0,
+        isLiked: userLikes.has(row.id),
+        category: row.is_pinned ? 'announcement' : 'update',
+      }))
+
+      setPosts(transformed)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : (err as any)?.message ?? JSON.stringify(err)
       console.error('Error fetching posts:', msg, err)
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -450,7 +449,7 @@ export function FeedPanel() {
   const filteredPosts = posts.filter(post => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'announcements') return post.category === 'announcement'
-    if (activeFilter === 'mine') return post.author.name === (user ? 'You' : '')
+    if (activeFilter === 'mine') return user != null && post.author.id === user.id
     return true
   })
 
@@ -464,7 +463,17 @@ export function FeedPanel() {
 
       {/* Scrollable Feed */}
       <div className="flex-1 overflow-y-auto space-y-3">
-        {loading ? (
+        {error ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-red-600">{error}</p>
+            <button
+              onClick={() => { setError(null); fetchPosts() }}
+              className="text-sm text-stone-600 underline mt-2"
+            >
+              Retry
+            </button>
+          </div>
+        ) : loading ? (
           <div className="text-center py-12 text-muted-foreground">
             <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
             <p className="text-sm">Loading posts...</p>
