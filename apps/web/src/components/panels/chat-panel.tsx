@@ -431,7 +431,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated } = useAuth()
   const { saveResource, isResourceSavedByName } = useSavedResources()
-  const { panelParams } = usePanelContext()
+  const { panelParams, setPanelParams } = usePanelContext()
 
   const {
     messages,
@@ -458,6 +458,50 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Auto-send wizard context when arriving from a category wizard
+  useEffect(() => {
+    const rawContext = panelParams?.wizardContext
+    if (typeof rawContext !== 'string' || !rawContext) return
+
+    let parsed: { category?: string; answers?: Record<string, string | string[]> } = {}
+    try {
+      parsed = JSON.parse(rawContext)
+    } catch {
+      return
+    }
+
+    const { category, answers } = parsed
+    if (!category || !answers) return
+
+    const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1)
+    const lines: string[] = [`I need help with ${categoryLabel} resources. Here's my situation:`]
+
+    const labelMap: Record<string, string> = {
+      'assistance-type': 'Looking for',
+      'household-size': 'Household size',
+      'situation': 'Current situation',
+      'experience': 'Work experience',
+      'frequency': 'Transportation frequency needed',
+      'urgency': 'Urgency',
+      'insurance': 'Insurance status',
+      'state': 'State',
+      'contact': 'Preferred contact method',
+    }
+
+    for (const [key, value] of Object.entries(answers)) {
+      const label = labelMap[key] ?? key
+      const display = Array.isArray(value) ? value.join(', ') : value
+      lines.push(`- ${label}: ${display}`)
+    }
+
+    const prompt = lines.join('\n')
+
+    // Clear wizardContext before sending to prevent re-send on re-render
+    setPanelParams({ ...panelParams, wizardContext: undefined })
+    sendMessage(prompt)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelParams?.wizardContext])
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return

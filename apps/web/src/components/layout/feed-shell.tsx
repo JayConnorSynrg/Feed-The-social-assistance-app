@@ -32,6 +32,7 @@ import {
   HandHeart,
   Utensils,
   ExternalLink,
+  Compass,
 } from 'lucide-react'
 
 // ============================================
@@ -53,7 +54,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages'
+type PanelType = 'chat' | 'map' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -103,6 +104,7 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'documents', icon: FolderOpen, label: 'Documents', roles: ['recipient', 'agency', 'program'] },
   { panel: 'forms', icon: FileText, label: 'Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'messages' as PanelType, icon: MessageSquare, label: 'Messages' },
+  { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -764,7 +766,7 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard']
 
 // Get panel from URL hash (e.g., #chat -> 'chat')
 function getPanelFromHash(): PanelType {

@@ -18,6 +18,12 @@ const FLOW_CONFIG: Record<SystemPromptKey, { title: string; description: string;
   eligibilityChecker: { title: 'Check Eligibility', description: 'See what benefits you may qualify for', icon: '✓' },
   formHelp: { title: 'Form Help', description: 'Get help completing applications', icon: '📝' },
   crisis: { title: 'Crisis Support', description: 'Immediate help is available', icon: '🆘' },
+  food: { title: 'Food Assistance', description: 'SNAP, food pantries, free meals, and more', icon: '🍎' },
+  housing: { title: 'Housing Help', description: 'Shelter, rent assistance, and vouchers', icon: '🏠' },
+  jobs: { title: 'Jobs & Career', description: 'Job search, training, and career support', icon: '💼' },
+  transportation: { title: 'Transportation', description: 'Bus passes, ride programs, and gas help', icon: '🚌' },
+  legal: { title: 'Legal Aid', description: 'Free legal help for housing, family, and more', icon: '⚖️' },
+  healthcare: { title: 'Healthcare', description: 'Free clinics, Medicaid, and prescription help', icon: '🏥' },
 }
 
 interface MessageBubbleProps {

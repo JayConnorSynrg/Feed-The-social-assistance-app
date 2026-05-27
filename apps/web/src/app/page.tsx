@@ -16,6 +16,7 @@ import { ApplicationsPanel } from '@/components/panels/applications-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { FormsPanel } from '@/components/panels/forms-panel'
 import { MessagesPanel } from '@/components/panels/messages-panel'
+import { WizardPanel } from '@/components/panels/wizard-panel'
 import { useAuth } from '@/hooks/use-auth'
 
 // Panel-level error boundary — shell stays mounted if a panel throws
@@ -104,6 +105,9 @@ function PanelRenderer() {
 
     case 'messages':
       return <MessagesPanel />
+
+    case 'wizard':
+      return <WizardPanel />
 
     default:
       return (
