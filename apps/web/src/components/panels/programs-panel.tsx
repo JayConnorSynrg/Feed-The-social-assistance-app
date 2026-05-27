@@ -359,7 +359,7 @@ export function ProgramsPanel() {
               Try adjusting your search or selecting a different category.
             </p>
           </div>
-        ) : (
+        ) : filters.category ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4 pr-1">
             {programs.map((resource) => (
               <ProgramTile
@@ -372,6 +372,42 @@ export function ProgramsPanel() {
                 onStartApplication={handleStartApplication}
               />
             ))}
+          </div>
+        ) : (
+          <div className="space-y-6 pb-4 pr-1">
+            {Object.entries(
+              programs.reduce<Record<string, Resource[]>>((acc, r) => {
+                const cat = r.category as string
+                if (!acc[cat]) acc[cat] = []
+                acc[cat].push(r)
+                return acc
+              }, {})
+            ).map(([cat, items]) => {
+              const display = CATEGORY_DISPLAY[cat] ?? CATEGORY_DISPLAY['other']
+              return (
+                <div key={cat}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h2 className="text-base font-bold text-stone-900">{display.label}</h2>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500">
+                      {items.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {items.map((resource) => (
+                      <ProgramTile
+                        key={resource.id}
+                        resource={resource}
+                        isExpanded={expandedId === resource.id}
+                        onToggle={() => handleToggle(resource.id, resource)}
+                        onSave={handleSave}
+                        isSaved={isResourceSaved(resource.id)}
+                        onStartApplication={handleStartApplication}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

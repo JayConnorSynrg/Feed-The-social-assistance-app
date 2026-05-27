@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { Database } from '@feed/database'
+import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
+
+const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
 let _supabase: ReturnType<typeof createClient> | null = null
 function getSupabase() {
@@ -58,12 +61,10 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .select('*')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
+        .in('category', filters.category ? [filters.category as Database['public']['Enums']['resource_category']] : FORM_CATEGORIES)
+        .order('category', { ascending: true })
         .order('name', { ascending: true })
-        .limit(100)
-
-      if (filters.category) {
-        query = query.eq('category', filters.category as Database['public']['Enums']['resource_category'])
-      }
+        .limit(200)
 
       if (filters.search.trim()) {
         query = query.ilike('name', `%${filters.search.trim()}%`)
@@ -102,6 +103,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .select('category')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
+        .in('category', FORM_CATEGORIES)
 
       if (fetchError) throw fetchError
 
