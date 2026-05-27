@@ -264,7 +264,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { saveResource, isResourceSavedByName } = useSavedResources()
 
   // Auth profile for location-based centering
-  const { profile } = useAuth()
+  const { profile, loading: authLoading } = useAuth()
 
   // Real geolocation
   const { position, getCurrentPosition } = useGeolocation()
@@ -329,7 +329,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // Real Supabase resources query
   const { resources: realResources, loading: resourcesLoading } = useViewportResources({
     bounds,
-    enabled: !!bounds,
+    enabled: !!bounds && !authLoading,
   })
 
   // Map real resources to MapResource interface

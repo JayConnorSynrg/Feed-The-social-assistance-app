@@ -102,9 +102,9 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'feed', icon: Newspaper, label: 'Community Feed' },
   { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
   { panel: 'documents', icon: FolderOpen, label: 'Documents', roles: ['recipient', 'agency', 'program'] },
+  { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
   { panel: 'forms', icon: FileText, label: 'Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'messages' as PanelType, icon: MessageSquare, label: 'Messages' },
-  { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 

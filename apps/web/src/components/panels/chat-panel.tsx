@@ -429,6 +429,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated } = useAuth()
   const { saveResource, isResourceSavedByName } = useSavedResources()
   const { panelParams, setPanelParams } = usePanelContext()
@@ -456,7 +457,12 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }, [messages])
 
   // Auto-send wizard context when arriving from a category wizard
@@ -636,7 +642,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
         // ============================================
         <>
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto py-4">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4">
             {messages.map((msg) => (
               <ChatMessageView
                 key={msg.id}

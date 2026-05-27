@@ -15,6 +15,7 @@ import {
   Calendar,
   Heart,
   Loader2,
+  Compass,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
@@ -265,11 +266,11 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
               onClick={() => handleNavigate('chat')}
             />
             <QuickActionCard
-              icon={Newspaper}
+              icon={Compass}
               iconBg="bg-green-100 text-green-600"
-              title="Community Feed"
-              description="Stay connected, share ideas, and get support from your community."
-              onClick={() => handleNavigate('feed')}
+              title="Resource Wizard"
+              description="Guided help finding resources"
+              onClick={() => handleNavigate('wizard')}
             />
             <QuickActionCard
               icon={ClipboardList}
