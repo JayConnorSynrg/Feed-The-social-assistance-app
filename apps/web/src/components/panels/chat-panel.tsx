@@ -14,6 +14,8 @@ import { GuidedFlowComponent } from '@/components/chat/guided-flow'
 import { resourceFinderFlow, eligibilityCheckerFlow, formHelpFlow } from '@/lib/ai/guided-flows'
 import type { GuidedFlow } from '@/lib/ai/guided-flows'
 import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-resources'
+import { usePanelContext } from '@/components/layout/feed-shell'
+import type { SystemPromptKey } from '@/lib/ai/system-prompts'
 
 // ============================================
 // FLOW SELECTION CARD
@@ -38,7 +40,7 @@ function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardP
       <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">
         {title}
       </h3>
-      <p className="text-xs text-muted-foreground leading-relaxed">
+      <p className="text-xs text-stone-500 leading-relaxed">
         {description}
       </p>
     </button>
@@ -375,12 +377,12 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
         )}
         <div className="flex items-center gap-2 mt-1">
           {message.timestamp && (
-            <p className={`text-[10px] ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+            <p className={`text-[10px] ${isUser ? 'text-primary-foreground/70' : 'text-stone-500'}`}>
               {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
           {message.model && !isUser && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] text-stone-500">
               via {message.model.split('/').pop()}
             </p>
           )}
@@ -429,6 +431,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated } = useAuth()
   const { saveResource, isResourceSavedByName } = useSavedResources()
+  const { panelParams } = usePanelContext()
 
   const {
     messages,
@@ -437,7 +440,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     sendMessage,
     stopStreaming,
   } = useChat({
-    flow: 'general',
+    flow: (panelParams?.flow as SystemPromptKey) || 'general',
     onError: (err) => console.error('Chat error:', err),
   })
 
@@ -512,7 +515,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             <h1 className="text-3xl font-bold mb-2">
               Hi, This is Feed.
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-lg text-stone-500">
               What can we help you gather today?
             </p>
           </div>

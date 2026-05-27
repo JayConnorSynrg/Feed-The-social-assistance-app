@@ -270,6 +270,7 @@ export function useConversations() {
 
   const acceptRequest = useCallback(async (id: string) => {
     if (!user?.id) return
+    setIsLoading(true)
     try {
       const { error: updateError } = await (supabase as any)
         .from('conversations')
@@ -281,11 +282,14 @@ export function useConversations() {
       await fetchConversations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept request')
+    } finally {
+      setIsLoading(false)
     }
   }, [supabase, user?.id, fetchConversations])
 
   const declineRequest = useCallback(async (id: string) => {
     if (!user?.id) return
+    setIsLoading(true)
     try {
       const { error: updateError } = await (supabase as any)
         .from('conversations')
@@ -297,11 +301,14 @@ export function useConversations() {
       await fetchConversations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to decline request')
+    } finally {
+      setIsLoading(false)
     }
   }, [supabase, user?.id, fetchConversations])
 
   const cancelConversation = useCallback(async (id: string) => {
     if (!user?.id) return
+    setIsLoading(true)
     try {
       const { error: updateError } = await (supabase as any)
         .from('conversations')
@@ -313,11 +320,14 @@ export function useConversations() {
       await fetchConversations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel conversation')
+    } finally {
+      setIsLoading(false)
     }
   }, [supabase, user?.id, fetchConversations])
 
   const withdrawRequest = useCallback(async (id: string) => {
     if (!user?.id) return
+    setIsLoading(true)
     try {
       const { error: updateError } = await (supabase as any)
         .from('conversations')
@@ -329,6 +339,8 @@ export function useConversations() {
       await fetchConversations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw request')
+    } finally {
+      setIsLoading(false)
     }
   }, [supabase, user?.id, fetchConversations])
 

@@ -108,6 +108,7 @@ export function useVolunteerResource() {
 
   const withdrawResource = useCallback(async (resourceId: string) => {
     if (!user?.id) return
+    setIsLoading(true)
     try {
       const { error: updateError } = await (supabase as any)
         .from('resources')
@@ -119,6 +120,8 @@ export function useVolunteerResource() {
       await fetchMyResources()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw resource')
+    } finally {
+      setIsLoading(false)
     }
   }, [supabase, user?.id, fetchMyResources])
 
