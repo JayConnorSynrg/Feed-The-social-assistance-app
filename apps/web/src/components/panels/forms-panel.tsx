@@ -1,9 +1,5 @@
 'use client'
 
-// apps/web/src/components/panels/forms-panel.tsx
-// Forms Panel - Browse, fill out, and submit benefit application forms
-// Tabs: Available Forms, In Progress, Submitted
-
 import React, { useState, useMemo } from 'react'
 import {
   FileText,
@@ -23,6 +19,8 @@ import { Button } from '@/components/ui/button'
 import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
 import { useUserSubmissions } from '@/hooks/use-form-submission'
 import type { FormSubmission as HookFormSubmission } from '@/hooks/use-form-submission'
+import { createClient } from '@/lib/supabase/client'
+import { FormWizard } from '@/components/forms/form-wizard'
 
 // ============================================
 // TYPES
@@ -59,6 +57,11 @@ interface FormSubmission {
   status: 'pending' | 'under-review' | 'approved' | 'denied' | 'needs-info'
   category: FormTemplate['category']
 }
+
+type WizardState =
+  | { mode: 'list' }
+  | { mode: 'wizard'; templateId: string; submissionId?: string }
+  | { mode: 'view'; submissionId: string }
 
 // ============================================
 // ADAPTERS: Hook data → Panel types
@@ -464,6 +467,7 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
 // ============================================
 export function FormsPanel({ userId }: FormsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('available')
+  const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
 
   // Live data hooks
   const { templates: rawTemplates, loading: templatesLoading, error: templatesError } = useFormTemplates()
@@ -497,21 +501,88 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const error = templatesError || submissionsError
 
   // Handlers
-  const handleStartForm = (_templateId: string) => {
-    // TODO: Navigate to form builder with selected template
+  const handleStartForm = (templateId: string) => {
+    setWizardState({ mode: 'wizard', templateId })
   }
 
-  const handleContinueForm = (_formId: string) => {
-    // TODO: Navigate to form builder with draft loaded
+  const handleContinueForm = (formId: string) => {
+    const draft = inProgress.find((f) => f.id === formId)
+    if (draft) {
+      setWizardState({ mode: 'wizard', templateId: draft.templateId, submissionId: formId })
+    }
   }
 
   const handleDeleteDraft = async (formId: string) => {
-    // TODO: Wire to delete submission via hook; for now refresh list
+    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('form_submissions').delete().eq('id', formId)
     await refreshSubmissions()
   }
 
-  const handleViewSubmission = (_submissionId: string) => {
-    // TODO: Navigate to submission detail view
+  const handleViewSubmission = (submissionId: string) => {
+    setWizardState({ mode: 'view', submissionId })
+  }
+
+  const handleWizardComplete = async () => {
+    setWizardState({ mode: 'list' })
+    setActiveTab('submitted')
+    await refreshSubmissions()
+  }
+
+  const handleWizardCancel = () => {
+    setWizardState({ mode: 'list' })
+  }
+
+  if (wizardState.mode === 'wizard') {
+    return (
+      <FormWizard
+        templateId={wizardState.templateId}
+        existingSubmissionId={wizardState.submissionId}
+        onComplete={handleWizardComplete}
+        onCancel={handleWizardCancel}
+      />
+    )
+  }
+
+  if (wizardState.mode === 'view') {
+    const sub = rawSubmissions.find((s) => s.id === wizardState.submissionId)
+    const tmpl = sub ? templateMap.get(sub.templateId) : null
+    return (
+      <div className="h-full flex flex-col overflow-y-auto">
+        <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-stone-900">{tmpl?.name ?? 'Submission'}</h1>
+            <Button variant="outline" size="sm" onClick={() => setWizardState({ mode: 'list' })}>
+              Back
+            </Button>
+          </div>
+          {sub ? (
+            <div className="p-5 bg-[#faf9f6] border border-stone-200 rounded-xl space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-500">Status:</span>
+                <span className="text-sm font-medium capitalize">{sub.status}</span>
+              </div>
+              {sub.submittedAt && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-500">Submitted:</span>
+                  <span className="text-sm">{new Date(sub.submittedAt).toLocaleDateString()}</span>
+                </div>
+              )}
+              <div className="space-y-3 pt-2">
+                {Object.entries(sub.data).map(([key, value]) => (
+                  <div key={key}>
+                    <dt className="text-xs text-stone-500 capitalize">{key.replace(/_/g, ' ')}</dt>
+                    <dd className="text-sm text-stone-900">{String(value)}</dd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-stone-500">Submission not found.</p>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
