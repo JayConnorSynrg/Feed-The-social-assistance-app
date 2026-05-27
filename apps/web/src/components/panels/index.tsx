@@ -14,3 +14,4 @@ export { DocumentsPanel } from './documents-panel'
 // Role-restricted panels (Phase 2)
 export { ApplicationsPanel } from './applications-panel'
 export { FormsPanel } from './forms-panel'
+export { ProgramsPanel } from './programs-panel'

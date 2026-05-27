@@ -3,7 +3,7 @@
 // apps/web/src/components/panels/applications-panel.tsx
 // Applications Panel - Track benefit applications, view status, and manage required actions
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import {
   ClipboardList,
   Clock,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useApplications, type Application as HookApplication, type ApplicationStatus as HookApplicationStatus } from '@/hooks/use-applications'
+import { usePanelContext } from '@/components/layout/feed-shell'
 
 // ============================================
 // TYPES
@@ -555,7 +556,7 @@ function FilterTabs({ activeFilter, onFilterChange, counts }: FilterTabsProps) {
 // ============================================
 // EMPTY STATE COMPONENT
 // ============================================
-function EmptyState() {
+function EmptyState({ onBrowsePrograms }: { onBrowsePrograms: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[#4a5d23]/10 flex items-center justify-center mb-4">
@@ -569,7 +570,7 @@ function EmptyState() {
       </p>
       <Button
         className="bg-[#4a5d23] hover:bg-[#3d4d1c]"
-        onClick={() => { /* TODO: Navigate to Forms panel to browse available programs */ }}
+        onClick={onBrowsePrograms}
       >
         Browse Available Programs
         <ArrowRight className="w-4 h-4 ml-2" />
@@ -583,8 +584,13 @@ function EmptyState() {
 // ============================================
 export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   const { applications: hookApps, isLoading, error, deleteApplication } = useApplications()
+  const { setActivePanel } = usePanelContext()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const handleBrowsePrograms = useCallback(() => {
+    setActivePanel('programs' as any)
+  }, [setActivePanel])
 
   // Adapt hook data to panel types
   const applications = useMemo(() => hookApps.map(adaptApplication), [hookApps])
@@ -670,7 +676,7 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
       {/* Applications List */}
       <div className="flex-1 overflow-y-auto">
         {applications.length === 0 ? (
-          <EmptyState />
+          <EmptyState onBrowsePrograms={handleBrowsePrograms} />
         ) : filteredApplications.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <p className="text-sm">No applications match this filter</p>

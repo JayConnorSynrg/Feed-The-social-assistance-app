@@ -5,7 +5,6 @@
 // Auth-aware: shows real user data when authenticated
 
 import React from 'react'
-import { useRouter } from 'next/navigation'
 import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
 import { ChatPanel } from '@/components/panels/chat-panel'
 import { MapPanel } from '@/components/panels/map-panel'
@@ -17,6 +16,7 @@ import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { FormsPanel } from '@/components/panels/forms-panel'
 import { MessagesPanel } from '@/components/panels/messages-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
+import { ProgramsPanel } from '@/components/panels/programs-panel'
 import { useAuth } from '@/hooks/use-auth'
 
 // Panel-level error boundary — shell stays mounted if a panel throws
@@ -78,14 +78,12 @@ function PanelRenderer() {
         <MapPanel
           onNavigateToChat={(resourceContext) => {
             setActivePanel('chat' as any)
-            // resourceContext carries the resource name for the chat panel
-            // ChatPanel reads from sessionStorage on mount if needed
-            if (resourceContext) {
-              sessionStorage.setItem('chat:initialContext', `I need help with: ${resourceContext}`)
-            }
           }}
         />
       )
+
+    case 'programs':
+      return <ProgramsPanel />
 
     case 'feed':
       return <FeedPanel />
@@ -134,7 +132,6 @@ function LoadingSkeleton() {
 // Main Page Component
 export default function HomePage() {
   const { user, profile, isAuthenticated, loading, signOut } = useAuth()
-  const router = useRouter()
 
   // TODO: Add onboarding_completed field to profiles table if needed
   // const needsOnboarding = isAuthenticated && profile && !profile.onboarding_completed

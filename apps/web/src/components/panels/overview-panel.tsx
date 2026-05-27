@@ -16,6 +16,7 @@ import {
   Heart,
   Loader2,
   Compass,
+  Search,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
@@ -266,6 +267,13 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
               onClick={() => handleNavigate('chat')}
             />
             <QuickActionCard
+              icon={Search}
+              iconBg="bg-amber-100 text-amber-700"
+              title="Browse Programs"
+              description="Explore all available benefits and services by category."
+              onClick={() => handleNavigate('programs')}
+            />
+            <QuickActionCard
               icon={Compass}
               iconBg="bg-green-100 text-green-600"
               title="Resource Wizard"
@@ -289,7 +297,7 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
             <QuickActionCard
               icon={FileText}
               iconBg="bg-teal-100 text-teal-600"
-              title="Forms & Applications"
+              title="Apply for Benefits"
               description="Fill out and submit forms for SNAP, Medicaid, and other programs."
               onClick={() => handleNavigate('forms')}
             />
