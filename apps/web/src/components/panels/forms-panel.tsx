@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import {
   FileText,
   Clock,
@@ -14,6 +14,7 @@ import {
   FileCheck,
   Calendar,
   ClipboardList,
+  FilePlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
@@ -21,6 +22,7 @@ import { useUserSubmissions } from '@/hooks/use-form-submission'
 import type { FormSubmission as HookFormSubmission } from '@/hooks/use-form-submission'
 import { createClient } from '@/lib/supabase/client'
 import { FormWizard } from '@/components/forms/form-wizard'
+import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 
 // ============================================
 // TYPES
@@ -62,6 +64,7 @@ type WizardState =
   | { mode: 'list' }
   | { mode: 'wizard'; templateId: string; submissionId?: string }
   | { mode: 'view'; submissionId: string }
+  | { mode: 'pdf'; pdfUrl: string; fileName: string }
 
 // ============================================
 // ADAPTERS: Hook data → Panel types
@@ -468,6 +471,7 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
 export function FormsPanel({ userId }: FormsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('available')
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Live data hooks
   const { templates: rawTemplates, loading: templatesLoading, error: templatesError } = useFormTemplates()
@@ -531,6 +535,54 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const handleWizardCancel = () => {
     setWizardState({ mode: 'list' })
+  }
+
+  const handleOpenPdfPicker = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handlePdfFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    setWizardState({ mode: 'pdf', pdfUrl: url, fileName: file.name })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handlePdfSave = async (pdfBytes: Uint8Array) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const fileName = wizardState.mode === 'pdf' ? wizardState.fileName : 'annotated.pdf'
+    const storagePath = `${user.id}/pdf-forms/${Date.now()}-${fileName}`
+
+    const plainBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer
+    const blob = new Blob([plainBuffer], { type: 'application/pdf' })
+    await supabase.storage.from('documents').upload(storagePath, blob, {
+      contentType: 'application/pdf',
+      upsert: false,
+    })
+
+    setWizardState({ mode: 'list' })
+    setActiveTab('submitted')
+  }
+
+  const handlePdfCancel = () => {
+    if (wizardState.mode === 'pdf') {
+      URL.revokeObjectURL(wizardState.pdfUrl)
+    }
+    setWizardState({ mode: 'list' })
+  }
+
+  if (wizardState.mode === 'pdf') {
+    return (
+      <PdfAnnotator
+        pdfUrl={wizardState.pdfUrl}
+        onSave={handlePdfSave}
+        onCancel={handlePdfCancel}
+      />
+    )
   }
 
   if (wizardState.mode === 'wizard') {
@@ -607,14 +659,34 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   return (
     <div className="h-full flex flex-col overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full px-4 py-6">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handlePdfFileSelected}
+          aria-hidden="true"
+        />
+
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 mb-1">
-            Forms & Applications
-          </h1>
-          <p className="text-sm text-stone-600">
-            Apply for benefits, assistance programs, and community resources.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-stone-900 mb-1">
+              Forms & Applications
+            </h1>
+            <p className="text-sm text-stone-600">
+              Apply for benefits, assistance programs, and community resources.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleOpenPdfPicker}
+            className="flex-shrink-0 mt-1"
+          >
+            <FilePlus className="w-3.5 h-3.5 mr-1.5" />
+            Fill PDF Form
+          </Button>
         </div>
 
         {/* Tab Navigation */}
