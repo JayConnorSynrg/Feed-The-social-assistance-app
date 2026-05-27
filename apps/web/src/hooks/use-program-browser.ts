@@ -19,6 +19,7 @@ export type Resource = Database['public']['Tables']['resources']['Row']
 export interface ProgramFilters {
   category: string | null
   search: string
+  state: string | null
 }
 
 export interface CategoryCount {
@@ -37,13 +38,19 @@ export interface ProgramBrowserResult {
 }
 
 export function useProgramBrowser(): ProgramBrowserResult {
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, profile } = useAuth()
 
   const [programs, setPrograms] = useState<Resource[]>([])
   const [categories, setCategories] = useState<CategoryCount[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<ProgramFilters>({ category: null, search: '' })
+  const [filters, setFilters] = useState<ProgramFilters>({ category: null, search: '', state: null })
+
+  useEffect(() => {
+    if (!authLoading && profile?.location_state) {
+      setFilters((prev) => prev.state === null ? { ...prev, state: profile.location_state } : prev)
+    }
+  }, [authLoading, profile?.location_state])
 
   const fetchPrograms = useCallback(async () => {
     if (authLoading) return
@@ -66,6 +73,10 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .order('name', { ascending: true })
         .limit(200)
 
+      if (filters.state) {
+        query = query.eq('state', filters.state)
+      }
+
       if (filters.search.trim()) {
         query = query.ilike('name', `%${filters.search.trim()}%`)
       }
@@ -81,6 +92,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
         action: 'programs_fetched',
         category: filters.category,
         search: filters.search,
+        state: filters.state,
         resultCount: results.length,
         durationMs: Date.now() - start,
       }))
@@ -98,12 +110,18 @@ export function useProgramBrowser(): ProgramBrowserResult {
     try {
       const supabase = getSupabase()
 
-      const { data, error: fetchError } = await supabase
+      let catQuery = supabase
         .from('resources')
         .select('category')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
         .in('category', FORM_CATEGORIES)
+
+      if (filters.state) {
+        catQuery = catQuery.eq('state', filters.state)
+      }
+
+      const { data, error: fetchError } = await catQuery
 
       if (fetchError) throw fetchError
 
@@ -121,7 +139,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
     } catch {
       // Non-fatal — categories bar degrades gracefully
     }
-  }, [authLoading])
+  }, [authLoading, filters.state])
 
   useEffect(() => {
     fetchPrograms()

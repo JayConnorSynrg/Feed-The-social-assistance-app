@@ -9,6 +9,7 @@ import {
   Phone,
   Globe,
   Mail,
+  MapPin,
   Search,
   Loader2,
   AlertCircle,
@@ -20,6 +21,18 @@ import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
+
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+  'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia',
+  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota',
+  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia',
+  'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+]
 
 function CategoryBadge({ category }: { category: string }) {
   const display = CATEGORY_DISPLAY[category] ?? CATEGORY_DISPLAY['other']
@@ -292,6 +305,21 @@ export function ProgramsPanel() {
             placeholder="Search programs..."
             className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
           />
+        </div>
+
+        <div className="relative">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+          <select
+            value={filters.state ?? ''}
+            onChange={(e) => setFilters({ ...filters, state: e.target.value || null })}
+            className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
+          >
+            <option value="">All States</option>
+            {US_STATES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
