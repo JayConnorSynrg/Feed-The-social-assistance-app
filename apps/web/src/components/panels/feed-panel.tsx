@@ -270,7 +270,7 @@ export function FeedPanel() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
 
   // Fetch posts from Supabase
@@ -367,15 +367,14 @@ export function FeedPanel() {
 
   // Real-time updates
   useRealtimeFeed({
-    onInsert: (newPost) => {
-      // Refetch to get full data with joins
+    onInsert: () => {
       fetchPosts()
     },
     onUpdate: () => fetchPosts(),
     onDelete: (postId) => {
       setPosts(prev => prev.filter(p => p.id !== postId))
     },
-    enabled: true,
+    enabled: !authLoading,
   })
 
   const handleCreatePost = async (content: string) => {

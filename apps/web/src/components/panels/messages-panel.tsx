@@ -42,11 +42,16 @@ export function MessagesPanel() {
   } = useConversations()
 
   const [messageInput, setMessageInput] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }, [messages])
 
   // Deep-link from map panel
@@ -228,7 +233,7 @@ export function MessagesPanel() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map(msg => (
                 <div
                   key={msg.id}
@@ -250,7 +255,6 @@ export function MessagesPanel() {
                   </div>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Input — only for active conversations (or pending requester's initial view) */}

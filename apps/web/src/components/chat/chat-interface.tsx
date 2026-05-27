@@ -166,7 +166,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('')
   const [showCrisisBanner, setShowCrisisBanner] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -185,7 +185,12 @@ export function ChatInterface({
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }, [messages])
 
   // Focus input on mount
@@ -247,7 +252,7 @@ export function ChatInterface({
         )}
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto p-4">
+      <CardContent ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
         {showCrisisBanner && (
           <CrisisBanner onDismiss={() => setShowCrisisBanner(false)} />
         )}
@@ -281,7 +286,6 @@ export function ChatInterface({
           </div>
         )}
 
-        <div ref={messagesEndRef} />
       </CardContent>
 
       <div className="border-t p-4">

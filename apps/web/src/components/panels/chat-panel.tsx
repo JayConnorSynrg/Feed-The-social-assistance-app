@@ -447,6 +447,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
   // Guided flow state
   const [selectedFlow, setSelectedFlow] = useState<GuidedFlow | null>(null)
+  const wizardSentRef = useRef(false)
 
   const handleFlowSelect = (flow: GuidedFlow) => setSelectedFlow(flow)
   const handleFlowComplete = (answers: Record<string, string>, aiResponse: string) => {
@@ -469,6 +470,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   useEffect(() => {
     const rawContext = panelParams?.wizardContext
     if (typeof rawContext !== 'string' || !rawContext) return
+    if (isLoading) return
+    if (wizardSentRef.current) return
 
     let parsed: { category?: string; answers?: Record<string, string | string[]> } = {}
     try {
@@ -479,6 +482,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
     const { category, answers } = parsed
     if (!category || !answers) return
+
+    wizardSentRef.current = true
 
     const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1)
     const lines: string[] = [`I need help with ${categoryLabel} resources. Here's my situation:`]
@@ -503,11 +508,12 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
     const prompt = lines.join('\n')
 
-    // Clear wizardContext before sending to prevent re-send on re-render
     setPanelParams({ ...panelParams, wizardContext: undefined })
-    sendMessage(prompt)
+    sendMessage(prompt).finally(() => {
+      wizardSentRef.current = false
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelParams?.wizardContext])
+  }, [panelParams?.wizardContext, isLoading])
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return

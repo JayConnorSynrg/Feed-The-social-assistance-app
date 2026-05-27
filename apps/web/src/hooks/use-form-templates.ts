@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import type { FormTemplateSchema } from '@/lib/form-schemas'
 
 interface FormTemplateRow {
@@ -61,6 +62,7 @@ export function useFormTemplates(
   })
 
   const supabase = createClient()
+  const { loading: authLoading, user } = useAuth()
 
   /**
    * Fetch all templates
@@ -109,10 +111,11 @@ export function useFormTemplates(
     }
   }, [supabase, category, activeOnly])
 
-  // Initial fetch
+  // Initial fetch — wait for auth to resolve before querying
   useEffect(() => {
+    if (authLoading || !user) return
     fetchTemplates()
-  }, [fetchTemplates])
+  }, [fetchTemplates, authLoading, user])
 
   /**
    * Get a single template by ID

@@ -3,8 +3,8 @@
 // apps/web/src/components/panels/resource-wizard.tsx
 // Step-by-step wizard for a given resource category
 
-import React, { useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import { ChevronLeft, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { CategoryWizardConfig, WizardStepConfig } from '@/lib/ai/resource-wizard-config'
@@ -130,19 +130,42 @@ function StepOptions({
   onMultiSubmit,
 }: StepOptionsProps) {
   const selected = (answers[step.id] as string[]) ?? []
+  const [filterQuery, setFilterQuery] = useState('')
+
+  const isManyOptions = (step.options?.length ?? 0) > 10
+
+  const filteredOptions = useMemo(() => {
+    if (!isManyOptions || !filterQuery.trim()) return step.options ?? []
+    const q = filterQuery.toLowerCase()
+    return (step.options ?? []).filter((opt) => opt.label.toLowerCase().includes(q))
+  }, [step.options, filterQuery, isManyOptions])
 
   if (step.type === 'single-select') {
     return (
       <div className="flex flex-col gap-2">
-        {step.options?.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onSingleSelect(opt.value)}
-            className="w-full text-left px-4 py-3 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all text-sm text-stone-700 font-medium"
-          >
-            {opt.label}
-          </button>
-        ))}
+        {isManyOptions && (
+          <div className="relative mb-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+            <Input
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder="Filter..."
+              className="pl-9 py-2 rounded-xl bg-[#faf9f6] border-stone-200 text-stone-900 placeholder:text-stone-400"
+              autoFocus
+            />
+          </div>
+        )}
+        <div className={isManyOptions ? 'max-h-72 overflow-y-auto flex flex-col gap-2 pr-1' : 'flex flex-col gap-2'}>
+          {filteredOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onSingleSelect(opt.value)}
+              className="w-full text-left px-4 py-3 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all text-sm text-stone-700 font-medium"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
     )
   }
