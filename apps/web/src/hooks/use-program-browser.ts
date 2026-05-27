@@ -55,6 +55,12 @@ export function useProgramBrowser(): ProgramBrowserResult {
   const fetchPrograms = useCallback(async () => {
     if (authLoading) return
 
+    if (!filters.state) {
+      setPrograms([])
+      setIsLoading(false)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
@@ -68,14 +74,12 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .select('*')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
+        .eq('source', 'admin_added')
         .in('category', filters.category ? [filters.category as Database['public']['Enums']['resource_category']] : FORM_CATEGORIES)
+        .eq('state', filters.state)
         .order('category', { ascending: true })
         .order('name', { ascending: true })
         .limit(200)
-
-      if (filters.state) {
-        query = query.eq('state', filters.state)
-      }
 
       if (filters.search.trim()) {
         query = query.ilike('name', `%${filters.search.trim()}%`)
@@ -107,19 +111,22 @@ export function useProgramBrowser(): ProgramBrowserResult {
   const fetchCategories = useCallback(async () => {
     if (authLoading) return
 
+    if (!filters.state) {
+      setCategories([])
+      return
+    }
+
     try {
       const supabase = getSupabase()
 
-      let catQuery = supabase
+      const catQuery = supabase
         .from('resources')
         .select('category')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
+        .eq('source', 'admin_added')
         .in('category', FORM_CATEGORIES)
-
-      if (filters.state) {
-        catQuery = catQuery.eq('state', filters.state)
-      }
+        .eq('state', filters.state)
 
       const { data, error: fetchError } = await catQuery
 

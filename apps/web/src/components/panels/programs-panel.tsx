@@ -314,7 +314,7 @@ export function ProgramsPanel() {
             onChange={(e) => setFilters({ ...filters, state: e.target.value || null })}
             className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
           >
-            <option value="">All States</option>
+            <option value="" disabled>Select your state</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -376,6 +376,16 @@ export function ProgramsPanel() {
               <RefreshCw className="w-4 h-4" />
               Retry
             </button>
+          </div>
+        ) : !filters.state ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
+              <MapPin className="w-8 h-8 text-stone-400" />
+            </div>
+            <h3 className="font-semibold text-stone-900">Select your state</h3>
+            <p className="text-sm text-stone-500">
+              Programs are state-specific. Choose your state above to see available benefits.
+            </p>
           </div>
         ) : programs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
