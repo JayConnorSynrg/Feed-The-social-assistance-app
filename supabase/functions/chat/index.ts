@@ -438,24 +438,19 @@ serve(async (req: Request) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
       : null
 
-    // RAG: search resources when the user message contains resource-related keywords
+    // RAG: always search resources for every message so the LLM always has verified context
     const lastUserMsg = messages.filter(m => m.role === 'user').pop()
     let resourceContext = ''
     if (lastUserMsg && supabaseClient) {
-      const searchKeywords = ['food', 'shelter', 'housing', 'health', 'clinic', 'legal', 'job', 'employment', 'help', 'resource', 'bank', 'pantry', 'assistance', 'benefit', 'snap', 'medicaid', 'utility', 'rent']
-      const msgLower = lastUserMsg.content.toLowerCase()
-      const isResourceQuery = searchKeywords.some(kw => msgLower.includes(kw))
-
-      if (isResourceQuery) {
-        resourceContext = await searchResources(supabaseClient, lastUserMsg.content, location || null, messages)
-      }
+      resourceContext = await searchResources(supabaseClient, lastUserMsg.content, location || null, messages)
     }
 
-    // Build enriched system prompt, appending verified resource data when available
+    // Build enriched system prompt, always appending verified resource context (or a no-results note)
     let enrichedSystemPrompt = systemPrompt || ''
-    if (resourceContext) {
-      enrichedSystemPrompt += `\n\n--- AVAILABLE RESOURCES (verified data) ---\n${resourceContext}\n\nWhen mentioning ANY resource, you MUST wrap it in double brackets with pipe-separated fields like this:\n[[Resource Name|Full Address|Phone Number|Website URL]]\nOr with an apply link:\n[[Resource Name|Full Address|Phone Number|Website URL|Apply URL]]\nExample: [[Vermont Foodbank|123 Main St, Rutland VT 05701|802-555-1234|www.vtfoodbank.org]]\nWhen a resource in the data above includes "Apply: <url>", include that URL as the 5th field.\nEvery resource MUST use this exact format. The app converts these into clickable cards for the user.\nONLY include FREE community resources. Never recommend paid services.\nAlways prefer local database resources first. Include the resource's phone number and address when available.\nThe Website URL field should be the SPECIFIC page about the service, NOT the organization's homepage. For example, use broc.org/food-shelf-rutland-county instead of broc.org. Direct the user to the exact page where they can get help.`
-    }
+    const resourceSection = resourceContext
+      ? `--- VERIFIED LOCAL RESOURCES ---\n${resourceContext}`
+      : `--- VERIFIED LOCAL RESOURCES ---\nNo matching resources found in the database for this query. Direct the user to call 211 (free, 24/7) or visit 211.org for immediate local help.`
+    enrichedSystemPrompt += `\n\n${resourceSection}\n\nWhen mentioning ANY resource, you MUST wrap it in double brackets with pipe-separated fields like this:\n[[Resource Name|Full Address|Phone Number|Website URL]]\nOr with an apply link:\n[[Resource Name|Full Address|Phone Number|Website URL|Apply URL]]\nExample: [[Vermont Foodbank|123 Main St, Rutland VT 05701|802-555-1234|www.vtfoodbank.org]]\nWhen a resource in the data above includes "Apply: <url>", include that URL as the 5th field.\nEvery resource MUST use this exact format. The app converts these into clickable cards for the user.\nONLY include FREE community resources. Never recommend paid services.\nAlways prefer local database resources first. Include the resource's phone number and address when available.\nThe Website URL field should be the SPECIFIC page about the service, NOT the organization's homepage. For example, use broc.org/food-shelf-rutland-county instead of broc.org. Direct the user to the exact page where they can get help.`
 
     // Prepend system prompt if provided
     const fullMessages: ChatMessage[] = enrichedSystemPrompt

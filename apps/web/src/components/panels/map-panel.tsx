@@ -31,6 +31,7 @@ import { useViewportResources } from '@/hooks/use-viewport-resources'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { useSavedResources } from '@/hooks/use-saved-resources'
 
 // ============================================
 // TYPES
@@ -133,9 +134,11 @@ interface ResourceDetailProps {
   onClose: () => void
   onGetDirections: () => void
   onGetHelp: (resourceName: string) => void
+  onSaveResource?: (resource: MapResource) => void
+  isSaved?: boolean
 }
 
-function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp }: ResourceDetailProps) {
+function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveResource, isSaved }: ResourceDetailProps) {
   const categoryColor = CATEGORY_COLORS[resource.category] || 'bg-gray-100 text-gray-700'
   const categoryLabel = CATEGORY_LABELS[resource.category] || resource.category
 
@@ -221,11 +224,12 @@ function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp }: Resou
         </Button>
         <Button
           variant="outline"
-          className="w-full"
+          className={`w-full ${isSaved ? 'bg-amber-50 border-amber-200 text-amber-700' : ''}`}
           size="sm"
-          onClick={() => alert('Bookmarking coming soon!')}
+          onClick={() => onSaveResource?.(resource)}
+          disabled={isSaved}
         >
-          Save Resource
+          {isSaved ? 'Saved' : 'Save Resource'}
         </Button>
       </div>
     </div>
@@ -255,6 +259,9 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Shell panel navigation
   const { setActivePanel } = usePanelContext()
+
+  // Saved resources
+  const { saveResource, isResourceSavedByName } = useSavedResources()
 
   // Auth profile for location-based centering
   const { profile } = useAuth()
@@ -571,6 +578,17 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               onClose={() => setSelectedResource(null)}
               onGetDirections={handleGetDirections}
               onGetHelp={handleGetHelp}
+              onSaveResource={(r) =>
+                saveResource({
+                  resource_name: r.name,
+                  resource_category: r.category || null,
+                  resource_address:
+                    [r.address_line1, r.city, r.state].filter(Boolean).join(', ') || null,
+                  resource_phone: r.phone || null,
+                  resource_website: r.website || null,
+                })
+              }
+              isSaved={isResourceSavedByName(selectedResource.name)}
             />
           )}
         </div>

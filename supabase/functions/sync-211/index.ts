@@ -150,7 +150,7 @@ function normalizePhone(phones?: Array<{ number: string; type?: string }>): stri
 function transformLocation(location: API211Location) {
   return {
     external_id: location.id,
-    external_source: '211',
+    source: '211_api',
     name: location.name,
     description: location.description || null,
     category: determineCategory(location),
@@ -261,7 +261,7 @@ Deno.serve(async (req: Request) => {
           const { error: upsertError } = await supabase
             .from('resources')
             .upsert(resources, {
-              onConflict: 'external_id,external_source',
+              onConflict: 'external_id,source',
               ignoreDuplicates: false,
             })
 

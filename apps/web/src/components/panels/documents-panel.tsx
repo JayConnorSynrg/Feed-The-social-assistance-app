@@ -24,13 +24,20 @@ import {
   ChevronRight,
   Lock,
   Loader2,
+  Bookmark,
+  ChevronDown,
+  ExternalLink,
+  MapPin,
+  Phone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EncryptedUpload } from '@/components/documents/encrypted-upload'
+import { ResourceDetailDialog } from '@/components/documents/resource-detail-dialog'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
 import { useAuthContext } from '@/providers/auth-provider'
 import { createClient } from '@/lib/supabase/client'
+import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
 
 // ============================================
 // TYPES
@@ -406,11 +413,15 @@ function EmptyState({ category, searchQuery }: EmptyStateProps) {
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { user } = useAuthContext()
   const { downloadFile, deleteFile, isDownloading } = useEncryptedUpload()
+  const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
   const [documents, setDocuments] = useState<Document[]>([])
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'documents' | 'resources'>('documents')
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
 
   // Load documents from database
   useEffect(() => {
@@ -471,6 +482,14 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
       doc.name.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesCategory && matchesSearch
   })
+
+  // Group saved resources by category
+  const resourcesByCategory = savedResources.reduce<Record<string, SavedResource[]>>((acc, r) => {
+    const cat = r.resource_category || 'Other'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(r)
+    return acc
+  }, {})
 
   // Handler for upload completion
   const handleUploadComplete = useCallback(() => {
@@ -556,63 +575,214 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   }
 
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6">
-      {/* Folder Sidebar (Desktop only) */}
-      <FolderSidebar
-        activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
-        documentCounts={documentCounts}
-      />
+    <div className="h-full flex flex-col">
+      {/* View Toggle */}
+      <div className="flex gap-2 mb-4 border-b border-stone-200 pb-3">
+        <button
+          onClick={() => setViewMode('documents')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            viewMode === 'documents'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            My Documents
+          </span>
+        </button>
+        <button
+          onClick={() => setViewMode('resources')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            viewMode === 'resources'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Bookmark className="w-4 h-4" />
+            My Resources
+            {savedResources.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-lime-200 text-lime-800">
+                {savedResources.length}
+              </span>
+            )}
+          </span>
+        </button>
+      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 min-w-0">
-        {/* Header with Search */}
-        <DocumentsHeader
-          documentCount={filteredDocuments.length}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
-
-        {/* Encrypted Upload Zone */}
-        <EncryptedUpload
-          category={activeCategory === 'all' ? 'other' : activeCategory}
-          onUploadComplete={handleUploadComplete}
-          className="mb-6"
-        />
-
-        {/* Category Tabs (Mobile/Tablet) */}
-        <div className="lg:hidden">
-          <CategoryTabs
+      {viewMode === 'documents' ? (
+        <div className="flex-1 flex flex-col lg:flex-row gap-6">
+          {/* Folder Sidebar (Desktop only) */}
+          <FolderSidebar
             activeCategory={activeCategory}
             onCategoryChange={setActiveCategory}
             documentCounts={documentCounts}
           />
-        </div>
 
-        {/* Documents Grid/List */}
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {/* Header with Search */}
+            <DocumentsHeader
+              documentCount={filteredDocuments.length}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
+
+            {/* Encrypted Upload Zone */}
+            <EncryptedUpload
+              category={activeCategory === 'all' ? 'other' : activeCategory}
+              onUploadComplete={handleUploadComplete}
+              className="mb-6"
+            />
+
+            {/* Category Tabs (Mobile/Tablet) */}
+            <div className="lg:hidden">
+              <CategoryTabs
+                activeCategory={activeCategory}
+                onCategoryChange={setActiveCategory}
+                documentCounts={documentCounts}
+              />
+            </div>
+
+            {/* Documents Grid/List */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
+                </div>
+              ) : filteredDocuments.length === 0 ? (
+                <EmptyState category={activeCategory} searchQuery={searchQuery} />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredDocuments.map((doc) => (
+                    <DocumentCard
+                      key={doc.id}
+                      document={doc}
+                      onView={handleView}
+                      onDownload={handleDownload}
+                      onDelete={handleDelete}
+                      isDownloading={downloadingId === doc.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Saved Resources View */
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {resourcesLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
             </div>
-          ) : filteredDocuments.length === 0 ? (
-            <EmptyState category={activeCategory} searchQuery={searchQuery} />
+          ) : savedResources.length === 0 ? (
+            <div className="text-center py-12">
+              <Bookmark className="w-12 h-12 text-stone-300 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-stone-700">No saved resources yet</h3>
+              <p className="text-sm text-stone-500 mt-1">
+                Save resources from the chat or map to access them here
+              </p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredDocuments.map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  document={doc}
-                  onView={handleView}
-                  onDownload={handleDownload}
-                  onDelete={handleDelete}
-                  isDownloading={downloadingId === doc.id}
-                />
+            <div className="space-y-3">
+              {Object.entries(resourcesByCategory).map(([category, resources]) => (
+                <div key={category} className="border border-stone-200 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setExpandedCategory(expandedCategory === category ? null : category)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-lime-700" />
+                      <span className="font-medium text-stone-800">{category}</span>
+                      <span className="text-xs text-stone-500">({resources.length})</span>
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-stone-400 transition-transform ${
+                        expandedCategory === category ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {expandedCategory === category && (
+                    <div className="divide-y divide-stone-100">
+                      {resources.map((resource) => (
+                        <div
+                          key={resource.id}
+                          className="px-4 py-3 hover:bg-stone-50 cursor-pointer"
+                          onClick={() => setSelectedResourceId(resource.id)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-stone-900 text-sm">{resource.resource_name}</h4>
+                              {resource.resource_address && (
+                                <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  {resource.resource_address}
+                                </p>
+                              )}
+                              {resource.resource_phone && (
+                                <a
+                                  href={`tel:${resource.resource_phone}`}
+                                  className="text-xs text-lime-700 hover:underline mt-0.5 flex items-center gap-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone className="w-3 h-3 flex-shrink-0" />
+                                  {resource.resource_phone}
+                                </a>
+                              )}
+                            </div>
+                            <div className="flex gap-1 flex-shrink-0">
+                              {resource.resource_website && (
+                                <a
+                                  href={resource.resource_website.startsWith('http') ? resource.resource_website : `https://${resource.resource_website}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg text-stone-500 hover:text-lime-700 hover:bg-lime-50 transition-colors"
+                                  title="Visit website"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              )}
+                              {resource.resource_address && (
+                                <a
+                                  href={`https://maps.google.com/?q=${encodeURIComponent(resource.resource_address)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg text-stone-500 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+                                  title="Get directions"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MapPin className="w-4 h-4" />
+                                </a>
+                              )}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeResource(resource.id) }}
+                                className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                title="Remove from saved"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
-      </div>
+      )}
+      <ResourceDetailDialog
+        savedResourceId={selectedResourceId}
+        open={selectedResourceId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedResourceId(null)
+        }}
+      />
     </div>
   )
 }

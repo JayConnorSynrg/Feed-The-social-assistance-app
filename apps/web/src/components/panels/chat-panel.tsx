@@ -3,9 +3,9 @@
 // apps/web/src/components/panels/chat-panel.tsx
 // AI Chat interface panel - wired to real Supabase edge function via useChat hook
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Send, Sparkles, Search, Apple, Building2, Heart, FileText, Square, CheckCircle } from 'lucide-react'
+import { Send, Sparkles, Search, Apple, Building2, Heart, FileText, Square, CheckCircle, Bookmark, BookmarkCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useChat, type ChatMessage } from '@/hooks/use-chat'
@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { GuidedFlowComponent } from '@/components/chat/guided-flow'
 import { resourceFinderFlow, eligibilityCheckerFlow, formHelpFlow } from '@/lib/ai/guided-flows'
 import type { GuidedFlow } from '@/lib/ai/guided-flows'
+import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-resources'
 
 // ============================================
 // FLOW SELECTION CARD
@@ -118,7 +119,15 @@ function linkifyText(text: string, keyPrefix: string): React.ReactNode[] {
 // ============================================
 // MESSAGE CONTENT PARSER
 // ============================================
-function parseMessageContent(content: string): React.ReactNode[] {
+function parseMessageContent(
+  content: string,
+  opts?: {
+    onSave?: (input: SaveResourceInput) => Promise<boolean>
+    isSaved?: (name: string) => boolean
+    savingNames?: Set<string>
+    saveError?: string | null
+  }
+): React.ReactNode[] {
   if (!content) return []
 
   const parts: React.ReactNode[] = []
@@ -190,6 +199,40 @@ function parseMessageContent(content: string): React.ReactNode[] {
                   Directions
                 </a>
               )}
+              {opts?.onSave && (() => {
+                const isSaved = opts.isSaved?.(name) ?? false
+                const isSaving = opts.savingNames?.has(name) ?? false
+                const isDisabled = isSaved || isSaving
+                return (
+                  <button
+                    disabled={isDisabled}
+                    onClick={() => {
+                      if (isDisabled) return
+                      opts.onSave!({
+                        resource_name: name,
+                        resource_address: address || null,
+                        resource_phone: phone || null,
+                        resource_website: website || applyUrl || null,
+                      })
+                    }}
+                    className={`px-2 py-1 text-xs rounded-lg transition-colors disabled:cursor-not-allowed ${
+                      isSaved
+                        ? 'bg-amber-100 text-amber-700'
+                        : isSaving
+                        ? 'bg-stone-100 text-stone-400'
+                        : 'bg-lime-100 text-lime-800 hover:bg-lime-200'
+                    }`}
+                  >
+                    {isSaved ? (
+                      <span className="flex items-center gap-1"><BookmarkCheck className="w-3 h-3" /> Saved</span>
+                    ) : isSaving ? (
+                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3 animate-pulse" /> Saving…</span>
+                    ) : (
+                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" /> Save</span>
+                    )}
+                  </button>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -269,10 +312,35 @@ const QUICK_REPLIES = ['Find more resources', 'Get directions', 'Check my eligib
 interface ChatMessageViewProps {
   message: ChatMessage
   onQuickReply?: (text: string) => void
+  onSaveResource?: (input: SaveResourceInput) => Promise<boolean>
+  isResourceSaved?: (name: string) => boolean
 }
 
-function ChatMessageView({ message, onQuickReply }: ChatMessageViewProps) {
+function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSaved }: ChatMessageViewProps) {
   const isUser = message.role === 'user'
+  const [savingNames, setSavingNames] = useState<Set<string>>(new Set())
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const handleSave = useCallback(async (input: SaveResourceInput): Promise<boolean> => {
+    setSavingNames(prev => new Set(prev).add(input.resource_name))
+    setSaveError(null)
+    try {
+      const ok = await onSaveResource!(input)
+      if (!ok) {
+        setSaveError(`Could not save "${input.resource_name}". Please try again.`)
+        setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
+        return false
+      }
+      // Remove from saving set — isSaved will become true via hook re-render
+      setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
+      return true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed'
+      setSaveError(msg)
+      setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
+      return false
+    }
+  }, [onSaveResource])
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -285,10 +353,18 @@ function ChatMessageView({ message, onQuickReply }: ChatMessageViewProps) {
       >
         <div className="text-base">
           {message.content
-            ? parseMessageContent(message.content)
+            ? parseMessageContent(message.content, {
+                onSave: onSaveResource ? handleSave : undefined,
+                isSaved: isResourceSaved,
+                savingNames,
+                saveError,
+              })
             : message.isStreaming
             ? null
             : null}
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1">{saveError}</p>
+          )}
         </div>
         {message.isStreaming && !message.content && (
           <div className="flex gap-1">
@@ -352,6 +428,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated } = useAuth()
+  const { saveResource, isResourceSavedByName } = useSavedResources()
 
   const {
     messages,
@@ -514,7 +591,13 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto py-4">
             {messages.map((msg) => (
-              <ChatMessageView key={msg.id} message={msg} onQuickReply={sendMessage} />
+              <ChatMessageView
+                key={msg.id}
+                message={msg}
+                onQuickReply={sendMessage}
+                onSaveResource={saveResource}
+                isResourceSaved={isResourceSavedByName}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>
