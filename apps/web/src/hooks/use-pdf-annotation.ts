@@ -65,7 +65,7 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
       const pdfDoc = await PDFDocument.load(bytes)
       const numPages = pdfDoc.getPageCount()
 
-      console.log(JSON.stringify({
+      console.info(JSON.stringify({
         action: 'pdf_loaded',
         numPages,
         fileSizeKb: Math.round(bytes.length / 1024),
@@ -77,21 +77,20 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
         pdfBytes: bytes,
         numPages,
         annotations: [],
-        isLoading: false,
         error: null,
       }))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load PDF'
-      console.log(JSON.stringify({
+      console.warn(JSON.stringify({
         action: 'pdf_error',
         phase: 'load',
-        errorMessage: message,
       }))
       setState(prev => ({
         ...prev,
-        isLoading: false,
         error: message,
       }))
+    } finally {
+      setState(prev => ({ ...prev, isLoading: false }))
     }
   }, [])
 
@@ -129,6 +128,7 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
     const start = Date.now()
     setState(prev => ({ ...prev, isSaving: true, error: null }))
 
+    let result: Uint8Array | undefined
     try {
       const pdfDoc = await PDFDocument.load(pdfBytes)
       const pages = pdfDoc.getPages()
@@ -157,25 +157,25 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
       }
 
       const saved = await pdfDoc.save()
-      const result = new Uint8Array(saved)
+      result = new Uint8Array(saved)
 
-      console.log(JSON.stringify({
+      console.info(JSON.stringify({
         action: 'pdf_saved',
         annotationCount: annotations.length,
         durationMs: Date.now() - start,
       }))
 
-      setState(prev => ({ ...prev, isSaving: false }))
       return result
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save PDF'
-      console.log(JSON.stringify({
+      console.warn(JSON.stringify({
         action: 'pdf_error',
         phase: 'save',
-        errorMessage: message,
       }))
-      setState(prev => ({ ...prev, isSaving: false, error: message }))
+      setState(prev => ({ ...prev, error: message }))
       throw err
+    } finally {
+      setState(prev => ({ ...prev, isSaving: false }))
     }
   }, [state])
 
