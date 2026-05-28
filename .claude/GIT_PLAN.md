@@ -15,7 +15,22 @@ created_at: <ISO timestamp>
 completed_at: <ISO timestamp or null>
 ```
 
+## Next Action
+next_action_id: push-develop-001
+
 ## Log
+
+```yaml
+id: push-develop-001
+status: pending
+type: push
+description: Push develop to origin after vercel.json fix — all session work (fleet agents, structured logging, vercel build fix)
+branch: develop
+remote: origin
+scope: "All session work: fleet agents, structured logging, vercel.json fix"
+created_at: 2026-05-28T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: fleet-agents-and-fixes
