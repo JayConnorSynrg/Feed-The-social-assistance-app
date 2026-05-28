@@ -73,6 +73,8 @@ secrets.yaml
 secrets.yml
 .secrets/
 vault/
+# Re-track UI components that live in a path matching vault/ above
+!apps/web/src/components/vault/
 
 # Sensitive data files
 *.sql.gz
