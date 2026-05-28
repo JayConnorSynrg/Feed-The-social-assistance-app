@@ -1,0 +1,9 @@
+{
+  "name": "feed-discovery-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "duck-duck-scrape": "^2.2.7"
+  }
+}

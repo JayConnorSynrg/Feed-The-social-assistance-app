@@ -2,13 +2,19 @@
 /**
  * program-discovery.ts
  *
- * Discovers benefit programs for a US state using Ollama + SearXNG,
+ * Discovers benefit programs for a US state using OpenRouter + duck-duck-scrape,
  * then pushes verified results to the resource-ingest webhook.
  *
+ * No local infrastructure required — zero Docker, zero Ollama, zero SearXNG.
+ *
  * Usage:
- *   npx tsx apps/web/scripts/program-discovery.ts --state VT [--dry-run] [--skip-verify] [--webhook-url URL]
+ *   npx tsx apps/web/scripts/program-discovery.ts --state VT [--dry-run] [--skip-verify] [--skip-normalize] [--model MODEL] [--webhook-url URL]
+ *
+ * Environment:
+ *   OPENROUTER_API_KEY  (required) — get one at https://openrouter.ai/keys
  */
 
+import { search, SafeSearchType } from 'duck-duck-scrape'
 import { findFederalForm } from './federal-forms'
 import { getStatePortal } from './state-portals'
 
@@ -51,18 +57,17 @@ interface IngestPayload {
   external_id?: string
 }
 
-interface OllamaResponse {
-  response: string
+interface OpenRouterMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
 }
 
-interface SearXNGResult {
-  url: string
-  title: string
-  content?: string
-}
-
-interface SearXNGResponse {
-  results: SearXNGResult[]
+interface OpenRouterResponse {
+  choices: Array<{
+    message: {
+      content: string
+    }
+  }>
 }
 
 interface StepLog {
@@ -80,6 +85,7 @@ function parseArgs(): {
   skipVerify: boolean
   skipNormalize: boolean
   webhookUrl: string
+  model: string
 } {
   const args = process.argv.slice(2)
   let state = ''
@@ -90,6 +96,7 @@ function parseArgs(): {
     process.env.SUPABASE_URL
       ? `${process.env.SUPABASE_URL}/functions/v1/resource-ingest`
       : 'https://ndtpovonpadugthmcntl.supabase.co/functions/v1/resource-ingest'
+  let model = 'qwen/qwen3-8b'
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--state' && args[i + 1]) {
@@ -102,6 +109,8 @@ function parseArgs(): {
       skipNormalize = true
     } else if (args[i] === '--webhook-url' && args[i + 1]) {
       webhookUrl = args[++i]
+    } else if (args[i] === '--model' && args[i + 1]) {
+      model = args[++i]
     }
   }
 
@@ -115,7 +124,13 @@ function parseArgs(): {
     process.exit(1)
   }
 
-  return { state, dryRun, skipVerify, skipNormalize, webhookUrl }
+  // Validate API key presence early
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error('Error: Set OPENROUTER_API_KEY environment variable. Get one at https://openrouter.ai/keys')
+    process.exit(1)
+  }
+
+  return { state, dryRun, skipVerify, skipNormalize, webhookUrl, model }
 }
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
@@ -140,15 +155,71 @@ function toSlug(name: string): string {
     .slice(0, 60)
 }
 
-// ─── Delay Helper ────────────────────────────────────────────────────────────
+// ─── Delay Helper ─────────────────────────────────────────────────────────────
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// ─── Step 1: Generate Candidates via Ollama ───────────────────────────────────
+// ─── OpenRouter LLM call ──────────────────────────────────────────────────────
 
-async function generateCandidates(state: string): Promise<ProgramCandidate[]> {
+async function callOpenRouter(
+  messages: OpenRouterMessage[],
+  model: string,
+  timeoutMs = 60_000
+): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY!
+
+  let response: Response
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://feed.app',
+        'X-Title': 'FEED Program Discovery',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (err) {
+    const name = err instanceof Error ? (err as Error & { name: string }).name : ''
+    const msg = err instanceof Error ? err.message : String(err)
+    const isTimeout = name === 'TimeoutError' || name === 'AbortError' || msg.toLowerCase().includes('timeout')
+    if (isTimeout) {
+      throw new Error(`OpenRouter request timed out after ${timeoutMs / 1000}s`)
+    }
+    throw new Error(`Network error calling OpenRouter: ${msg}`)
+  }
+
+  if (response.status === 401) {
+    console.error('Error: Invalid OPENROUTER_API_KEY. Verify your key at https://openrouter.ai/keys')
+    process.exit(1)
+  }
+
+  if (response.status === 429) {
+    throw new Error('Rate limited by OpenRouter. Wait a moment and retry.')
+  }
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`OpenRouter returned HTTP ${response.status}: ${body}`)
+  }
+
+  const data = (await response.json()) as OpenRouterResponse
+  const content = data.choices?.[0]?.message?.content ?? ''
+
+  // qwen3 is a reasoning model — strip <think>…</think> blocks before returning
+  return content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+}
+
+// ─── Step 1: Generate Candidates via OpenRouter ───────────────────────────────
+
+async function generateCandidates(state: string, model: string): Promise<ProgramCandidate[]> {
   const start = Date.now()
   const categories = [
     'food', 'housing', 'healthcare', 'employment', 'financial',
@@ -184,145 +255,72 @@ Example:
 Include both federal programs administered by ${state} and state-specific programs.
 Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON object described above, no other text.`
 
-  // Use 127.0.0.1 directly to avoid IPv6 (::1) connection-refused retry latency.
-  // qwen3:8b on CPU: 6-8 programs × 12 categories takes ~5-8 min depending on hardware.
-  // 10 min (600s) timeout provides headroom without hanging indefinitely.
-  const GENERATE_TIMEOUT_MS = 600_000
-  let response: Response
+  let rawContent: string
   try {
-    response = await fetch('http://127.0.0.1:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen3:8b',
-        prompt,
-        format: 'json',
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
-    })
+    rawContent = await callOpenRouter(
+      [{ role: 'user', content: prompt }],
+      model,
+      90_000 // 90s — cloud inference is fast (5-15s typically)
+    )
   } catch (err) {
-    const name = err instanceof Error ? (err as Error & { name: string }).name : ''
-    const msg = err instanceof Error ? err.message : String(err)
-    // Node 22 DOMException for AbortSignal.timeout is named "TimeoutError"
-    const isTimeout = name === 'TimeoutError' || name === 'AbortError' || msg.toLowerCase().includes('timeout')
-    if (isTimeout) {
-      console.error(`Ollama timed out after ${GENERATE_TIMEOUT_MS / 60_000} minutes. Reduce the prompt size or use a GPU-backed model.`)
-    } else {
-      console.error(`Ollama connection failed: ${msg}`)
-      console.error('Ensure Ollama is running: ollama serve')
-    }
+    console.error(`OpenRouter generate step failed: ${err instanceof Error ? err.message : String(err)}`)
     process.exit(1)
   }
 
-  if (!response.ok) {
-    console.error(`Ollama returned HTTP ${response.status}: ${await response.text()}`)
-    process.exit(1)
-  }
-
-  const data = (await response.json()) as OllamaResponse
   let candidates: ProgramCandidate[] = []
-
-  // qwen3:8b is a "thinking" model — it sometimes wraps output in <think>…</think>
-  // before the JSON body even when format:json is set. Strip any such prefix/suffix.
-  const rawResponse = data.response
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .trim()
-
   try {
-    const parsed = JSON.parse(rawResponse)
+    const parsed = JSON.parse(rawContent)
     candidates = Array.isArray(parsed) ? parsed : (parsed.programs ?? parsed.results ?? [])
   } catch {
-    console.error('Failed to parse Ollama JSON response')
-    console.error('Raw response:', rawResponse.slice(0, 500))
+    console.error('Failed to parse OpenRouter JSON response')
+    console.error('Raw content:', rawContent.slice(0, 500))
     process.exit(1)
   }
 
   // Filter to objects with at least a name field
   candidates = candidates.filter(
-    (c): c is ProgramCandidate => typeof c === 'object' && c !== null && typeof c.name === 'string' && c.name.length > 1
+    (c): c is ProgramCandidate =>
+      typeof c === 'object' && c !== null && typeof c.name === 'string' && c.name.length > 1
   )
 
-  logStep({ step: 'generate', state, candidates: candidates.length, durationMs: Date.now() - start })
+  logStep({ step: 'generate', state, candidates: candidates.length, model, durationMs: Date.now() - start })
   return candidates
 }
 
-// ─── Step 2: Verify via SearXNG ───────────────────────────────────────────────
+// ─── Step 2: Verify via duck-duck-scrape ──────────────────────────────────────
 
 /**
- * Fetch SearXNG results for a query string. Returns an empty array on any error.
- * On HTTP success with zero results, retries once without the site: filter if
- * `fallbackQuery` is provided and differs from `query`.
- */
-async function searxngSearch(query: string, fallbackQuery?: string): Promise<SearXNGResult[]> {
-  const searchUrl = `http://localhost:8080/search?q=${encodeURIComponent(query)}&format=json`
-  let results: SearXNGResult[] = []
-  try {
-    const res = await fetch(searchUrl, { signal: AbortSignal.timeout(15_000) })
-    if (res.ok) {
-      const data = (await res.json()) as SearXNGResponse
-      results = data.results ?? []
-    }
-  } catch {
-    // Network error — caller decides how to handle
-    return []
-  }
-
-  // Retry without site filter if no results and a fallback query is available
-  if (results.length === 0 && fallbackQuery && fallbackQuery !== query) {
-    await delay(500)
-    const fallbackUrl = `http://localhost:8080/search?q=${encodeURIComponent(fallbackQuery)}&format=json`
-    try {
-      const res = await fetch(fallbackUrl, { signal: AbortSignal.timeout(15_000) })
-      if (res.ok) {
-        const data = (await res.json()) as SearXNGResponse
-        results = data.results ?? []
-      }
-    } catch {
-      // Fall through with empty results
-    }
-  }
-
-  return results
-}
-
-/**
- * Check whether a candidate name is corroborated by a set of SearXNG results.
+ * Check whether a candidate name is corroborated by a DDG search result.
  *
  * Match criteria (any one sufficient):
- *   1. A result URL is a .gov or .org domain (credible source, name is plausible)
- *   2. Any significant word from the program name (>3 chars) appears in a result
- *      title, URL, or content snippet within the top 10 results
+ *   1. A result URL is a .gov or .org domain
+ *   2. Any significant word from the program name (>3 chars) appears in
+ *      a result title, URL, or snippet within the top 10 results
  */
-function isCorroborated(candidate: ProgramCandidate, results: SearXNGResult[]): SearXNGResult | null {
-  const top10 = results.slice(0, 10)
+function isCorroborated(
+  name: string,
+  title: string,
+  url: string,
+  description: string
+): boolean {
+  const urlLower = (url ?? '').toLowerCase()
+  const titleLower = (title ?? '').toLowerCase()
+  const descLower = (description ?? '').toLowerCase()
 
-  // Significant words: strip parentheses/punctuation, keep tokens longer than 3 chars
-  const nameTokens = candidate.name
+  // Criterion 1: credible domain
+  if (/\.gov(\/|$)/.test(urlLower) || /\.org(\/|$)/.test(urlLower)) {
+    return true
+  }
+
+  // Criterion 2: significant name token found anywhere
+  const nameTokens = name
     .toLowerCase()
     .replace(/[()[\]{}]/g, ' ')
     .split(/\s+/)
     .filter(t => t.length > 3)
 
-  for (const result of top10) {
-    const urlLower = (result.url ?? '').toLowerCase()
-    const titleLower = (result.title ?? '').toLowerCase()
-    const contentLower = (result.content ?? '').toLowerCase()
-
-    // Criterion 1: .gov or .org result URL — any result from a credible source
-    // corroborates that the query topic is real
-    if (/\.gov(\/|$)/.test(urlLower) || /\.org(\/|$)/.test(urlLower)) {
-      return result
-    }
-
-    // Criterion 2: any significant name token found in title, URL, or content
-    const haystack = `${titleLower} ${urlLower} ${contentLower}`
-    if (nameTokens.some(token => haystack.includes(token))) {
-      return result
-    }
-  }
-
-  return null
+  const haystack = `${titleLower} ${urlLower} ${descLower}`
+  return nameTokens.some(token => haystack.includes(token))
 }
 
 async function verifyCandidates(
@@ -343,40 +341,36 @@ async function verifyCandidates(
 
   const verified: VerifiedProgram[] = []
   let discarded = 0
-  let searxngDown = false
 
   for (const candidate of candidates) {
-    await delay(500) // 2 req/sec — fast enough for a local instance
+    // 1500ms between searches — DDG rate-limits bursts; 1.5s keeps under threshold
+    await delay(1500)
 
-    // Primary query: name + state, no site: filter (site: filters cause zero results
-    // when the rate-limited engines like Google/Brave are the only ones that support it)
-    const primaryQuery = `${candidate.name} ${state} benefits`
-    // Fallback: just name + state, even more permissive
-    const fallbackQuery = `${candidate.name} ${state}`
+    const query = `${candidate.name} ${state} benefits`
 
-    let results: SearXNGResult[] = []
+    let ddgResults: Awaited<ReturnType<typeof search>> | null = null
     try {
-      results = await searxngSearch(primaryQuery, fallbackQuery)
+      ddgResults = await search(query, { safeSearch: SafeSearchType.OFF })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(
-        JSON.stringify({ step: 'verify_warn', state, candidate: candidate.name, message: `SearXNG error: ${msg}` }) + '\n'
+        JSON.stringify({ step: 'verify_warn', state, candidate: candidate.name, message: `DDG search error: ${msg}` }) + '\n'
       )
-      // If we get a network-level error (SearXNG itself is down), stop verifying
-      searxngDown = true
-      discarded += candidates.length - verified.length
-      break
+      // On DDG error, fall back: accept if already has a .gov/.org website, else discard
+      if (candidate.website && /\.(gov|org)(\/|$)/.test(candidate.website.toLowerCase())) {
+        verified.push({ ...candidate, sourceUrl: candidate.website })
+      } else {
+        discarded++
+      }
+      continue
     }
 
+    const results = ddgResults?.results ?? []
+
     if (results.length === 0) {
-      // SearXNG returned nothing — engines may all be suspended right now.
-      // Accept the candidate if it already has a .gov/.org website from Ollama,
-      // otherwise discard.
+      // No results — accept if candidate already provided a credible website
       if (candidate.website && /\.(gov|org)(\/|$)/.test(candidate.website.toLowerCase())) {
-        verified.push({
-          ...candidate,
-          sourceUrl: candidate.website,
-        })
+        verified.push({ ...candidate, sourceUrl: candidate.website })
       } else {
         process.stderr.write(
           JSON.stringify({ step: 'verify_discard', state, candidate: candidate.name, reason: 'no_results' }) + '\n'
@@ -386,16 +380,25 @@ async function verifyCandidates(
       continue
     }
 
-    const match = isCorroborated(candidate, results)
-    if (match) {
-      // Prefer a .gov/.org URL as source; fall back to the matching result's URL
-      const govOrgResult = results.slice(0, 10).find(r =>
-        /\.(gov|org)(\/|$)/.test((r.url ?? '').toLowerCase())
-      )
-      verified.push({
-        ...candidate,
-        sourceUrl: govOrgResult?.url ?? match.url,
-      })
+    // Check top 10 results for corroboration
+    const top10 = results.slice(0, 10)
+    let matched = false
+    let sourceUrl: string | null = null
+
+    for (const r of top10) {
+      if (isCorroborated(candidate.name, r.title ?? '', r.url ?? '', r.description ?? '')) {
+        matched = true
+        // Prefer a .gov/.org source URL
+        const urlLower = (r.url ?? '').toLowerCase()
+        if (!sourceUrl || /\.(gov|org)(\/|$)/.test(urlLower)) {
+          sourceUrl = r.url ?? null
+        }
+        if (/\.(gov|org)(\/|$)/.test(urlLower)) break // take first credible hit
+      }
+    }
+
+    if (matched && sourceUrl) {
+      verified.push({ ...candidate, sourceUrl })
     } else {
       process.stderr.write(
         JSON.stringify({ step: 'verify_discard', state, candidate: candidate.name, reason: 'no_match' }) + '\n'
@@ -404,7 +407,7 @@ async function verifyCandidates(
     }
   }
 
-  logStep({ step: 'verify', state, verified: verified.length, discarded, searxngDown, durationMs: Date.now() - start })
+  logStep({ step: 'verify', state, verified: verified.length, discarded, durationMs: Date.now() - start })
   return verified
 }
 
@@ -462,7 +465,7 @@ async function extractProgramDetails(
   const enriched: VerifiedProgram[] = []
 
   for (const program of programs) {
-    await delay(500) // 500ms between fetches
+    await delay(750) // 750ms between page fetches
 
     if (!isValidUrl(program.sourceUrl)) {
       enriched.push(program)
@@ -505,9 +508,13 @@ async function extractProgramDetails(
   return enriched
 }
 
-// ─── Step 4: Normalize via Ollama ─────────────────────────────────────────────
+// ─── Step 4: Normalize via OpenRouter ────────────────────────────────────────
 
-async function normalizeProgram(program: VerifiedProgram, state: string): Promise<IngestPayload | null> {
+async function normalizeProgram(
+  program: VerifiedProgram,
+  state: string,
+  model: string
+): Promise<IngestPayload | null> {
   const prompt = `Given this raw benefit program data, produce a clean JSON object matching the schema below.
 
 Raw data:
@@ -536,42 +543,19 @@ Rules:
 
 Return ONLY the JSON object, no other text.`
 
-  // 120s per-program — generous for CPU-bound qwen3:8b. On timeout or any error,
-  // normalizePrograms() falls back to raw extracted data so no program is lost.
   try {
-    const res = await fetch('http://127.0.0.1:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'qwen3:8b',
-        prompt,
-        format: 'json',
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(120_000),
-    })
-
-    if (!res.ok) {
-      process.stderr.write(
-        JSON.stringify({ step: 'normalize_warn', program: program.name, reason: `HTTP ${res.status}` }) + '\n'
-      )
-      return null
-    }
-
-    const data = (await res.json()) as OllamaResponse
-    // Strip qwen3 thinking-model prefix before parsing JSON
-    const rawResponse = data.response
-      .replace(/<think>[\s\S]*?<\/think>/gi, '')
-      .trim()
-    const parsed = JSON.parse(rawResponse) as IngestPayload
+    const rawContent = await callOpenRouter(
+      [{ role: 'user', content: prompt }],
+      model,
+      60_000 // 60s per program — cloud inference is fast
+    )
+    const parsed = JSON.parse(rawContent) as IngestPayload
     if (!parsed.name || parsed.name.trim().length < 2) return null
     return parsed
   } catch (err) {
-    const name = err instanceof Error ? (err as Error & { name: string }).name : ''
     const msg = err instanceof Error ? err.message : String(err)
-    const isTimeout = name === 'TimeoutError' || name === 'AbortError' || msg.toLowerCase().includes('timeout')
     process.stderr.write(
-      JSON.stringify({ step: 'normalize_warn', program: program.name, reason: isTimeout ? 'timeout' : msg }) + '\n'
+      JSON.stringify({ step: 'normalize_warn', program: program.name, reason: msg }) + '\n'
     )
     return null
   }
@@ -596,7 +580,8 @@ function programToRawPayload(program: VerifiedProgram, state: string): IngestPay
 async function normalizePrograms(
   programs: VerifiedProgram[],
   state: string,
-  skipNormalize: boolean
+  skipNormalize: boolean,
+  model: string
 ): Promise<IngestPayload[]> {
   const start = Date.now()
   const normalized: IngestPayload[] = []
@@ -609,13 +594,13 @@ async function normalizePrograms(
     return normalized
   }
 
-  let ollamaSuccesses = 0
-  let ollamaFallbacks = 0
+  let openRouterSuccesses = 0
+  let openRouterFallbacks = 0
 
   for (const program of programs) {
-    const result = await normalizeProgram(program, state)
+    const result = await normalizeProgram(program, state, model)
     if (result) {
-      ollamaSuccesses++
+      openRouterSuccesses++
       normalized.push({
         ...result,
         source_url: program.sourceUrl,
@@ -623,9 +608,8 @@ async function normalizePrograms(
         application_form_url: result.application_form_url ?? program.applicationFormUrl,
       })
     } else {
-      // Ollama timed out or failed — fall back to raw extracted data.
-      // The program is NOT dropped; raw data from generate + extract is good enough.
-      ollamaFallbacks++
+      // OpenRouter failed — fall back to raw extracted data. Program is not dropped.
+      openRouterFallbacks++
       normalized.push(programToRawPayload(program, state))
     }
   }
@@ -634,8 +618,8 @@ async function normalizePrograms(
     step: 'normalize',
     state,
     normalized: normalized.length,
-    ollamaSuccesses,
-    ollamaFallbacks,
+    openRouterSuccesses,
+    openRouterFallbacks,
     durationMs: Date.now() - start,
   })
   return normalized
@@ -758,21 +742,29 @@ async function pushToWebhook(
 // ─── Main Pipeline ────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { state, dryRun, skipVerify, skipNormalize, webhookUrl } = parseArgs()
+  const { state, dryRun, skipVerify, skipNormalize, webhookUrl, model } = parseArgs()
 
-  console.error(JSON.stringify({ step: 'start', state, dryRun, skipVerify, skipNormalize, webhookUrl: dryRun ? '(dry-run)' : webhookUrl }))
+  console.error(JSON.stringify({
+    step: 'start',
+    state,
+    dryRun,
+    skipVerify,
+    skipNormalize,
+    model,
+    webhookUrl: dryRun ? '(dry-run)' : webhookUrl,
+  }))
 
   // Step 1: Generate
-  const candidates = await generateCandidates(state)
+  const candidates = await generateCandidates(state, model)
   if (candidates.length === 0) {
-    console.error('No candidates generated — check Ollama model and prompt')
+    console.error('No candidates generated — check OpenRouter API key and model name')
     process.exit(1)
   }
 
   // Step 2: Verify
   const verified = await verifyCandidates(candidates, state, skipVerify)
   if (verified.length === 0) {
-    console.error('No programs survived verification — use --skip-verify to bypass SearXNG check')
+    console.error('No programs survived verification — use --skip-verify to bypass DDG check')
     process.exit(1)
   }
 
@@ -780,7 +772,7 @@ async function main(): Promise<void> {
   const enriched = await extractProgramDetails(verified, state)
 
   // Step 4: Normalize
-  const normalized = await normalizePrograms(enriched, state, skipNormalize)
+  const normalized = await normalizePrograms(enriched, state, skipNormalize, model)
 
   // Step 5: Attach form/portal URLs
   const withForms = attachFormUrls(normalized, state)
