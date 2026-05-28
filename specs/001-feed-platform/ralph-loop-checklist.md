@@ -68,7 +68,7 @@ WHEN all tasks in a phase are [x]:
 | 4 | AI Assistant | 11 | 10 | COMPLETE* |
 | 5 | Case Management | 12 | 11 | COMPLETE* |
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
-| 7 | Production Hardening | 11 | 0 | IN_PROGRESS |
+| 7 | Production Hardening | 11 | 10 | IN_PROGRESS |
 
 **Overall Progress**: 86 / 98 tasks (88%)
 
@@ -293,7 +293,7 @@ WHEN all tasks in a phase are [x]:
 ### Section 1C: Authentication System
 
 #### P1-T9: Configure Supabase Auth Providers
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T9
 - **Dependencies**: P1-T1
 - **Description**: Enable Email, Google, and Apple OAuth
@@ -303,186 +303,186 @@ WHEN all tasks in a phase are [x]:
   3. Enable Google OAuth (requires Google Cloud Console setup)
   4. Enable Apple OAuth (requires Apple Developer setup)
 - **Acceptance Criteria**:
-  - [ ] Email auth enabled
-  - [ ] Google OAuth configured
-  - [ ] Apple OAuth configured (optional for MVP)
+  - [x] Email auth enabled
+  - [x] Google OAuth configured
+  - [x] Apple OAuth configured (optional for MVP)
 
 #### P1-T10: Create Auth Middleware
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T10
 - **Dependencies**: P1-T9
 - **Description**: Create Next.js middleware for auth protection
 - **File**: `apps/web/src/middleware.ts`
 - **Acceptance Criteria**:
-  - [ ] Middleware protects /dashboard/* routes
-  - [ ] Redirects to /login if not authenticated
-  - [ ] Passes through public routes
+  - [x] Middleware protects /dashboard/* routes
+  - [x] Redirects to /login if not authenticated
+  - [x] Passes through public routes
 
 #### P1-T11: Create Login Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T11
 - **Dependencies**: P1-T9, P1-T3
 - **Description**: Build login UI with email and OAuth buttons
 - **File**: `apps/web/src/app/(auth)/login/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Email/password form
-  - [ ] Google sign-in button
-  - [ ] Apple sign-in button
-  - [ ] Link to signup page
-  - [ ] Error handling UI
+  - [x] Email/password form
+  - [x] Google sign-in button
+  - [x] Apple sign-in button
+  - [x] Link to signup page
+  - [x] Error handling UI
 
 #### P1-T12: Create Signup Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T12
 - **Dependencies**: P1-T11
 - **Description**: Build signup UI
 - **File**: `apps/web/src/app/(auth)/signup/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Email/password form with confirmation
-  - [ ] OAuth buttons
-  - [ ] Terms of service checkbox
-  - [ ] Email verification flow
+  - [x] Email/password form with confirmation
+  - [x] OAuth buttons
+  - [x] Terms of service checkbox
+  - [x] Email verification flow
 
 #### P1-T13: Create Auth Hooks
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T13
 - **Dependencies**: P1-T10
 - **Description**: Create useAuth, useUser, useSession hooks
 - **File**: `apps/web/src/hooks/use-auth.ts`
 - **Acceptance Criteria**:
-  - [ ] useAuth hook returns auth state
-  - [ ] useUser hook returns current user
-  - [ ] useSession hook manages session
-  - [ ] Handles loading and error states
+  - [x] useAuth hook returns auth state
+  - [x] useUser hook returns current user
+  - [x] useSession hook manages session
+  - [x] Handles loading and error states
 
 #### P1-T14: Create Auth Context Provider
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T14
 - **Dependencies**: P1-T13
 - **Description**: Create AuthProvider for app-wide auth state
 - **File**: `apps/web/src/providers/auth-provider.tsx`
 - **Acceptance Criteria**:
-  - [ ] AuthProvider wraps app
-  - [ ] Syncs auth state with Supabase
-  - [ ] Handles session refresh
+  - [x] AuthProvider wraps app
+  - [x] Syncs auth state with Supabase
+  - [x] Handles session refresh
 
 ### Section 1D: User Profiles
 
 #### P1-T15: Create Profile Form Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T15
 - **Dependencies**: P1-T5, P1-T13
 - **Description**: Build profile edit form with Zod validation
 - **File**: `apps/web/src/components/profile/profile-form.tsx`
 - **Acceptance Criteria**:
-  - [ ] Form with all profile fields
-  - [ ] Zod schema validation
-  - [ ] Real-time validation feedback
-  - [ ] Submit to Supabase
+  - [x] Form with all profile fields
+  - [x] Zod schema validation
+  - [x] Real-time validation feedback
+  - [x] Submit to Supabase
 
 #### P1-T16: Create Avatar Upload Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T16
 - **Dependencies**: P1-T1, P1-T15
 - **Description**: Build avatar upload with Supabase Storage
 - **File**: `apps/web/src/components/profile/avatar-upload.tsx`
 - **Acceptance Criteria**:
-  - [ ] Image picker/dropzone
-  - [ ] Preview before upload
-  - [ ] Upload to Supabase Storage
-  - [ ] Update profile with URL
+  - [x] Image picker/dropzone
+  - [x] Preview before upload
+  - [x] Upload to Supabase Storage
+  - [x] Update profile with URL
 
 #### P1-T17: Create Profile Settings Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T17
 - **Dependencies**: P1-T15, P1-T16
 - **Description**: Build settings page combining profile components
 - **File**: `apps/web/src/app/(dashboard)/settings/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Profile form integrated
-  - [ ] Avatar upload integrated
-  - [ ] Payment links section
-  - [ ] Save/cancel actions
+  - [x] Profile form integrated
+  - [x] Avatar upload integrated
+  - [x] Payment links section
+  - [x] Save/cancel actions
 
 #### P1-T18: Create Public Profile Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T18
 - **Dependencies**: P1-T5
 - **Description**: Build public profile view page
 - **File**: `apps/web/src/app/profile/[username]/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Display user info
-  - [ ] Show payment links
-  - [ ] List user's posts
-  - [ ] Handle 404 for unknown users
+  - [x] Display user info
+  - [x] Show payment links
+  - [x] List user's posts
+  - [x] Handle 404 for unknown users
 
 ### Section 1E: Feed System
 
 #### P1-T19: Create Post Card Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T19
 - **Dependencies**: P1-T6, P1-T3
 - **Description**: Build post display card
 - **File**: `apps/web/src/components/feed/post-card.tsx`
 - **Acceptance Criteria**:
-  - [ ] Shows author avatar and name
-  - [ ] Displays post content
-  - [ ] Shows image if present
-  - [ ] Timestamp display
-  - [ ] Links to author profile
+  - [x] Shows author avatar and name
+  - [x] Displays post content
+  - [x] Shows image if present
+  - [x] Timestamp display
+  - [x] Links to author profile
 
 #### P1-T20: Create Post Composer Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T20
 - **Dependencies**: P1-T6, P1-T13
 - **Description**: Build post creation form
 - **File**: `apps/web/src/components/feed/post-composer.tsx`
 - **Acceptance Criteria**:
-  - [ ] Text input for content
-  - [ ] Image upload option
-  - [ ] Character limit display
-  - [ ] Submit action
-  - [ ] Loading state
+  - [x] Text input for content
+  - [x] Image upload option
+  - [x] Character limit display
+  - [x] Submit action
+  - [x] Loading state
 
 #### P1-T21: Create Feed List Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T21
 - **Dependencies**: P1-T19
 - **Description**: Build infinite scroll feed
 - **File**: `apps/web/src/components/feed/feed-list.tsx`
 - **Acceptance Criteria**:
-  - [ ] Infinite scroll pagination
-  - [ ] Loading skeleton
-  - [ ] Empty state
-  - [ ] Pull to refresh (mobile)
+  - [x] Infinite scroll pagination
+  - [x] Loading skeleton
+  - [x] Empty state
+  - [x] Pull to refresh (mobile)
 
 #### P1-T22: Create Feed Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T22
 - **Dependencies**: P1-T20, P1-T21
 - **Description**: Build main feed page
 - **File**: `apps/web/src/app/(dashboard)/feed/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Post composer at top
-  - [ ] Feed list below
-  - [ ] Real-time updates
+  - [x] Post composer at top
+  - [x] Feed list below
+  - [x] Real-time updates
 
 #### P1-T23: Setup Supabase Realtime for Feed
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T23
 - **Dependencies**: P1-T21
 - **Description**: Enable realtime updates for new posts
 - **File**: `apps/web/src/hooks/use-realtime-feed.ts`
 - **Acceptance Criteria**:
-  - [ ] Subscribe to posts table changes
-  - [ ] Add new posts to feed in realtime
-  - [ ] Handle post updates
-  - [ ] Clean up subscriptions
+  - [x] Subscribe to posts table changes
+  - [x] Add new posts to feed in realtime
+  - [x] Handle post updates
+  - [x] Clean up subscriptions
 
 ### Section 1F: Mobile Shell
 
 #### P1-T24: Configure Capacitor Plugins
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T24
 - **Dependencies**: P1-T2
 - **Description**: Add essential Capacitor plugins
@@ -492,14 +492,14 @@ WHEN all tasks in a phase are [x]:
   npm install @capacitor/push-notifications @capacitor/geolocation
   ```
 - **Acceptance Criteria**:
-  - [ ] Splash screen configured
-  - [ ] Status bar plugin added
-  - [ ] Keyboard plugin added
-  - [ ] Push notifications plugin added
-  - [ ] Geolocation plugin added
+  - [x] Splash screen configured
+  - [x] Status bar plugin added
+  - [x] Keyboard plugin added
+  - [x] Push notifications plugin added
+  - [x] Geolocation plugin added
 
 #### P1-T25: Build and Test Mobile Apps
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P1-T25
 - **Dependencies**: P1-T24, P1-T22
 - **Description**: Build and run on simulators
@@ -515,10 +515,10 @@ WHEN all tasks in a phase are [x]:
   - Test auth flow on Android emulator
   - Verify feed loads and scrolls
 - **Acceptance Criteria**:
-  - [ ] iOS app runs in simulator
-  - [ ] Android app runs in emulator
-  - [ ] Auth works on both platforms
-  - [ ] Feed displays correctly
+  - [x] iOS app runs in simulator
+  - [x] Android app runs in emulator
+  - [x] Auth works on both platforms
+  - [x] Feed displays correctly
 
 ---
 
@@ -526,14 +526,14 @@ WHEN all tasks in a phase are [x]:
 
 Before proceeding to Phase 2, ALL must be true:
 
-- [ ] `npm run build` passes without errors
-- [ ] `npm run type-check` has 0 errors
-- [ ] Auth flow works (email + Google)
-- [ ] Profile CRUD operations work
-- [ ] Feed shows posts with images
-- [ ] iOS app runs in simulator
-- [ ] Android app runs in emulator
-- [ ] All P1 tasks marked [x]
+- [x] `npm run build` passes without errors
+- [x] `npm run type-check` has 0 errors
+- [x] Auth flow works (email + Google)
+- [x] Profile CRUD operations work
+- [x] Feed shows posts with images
+- [x] iOS app runs in simulator
+- [x] Android app runs in emulator
+- [x] All P1 tasks marked [x]
 
 **Phase 1 Completion Command**:
 ```bash
@@ -549,168 +549,168 @@ npx cap sync && npx cap run ios
 ### Section 2A: Map Integration
 
 #### P2-T1: Setup Mapbox Account and API Key
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T1
 - **Dependencies**: P1 Complete
 - **Description**: Create Mapbox account and configure API
 - **Acceptance Criteria**:
-  - [ ] Mapbox account created
-  - [ ] API key generated
-  - [ ] Key added to environment variables
+  - [x] Mapbox account created
+  - [x] API key generated
+  - [x] Key added to environment variables
 
 #### P2-T2: Create Map Component
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T2
 - **Dependencies**: P2-T1
 - **Description**: Build base map component with Mapbox GL JS
 - **File**: `apps/web/src/components/map/map-view.tsx`
 - **Acceptance Criteria**:
-  - [ ] Map renders with default view
-  - [ ] Zoom controls work
-  - [ ] Location button shows user position
-  - [ ] Responsive sizing
+  - [x] Map renders with default view
+  - [x] Zoom controls work
+  - [x] Location button shows user position
+  - [x] Responsive sizing
 
 #### P2-T3: Create Resource Markers
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T3
 - **Dependencies**: P2-T2, P1-T7
 - **Description**: Display resources as map markers
 - **File**: `apps/web/src/components/map/resource-marker.tsx`
 - **Acceptance Criteria**:
-  - [ ] Markers show for each resource
-  - [ ] Click opens info popup
-  - [ ] Different icons by category
+  - [x] Markers show for each resource
+  - [x] Click opens info popup
+  - [x] Different icons by category
 
 #### P2-T4: Implement Marker Clustering
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T4
 - **Dependencies**: P2-T3
 - **Description**: Add supercluster for marker clustering
 - **Acceptance Criteria**:
-  - [ ] Markers cluster at zoom out
-  - [ ] Cluster shows count
-  - [ ] Click expands cluster
+  - [x] Markers cluster at zoom out
+  - [x] Cluster shows count
+  - [x] Click expands cluster
 
 #### P2-T5: Create Viewport-Based Loading
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T5
 - **Dependencies**: P2-T3
 - **Description**: Load resources only within viewport
 - **File**: `apps/web/src/hooks/use-viewport-resources.ts`
 - **Acceptance Criteria**:
-  - [ ] Resources load on map move
-  - [ ] Debounced API calls
-  - [ ] Loading indicator
+  - [x] Resources load on map move
+  - [x] Debounced API calls
+  - [x] Loading indicator
 
 #### P2-T6: Create Resource Search
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T6
 - **Dependencies**: P2-T2
 - **Description**: Add location/keyword search
 - **File**: `apps/web/src/components/map/resource-search.tsx`
 - **Acceptance Criteria**:
-  - [ ] Search by keyword
-  - [ ] Search by location
-  - [ ] Filter by category
-  - [ ] Results update map
+  - [x] Search by keyword
+  - [x] Search by location
+  - [x] Filter by category
+  - [x] Results update map
 
 #### P2-T7: Add Directions Integration
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T7
 - **Dependencies**: P2-T3
 - **Description**: Open directions in Maps app
 - **Acceptance Criteria**:
-  - [ ] Get Directions button on resource
-  - [ ] Opens Apple/Google Maps
-  - [ ] Falls back to web directions
+  - [x] Get Directions button on resource
+  - [x] Opens Apple/Google Maps
+  - [x] Falls back to web directions
 
 ### Section 2B: 211 API Integration
 
 #### P2-T8: Create 211 API Client
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T8
 - **Dependencies**: P1-T1
 - **Description**: Build API client for 211 data
 - **File**: `packages/shared/lib/211-client.ts`
 - **Acceptance Criteria**:
-  - [ ] API client with auth
-  - [ ] Search endpoint wrapper
-  - [ ] Error handling
-  - [ ] Rate limiting
+  - [x] API client with auth
+  - [x] Search endpoint wrapper
+  - [x] Error handling
+  - [x] Rate limiting
 
 #### P2-T9: Create Data Transformation Layer
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T9
 - **Dependencies**: P2-T8
 - **Description**: Transform 211 data to our schema
 - **File**: `packages/shared/lib/211-transformer.ts`
 - **Acceptance Criteria**:
-  - [ ] Transform location format
-  - [ ] Map categories
-  - [ ] Handle missing fields
+  - [x] Transform location format
+  - [x] Map categories
+  - [x] Handle missing fields
 
 #### P2-T10: Create Sync Edge Function
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T10
 - **Dependencies**: P2-T9
 - **Description**: Scheduled sync of 211 data
 - **File**: `supabase/functions/sync-211/index.ts`
 - **Acceptance Criteria**:
-  - [ ] Scheduled trigger
-  - [ ] Incremental sync
-  - [ ] Error notifications
+  - [x] Scheduled trigger
+  - [x] Incremental sync
+  - [x] Error notifications
 
 ### Section 2C: User-Contributed Resources
 
 #### P2-T11: Create Resource Submission Form
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T11
 - **Dependencies**: P2-T2, P1-T7
 - **Description**: Form for users to add resources
 - **File**: `apps/web/src/components/resources/resource-form.tsx`
 - **Acceptance Criteria**:
-  - [ ] All resource fields
-  - [ ] Location picker on map
-  - [ ] Category selection
-  - [ ] Validation
+  - [x] All resource fields
+  - [x] Location picker on map
+  - [x] Category selection
+  - [x] Validation
 
 #### P2-T12: Create Moderation Queue
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T12
 - **Dependencies**: P2-T11
 - **Description**: Admin view for moderating submissions
 - **File**: `apps/web/src/app/(admin)/moderation/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] List pending submissions
-  - [ ] Approve/reject actions
-  - [ ] Edit before approval
+  - [x] List pending submissions
+  - [x] Approve/reject actions
+  - [x] Edit before approval
 
 #### P2-T13: Create Resources Page
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T13
 - **Dependencies**: P2-T2, P2-T6
 - **Description**: Main resources discovery page
 - **File**: `apps/web/src/app/(dashboard)/resources/page.tsx`
 - **Acceptance Criteria**:
-  - [ ] Map view
-  - [ ] Search panel
-  - [ ] List view toggle
-  - [ ] Add resource button
+  - [x] Map view
+  - [x] Search panel
+  - [x] List view toggle
+  - [x] Add resource button
 
 #### P2-T14: Mobile Geolocation Setup
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T14
 - **Dependencies**: P1-T24, P2-T2
 - **Description**: Configure Capacitor geolocation
 - **File**: `apps/web/src/hooks/use-geolocation.ts`
 - **Acceptance Criteria**:
-  - [ ] Request permission
-  - [ ] Get current location
-  - [ ] Watch position updates
-  - [ ] Handle permission denied
+  - [x] Request permission
+  - [x] Get current location
+  - [x] Watch position updates
+  - [x] Handle permission denied
 
 #### P2-T15: Mobile Map Testing
-- [ ] **Status**: NOT_STARTED
+- [x] **Status**: COMPLETE
 - **ID**: P2-T15
 - **Dependencies**: P2-T13, P2-T14
 - **Description**: Test map on mobile devices
@@ -720,21 +720,21 @@ npx cap sync && npx cap run ios
   - Verify geolocation works
   - Check marker interactions
 - **Acceptance Criteria**:
-  - [ ] Map renders on mobile
-  - [ ] Touch gestures work
-  - [ ] Location button works
-  - [ ] Markers clickable
+  - [x] Map renders on mobile
+  - [x] Touch gestures work
+  - [x] Location button works
+  - [x] Markers clickable
 
 ---
 
 ## PHASE 2 EXIT CRITERIA
 
-- [ ] Map renders with markers
-- [ ] Location search works
-- [ ] 211 data displays
-- [ ] Directions open in Maps app
-- [ ] User can submit resource
-- [ ] All P2 tasks marked [x]
+- [x] Map renders with markers
+- [x] Location search works
+- [x] 211 data displays
+- [x] Directions open in Maps app
+- [x] User can submit resource
+- [x] All P2 tasks marked [x]
 
 ---
 
@@ -1537,6 +1537,68 @@ Dependencies not met: {missing_dependencies}
 
 Action: Complete {dependency_task_id} first, then return to {task_id}
 ```
+
+---
+
+## PHASE 8: Beyond-Plan Enhancements (Shipped 2026-05-26 → 2026-05-28)
+
+> **Context**: These features were designed and shipped beyond the original 98-task plan during production hardening.
+> All tasks in this phase are COMPLETE at time of documentation.
+
+### P8-T1: Programs Panel + Discovery Pipeline
+- [x] **Status**: COMPLETE
+- **ID**: P8-T1
+- **Dependencies**: Phase 7 Complete
+- **Description**: Browse/filter benefit programs database. Zero-infrastructure discovery pipeline (OpenRouter + duck-duck-scrape + SearXNG verification). 86 Rutland VT programs seeded.
+- **Files**: `apps/web/src/components/panels/programs-panel.tsx`, `apps/web/src/hooks/use-program-browser.ts`, `apps/web/scripts/program-discovery.ts`
+- **Migrations**: `20260527000005_seed_rutland_programs.sql`, `20260527000006_add_application_urls.sql`
+
+### P8-T2: Volunteer Messaging + Resource FAB
+- [x] **Status**: COMPLETE
+- **ID**: P8-T2
+- **Dependencies**: Phase 7 Complete
+- **Description**: P2P messaging between resource seekers and volunteer providers. FAB with 6-category speed dial. Role-gated (providing/facilitator/both). Conversations + messages tables with partial unique index (1 pending request per user-resource pair).
+- **Files**: `apps/web/src/components/panels/messages-panel.tsx`, `apps/web/src/hooks/use-conversations.ts`, `apps/web/src/hooks/use-volunteer-resource.ts`, `apps/web/src/components/volunteer/`
+- **Migration**: `20260527000001_add_volunteer_messaging.sql`
+
+### P8-T3: Resource Wizard + Wizard Panel
+- [x] **Status**: COMPLETE
+- **ID**: P8-T3
+- **Dependencies**: Phase 2 Complete
+- **Description**: Guided resource category wizard with AI-guided intake flow. Multi-step wizard UI integrated into panel navigation.
+- **Files**: `apps/web/src/components/panels/wizard-panel.tsx`, `apps/web/src/components/panels/resource-wizard.tsx`
+
+### P8-T4: PDF Annotation Panel
+- [x] **Status**: COMPLETE
+- **ID**: P8-T4
+- **Dependencies**: Phase 3 Complete
+- **Description**: In-app PDF annotation for forms and documents. Canvas-based annotation, drag/resize, text insertion. Integrated into FormsPanel.
+- **Files**: `apps/web/src/components/forms/pdf-annotator.tsx`, `apps/web/src/hooks/use-pdf-annotation.ts`
+
+### P8-T5: Saved Resources
+- [x] **Status**: COMPLETE
+- **ID**: P8-T5
+- **Dependencies**: Phase 2 Complete
+- **Description**: Save/unsave resources for user bookmark list.
+- **Files**: `apps/web/src/hooks/use-saved-resources.ts`
+- **Migration**: `20260527000002_saved_resources.sql`
+
+### P8-T6: Resource Detail Tables + Source Tracking
+- [x] **Status**: COMPLETE
+- **ID**: P8-T6
+- **Dependencies**: Phase 2 Complete
+- **Description**: Extended resource metadata (detail tables, source enum, application URL fields).
+- **Migrations**: `20260526000001_extend_resource_source_enum.sql`, `20260527000003_add_resource_sources.sql`, `20260527000004_add_resource_detail_tables.sql`
+
+---
+
+## PHASE 8 EXIT CRITERIA
+
+- [x] All P8 features committed on develop branch
+- [x] All migrations applied to production DB (ndtpovonpadugthmcntl)
+- [x] All new panels wired into PanelRenderer (app/page.tsx confirmed)
+- [x] All new hooks have finally blocks (confirmed via audit 2026-05-28)
+- [ ] Phase 8 features included in P7-T11 auth E2E smoke test (pending P7-T11 execution)
 
 ---
 
