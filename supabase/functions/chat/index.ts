@@ -5,6 +5,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// Structured edge logging — outputs JSON lines readable by Supabase log drains
+function edgeLog(level: 'info' | 'warn' | 'error', event: string, data: Record<string, unknown>) {
+  console.log(JSON.stringify({ level, event, timestamp: new Date().toISOString(), ...data }))
+}
+
 const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY')
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -237,17 +242,27 @@ async function tryModelWithFallback(
     : MODEL_FALLBACK_CHAIN
 
   let lastError: Error | null = null
+  const primaryModel = modelsToTry[0]
 
-  for (const model of modelsToTry) {
+  for (let attemptIndex = 0; attemptIndex < modelsToTry.length; attemptIndex++) {
+    const model = modelsToTry[attemptIndex]
+    edgeLog('info', 'chat.model.attempt', { model, attempt: attemptIndex + 1 })
     try {
       const response = await callOpenRouter(messages, model, stream, temperature, maxTokens)
 
       if (response.ok) {
+        if (model !== primaryModel) {
+          edgeLog('warn', 'chat.model.fallback', { primaryModel, modelUsed: model, attempt: attemptIndex + 1 })
+        }
         return { response, model }
       }
 
       // 429 = rate limited, 503 = model unavailable - try next
       if (response.status === 429 || response.status === 503) {
+        const nextModel = modelsToTry[attemptIndex + 1]
+        if (nextModel) {
+          edgeLog('warn', 'chat.model.fallback', { failedModel: model, nextModel, errorCode: response.status })
+        }
         continue
       }
 
@@ -256,6 +271,10 @@ async function tryModelWithFallback(
       throw new Error(errorData.error?.message || `API error: ${response.status}`)
     } catch (error) {
       lastError = error as Error
+      const nextModel = modelsToTry[attemptIndex + 1]
+      if (nextModel) {
+        edgeLog('warn', 'chat.model.fallback', { failedModel: model, nextModel, errorMessage: (error as Error).message })
+      }
       continue
     }
   }
@@ -309,7 +328,7 @@ async function searchResources(
     })(),
   ])
 
-  console.log(`[CHAT] Resource search: ${Date.now() - t0}ms (DB: ${dbResult.length} results, Web: ${searchResult.length} results)`)
+  edgeLog('info', 'chat.resourceSearch.complete', { durationMs: Date.now() - t0, dbResultCount: dbResult.length, webResultCount: searchResult.length })
 
   // Enrich local resources with web URLs when website is null
   // deno-lint-ignore no-explicit-any
@@ -359,6 +378,7 @@ async function searchResources(
 }
 
 serve(async (req: Request) => {
+  const requestStart = performance.now()
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin)
 
@@ -396,6 +416,11 @@ serve(async (req: Request) => {
     // Check rate limit
     const rateLimit = checkRateLimit(auth.userId)
     if (!rateLimit.allowed) {
+      edgeLog('warn', 'chat.rateLimit.hit', {
+        userId: auth.userId,
+        resetAt: rateLimit.resetAt,
+        windowMs: RATE_LIMIT.windowMs,
+      })
       return new Response(
         JSON.stringify({
           error: 'Rate limit exceeded',
@@ -459,6 +484,7 @@ serve(async (req: Request) => {
 
     // Call OpenRouter with fallback
     const tLLM = Date.now()
+    const primaryModel = MODEL_FALLBACK_CHAIN[0]
     const { response: openRouterResponse, model: modelUsed } = await tryModelWithFallback(
       fullMessages,
       model,
@@ -466,7 +492,13 @@ serve(async (req: Request) => {
       temperature,
       maxTokens
     )
-    console.log(`[CHAT] LLM first token: ${Date.now() - tLLM}ms (model: ${modelUsed})`)
+    edgeLog('info', 'chat.response.complete', {
+      userId: auth.userId,
+      model: modelUsed,
+      durationMs: Math.round(performance.now() - requestStart),
+      llmFirstTokenMs: Date.now() - tLLM,
+      didFallback: modelUsed !== (model ?? primaryModel),
+    })
 
     // Return response (streaming or non-streaming)
     if (stream) {
@@ -475,7 +507,10 @@ serve(async (req: Request) => {
       return handleNonStreamingResponse(openRouterResponse, modelUsed, corsHeaders)
     }
   } catch (error) {
-    console.error('Chat function error:', error)
+    edgeLog('error', 'chat.response.error', {
+      errorMessage: error instanceof Error ? error.message : String(error),
+      durationMs: Math.round(performance.now() - requestStart),
+    })
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Internal server error',

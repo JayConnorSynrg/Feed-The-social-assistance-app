@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { FormTemplateSchema } from '@/lib/form-schemas'
 import { extractSensitiveFields } from '@/lib/form-field-mapper'
 import { encryptProfile, hasKey, getCachedKey } from '@/lib/secure-profile'
+import { logger } from '@/lib/logger'
 
 // ============================================
 // Types
@@ -121,6 +122,7 @@ export function useFormSubmission(
 
         return data.id
       } catch (error) {
+        logger.error('form.createDraft.error', error, { templateId })
         setState((prev) => ({
           ...prev,
           saving: false,
@@ -199,6 +201,7 @@ export function useFormSubmission(
 
         return true
       } catch (error) {
+        logger.error('form.saveDraft.error', error, { submissionId: state.submission?.id, templateId: template?.id })
         setState((prev) => ({
           ...prev,
           saving: false,
@@ -224,6 +227,8 @@ export function useFormSubmission(
       }
 
       setState((prev) => ({ ...prev, saving: true, error: null }))
+
+      const submitStart = performance.now()
 
       try {
         // First save the data
@@ -305,8 +310,16 @@ export function useFormSubmission(
           error: null,
         }))
 
+        logger.info('form.submit.complete', {
+          submissionId: state.submission?.id,
+          templateId: template?.id,
+          durationMs: Math.round(performance.now() - submitStart),
+          encrypted: !!encryptedData,
+        })
+
         return true
       } catch (error) {
+        logger.error('form.submit.error', error, { submissionId: state.submission?.id, templateId: template?.id, durationMs: Math.round(performance.now() - submitStart) })
         setState((prev) => ({
           ...prev,
           saving: false,
@@ -358,6 +371,7 @@ export function useFormSubmission(
 
         return true
       } catch (error) {
+        logger.error('form.load.error', error, { submissionId })
         setState((prev) => ({
           ...prev,
           loading: false,
@@ -423,6 +437,7 @@ export function useFormSubmission(
 
         return true
       } catch (error) {
+        logger.error('form.updateStatus.error', error, { submissionId: state.submission?.id, status })
         setState((prev) => ({
           ...prev,
           saving: false,
