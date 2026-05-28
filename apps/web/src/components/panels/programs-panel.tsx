@@ -16,6 +16,7 @@ import {
   RefreshCw,
   FileText,
   ExternalLink,
+  FileDown,
 } from 'lucide-react'
 import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
 import { useSavedResources } from '@/hooks/use-saved-resources'
@@ -162,7 +163,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
               </div>
             )}
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -201,6 +202,32 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
                   Contact Directly
                 </a>
               ) : null}
+
+              {(resource as Resource & { application_url?: string | null }).application_url && (
+                <a
+                  href={(resource as Resource & { application_url?: string | null }).application_url!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#4a5d23] text-white hover:bg-[#3d4d1c] transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Apply Online
+                </a>
+              )}
+
+              {(resource as Resource & { application_form_url?: string | null }).application_form_url && (
+                <a
+                  href={(resource as Resource & { application_form_url?: string | null }).application_form_url!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[#4a5d23] text-[#4a5d23] hover:bg-[#4a5d23]/10 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Download Form
+                </a>
+              )}
             </div>
           </div>
         </div>

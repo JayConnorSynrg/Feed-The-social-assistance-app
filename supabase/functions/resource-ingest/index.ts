@@ -24,6 +24,8 @@ interface IngestResource {
   longitude?: number
   source_url?: string
   confidence?: 'high' | 'medium' | 'low'
+  application_url?: string
+  application_form_url?: string
 }
 
 interface IngestResult {
@@ -60,6 +62,8 @@ function validateResource(r: IngestResource): string | null {
   }
   if (r.website && !r.website.match(/^https?:\/\/.+/)) return `Invalid URL: ${r.website}`
   if (r.email && !r.email.match(/^[^@]+@[^@]+\.[^@]+$/)) return `Invalid email: ${r.email}`
+  if (r.application_url && !r.application_url.match(/^https?:\/\/.+/)) return `Invalid application_url: ${r.application_url}`
+  if (r.application_form_url && !r.application_form_url.match(/^https?:\/\/.+/)) return `Invalid application_form_url: ${r.application_form_url}`
   return null
 }
 
@@ -180,6 +184,8 @@ serve(async (req: Request) => {
         status: resource.confidence === 'high' ? 'approved' : 'pending',
         is_verified: resource.confidence === 'high',
         last_verified_at: resource.confidence === 'high' ? new Date().toISOString() : null,
+        application_url: resource.application_url || null,
+        application_form_url: resource.application_form_url || null,
       }
 
       const { data: inserted, error: insertError } = await supabase

@@ -110,3 +110,14 @@ google-services.json
 .history/
 .ionide/
 .vercel
+
+# Pipeline temp output
+pipeline-*.json
+pipeline-*.log
+
+# Root screenshots
+/demo-page-full.png
+/feed-app-current.png
+/feed-panel-text-issue.png
+/social-demo-full.png
+/Untitled
