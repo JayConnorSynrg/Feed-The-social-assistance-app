@@ -5,6 +5,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
+import { logger, createOpId } from '@/lib/logger'
 
 export interface ChatMessage {
   id: string
@@ -72,6 +73,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     async (content: string) => {
       if (!content.trim() || isLoading) return
 
+      const opId = createOpId()
+      const chatStart = performance.now()
+      logger.info('chat.send.start', { opId, userId: profile?.id, flowType: currentFlow, messageCount: messages.length })
+
       setError(null)
 
       // Check for crisis keywords
@@ -104,11 +109,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       try {
         // Get auth token
-        console.log('[CHAT] Getting session...')
+        logger.debug('chat.session.check', { opId })
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('[CHAT] Session:', session ? 'valid' : 'null', 'token length:', session?.access_token?.length)
+        logger.debug('chat.session.result', { opId, hasSession: !!session, tokenPresent: !!session?.access_token })
         if (!session?.access_token) {
-          console.error('[CHAT] No session — user not authenticated')
+          logger.warn('chat.session.missing', { opId })
           throw new Error('Please sign in to use the chat')
         }
 
@@ -123,7 +128,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         // Call Edge Function
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`
-        console.log('[CHAT] Fetching:', url, 'with', messages.length, 'messages')
+        logger.debug('chat.fetch.start', { opId, messageCount: messages.length })
         const response = await fetch(
           url,
           {
@@ -150,11 +155,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           }
         )
 
-        console.log('[CHAT] Response status:', response.status, response.statusText)
+        logger.debug('chat.fetch.response', { opId, status: response.status })
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error('[CHAT] Error response:', response.status, errorText)
+          logger.warn('chat.fetch.error', { opId, status: response.status })
           let errorMessage = `Request failed: ${response.status}`
           try {
             const errorData = JSON.parse(errorText)
@@ -171,7 +176,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw new Error('No response body')
         }
 
-        console.log('[CHAT] Starting stream reader...')
+        logger.debug('chat.stream.start', { opId })
         const decoder = new TextDecoder()
         let accumulatedContent = ''
         let firstChunk = true
@@ -183,7 +188,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             if (done) break
 
             if (firstChunk) {
-              console.log('[CHAT] First chunk received')
+              logger.debug('chat.stream.firstChunk', { opId, durationMs: Math.round(performance.now() - chatStart) })
               firstChunk = false
             }
 
@@ -196,7 +201,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
                 if (data === '[DONE]') {
                   // Streaming complete
-                  console.log('[CHAT] Stream complete, final content length:', accumulatedContent.length)
+                  logger.info('chat.send.complete', {
+                    opId,
+                    userId: profile?.id,
+                    durationMs: Math.round(performance.now() - chatStart),
+                    model: currentModel ?? 'unknown',
+                    contentLength: accumulatedContent.length,
+                  })
                   streamDone = true
                   setMessages(prev =>
                     prev.map(m =>
@@ -239,7 +250,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
                   // Non-streaming fallback: single JSON response with content field
                   if (parsed.content && parsed.type === undefined) {
-                    console.log('[CHAT] Non-streaming response:', parsed)
+                    logger.debug('chat.stream.nonStreamingFallback', { opId })
                     accumulatedContent = parsed.content
                     setMessages(prev =>
                       prev.map(m =>
@@ -253,7 +264,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 } catch (parseError) {
                   // Skip malformed JSON
                   if (parseError instanceof Error && parseError.message !== 'error') {
-                    console.warn('Parse error:', parseError)
+                    logger.warn('chat.stream.parseError', { opId })
                   }
                 }
               }
@@ -265,7 +276,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         // Guard: if stream ended without [DONE], close the streaming state so dots don't persist
         if (!streamDone) {
-          console.warn('[CHAT] Stream ended without [DONE] — forcing isStreaming=false, content length:', accumulatedContent.length)
+          logger.warn('chat.stream.missingDone', { opId, contentLength: accumulatedContent.length, durationMs: Math.round(performance.now() - chatStart) })
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantMessage.id
@@ -277,14 +288,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       } catch (err) {
         const error = err as Error
 
-        // Abort errors are expected in Next.js — suppress before console.error
+        // Abort errors are expected in Next.js — suppress before logging
         if (error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('signal')) {
-          console.log('[CHAT] Stream aborted (expected in Next.js)')
+          logger.debug('chat.stream.aborted', { opId })
           setMessages(prev => prev.filter(m => m.id !== assistantMessage.id))
           return
         }
 
-        console.error('[CHAT] Error:', error.message, error)
+        logger.error('chat.send.error', error, { opId, userId: profile?.id, durationMs: Math.round(performance.now() - chatStart) })
 
         setError(error)
         onError?.(error)

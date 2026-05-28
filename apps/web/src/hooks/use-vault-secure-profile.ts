@@ -119,10 +119,19 @@ export function useVaultSecureProfile(): UseVaultSecureProfileReturn {
         })
       } catch (decryptError) {
         console.error('Failed to decrypt profile:', decryptError)
+        logPredefinedEvent('ENCRYPTION_ERROR', {
+          action: 'decrypt',
+          resourceType: 'secure_profile',
+          resourceId: user.id,
+        })
         setError('Failed to decrypt profile data')
       }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
+      logPredefinedEvent('VAULT_UNLOCK_FAILED', {
+        action: 'read',
+        resourceType: 'secure_profile',
+      })
       setError(err instanceof Error ? err.message : 'Failed to load profile')
     } finally {
       setLoading(false)
@@ -187,6 +196,10 @@ export function useVaultSecureProfile(): UseVaultSecureProfileReturn {
         return true
       } catch (err) {
         console.error('Failed to save profile:', err)
+        logPredefinedEvent('ENCRYPTION_ERROR', {
+          action: 'encrypt',
+          resourceType: 'secure_profile',
+        })
         setError(err instanceof Error ? err.message : 'Failed to save profile')
         setLoading(false)
         return false

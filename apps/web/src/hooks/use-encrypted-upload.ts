@@ -13,6 +13,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuthContext } from '@/providers/auth-provider'
 import { encryptFile, decryptFile, type DocumentEncryptionProgress } from '@/lib/document-encryption'
+import { logger, createOpId } from '@/lib/logger'
 
 const STORAGE_BUCKET = 'user-documents'
 
@@ -60,6 +61,16 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
       setIsUploading(true)
       setProgress(0)
       setError(null)
+
+      const opId = createOpId()
+      const uploadStart = performance.now()
+      logger.info('document.upload.start', {
+        opId,
+        userId: user?.id,
+        fileSizeBytes: file.size,
+        category,
+        encrypted: true,
+      })
 
       try {
         const supabase = createClient()
@@ -117,11 +128,25 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
 
         setProgress(100)
 
+        logger.info('document.upload.complete', {
+          opId,
+          userId: user?.id,
+          fileSizeBytes: file.size,
+          durationMs: Math.round(performance.now() - uploadStart),
+        })
+
         return {
           documentId: documentData.id,
           storagePath,
         }
       } catch (err) {
+        logger.error('document.upload.error', err, {
+          opId,
+          userId: user?.id,
+          fileSizeBytes: file?.size,
+          category,
+          durationMs: Math.round(performance.now() - uploadStart),
+        })
         const errorMessage = err instanceof Error ? err.message : 'Upload failed'
         setError(errorMessage)
         throw err
@@ -241,7 +266,7 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
           .remove([document.file_path])
 
         if (storageError) {
-          console.error('Failed to delete from storage:', storageError)
+          logger.error('document.delete.error', storageError, { userId: user?.id, documentId })
           // Continue with database deletion even if storage fails
         }
 

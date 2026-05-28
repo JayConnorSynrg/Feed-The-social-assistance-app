@@ -104,3 +104,45 @@ export const logger = {
     }
   },
 }
+
+// ============================================
+// Correlation utilities
+// ============================================
+
+/**
+ * Generate a short random operation ID for correlating multi-step operations
+ * across client logs and edge function logs.
+ */
+export function createOpId(): string {
+  return Math.random().toString(36).substring(2, 10)
+}
+
+/**
+ * Wrap an async operation with structured start/complete/error logging and
+ * automatic duration tracking. Re-throws on error — never swallows exceptions.
+ */
+export async function withTiming<T>(
+  operation: string,
+  context: Record<string, unknown>,
+  fn: () => Promise<T>
+): Promise<T> {
+  const start = performance.now()
+  const opId = createOpId()
+  logger.info(`${operation}.start`, { ...context, opId })
+  try {
+    const result = await fn()
+    logger.info(`${operation}.complete`, {
+      ...context,
+      opId,
+      durationMs: Math.round(performance.now() - start),
+    })
+    return result
+  } catch (error) {
+    logger.error(`${operation}.error`, error, {
+      ...context,
+      opId,
+      durationMs: Math.round(performance.now() - start),
+    })
+    throw error
+  }
+}
