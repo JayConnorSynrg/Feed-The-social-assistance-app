@@ -21,6 +21,24 @@ next_action_id: null
 ## Log
 
 ```yaml
+id: phaseB-auth-e2e-harness
+status: complete
+type: commit
+description: "Phase B — P7-T11 auth E2E test harness: playwright.config.ts (baseURL :3000, webServer npm run dev, chromium), apps/web/e2e/auth.spec.ts covering email-signup→onboarding, email/password login + wrong-pw error, password-reset via token_hash, Google OAuth redirect assertion. Admin client for setup/teardown (SERVICE_ROLE_KEY). Wire test:e2e in apps/web/package.json. 3 of 4 flows fully automated; Google consent-screen click is the 1 documented manual step."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - playwright.config.ts
+  - apps/web/e2e/auth.spec.ts
+  - apps/web/package.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T23:45:00.000Z
+completed_at: 2026-05-29T23:59:00.000Z
+```
+
+```yaml
 id: phaseF2-build-determinism-indexes
 status: complete
 type: commit

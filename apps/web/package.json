@@ -13,7 +13,7 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint",
     "seed": "npx ts-node --esm scripts/seed-test-data.ts",
-    "test:e2e": "echo 'E2E tests not yet configured'",
+    "test:e2e": "playwright test",
     "test:unit": "node --test \"src/**/*.test.mjs\"",
     "test:vitest": "vitest run",
     "test": "npm run test:unit && npm run test:vitest"
