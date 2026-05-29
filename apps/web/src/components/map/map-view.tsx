@@ -91,9 +91,9 @@ export function MapView({
     return (
       <div className={`flex items-center justify-center bg-muted ${className}`}>
         <div className="text-center p-8">
-          <p className="text-muted-foreground mb-2">Map not configured</p>
+          <p className="text-muted-foreground mb-2">Map unavailable</p>
           <p className="text-sm text-muted-foreground">
-            Add your Mapbox token to <code className="bg-muted-foreground/10 px-1 rounded">.env.local</code>
+            Configure <code className="bg-muted-foreground/10 px-1 rounded">NEXT_PUBLIC_MAPBOX_TOKEN</code>
           </p>
         </div>
       </div>

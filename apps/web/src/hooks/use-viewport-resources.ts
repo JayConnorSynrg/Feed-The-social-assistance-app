@@ -95,44 +95,22 @@ export function useViewportResources({
       setError(null)
 
       try {
-        // Build the query
-        let query = (supabase as any)
-          .from('resources')
-          .select(`
-            id,
-            name,
-            description,
-            category,
-            address_line1,
-            city,
-            state,
-            phone,
-            website,
-            hours_of_operation,
-            location,
-            is_volunteer_resource
-          `)
-          .eq('status', 'approved')
-          .limit(limit)
-
-        // Filter by category if specified
-        if (category) {
-          query = query.eq('category', category as never)
+        // Server-side geospatial filter via PostGIS resources_in_bounds RPC.
+        // Uses GiST index on resources.location — returns only rows within the viewport.
+        const rpcParams: Record<string, unknown> = {
+          west: currentBounds.west,
+          south: currentBounds.south,
+          east: currentBounds.east,
+          north: currentBounds.north,
+          max_results: limit,
         }
 
-        // Note: For proper geospatial queries, we'd use PostGIS
-        // This is a simplified bounding box filter using the ST_MakeEnvelope function
-        // In production, you'd use: .rpc('resources_in_bounds', { ... })
-
-        const { data, error: queryError } = await query
+        const { data, error: queryError } = await (supabase as any)
+          .rpc('resources_in_bounds', rpcParams)
 
         if (queryError) throw queryError
 
-        // Transform data to include lat/lng from PostGIS geography
-        // The location field is stored as GEOGRAPHY(POINT, 4326)
         const transformedResources: Resource[] = ((data || []) as ResourceRow[]).map((row) => {
-          // Parse the geography point if available
-          // Format: POINT(lng lat) or GeoJSON
           let latitude = 0
           let longitude = 0
 
@@ -163,16 +141,12 @@ export function useViewportResources({
           }
         }).filter((r) => r.latitude !== 0 && r.longitude !== 0)
 
-        // Filter by bounds client-side (until we add proper RPC function)
-        const boundsFiltered = transformedResources.filter(
-          (r) =>
-            r.longitude >= currentBounds.west &&
-            r.longitude <= currentBounds.east &&
-            r.latitude >= currentBounds.south &&
-            r.latitude <= currentBounds.north
-        )
+        // Category filter applied client-side (RPC returns all categories)
+        const filtered = category
+          ? transformedResources.filter((r) => r.category === category)
+          : transformedResources
 
-        setResources(boundsFiltered)
+        setResources(filtered)
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') {
           setError(err)
