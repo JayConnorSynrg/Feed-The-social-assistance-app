@@ -16,13 +16,26 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: push-develop-001
+next_action_id: commit-map-singleton-fix
 
 ## Log
 
 ```yaml
+id: commit-map-singleton-fix
+status: complete
+type: commit
+description: Singleton browser Supabase client — stops infinite refetch loop that left map "Loading resources..." spinner stuck on
+branch: develop
+files:
+  - apps/web/src/lib/supabase/client.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T08:30:00.000Z
+completed_at: 2026-05-29T08:30:00.000Z
+```
+
+```yaml
 id: push-develop-001
-status: pending
+status: superseded
 type: push
 description: Push develop to origin after vercel.json fix — all session work (fleet agents, structured logging, vercel build fix)
 branch: develop
