@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-05-28T00:00:00.000Z",
+  "gitSha": "813048cdcfd570def7abe32bff31827dac2d7fe2",
+  "branch": "develop",
+  "phaseProgress": {
+    "current": "Phase 7",
+    "currentTask": "P7-T11",
+    "status": "IN_PROGRESS",
+    "overall": { "complete": 96, "total": 101, "percent": 95 },
+    "byPhase": {
+      "0": { "name": "Pre-Flight Setup", "status": "COMPLETE", "complete": 3, "total": 3 },
+      "1": { "name": "Foundation", "status": "COMPLETE", "complete": 25, "total": 25 },
+      "2": { "name": "Resource Discovery", "status": "COMPLETE", "complete": 15, "total": 15 },
+      "3": { "name": "Form System", "status": "COMPLETE", "complete": 15, "total": 16, "notes": "P3-T16 (mobile testing) deferred" },
+      "4": { "name": "AI Assistant", "status": "COMPLETE", "complete": 10, "total": 11 },
+      "5": { "name": "Programs & Apps", "status": "COMPLETE", "complete": 11, "total": 12 },
+      "6": { "name": "Documents & Mobile", "status": "COMPLETE", "complete": 7, "total": 8 },
+      "7": { "name": "Polish & Launch", "status": "IN_PROGRESS", "complete": 10, "total": 11 }
+    }
+  },
+  "subsystems": [
+    { "name": "auth", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/providers/auth-provider.tsx", "apps/web/src/hooks/use-auth.ts", "apps/web/src/app/api/auth/check-lockout/route.ts", "supabase/functions/auth-guard/"] },
+    { "name": "chat", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/chat-panel.tsx", "apps/web/src/hooks/use-chat.ts", "supabase/functions/chat/index.ts", "apps/web/src/lib/ai/system-prompts.ts"] },
+    { "name": "map", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/map-panel.tsx", "apps/web/src/components/map/map-view.tsx", "apps/web/src/hooks/use-viewport-resources.ts", "apps/web/src/hooks/use-cluster.ts"] },
+    { "name": "documents", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/documents-panel.tsx", "apps/web/src/components/documents/encrypted-upload.tsx", "apps/web/src/hooks/use-documents.ts", "apps/web/src/hooks/use-encrypted-upload.ts"] },
+    { "name": "forms", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/forms-panel.tsx", "apps/web/src/hooks/use-form-submission.ts", "apps/web/src/hooks/use-form-templates.ts", "apps/web/src/hooks/use-pdf-annotation.ts"] },
+    { "name": "vault", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/hooks/use-secure-profile.ts", "apps/web/src/hooks/use-vault-form-submission.ts", "apps/web/src/hooks/use-vault-secure-profile.ts"] },
+    { "name": "programs", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/programs-panel.tsx", "apps/web/src/hooks/use-program-browser.ts", "supabase/functions/benefits-screening/"] },
+    { "name": "messages", "status": "live", "wiring": "PARTIAL", "evidence": ["apps/web/src/components/panels/messages-panel.tsx", "apps/web/src/hooks/use-conversations.ts"], "issues": ["mutations missing finally blocks (isSending stuck on error)"] },
+    { "name": "volunteer", "status": "live", "wiring": "PARTIAL", "evidence": ["apps/web/src/hooks/use-volunteer-resource.ts"], "issues": ["withdrawResource missing finally block"] },
+    { "name": "resources", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/hooks/use-saved-resources.ts", "apps/web/src/hooks/use-resource-detail.ts", "apps/web/src/components/panels/resource-wizard.tsx", "supabase/functions/resource-ingest/", "supabase/functions/resource-sync/"] },
+    { "name": "applications", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/applications-panel.tsx", "apps/web/src/hooks/use-applications.ts"] },
+    { "name": "feed-realtime", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/panels/feed-panel.tsx", "apps/web/src/hooks/use-realtime-feed.ts", "apps/web/src/hooks/use-notifications.ts"] },
+    { "name": "settings", "status": "live", "wiring": "PARTIAL", "evidence": ["apps/web/src/components/panels/settings-panel.tsx", "apps/web/src/hooks/use-audit-log.ts"], "issues": ["text-muted-foreground contrast ~4.3:1 on #faf9f6 (borderline)"] },
+    { "name": "federation", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/app/api/federation/webhook/route.ts", "apps/web/src/app/api/federation/resources/route.ts", "apps/web/src/app/api/federation/instance/route.ts", "supabase/functions/federation-sync/", "supabase/functions/federation-webhook/", "supabase/functions/federation-health-check/"] },
+    { "name": "db-migrations", "status": "live", "wiring": "WIRED", "evidence": ["supabase/migrations/ (29 files)", "packages/database/types.ts"] },
+    { "name": "edge-functions", "status": "live", "wiring": "WIRED", "evidence": ["supabase/functions/ (15 dirs)"] },
+    { "name": "ui-primitives", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/components/ui/", "packages/ui/"] },
+    { "name": "security", "status": "live", "wiring": "WIRED", "evidence": ["apps/web/src/hooks/use-csrf-token.ts", "apps/web/src/hooks/use-rate-limited-action.ts", "supabase/functions/auth-guard/", "supabase/functions/validate-password/"] }
+  ],
+  "panels": [
+    { "name": "ApplicationsPanel", "file": "applications-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "ChatPanel", "file": "chat-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "DocumentsPanel", "file": "documents-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "FeedPanel", "file": "feed-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "FormsPanel", "file": "forms-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "MapPanel", "file": "map-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "MessagesPanel", "file": "messages-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "OverviewPanel", "file": "overview-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "ProgramsPanel", "file": "programs-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "ResourceWizard", "file": "resource-wizard.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "SettingsPanel", "file": "settings-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true },
+    { "name": "WizardPanel", "file": "wizard-panel.tsx", "renders": true, "liveData": true, "events": true, "typescript": true }
+  ],
+  "fleet": {
+    "agents": [
+      "feed-api-debugger",
+      "feed-auth-debugger",
+      "feed-chat-expert",
+      "feed-data-flow-analyzer",
+      "feed-db-migrations-expert",
+      "feed-documents-expert",
+      "feed-edge-functions-expert",
+      "feed-federation-expert",
+      "feed-forms-expert",
+      "feed-map-debugger",
+      "feed-messages-expert",
+      "feed-programs-expert",
+      "feed-realtime-monitor",
+      "feed-resources-expert",
+      "feed-smoke-runner",
+      "feed-supabase-validator",
+      "feed-vault-expert",
+      "feed-volunteer-expert"
+    ],
+    "agentCount": 18,
+    "coveredDomains": [
+      "auth", "chat", "map", "documents", "forms", "vault",
+      "programs", "messages", "volunteer", "resources",
+      "feed-realtime", "federation", "db-migrations", "edge-functions"
+    ],
+    "uncoveredDomains": [
+      "applications",
+      "settings",
+      "ui-primitives",
+      "security"
+    ]
+  },
+  "drift": [
+    {
+      "category": "checklist-vs-code",
+      "severity": "medium",
+      "description": "32 tasks + volunteer messaging feature have code but no checklist checkboxes (per MEMORY.md run 3)"
+    },
+    {
+      "category": "uncommitted-changes",
+      "severity": "low",
+      "description": "19 modified files + 8 untracked items (panels, hooks, auth flows, new migration, scripts)"
+    },
+    {
+      "category": "runtime-bug",
+      "severity": "low",
+      "description": "use-conversations.ts mutations missing finally blocks (isSending stuck on error)"
+    },
+    {
+      "category": "runtime-bug",
+      "severity": "low",
+      "description": "use-volunteer-resource.ts:withdrawResource missing finally block"
+    },
+    {
+      "category": "accessibility",
+      "severity": "low",
+      "description": "Chat panel text-muted-foreground on #faf9f6 = ~4.3:1 contrast (borderline WCAG AA)"
+    },
+    {
+      "category": "fleet-coverage",
+      "severity": "low",
+      "description": "4 subsystems uncovered by dedicated agents: applications, settings, ui-primitives, security"
+    }
+  ],
+  "metrics": {
+    "panelCount": 12,
+    "hookCount": 25,
+    "edgeFunctionCount": 14,
+    "migrationCount": 29,
+    "apiRouteCount": 7,
+    "componentDirCount": 17,
+    "agentCount": 18,
+    "subsystemCount": 18
+  },
+  "baselineNotes": [
+    "panelCount excludes index.tsx (barrel export) — 13 .tsx files, 12 panels",
+    "hookCount excludes index.ts (barrel export) — 26 .ts files, 25 hooks",
+    "edgeFunctionCount excludes _shared/ (utility dir) — 15 dirs, 14 functions",
+    "Task delta vs MEMORY.md run 3: was 96/98, now 96/101 — denominator grew because phase task lists were corrected upward (P3 16, P4 11, P5 12, P6 8, P7 11)"
+  ]
+}
