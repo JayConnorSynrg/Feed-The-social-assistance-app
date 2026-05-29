@@ -7,7 +7,6 @@
 
 import React, { useState, createContext, useContext, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
 import {
   MessageSquare,
   Map,
@@ -889,7 +888,6 @@ export function FeedShell({
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav />
-      <VolunteerResourceFAB />
     </ShellContext.Provider>
   )
 }

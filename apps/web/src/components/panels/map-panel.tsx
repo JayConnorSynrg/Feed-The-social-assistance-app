@@ -32,6 +32,7 @@ import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useSavedResources } from '@/hooks/use-saved-resources'
+import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
 
 // ============================================
 // TYPES
@@ -560,7 +561,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       </div>
 
       {/* Center: Interactive Map */}
-      <div className="flex-1 min-w-0 rounded-xl overflow-hidden">
+      <div className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
         <MapView
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
@@ -597,6 +598,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             )
           )}
         </MapView>
+        <VolunteerResourceFAB />
       </div>
 
       {/* Right Panel: Resource Details (conditional) */}
