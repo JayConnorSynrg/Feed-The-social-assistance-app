@@ -16,13 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phase3-observability-resilience
+next_action_id: merge-push-phase3
 
 ## Log
 
 ```yaml
+id: merge-push-phase3
+status: complete
+type: merge
+description: "Merge feature/phase3-observability-resilience to develop + push. withMetric seed, map/chat metrics, vault safety-valve, Programs stale-closure fix (completes objective #2), programs telemetry hygiene. tsc 0, build pass, node:test 3/3."
+branch: develop
+remote: origin
+created_at: 2026-05-29T11:20:00.000Z
+completed_at: 2026-05-29T11:20:00.000Z
+```
+
+```yaml
 id: phase3-observability-resilience
-status: in_progress
+status: complete
 type: branch
 description: "Phase 3 — withMetric optimization-logging seed (logger+track, normalize duration_ms) + instrument map RPC & chat TTFB (close prod-blind) + vault-context safety-valve + Programs default-state select desync fix + programs error/console cleanup. node:test smokes; tsc+build gated."
 branch: feature/phase3-observability-resilience
