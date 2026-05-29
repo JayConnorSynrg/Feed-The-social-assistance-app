@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 interface Post {
@@ -68,7 +69,14 @@ export function useRealtimeFeed({
         },
         handleChange
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          logger.error('realtime-feed.subscribe.status', undefined, {
+            channel: 'posts-realtime',
+            status,
+          })
+        }
+      })
 
     channelRef.current = channel
 

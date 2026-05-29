@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { Resource } from '@/components/map/resource-marker'
 
 interface Bounds {
@@ -95,6 +96,8 @@ export function useViewportResources({
       setLoading(true)
       setError(null)
 
+      logger.debug('viewport-resources.fetch.start', { bounds: currentBounds, category })
+
       try {
         // Server-side geospatial filter via PostGIS resources_in_bounds RPC.
         // Uses GiST index on resources.location — returns only rows within the viewport.
@@ -148,9 +151,19 @@ export function useViewportResources({
           ? transformedResources.filter((r) => r.category === category)
           : transformedResources
 
+        logger.debug('viewport-resources.fetch.resolved', {
+          bounds: currentBounds,
+          category,
+          count: filtered.length,
+        })
+
         setResources(filtered)
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') {
+          logger.error('viewport-resources.fetch.error', err, {
+            bounds: currentBounds,
+            category,
+          })
           setError(err)
         }
       } finally {
