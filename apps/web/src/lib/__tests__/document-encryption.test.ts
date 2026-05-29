@@ -130,14 +130,10 @@ describe('Document Encryption', () => {
       expect(decryptedContent).toBe(originalContent)
     })
 
-    it.skip('should handle large file decryption with progress', async () => {
-      // REAL BUG — document-encryption.ts:282 decryptFileChunked iterates at CHUNK_SIZE
-      // (1MB) offsets through the encrypted blob, but each encrypted chunk is
-      // CHUNK_SIZE + 16 bytes (AES-GCM appends a 16-byte authentication tag).
-      // Decrypting misaligned slices causes AES-GCM auth tag verification to fail
-      // with "Cipher job failed". Fix: iterate at (CHUNK_SIZE + 16) per chunk in
-      // the decrypt loop, or store chunk boundaries in the blob header.
-      // Tracked at: apps/web/src/lib/document-encryption.ts:282 decryptFileChunked.
+    it('should handle large file decryption with progress', async () => {
+      // Fixed: decryptFileChunked now steps by ENCRYPTED_CHUNK_SIZE (CHUNK_SIZE + 16)
+      // so each slice aligns with what encryptFileChunked wrote. Previously stepping
+      // by CHUNK_SIZE caused AES-GCM auth tag verification to fail for files > 5MB.
       // Create and encrypt a 6MB file
       const largeContent = new Array(6 * 1024 * 1024).fill('b').join('')
       const largeFile = new File([largeContent], 'large.pdf', { type: 'application/pdf' })

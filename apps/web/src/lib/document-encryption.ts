@@ -15,7 +15,9 @@ import { getDEK } from '@/lib/key-store'
 import { generateIV, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto'
 import { validateFileUpload, type FileValidationResult } from '@/lib/security'
 
-const CHUNK_SIZE = 1024 * 1024 // 1MB chunks for large files
+const CHUNK_SIZE = 1024 * 1024 // 1MB plaintext chunks for large files
+const GCM_TAG_BYTES = 16 // AES-GCM authentication tag appended to each encrypted chunk
+const ENCRYPTED_CHUNK_SIZE = CHUNK_SIZE + GCM_TAG_BYTES // on-disk size per encrypted chunk
 const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024 // 5MB threshold for chunked processing
 
 export interface EncryptedFileResult {
@@ -277,10 +279,15 @@ async function decryptFileChunked(
   const decryptedChunks: Uint8Array[] = []
   let bytesProcessed = 0
 
-  // Process in chunks
+  // Process in chunks.
+  // Each encrypted chunk is ENCRYPTED_CHUNK_SIZE bytes (CHUNK_SIZE plaintext +
+  // GCM_TAG_BYTES auth tag). The decrypt loop must step by ENCRYPTED_CHUNK_SIZE
+  // so that slices align with what encryptFileChunked wrote. Stepping by
+  // CHUNK_SIZE instead would misalign every chunk after the first, causing
+  // AES-GCM auth tag verification to fail for files larger than LARGE_FILE_THRESHOLD.
   let chunkIndex = 0
-  for (let offset = 0; offset < encryptedBuffer.byteLength; offset += CHUNK_SIZE) {
-    const chunkSize = Math.min(CHUNK_SIZE, encryptedBuffer.byteLength - offset)
+  for (let offset = 0; offset < encryptedBuffer.byteLength; offset += ENCRYPTED_CHUNK_SIZE) {
+    const chunkSize = Math.min(ENCRYPTED_CHUNK_SIZE, encryptedBuffer.byteLength - offset)
     const chunk = encryptedBuffer.slice(offset, offset + chunkSize)
 
     // Derive the same unique IV that was used for this chunk during encryption
@@ -324,11 +331,10 @@ async function decryptFileChunked(
 }
 
 /**
- * Get encrypted file size estimate
- * AES-GCM adds 16 bytes of authentication tag per encryption operation
+ * Get encrypted file size estimate.
+ * AES-GCM appends GCM_TAG_BYTES (16) bytes of authentication tag per chunk.
  */
 export function estimateEncryptedSize(originalSize: number): number {
-  // Each chunk gets 16 bytes of GCM auth tag
   const numChunks = Math.ceil(originalSize / CHUNK_SIZE)
-  return originalSize + (numChunks * 16)
+  return originalSize + (numChunks * GCM_TAG_BYTES)
 }

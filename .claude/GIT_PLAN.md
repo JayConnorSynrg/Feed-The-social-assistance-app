@@ -298,3 +298,23 @@ files:
 created_at: 2026-05-29T20:00:00.000Z
 completed_at: 2026-05-29T20:30:00.000Z
 ```
+
+```yaml
+id: phaseA2-vault-crypto-fix
+status: complete
+type: commit
+description: "Phase A2 — fix two real crypto bugs exposed by newly-wired security tests. BUG 1 (CRITICAL): generateDEK() returned non-extractable CryptoKey; wrapDEK called wrapKey('raw') which requires extractable:true — always threw InvalidAccessException, making vault setup/unlock/rotateKEK non-functional. Fix: envelope pattern — generateDEK now returns { key: CryptoKey (non-extractable); rawBytes: Uint8Array }; wrapDEK takes raw bytes, AES-GCM-encrypts them with KEK; unwrapDEK AES-GCM-decrypts then importKey(non-extractable); rotateKEK decrypts envelope, re-encrypts with new KEK. deriveKEK usages changed from wrapKey/unwrapKey to encrypt/decrypt. In-use DEK stays non-extractable (XSS protection preserved). BUG 2 (HIGH): decryptFileChunked stepped by CHUNK_SIZE (1MB) through encrypted buffer but each encrypted chunk is CHUNK_SIZE+16 bytes; fix steps by ENCRYPTED_CHUNK_SIZE=CHUNK_SIZE+GCM_TAG_BYTES. All 7 previously-skipped tests now pass; full suite green (30 node:test + 52 vitest); vault-form-flow 9/9; type-check 0 errors; build PASS."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/lib/crypto.ts
+  - apps/web/src/lib/vault.ts
+  - apps/web/src/lib/document-encryption.ts
+  - apps/web/src/lib/__tests__/vault.test.ts
+  - apps/web/src/lib/__tests__/document-encryption.test.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T18:45:00.000Z
+completed_at: 2026-05-29T18:55:00.000Z
+```
