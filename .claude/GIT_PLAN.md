@@ -16,9 +16,23 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: phaseF2-build-determinism-indexes
 
 ## Log
+
+```yaml
+id: phaseF2-build-determinism-indexes
+status: pending
+type: commit
+description: "Phase F2 — make build network-deterministic (drop Geist fonts dead code from layout.tsx; build no longer fetches fonts.gstatic.com) + drop redundant DB indexes (duplicate created_at/user_id on posts, duplicate username index on profiles keeping UNIQUE constraint, low-value status index on resources). Migration supabase/migrations/<timestamp>_drop_redundant_indexes.sql. tsc 0, build PASS (deterministic), npm test green, vault-form-flow 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files: []
+created_at: 2026-05-29T23:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: phaseF1-observability
