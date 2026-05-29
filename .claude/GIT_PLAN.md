@@ -16,9 +16,21 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-push-phase1
+next_action_id: phase2-programs-tiles-fab
 
 ## Log
+
+```yaml
+id: phase2-programs-tiles-fab
+status: in_progress
+type: branch
+description: "Phase 2 — 2A state normalization (us-states.ts util + dedup 3x US_STATES + normalize read/write paths, fixes empty Programs + state default), 2B resource-tile address+distance, 2C volunteer FAB map-only bottom-right. node:test smokes; tsc+build gated."
+branch: feature/phase2-programs-tiles-fab
+base: develop
+remote: origin
+created_at: 2026-05-29T10:05:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: merge-push-phase1
