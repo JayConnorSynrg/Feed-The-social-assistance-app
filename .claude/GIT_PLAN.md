@@ -16,9 +16,22 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: apply-resources-browse-index
+next_action_id: phase5-logging-extension
 
 ## Log
+
+```yaml
+id: phase5-logging-extension
+status: in_progress
+type: branch
+description: "Phase 5 — extend withMetric optimization-logging to remaining hot paths (vault unlock, documents upload, programs query, feed load, messages send) + docs/observability.md. Additive only (preserve all control flow), tsc+build gated. ISOLATED WORKTREE (FEED-obs) to avoid conflict with kiosk-session docs in main tree + nav-nest worktree. Orchestrator owns GIT_PLAN; agent never touches it."
+branch: feature/phase5-logging-extension
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-obs
+created_at: 2026-05-29T15:15:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: apply-resources-browse-index
