@@ -28,7 +28,7 @@ import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
 import { useViewportResources } from '@/hooks/use-viewport-resources'
-import { useGeolocation } from '@/hooks/use-geolocation'
+import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useSavedResources } from '@/hooks/use-saved-resources'
@@ -43,6 +43,12 @@ interface MapResource extends Resource {
   hours?: string
   rating?: number
   status?: 'open' | 'closed' | 'unknown'
+}
+
+// Format a kilometer distance into a human-readable imperial string.
+function formatDistance(km: number): string {
+  const mi = km * 0.621371
+  return mi < 0.1 ? `${Math.round((mi * 5280) / 10) * 10} ft` : `${mi.toFixed(1)} mi`
 }
 
 // DEMO_RESOURCES removed - now using real Supabase data via useViewportResources
@@ -111,10 +117,20 @@ function ResourceListItem({ resource, isSelected, onClick }: ResourceListItemPro
       </div>
 
       <div className="flex items-center gap-3 text-xs text-stone-600">
-        <span className="flex items-center gap-1">
-          <MapPin className="w-3 h-3" />
-          {resource.distance}
-        </span>
+        {(() => {
+          const addr = [resource.address_line1, resource.city, resource.state].filter(Boolean).join(', ')
+          if (!addr && !resource.distance) return null
+          return (
+            <span className="flex items-center gap-1 min-w-0">
+              <MapPin className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">
+                {addr}
+                {addr && resource.distance ? ' · ' : ''}
+                {resource.distance ?? ''}
+              </span>
+            </span>
+          )
+        })()}
         {resource.rating && (
           <span className="flex items-center gap-1">
             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
@@ -269,6 +285,19 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // Real geolocation
   const { position, getCurrentPosition } = useGeolocation()
 
+  // Origin point for distance estimates: live GPS if available, else profile.
+  const userOrigin = useMemo<[number, number] | null>(() => {
+    if (position?.coords) return [position.coords.longitude, position.coords.latitude]
+    if (
+      profile?.latitude != null &&
+      profile?.longitude != null &&
+      (profile.latitude !== 0 || profile.longitude !== 0)
+    ) {
+      return [profile.longitude, profile.latitude]
+    }
+    return null
+  }, [position?.coords, profile?.latitude, profile?.longitude])
+
   // Priority 1a: Use stored lat/lng from profile (instant, no network call)
   useEffect(() => {
     if (hasAutocentered) return
@@ -360,12 +389,19 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Sort filtered resources by proximity to current map center
   const sortedResources = useMemo(() => {
-    return [...filteredResources].sort((a, b) => {
-      const distA = Math.hypot(a.latitude - viewState.latitude, a.longitude - viewState.longitude)
-      const distB = Math.hypot(b.latitude - viewState.latitude, b.longitude - viewState.longitude)
-      return distA - distB
-    })
-  }, [filteredResources, viewState.latitude, viewState.longitude])
+    return [...filteredResources]
+      .sort((a, b) => {
+        const distA = Math.hypot(a.latitude - viewState.latitude, a.longitude - viewState.longitude)
+        const distB = Math.hypot(b.latitude - viewState.latitude, b.longitude - viewState.longitude)
+        return distA - distB
+      })
+      .map((r) => ({
+        ...r,
+        distance: userOrigin
+          ? formatDistance(calculateDistance(userOrigin[1], userOrigin[0], r.latitude, r.longitude))
+          : undefined,
+      }))
+  }, [filteredResources, viewState.latitude, viewState.longitude, userOrigin])
 
   // Use clustering for map markers
   const clusters = useCluster({
