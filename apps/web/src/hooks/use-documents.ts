@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 
 export type DocumentCategory =
   | 'identity'
@@ -138,12 +138,16 @@ export function useDocuments(): UseDocumentsReturn {
       const fileName = `${user.id}/${category}/${Date.now()}.${fileExt}`
 
       // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        })
+      const { error: uploadError } = await withMetric(
+        'documents.upload',
+        { category, file_size: file.size, document_type: file.type },
+        async () => await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false,
+          })
+      )
 
       if (uploadError) throw uploadError
 

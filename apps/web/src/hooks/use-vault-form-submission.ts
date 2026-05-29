@@ -15,6 +15,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useVault } from '@/contexts/vault-context'
+import { withMetric } from '@/lib/logger'
 import {
   encryptFormSubmission,
   decryptFormSubmission,
@@ -258,11 +259,15 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           encryption_migrated: true,
         }
 
-        const { data, error } = await supabase
-          .from('form_submissions')
-          .insert(submission)
-          .select('*')
-          .single()
+        const { data, error } = await withMetric(
+          'forms.draft',
+          { template_id: templateId },
+          async () => await supabase
+            .from('form_submissions')
+            .insert(submission)
+            .select('*')
+            .single()
+        )
 
         if (error) throw error
 
@@ -403,10 +408,14 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           updated_at: now,
         }
 
-        const { error: updateError } = await supabase
-          .from('form_submissions')
-          .update(updates)
-          .eq('id', state.submission.id)
+        const { error: updateError } = await withMetric(
+          'forms.submit',
+          { template_id: state.submission.templateId, has_signature: signatureData != null },
+          async () => await supabase
+            .from('form_submissions')
+            .update(updates)
+            .eq('id', state.submission!.id)
+        )
 
         if (updateError) throw updateError
 

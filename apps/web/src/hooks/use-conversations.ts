@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { withMetric } from '@/lib/logger'
 
 interface ConversationProfile {
   full_name: string | null
@@ -352,14 +353,18 @@ export function useConversations() {
     setIsSending(true)
     setError(null)
     try {
-      const { error: insertError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: selectedConversationId,
-          sender_id: user.id,
-          content,
-          is_read: false,
-        })
+      const { error: insertError } = await withMetric(
+        'messages.send',
+        { content_length: content.length },
+        async () => await supabase
+          .from('messages')
+          .insert({
+            conversation_id: selectedConversationId,
+            sender_id: user.id,
+            content,
+            is_read: false,
+          })
+      )
 
       if (insertError) throw new Error(insertError.message)
       // Optimistic append happens via realtime INSERT event; no manual push needed

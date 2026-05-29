@@ -21,6 +21,28 @@ next_action_id: null
 ## Log
 
 ```yaml
+id: phaseF1-observability
+status: in_progress
+type: commit
+description: "Phase F1 — weave withMetric into 6 live hot paths (vault.unlock, documents.upload, programs.query, feed.load, messages.send, forms.draft, forms.submit). Remove redundant manual Date.now() timing + duplicate logger.info from programs.query. Create docs/observability.md metric catalog. Additive only: zero control-flow change, zero regression. tsc 0, node:test 30/30 pass, vitest 38/14-todo pass, vault-form-flow smoke 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/contexts/vault-context.tsx
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/hooks/use-program-browser.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - docs/observability.md
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T19:00:00.000Z
+completed_at: null
+```
+
+```yaml
 id: phaseD-test-infra
 status: complete
 type: commit

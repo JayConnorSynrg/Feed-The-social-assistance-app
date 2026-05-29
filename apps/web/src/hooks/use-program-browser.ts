@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import type { Database } from '@feed/database'
 import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
 import { normalizeState } from '@/lib/us-states'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 
 const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
@@ -67,8 +67,6 @@ export function useProgramBrowser(): ProgramBrowserResult {
     setIsLoading(true)
     setError(null)
 
-    const start = Date.now()
-
     try {
       const supabase = getSupabase()
 
@@ -88,20 +86,20 @@ export function useProgramBrowser(): ProgramBrowserResult {
         query = query.ilike('name', `%${filters.search.trim()}%`)
       }
 
-      const { data, error: fetchError } = await query
+      const { data, error: fetchError } = await withMetric(
+        'programs.query',
+        {
+          category: filters.category ?? null,
+          state: filters.state ?? null,
+          has_search: filters.search.trim().length > 0,
+        },
+        async () => await query
+      )
 
       if (fetchError) throw fetchError
 
       const results = (data ?? []) as Resource[]
       setPrograms(results)
-
-      logger.info('programs.fetched', {
-        category: filters.category,
-        search: filters.search,
-        state: filters.state,
-        resultCount: results.length,
-        duration_ms: Date.now() - start,
-      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load programs'
       setError(message)
