@@ -7,6 +7,8 @@
  * - Includes request timing via `logger.time()` and error serialization.
  */
 
+import { track } from '@vercel/analytics'
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 interface LogEntry {
@@ -134,15 +136,47 @@ export async function withTiming<T>(
     logger.info(`${operation}.complete`, {
       ...context,
       opId,
-      durationMs: Math.round(performance.now() - start),
+      duration_ms: Math.round(performance.now() - start),
     })
     return result
   } catch (error) {
     logger.error(`${operation}.error`, error, {
       ...context,
       opId,
-      durationMs: Math.round(performance.now() - start),
+      duration_ms: Math.round(performance.now() - start),
     })
+    throw error
+  }
+}
+
+/**
+ * Time an async operation, emitting a structured log AND a Vercel analytics
+ * event so latency/error signals are visible in production (where `debug` and
+ * raw timing logs are suppressed). Re-throws on error — never swallows.
+ *
+ * `track()` accepts only flat primitive props (string | number | boolean |
+ * null). AbortError outcomes are NOT failures (Next.js aborts in-flight fetch
+ * on re-render), so the analytics event is skipped for them.
+ */
+export async function withMetric<T>(
+  operation: string,
+  attrs: Record<string, string | number | boolean | null>,
+  fn: () => Promise<T>
+): Promise<T> {
+  const start = performance.now()
+  try {
+    const result = await fn()
+    const duration_ms = Math.round(performance.now() - start)
+    logger.info(`${operation}.complete`, { ...attrs, duration_ms })
+    track(operation, { ...attrs, duration_ms, ok: true })
+    return result
+  } catch (error) {
+    const duration_ms = Math.round(performance.now() - start)
+    const error_code = error instanceof Error ? error.name : 'UnknownError'
+    logger.error(`${operation}.error`, error, { ...attrs, duration_ms, error_code })
+    if (error_code !== 'AbortError') {
+      track(operation, { ...attrs, duration_ms, ok: false, error_code })
+    }
     throw error
   }
 }
