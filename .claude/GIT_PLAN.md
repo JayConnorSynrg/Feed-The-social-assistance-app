@@ -22,7 +22,7 @@ next_action_id: apply-resources-browse-index
 
 ```yaml
 id: apply-resources-browse-index
-status: pending
+status: complete
 type: db-apply
 description: "Apply 20260529000002 to prod (ndtpovonpadugthmcntl). BLOCKED on user DB password. Apply via `SUPABASE_DB_PASSWORD=<pw> npx supabase db push --linked --yes` OR Supabase SQL editor + `supabase migration repair --status applied 20260529000002 --linked`. Capture EXPLAIN ANALYZE before/after to confirm Seq Scan → Index Scan."
 branch: develop
