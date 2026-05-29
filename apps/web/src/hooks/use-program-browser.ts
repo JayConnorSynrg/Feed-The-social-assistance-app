@@ -1,11 +1,13 @@
 'use client'
 
+import type React from 'react'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { Database } from '@feed/database'
 import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
 import { normalizeState } from '@/lib/us-states'
+import { logger } from '@/lib/logger'
 
 const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
@@ -34,7 +36,7 @@ export interface ProgramBrowserResult {
   isLoading: boolean
   error: string | null
   filters: ProgramFilters
-  setFilters: (f: ProgramFilters) => void
+  setFilters: React.Dispatch<React.SetStateAction<ProgramFilters>>
   totalCount: number
 }
 
@@ -93,14 +95,13 @@ export function useProgramBrowser(): ProgramBrowserResult {
       const results = (data ?? []) as Resource[]
       setPrograms(results)
 
-      console.log(JSON.stringify({
-        action: 'programs_fetched',
+      logger.info('programs.fetched', {
         category: filters.category,
         search: filters.search,
         state: filters.state,
         resultCount: results.length,
-        durationMs: Date.now() - start,
-      }))
+        duration_ms: Date.now() - start,
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load programs'
       setError(message)
@@ -144,8 +145,11 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .sort((a, b) => b.count - a.count)
 
       setCategories(sorted)
-    } catch {
-      // Non-fatal — categories bar degrades gracefully
+    } catch (err) {
+      // Non-fatal — categories bar degrades gracefully, but surface the cause.
+      logger.warn('programs.categories.error', {
+        error_message: err instanceof Error ? err.message : String(err),
+      })
     }
   }, [authLoading, filters.state])
 

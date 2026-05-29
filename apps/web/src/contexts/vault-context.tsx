@@ -24,6 +24,7 @@ import {
 import { clearKeys } from '@/lib/key-store'
 import { migrateUserDataToEncrypted, needsMigration } from '@/lib/migrate-to-encrypted'
 import { logPredefinedEvent } from '@/lib/audit-logger'
+import { logger } from '@/lib/logger'
 
 interface VaultContextType {
   // State
@@ -97,6 +98,23 @@ export function VaultProvider({ children }: VaultProviderProps) {
     }
 
     checkVaultStatus()
+
+    // Safety valve: if a vault check hangs (hasVault / isVaultUnlocked never
+    // resolves), loading would stick true forever and block the UI. After 10s
+    // force loading=false. On the happy path the finally block above clears
+    // loading first, so this timer becomes a no-op (current === false).
+    const maxLoadingTimer = setTimeout(() => {
+      setLoading((current) => {
+        if (current) {
+          logger.warn('vault.safetyValve', { totalWait_ms: 10000, userId: user?.id })
+        }
+        return false
+      })
+    }, 10_000)
+
+    return () => {
+      clearTimeout(maxLoadingTimer)
+    }
   }, [user?.id])
 
   // Lock vault on logout

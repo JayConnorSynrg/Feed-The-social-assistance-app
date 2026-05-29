@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 export interface ChatMessage {
   id: string
@@ -188,7 +189,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             if (done) break
 
             if (firstChunk) {
-              logger.debug('chat.stream.firstChunk', { opId, durationMs: Math.round(performance.now() - chatStart) })
+              const ttfb_ms = Math.round(performance.now() - chatStart)
+              logger.info('chat.stream.firstChunk', { opId, duration_ms: ttfb_ms })
+              track('chat.ttfb', { duration_ms: ttfb_ms })
               firstChunk = false
             }
 
@@ -201,13 +204,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
                 if (data === '[DONE]') {
                   // Streaming complete
+                  const complete_ms = Math.round(performance.now() - chatStart)
                   logger.info('chat.send.complete', {
                     opId,
                     userId: profile?.id,
-                    durationMs: Math.round(performance.now() - chatStart),
+                    duration_ms: complete_ms,
                     model: currentModel ?? 'unknown',
                     contentLength: accumulatedContent.length,
                   })
+                  track('chat.complete', { duration_ms: complete_ms, ok: true })
                   streamDone = true
                   setMessages(prev =>
                     prev.map(m =>
@@ -276,7 +281,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         // Guard: if stream ended without [DONE], close the streaming state so dots don't persist
         if (!streamDone) {
-          logger.warn('chat.stream.missingDone', { opId, contentLength: accumulatedContent.length, durationMs: Math.round(performance.now() - chatStart) })
+          logger.warn('chat.stream.missingDone', { opId, contentLength: accumulatedContent.length, duration_ms: Math.round(performance.now() - chatStart) })
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantMessage.id
@@ -295,7 +300,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           return
         }
 
-        logger.error('chat.send.error', error, { opId, userId: profile?.id, durationMs: Math.round(performance.now() - chatStart) })
+        logger.error('chat.send.error', error, { opId, userId: profile?.id, duration_ms: Math.round(performance.now() - chatStart) })
 
         setError(error)
         onError?.(error)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 import type { Resource } from '@/components/map/resource-marker'
 
 interface Bounds {
@@ -109,9 +109,17 @@ export function useViewportResources({
           max_results: limit,
         }
 
-        const { data, error: queryError } = await (supabase as any)
-          .rpc('resources_in_bounds', rpcParams)
-          .abortSignal(controller.signal)
+        const { data, error: queryError } = await withMetric<{
+          data: ResourceRow[] | null
+          error: Error | null
+        }>(
+          'map.resources_in_bounds',
+          { category: category ?? 'all', limit },
+          () =>
+            (supabase as any)
+              .rpc('resources_in_bounds', rpcParams)
+              .abortSignal(controller.signal)
+        )
 
         if (queryError) throw queryError
 
@@ -151,7 +159,7 @@ export function useViewportResources({
           ? transformedResources.filter((r) => r.category === category)
           : transformedResources
 
-        logger.debug('viewport-resources.fetch.resolved', {
+        logger.info('viewport-resources.fetch.resolved', {
           bounds: currentBounds,
           category,
           count: filtered.length,
