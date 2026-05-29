@@ -17,12 +17,14 @@ export interface Document {
   user_id: string
   name: string
   file_path: string
-  file_type: string
-  file_size: number
-  category: DocumentCategory
-  application_id?: string
-  description?: string
-  uploaded_at: string
+  /** Maps to user_documents.document_type */
+  document_type: string
+  file_size: number | null
+  category: string | null
+  /** Maps to user_documents.submission_id */
+  submission_id?: string | null
+  notes?: string | null
+  created_at: string | null
   url?: string
 }
 
@@ -30,12 +32,12 @@ export interface UseDocumentsReturn {
   documents: Document[]
   isLoading: boolean
   error: Error | null
-  uploadDocument: (file: File, category: DocumentCategory, applicationId?: string, description?: string) => Promise<Document | null>
+  uploadDocument: (file: File, category: string, applicationId?: string, description?: string) => Promise<Document | null>
   deleteDocument: (id: string) => Promise<void>
   getDocumentUrl: (filePath: string) => Promise<string | null>
   refreshDocuments: () => Promise<void>
-  getDocumentsByCategory: (category: DocumentCategory) => Document[]
-  getDocumentsByApplication: (applicationId: string) => Document[]
+  getDocumentsByCategory: (category: string) => Document[]
+  getDocumentsByApplication: (submissionId: string) => Document[]
 }
 
 const CATEGORY_INFO: Record<DocumentCategory, { label: string; icon: string; description: string }> = {
@@ -66,8 +68,8 @@ const CATEGORY_INFO: Record<DocumentCategory, { label: string; icon: string; des
   },
 }
 
-export function getCategoryInfo(category: DocumentCategory) {
-  return CATEGORY_INFO[category] || CATEGORY_INFO.other
+export function getCategoryInfo(category: string) {
+  return CATEGORY_INFO[category as DocumentCategory] || CATEGORY_INFO.other
 }
 
 const STORAGE_BUCKET = 'documents'
@@ -95,12 +97,11 @@ export function useDocuments(): UseDocumentsReturn {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('user_documents')
         .select('*')
         .eq('user_id', user.id)
-        .order('uploaded_at', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (fetchError) throw fetchError
 
@@ -115,7 +116,7 @@ export function useDocuments(): UseDocumentsReturn {
 
   const uploadDocument = useCallback(async (
     file: File,
-    category: DocumentCategory,
+    category: string,
     applicationId?: string,
     description?: string
   ): Promise<Document | null> => {
@@ -147,18 +148,17 @@ export function useDocuments(): UseDocumentsReturn {
       if (uploadError) throw uploadError
 
       // Create database record
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: doc, error: insertError } = await (supabase as any)
+      const { data: doc, error: insertError } = await supabase
         .from('user_documents')
         .insert({
           user_id: user.id,
           name: file.name,
           file_path: fileName,
-          file_type: file.type,
+          document_type: file.type,
           file_size: file.size,
           category,
-          application_id: applicationId || null,
-          description: description || null,
+          submission_id: applicationId || null,
+          notes: description || null,
         })
         .select()
         .single()
@@ -187,8 +187,7 @@ export function useDocuments(): UseDocumentsReturn {
       if (storageError) throw storageError
 
       // Delete database record
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await supabase
         .from('user_documents')
         .delete()
         .eq('id', id)
@@ -218,12 +217,12 @@ export function useDocuments(): UseDocumentsReturn {
     }
   }, [supabase])
 
-  const getDocumentsByCategory = useCallback((category: DocumentCategory) => {
+  const getDocumentsByCategory = useCallback((category: string) => {
     return documents.filter(d => d.category === category)
   }, [documents])
 
-  const getDocumentsByApplication = useCallback((applicationId: string) => {
-    return documents.filter(d => d.application_id === applicationId)
+  const getDocumentsByApplication = useCallback((submissionId: string) => {
+    return documents.filter(d => d.submission_id === submissionId)
   }, [documents])
 
   // Initial load

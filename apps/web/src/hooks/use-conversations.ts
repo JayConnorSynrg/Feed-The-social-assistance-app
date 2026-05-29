@@ -78,7 +78,7 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('conversations')
         .select(CONVERSATION_SELECT)
         .or(`volunteer_id.eq.${user.id},requester_id.eq.${user.id}`)
@@ -86,7 +86,7 @@ export function useConversations() {
 
       if (fetchError) throw new Error(fetchError.message)
 
-      const rows = (data ?? []) as Conversation[]
+      const rows = (data ?? []) as unknown as Conversation[]
       setConversations(rows)
 
       // Recompute unread count across all active conversations
@@ -104,7 +104,7 @@ export function useConversations() {
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('messages')
         .select('id, conversation_id, sender_id, content, is_read, created_at')
         .eq('conversation_id', conversationId)
@@ -224,7 +224,7 @@ export function useConversations() {
       setError(null)
       try {
         // Insert the conversation (pending status)
-        const { data: convData, error: convError } = await (supabase as any)
+        const { data: convData, error: convError } = await supabase
           .from('conversations')
           .insert({
             resource_id: resourceId,
@@ -245,7 +245,7 @@ export function useConversations() {
         }
 
         // Insert the opening message
-        const { error: msgError } = await (supabase as any)
+        const { error: msgError } = await supabase
           .from('messages')
           .insert({
             conversation_id: convData.id,
@@ -272,7 +272,7 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ status: 'active' })
         .eq('id', id)
@@ -291,7 +291,7 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ status: 'declined' })
         .eq('id', id)
@@ -310,7 +310,7 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ status: 'cancelled' })
         .eq('id', id)
@@ -329,7 +329,7 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ status: 'cancelled' })
         .eq('id', id)
@@ -352,7 +352,7 @@ export function useConversations() {
     setIsSending(true)
     setError(null)
     try {
-      const { error: insertError } = await (supabase as any)
+      const { error: insertError } = await supabase
         .from('messages')
         .insert({
           conversation_id: selectedConversationId,
@@ -373,7 +373,7 @@ export function useConversations() {
   const markAsRead = useCallback(async (conversationId: string) => {
     if (!user?.id) return
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('messages')
         .update({ is_read: true })
         .eq('conversation_id', conversationId)

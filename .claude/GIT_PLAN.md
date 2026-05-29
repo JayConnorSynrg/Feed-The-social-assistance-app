@@ -16,9 +16,39 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: phaseC-types-casts-lintguard
 
 ## Log
+
+```yaml
+id: phaseC-types-casts-lintguard
+status: complete
+type: commit
+description: "Phase C — (1) Regenerate Supabase types from live project (37→41 tables; adds saved_resources, saved_resource_tasks, saved_resource_events, saved_resource_documents). (2) Remove all 51 (supabase as any) casts: 49 removed cleanly, 2 documented dynamic-table casts remain in query-utils.ts with eslint-disable comments. Real bugs exposed and fixed: use-documents.ts queried uploaded_at (nonexistent, fixed to created_at), file_type (nonexistent, fixed to document_type), application_id (nonexistent, fixed to submission_id); use-form-templates.ts queried nonexistent category/agency columns (fixed to form_type/agency_name). (3) Add no-restricted-syntax lint guard in eslint.config.mjs targeting (supabase as any) pattern in hooks/components/lib/app dirs. tsc 0 errors, build pass, smoke 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - packages/database/types.ts
+  - apps/web/src/hooks/use-resource-detail.ts
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-notifications.ts
+  - apps/web/src/hooks/use-form-templates.ts
+  - apps/web/src/hooks/use-volunteer-resource.ts
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/hooks/use-viewport-resources.ts
+  - apps/web/src/lib/query-utils.ts
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/src/app/(admin)/moderation/moderation-queue.tsx
+  - apps/web/src/components/documents/document-viewer.tsx
+  - apps/web/src/components/documents/resource-detail-dialog.tsx
+  - apps/web/eslint.config.mjs
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T21:00:00.000Z
+completed_at: 2026-05-29T21:45:00.000Z
+```
+
 
 ```yaml
 id: phaseA-vault-migration

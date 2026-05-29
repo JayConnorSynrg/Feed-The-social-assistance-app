@@ -79,8 +79,9 @@ export function buildOptimizedQuery(
   const orderBy = config.orderBy ?? defaults.orderBy ?? 'created_at'
   const ascending = config.ascending ?? defaults.ascending ?? false
 
+  // Dynamic table name from caller — cannot be typed statically without generics refactor.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (supabase as any)
+  return (supabase as unknown as any)
     .from(table)
     .select(select, { count: 'exact' })
     .order(orderBy, { ascending })
@@ -101,8 +102,9 @@ export async function batchFetchRelated<T extends { id: string }>(
   const ids = items.map(item => item.id)
   const supabase = createClient()
 
+  // Dynamic table name from caller — cannot be typed statically without generics refactor.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await (supabase as unknown as any)
     .from(relatedTable)
     .select(select)
     .in(foreignKey, ids)
@@ -176,8 +178,7 @@ export async function fetchResourcesInViewport(
   const supabase = createClient()
 
   // Use PostGIS functions for efficient spatial queries
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from('resources')
     .select(QUERY_DEFAULTS.resources.select)
     .gte('latitude', bounds.south)

@@ -70,6 +70,16 @@ type WizardState =
 // ============================================
 // ADAPTERS: Hook data → Panel types
 // ============================================
+function deriveCategoryFromFormType(formType: string): FormTemplate['category'] {
+  switch (formType) {
+    case 'snap': case 'wic': case 'tanf': return 'food'
+    case 'medicaid': return 'healthcare'
+    case 'housing': return 'housing'
+    case 'utility': return 'utilities'
+    default: return 'benefits'
+  }
+}
+
 function deriveCategoryFromName(name: string | null): FormTemplate['category'] {
   if (!name) return 'benefits'
   const lower = name.toLowerCase()
@@ -88,7 +98,7 @@ function adaptTemplate(row: FormTemplateWithMeta): FormTemplate {
     description: row.description ?? schema.description ?? '',
     estimatedTime: schema.metadata?.estimatedTime ?? 30,
     requiredDocs: schema.metadata?.requiredDocuments ?? [],
-    category: (row.category as FormTemplate['category']) ?? deriveCategoryFromName(row.name),
+    category: deriveCategoryFromFormType(row.form_type) ?? deriveCategoryFromName(row.name),
   }
 }
 
@@ -115,7 +125,7 @@ function adaptSubmission(
     templateName: tmpl?.name ?? 'Unknown Form',
     submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : new Date(sub.createdAt),
     status: mapSubmissionStatus(sub.status),
-    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+    category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
   }
 }
 
@@ -134,7 +144,7 @@ function adaptDraft(
     templateName: tmpl?.name ?? 'Unknown Form',
     progress,
     lastSaved: new Date(sub.updatedAt),
-    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+    category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
   }
 }
 
@@ -549,8 +559,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const handleDeleteDraft = async (formId: string) => {
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('form_submissions').delete().eq('id', formId)
+    await supabase.from('form_submissions').delete().eq('id', formId)
     await refreshSubmissions()
   }
 

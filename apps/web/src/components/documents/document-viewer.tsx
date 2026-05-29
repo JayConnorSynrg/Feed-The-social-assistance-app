@@ -17,9 +17,10 @@ interface DocumentCardProps {
 
 export function DocumentCard({ document, onView, onDelete, getUrl }: DocumentCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
-  const categoryInfo = getCategoryInfo(document.category)
+  const categoryInfo = getCategoryInfo(document.category ?? 'other')
 
-  const formatSize = (bytes: number): string => {
+  const formatSize = (bytes: number | null): string => {
+    if (bytes == null) return 'Unknown'
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -35,8 +36,8 @@ export function DocumentCard({ document, onView, onDelete, getUrl }: DocumentCar
     }
   }
 
-  const isImage = document.file_type.startsWith('image/')
-  const isPdf = document.file_type === 'application/pdf'
+  const isImage = (document.document_type ?? '').startsWith('image/')
+  const isPdf = document.document_type === 'application/pdf'
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -58,13 +59,13 @@ export function DocumentCard({ document, onView, onDelete, getUrl }: DocumentCar
                 {formatSize(document.file_size)}
               </span>
             </div>
-            {document.description && (
+            {document.notes && (
               <p className="text-sm text-muted-foreground mt-1 truncate">
-                {document.description}
+                {document.notes}
               </p>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              Uploaded {new Date(document.uploaded_at).toLocaleDateString()}
+              Uploaded {document.created_at ? new Date(document.created_at).toLocaleDateString() : '—'}
             </p>
           </div>
 
@@ -103,8 +104,8 @@ interface DocumentViewerModalProps {
 export function DocumentViewerModal({ document, url, onClose }: DocumentViewerModalProps) {
   if (!document) return null
 
-  const isImage = document.file_type.startsWith('image/')
-  const isPdf = document.file_type === 'application/pdf'
+  const isImage = (document.document_type ?? '').startsWith('image/')
+  const isPdf = document.document_type === 'application/pdf'
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -114,7 +115,7 @@ export function DocumentViewerModal({ document, url, onClose }: DocumentViewerMo
           <div>
             <h3 className="font-semibold">{document.name}</h3>
             <p className="text-sm text-muted-foreground">
-              {getCategoryInfo(document.category).label}
+              {getCategoryInfo(document.category ?? 'other').label}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -247,12 +248,12 @@ export function DocumentsByCategory({
   onDelete,
   getUrl,
 }: DocumentsByCategoryProps) {
-  const categories: DocumentCategory[] = ['identity', 'income', 'residence', 'medical', 'other']
+  const categories = ['identity', 'income', 'residence', 'medical', 'other'] as const
 
   const documentsByCategory = categories.reduce((acc, category) => {
     acc[category] = documents.filter(d => d.category === category)
     return acc
-  }, {} as Record<DocumentCategory, Document[]>)
+  }, {} as Record<string, Document[]>)
 
   return (
     <div className="space-y-6">

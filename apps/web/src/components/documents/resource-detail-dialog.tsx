@@ -177,7 +177,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                       {tasks.map((task) => (
                         <div key={task.id} className="flex items-center gap-3 group">
                           <Checkbox
-                            checked={task.is_completed}
+                            checked={task.is_completed ?? false}
                             onCheckedChange={() => toggleTask(task.id)}
                           />
                           <span className={`flex-1 text-sm ${task.is_completed ? 'line-through text-stone-400' : 'text-stone-700'}`}>
@@ -290,7 +290,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                           <FileText className="w-4 h-4 text-stone-400 flex-shrink-0" />
                           <span className="flex-1 text-sm text-stone-700 truncate">{doc.file_name}</span>
                           <span className="text-xs text-stone-400 flex-shrink-0">
-                            {(doc.file_size / 1024 / 1024).toFixed(1)} MB
+                            {doc.file_size != null ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : '—'}
                           </span>
                           <button
                             onClick={() => handleDownload(doc.file_path, doc.file_name)}
