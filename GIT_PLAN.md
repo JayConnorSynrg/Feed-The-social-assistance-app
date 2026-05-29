@@ -44,3 +44,30 @@ Move the "Forms" sidebar tab inside the Documents panel, and the "Messages" side
 - grep: FormsPanel imported in documents-panel.tsx
 - grep: MessagesPanel imported in feed-panel.tsx
 - git diff: forms-panel.tsx and messages-panel.tsx not listed (unmodified)
+
+---
+
+## Entry: feed-perf-batch1
+
+**ID:** feed-perf-batch1
+**Status:** complete
+**Branch:** feature/feed-perf-fixes (worktree at /Users/jelalconnor/CODING/CURSOR/FEED-nav-nest)
+**Base:** develop
+
+### Objective
+Performance + cleanup batch: Vercel RUM gating, memoization, auth-gated realtime, a11y tablists, demo route removal, perf e2e spec.
+
+### Changes
+- middleware.ts: add _vercel/ to matcher negative-lookahead; remove /demo from publicRoutes
+- demo/page.tsx + demo/social/page.tsx: deleted (git rm)
+- applications-panel.tsx: module-level Intl.DateTimeFormat; counts/filteredApplications wrapped in useMemo; as any cast removed; FilterTabs → ARIA tablist with roving tabindex
+- feed-shell.tsx: ShellContext Provider value wrapped in useMemo<ShellContextType>
+- use-realtime-feed.ts: gated on session !== null via useAuth
+- forms-panel.tsx: TabButton ARIA tablist pattern (role=tab/tablist/tabpanel, roving tabindex, arrow keys)
+- map-panel.tsx: Map/List toggle → ARIA tablist
+- e2e/perf-walkthrough.spec.ts: new authenticated perf spec (excluded from tsconfig)
+- tsconfig.json: exclude e2e/** from type-check
+
+### Validation
+- type-check: exit 0
+- build: exit 0

@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
@@ -31,6 +32,7 @@ export function useRealtimeFeed({
 }: UseRealtimeFeedOptions = {}) {
   const supabase = createClient()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const { session } = useAuth()
 
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<Post>) => {
@@ -56,7 +58,10 @@ export function useRealtimeFeed({
   )
 
   useEffect(() => {
-    if (!enabled) return
+    // Gate subscribe on both the enabled flag and an authenticated session.
+    // Without a session the Supabase realtime gateway rejects the connection,
+    // producing a console error on every unauthenticated page load.
+    if (!enabled || !session) return
 
     const channel = supabase
       .channel('posts-realtime')
@@ -86,7 +91,7 @@ export function useRealtimeFeed({
         channelRef.current = null
       }
     }
-  }, [supabase, enabled, handleChange])
+  }, [supabase, enabled, session, handleChange])
 
   const unsubscribe = useCallback(() => {
     if (channelRef.current) {
