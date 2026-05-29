@@ -94,6 +94,7 @@ Deno.serve(async (req: Request) => {
     await safeDelete('form_submissions', 'user_id', userId)
     await safeNullify('resources', 'submitted_by', userId)
     await safeNullify('resources', 'moderated_by', userId)
+    await safeNullify('federation_trust_events', 'created_by', userId)
     await safeDelete('user_documents', 'user_id', userId)
     await safeDelete('user_secure_profiles', 'id', userId)
     await safeDelete('mfa_backup_codes', 'user_id', userId)
