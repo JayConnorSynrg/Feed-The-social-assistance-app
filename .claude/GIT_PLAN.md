@@ -16,9 +16,26 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: apply-resources-browse-index
+next_action_id: auth-fixes-signout-delete
 
 ## Log
+
+```yaml
+id: auth-fixes-signout-delete
+status: in_progress
+type: commit
+description: "Fix 1: TopNav sign-out handler adds router.push('/login') + logger.info. Fix 2: safeNullify('federation_trust_events','created_by') in delete-account fn + ON DELETE SET NULL migration (20260529221945). Edge-fn redeploy + db push are PENDING (next gated step)."
+branch: feature/auth-fixes
+base: origin/develop
+remote: origin
+files:
+  - apps/web/src/components/layout/feed-shell.tsx
+  - supabase/functions/delete-account/index.ts
+  - supabase/migrations/20260529221945_fix_federation_trust_events_fk_on_delete.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T22:19:45.000Z
+completed_at: null
+```
 
 ```yaml
 id: apply-resources-browse-index
