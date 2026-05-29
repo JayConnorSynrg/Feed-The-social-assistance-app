@@ -91,6 +91,7 @@ export function useViewportResources({
       }
 
       abortControllerRef.current = new AbortController()
+      const controller = abortControllerRef.current
       setLoading(true)
       setError(null)
 
@@ -107,6 +108,7 @@ export function useViewportResources({
 
         const { data, error: queryError } = await (supabase as any)
           .rpc('resources_in_bounds', rpcParams)
+          .abortSignal(controller.signal)
 
         if (queryError) throw queryError
 
@@ -152,7 +154,7 @@ export function useViewportResources({
           setError(err)
         }
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     },
     [supabase, limit, category]
