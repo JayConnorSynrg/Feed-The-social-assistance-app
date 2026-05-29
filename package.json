@@ -17,6 +17,7 @@
     "federation:register-local": "npx ts-node scripts/federation/register-local-instance.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "duck-duck-scrape": "^2.2.7",
     "turbo": "^2.0.0"
   },

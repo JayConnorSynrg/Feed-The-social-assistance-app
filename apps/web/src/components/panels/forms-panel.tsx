@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo, useRef, useCallback } from 'react'
 import {
   FileText,
   Clock,
@@ -417,15 +417,26 @@ function SubmissionCard({ submission, onView }: SubmissionCardProps) {
 // ============================================
 interface TabButtonProps {
   label: string
+  tabId: string
+  panelId: string
   count: number
   isActive: boolean
   onClick: () => void
+  onKeyDown: (e: React.KeyboardEvent) => void
+  buttonRef: (el: HTMLButtonElement | null) => void
 }
 
-function TabButton({ label, count, isActive, onClick }: TabButtonProps) {
+function TabButton({ label, tabId, panelId, count, isActive, onClick, onKeyDown, buttonRef }: TabButtonProps) {
   return (
     <button
+      ref={buttonRef}
+      id={tabId}
+      role="tab"
+      aria-selected={isActive}
+      aria-controls={panelId}
+      tabIndex={isActive ? 0 : -1}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       className={`px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap flex items-center gap-2 ${
         isActive
           ? 'bg-[#4a5d23] text-white'
@@ -468,10 +479,29 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
 // ============================================
 // MAIN FORMS PANEL
 // ============================================
+const FORMS_TABS: { key: TabType; label: string; panelId: string }[] = [
+  { key: 'available', label: 'Available Forms', panelId: 'forms-panel-available' },
+  { key: 'in-progress', label: 'In Progress', panelId: 'forms-panel-in-progress' },
+  { key: 'submitted', label: 'Submitted', panelId: 'forms-panel-submitted' },
+]
+
 export function FormsPanel({ userId }: FormsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('available')
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  const handleTabKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
+    let next = index
+    if (e.key === 'ArrowRight') next = (index + 1) % FORMS_TABS.length
+    else if (e.key === 'ArrowLeft') next = (index - 1 + FORMS_TABS.length) % FORMS_TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = FORMS_TABS.length - 1
+    else return
+    e.preventDefault()
+    tabRefs.current[next]?.focus()
+    setActiveTab(FORMS_TABS[next].key)
+  }, [])
 
   // Live data hooks
   const { templates: rawTemplates, loading: templatesLoading, error: templatesError } = useFormTemplates()
@@ -690,29 +720,36 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 overflow-x-auto mb-6 pb-1">
-          <TabButton
-            label="Available Forms"
-            count={templates.length}
-            isActive={activeTab === 'available'}
-            onClick={() => setActiveTab('available')}
-          />
-          <TabButton
-            label="In Progress"
-            count={inProgress.length}
-            isActive={activeTab === 'in-progress'}
-            onClick={() => setActiveTab('in-progress')}
-          />
-          <TabButton
-            label="Submitted"
-            count={submissions.length}
-            isActive={activeTab === 'submitted'}
-            onClick={() => setActiveTab('submitted')}
-          />
+        <div
+          role="tablist"
+          aria-label="Forms sections"
+          className="flex gap-2 overflow-x-auto mb-6 pb-1"
+        >
+          {FORMS_TABS.map((tab, index) => {
+            const count = tab.key === 'available' ? templates.length : tab.key === 'in-progress' ? inProgress.length : submissions.length
+            return (
+              <TabButton
+                key={tab.key}
+                tabId={`forms-tab-${tab.key}`}
+                panelId={tab.panelId}
+                label={tab.label}
+                count={count}
+                isActive={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                onKeyDown={(e) => handleTabKeyDown(e, index)}
+                buttonRef={(el) => { tabRefs.current[index] = el }}
+              />
+            )
+          })}
         </div>
 
         {/* Tab Content */}
-        <div className="space-y-4">
+        <div
+          id={FORMS_TABS.find(t => t.key === activeTab)?.panelId}
+          role="tabpanel"
+          aria-labelledby={`forms-tab-${activeTab}`}
+          className="space-y-4"
+        >
           {/* Available Forms Tab */}
           {activeTab === 'available' && (
             <>

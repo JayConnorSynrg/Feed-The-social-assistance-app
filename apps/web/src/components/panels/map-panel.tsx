@@ -469,22 +469,50 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-semibold">Resources</h2>
-            <div className="flex gap-1">
+            <div
+              role="tablist"
+              aria-label="Map or list view"
+              className="flex gap-1"
+            >
               <Button
+                role="tab"
+                aria-selected={viewMode === 'map'}
+                aria-controls="map-view-panel"
+                id="map-tab-map"
+                tabIndex={viewMode === 'map' ? 0 : -1}
                 variant="ghost"
                 size="icon"
                 className={`h-8 w-8 ${viewMode === 'map' ? 'bg-[#4a5d23] text-white hover:bg-[#3a4a1a]' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'}`}
                 onClick={() => setViewMode('map')}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    setViewMode(viewMode === 'map' ? 'list' : 'map')
+                  }
+                }}
               >
                 <MapIcon className="w-4 h-4" />
+                <span className="sr-only">Map view</span>
               </Button>
               <Button
+                role="tab"
+                aria-selected={viewMode === 'list'}
+                aria-controls="map-view-panel"
+                id="map-tab-list"
+                tabIndex={viewMode === 'list' ? 0 : -1}
                 variant="ghost"
                 size="icon"
                 className={`h-8 w-8 ${viewMode === 'list' ? 'bg-[#4a5d23] text-white hover:bg-[#3a4a1a]' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'}`}
                 onClick={() => setViewMode('list')}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    setViewMode(viewMode === 'map' ? 'list' : 'map')
+                  }
+                }}
               >
                 <List className="w-4 h-4" />
+                <span className="sr-only">List view</span>
               </Button>
             </div>
           </div>
@@ -561,7 +589,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       </div>
 
       {/* Center: Interactive Map */}
-      <div className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
+      <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
         <MapView
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
