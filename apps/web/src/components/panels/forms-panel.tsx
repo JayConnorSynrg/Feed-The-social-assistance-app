@@ -18,11 +18,12 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
-import { useUserSubmissions } from '@/hooks/use-form-submission'
-import type { FormSubmission as HookFormSubmission } from '@/hooks/use-form-submission'
+import { useUserSubmissions } from '@/hooks/use-vault-form-submission'
+import type { FormSubmission as HookFormSubmission } from '@/hooks/use-vault-form-submission'
 import { createClient } from '@/lib/supabase/client'
 import { FormWizard } from '@/components/forms/form-wizard'
 import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
+import { VaultGuard } from '@/components/vault'
 
 // ============================================
 // TYPES
@@ -124,7 +125,7 @@ function adaptDraft(
 ): FormInProgressData {
   const tmpl = templateMap.get(sub.templateId)
   // Estimate progress from filled data fields
-  const dataKeys = Object.keys(sub.data || {}).length
+  const dataKeys = Object.keys(sub.formData || {}).length
   const progress = Math.min(Math.round((dataKeys / Math.max(dataKeys + 3, 5)) * 100), 95)
 
   return {
@@ -617,12 +618,14 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   if (wizardState.mode === 'wizard') {
     return (
-      <FormWizard
-        templateId={wizardState.templateId}
-        existingSubmissionId={wizardState.submissionId}
-        onComplete={handleWizardComplete}
-        onCancel={handleWizardCancel}
-      />
+      <VaultGuard>
+        <FormWizard
+          templateId={wizardState.templateId}
+          existingSubmissionId={wizardState.submissionId}
+          onComplete={handleWizardComplete}
+          onCancel={handleWizardCancel}
+        />
+      </VaultGuard>
     )
   }
 
@@ -651,7 +654,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                 </div>
               )}
               <div className="space-y-3 pt-2">
-                {Object.entries(sub.data).map(([key, value]) => (
+                {Object.entries(sub.formData || {}).map(([key, value]) => (
                   <div key={key}>
                     <dt className="text-xs text-stone-500 capitalize">{key.replace(/_/g, ' ')}</dt>
                     <dd className="text-sm text-stone-900">{String(value)}</dd>

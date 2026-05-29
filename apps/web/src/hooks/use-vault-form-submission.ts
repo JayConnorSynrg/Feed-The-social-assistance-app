@@ -12,7 +12,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useVault } from '@/contexts/vault-context'
 import {
@@ -63,6 +63,148 @@ interface UseVaultFormSubmissionReturn extends UseVaultFormSubmissionState {
   submitForm: (formData: Record<string, unknown>, signatureData?: string) => Promise<boolean>
   loadSubmission: (submissionId: string) => Promise<boolean>
   updateStatus: (status: SubmissionStatus, notes?: string) => Promise<boolean>
+}
+
+// ============================================
+// User Submissions List Hook (vault-decrypted)
+// ============================================
+
+interface UseUserSubmissionsReturn {
+  submissions: FormSubmission[]
+  loading: boolean
+  error: string | null
+  refresh: () => Promise<void>
+}
+
+/**
+ * Lists the current user's form submissions and decrypts each via the vault path.
+ * Returns typed-empty (empty array) when the vault is locked — callers must guard
+ * with VaultGuard so users see the unlock prompt rather than an empty list.
+ */
+export function useUserSubmissions(
+  options: {
+    templateId?: string
+    status?: SubmissionStatus
+  } = {}
+): UseUserSubmissionsReturn {
+  const { isUnlocked } = useVault()
+  const [submissions, setSubmissions] = useState<FormSubmission[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const supabase = createClient()
+
+  const fetchSubmissions = useCallback(async () => {
+    // Guard: vault locked → return typed-empty, no throw
+    if (!isUnlocked) {
+      setSubmissions([])
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        setSubmissions([])
+        setLoading(false)
+        return
+      }
+
+      let query = supabase
+        .from('form_submissions')
+        .select(
+          `
+          id,
+          template_id,
+          user_id,
+          status,
+          encrypted_form_data,
+          form_data_iv,
+          encrypted_signature_data,
+          signature_data_iv,
+          submitted_at,
+          notes,
+          created_at,
+          updated_at
+        `
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (options.templateId) {
+        query = query.eq('template_id', options.templateId)
+      }
+
+      if (options.status) {
+        query = query.eq('status', options.status)
+      }
+
+      const { data, error: fetchError } = await query
+
+      if (fetchError) throw fetchError
+
+      // Decrypt each submission — fall back to empty formData on decrypt failure
+      const decrypted: FormSubmission[] = await Promise.all(
+        (data || []).map(async (row) => {
+          let formData: Record<string, unknown> = {}
+          let signatureData: string | undefined
+
+          if (row.encrypted_form_data && row.form_data_iv) {
+            try {
+              const result = await decryptFormSubmission({
+                encrypted_form_data: row.encrypted_form_data,
+                form_data_iv: row.form_data_iv,
+                encrypted_signature_data: row.encrypted_signature_data || undefined,
+                signature_data_iv: row.signature_data_iv || undefined,
+              })
+              formData = result.formData
+              signatureData = result.signatureData
+            } catch {
+              // Decryption failure for a single row must not block the whole list
+            }
+          }
+
+          const submission: FormSubmission = {
+            id: row.id,
+            templateId: row.template_id,
+            userId: row.user_id,
+            status: row.status as SubmissionStatus,
+            formData,
+            signatureData,
+            submittedAt: row.submitted_at || undefined,
+            processedAt: undefined,
+            notes: row.notes || undefined,
+            createdAt: row.created_at || '',
+            updatedAt: row.updated_at || '',
+          }
+          return submission
+        })
+      )
+
+      setSubmissions(decrypted)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load submissions')
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase, isUnlocked, options.templateId, options.status])
+
+  useEffect(() => {
+    fetchSubmissions()
+  }, [fetchSubmissions])
+
+  return {
+    submissions,
+    loading,
+    error,
+    refresh: fetchSubmissions,
+  }
 }
 
 // ============================================

@@ -16,9 +16,31 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phase5-logging-extension
+next_action_id: phaseA-vault-migration
 
 ## Log
+
+```yaml
+id: phaseA-vault-migration
+status: complete
+type: branch
+description: "Phase A — vault encryption migration launch blockers: (1) DB migration form_data nullable (zero-knowledge encrypted path), (2) add useUserSubmissions to use-vault-form-submission.ts with decrypt path, (3) swap useFormSubmission→useVaultFormSubmission + useSecureProfile→useVaultSecureProfile in form-wizard.tsx, (4) relax VaultGuard to show setup/unlock modal for !isUnlocked (not only isSetup&&!isUnlocked), (5) swap imports in forms-panel.tsx + wrap FormWizard in VaultGuard. tsc 0, build pass, node:test smoke pass."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - supabase/migrations/<timestamp>_form_data_nullable.sql
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - apps/web/src/components/vault/vault-guard.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/src/components/forms/__tests__/vault-form-flow.test.mjs
+created_at: 2026-05-29T18:00:00.000Z
+completed_at: 2026-05-29T18:30:00.000Z
+```
+
+
 
 ```yaml
 id: phase5-logging-extension
