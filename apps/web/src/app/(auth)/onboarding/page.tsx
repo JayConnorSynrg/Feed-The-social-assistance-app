@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import { normalizeState } from '@/lib/us-states'
 
 const ROLE_OPTIONS = [
   {
@@ -150,7 +151,7 @@ export default function OnboardingPage() {
         user_role: userRole,
         zip_code: zipCode || null,
         location_city: city || null,
-        location_state: state || null,
+        location_state: normalizeState(state) || null,
         latitude: latitude,
         longitude: longitude,
         needs: selectedNeeds,

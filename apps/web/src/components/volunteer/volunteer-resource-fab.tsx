@@ -96,7 +96,7 @@ export function VolunteerResourceFAB() {
   return (
     <>
       {/* Speed Dial Container */}
-      <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 flex flex-col items-end gap-3">
+      <div className="absolute bottom-4 right-4 z-40 flex flex-col items-end gap-3">
         {/* Speed Dial Items */}
         {CATEGORIES.map((cat, index) => (
           <div
@@ -123,6 +123,8 @@ export function VolunteerResourceFAB() {
         {/* Main FAB Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
+          aria-label="Add volunteer resource"
+          aria-expanded={isOpen}
           className={`w-14 h-14 rounded-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white shadow-lg flex items-center justify-center transition-all duration-200 ${
             isOpen ? 'rotate-45' : 'rotate-0'
           }`}

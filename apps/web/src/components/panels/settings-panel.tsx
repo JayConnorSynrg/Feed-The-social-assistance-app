@@ -28,6 +28,7 @@ import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
 import { SecurityActivity } from '@/components/security/security-activity'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeState } from '@/lib/us-states'
 
 // ============================================
 // TYPES
@@ -867,7 +868,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
         .update({
           full_name: newProfile.name,
           location_city: city,
-          location_state: state,
+          location_state: normalizeState(state),
           phone: newProfile.phone,
         })
         .eq('id', user.id)
