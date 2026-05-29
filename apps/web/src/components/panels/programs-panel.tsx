@@ -240,12 +240,16 @@ export function ProgramsPanel() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      setFilters({ ...filters, search: searchInput })
+      // Functional update so the debounce only touches `search` and never
+      // overwrites a `state`/`category` seeded by the hook between the effect
+      // closing over `filters` and the timer firing (stale-closure bug: the
+      // initial state:null was clobbering the profile-seeded state → 0 results).
+      setFilters((prev) => ({ ...prev, search: searchInput }))
     }, 300)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [searchInput])
+  }, [searchInput, setFilters])
 
   useEffect(() => {
     if (!isLoading) {

@@ -1,5 +1,6 @@
 'use client'
 
+import type React from 'react'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
@@ -34,7 +35,7 @@ export interface ProgramBrowserResult {
   isLoading: boolean
   error: string | null
   filters: ProgramFilters
-  setFilters: (f: ProgramFilters) => void
+  setFilters: React.Dispatch<React.SetStateAction<ProgramFilters>>
   totalCount: number
 }
 
