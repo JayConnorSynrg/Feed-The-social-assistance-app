@@ -34,6 +34,8 @@ import {
   Compass,
   Search,
 } from 'lucide-react'
+import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -64,7 +66,7 @@ interface ShellContextType {
   userFocus: UserFocus[]
   setUserFocus: (focus: UserFocus[]) => void
   panelParams: Record<string, unknown>
-  setPanelParams: (params: Record<string, unknown>) => void
+  setPanelParams: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
 }
 
 const ShellContext = createContext<ShellContextType>({
@@ -100,14 +102,20 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'chat', icon: MessageSquare, label: 'AI Assistant' },
   { panel: 'map', icon: Map, label: 'Resource Map' },
   { panel: 'programs', icon: Search, label: 'Browse Programs' },
-  { panel: 'feed', icon: Newspaper, label: 'Community Feed' },
+  { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
   { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
-  { panel: 'documents', icon: FolderOpen, label: 'Documents', roles: ['recipient', 'agency', 'program'] },
+  { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
-  { panel: 'forms', icon: FileText, label: 'Forms', roles: ['recipient', 'agency', 'program'] },
-  { panel: 'messages' as PanelType, icon: MessageSquare, label: 'Messages' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
+
+// Panel aliases: 'forms' and 'messages' are deep-link inputs that resolve to
+// a parent panel + subtab. They remain valid PanelType inputs to setActivePanel
+// but never become the resolved activePanel value.
+const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string }> = {
+  forms: { panel: 'documents', subtab: 'forms' },
+  messages: { panel: 'feed', subtab: 'messages' },
+}
 
 // ============================================
 // TOP NAVIGATION BAR
@@ -236,6 +244,9 @@ function IconSidebar() {
   return (
     <aside className="w-14 flex flex-col items-center py-4 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
       {visibleIcons.map(({ panel, icon: Icon, label }) => {
+        // A sidebar entry is active when the resolved activePanel matches its panel.
+        // Since aliases ('forms', 'messages') resolve to parent panels, the parent
+        // entry lights up correctly without special-casing here.
         const isActive = activePanel === panel
         return (
           <button
@@ -766,17 +777,26 @@ interface FeedShellProps {
   onSignOut?: () => void
 }
 
-// Valid panel names for URL hash routing
+// Valid panel names for URL hash routing (aliases included for deep-link init)
 const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard']
+
+// Resolve a hash value to a panel + optional subtab.
+// Alias hashes (#forms, #messages) map to their parent panel + subtab.
+function resolveHashToPanel(hash: string): { panel: PanelType; subtab?: string } {
+  if (hash in PANEL_ALIASES) {
+    return PANEL_ALIASES[hash]
+  }
+  if (hash && VALID_PANELS.includes(hash as PanelType)) {
+    return { panel: hash as PanelType }
+  }
+  return { panel: 'chat' }
+}
 
 // Get panel from URL hash (e.g., #chat -> 'chat')
 function getPanelFromHash(): PanelType {
   if (typeof window === 'undefined') return 'chat'
-  const hash = window.location.hash.slice(1) // Remove #
-  if (hash && VALID_PANELS.includes(hash as PanelType)) {
-    return hash as PanelType
-  }
-  return 'chat' // Default panel
+  const hash = window.location.hash.slice(1)
+  return resolveHashToPanel(hash).panel
 }
 
 export function FeedShell({
@@ -796,29 +816,58 @@ export function FeedShell({
   const [activePanel, setActivePanelState] = useState<PanelType>('chat')
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // Initialize from hash on mount
+  // Initialize from hash on mount — resolve aliases so #forms boots into
+  // documents panel with subtab='forms'
   useEffect(() => {
-    setActivePanelState(getPanelFromHash())
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash.slice(1)
+    const resolved = resolveHashToPanel(hash)
+    setActivePanelState(resolved.panel)
+    if (resolved.subtab) {
+      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
+    }
     setIsInitialized(true)
   }, [])
 
-  // Wrapped setActivePanel that also updates URL hash
+  // Alias-aware setActivePanel.
+  // - If called with 'forms' or 'messages', resolves to parent panel + sets
+  //   panelParams.subtab. Merges into existing panelParams so callers that
+  //   pre-set openConversationId (or other params) are not overwritten.
+  // - For non-alias panels, sets activePanel directly and pushes hash.
   const setActivePanel = useCallback((panel: PanelType) => {
-    setActivePanelState(panel)
-    // Update URL hash without triggering navigation (SPA model)
-    if (typeof window !== 'undefined') {
-      const newHash = `#${panel}`
-      if (window.location.hash !== newHash) {
-        window.history.pushState(null, '', newHash)
+    if (panel in PANEL_ALIASES) {
+      const { panel: parent, subtab } = PANEL_ALIASES[panel]
+      logger.info('nav.alias.resolve', { input: panel, panel: parent, subtab })
+      setActivePanelState(parent)
+      // Functional update merges — preserves any existing params (e.g. openConversationId)
+      setPanelParams((prev) => ({ ...prev, subtab }))
+      if (typeof window !== 'undefined') {
+        const newHash = `#${panel}`
+        if (window.location.hash !== newHash) {
+          window.history.pushState(null, '', newHash)
+        }
+      }
+    } else {
+      setActivePanelState(panel)
+      if (typeof window !== 'undefined') {
+        const newHash = `#${panel}`
+        if (window.location.hash !== newHash) {
+          window.history.pushState(null, '', newHash)
+        }
       }
     }
   }, [])
 
-  // Listen for browser back/forward (hashchange event)
+  // Listen for browser back/forward (hashchange event).
+  // Alias hashes resolve to parent panel + subtab.
   useEffect(() => {
     const handleHashChange = () => {
-      const panelFromHash = getPanelFromHash()
-      setActivePanelState(panelFromHash)
+      const hash = window.location.hash.slice(1)
+      const resolved = resolveHashToPanel(hash)
+      setActivePanelState(resolved.panel)
+      if (resolved.subtab) {
+        setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
+      }
     }
 
     window.addEventListener('hashchange', handleHashChange)

@@ -38,6 +38,10 @@ import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
 import { useAuthContext } from '@/providers/auth-provider'
 import { createClient } from '@/lib/supabase/client'
 import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
+import { FormsPanel } from './forms-panel'
+import { usePanelContext } from '@/components/layout/feed-shell'
+import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 // ============================================
 // TYPES
@@ -414,14 +418,29 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { user } = useAuthContext()
   const { downloadFile, deleteFile, isDownloading } = useEncryptedUpload()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
+  const { panelParams, setActivePanel } = usePanelContext()
   const [documents, setDocuments] = useState<Document[]>([])
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'documents' | 'resources'>('documents')
+  // viewMode is driven by panelParams.subtab when set (deep-link / alias routing)
+  const [viewMode, setViewMode] = useState<'documents' | 'resources' | 'forms'>(() => {
+    const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
+    if (sub === 'forms') return 'forms'
+    if (sub === 'resources') return 'resources'
+    return 'documents'
+  })
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
+
+  // Sync viewMode when panelParams.subtab changes (e.g. back-button resolves alias)
+  useEffect(() => {
+    const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
+    if (sub === 'forms' && viewMode !== 'forms') setViewMode('forms')
+    else if (sub === 'resources' && viewMode !== 'resources') setViewMode('resources')
+    else if (sub === 'documents' && viewMode !== 'documents') setViewMode('documents')
+  }, [panelParams?.subtab])
 
   // Load documents from database
   useEffect(() => {
@@ -574,12 +593,58 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
   }
 
+  // Tab switch handler: drives via setActivePanel alias path so hash + state
+  // stay in sync through one code path.
+  const handleTabSwitch = useCallback((tab: 'documents' | 'resources' | 'forms') => {
+    logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
+    track('nav_subtab', { panel: 'documents', subtab: tab })
+    if (tab === 'forms') {
+      setActivePanel('forms')
+    } else if (tab === 'resources') {
+      // 'resources' is not an alias — update viewMode directly and update hash
+      setViewMode('resources')
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '#documents')
+      }
+    } else {
+      setActivePanel('documents')
+    }
+  }, [setActivePanel])
+
+  // ARIA roving tabindex keyboard handler for the Documents tablist
+  const handleDocsTabKeyDown = useCallback((
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    currentIdx: number
+  ) => {
+    const tabs: Array<'documents' | 'resources' | 'forms'> = ['documents', 'resources', 'forms']
+    let next = currentIdx
+    if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
+    else if (e.key === 'Home') { e.preventDefault(); next = 0 }
+    else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTabSwitch(tabs[currentIdx]); return }
+    else return
+    const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    tabEls?.[next]?.focus()
+    handleTabSwitch(tabs[next])
+  }, [handleTabSwitch])
+
   return (
     <div className="h-full flex flex-col">
-      {/* View Toggle */}
-      <div className="flex gap-2 mb-4 border-b border-stone-200 pb-3">
+      {/* View Toggle — ARIA tablist (W3C APG Tabs) */}
+      <div
+        role="tablist"
+        aria-label="Documents & Forms sections"
+        className="flex gap-2 mb-4 border-b border-stone-200 pb-3"
+      >
         <button
-          onClick={() => setViewMode('documents')}
+          role="tab"
+          id="docs-tab-documents"
+          aria-selected={viewMode === 'documents'}
+          aria-controls="docs-panel-documents"
+          tabIndex={viewMode === 'documents' ? 0 : -1}
+          onClick={() => handleTabSwitch('documents')}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 0)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
             viewMode === 'documents'
               ? 'bg-lime-100 text-lime-800'
@@ -592,7 +657,13 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           </span>
         </button>
         <button
-          onClick={() => setViewMode('resources')}
+          role="tab"
+          id="docs-tab-resources"
+          aria-selected={viewMode === 'resources'}
+          aria-controls="docs-panel-resources"
+          tabIndex={viewMode === 'resources' ? 0 : -1}
+          onClick={() => handleTabSwitch('resources')}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 1)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
             viewMode === 'resources'
               ? 'bg-lime-100 text-lime-800'
@@ -609,10 +680,47 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
             )}
           </span>
         </button>
+        <button
+          role="tab"
+          id="docs-tab-forms"
+          aria-selected={viewMode === 'forms'}
+          aria-controls="docs-panel-forms"
+          tabIndex={viewMode === 'forms' ? 0 : -1}
+          onClick={() => handleTabSwitch('forms')}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 2)}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            viewMode === 'forms'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            Forms
+          </span>
+        </button>
       </div>
 
-      {viewMode === 'documents' ? (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6">
+      {viewMode === 'forms' ? (
+        /* Forms sub-tab — FormsPanel owns its own scroll; min-h-0 is required
+           so the flex child can scroll without double-scroll / zero-height collapse */
+        <div
+          role="tabpanel"
+          id="docs-panel-forms"
+          aria-labelledby="docs-tab-forms"
+          tabIndex={0}
+          className="flex-1 min-h-0"
+        >
+          <FormsPanel />
+        </div>
+      ) : viewMode === 'documents' ? (
+        <div
+          role="tabpanel"
+          id="docs-panel-documents"
+          aria-labelledby="docs-tab-documents"
+          tabIndex={0}
+          className="flex-1 flex flex-col lg:flex-row gap-6"
+        >
           {/* Folder Sidebar (Desktop only) */}
           <FolderSidebar
             activeCategory={activeCategory}
@@ -672,7 +780,13 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         </div>
       ) : (
         /* Saved Resources View */
-        <div className="flex-1 overflow-y-auto">
+        <div
+          role="tabpanel"
+          id="docs-panel-resources"
+          aria-labelledby="docs-tab-resources"
+          tabIndex={0}
+          className="flex-1 overflow-y-auto"
+        >
           {resourcesLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
