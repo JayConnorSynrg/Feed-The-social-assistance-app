@@ -5,7 +5,7 @@
 // Based on concept: Single-page app with persistent shell and dynamic content area
 // V2: Separated interactive area from metrics, role-based content visibility
 
-import React, { useState, createContext, useContext, useCallback, useEffect } from 'react'
+import React, { useState, createContext, useContext, useCallback, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import {
   MessageSquare,
@@ -874,17 +874,22 @@ export function FeedShell({
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
+  // Memoize context value so consumers only re-render when relevant state changes.
+  // setActivePanel and setPanelParams are stable (useCallback/useState) so this
+  // memo recomputes only on real state transitions.
+  const shellValue = useMemo<ShellContextType>(() => ({
+    activePanel,
+    setActivePanel,
+    userRole,
+    setUserRole,
+    userFocus,
+    setUserFocus,
+    panelParams,
+    setPanelParams,
+  }), [activePanel, setActivePanel, userRole, setUserRole, userFocus, setUserFocus, panelParams, setPanelParams])
+
   return (
-    <ShellContext.Provider value={{
-      activePanel,
-      setActivePanel,
-      userRole,
-      setUserRole,
-      userFocus,
-      setUserFocus,
-      panelParams,
-      setPanelParams,
-    }}>
+    <ShellContext.Provider value={shellValue}>
       {/* Full-screen nature background */}
       <div
         className="fixed inset-0 bg-cover bg-center bg-no-repeat"

@@ -3,7 +3,10 @@
 // apps/web/src/components/panels/applications-panel.tsx
 // Applications Panel - Track benefit applications, view status, and manage required actions
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+
+// Module-level cached formatter — avoids per-call Intl object allocation inside buildTimeline
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 import {
   ClipboardList,
   Clock,
@@ -118,7 +121,7 @@ function buildTimeline(status: HookApplicationStatus, submittedDate: Date): Time
     if (index < steps.completed) {
       stepStatus = 'completed'
       const stepDate = new Date(submittedDate.getTime() + index * 2 * 24 * 60 * 60 * 1000)
-      date = stepDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      date = DATE_FORMATTER.format(stepDate)
     } else if (index === steps.completed) {
       stepStatus = 'current'
     }
@@ -519,36 +522,64 @@ interface FilterTabsProps {
   counts: Record<FilterType, number>
 }
 
+const FILTER_LIST: { key: FilterType; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'denied', label: 'Denied' },
+]
+
 function FilterTabs({ activeFilter, onFilterChange, counts }: FilterTabsProps) {
-  const filters: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'in_progress', label: 'In Progress' },
-    { key: 'approved', label: 'Approved' },
-    { key: 'denied', label: 'Denied' },
-  ]
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let next = index
+    if (e.key === 'ArrowRight') next = (index + 1) % FILTER_LIST.length
+    else if (e.key === 'ArrowLeft') next = (index - 1 + FILTER_LIST.length) % FILTER_LIST.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = FILTER_LIST.length - 1
+    else return
+    e.preventDefault()
+    tabRefs.current[next]?.focus()
+    onFilterChange(FILTER_LIST[next].key)
+  }
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
-      {filters.map((filter) => (
-        <button
-          key={filter.key}
-          onClick={() => onFilterChange(filter.key)}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeFilter === filter.key
-              ? 'bg-[#4a5d23] text-white'
-              : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
-          }`}
-        >
-          {filter.label}
-          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-            activeFilter === filter.key
-              ? 'bg-white/20'
-              : 'bg-stone-300/50'
-          }`}>
-            {counts[filter.key]}
-          </span>
-        </button>
-      ))}
+    <div
+      role="tablist"
+      aria-label="Filter applications"
+      className="flex gap-2 overflow-x-auto pb-1"
+    >
+      {FILTER_LIST.map((filter, index) => {
+        const isActive = activeFilter === filter.key
+        return (
+          <button
+            key={filter.key}
+            ref={(el) => { tabRefs.current[index] = el }}
+            role="tab"
+            id={`app-tab-${filter.key}`}
+            aria-selected={isActive}
+            aria-controls="app-tabpanel"
+            tabIndex={isActive ? 0 : -1}
+            onClick={() => onFilterChange(filter.key)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              isActive
+                ? 'bg-[#4a5d23] text-white'
+                : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
+            }`}
+          >
+            {filter.label}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              isActive
+                ? 'bg-white/20'
+                : 'bg-stone-300/50'
+            }`}>
+              {counts[filter.key]}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -589,24 +620,24 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const handleBrowsePrograms = useCallback(() => {
-    setActivePanel('programs' as any)
+    setActivePanel('programs')
   }, [setActivePanel])
 
   // Adapt hook data to panel types
   const applications = useMemo(() => hookApps.map(adaptApplication), [hookApps])
 
-  // Calculate filter counts
-  const counts: Record<FilterType, number> = {
+  // Calculate filter counts — memoized so it only recomputes when applications change
+  const counts = useMemo<Record<FilterType, number>>(() => ({
     all: applications.length,
     in_progress: applications.filter(a =>
       a.status === 'submitted' || a.status === 'under_review' || a.status === 'action_required'
     ).length,
     approved: applications.filter(a => a.status === 'approved').length,
     denied: applications.filter(a => a.status === 'denied').length,
-  }
+  }), [applications])
 
-  // Filter applications
-  const filteredApplications = applications.filter(app => {
+  // Filter applications — memoized so it only recomputes when applications or activeFilter change
+  const filteredApplications = useMemo(() => applications.filter(app => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'in_progress') {
       return app.status === 'submitted' || app.status === 'under_review' || app.status === 'action_required'
@@ -614,7 +645,7 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
     if (activeFilter === 'approved') return app.status === 'approved'
     if (activeFilter === 'denied') return app.status === 'denied'
     return true
-  })
+  }), [applications, activeFilter])
 
   const handleViewDetails = (id: string) => {
     const app = filteredApplications.find(a => a.id === id)
@@ -674,7 +705,12 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
       </div>
 
       {/* Applications List */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        id="app-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`app-tab-${activeFilter}`}
+        className="flex-1 overflow-y-auto"
+      >
         {applications.length === 0 ? (
           <EmptyState onBrowsePrograms={handleBrowsePrograms} />
         ) : filteredApplications.length === 0 ? (

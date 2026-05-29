@@ -74,7 +74,6 @@ export async function middleware(request: NextRequest) {
     '/mission',
     '/blog',
     '/resources',
-    '/demo',
   ]
 
   // Root SPA - if authenticated, check onboarding completion
@@ -125,6 +124,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|images/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|images/|_vercel/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
