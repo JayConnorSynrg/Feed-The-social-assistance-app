@@ -13,8 +13,6 @@ import { FeedPanel } from '@/components/panels/feed-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
 import { ApplicationsPanel } from '@/components/panels/applications-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
-import { FormsPanel } from '@/components/panels/forms-panel'
-import { MessagesPanel } from '@/components/panels/messages-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
 import { ProgramsPanel } from '@/components/panels/programs-panel'
 import { useAuth } from '@/hooks/use-auth'
@@ -116,11 +114,9 @@ function PanelRenderer() {
     case 'documents':
       return <DocumentsPanel />
 
-    case 'forms':
-      return <FormsPanel />
-
-    case 'messages':
-      return <MessagesPanel />
+    // 'forms' and 'messages' are alias inputs — setActivePanel resolves them to
+    // 'documents'/'feed' before they reach the switch. They never appear as
+    // activePanel, so these cases are intentionally removed.
 
     case 'wizard':
       return <WizardPanel />

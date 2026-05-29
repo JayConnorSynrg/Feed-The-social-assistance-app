@@ -13,6 +13,10 @@ import { sanitizeInput } from '@/lib/security'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
+import { MessagesPanel } from './messages-panel'
+import { usePanelContext } from '@/components/layout/feed-shell'
+import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 // ============================================
 // TYPES
@@ -272,6 +276,44 @@ export function FeedPanel() {
   const [error, setError] = useState<string | null>(null)
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
+  const { panelParams, setActivePanel } = usePanelContext()
+
+  // Resolve active subtab from panelParams (set by alias routing in feed-shell)
+  const activeSubtab: 'feed' | 'messages' =
+    panelParams?.subtab === 'messages' ? 'messages' : 'feed'
+
+  // Sync subtab when panelParams.subtab changes (e.g. back-button hash navigation)
+  // No local state needed — activeSubtab is derived directly from panelParams.
+
+  // Tab switch handler: drives via setActivePanel alias path so hash + state
+  // stay in sync through one code path. replaceState — no back-button spam.
+  const handleSubtabSwitch = useCallback((tab: 'feed' | 'messages') => {
+    logger.info('nav.subtab.switch', { panel: 'feed', subtab: tab })
+    track('nav_subtab', { panel: 'feed', subtab: tab })
+    if (tab === 'messages') {
+      setActivePanel('messages')
+    } else {
+      setActivePanel('feed')
+    }
+  }, [setActivePanel])
+
+  // ARIA roving tabindex keyboard handler for the Feed tablist
+  const handleFeedTabKeyDown = useCallback((
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    currentIdx: number
+  ) => {
+    const tabs: Array<'feed' | 'messages'> = ['feed', 'messages']
+    let next = currentIdx
+    if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
+    else if (e.key === 'Home') { e.preventDefault(); next = 0 }
+    else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
+    else return
+    const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    tabEls?.[next]?.focus()
+    handleSubtabSwitch(tabs[next])
+  }, [handleSubtabSwitch])
 
   // Fetch posts from Supabase
   const fetchPosts = useCallback(async () => {
@@ -454,46 +496,109 @@ export function FeedPanel() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header with Filter Tabs */}
-      <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
-
-      {/* Create Post Card */}
-      {isAuthenticated && <CreatePostCard onPost={handleCreatePost} />}
-
-      {/* Scrollable Feed */}
-      <div className="flex-1 overflow-y-auto space-y-3">
-        {error ? (
-          <div className="text-center py-8">
-            <p className="text-sm text-red-600">{error}</p>
-            <button
-              onClick={() => { setError(null); fetchPosts() }}
-              className="text-sm text-stone-600 underline mt-2"
-            >
-              Retry
-            </button>
-          </div>
-        ) : loading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
-            <p className="text-sm">Loading posts...</p>
-          </div>
-        ) : filteredPosts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="text-sm">No posts to show</p>
-            <p className="text-xs mt-1">Be the first to share something!</p>
-          </div>
-        ) : (
-          filteredPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              onLike={handleLike}
-              onComment={handleComment}
-              onShare={handleShare}
-            />
-          ))
-        )}
+      {/* Top-level tablist: Feed | Messages
+          Styled DISTINCT from FeedHeader's rounded-full filter pills:
+          py-2.5 font-semibold border-b — per NN/g 2-level tab differentiation */}
+      <div
+        role="tablist"
+        aria-label="Community & Messages sections"
+        className="flex border-b border-stone-200 mb-0"
+      >
+        <button
+          role="tab"
+          id="feed-tab-feed"
+          aria-selected={activeSubtab === 'feed'}
+          aria-controls="feed-panel-feed"
+          tabIndex={activeSubtab === 'feed' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('feed')}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 0)}
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeSubtab === 'feed'
+              ? 'border-[#4a5d23] text-[#4a5d23]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          Feed
+        </button>
+        <button
+          role="tab"
+          id="feed-tab-messages"
+          aria-selected={activeSubtab === 'messages'}
+          aria-controls="feed-panel-messages"
+          tabIndex={activeSubtab === 'messages' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('messages')}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 1)}
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeSubtab === 'messages'
+              ? 'border-[#4a5d23] text-[#4a5d23]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          Messages
+        </button>
       </div>
+
+      {/* Conditional-mount: only active subtab mounts — leak-free, hooks clean up on unmount */}
+      {activeSubtab === 'messages' ? (
+        <div
+          role="tabpanel"
+          id="feed-panel-messages"
+          aria-labelledby="feed-tab-messages"
+          tabIndex={0}
+          className="flex-1 min-h-0"
+        >
+          <MessagesPanel />
+        </div>
+      ) : (
+        <div
+          role="tabpanel"
+          id="feed-panel-feed"
+          aria-labelledby="feed-tab-feed"
+          tabIndex={0}
+          className="flex-1 flex flex-col"
+        >
+          {/* Header with Filter Tabs */}
+          <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+
+          {/* Create Post Card */}
+          {isAuthenticated && <CreatePostCard onPost={handleCreatePost} />}
+
+          {/* Scrollable Feed */}
+          <div className="flex-1 overflow-y-auto space-y-3">
+            {error ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-red-600">{error}</p>
+                <button
+                  onClick={() => { setError(null); fetchPosts() }}
+                  className="text-sm text-stone-600 underline mt-2"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : loading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                <p className="text-sm">Loading posts...</p>
+              </div>
+            ) : filteredPosts.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="text-sm">No posts to show</p>
+                <p className="text-xs mt-1">Be the first to share something!</p>
+              </div>
+            ) : (
+              filteredPosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onLike={handleLike}
+                  onComment={handleComment}
+                  onShare={handleShare}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
