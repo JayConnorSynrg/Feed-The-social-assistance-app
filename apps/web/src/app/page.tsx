@@ -5,9 +5,9 @@
 // Auth-aware: shows real user data when authenticated
 
 import React from 'react'
+import dynamic from 'next/dynamic'
 import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
 import { ChatPanel } from '@/components/panels/chat-panel'
-import { MapPanel } from '@/components/panels/map-panel'
 import { OverviewPanel } from '@/components/panels/overview-panel'
 import { FeedPanel } from '@/components/panels/feed-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
@@ -18,6 +18,24 @@ import { MessagesPanel } from '@/components/panels/messages-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
 import { ProgramsPanel } from '@/components/panels/programs-panel'
 import { useAuth } from '@/hooks/use-auth'
+
+// MapPanel pulls supercluster + react-map-gl into its chunk. Map is not the
+// default panel, so load it on demand to keep those deps out of the initial
+// `/` bundle. ssr:false because Mapbox GL requires the browser.
+const MapPanel = dynamic(
+  () => import('@/components/panels/map-panel').then((m) => m.MapPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#4a5d23]/20 animate-pulse" />
+          <div className="w-32 h-3 bg-stone-200 rounded animate-pulse" />
+        </div>
+      </div>
+    ),
+  }
+)
 
 // Panel-level error boundary — shell stays mounted if a panel throws
 class PanelErrorBoundary extends React.Component<

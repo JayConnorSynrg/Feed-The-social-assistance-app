@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 export type DocumentCategory =
   | 'identity'
@@ -105,6 +106,7 @@ export function useDocuments(): UseDocumentsReturn {
 
       setDocuments(data || [])
     } catch (err) {
+      logger.error('documents.refresh.error', err)
       setError(err as Error)
     } finally {
       setIsLoading(false)
@@ -166,6 +168,7 @@ export function useDocuments(): UseDocumentsReturn {
       await refreshDocuments()
       return doc
     } catch (err) {
+      logger.error('documents.upload.error', err, { category, applicationId })
       setError(err as Error)
       return null
     }
@@ -194,6 +197,7 @@ export function useDocuments(): UseDocumentsReturn {
 
       await refreshDocuments()
     } catch (err) {
+      logger.error('documents.delete.error', err, { id })
       setError(err as Error)
       throw err
     }

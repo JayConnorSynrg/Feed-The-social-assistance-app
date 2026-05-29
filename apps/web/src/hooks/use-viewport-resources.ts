@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { Resource } from '@/components/map/resource-marker'
 
 interface Bounds {
@@ -91,8 +92,11 @@ export function useViewportResources({
       }
 
       abortControllerRef.current = new AbortController()
+      const controller = abortControllerRef.current
       setLoading(true)
       setError(null)
+
+      logger.debug('viewport-resources.fetch.start', { bounds: currentBounds, category })
 
       try {
         // Server-side geospatial filter via PostGIS resources_in_bounds RPC.
@@ -107,6 +111,7 @@ export function useViewportResources({
 
         const { data, error: queryError } = await (supabase as any)
           .rpc('resources_in_bounds', rpcParams)
+          .abortSignal(controller.signal)
 
         if (queryError) throw queryError
 
@@ -146,13 +151,23 @@ export function useViewportResources({
           ? transformedResources.filter((r) => r.category === category)
           : transformedResources
 
+        logger.debug('viewport-resources.fetch.resolved', {
+          bounds: currentBounds,
+          category,
+          count: filtered.length,
+        })
+
         setResources(filtered)
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') {
+          logger.error('viewport-resources.fetch.error', err, {
+            bounds: currentBounds,
+            category,
+          })
           setError(err)
         }
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     },
     [supabase, limit, category]
