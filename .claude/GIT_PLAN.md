@@ -16,13 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phase1-map-fix-observability
+next_action_id: merge-push-phase1
 
 ## Log
 
 ```yaml
+id: merge-push-phase1
+status: complete
+type: merge
+description: "Merge feature/map-fix-observability-phase1 to develop (--no-ff) and push to origin — ships Phase 1 live via Vercel auto-deploy"
+branch: develop
+remote: origin
+created_at: 2026-05-29T09:10:00.000Z
+completed_at: 2026-05-29T09:10:00.000Z
+```
+
+```yaml
 id: phase1-map-fix-observability
-status: in_progress
+status: complete
 type: branch
 description: "Phase 1 feature branch — resources abortSignal+finally-guard fix, observability (Vercel RUM + logger wiring + global-error), MapPanel next/dynamic (-548KB), safe dead-code deletion (dashboard/, test-data/, supabase/index.ts). Demo routes EXCLUDED per user."
 branch: feature/map-fix-observability-phase1
