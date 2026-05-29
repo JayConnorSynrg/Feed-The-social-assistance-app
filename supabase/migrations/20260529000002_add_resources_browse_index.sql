@@ -1,0 +1,106 @@
+-- =============================================================================
+-- Migration: add_resources_browse_index
+-- =============================================================================
+--
+-- WHAT
+--   Adds a partial, composite btree index `idx_resources_browse` to
+--   public.resources to cover the "programs browse" query path.
+--
+-- WHY
+--   The programs browse query (apps/web/src/hooks/use-program-browser.ts:75-85
+--   and the category query at :124-131) runs on every panel mount and every
+--   filter change:
+--
+--     .eq('status','approved')
+--     .eq('is_volunteer_resource', false)
+--     .eq('source','admin_added')
+--     .in('category', [...])
+--     .eq('state', X)
+--     .order('category').order('name')
+--     .limit(200)
+--
+--   With 19,057 rows in production (project ndtpovonpadugthmcntl) and NO btree
+--   index covering these predicates, Postgres is forced into a Seq Scan over all
+--   19,057 rows to return a ~99-row subset (0.52% selectivity). Existing
+--   resources indexes do not help this path:
+--     - GiST(location)               -> geospatial only
+--     - GIN trigram(name, description) -> fuzzy text search only
+--     - partial(is_volunteer_resource) WHERE true -> unusable for the = false case
+--     - unique(external_id, source)  -> wrong leading columns
+--
+--   This partial composite index lets the planner satisfy the equality
+--   predicates (state) + the IN(category) + ORDER BY (category, name) directly
+--   from the index, eliminating the Seq Scan.
+--
+-- CONCURRENTLY DROPPED (intentional)
+--   An earlier draft used `CREATE INDEX CONCURRENTLY` plus a leading
+--   `-- supabase: no-transaction` directive. That directive does not exist in the
+--   Supabase CLI: the migration runner wraps every migration file in an
+--   unconditional BEGIN/COMMIT, so CONCURRENTLY would fail at `db push` with
+--   SQLSTATE 25001 ("CREATE INDEX CONCURRENTLY cannot run inside a transaction
+--   block"). Plain `CREATE INDEX` is used instead. This is safe here: the index
+--   is PARTIAL and matches only the ~99 `source='admin_added'` approved,
+--   non-volunteer rows out of 19,057, so the build is sub-second and the brief
+--   ACCESS EXCLUSIVE lock is negligible. `resources` writes originate from
+--   background sync edge functions, not real-time user writes, so the momentary
+--   lock has no user-facing impact. Plain CREATE INDEX applies cleanly through
+--   the standard transactional migration pipeline.
+--
+-- SAFETY / OPERATIONAL NOTES
+--   - ADDITIVE: creates a new index only; no table/column/data changes.
+--   - LOW-IMPACT LOCK: plain CREATE INDEX takes a brief ACCESS EXCLUSIVE lock;
+--     sub-second on this ~99-row partial index, against a write source that is
+--     background sync (not interactive user writes).
+--   - REVERSIBLE: DROP INDEX IF EXISTS public.idx_resources_browse;
+--   - RLS-UNAFFECTED: indexes are orthogonal to Row Level Security; existing
+--     resources RLS policies and visibility are unchanged.
+--   - PLANNER-SAFE PARTIAL PREDICATE: the index WHERE clause
+--     (status='approved' AND source='admin_added' AND is_volunteer_resource=false)
+--     is a STRICT SUBSET of the query's WHERE clause. The planner can only use a
+--     partial index when the query predicate implies the index predicate, which
+--     holds here, so the index is eligible for exactly this browse query and is
+--     never incorrectly applied to broader scans.
+--   - IDEMPOTENT: IF NOT EXISTS makes re-runs a no-op.
+-- =============================================================================
+
+CREATE INDEX IF NOT EXISTS idx_resources_browse
+  ON public.resources (state, category, name)
+  WHERE status = 'approved'
+    AND source = 'admin_added'
+    AND is_volunteer_resource = false;
+
+-- =============================================================================
+-- EMPIRICAL VERIFICATION (run in the Supabase SQL editor against the linked
+-- project; the external EXPLAIN endpoint is disabled, so capture plans here).
+-- These statements are commented out so the migration itself stays side-effect
+-- free; copy/paste them to verify the before/after plan.
+-- =============================================================================
+--
+-- 1) BEFORE (run prior to the CREATE INDEX above) -- expect "Seq Scan on resources":
+--
+--    EXPLAIN ANALYZE
+--    SELECT id, name, category, state
+--    FROM public.resources
+--    WHERE status = 'approved'
+--      AND is_volunteer_resource = false
+--      AND source = 'admin_added'
+--      AND category IN ('food','housing','healthcare','financial','employment','legal','education','transportation','childcare','utilities','clothing','mental_health','substance_abuse','senior_services','veteran_services','disability_services','immigration','other')
+--      AND state = 'VT'
+--    ORDER BY category, name
+--    LIMIT 200;
+--
+-- 2) Apply the CREATE INDEX statement above.
+--
+-- 3) AFTER (re-run the identical EXPLAIN ANALYZE) -- expect
+--    "Index Scan using idx_resources_browse on resources" (or a Bitmap Index
+--    Scan on idx_resources_browse for the IN list). Record the execution-time
+--    delta vs. the BEFORE plan; the Seq Scan over 19,057 rows should be replaced
+--    by an index access returning the ~99-row (0.52%) subset.
+--
+--    -- Confirm the index exists and is valid:
+--    SELECT indexname, indexdef FROM pg_indexes
+--    WHERE tablename = 'resources' AND indexname = 'idx_resources_browse';
+--
+--    SELECT indisvalid, indisready
+--    FROM pg_index WHERE indexrelid = 'public.idx_resources_browse'::regclass;
+-- =============================================================================

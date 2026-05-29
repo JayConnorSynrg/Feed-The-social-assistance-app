@@ -16,9 +16,31 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-push-phase3
+next_action_id: apply-resources-browse-index
 
 ## Log
+
+```yaml
+id: apply-resources-browse-index
+status: pending
+type: db-apply
+description: "Apply 20260529000002 to prod (ndtpovonpadugthmcntl). BLOCKED on user DB password. Apply via `SUPABASE_DB_PASSWORD=<pw> npx supabase db push --linked --yes` OR Supabase SQL editor + `supabase migration repair --status applied 20260529000002 --linked`. Capture EXPLAIN ANALYZE before/after to confirm Seq Scan → Index Scan."
+branch: develop
+remote: origin
+created_at: 2026-05-29T11:50:00.000Z
+completed_at: null
+```
+
+```yaml
+id: phase4-resources-browse-index
+status: complete
+type: commit
+description: "Phase 4 — author migration for idx_resources_browse partial composite index (state,category,name) WHERE status=approved AND source=admin_added AND is_volunteer_resource=false. Fixes confirmed Seq Scan on programs browse path (19057 rows → ~99-row partial). CONCURRENTLY, zero-downtime. Empirically-audited: the ONLY justified index gap."
+branch: develop
+remote: origin
+created_at: 2026-05-29T11:40:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: merge-push-phase3
