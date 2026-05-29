@@ -13,7 +13,10 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint",
     "seed": "npx ts-node --esm scripts/seed-test-data.ts",
-    "test:e2e": "echo 'E2E tests not yet configured'"
+    "test:e2e": "playwright test",
+    "test:unit": "node --test \"src/**/*.test.mjs\"",
+    "test:vitest": "vitest run",
+    "test": "npm run test:unit && npm run test:vitest"
   },
   "dependencies": {
     "@capacitor/geolocation": "^6.1.1",
@@ -59,6 +62,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import type { Database } from '@feed/database'
 import {
   Select,
   SelectContent,
@@ -87,10 +88,9 @@ export function ModerationQueue({ initialResources }: ModerationQueueProps) {
         // Apply any pending edits
         const updates = editingId === resourceId ? editData : {}
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('resources')
-          .update({ ...updates, status: 'approved' })
+          .update({ ...updates as Database['public']['Tables']['resources']['Update'], status: 'approved' })
           .eq('id', resourceId)
 
         if (error) throw error
@@ -112,8 +112,7 @@ export function ModerationQueue({ initialResources }: ModerationQueueProps) {
     async (resourceId: string) => {
       setProcessingId(resourceId)
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('resources')
           .update({ status: 'rejected' })
           .eq('id', resourceId)

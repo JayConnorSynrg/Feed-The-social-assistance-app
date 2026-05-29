@@ -15,7 +15,7 @@ import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 import { track } from '@vercel/analytics'
 
 // ============================================
@@ -320,13 +320,17 @@ export function FeedPanel() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_admin)')
-        .eq('is_hidden', false)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(50)
+      const { data, error } = await withMetric(
+        'feed.load',
+        { limit: 50 },
+        async () => await supabase
+          .from('posts')
+          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_admin)')
+          .eq('is_hidden', false)
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(50)
+      )
 
       if (error) throw error
 

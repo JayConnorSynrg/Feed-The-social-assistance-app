@@ -4,26 +4,26 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { FormTemplateSchema } from '@/lib/form-schemas'
+import type { Database } from '@feed/database'
 
 interface FormTemplateRow {
   id: string
   name: string
   description: string | null
-  version: number
+  version: number | null
   schema: FormTemplateSchema
-  is_active: boolean
-  category: string | null
-  agency: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
+  is_active: boolean | null
+  form_type: string
+  agency_name: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface FormTemplateWithMeta {
   id: string
   name: string
   description: string | null
-  category: string | null
+  form_type: string
   schema: FormTemplateSchema
 }
 
@@ -71,8 +71,7 @@ export function useFormTemplates(
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      let query = supabase
         .from('form_templates')
         .select('*')
         .order('name', { ascending: true })
@@ -82,18 +81,19 @@ export function useFormTemplates(
       }
 
       if (category) {
-        query = query.eq('category', category)
+        // form_templates has no bare 'category' column; filter by form_type instead
+        query = query.eq('form_type', category as Database['public']['Enums']['form_type'])
       }
 
       const { data, error } = await query
 
       if (error) throw error
 
-      const templates: FormTemplateWithMeta[] = ((data || []) as FormTemplateRow[]).map((row) => ({
+      const templates: FormTemplateWithMeta[] = ((data || []) as unknown as FormTemplateRow[]).map((row) => ({
         id: row.id,
         name: row.name,
         description: row.description,
-        category: row.category,
+        form_type: row.form_type,
         schema: row.schema,
       }))
 
@@ -123,8 +123,7 @@ export function useFormTemplates(
   const getTemplate = useCallback(
     async (id: string): Promise<FormTemplateSchema | null> => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('form_templates')
           .select('schema')
           .eq('id', id)
@@ -132,7 +131,7 @@ export function useFormTemplates(
 
         if (error) throw error
 
-        return (data as { schema: FormTemplateSchema })?.schema || null
+        return (data as unknown as { schema: FormTemplateSchema })?.schema || null
       } catch (error) {
         console.error('Failed to get template:', error)
         return null
@@ -157,15 +156,14 @@ export function useFormTemplates(
           name: template.name,
           description: template.description || null,
           version: template.version,
-          schema: template,
+          // FormTemplateSchema is a structured JSON object; cast to Json for DB insert
+          schema: template as unknown as import('@feed/database').Json,
           is_active: true,
-          category: template.metadata?.category || null,
-          agency: template.metadata?.agency || null,
-          created_by: user?.id || null,
+          form_type: (template.metadata?.category || 'general') as Database['public']['Enums']['form_type'],
+          agency_name: template.metadata?.agency || null,
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any).from('form_templates').insert(row)
+        const { error } = await supabase.from('form_templates').insert(row)
 
         if (error) throw error
 
@@ -188,8 +186,7 @@ export function useFormTemplates(
     async (id: string, updates: Partial<FormTemplateSchema>): Promise<boolean> => {
       try {
         // Get current template
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: current, error: fetchError } = await (supabase as any)
+        const { data: current, error: fetchError } = await supabase
           .from('form_templates')
           .select('schema, version')
           .eq('id', id)
@@ -197,8 +194,8 @@ export function useFormTemplates(
 
         if (fetchError) throw fetchError
 
-        const currentSchema = (current as FormTemplateRow).schema
-        const newVersion = (current as FormTemplateRow).version + 1
+        const currentSchema = (current as unknown as FormTemplateRow).schema
+        const newVersion = ((current as unknown as FormTemplateRow).version ?? 0) + 1
 
         // Merge updates into schema
         const updatedSchema: FormTemplateSchema = {
@@ -211,14 +208,13 @@ export function useFormTemplates(
           name: updatedSchema.name,
           description: updatedSchema.description || null,
           version: newVersion,
-          schema: updatedSchema,
-          category: updatedSchema.metadata?.category || null,
-          agency: updatedSchema.metadata?.agency || null,
+          schema: updatedSchema as unknown as import('@feed/database').Json,
+          form_type: (updatedSchema.metadata?.category || 'general') as Database['public']['Enums']['form_type'],
+          agency_name: updatedSchema.metadata?.agency || null,
           updated_at: new Date().toISOString(),
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('form_templates')
           .update(row)
           .eq('id', id)
@@ -243,8 +239,7 @@ export function useFormTemplates(
   const deleteTemplate = useCallback(
     async (id: string): Promise<boolean> => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('form_templates')
           .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq('id', id)
@@ -328,8 +323,7 @@ export function useFormTemplate(id: string | null): {
     setError(null)
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('form_templates')
         .select('schema')
         .eq('id', id)
@@ -337,7 +331,7 @@ export function useFormTemplate(id: string | null): {
 
       if (fetchError) throw fetchError
 
-      setTemplate((data as { schema: FormTemplateSchema })?.schema || null)
+      setTemplate((data as unknown as { schema: FormTemplateSchema })?.schema || null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch template')
       setTemplate(null)

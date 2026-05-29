@@ -24,7 +24,7 @@ import {
 import { clearKeys } from '@/lib/key-store'
 import { migrateUserDataToEncrypted, needsMigration } from '@/lib/migrate-to-encrypted'
 import { logPredefinedEvent } from '@/lib/audit-logger'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 
 interface VaultContextType {
   // State
@@ -162,7 +162,11 @@ export function VaultProvider({ children }: VaultProviderProps) {
     try {
       setLoading(true)
       setError(null)
-      const success = await unlockVault(masterPassword, user.id)
+      const success = await withMetric(
+        'vault.unlock',
+        { userId: user.id },
+        () => unlockVault(masterPassword, user.id)
+      )
       setIsUnlocked(success)
 
       if (!success) {

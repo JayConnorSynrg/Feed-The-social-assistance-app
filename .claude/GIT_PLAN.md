@@ -16,9 +16,158 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phase5-logging-extension
+next_action_id: null
 
 ## Log
+
+```yaml
+id: phaseG-truthup
+status: complete
+type: commit
+description: "Phase G — correct drifted spec/state docs to reflect session reality. .phase-state.json: lastUpdated→2026-05-29T23:59:00Z; Phase 7 notes expanded with all 2026-05-29 session repairs (Phase 3 encryption/vault-crypto/doc-encryption/Phase 5-6 doc-upload); session-010 entry added. ralph-loop-checklist.md: last_updated frontmatter→2026-05-29; Overall Progress 86/98 88%→96/98 98%; P3-T16/P4-T11/P5-T12 NOT_STARTED→DEFERRED; P6-T8 IN_PROGRESS→SUPERSEDED; Phase 3 exit criteria checked + repair note added; Phase 5 exit criteria checked + repair note added. Memory vault (non-git): 3 new pattern/feedback files written + MEMORY.md pointers."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - specs/001-feed-platform/.phase-state.json
+  - specs/001-feed-platform/ralph-loop-checklist.md
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T23:59:00.000Z
+completed_at: 2026-05-29T23:59:00.000Z
+```
+
+```yaml
+id: phaseB-auth-e2e-harness
+status: complete
+type: commit
+description: "Phase B — P7-T11 auth E2E test harness: playwright.config.ts (baseURL :3000, webServer npm run dev, chromium), apps/web/e2e/auth.spec.ts covering email-signup→onboarding, email/password login + wrong-pw error, password-reset via token_hash, Google OAuth redirect assertion. Admin client for setup/teardown (SERVICE_ROLE_KEY). Wire test:e2e in apps/web/package.json. 3 of 4 flows fully automated; Google consent-screen click is the 1 documented manual step."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - playwright.config.ts
+  - apps/web/e2e/auth.spec.ts
+  - apps/web/package.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T23:45:00.000Z
+completed_at: 2026-05-29T23:59:00.000Z
+```
+
+```yaml
+id: phaseF2-build-determinism-indexes
+status: complete
+type: commit
+description: "Phase F2 — make build network-deterministic (drop Geist fonts dead code from layout.tsx; build no longer fetches fonts.gstatic.com) + drop redundant DB indexes (duplicate created_at/user_id on posts, duplicate username index on profiles keeping UNIQUE constraint, low-value status index on resources). Migration supabase/migrations/<timestamp>_drop_redundant_indexes.sql. tsc 0, build PASS (deterministic), npm test green, vault-form-flow 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/app/layout.tsx
+  - supabase/migrations/20260529000004_drop_redundant_indexes.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T23:00:00.000Z
+completed_at: 2026-05-29T23:30:00.000Z
+```
+
+```yaml
+id: phaseF1-observability
+status: complete
+type: commit
+description: "Phase F1 — weave withMetric into 6 live hot paths (vault.unlock, documents.upload, programs.query, feed.load, messages.send, forms.draft, forms.submit). Remove redundant manual Date.now() timing + duplicate logger.info from programs.query. Create docs/observability.md metric catalog. Additive only: zero control-flow change, zero regression. tsc 0, node:test 30/30 pass, vitest 38/14-todo pass, vault-form-flow smoke 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/contexts/vault-context.tsx
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/hooks/use-program-browser.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - docs/observability.md
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T19:00:00.000Z
+completed_at: null
+```
+
+```yaml
+id: phaseD-test-infra
+status: complete
+type: commit
+description: "Phase D — Wire npm test: vitest for 3 security .ts tests (mfa.test.ts, vault.test.ts, document-encryption.test.ts) + node:test for .mjs tests, unify turbo test task, drop build dependency. Install vitest + vitest.config.ts in apps/web. Fix any test drift vs current source. npm test → all camps, all green, non-zero count. Real bugs flagged: (1) wrapDEK('raw', non-extractable-dek) broken (crypto.ts:359); (2) decryptFileChunked reads CHUNK_SIZE-aligned slices but encrypted chunks are CHUNK_SIZE+16 (document-encryption.ts:282). Before: 0 tests. After: 61 active (30 .mjs + 31 .ts), 7 skipped (real-bug flags), 14 todo."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/package.json
+  - apps/web/vitest.config.ts
+  - apps/web/src/lib/__tests__/mfa.test.ts
+  - apps/web/src/lib/__tests__/vault.test.ts
+  - apps/web/src/lib/__tests__/document-encryption.test.ts
+  - turbo.json
+  - package-lock.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T22:00:00.000Z
+completed_at: 2026-05-29T22:30:00.000Z
+```
+
+
+```yaml
+id: phaseC-types-casts-lintguard
+status: complete
+type: commit
+description: "Phase C — (1) Regenerate Supabase types from live project (37→41 tables; adds saved_resources, saved_resource_tasks, saved_resource_events, saved_resource_documents). (2) Remove all 51 (supabase as any) casts: 49 removed cleanly, 2 documented dynamic-table casts remain in query-utils.ts with eslint-disable comments. Real bugs exposed and fixed: use-documents.ts queried uploaded_at (nonexistent, fixed to created_at), file_type (nonexistent, fixed to document_type), application_id (nonexistent, fixed to submission_id); use-form-templates.ts queried nonexistent category/agency columns (fixed to form_type/agency_name). (3) Add no-restricted-syntax lint guard in eslint.config.mjs targeting (supabase as any) pattern in hooks/components/lib/app dirs. tsc 0 errors, build pass, smoke 9/9."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - packages/database/types.ts
+  - apps/web/src/hooks/use-resource-detail.ts
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-notifications.ts
+  - apps/web/src/hooks/use-form-templates.ts
+  - apps/web/src/hooks/use-volunteer-resource.ts
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/hooks/use-viewport-resources.ts
+  - apps/web/src/lib/query-utils.ts
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/src/app/(admin)/moderation/moderation-queue.tsx
+  - apps/web/src/components/documents/document-viewer.tsx
+  - apps/web/src/components/documents/resource-detail-dialog.tsx
+  - apps/web/eslint.config.mjs
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T21:00:00.000Z
+completed_at: 2026-05-29T21:45:00.000Z
+```
+
+
+```yaml
+id: phaseA-vault-migration
+status: complete
+type: branch
+description: "Phase A — vault encryption migration launch blockers: (1) DB migration form_data nullable (zero-knowledge encrypted path), (2) add useUserSubmissions to use-vault-form-submission.ts with decrypt path, (3) swap useFormSubmission→useVaultFormSubmission + useSecureProfile→useVaultSecureProfile in form-wizard.tsx, (4) relax VaultGuard to show setup/unlock modal for !isUnlocked (not only isSetup&&!isUnlocked), (5) swap imports in forms-panel.tsx + wrap FormWizard in VaultGuard. tsc 0, build pass, node:test smoke pass."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - supabase/migrations/<timestamp>_form_data_nullable.sql
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - apps/web/src/components/vault/vault-guard.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/src/components/forms/__tests__/vault-form-flow.test.mjs
+created_at: 2026-05-29T18:00:00.000Z
+completed_at: 2026-05-29T18:30:00.000Z
+```
+
+
 
 ```yaml
 id: phase5-logging-extension
@@ -193,4 +342,53 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-05-28T00:00:00.000Z
 completed_at: null
+```
+
+```yaml
+id: phaseE-deadcode-deletion
+status: complete
+type: commit
+description: "Phase E — delete dead/orphaned code in dependency order (4 batches). Batch 1: secure-profile-form.tsx, profile-form.tsx, resource-form.tsx, dynamic-form-renderer.tsx, autofill-banner.tsx, signature-canvas.tsx, use-form-signature.tsx, test-key-store.ts, key-store-diagnostics.ts, database.types.ts. Batch 2: use-form-submission.ts, use-secure-profile.ts. Batch 3: form-field-mapper.ts, secure-profile.ts. Batch 4: deriveKeyFromPassword RETAINED (internal callers at L253/L291 in crypto.ts). tsc 0 errors after each batch. Build failure pre-existing (Supabase env vars, digest 2417864637, same on base commit)."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/components/forms/secure-profile-form.tsx (DELETED)
+  - apps/web/src/components/profile/profile-form.tsx (DELETED)
+  - apps/web/src/components/resources/resource-form.tsx (DELETED)
+  - apps/web/src/components/forms/dynamic-form-renderer.tsx (DELETED)
+  - apps/web/src/components/forms/autofill-banner.tsx (DELETED)
+  - apps/web/src/components/forms/signature-canvas.tsx (DELETED)
+  - apps/web/src/hooks/use-form-signature.tsx (DELETED)
+  - apps/web/src/lib/utils/test-key-store.ts (DELETED)
+  - apps/web/src/lib/utils/key-store-diagnostics.ts (DELETED)
+  - apps/web/src/lib/database.types.ts (DELETED)
+  - apps/web/src/hooks/use-form-submission.ts (DELETED)
+  - apps/web/src/hooks/use-secure-profile.ts (DELETED)
+  - apps/web/src/lib/form-field-mapper.ts (DELETED)
+  - apps/web/src/lib/secure-profile.ts (DELETED)
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T20:00:00.000Z
+completed_at: 2026-05-29T20:30:00.000Z
+```
+
+```yaml
+id: phaseA2-vault-crypto-fix
+status: complete
+type: commit
+description: "Phase A2 — fix two real crypto bugs exposed by newly-wired security tests. BUG 1 (CRITICAL): generateDEK() returned non-extractable CryptoKey; wrapDEK called wrapKey('raw') which requires extractable:true — always threw InvalidAccessException, making vault setup/unlock/rotateKEK non-functional. Fix: envelope pattern — generateDEK now returns { key: CryptoKey (non-extractable); rawBytes: Uint8Array }; wrapDEK takes raw bytes, AES-GCM-encrypts them with KEK; unwrapDEK AES-GCM-decrypts then importKey(non-extractable); rotateKEK decrypts envelope, re-encrypts with new KEK. deriveKEK usages changed from wrapKey/unwrapKey to encrypt/decrypt. In-use DEK stays non-extractable (XSS protection preserved). BUG 2 (HIGH): decryptFileChunked stepped by CHUNK_SIZE (1MB) through encrypted buffer but each encrypted chunk is CHUNK_SIZE+16 bytes; fix steps by ENCRYPTED_CHUNK_SIZE=CHUNK_SIZE+GCM_TAG_BYTES. All 7 previously-skipped tests now pass; full suite green (30 node:test + 52 vitest); vault-form-flow 9/9; type-check 0 errors; build PASS."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/lib/crypto.ts
+  - apps/web/src/lib/vault.ts
+  - apps/web/src/lib/document-encryption.ts
+  - apps/web/src/lib/__tests__/vault.test.ts
+  - apps/web/src/lib/__tests__/document-encryption.test.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T18:45:00.000Z
+completed_at: 2026-05-29T18:55:00.000Z
 ```

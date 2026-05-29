@@ -74,11 +74,11 @@ export async function setupVault(
   // 2. Derive KEK from master password + salt
   const kek = await deriveKEK(masterPassword, salt)
 
-  // 3. Generate new DEK
-  const dek = await generateDEK()
+  // 3. Generate new DEK (raw bytes for wrapping + non-extractable key for use)
+  const { key: dek, rawBytes: dekRawBytes } = await generateDEK()
 
-  // 4. Wrap DEK with KEK
-  const { wrappedKey, iv } = await wrapDEK(dek, kek)
+  // 4. Wrap raw DEK bytes with KEK (envelope pattern — dek CryptoKey stays non-extractable)
+  const { wrappedKey, iv } = await wrapDEK(dekRawBytes, kek)
 
   // 5. Convert to base64 for storage
   const result: VaultSetupResult = {

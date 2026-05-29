@@ -25,20 +25,26 @@ const getCrypto = (): Crypto => {
 }
 
 /**
- * Generate a random DEK (Data Encryption Key)
- * DEK is used to encrypt actual user data
+ * Generate a random DEK (Data Encryption Key).
+ * Returns both the raw 32-byte key material and a non-extractable CryptoKey.
  *
- * SECURITY: extractable is false. WebCrypto's wrapKey() can wrap non-extractable
- * keys — that is a core feature of the API. Setting extractable: false prevents
- * an XSS attacker from calling exportKey() to steal the raw key material.
+ * SECURITY: The in-use CryptoKey (key) is always non-extractable, preventing
+ * an XSS attacker from calling exportKey() to steal raw key material.
+ * The raw bytes are only retained long enough to be AES-GCM-wrapped with the KEK
+ * (envelope pattern — see wrapDEK). They must not be persisted in JS memory
+ * beyond the wrapDEK call in vault setup / KEK rotation.
  */
-export async function generateDEK(): Promise<CryptoKey> {
+export async function generateDEK(): Promise<{ key: CryptoKey; rawBytes: Uint8Array }> {
   const crypto = getCrypto()
-  return crypto.subtle.generateKey(
+  const rawBytes = crypto.getRandomValues(new Uint8Array(32))
+  const key = await crypto.subtle.importKey(
+    'raw',
+    rawBytes,
     { name: 'AES-GCM', length: 256 },
     false, // non-extractable: prevents XSS exportKey() exfiltration
     ['encrypt', 'decrypt']
   )
+  return { key, rawBytes }
 }
 
 /**
@@ -70,7 +76,8 @@ export async function generateExtractableDEK(): Promise<CryptoKey> {
  * Use generateDEK for new implementations
  */
 export async function generateKey(): Promise<CryptoKey> {
-  return generateDEK()
+  const { key } = await generateDEK()
+  return key
 }
 
 /**
@@ -121,7 +128,11 @@ export async function deriveKEK(
     ['deriveKey']
   )
 
-  // Derive KEK for key wrapping/unwrapping
+  // Derive KEK for DEK envelope encryption/decryption.
+  // Usages are encrypt/decrypt because the envelope pattern uses AES-GCM
+  // crypto.subtle.encrypt/decrypt to wrap/unwrap the raw DEK bytes rather
+  // than the wrapKey/unwrapKey API (which requires the wrapped key to be
+  // extractable, conflicting with our XSS-safe non-extractable DEK design).
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -132,7 +143,7 @@ export async function deriveKEK(
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false, // non-extractable
-    ['wrapKey', 'unwrapKey']
+    ['encrypt', 'decrypt']
   )
 }
 
@@ -342,42 +353,51 @@ export async function decryptObject<T>(
 }
 
 // ============================================
-// Key Wrapping/Unwrapping (KEK/DEK Architecture)
+// Key Wrapping/Unwrapping (KEK/DEK Envelope Pattern)
 // ============================================
 
 /**
- * Wrap a DEK with a KEK for storage
- * Returns the wrapped key and IV used for wrapping
+ * Wrap DEK raw bytes with a KEK using AES-GCM (envelope encryption).
+ *
+ * SECURITY DESIGN — why envelope instead of wrapKey('raw'/'jwk'):
+ * The WebCrypto wrapKey() API with 'raw' or 'jwk' format requires the wrapped
+ * key to have extractable:true, which would allow XSS code to call exportKey()
+ * and exfiltrate the raw DEK material. The envelope pattern avoids this: we
+ * treat the 32 raw DEK bytes as arbitrary plaintext, AES-GCM-encrypt them with
+ * the KEK, and store only the ciphertext+IV. The in-use CryptoKey (created by
+ * generateDEK() or unwrapDEK()) remains non-extractable at all times.
+ *
+ * @param dekRawBytes - The 32 raw DEK bytes returned by generateDEK().rawBytes.
+ * @param kek         - The non-extractable AES-GCM KEK derived by deriveKEK().
+ * @returns wrappedKey (48 bytes: 32-byte DEK ciphertext + 16-byte GCM tag) and iv.
  */
 export async function wrapDEK(
-  dek: CryptoKey,
+  dekRawBytes: Uint8Array,
   kek: CryptoKey
 ): Promise<{ wrappedKey: ArrayBuffer; iv: Uint8Array }> {
   const crypto = getCrypto()
   const iv = generateIV()
 
-  const wrappedKey = await crypto.subtle.wrapKey(
-    'raw',
-    dek,
+  const wrappedKey = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
     kek,
-    { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> }
+    dekRawBytes as Uint8Array<ArrayBuffer>
   )
 
   return { wrappedKey, iv }
 }
 
 /**
- * Unwrap a DEK using a KEK
- * Restores the DEK from its wrapped form
+ * Unwrap a DEK from its AES-GCM-encrypted form (envelope decryption).
+ * Returns a non-extractable CryptoKey ready for encrypt/decrypt use.
  *
- * SECURITY: extractable is false. WebCrypto's wrapKey() can wrap non-extractable
- * keys — this is explicitly guaranteed by the W3C WebCrypto specification
- * (https://www.w3.org/TR/WebCryptoAPI/#dfn-SubtleCrypto-method-wrapKey).
- * The DEK does NOT need to be extractable to be re-wrapped during password
- * rotation; rotateKEK() passes the unwrapped DEK directly to wrapDEK(), which
- * calls wrapKey() and works on non-extractable keys. Setting extractable: false
- * here prevents an XSS attacker from obtaining raw DEK bytes via exportKey()
- * even if they gain access to the CryptoKey handle.
+ * SECURITY: The restored CryptoKey is always non-extractable, preventing
+ * XSS code from obtaining raw DEK bytes via exportKey() after unwrapping.
+ *
+ * @param wrappedKey - The 48-byte ciphertext produced by wrapDEK().
+ * @param kek        - The non-extractable AES-GCM KEK derived by deriveKEK().
+ * @param iv         - The 12-byte IV returned by wrapDEK().
+ * @returns A non-extractable AES-GCM-256 CryptoKey.
  */
 export async function unwrapDEK(
   wrappedKey: ArrayBuffer,
@@ -386,13 +406,19 @@ export async function unwrapDEK(
 ): Promise<CryptoKey> {
   const crypto = getCrypto()
 
-  return crypto.subtle.unwrapKey(
-    'raw',
-    wrappedKey,
-    kek,
+  // Decrypt the envelope to recover the raw DEK bytes.
+  const dekRawBytes = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+    kek,
+    wrappedKey
+  )
+
+  // Import as non-extractable CryptoKey for use.
+  return crypto.subtle.importKey(
+    'raw',
+    dekRawBytes,
     { name: 'AES-GCM', length: 256 },
-    false, // non-extractable: wrapKey() works on non-extractable keys per WebCrypto spec
+    false, // non-extractable: prevents XSS exportKey() exfiltration
     ['encrypt', 'decrypt']
   )
 }
@@ -477,8 +503,12 @@ export async function deriveVerificationKey(
 }
 
 /**
- * Rotate KEK - re-encrypt DEK with new password
- * Used when user changes their master password
+ * Rotate KEK — re-encrypt DEK envelope with a new password.
+ * Used when the user changes their master password.
+ *
+ * The raw DEK bytes are decrypted from the old envelope, re-encrypted into a
+ * new envelope under the new KEK, and immediately discarded. The in-memory
+ * exposure window of the raw bytes is confined to this function's stack frame.
  */
 export async function rotateKEK(
   oldPassword: string,
@@ -487,16 +517,22 @@ export async function rotateKEK(
   wrappedDEK: ArrayBuffer,
   iv: Uint8Array
 ): Promise<{ newWrappedKey: ArrayBuffer; newIV: Uint8Array; newSalt: Uint8Array }> {
-  // 1. Derive old KEK and unwrap DEK
-  const oldKEK = await deriveKEK(oldPassword, salt)
-  const dek = await unwrapDEK(wrappedDEK, oldKEK, iv)
+  const crypto = getCrypto()
 
-  // 2. Generate new salt and derive new KEK
+  // 1. Derive old KEK and decrypt envelope to recover raw DEK bytes.
+  const oldKEK = await deriveKEK(oldPassword, salt)
+  const dekRawBytes = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+    oldKEK,
+    wrappedDEK
+  )
+
+  // 2. Generate new salt and derive new KEK.
   const newSalt = generateSalt()
   const newKEK = await deriveKEK(newPassword, newSalt)
 
-  // 3. Wrap DEK with new KEK
-  const { wrappedKey: newWrappedKey, iv: newIV } = await wrapDEK(dek, newKEK)
+  // 3. Re-encrypt raw DEK bytes under new KEK.
+  const { wrappedKey: newWrappedKey, iv: newIV } = await wrapDEK(new Uint8Array(dekRawBytes), newKEK)
 
   return { newWrappedKey, newIV, newSalt }
 }

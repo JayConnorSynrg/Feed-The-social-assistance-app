@@ -18,11 +18,12 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
-import { useUserSubmissions } from '@/hooks/use-form-submission'
-import type { FormSubmission as HookFormSubmission } from '@/hooks/use-form-submission'
+import { useUserSubmissions } from '@/hooks/use-vault-form-submission'
+import type { FormSubmission as HookFormSubmission } from '@/hooks/use-vault-form-submission'
 import { createClient } from '@/lib/supabase/client'
 import { FormWizard } from '@/components/forms/form-wizard'
 import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
+import { VaultGuard } from '@/components/vault'
 
 // ============================================
 // TYPES
@@ -69,6 +70,16 @@ type WizardState =
 // ============================================
 // ADAPTERS: Hook data → Panel types
 // ============================================
+function deriveCategoryFromFormType(formType: string): FormTemplate['category'] {
+  switch (formType) {
+    case 'snap': case 'wic': case 'tanf': return 'food'
+    case 'medicaid': return 'healthcare'
+    case 'housing': return 'housing'
+    case 'utility': return 'utilities'
+    default: return 'benefits'
+  }
+}
+
 function deriveCategoryFromName(name: string | null): FormTemplate['category'] {
   if (!name) return 'benefits'
   const lower = name.toLowerCase()
@@ -87,7 +98,7 @@ function adaptTemplate(row: FormTemplateWithMeta): FormTemplate {
     description: row.description ?? schema.description ?? '',
     estimatedTime: schema.metadata?.estimatedTime ?? 30,
     requiredDocs: schema.metadata?.requiredDocuments ?? [],
-    category: (row.category as FormTemplate['category']) ?? deriveCategoryFromName(row.name),
+    category: deriveCategoryFromFormType(row.form_type) ?? deriveCategoryFromName(row.name),
   }
 }
 
@@ -114,7 +125,7 @@ function adaptSubmission(
     templateName: tmpl?.name ?? 'Unknown Form',
     submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : new Date(sub.createdAt),
     status: mapSubmissionStatus(sub.status),
-    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+    category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
   }
 }
 
@@ -124,7 +135,7 @@ function adaptDraft(
 ): FormInProgressData {
   const tmpl = templateMap.get(sub.templateId)
   // Estimate progress from filled data fields
-  const dataKeys = Object.keys(sub.data || {}).length
+  const dataKeys = Object.keys(sub.formData || {}).length
   const progress = Math.min(Math.round((dataKeys / Math.max(dataKeys + 3, 5)) * 100), 95)
 
   return {
@@ -133,7 +144,7 @@ function adaptDraft(
     templateName: tmpl?.name ?? 'Unknown Form',
     progress,
     lastSaved: new Date(sub.updatedAt),
-    category: tmpl ? ((tmpl.category as FormTemplate['category']) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
+    category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
   }
 }
 
@@ -548,8 +559,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const handleDeleteDraft = async (formId: string) => {
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('form_submissions').delete().eq('id', formId)
+    await supabase.from('form_submissions').delete().eq('id', formId)
     await refreshSubmissions()
   }
 
@@ -617,12 +627,14 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   if (wizardState.mode === 'wizard') {
     return (
-      <FormWizard
-        templateId={wizardState.templateId}
-        existingSubmissionId={wizardState.submissionId}
-        onComplete={handleWizardComplete}
-        onCancel={handleWizardCancel}
-      />
+      <VaultGuard>
+        <FormWizard
+          templateId={wizardState.templateId}
+          existingSubmissionId={wizardState.submissionId}
+          onComplete={handleWizardComplete}
+          onCancel={handleWizardCancel}
+        />
+      </VaultGuard>
     )
   }
 
@@ -651,7 +663,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                 </div>
               )}
               <div className="space-y-3 pt-2">
-                {Object.entries(sub.data).map(([key, value]) => (
+                {Object.entries(sub.formData || {}).map(([key, value]) => (
                   <div key={key}>
                     <dt className="text-xs text-stone-500 capitalize">{key.replace(/_/g, ' ')}</dt>
                     <dd className="text-sm text-stone-900">{String(value)}</dd>

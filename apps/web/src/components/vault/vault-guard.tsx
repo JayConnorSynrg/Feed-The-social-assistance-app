@@ -18,15 +18,17 @@ interface VaultGuardProps {
 }
 
 export function VaultGuard({ children, fallback }: VaultGuardProps) {
-  const { isUnlocked, isSetup, loading } = useVault()
+  const { isUnlocked, loading } = useVault()
   const [showUnlockModal, setShowUnlockModal] = useState(false)
 
-  // Show unlock modal if vault exists but is locked
+  // Show setup/unlock modal whenever the vault is not unlocked (covers both
+  // new users with no vault and returning users whose vault is locked).
+  // VaultUnlockModal auto-selects setup vs unlock mode from isSetup internally.
   useEffect(() => {
-    if (!loading && isSetup && !isUnlocked) {
+    if (!loading && !isUnlocked) {
       setShowUnlockModal(true)
     }
-  }, [loading, isSetup, isUnlocked])
+  }, [loading, isUnlocked])
 
   // Close modal when vault is unlocked
   useEffect(() => {

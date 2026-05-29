@@ -101,7 +101,7 @@ export function useViewportResources({
       try {
         // Server-side geospatial filter via PostGIS resources_in_bounds RPC.
         // Uses GiST index on resources.location — returns only rows within the viewport.
-        const rpcParams: Record<string, unknown> = {
+        const rpcParams = {
           west: currentBounds.west,
           south: currentBounds.south,
           east: currentBounds.east,
@@ -116,9 +116,9 @@ export function useViewportResources({
           'map.resources_in_bounds',
           { category: category ?? 'all', limit },
           () =>
-            (supabase as any)
+            supabase
               .rpc('resources_in_bounds', rpcParams)
-              .abortSignal(controller.signal)
+              .abortSignal(controller.signal) as unknown as Promise<{ data: ResourceRow[] | null; error: Error | null }>
         )
 
         if (queryError) throw queryError

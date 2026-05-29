@@ -19,7 +19,7 @@ interface VolunteerResource {
   name: string
   category: string
   description: string | null
-  status: string
+  status: string | null
   created_at: string | null
 }
 
@@ -35,7 +35,7 @@ export function useVolunteerResource() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { data, error: fetchError } = await (supabase as any)
+      const { data, error: fetchError } = await supabase
         .from('resources')
         .select('id, name, category, description, status, created_at')
         .eq('submitted_by', user.id)
@@ -68,7 +68,7 @@ export function useVolunteerResource() {
     try {
       const resourceName = profile?.full_name || 'Volunteer'
 
-      const { data, error: insertError } = await (supabase as any)
+      const { data, error: insertError } = await supabase
         .from('resources')
         .insert({
           name: resourceName,
@@ -89,7 +89,7 @@ export function useVolunteerResource() {
 
       // Set PostGIS location from profile coordinates
       if (profile?.latitude && profile?.longitude && data?.id) {
-        await (supabase as any).rpc('set_resource_location_by_id', {
+        await supabase.rpc('set_resource_location_by_id', {
           p_id: data.id,
           p_lat: profile.latitude,
           p_lng: profile.longitude,
@@ -110,7 +110,7 @@ export function useVolunteerResource() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('resources')
         .update({ status: 'archived' })
         .eq('id', resourceId)

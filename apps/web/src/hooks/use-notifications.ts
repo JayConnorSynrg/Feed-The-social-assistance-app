@@ -19,8 +19,8 @@ export interface Notification {
   type: NotificationType
   title: string
   message: string
-  link?: string
-  application_id?: string
+  link?: string | null
+  application_id?: string | null
   is_read: boolean
   created_at: string
 }
@@ -28,9 +28,9 @@ export interface Notification {
 export interface Reminder {
   id: string
   user_id: string
-  application_id?: string
+  application_id?: string | null
   title: string
-  description?: string
+  description?: string | null
   remind_at: string
   is_completed: boolean
   created_at: string
@@ -90,8 +90,7 @@ export function useNotifications(): UseNotificationsReturn {
       if (!user) throw new Error('Not authenticated')
 
       // Fetch notifications
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: notifs, error: notifError } = await (supabase as any)
+      const { data: notifs, error: notifError } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
@@ -101,8 +100,7 @@ export function useNotifications(): UseNotificationsReturn {
       if (notifError) throw notifError
 
       // Fetch reminders
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: rems, error: remError } = await (supabase as any)
+      const { data: rems, error: remError } = await supabase
         .from('reminders')
         .select('*')
         .eq('user_id', user.id)
@@ -121,8 +119,7 @@ export function useNotifications(): UseNotificationsReturn {
 
   const markAsRead = useCallback(async (id: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('id', id)
@@ -142,8 +139,7 @@ export function useNotifications(): UseNotificationsReturn {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
@@ -159,8 +155,7 @@ export function useNotifications(): UseNotificationsReturn {
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await supabase
         .from('notifications')
         .delete()
         .eq('id', id)
@@ -180,8 +175,7 @@ export function useNotifications(): UseNotificationsReturn {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: insertError } = await (supabase as any)
+      const { data, error: insertError } = await supabase
         .from('reminders')
         .insert({
           user_id: user.id,
@@ -206,8 +200,7 @@ export function useNotifications(): UseNotificationsReturn {
 
   const completeReminder = useCallback(async (id: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('reminders')
         .update({ is_completed: true })
         .eq('id', id)
@@ -224,8 +217,7 @@ export function useNotifications(): UseNotificationsReturn {
 
   const deleteReminder = useCallback(async (id: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await supabase
         .from('reminders')
         .delete()
         .eq('id', id)

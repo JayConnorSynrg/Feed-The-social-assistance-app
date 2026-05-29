@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       account_lockouts: {
@@ -744,7 +719,7 @@ export type Database = {
           encrypted_signature_data: string | null
           encryption_migrated: boolean | null
           encryption_migrated_at: string | null
-          form_data: Json
+          form_data: Json | null
           form_data_iv: string | null
           id: string
           last_status_change: string | null
@@ -771,7 +746,7 @@ export type Database = {
           encrypted_signature_data?: string | null
           encryption_migrated?: boolean | null
           encryption_migrated_at?: string | null
-          form_data: Json
+          form_data?: Json | null
           form_data_iv?: string | null
           id?: string
           last_status_change?: string | null
@@ -798,7 +773,7 @@ export type Database = {
           encrypted_signature_data?: string | null
           encryption_migrated?: boolean | null
           encryption_migrated_at?: string | null
-          form_data?: Json
+          form_data?: Json | null
           form_data_iv?: string | null
           id?: string
           last_status_change?: string | null
@@ -1333,6 +1308,8 @@ export type Database = {
         Row: {
           address_line1: string | null
           address_line2: string | null
+          application_form_url: string | null
+          application_url: string | null
           category: Database["public"]["Enums"]["resource_category"]
           city: string | null
           country: string | null
@@ -1365,6 +1342,8 @@ export type Database = {
         Insert: {
           address_line1?: string | null
           address_line2?: string | null
+          application_form_url?: string | null
+          application_url?: string | null
           category?: Database["public"]["Enums"]["resource_category"]
           city?: string | null
           country?: string | null
@@ -1397,6 +1376,8 @@ export type Database = {
         Update: {
           address_line1?: string | null
           address_line2?: string | null
+          application_form_url?: string | null
+          application_url?: string | null
           category?: Database["public"]["Enums"]["resource_category"]
           city?: string | null
           country?: string | null
@@ -1453,6 +1434,176 @@ export type Database = {
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_resource_documents: {
+        Row: {
+          created_at: string | null
+          encrypted: boolean | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          saved_resource_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          saved_resource_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          saved_resource_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_resource_documents_saved_resource_id_fkey"
+            columns: ["saved_resource_id"]
+            isOneToOne: false
+            referencedRelation: "saved_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_resource_events: {
+        Row: {
+          created_at: string | null
+          event_date: string
+          event_time: string | null
+          id: string
+          reminder: boolean | null
+          saved_resource_id: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_date: string
+          event_time?: string | null
+          id?: string
+          reminder?: boolean | null
+          saved_resource_id: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_date?: string
+          event_time?: string | null
+          id?: string
+          reminder?: boolean | null
+          saved_resource_id?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_resource_events_saved_resource_id_fkey"
+            columns: ["saved_resource_id"]
+            isOneToOne: false
+            referencedRelation: "saved_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_resource_tasks: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_completed: boolean | null
+          saved_resource_id: string
+          sort_order: number | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          saved_resource_id: string
+          sort_order?: number | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          saved_resource_id?: string
+          sort_order?: number | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_resource_tasks_saved_resource_id_fkey"
+            columns: ["saved_resource_id"]
+            isOneToOne: false
+            referencedRelation: "saved_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_resources: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          resource_address: string | null
+          resource_category: string | null
+          resource_id: string | null
+          resource_name: string
+          resource_phone: string | null
+          resource_website: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          resource_address?: string | null
+          resource_category?: string | null
+          resource_id?: string | null
+          resource_name: string
+          resource_phone?: string | null
+          resource_website?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          resource_address?: string | null
+          resource_category?: string | null
+          resource_id?: string | null
+          resource_name?: string
+          resource_phone?: string | null
+          resource_website?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
             referencedColumns: ["id"]
           },
         ]
@@ -2062,6 +2213,22 @@ export type Database = {
       earth: { Args: never; Returns: number }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      find_duplicate_resource: {
+        Args: {
+          p_address?: string
+          p_name: string
+          p_phone?: string
+          p_threshold?: number
+        }
+        Returns: {
+          address_line1: string
+          id: string
+          name: string
+          phone: string
+          similarity_score: number
+          source: Database["public"]["Enums"]["resource_source"]
+        }[]
+      }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }
@@ -2248,6 +2415,8 @@ export type Database = {
         Returns: {
           address_line1: string | null
           address_line2: string | null
+          application_form_url: string | null
+          application_url: string | null
           category: Database["public"]["Enums"]["resource_category"]
           city: string | null
           country: string | null
@@ -2333,6 +2502,29 @@ export type Database = {
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
+      resources_in_bounds: {
+        Args: {
+          east: number
+          max_results?: number
+          north: number
+          south: number
+          west: number
+        }
+        Returns: {
+          address_line1: string
+          category: string
+          city: string
+          description: string
+          hours_of_operation: Json
+          id: string
+          is_volunteer_resource: boolean
+          location: unknown
+          name: string
+          phone: string
+          state: string
+          website: string
+        }[]
+      }
       set_resource_location: {
         Args: {
           p_external_id: string
@@ -2995,6 +3187,11 @@ export type Database = {
         | "headstart"
         | "cdc"
         | "samhsa"
+        | "imls"
+        | "dol"
+        | "cms"
+        | "npi"
+        | "usajobs"
       resource_status: "pending" | "approved" | "rejected" | "archived"
       submission_status:
         | "draft"
@@ -3138,9 +3335,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       conversation_status: ["pending", "active", "declined", "cancelled"],
@@ -3198,6 +3392,11 @@ export const Constants = {
         "headstart",
         "cdc",
         "samhsa",
+        "imls",
+        "dol",
+        "cms",
+        "npi",
+        "usajobs",
       ],
       resource_status: ["pending", "approved", "rejected", "archived"],
       submission_status: [

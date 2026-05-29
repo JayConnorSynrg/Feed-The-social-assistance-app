@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-05-25T00:00:00.000Z",
+  "lastUpdated": "2026-05-29T23:59:00.000Z",
   "currentPhase": 7,
   "currentTask": "P7-T11",
   "status": "IN_PROGRESS",
@@ -75,7 +75,7 @@
       "completedTasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10"],
       "startedAt": "2026-02-22T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments).",
+      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken — useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK — vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 — false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) — runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step.",
       "panelWiringComplete": true,
       "migrationGapsClosed": true
     }
@@ -161,6 +161,24 @@
         "status": "in_progress",
         "phase": "Phase 7: Production Hardening",
         "notes": "Session focused on closing discovered gaps (panel wiring + missing migrations). P7-T11 (Auth E2E Test) remains the sole outstanding planned task."
+      },
+      {
+        "id": "session-010",
+        "startedAt": "2026-05-29T00:00:00.000Z",
+        "endedAt": "2026-05-29T23:59:00.000Z",
+        "tasksCompleted": ["P7-T11-harness"],
+        "unplannedRepairs": [
+          "Phase 3 — encryption/autofill/e-signature was silently broken (as-any-masked queries to nonexistent tables). Fixed: vault hooks wired, VaultGuard gate, form_data-nullable migration",
+          "vault-crypto — wrapDEK('raw') on non-extractable DEK always threw; fixed via AES-GCM envelope encryption",
+          "document-encryption — chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed",
+          "Phase 5/6 documents — use-documents queried nonexistent columns (uploaded_at/file_type/application_id); fixed after type regen",
+          "test-false-green — npm test ran 0 tests; now 61 (30 node:test + 31 vitest) + ESLint as-any guard",
+          "14 dead files / 4540 LOC deleted; 4 redundant indexes dropped; Geist removed for deterministic build",
+          "withMetric woven into 7 hot paths + docs/observability.md"
+        ],
+        "status": "complete",
+        "phase": "Phase 7: Production Hardening",
+        "notes": "P7-T11 auth E2E harness built and committed (playwright.config.ts + apps/web/e2e/auth.spec.ts). Execution env-blocked (Node TLS sandbox); runs via npm run test:e2e on unrestricted env. Google consent screen = 1 documented manual step. All other session work was discovery-driven repair of silently-broken Phase 3 and Phase 5/6 paths."
       }
     ]
   }

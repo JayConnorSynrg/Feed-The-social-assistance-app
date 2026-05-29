@@ -16,10 +16,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useFormTemplate } from '@/hooks/use-form-templates'
-import { useFormSubmission } from '@/hooks/use-form-submission'
+import { useVaultFormSubmission } from '@/hooks/use-vault-form-submission'
 import { getVisibleFields } from '@/lib/form-schemas'
 import type { FormFieldSchema, FormSection } from '@/lib/form-schemas'
-import { useSecureProfile } from '@/hooks/use-secure-profile'
+import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
 
 export interface FormWizardProps {
   templateId: string
@@ -350,8 +350,8 @@ export function FormWizard({
   onCancel,
 }: FormWizardProps) {
   const { template, loading: templateLoading, error: templateError } = useFormTemplate(templateId)
-  const submissionHook = useFormSubmission(template ?? undefined)
-  const { data: profileData } = useSecureProfile()
+  const submissionHook = useVaultFormSubmission()
+  const { profile: profileData } = useVaultSecureProfile()
 
   const [currentStep, setCurrentStep] = useState(0)
   const [isReviewStep, setIsReviewStep] = useState(false)
