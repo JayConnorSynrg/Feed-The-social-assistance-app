@@ -16,9 +16,32 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: push-develop-map-singleton-fix
+next_action_id: phase1-map-fix-observability
 
 ## Log
+
+```yaml
+id: phase1-map-fix-observability
+status: in_progress
+type: branch
+description: "Phase 1 feature branch — resources abortSignal+finally-guard fix, observability (Vercel RUM + logger wiring + global-error), MapPanel next/dynamic (-548KB), safe dead-code deletion (dashboard/, test-data/, supabase/index.ts). Demo routes EXCLUDED per user."
+branch: feature/map-fix-observability-phase1
+base: develop
+remote: origin
+files:
+  - apps/web/src/hooks/use-viewport-resources.ts
+  - apps/web/src/hooks/use-realtime-feed.ts
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/app/layout.tsx
+  - apps/web/src/app/global-error.tsx
+  - apps/web/src/app/page.tsx
+  - apps/web/package.json
+  - apps/web/src/components/dashboard/ (DELETE)
+  - apps/web/src/lib/test-data/ (DELETE)
+  - apps/web/src/lib/supabase/index.ts (DELETE)
+created_at: 2026-05-29T09:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: push-develop-map-singleton-fix
