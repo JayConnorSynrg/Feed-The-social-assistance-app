@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phaseA-vault-migration
+next_action_id: null
 
 ## Log
 
@@ -215,4 +215,33 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-05-28T00:00:00.000Z
 completed_at: null
+```
+
+```yaml
+id: phaseE-deadcode-deletion
+status: complete
+type: commit
+description: "Phase E — delete dead/orphaned code in dependency order (4 batches). Batch 1: secure-profile-form.tsx, profile-form.tsx, resource-form.tsx, dynamic-form-renderer.tsx, autofill-banner.tsx, signature-canvas.tsx, use-form-signature.tsx, test-key-store.ts, key-store-diagnostics.ts, database.types.ts. Batch 2: use-form-submission.ts, use-secure-profile.ts. Batch 3: form-field-mapper.ts, secure-profile.ts. Batch 4: deriveKeyFromPassword RETAINED (internal callers at L253/L291 in crypto.ts). tsc 0 errors after each batch. Build failure pre-existing (Supabase env vars, digest 2417864637, same on base commit)."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/src/components/forms/secure-profile-form.tsx (DELETED)
+  - apps/web/src/components/profile/profile-form.tsx (DELETED)
+  - apps/web/src/components/resources/resource-form.tsx (DELETED)
+  - apps/web/src/components/forms/dynamic-form-renderer.tsx (DELETED)
+  - apps/web/src/components/forms/autofill-banner.tsx (DELETED)
+  - apps/web/src/components/forms/signature-canvas.tsx (DELETED)
+  - apps/web/src/hooks/use-form-signature.tsx (DELETED)
+  - apps/web/src/lib/utils/test-key-store.ts (DELETED)
+  - apps/web/src/lib/utils/key-store-diagnostics.ts (DELETED)
+  - apps/web/src/lib/database.types.ts (DELETED)
+  - apps/web/src/hooks/use-form-submission.ts (DELETED)
+  - apps/web/src/hooks/use-secure-profile.ts (DELETED)
+  - apps/web/src/lib/form-field-mapper.ts (DELETED)
+  - apps/web/src/lib/secure-profile.ts (DELETED)
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T20:00:00.000Z
+completed_at: 2026-05-29T20:30:00.000Z
 ```
