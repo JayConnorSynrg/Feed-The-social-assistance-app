@@ -22,7 +22,7 @@ next_action_id: null
 
 ```yaml
 id: phaseF1-observability
-status: in_progress
+status: complete
 type: commit
 description: "Phase F1 — weave withMetric into 6 live hot paths (vault.unlock, documents.upload, programs.query, feed.load, messages.send, forms.draft, forms.submit). Remove redundant manual Date.now() timing + duplicate logger.info from programs.query. Create docs/observability.md metric catalog. Additive only: zero control-flow change, zero regression. tsc 0, node:test 30/30 pass, vitest 38/14-todo pass, vault-form-flow smoke 9/9."
 branch: feature/launch-readiness
