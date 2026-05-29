@@ -22,18 +22,7 @@ import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia',
-  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
-  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota',
-  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
-  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia',
-  'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
-]
+import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
 
 function CategoryBadge({ category }: { category: string }) {
   const display = CATEGORY_DISPLAY[category] ?? CATEGORY_DISPLAY['other']
@@ -343,7 +332,7 @@ export function ProgramsPanel() {
           >
             <option value="" disabled>Select your state</option>
             {US_STATES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={STATE_TO_ABBR[s]}>{s}</option>
             ))}
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />

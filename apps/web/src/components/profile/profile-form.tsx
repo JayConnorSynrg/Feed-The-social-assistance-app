@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@feed/database'
+import { normalizeState } from '@/lib/us-states'
 
 const profileSchema = z.object({
   username: z
@@ -99,7 +100,7 @@ export function ProfileForm({ profile, onSuccess }: ProfileFormProps) {
       if (data.full_name) updates.full_name = data.full_name
       if (data.bio !== undefined) updates.bio = data.bio || null
       if (data.location_city !== undefined) updates.location_city = data.location_city || null
-      if (data.location_state !== undefined) updates.location_state = data.location_state || null
+      if (data.location_state !== undefined) updates.location_state = normalizeState(data.location_state) || null
       if (data.venmo_username !== undefined) updates.venmo_username = data.venmo_username || null
       if (data.paypal_email !== undefined) updates.paypal_email = data.paypal_email || null
 

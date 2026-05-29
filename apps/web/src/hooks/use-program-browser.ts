@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { Database } from '@feed/database'
 import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
+import { normalizeState } from '@/lib/us-states'
 
 const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
@@ -48,7 +49,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
 
   useEffect(() => {
     if (!authLoading && profile?.location_state) {
-      setFilters((prev) => prev.state === null ? { ...prev, state: profile.location_state } : prev)
+      setFilters((prev) => prev.state === null ? { ...prev, state: normalizeState(profile.location_state) } : prev)
     }
   }, [authLoading, profile?.location_state])
 
@@ -76,7 +77,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .eq('is_volunteer_resource', false)
         .eq('source', 'admin_added')
         .in('category', filters.category ? [filters.category as Database['public']['Enums']['resource_category']] : FORM_CATEGORIES)
-        .eq('state', filters.state)
+        .eq('state', normalizeState(filters.state) ?? filters.state)
         .order('category', { ascending: true })
         .order('name', { ascending: true })
         .limit(200)
@@ -126,7 +127,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .eq('is_volunteer_resource', false)
         .eq('source', 'admin_added')
         .in('category', FORM_CATEGORIES)
-        .eq('state', filters.state)
+        .eq('state', normalizeState(filters.state) ?? filters.state)
 
       const { data, error: fetchError } = await catQuery
 
