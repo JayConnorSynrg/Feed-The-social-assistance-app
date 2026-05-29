@@ -16,9 +16,20 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: commit-map-singleton-fix
+next_action_id: push-develop-map-singleton-fix
 
 ## Log
+
+```yaml
+id: push-develop-map-singleton-fix
+status: complete
+type: push
+description: Push develop to origin — ships a5f662f (Supabase singleton fix) to trigger Vercel redeploy
+branch: develop
+remote: origin
+created_at: 2026-05-29T08:35:00.000Z
+completed_at: 2026-05-29T08:35:00.000Z
+```
 
 ```yaml
 id: commit-map-singleton-fix
