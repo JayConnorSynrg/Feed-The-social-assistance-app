@@ -22,7 +22,7 @@ next_action_id: auth-fixes-signout-delete
 
 ```yaml
 id: auth-fixes-signout-delete
-status: in_progress
+status: complete
 type: commit
 description: "Fix 1: TopNav sign-out handler adds router.push('/login') + logger.info. Fix 2: safeNullify('federation_trust_events','created_by') in delete-account fn + ON DELETE SET NULL migration (20260529221945). Edge-fn redeploy + db push are PENDING (next gated step)."
 branch: feature/auth-fixes
@@ -197,4 +197,31 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-05-28T00:00:00.000Z
 completed_at: null
+```
+
+```yaml
+id: smoke-suite-prod-validation
+status: complete
+type: commit
+description: Add prod smoke-test suite (Playwright, 27 tests, global-setup shared user, 19 pass / 7 fail empirical run) + docs/SMOKE-TEST-MAP.md feature map. PR #12.
+branch: feature/smoke-suite
+files:
+  - docs/SMOKE-TEST-MAP.md
+  - apps/web/e2e/playwright.config.ts
+  - apps/web/e2e/global-setup.ts
+  - apps/web/e2e/global-teardown.ts
+  - apps/web/e2e/fixtures.ts
+  - apps/web/e2e/auth.spec.ts
+  - apps/web/e2e/nav.spec.ts
+  - apps/web/e2e/feed.spec.ts
+  - apps/web/e2e/map.spec.ts
+  - apps/web/e2e/programs.spec.ts
+  - apps/web/e2e/documents.spec.ts
+  - apps/web/e2e/forms.spec.ts
+  - apps/web/e2e/applications.spec.ts
+  - apps/web/e2e/chat.spec.ts
+  - apps/web/e2e/settings.spec.ts
+  - apps/web/e2e/delete-account.spec.ts
+created_at: 2026-05-29T19:41:00.000Z
+completed_at: 2026-05-29T19:41:00.000Z
 ```
