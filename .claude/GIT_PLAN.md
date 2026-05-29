@@ -16,9 +16,32 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: phaseC-types-casts-lintguard
+next_action_id: null
 
 ## Log
+
+```yaml
+id: phaseD-test-infra
+status: complete
+type: commit
+description: "Phase D — Wire npm test: vitest for 3 security .ts tests (mfa.test.ts, vault.test.ts, document-encryption.test.ts) + node:test for .mjs tests, unify turbo test task, drop build dependency. Install vitest + vitest.config.ts in apps/web. Fix any test drift vs current source. npm test → all camps, all green, non-zero count. Real bugs flagged: (1) wrapDEK('raw', non-extractable-dek) broken (crypto.ts:359); (2) decryptFileChunked reads CHUNK_SIZE-aligned slices but encrypted chunks are CHUNK_SIZE+16 (document-encryption.ts:282). Before: 0 tests. After: 61 active (30 .mjs + 31 .ts), 7 skipped (real-bug flags), 14 todo."
+branch: feature/launch-readiness
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-launch
+files:
+  - apps/web/package.json
+  - apps/web/vitest.config.ts
+  - apps/web/src/lib/__tests__/mfa.test.ts
+  - apps/web/src/lib/__tests__/vault.test.ts
+  - apps/web/src/lib/__tests__/document-encryption.test.ts
+  - turbo.json
+  - package-lock.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T22:00:00.000Z
+completed_at: 2026-05-29T22:30:00.000Z
+```
+
 
 ```yaml
 id: phaseC-types-casts-lintguard

@@ -2,10 +2,10 @@
 // Unit tests for MFA service
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { MFAService } from '../mfa'
 
-// Mock Supabase client
-const mockSupabase = {
+// vi.hoisted() runs before module imports, making mockSupabase available
+// inside the vi.mock() factory without hitting the temporal dead zone.
+const mockSupabase = vi.hoisted(() => ({
   auth: {
     mfa: {
       listFactors: vi.fn(),
@@ -19,11 +19,13 @@ const mockSupabase = {
     getUser: vi.fn(),
   },
   from: vi.fn(),
-}
+}))
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => mockSupabase,
 }))
+
+import { MFAService } from '../mfa'
 
 describe('MFAService', () => {
   let mfaService: MFAService
@@ -34,10 +36,11 @@ describe('MFAService', () => {
   })
 
   describe('isMFAEnabled', () => {
+    // mfa.ts L42: data?.all?.some(f => f.status === 'verified') — uses data.all, not data.factors
     it('should return true when user has verified TOTP factor', async () => {
       mockSupabase.auth.mfa.listFactors.mockResolvedValue({
         data: {
-          factors: [
+          all: [
             { id: '1', status: 'verified', factor_type: 'totp' },
           ],
         },
@@ -50,7 +53,7 @@ describe('MFAService', () => {
     it('should return false when user has no verified factors', async () => {
       mockSupabase.auth.mfa.listFactors.mockResolvedValue({
         data: {
-          factors: [
+          all: [
             { id: '1', status: 'unverified', factor_type: 'totp' },
           ],
         },
@@ -62,7 +65,7 @@ describe('MFAService', () => {
 
     it('should return false when user has no factors', async () => {
       mockSupabase.auth.mfa.listFactors.mockResolvedValue({
-        data: { factors: [] },
+        data: { all: [] },
       })
 
       const result = await mfaService.isMFAEnabled()
