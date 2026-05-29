@@ -61,13 +61,15 @@ function LoginForm() {
         const lockoutCheck = await fetch('/api/auth/check-lockout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'check-lockout', email }),
+          body: JSON.stringify({ action: 'check', email }),
         })
 
         if (lockoutCheck.ok) {
           const lockoutData = await lockoutCheck.json()
-          if (lockoutData.is_locked) {
-            const minutes = lockoutData.minutes_remaining || 15
+          if (lockoutData.isLocked) {
+            const minutes = lockoutData.lockedUntil
+              ? Math.max(1, Math.ceil((new Date(lockoutData.lockedUntil).getTime() - Date.now()) / 60000))
+              : 15
             setError(`Account temporarily locked. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`)
             setLoading(false)
             return
@@ -85,7 +87,7 @@ function LoginForm() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'record-attempt',
+            action: 'record_attempt',
             email,
             success: !error,
             failure_reason: error ? 'invalid_credentials' : undefined,
