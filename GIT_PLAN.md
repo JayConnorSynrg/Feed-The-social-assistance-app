@@ -71,3 +71,30 @@ Performance + cleanup batch: Vercel RUM gating, memoization, auth-gated realtime
 ### Validation
 - type-check: exit 0
 - build: exit 0
+
+---
+
+## Entry: onboarding-resilience
+
+**ID:** onboarding-resilience
+**Status:** complete
+**Branch:** feature/onboarding-resilience (worktree at /Users/jelalconnor/CODING/CURSOR/FEED-nav-nest)
+**PR:** #16 — merged into develop @ d2ac0c3
+**Commit:** 3ced432
+
+### Objective
+Fix the onboarding "stuck at Saving..." bug: upsert hung with no timeout, no error surface, and no escape path. Add client-side log sink so onboarding errors reach app_logs.
+
+### Changes
+- `apps/web/src/app/(auth)/onboarding/page.tsx`:
+  - Replaced `loading`/`authLoading` button gate with local `submitting` flag; `userIdRef` captures auth once resolved; pending submits fire via effect
+  - Wrapped `profiles.upsert` in 10s `AbortController` timeout via `.abortSignal()`; abort/timeout navigates forward; explicit DB errors surface with "Continue anyway" escape hatch
+  - Extracted `handleSkip`: separate function with 10s timeout; navigates to `/` unconditionally regardless of write outcome
+  - Added structured logging: `onboarding.complete.start`, `.ok`, `.failed`, `.upsert_aborted`, `onboarding.skip.start/.ok`
+- `apps/web/src/app/api/client-log/route.ts` (new): POST route; 4KB size cap; level/event validation; context sanitization; service-role insert into app_logs
+- `apps/web/src/lib/logger.ts`: `sinkToSupabase` browser path now fires `fetch('/api/client-log', { keepalive: true })` so client warn/error events survive navigation
+
+### Validation
+- type-check: exit 0
+- build: exit 0 (`/api/client-log` listed in route table)
+- Merged PR #16; origin/develop HEAD = d2ac0c3

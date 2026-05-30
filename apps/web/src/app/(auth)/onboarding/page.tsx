@@ -146,58 +146,65 @@ export default function OnboardingPage() {
   }
 
   /**
-   * Best-effort mark of onboarding_completed with a 10s timeout.
-   * Always navigates to `/` regardless of outcome — the user must never be
-   * trapped. Used by both the Skip path and the "Continue anyway" escape hatch.
+   * Navigate to `/` immediately, then fire a best-effort profile write as
+   * fire-and-forget. The user reaches the app instantly regardless of what
+   * Supabase does. Used by Skip and the "Continue anyway" escape hatch.
    */
   const markCompleteAndNavigate = useCallback(
-    async (userId: string) => {
-      const controller = new AbortController()
-      const timerId = setTimeout(() => controller.abort(), 10_000)
-      try {
-        await (supabase
+    (userId: string) => {
+      // Navigate FIRST — zero Supabase awaits before the user reaches the app.
+      logger.info('onboarding.skip.navigating', { userId })
+      router.push('/')
+      // Fire-and-forget profile write — result does not block navigation.
+      // Wrap in Promise.resolve() to get a real Promise (Supabase returns PromiseLike).
+      void Promise.resolve(
+        supabase
           .from('profiles')
-          .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' }) as any)
-          .abortSignal(controller.signal)
-        logger.info('onboarding.skip.ok', { userId })
-      } catch (err: unknown) {
+          .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
+      ).then(({ error }) => {
+        if (error) {
+          logger.warn('onboarding.skip.best_effort_failed', { message: error.message, userId })
+        } else {
+          logger.info('onboarding.skip.ok', { userId })
+        }
+      }).catch((err: unknown) => {
         logger.warn('onboarding.skip.best_effort_failed', {
           message: (err as any)?.message ?? String(err),
           userId,
         })
-      } finally {
-        clearTimeout(timerId)
-      }
-      router.push('/')
+      })
     },
     [router, supabase]
   )
 
   const handleComplete = useCallback(async () => {
-    const userId = userIdRef.current ?? authUser?.id ?? null
-
-    // Auth not yet resolved — queue the submit and return.
-    if (!userId && authLoading) {
-      pendingSubmitRef.current = true
-      logger.info('onboarding.complete.pending_auth', {})
-      return
-    }
-
-    if (!userId) {
-      // Auth done but no user — session expired.
-      logger.warn('onboarding.complete.no_user', { authLoading })
-      router.push('/login')
-      return
-    }
-
-    logger.info('onboarding.complete.start', { userId, hasPhone: !!phone })
-
     setSubmitting(true)
     setError(null)
     setShowContinueAnyway(false)
-    const timer = logger.time('auth.onboarding.complete')
 
-    try {
+    // Hard 10s timeout wrapping the ENTIRE operation — including auth resolution,
+    // profile upsert, and verification. If anything stalls, the user always
+    // escapes "Saving…" within ~10s.
+    const doWork = async () => {
+      const userId = userIdRef.current ?? authUser?.id ?? null
+
+      // Auth not yet resolved — queue the submit and return.
+      if (!userId && authLoading) {
+        pendingSubmitRef.current = true
+        logger.info('onboarding.complete.pending_auth', {})
+        return
+      }
+
+      if (!userId) {
+        // Auth done but no user — session expired.
+        logger.warn('onboarding.complete.no_user', { authLoading })
+        router.push('/login')
+        return
+      }
+
+      logger.info('onboarding.complete.start', { userId, hasPhone: !!phone })
+      const timer = logger.time('auth.onboarding.complete')
+
       const profileData = {
         id: userId,
         user_role: userRole,
@@ -212,11 +219,11 @@ export default function OnboardingPage() {
         updated_at: new Date().toISOString(),
       } as any
 
-      // Wrap the upsert in a 10s AbortController timeout. Next.js patches global
-      // fetch and may abort in-flight requests on re-render — the server-side
-      // write often completes before the client abort fires.
+      // Inner upsert with AbortController. Next.js patches global fetch and may
+      // abort in-flight requests on re-render; the server-side write usually
+      // completes before the client abort fires.
       const controller = new AbortController()
-      const timerId = setTimeout(() => controller.abort(), 10_000)
+      const timerId = setTimeout(() => controller.abort(), 8_000)
 
       let upsertError: { message: string; code?: string } | null = null
       try {
@@ -233,7 +240,6 @@ export default function OnboardingPage() {
           msg.includes('aborted')
 
         if (isAbortOrTimeout) {
-          // Upsert likely committed server-side before the abort — navigate.
           logger.warn('onboarding.complete.upsert_aborted', { userId, reason: msg })
           clearTimeout(timerId)
           logger.info('onboarding.complete.ok', { userId, path: 'abort_navigate' })
@@ -249,7 +255,7 @@ export default function OnboardingPage() {
 
       if (upsertError) {
         logger.error('onboarding.complete.failed', new Error(upsertError.message), {
-          step: 'phone',
+          step: 'upsert',
           message: upsertError.message,
           code: upsertError.code ?? 'unknown',
           userId,
@@ -285,23 +291,36 @@ export default function OnboardingPage() {
       logger.info('onboarding.complete.ok', { userId })
       router.push('/')
       router.refresh()
+    }
+
+    try {
+      await Promise.race([
+        doWork(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('onboarding_timeout')), 10_000)
+        ),
+      ])
     } catch (err: unknown) {
       const msg = (err as any)?.message ?? String(err)
       const isAbort =
         (err as any)?.name === 'AbortError' ||
         (typeof msg === 'string' && (msg.includes('signal') || msg.includes('aborted')))
+      const isTimeout = msg === 'onboarding_timeout'
 
-      if (isAbort) {
-        logger.warn('onboarding.complete.outer_abort', { message: msg, userId })
+      if (isAbort || isTimeout) {
+        // Abort or hard timeout — the upsert may have committed server-side.
+        // Navigate and let middleware detect any loop.
+        logger.warn(
+          isTimeout ? 'onboarding.complete.timeout' : 'onboarding.complete.outer_abort',
+          { message: msg }
+        )
         router.push('/')
         return
       }
 
-      timer.error(err, { step: 'handleComplete', userId })
       logger.error('onboarding.complete.failed', err as Error, {
         step: 'handleComplete',
         message: msg,
-        userId,
       })
       setError(typeof msg === 'string' ? msg : 'Failed to save. Please try again.')
       setShowContinueAnyway(true)
@@ -311,21 +330,17 @@ export default function OnboardingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, router, supabase])
 
-  const handleSkip = useCallback(async () => {
+  const handleSkip = useCallback(() => {
     const userId = userIdRef.current ?? authUser?.id ?? null
     if (!userId) {
-      // No user — redirect to login rather than hanging.
+      // No user — redirect immediately; skip the upsert entirely.
       logger.warn('onboarding.skip.no_user', { authLoading })
-      router.push('/login')
+      router.push('/')
       return
     }
     logger.info('onboarding.skip.start', { userId })
-    setSubmitting(true)
-    try {
-      await markCompleteAndNavigate(userId)
-    } finally {
-      setSubmitting(false)
-    }
+    // markCompleteAndNavigate navigates first, writes second — synchronous return.
+    markCompleteAndNavigate(userId)
   }, [authUser, authLoading, markCompleteAndNavigate, router])
 
   const canProceedStep1 = userRole !== null
