@@ -313,7 +313,12 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     zoom: 4,
   })
   const [bounds, setBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null)
-  const [hasAutocentered, setHasAutocentered] = useState(false)
+  // userHasMovedMap: set true ONLY when the user manually pans/zooms the map.
+  // Profile-based auto-centering (Priority 1a/1b) is allowed until this is true.
+  // Browser geolocation (Priority 2) uses a separate hasGeocentered flag so it
+  // never pre-empts the profile center.
+  const [userHasMovedMap, setUserHasMovedMap] = useState(false)
+  const [hasGeocentered, setHasGeocentered] = useState(false)
 
   // Shell panel navigation
   const { setActivePanel } = usePanelContext()
@@ -340,9 +345,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     return null
   }, [position?.coords, profile?.latitude, profile?.longitude])
 
-  // Priority 1a: Use stored lat/lng from profile (instant, no network call)
+  // Priority 1a: Use stored lat/lng from profile (instant, no network call).
+  // Fires whenever profile lat/lng become available; respects manual pans only.
   useEffect(() => {
-    if (hasAutocentered) return
+    if (userHasMovedMap) return
     if (!profile?.latitude || !profile?.longitude) return
 
     setViewState((prev) => ({
@@ -351,17 +357,18 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       latitude: profile.latitude!,
       zoom: 11,
     }))
-    setHasAutocentered(true)
-  }, [profile?.latitude, profile?.longitude, hasAutocentered])
+    // Profile center applied — block further auto-centering by marking map as "moved"
+    // so browser-geo and the geocode fallback don't override it.
+    setUserHasMovedMap(true)
+  }, [profile?.latitude, profile?.longitude, userHasMovedMap])
 
   // Priority 1b: Geocode profile city/state via Mapbox — async, non-blocking, cached.
-  // The map renders immediately at its default/last center; this effect flies to the
-  // geocoded position once it resolves (or from cache instantly).
+  // Only runs when profile has no stored lat/lng and user hasn't manually panned.
   const geocodeAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    if (hasAutocentered) return
+    if (userHasMovedMap) return
     if (!profile?.location_city || !profile?.location_state) return
-    if (profile?.latitude && profile?.longitude) return // lat/lng already stored — Priority 1a handles it
+    if (profile?.latitude && profile?.longitude) return // lat/lng stored — Priority 1a handles it
 
     const city = `${profile.location_city}, ${profile.location_state}`
     const t0 = Date.now()
@@ -371,7 +378,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     if (memHit) {
       logger.info('map.geocode', { city, ms: 0, cached: 'memory' })
       setViewState((prev) => ({ ...prev, longitude: memHit.lng, latitude: memHit.lat, zoom: 11 }))
-      setHasAutocentered(true)
+      setUserHasMovedMap(true)
       return
     }
 
@@ -382,7 +389,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       memGeocodeCache.set(city, diskHit)
       logger.info('map.geocode', { city, ms: 0, cached: 'localStorage' })
       setViewState((prev) => ({ ...prev, longitude: diskHit.lng, latitude: diskHit.lat, zoom: 11 }))
-      setHasAutocentered(true)
+      setUserHasMovedMap(true)
       return
     }
 
@@ -409,7 +416,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           writeGeocodeCache(city, entry)
           logger.info('map.geocode', { city, ms, cached: false })
           setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat, zoom: 11 }))
-          setHasAutocentered(true)
+          setUserHasMovedMap(true)
         }
       })
       .catch((err: unknown) => {
@@ -423,25 +430,30 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       controller.abort()
       clearTimeout(timeoutId)
     }
-  }, [profile?.location_city, profile?.location_state, profile?.latitude, profile?.longitude, hasAutocentered])
+  }, [profile?.location_city, profile?.location_state, profile?.latitude, profile?.longitude, userHasMovedMap])
 
-  // Priority 2: Browser geolocation (fires if profile geocoding didn't center)
+  // Priority 2: Browser geolocation — fallback only when profile has no location.
+  // Kicks off the GPS request once on mount.
   useEffect(() => {
-    if (!hasAutocentered) {
-      getCurrentPosition()
-    }
+    getCurrentPosition()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Apply browser-geo position only when profile provided no center (userHasMovedMap
+  // is still false) and we haven't already applied it.
   useEffect(() => {
-    if (position && !hasAutocentered) {
-      setViewState({
-        longitude: position.coords.longitude,
-        latitude: position.coords.latitude,
-        zoom: 12,
-      })
-      setHasAutocentered(true)
-    }
-  }, [position, hasAutocentered])
+    if (userHasMovedMap) return
+    if (hasGeocentered) return
+    if (!position) return
+
+    setViewState({
+      longitude: position.coords.longitude,
+      latitude: position.coords.latitude,
+      zoom: 12,
+    })
+    setHasGeocentered(true)
+    // Do NOT set userHasMovedMap here — profile center (Priority 1a/1b) may still
+    // arrive after GPS and should override browser-geo for the initial center.
+  }, [position, userHasMovedMap, hasGeocentered])
 
   // Real Supabase resources query
   const { resources: realResources, loading: resourcesLoading } = useViewportResources({
@@ -681,6 +693,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
           onBoundsChange={handleBoundsChange}
+          onUserInteraction={() => setUserHasMovedMap(true)}
           className="h-full"
         >
           {clusters.map((cluster) =>
