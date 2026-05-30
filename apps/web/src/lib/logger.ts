@@ -5,9 +5,48 @@
  * - Vercel Log Drain captures console.log/warn/error automatically.
  * - Works in Node.js (API routes), Edge Runtime, and the browser.
  * - Includes request timing via `logger.time()` and error serialization.
+ * - Server-side sink: warn/error levels are persisted to app_logs in Supabase
+ *   via service-role client (fire-and-forget, never throws, never slows caller).
  */
 
 import { track } from '@vercel/analytics'
+
+// ============================================
+// Server-side Supabase log sink
+// ============================================
+
+/**
+ * Fire-and-forget insert into public.app_logs.
+ * Runs only on the server (Node.js runtime, not browser/Edge).
+ * Uses SUPABASE_SERVICE_ROLE_KEY — if absent, silently skips.
+ * Wrapped in try/catch: a log write must NEVER throw or await in the caller.
+ */
+function sinkToSupabase(
+  level: 'warn' | 'error',
+  event: string,
+  context?: Record<string, unknown>,
+  request_id?: string
+): void {
+  // Guard: server-only
+  if (typeof window !== 'undefined') return
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return
+
+  // Detached promise — intentionally not awaited so callers are never blocked.
+  Promise.resolve().then(async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const client = createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      await client.from('app_logs').insert({ level, event, context, request_id })
+    } catch {
+      // Swallow unconditionally — logging must never break a request.
+    }
+  })
+}
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -47,12 +86,14 @@ export const logger = {
   info: (message: string, data?: Record<string, unknown>) =>
     emit({ level: 'info', message, timestamp: new Date().toISOString(), ...data }),
 
-  warn: (message: string, data?: Record<string, unknown>) =>
-    emit({ level: 'warn', message, timestamp: new Date().toISOString(), ...data }),
+  warn: (message: string, data?: Record<string, unknown>) => {
+    emit({ level: 'warn', message, timestamp: new Date().toISOString(), ...data })
+    sinkToSupabase('warn', message, data)
+  },
 
-  error: (message: string, error?: unknown, data?: Record<string, unknown>) =>
-    emit({
-      level: 'error',
+  error: (message: string, error?: unknown, data?: Record<string, unknown>) => {
+    const entry = {
+      level: 'error' as const,
       message,
       timestamp: new Date().toISOString(),
       error_name: error instanceof Error ? error.name : undefined,
@@ -62,7 +103,11 @@ export const logger = {
           ? error.stack?.split('\n').slice(0, 5).join('\n')
           : undefined,
       ...data,
-    }),
+    }
+    emit(entry)
+    const { level: _l, message: _m, timestamp: _t, ...contextFields } = entry
+    sinkToSupabase('error', message, { ...contextFields, ...data })
+  },
 
   /**
    * Start a timer for an operation. Returns an object with `.end()` and
