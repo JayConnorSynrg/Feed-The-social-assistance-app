@@ -13,7 +13,15 @@ export function createClient(): SupabaseClient<Database> {
   if (browserClient) return browserClient
   browserClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        // navigator.locks (Web Locks API) deadlocks getSession() in some
+        // environments (PWA, Capacitor, incognito). Bypass with a no-op lock
+        // so auth resolves immediately and authUser populates on first render.
+        lock: async (_name, _acquireTimeout, fn) => fn(),
+      },
+    }
   )
   return browserClient
 }
