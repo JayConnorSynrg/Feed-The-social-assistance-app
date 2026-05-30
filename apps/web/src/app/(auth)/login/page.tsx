@@ -18,6 +18,8 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/'
+  const oauthError = searchParams.get('error')
+  const oauthDetail = searchParams.get('detail')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -161,15 +163,21 @@ function LoginForm() {
     setError(null)
     setLoading(true)
 
+    const callbackRedirectTo = `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`
+    logger.info('oauth.start', { provider, redirectTo: callbackRedirectTo })
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+          redirectTo: callbackRedirectTo,
         },
       })
 
-      if (error) throw error
+      if (error) {
+        logger.error('oauth.start.error', error, { provider })
+        throw error
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
@@ -215,6 +223,21 @@ function LoginForm() {
               {error && (
                 <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
                   {error}
+                </div>
+              )}
+
+              {oauthError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md space-y-1">
+                  <p className="font-medium">
+                    Sign-in failed
+                    {oauthError === 'oauth_provider' && ' (provider rejected the request)'}
+                    {oauthError === 'exchange_failed' && ' (session exchange failed)'}
+                    {oauthError === 'no_code' && ' (no authorization code received)'}
+                    {oauthError === 'no_session' && ' (session was not created)'}
+                  </p>
+                  {oauthDetail && (
+                    <p className="text-xs text-red-600 break-words font-mono">{decodeURIComponent(oauthDetail)}</p>
+                  )}
                 </div>
               )}
 

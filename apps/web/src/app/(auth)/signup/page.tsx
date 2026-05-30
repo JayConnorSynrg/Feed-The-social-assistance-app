@@ -153,15 +153,21 @@ export default function SignupPage() {
     setError(null)
     setLoading(true)
 
+    const callbackRedirectTo = `${window.location.origin}/auth/callback?redirectTo=/onboarding`
+    logger.info('oauth.start', { provider, redirectTo: callbackRedirectTo })
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirectTo=/onboarding`,
+          redirectTo: callbackRedirectTo,
         },
       })
 
-      if (error) throw error
+      if (error) {
+        logger.error('oauth.start.error', error, { provider })
+        throw error
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
