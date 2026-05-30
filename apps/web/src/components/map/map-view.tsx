@@ -25,6 +25,8 @@ interface MapViewProps {
   onViewStateChange?: (viewState: ViewState) => void
   onBoundsChange?: (bounds: Bounds) => void
   onMapLoad?: () => void
+  /** Called once when the user first intentionally drags or zooms the map. */
+  onUserInteraction?: () => void
   children?: React.ReactNode
   className?: string
 }
@@ -40,6 +42,7 @@ export function MapView({
   onViewStateChange,
   onBoundsChange,
   onMapLoad,
+  onUserInteraction,
   children,
   className = '',
 }: MapViewProps) {
@@ -77,6 +80,10 @@ export function MapView({
     }
   }, [getBounds, onBoundsChange])
 
+  const handleUserInteraction = useCallback(() => {
+    onUserInteraction?.()
+  }, [onUserInteraction])
+
   const handleLoad = useCallback(() => {
     setIsLoading(false)
     onMapLoad?.()
@@ -112,6 +119,8 @@ export function MapView({
         {...viewState}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
+        onDragStart={handleUserInteraction}
+        onZoomStart={handleUserInteraction}
         onLoad={handleLoad}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/streets-v12"
