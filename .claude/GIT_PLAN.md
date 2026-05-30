@@ -248,6 +248,22 @@ completed_at: 2026-05-29T11:20:00.000Z
 ```
 
 ```yaml
+id: item2-federation-defer
+status: complete
+type: commit
+description: "Record deferral of federation service-role→edge migration. Federation is dormant: 0 real peers, 0 federated_resources, 0 sync_log entries. service_role key is server-only (not client-exposed). Logic already duplicated in supabase/functions/federation-*. Change: comment-only sharpening at 4 sites (resources/route.ts L153, webhook/route.ts L234+L357, verify-federation.ts L68). Trigger to action: federation_peers > 0. Zero logic/behavior change; tsc 0, build pass confirmed."
+branch: develop
+remote: origin
+files:
+  - apps/web/src/app/api/federation/resources/route.ts
+  - apps/web/src/app/api/federation/webhook/route.ts
+  - apps/web/src/lib/federation/verify-federation.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T00:00:00.000Z
+completed_at: 2026-05-29T00:00:00.000Z
+```
+
+```yaml
 id: phase3-observability-resilience
 status: complete
 type: branch

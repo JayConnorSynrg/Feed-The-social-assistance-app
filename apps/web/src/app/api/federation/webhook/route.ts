@@ -231,7 +231,11 @@ async function fetchResourceFromPartner(
  * This route is NOT user-facing - it receives webhooks from external federation instances.
  * Authentication is via HMAC signature verification (line 460) not user sessions.
  *
- * TODO: Move to Supabase Edge Function to avoid exposing service role in Next.js API routes
+ * DEFERRED 2026-05-29 (federation dormant: 0 peers, 0 federated_resources, 0 sync_log entries).
+ * The service_role key here is server-only (not client-exposed) and gated by HMAC verification.
+ * Trigger to action: when federation_peers > 0 (a real partner onboards), consolidate this
+ * service_role logic onto the existing supabase/functions/federation-* edge functions and
+ * remove this duplicated Next.js route.
  */
 async function processWebhookEvent(
   payload: WebhookPayload,
@@ -353,8 +357,9 @@ async function processWebhookEvent(
 /**
  * Log webhook receipt to federation_sync_log
  *
- * SECURITY NOTE: Uses service role key for admin logging.
- * TODO: Move to Supabase Edge Function
+ * SECURITY NOTE: Uses service role key for admin logging (server-only, not client-exposed).
+ * DEFERRED 2026-05-29 (federation dormant: 0 peers). Trigger to action: when federation_peers > 0,
+ * consolidate onto supabase/functions/federation-* edge functions with processWebhookEvent above.
  */
 async function logWebhook(
   instanceId: string,

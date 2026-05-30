@@ -65,8 +65,11 @@ export async function verifyFederationRequest(
   // This function validates HTTP signatures from external federation peers.
   // It needs admin access to look up instance public keys and update last_seen_at.
   //
-  // TODO: Move to Supabase Edge Function or create a dedicated RPC function
-  // that can verify signatures without exposing service role key to Next.js
+  // DEFERRED 2026-05-29 (federation dormant: 0 peers, 0 federated_resources, 0 sync_log entries).
+  // The service_role key here is server-only (not client-exposed); it is used only to look up
+  // instance public keys and update last_seen_at. Trigger to action: when federation_peers > 0
+  // (a real partner onboards), move this verification logic into the supabase/functions/federation-*
+  // edge functions so the service_role key never touches the Next.js runtime.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 

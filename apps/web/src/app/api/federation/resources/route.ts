@@ -150,7 +150,11 @@ async function getResources(
   // Only verified federation instances can access this endpoint.
   // Returns only approved, verified resources (see WHERE clause line 175).
   //
-  // TODO: Move to Supabase Edge Function to avoid exposing service role in Next.js API routes
+  // DEFERRED 2026-05-29 (federation dormant: 0 peers, 0 federated_resources, 0 sync_log entries).
+  // The service_role key here is server-only (not client-exposed) and protected by HTTP signature
+  // verification above. Trigger to action: when federation_peers > 0 (a real partner onboards),
+  // consolidate this service_role logic onto the existing supabase/functions/federation-* edge
+  // functions and remove this duplicated Next.js route.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
