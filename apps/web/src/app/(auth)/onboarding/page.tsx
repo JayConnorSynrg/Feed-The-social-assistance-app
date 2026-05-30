@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuthContext } from '@/providers/auth-provider'
@@ -71,9 +71,34 @@ export default function OnboardingPage() {
   const [longitude, setLongitude] = useState<number | null>(null)
   const [selectedNeeds, setSelectedNeeds] = useState<string[]>([])
   const [phone, setPhone] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  // Local submitting flag — decoupled from authLoading so the button is never
+  // permanently disabled waiting for auth context to resolve.
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // showContinueAnyway becomes true when an upsert error/timeout occurs so the
+  // user can always escape the phone step.
+  const [showContinueAnyway, setShowContinueAnyway] = useState(false)
+
   const [geoLoading, setGeoLoading] = useState(false)
+
+  // Capture userId into local ref once authUser first resolves.
+  // This prevents the silent return that dead-ends the form when handleComplete
+  // fires while authLoading is still true.
+  const userIdRef = useRef<string | null>(null)
+  const pendingSubmitRef = useRef(false)
+
+  useEffect(() => {
+    if (authUser?.id && !userIdRef.current) {
+      userIdRef.current = authUser.id
+      // If a submit was attempted before auth resolved, fire it now.
+      if (pendingSubmitRef.current) {
+        pendingSubmitRef.current = false
+        void handleComplete()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser])
 
   const { getCurrentPosition } = useGeolocation()
 
@@ -85,7 +110,6 @@ export default function OnboardingPage() {
       if (position) {
         setLatitude(position.coords.latitude)
         setLongitude(position.coords.longitude)
-        // Reverse geocode to get city/state/zip
         try {
           const response = await fetch(
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${position.coords.longitude},${position.coords.latitude}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&types=postcode,place,region`
@@ -105,7 +129,7 @@ export default function OnboardingPage() {
             }
           }
         } catch {
-          // Geocoding failed, but we still have coords
+          // Geocoding failed but coords are captured — continue without city/zip
         }
       }
     } catch {
@@ -121,31 +145,59 @@ export default function OnboardingPage() {
     )
   }
 
-  const handleComplete = async () => {
-    setLoading(true)
+  /**
+   * Best-effort mark of onboarding_completed with a 10s timeout.
+   * Always navigates to `/` regardless of outcome — the user must never be
+   * trapped. Used by both the Skip path and the "Continue anyway" escape hatch.
+   */
+  const markCompleteAndNavigate = useCallback(
+    async (userId: string) => {
+      const controller = new AbortController()
+      const timerId = setTimeout(() => controller.abort(), 10_000)
+      try {
+        await (supabase
+          .from('profiles')
+          .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' }) as any)
+          .abortSignal(controller.signal)
+        logger.info('onboarding.skip.ok', { userId })
+      } catch (err: unknown) {
+        logger.warn('onboarding.skip.best_effort_failed', {
+          message: (err as any)?.message ?? String(err),
+          userId,
+        })
+      } finally {
+        clearTimeout(timerId)
+      }
+      router.push('/')
+    },
+    [router, supabase]
+  )
+
+  const handleComplete = useCallback(async () => {
+    const userId = userIdRef.current ?? authUser?.id ?? null
+
+    // Auth not yet resolved — queue the submit and return.
+    if (!userId && authLoading) {
+      pendingSubmitRef.current = true
+      logger.info('onboarding.complete.pending_auth', {})
+      return
+    }
+
+    if (!userId) {
+      // Auth done but no user — session expired.
+      logger.warn('onboarding.complete.no_user', { authLoading })
+      router.push('/login')
+      return
+    }
+
+    logger.info('onboarding.complete.start', { userId, hasPhone: !!phone })
+
+    setSubmitting(true)
     setError(null)
+    setShowContinueAnyway(false)
     const timer = logger.time('auth.onboarding.complete')
 
     try {
-      // Use the user from AuthProvider context exclusively.
-      // NEVER call getSession() here — it acquires a navigator lock that
-      // can deadlock against AuthProvider's own initialization, especially
-      // under React Strict Mode's double-mount cycle. If the context has
-      // no user after auth loading completes, redirect to login.
-      const userId = authUser?.id
-      if (!userId) {
-        if (authLoading) {
-          // Auth still initializing — retry after a short delay rather
-          // than calling getSession() which would deadlock.
-          setLoading(false)
-          setError('Still loading your account. Please try again in a moment.')
-          return
-        }
-        // Auth finished loading but no user — session expired or invalid.
-        router.push('/login')
-        return
-      }
-
       const profileData = {
         id: userId,
         user_role: userRole,
@@ -160,43 +212,55 @@ export default function OnboardingPage() {
         updated_at: new Date().toISOString(),
       } as any
 
-      // Upsert with a timeout — Next.js patches global fetch and can abort
-      // in-flight requests. If the timeout fires, the server-side write
-      // likely completed before the abort.
-      const upsertPromise = supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'id' })
+      // Wrap the upsert in a 10s AbortController timeout. Next.js patches global
+      // fetch and may abort in-flight requests on re-render — the server-side
+      // write often completes before the client abort fires.
+      const controller = new AbortController()
+      const timerId = setTimeout(() => controller.abort(), 10_000)
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('upsert_timeout')), 10_000)
-      )
-
-      let upsertError: { message: string } | null = null
+      let upsertError: { message: string; code?: string } | null = null
       try {
-        const result = await Promise.race([upsertPromise, timeoutPromise])
-        upsertError = result.error
+        const result = await (supabase
+          .from('profiles')
+          .upsert(profileData, { onConflict: 'id' }) as any)
+          .abortSignal(controller.signal)
+        upsertError = result.error ?? null
       } catch (raceErr: unknown) {
         const msg = (raceErr as any)?.message ?? ''
         const isAbortOrTimeout =
           (raceErr as any)?.name === 'AbortError' ||
           msg.includes('signal') ||
-          msg.includes('aborted') ||
-          msg === 'upsert_timeout'
+          msg.includes('aborted')
 
-        if (!isAbortOrTimeout) throw raceErr
-        // Abort or timeout — the upsert likely succeeded server-side.
-        // Navigate and let middleware verify.
-        logger.warn('auth.onboarding.upsert_aborted', { reason: msg })
+        if (isAbortOrTimeout) {
+          // Upsert likely committed server-side before the abort — navigate.
+          logger.warn('onboarding.complete.upsert_aborted', { userId, reason: msg })
+          clearTimeout(timerId)
+          logger.info('onboarding.complete.ok', { userId, path: 'abort_navigate' })
+          router.push('/')
+          router.refresh()
+          return
+        }
+        clearTimeout(timerId)
+        throw raceErr
+      } finally {
+        clearTimeout(timerId)
       }
 
       if (upsertError) {
-        logger.error('auth.onboarding.upsert_failed', upsertError, { userId })
-        throw new Error(upsertError.message)
+        logger.error('onboarding.complete.failed', new Error(upsertError.message), {
+          step: 'phone',
+          message: upsertError.message,
+          code: upsertError.code ?? 'unknown',
+          userId,
+        })
+        setError(`Could not save your profile: ${upsertError.message}`)
+        setShowContinueAnyway(true)
+        return
       }
 
-      // Verify the write committed before navigating — prevents the
-      // redirect loop where middleware sees onboarding_completed=false
-      // and sends the user back here.
+      // Verify the write committed — prevents the redirect loop where middleware
+      // sees onboarding_completed=false and sends the user back.
       try {
         const { data: verify } = await supabase
           .from('profiles')
@@ -204,15 +268,21 @@ export default function OnboardingPage() {
           .eq('id', userId)
           .maybeSingle()
         if (!verify?.onboarding_completed) {
-          logger.warn('auth.onboarding.verify_failed', { userId, verify })
-          // Retry the upsert once
-          await supabase.from('profiles').upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
+          logger.warn('onboarding.complete.verify_failed', { userId })
+          await supabase
+            .from('profiles')
+            .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
         }
-      } catch {
-        // Verification failed — navigate anyway, middleware will catch
+      } catch (verifyErr: unknown) {
+        // Verification failed — navigate anyway; middleware will catch loops.
+        logger.warn('onboarding.complete.verify_error', {
+          userId,
+          message: (verifyErr as any)?.message ?? String(verifyErr),
+        })
       }
 
       timer.end({ step: 'complete', userId })
+      logger.info('onboarding.complete.ok', { userId })
       router.push('/')
       router.refresh()
     } catch (err: unknown) {
@@ -222,19 +292,41 @@ export default function OnboardingPage() {
         (typeof msg === 'string' && (msg.includes('signal') || msg.includes('aborted')))
 
       if (isAbort) {
-        // Abort errors mean the whole operation was interrupted.
-        // The upsert may have succeeded — navigate and let middleware decide.
-        logger.warn('auth.onboarding.outer_abort', { message: msg })
+        logger.warn('onboarding.complete.outer_abort', { message: msg, userId })
         router.push('/')
         return
       }
 
-      timer.error(err, { step: 'handleComplete' })
+      timer.error(err, { step: 'handleComplete', userId })
+      logger.error('onboarding.complete.failed', err as Error, {
+        step: 'handleComplete',
+        message: msg,
+        userId,
+      })
       setError(typeof msg === 'string' ? msg : 'Failed to save. Please try again.')
+      setShowContinueAnyway(true)
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, router, supabase])
+
+  const handleSkip = useCallback(async () => {
+    const userId = userIdRef.current ?? authUser?.id ?? null
+    if (!userId) {
+      // No user — redirect to login rather than hanging.
+      logger.warn('onboarding.skip.no_user', { authLoading })
+      router.push('/login')
+      return
+    }
+    logger.info('onboarding.skip.start', { userId })
+    setSubmitting(true)
+    try {
+      await markCompleteAndNavigate(userId)
+    } finally {
+      setSubmitting(false)
+    }
+  }, [authUser, authLoading, markCompleteAndNavigate, router])
 
   const canProceedStep1 = userRole !== null
   const canProceedStep2 = zipCode.length >= 5 || (latitude !== null && longitude !== null)
@@ -280,8 +372,20 @@ export default function OnboardingPage() {
 
         <CardContent className="space-y-4">
           {error && (
-            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-              {error}
+            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md space-y-2">
+              <p>{error}</p>
+              {showContinueAnyway && (
+                <button
+                  onClick={async () => {
+                    const userId = userIdRef.current ?? authUser?.id ?? null
+                    if (userId) await markCompleteAndNavigate(userId)
+                    else router.push('/')
+                  }}
+                  className="underline font-medium text-destructive hover:text-destructive/80"
+                >
+                  Continue anyway
+                </button>
+              )}
             </div>
           )}
 
@@ -324,9 +428,9 @@ export default function OnboardingPage() {
               </Button>
 
               <button
-                onClick={handleComplete}
-                disabled={loading || authLoading}
-                className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors"
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors disabled:opacity-50"
               >
                 Find out how to help Feed.
               </button>
@@ -496,16 +600,16 @@ export default function OnboardingPage() {
                 <Button
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                   onClick={handleComplete}
-                  disabled={loading || authLoading}
+                  disabled={submitting}
                 >
-                  {loading ? 'Saving...' : authLoading ? 'Loading...' : 'Get Started'}
+                  {submitting ? 'Saving...' : 'Get Started'}
                 </Button>
               </div>
 
               <button
-                onClick={handleComplete}
-                disabled={loading || authLoading}
-                className="w-full text-center text-sm text-stone-400 hover:text-stone-600"
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
               >
                 Skip for now
               </button>

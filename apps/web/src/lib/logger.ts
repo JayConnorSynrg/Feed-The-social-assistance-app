@@ -17,8 +17,9 @@ import { track } from '@vercel/analytics'
 
 /**
  * Fire-and-forget insert into public.app_logs.
- * Runs only on the server (Node.js runtime, not browser/Edge).
- * Uses SUPABASE_SERVICE_ROLE_KEY — if absent, silently skips.
+ * - On the SERVER (Node.js runtime): writes directly via service-role client.
+ * - On the CLIENT (browser): posts to /api/client-log with keepalive:true so
+ *   the request survives navigation and the event is not lost on redirect.
  * Wrapped in try/catch: a log write must NEVER throw or await in the caller.
  */
 function sinkToSupabase(
@@ -27,9 +28,25 @@ function sinkToSupabase(
   context?: Record<string, unknown>,
   request_id?: string
 ): void {
-  // Guard: server-only
-  if (typeof window !== 'undefined') return
+  if (typeof window !== 'undefined') {
+    // Browser path — fire-and-forget via the client-log API route.
+    // keepalive:true ensures the request is not cancelled on navigation.
+    try {
+      fetch('/api/client-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ level, event, context }),
+      }).catch(() => {
+        // Swallow network errors — logging must never surface to the caller.
+      })
+    } catch {
+      // Swallow synchronous errors (e.g. JSON.stringify failure).
+    }
+    return
+  }
 
+  // Server path — write directly via service-role client.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return
