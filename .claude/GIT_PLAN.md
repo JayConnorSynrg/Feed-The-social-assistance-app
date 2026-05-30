@@ -16,9 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: fix-vitest-build
 
 ## Log
+
+```yaml
+id: fix-vitest-build
+status: complete
+type: commit
+description: "Fix build regression: vitest.config.ts pulled into Next.js TypeScript checker via **/*.ts glob in tsconfig include — production build fails when vitest not installed. Root cause: BOTH stale node_modules (npm install not run after Phase D added vitest) AND vitest.config.ts not excluded from tsconfig. Fix: (1) npm install to bring vitest in, (2) add vitest.config.ts + **/*.test.ts + **/*.test.tsx to tsconfig exclude list so production build never depends on test tooling. Forced build PASS, tsc 0, npm test 38/14-todo vitest + 30 node:test all green."
+branch: develop
+remote: origin
+files:
+  - apps/web/tsconfig.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T20:10:00.000Z
+completed_at: 2026-05-29T20:10:00.000Z
+```
+
 
 ```yaml
 id: proxy-rename
