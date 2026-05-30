@@ -21,6 +21,37 @@ next_action_id: auth-fixes-signout-delete
 ## Log
 
 ```yaml
+id: app-logs-sink
+status: complete
+type: merge
+description: "feat(observability): app_logs Supabase sink. Migration 20260530015243 creates public.app_logs (RLS on, service-role only). sinkToSupabase() wired into logger.warn + logger.error — server-only, fire-and-forget, lazy import, unconditional swallow. Merged as PR #15 to develop (sha 834a84a). Pipe verified: INSERT + SELECT via service-role REST confirmed."
+branch: feature/app-logs-sink
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260530015243_create_app_logs.sql
+  - apps/web/src/lib/logger.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T01:52:43.000Z
+completed_at: 2026-05-30T01:55:30.000Z
+```
+
+```yaml
+id: map-geocode-perf
+status: complete
+type: merge
+description: "Make Mapbox city-geocode non-blocking + cached. Map renders immediately at default center; geocode fires async with 5s AbortController timeout and flyTo on resolve. Results cached in memory (module Map) + localStorage (7-day TTL). Logged via logger.info('map.geocode'). Measured baseline: ~3429ms blocking. Fix eliminates block entirely; first-load async, subsequent loads 0ms. Merged as PR #13 to develop (sha e2224c5)."
+branch: feature/map-geocode-perf
+base: develop
+remote: origin
+files:
+  - apps/web/src/components/panels/map-panel.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T00:00:00.000Z
+completed_at: 2026-05-29T00:00:00.000Z
+```
+
+```yaml
 id: auth-fixes-signout-delete
 status: in_progress
 type: commit
