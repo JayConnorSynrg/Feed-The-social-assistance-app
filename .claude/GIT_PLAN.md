@@ -21,6 +21,23 @@ next_action_id: null
 ## Log
 
 ```yaml
+id: proxy-rename
+status: complete
+type: branch
+description: "Mechanical Next.js 16 convention rename: middleware.ts→proxy.ts, exported function middleware→proxy. Single-line diff (function signature only). Build PASS (no deprecation warning, output shows 'ƒ Proxy (Middleware)'), tsc 0 errors, vault-form-flow 9/9."
+branch: feature/proxy-rename
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-proxy
+files:
+  - apps/web/src/proxy.ts
+  - apps/web/src/middleware.ts (RENAMED → proxy.ts)
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T00:00:00.000Z
+completed_at: 2026-05-29T00:00:00.000Z
+```
+
+```yaml
 id: phaseG-truthup
 status: complete
 type: commit
