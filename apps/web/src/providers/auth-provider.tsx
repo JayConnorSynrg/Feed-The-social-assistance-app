@@ -49,13 +49,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
       if (error) {
-        console.error('Error fetching profile:', error)
+        console.error('Error fetching profile:', error.message, error.code)
         return null
       }
-      return data as Profile
+      return data as Profile | null
     }
 
     const mountTime = Date.now()
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .from('profiles')
         .select('*')
         .eq('id', newSession.user.id)
-        .single()
+        .maybeSingle()
       setUser(newSession.user)
       setSession(newSession)
       setProfile(profileData as Profile)
