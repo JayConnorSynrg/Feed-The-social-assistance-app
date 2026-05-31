@@ -55,18 +55,19 @@ References:
 
 ## Metric catalog
 
-| Operation | File : approx line | Attrs | Mechanism |
+| Operation | File : line | Attrs | Mechanism |
 |---|---|---|---|
-| `map.resources_in_bounds` | `apps/web/src/hooks/use-viewport-resources.ts` : L112 | `bounds_area`, `result_count`, `category` | `withMetric` |
-| `chat.ttfb` | `apps/web/src/hooks/use-chat.ts` | `model`, `ttfb_ms` | inline `track()` |
-| `chat.complete` | `apps/web/src/hooks/use-chat.ts` | `model`, `duration_ms`, `token_estimate` | inline `track()` |
-| `vault.unlock` | `apps/web/src/contexts/vault-context.tsx` : `unlock` callback | `userId` | `withMetric` |
-| `documents.upload` | `apps/web/src/hooks/use-documents.ts` : `uploadDocument` | `category`, `file_size`, `document_type` | `withMetric` |
-| `programs.query` | `apps/web/src/hooks/use-program-browser.ts` : `fetchPrograms` | `category`, `state`, `has_search` | `withMetric` |
-| `feed.load` | `apps/web/src/components/panels/feed-panel.tsx` : `fetchPosts` | `limit` | `withMetric` |
-| `messages.send` | `apps/web/src/hooks/use-conversations.ts` : `sendMessage` | `content_length` | `withMetric` |
-| `forms.draft` | `apps/web/src/hooks/use-vault-form-submission.ts` : `createDraft` | `template_id` | `withMetric` |
-| `forms.submit` | `apps/web/src/hooks/use-vault-form-submission.ts` : `submitForm` | `template_id`, `has_signature` | `withMetric` |
+| `map.resources_in_bounds` | `apps/web/src/hooks/use-viewport-resources.ts` : L112 | `category`, `limit` | `withMetric` |
+| `vault.unlock` | `apps/web/src/contexts/vault-context.tsx` : L165 | `userId` | `withMetric` |
+| `documents.upload` | `apps/web/src/hooks/use-documents.ts` : L141 | `category`, `file_size`, `document_type` | `withMetric` |
+| `programs.query` | `apps/web/src/hooks/use-program-browser.ts` : L89 | `category`, `state`, `has_search` | `withMetric` |
+| `feed.load` | `apps/web/src/components/panels/feed-panel.tsx` : L323 | `limit` | `withMetric` |
+| `messages.send` | `apps/web/src/hooks/use-conversations.ts` : L356 | `content_length` | `withMetric` |
+| `forms.draft` | `apps/web/src/hooks/use-vault-form-submission.ts` : L262 | `template_id` | `withMetric` |
+| `forms.submit` | `apps/web/src/hooks/use-vault-form-submission.ts` : L411 | `template_id`, `has_signature` | `withMetric` |
+| `chat.ttfb` | `apps/web/src/hooks/use-chat.ts` : L194 | `duration_ms` | inline `track()` |
+| `chat.complete` | `apps/web/src/hooks/use-chat.ts` : L215 | `duration_ms`, `ok` | inline `track()` |
+| `nav_subtab` | `apps/web/src/components/panels/feed-panel.tsx` : L292; `documents-panel.tsx` : L600 | `panel`, `subtab` | inline `track()` |
 
 All `withMetric`-backed operations also emit a structured log entry (`${operation}.complete` or `${operation}.error`) visible in the Vercel Log Drain.
 

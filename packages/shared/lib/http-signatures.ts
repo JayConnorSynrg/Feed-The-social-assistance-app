@@ -1,8 +1,15 @@
 /**
- * HTTP Signatures (RFC 9421) for Federation Authentication
+ * HTTP Signatures (draft-cavage HTTP Signatures) for Federation Authentication
  *
  * Implements request signing and verification for secure communication
  * between federated FEED instances.
+ *
+ * NOTE: Despite the earlier "RFC 9421" label, this file implements the
+ * draft-cavage-http-signatures scheme (Signature header, keyId/algorithm/headers
+ * parameters, (request-target) pseudo-header). RFC 9421 is a separate, later
+ * standard. Do not change this implementation — the inbound Next.js verifier
+ * (verify-federation.ts) depends on it and all peer sign/verify round-trips
+ * have been validated against it.
  */
 
 import { createSign, createVerify, createHash } from 'crypto'

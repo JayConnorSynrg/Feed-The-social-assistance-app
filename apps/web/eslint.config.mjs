@@ -17,7 +17,7 @@ const eslintConfig = defineConfig([
   // Regenerate types and fix the underlying mismatch instead of silencing it.
   // Applies to hooks, components, and lib where the supabase client is used.
   {
-    files: ["src/hooks/**/*.ts", "src/components/**/*.tsx", "src/lib/**/*.ts", "src/app/**/*.tsx"],
+    files: ["src/hooks/**/*.ts", "src/components/**/*.tsx", "src/lib/**/*.ts", "src/app/**/*.tsx", "src/app/**/*.ts", "src/proxy.ts", "src/middleware/**/*.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

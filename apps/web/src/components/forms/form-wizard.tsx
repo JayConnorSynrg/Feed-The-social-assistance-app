@@ -20,6 +20,7 @@ import { useVaultFormSubmission } from '@/hooks/use-vault-form-submission'
 import { getVisibleFields } from '@/lib/form-schemas'
 import type { FormFieldSchema, FormSection } from '@/lib/form-schemas'
 import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
+import { logger } from '@/lib/logger'
 
 export interface FormWizardProps {
   templateId: string
@@ -381,12 +382,10 @@ export function FormWizard({
 
     submissionHook.createDraft(templateId).then((id) => {
       if (id) {
-        console.log(JSON.stringify({
-          action: 'form_wizard_opened',
+        logger.info('forms.wizard.opened', {
           templateId,
-          templateName: template.name,
-          totalSteps: template.sections.length,
-        }))
+          total_steps: template.sections.length,
+        })
       }
     })
   }, [template])
@@ -415,25 +414,20 @@ export function FormWizard({
     if (!valid) return
 
     const stepDurationMs = Date.now() - stepStartTimeRef.current
-    console.log(JSON.stringify({
-      action: 'form_wizard_step',
+    logger.info('forms.wizard.step', {
       templateId,
       step: currentStep + 1,
-      totalSteps,
+      total_steps: totalSteps,
       direction: 'next',
-      durationOnStepMs: stepDurationMs,
-    }))
+      duration_ms: stepDurationMs,
+    })
 
     setIsSaving(true)
     const data = getValues() as Record<string, unknown>
     await submissionHook.saveDraft(data)
     setIsSaving(false)
 
-    console.log(JSON.stringify({
-      action: 'form_wizard_draft_saved',
-      templateId,
-      step: currentStep + 1,
-    }))
+    logger.info('forms.wizard.draft_saved', { templateId, step: currentStep + 1 })
 
     stepStartTimeRef.current = Date.now()
 
@@ -450,14 +444,13 @@ export function FormWizard({
       return
     }
     if (currentStep > 0) {
-      console.log(JSON.stringify({
-        action: 'form_wizard_step',
+      logger.info('forms.wizard.step', {
         templateId,
         step: currentStep,
-        totalSteps,
+        total_steps: totalSteps,
         direction: 'back',
-        durationOnStepMs: Date.now() - stepStartTimeRef.current,
-      }))
+        duration_ms: Date.now() - stepStartTimeRef.current,
+      })
       setCurrentStep((s) => s - 1)
       stepStartTimeRef.current = Date.now()
     }
@@ -477,23 +470,19 @@ export function FormWizard({
         throw new Error(submissionHook.error ?? 'Submission failed')
       }
 
-      console.log(JSON.stringify({
-        action: 'form_wizard_submitted',
+      logger.info('forms.wizard.submitted', {
         templateId,
-        totalDurationMs: Date.now() - startTimeRef.current,
-      }))
+        duration_ms: Date.now() - startTimeRef.current,
+      })
 
       onComplete()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed'
       setSubmitError(msg)
-      console.log(JSON.stringify({
-        action: 'form_wizard_error',
+      logger.error('forms.wizard.submit_error', new Error(msg), {
         templateId,
-        step: isReviewStep ? 'review' : currentStep + 1,
-        errorType: 'submit',
-        errorMessage: msg,
-      }))
+        step: isReviewStep ? 'review' : String(currentStep + 1),
+      })
     } finally {
       setIsSubmitting(false)
     }

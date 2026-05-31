@@ -1,17 +1,11 @@
 /**
- * Federation Resources Proxy
+ * Federation Single-Resource Proxy
  *
- * Thin proxy to the federation-resources edge function.
+ * Thin proxy to the federation-resources edge function for single-resource GET.
  * No service_role key — all privileged logic lives in the edge function.
  *
- * Forwards the original Signature, Date, Digest headers so the edge
- * function can verify the cavage HTTP Signature that the caller produced.
- *
- * Adds two passthrough headers required for correct signature verification:
- *   x-original-host   — the Host value the signer used (this request's host)
- *   x-original-target — "<METHOD> <path+query>" the signer used
- *
- * The edge function reconstructs the exact signing string from these.
+ * The edge function detects a UUID final segment on x-original-target and
+ * handles it as a single-resource lookup (same handler, different code path).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -43,6 +37,7 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url)
   const originalHost = request.headers.get('host') ?? url.host
+  // Preserve the full path including the resource id so the edge fn can parse it
   const originalTarget = `GET ${url.pathname}${url.search}`
 
   const forwardHeaders: Record<string, string> = {
@@ -50,7 +45,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     'x-original-target': originalTarget,
   }
 
-  // Forward cavage auth headers
   const signature = request.headers.get('signature')
   if (signature) forwardHeaders['signature'] = signature
 
@@ -63,15 +57,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const authorization = request.headers.get('authorization')
   if (authorization) forwardHeaders['authorization'] = authorization
 
-  // Forward query string to edge function
-  const edgeUrl = new URL(EDGE_FN_URL)
-  url.searchParams.forEach((v, k) => edgeUrl.searchParams.set(k, v))
-
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS)
 
   try {
-    const edgeResponse = await fetch(edgeUrl.toString(), {
+    const edgeResponse = await fetch(EDGE_FN_URL, {
       method: 'GET',
       headers: forwardHeaders,
       signal: controller.signal,
@@ -79,14 +69,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     clearTimeout(timeoutId)
 
     const body = await edgeResponse.text()
-    const responseHeaders: Record<string, string> = {
-      'Content-Type': edgeResponse.headers.get('content-type') ?? 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    }
-
     return new NextResponse(body, {
       status: edgeResponse.status,
-      headers: responseHeaders,
+      headers: {
+        'Content-Type': edgeResponse.headers.get('content-type') ?? 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     })
   } catch (err) {
     clearTimeout(timeoutId)

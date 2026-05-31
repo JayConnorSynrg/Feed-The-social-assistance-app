@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Plus, Save, X, Type } from 'lucide-react'
 import { usePdfAnnotation } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
+import { logger } from '@/lib/logger'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
@@ -250,12 +251,7 @@ function PageOverlay({
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    console.log(JSON.stringify({
-      action: 'pdf_textbox_added',
-      pageIndex,
-      x: Math.round(x),
-      y: Math.round(y),
-    }))
+    logger.info('forms.pdf.textbox_added', { pageIndex, x: Math.round(x), y: Math.round(y) })
 
     onAnnotationAdd({
       pageIndex,
@@ -326,10 +322,7 @@ export function PdfAnnotator({ pdfUrl, onSave, onCancel }: PdfAnnotatorProps) {
 
   const handleSave = useCallback(async () => {
     setSaveError(null)
-    console.log(JSON.stringify({
-      action: 'pdf_save_initiated',
-      annotationCount: annotations.length,
-    }))
+    logger.info('forms.pdf.save_initiated', { annotation_count: annotations.length })
 
     try {
       const bytes = await savePdf(scale)

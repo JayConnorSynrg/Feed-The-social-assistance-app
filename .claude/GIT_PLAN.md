@@ -21,6 +21,68 @@ next_action_id: none
 ## Log
 
 ```yaml
+id: wave4b-syncstatus-fix
+status: complete
+type: commit
+description: "fix(federation): sync_log status must be 'success' not 'completed' (DB constraint). Constraint on federation_sync_log.sync_status CHECK IN ('success','partial','failed'). Three invalid values fixed: (1) federation-inbox/index.ts:344 'completed'→'success'; (2) federation-sync/index.ts:177 'in_progress'→'partial' (initial insert sentinel); (3) federation-sync/index.ts:289 'error'→'failed'. Admin UI corrected to match: federation/sync/page.tsx:119 'in_progress'→'partial', :120 'error'→'failed'. deno check federation-inbox: clean. federation-inbox redeployed to ndtpovonpadugthmcntl (version 2, ACTIVE). tsc 0 errors (4/4 packages)."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - supabase/functions/federation-inbox/index.ts
+  - supabase/functions/federation-sync/index.ts
+  - apps/web/src/app/(admin)/federation/sync/page.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T03:47:00.000Z
+completed_at: 2026-05-30T03:47:00.000Z
+```
+
+```yaml
+id: wave3-edge-migration
+status: complete
+type: commit
+description: "feat(federation): Wave 3 — inbound edge fns (resources/inbox) + thin Next proxies, service_role off Next runtime. FED3: supabase/functions/federation-resources/index.ts (cavage verify via x-original-host+x-original-target, trust-level gate, paged+single-resource collection, last_seen_at update); supabase/functions/federation-inbox/index.ts (HMAC-SHA256 verify, timestamp replay window, upsert/delete federated_resources, federation_sync_log insert); supabase/functions/_shared/federation-db.ts (serviceClient + CORS helpers). FED4: apps/web/src/app/api/federation/resources/route.ts + [id]/route.ts + webhook/route.ts → thin proxies (no SERVICE_ROLE, forward Signature/HMAC headers + x-original-host + x-original-target, 30s timeout). FED5: supabase/config.toml (verify_jwt=false for 5 federation fns). FED6: Tier-0 rate-limit note in edge fns + docs/federation.md (Upstash Redis upgrade path). Gate: tsc 0, build PASS, npm test 52 vitest + node:test green, deno check both edge fns clean, grep SERVICE_ROLE in proxy routes = 0 runtime refs."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - supabase/functions/_shared/federation-db.ts
+  - supabase/functions/federation-resources/index.ts
+  - supabase/functions/federation-inbox/index.ts
+  - apps/web/src/app/api/federation/resources/route.ts
+  - apps/web/src/app/api/federation/resources/[id]/route.ts
+  - apps/web/src/app/api/federation/webhook/route.ts
+  - supabase/config.toml
+  - docs/federation.md
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T00:00:00.000Z
+completed_at: 2026-05-30T00:00:00.000Z
+```
+
+```yaml
+id: wave2-federation-foundation
+status: complete
+type: commit
+description: "Wave 2 — align edge signer to cavage Signature scheme + single-resource route. FED1: (1) fix false RFC 9421 label in packages/shared/lib/http-signatures.ts (was cavage all along); (2) create supabase/functions/_shared/http-signatures.ts — Deno/WebCrypto signer byte-identical to Next verifier (same draft-cavage signing string, RSASSA-PKCS1-v1_5/SHA-256, base64 Signature header); (3) fix federation-sync/index.ts: replace X-Federation-Signature:<ts>:<hex> bespoke scheme with cavage Signature+Host+Date headers via _shared signer; (4) parity test apps/web/src/lib/__tests__/federation-signature-parity.test.mjs — 5 tests all pass (GET round-trip, POST+body round-trip, tampered sig rejected, wrong key rejected, signing-string reconstruction). FED2: create apps/web/src/app/api/federation/resources/[id]/route.ts — single-resource GET gated by withFederationAuth+requireTrustLevel 'pending', 404-safe, mirrors collection route auth/service_role/CORS. Gate: tsc 0, build PASS (route visible in build output), npm test 35/35 node:test + 52 vitest all green."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - packages/shared/lib/http-signatures.ts
+  - supabase/functions/_shared/http-signatures.ts
+  - supabase/functions/federation-sync/index.ts
+  - apps/web/src/app/api/federation/resources/[id]/route.ts
+  - apps/web/src/lib/__tests__/federation-signature-parity.test.mjs
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T00:00:00.000Z
+completed_at: 2026-05-30T00:00:00.000Z
+```
+
+```yaml
+>>>>>>> feature/launch-hardening
 id: wave1-present-gaps
 status: complete
 type: branch
@@ -40,10 +102,10 @@ files:
   - apps/web/src/contexts/vault-context.tsx
   - apps/web/src/components/panels/feed-panel.tsx
   - apps/web/src/app/(admin)/federation/sync/page.tsx
+  - .claude/GIT_PLAN.md
 created_at: 2026-05-30T00:00:00.000Z
 completed_at: 2026-05-30T21:36:00.000Z
 ```
-
 
 ```yaml
 id: fix-vitest-build
