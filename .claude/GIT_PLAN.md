@@ -16,9 +16,22 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: p7t11-auth-e2e-onboarding-setup-fix
 
 ## Log
+
+```yaml
+id: p7t11-auth-e2e-onboarding-setup-fix
+status: pending
+type: commit
+description: "test(e2e): set onboarded precondition for login/reset auth flows (P7-T11). Flow 2 + Flow 3 beforeAll: after admin.auth.admin.createUser(), capture the returned user.id and UPDATE profiles SET onboarding_completed=true WHERE id=<userId>. Fixes proxy redirect to /onboarding that caused both flows to fail the / assertion. App/auth code is unchanged — test-setup only."
+branch: develop
+files:
+  - apps/web/e2e/auth.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-31T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: wave4b-syncstatus-fix

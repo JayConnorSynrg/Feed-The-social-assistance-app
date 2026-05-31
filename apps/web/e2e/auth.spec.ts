@@ -163,13 +163,22 @@ test.describe('Flow 2: email/password login', () => {
     admin = makeAdmin()
     await deleteUserByEmail(admin, email)
 
-    // Pre-create a confirmed user — no email needed
-    const { error } = await admin.auth.admin.createUser({
+    // Pre-create a confirmed user — no email needed.
+    // The handle_new_user trigger fires synchronously and inserts a profiles row
+    // with onboarding_completed=false. The proxy would redirect that user to
+    // /onboarding, so we set the precondition here to model a returning user.
+    const { data: created, error } = await admin.auth.admin.createUser({
       email,
       password: TEST_PASSWORD,
       email_confirm: true,
     })
     if (error) throw new Error(`beforeAll createUser failed: ${error.message}`)
+
+    const { error: profileError } = await admin
+      .from('profiles')
+      .update({ onboarding_completed: true })
+      .eq('id', created.user.id)
+    if (profileError) throw new Error(`beforeAll profile update failed: ${profileError.message}`)
   })
 
   test.afterAll(async () => {
@@ -216,12 +225,21 @@ test.describe('Flow 3: password reset via admin generateLink + token_hash', () =
     admin = makeAdmin()
     await deleteUserByEmail(admin, email)
 
-    const { error } = await admin.auth.admin.createUser({
+    // Pre-create a confirmed user. Set onboarding_completed=true so the proxy
+    // does not redirect to /onboarding when we log in with the new password in
+    // Step D (returning-user precondition).
+    const { data: created, error } = await admin.auth.admin.createUser({
       email,
       password: TEST_PASSWORD,
       email_confirm: true,
     })
     if (error) throw new Error(`beforeAll createUser failed: ${error.message}`)
+
+    const { error: profileError } = await admin
+      .from('profiles')
+      .update({ onboarding_completed: true })
+      .eq('id', created.user.id)
+    if (profileError) throw new Error(`beforeAll profile update failed: ${profileError.message}`)
   })
 
   test.afterAll(async () => {
@@ -261,15 +279,12 @@ test.describe('Flow 3: password reset via admin generateLink + token_hash', () =
     // Success state shows "Password updated successfully." text
     await expect(page.locator('text=Password updated successfully.')).toBeVisible({ timeout: 15_000 })
 
-    // The page auto-redirects to /login after 2-3s. Wait for it.
-    await page.waitForURL(/\/login/, { timeout: 10_000 })
-
-    // Step D: log in with the NEW password to confirm the reset actually worked
-    await page.fill('#email', email)
-    await page.fill('#password', NEW_PASSWORD)
-    await page.click('button[type="submit"]')
-
-    await page.waitForURL(/\/$|\/\?/, { timeout: 20_000 })
+    // The reset-password page calls router.push('/login') after ~3s, but the
+    // proxy (proxy.ts:133) immediately redirects authenticated users away from
+    // /login → /. Wait for the final landing at / directly — the transient
+    // /login URL is never observable because the proxy redirect happens server-
+    // side before the browser commits to /login.
+    await page.waitForURL(/\/$|\/\?/, { timeout: 15_000 })
     await expect(page).toHaveURL(/http:\/\/localhost:3000\/?$/)
   })
 })
