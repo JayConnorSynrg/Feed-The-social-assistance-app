@@ -120,7 +120,10 @@ export function MapView({
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div
+      className={`relative ${className}`}
+      data-map-center={`${viewState.latitude.toFixed(4)},${viewState.longitude.toFixed(4)}`}
+    >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted z-10">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
