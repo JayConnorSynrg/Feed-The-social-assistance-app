@@ -87,7 +87,7 @@ const loginPage = src('app/(auth)/login/page.tsx')
 const signupPage = src('app/(auth)/signup/page.tsx')
 const forgotPage = src('app/(auth)/forgot-password/page.tsx')
 const resetPage = src('app/(auth)/reset-password/page.tsx')
-const middleware = src('middleware.ts')
+const middleware = src('proxy.ts')
 const authProvider = src('providers/auth-provider.tsx')
 
 // login/page.tsx
@@ -246,51 +246,51 @@ test(
   "router.push('/login') not found",
 )
 
-// middleware.ts
+// proxy.ts
 test(
-  'middleware.ts — file exists',
-  () => fileExists('middleware.ts'),
+  'proxy.ts — file exists',
+  () => fileExists('proxy.ts'),
   'File not found',
 )
 
 test(
-  'middleware.ts — exports async middleware function',
-  () => middleware.includes('export async function middleware(request: NextRequest)'),
-  'middleware export not found',
+  'proxy.ts — exports async proxy function',
+  () => middleware.includes('export async function proxy(request: NextRequest)'),
+  'proxy export not found',
 )
 
 test(
-  'middleware.ts — calls supabase.auth.getUser()',
+  'proxy.ts — calls supabase.auth.getUser()',
   () => middleware.includes('supabase.auth.getUser()'),
   'getUser call not found',
 )
 
 test(
-  'middleware.ts — redirects unauthenticated users to /login',
+  'proxy.ts — redirects unauthenticated users to /login',
   () => middleware.includes("return NextResponse.redirect(new URL('/login', request.url))"),
   'unauthenticated redirect not found',
 )
 
 test(
-  'middleware.ts — defines public routes list',
+  'proxy.ts — defines public routes list',
   () => middleware.includes('const publicRoutes = ['),
   'publicRoutes definition not found',
 )
 
 test(
-  'middleware.ts — exports config matcher',
+  'proxy.ts — exports config matcher',
   () => middleware.includes('export const config = {') && middleware.includes('matcher:'),
   'config matcher export not found',
 )
 
 test(
-  'middleware.ts — MFA assurance level check present',
+  'proxy.ts — MFA assurance level check present',
   () => middleware.includes('getAuthenticatorAssuranceLevel'),
   'MFA AAL check not found',
 )
 
 test(
-  'middleware.ts — protected route list includes / and /settings',
+  'proxy.ts — protected route list includes / and /settings',
   () =>
     middleware.includes("'/'") && middleware.includes("'/settings'"),
   "protected routes must include '/' and '/settings'",

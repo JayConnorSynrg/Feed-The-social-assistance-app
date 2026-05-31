@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -100,7 +101,7 @@ export default function SyncStatusPage() {
         .limit(100)
 
       if (logsError) {
-        console.error('Error fetching sync logs:', logsError)
+        logger.error('federation.sync_logs.fetch_failed', logsError instanceof Error ? logsError : new Error(String(logsError)), {})
         return
       }
 
@@ -170,7 +171,7 @@ export default function SyncStatusPage() {
 
       setPartnerStatuses(Array.from(partnerMap.values()))
     } catch (error) {
-      console.error('Error fetching sync data:', error)
+      logger.error('federation.sync_data.fetch_failed', error instanceof Error ? error : new Error(String(error)), {})
     } finally {
       setLoading(false)
     }
@@ -209,13 +210,13 @@ export default function SyncStatusPage() {
       })
 
       if (error) {
-        console.error('Manual sync error:', error)
+        logger.error('federation.sync.error', error instanceof Error ? error : new Error(String(error)), { peerId })
         alert(`Sync failed: ${error.message}`)
       } else {
-        console.log('Manual sync triggered:', data)
+        logger.info('federation.sync.triggered', { peerId, result: JSON.stringify(data) })
       }
     } catch (error) {
-      console.error('Error triggering sync:', error)
+      logger.error('federation.sync.trigger_failed', error instanceof Error ? error : new Error(String(error)), { peerId })
       alert('Failed to trigger sync')
     } finally {
       setSyncingPeers(prev => {

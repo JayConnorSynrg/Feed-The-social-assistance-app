@@ -88,7 +88,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
           setIsUnlocked(false)
         }
       } catch (err) {
-        console.error('Error checking vault status:', err)
+        logger.error('vault.status.check_failed', err instanceof Error ? err : new Error(String(err)), {})
         setError(err instanceof Error ? err.message : 'Failed to check vault status')
         setIsUnlocked(false)
         setIsSetup(false)
@@ -120,7 +120,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
   // Lock vault on logout
   useEffect(() => {
     if (!isAuthenticated) {
-      lockVault().catch(console.error)
+      lockVault().catch((err: unknown) => logger.error('vault.lock.failed', err instanceof Error ? err : new Error(String(err)), {}))
       setIsUnlocked(false)
     }
   }, [isAuthenticated])
@@ -195,13 +195,16 @@ export function VaultProvider({ children }: VaultProviderProps) {
       try {
         const shouldMigrate = await needsMigration(user.id)
         if (shouldMigrate) {
-          console.log('Migrating user data to encrypted storage...')
+          logger.info('vault.migration.started', { userId: user.id })
           const migrationResult = await migrateUserDataToEncrypted(user.id)
 
           if (migrationResult.errors.length > 0) {
-            console.error('Migration completed with errors:', migrationResult.errors)
+            logger.error('vault.migration.errors', new Error('migration_partial'), {
+              error_count: migrationResult.errors.length,
+              userId: user.id,
+            })
           } else {
-            console.log('Migration completed successfully:', {
+            logger.info('vault.migration.complete', {
               profiles: migrationResult.migratedProfiles,
               submissions: migrationResult.migratedSubmissions,
             })
@@ -220,7 +223,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
         }
       } catch (migrationErr) {
         // Don't fail unlock if migration fails - log error and continue
-        console.error('Migration failed:', migrationErr)
+        logger.error('vault.migration.failed', migrationErr instanceof Error ? migrationErr : new Error(String(migrationErr)), { userId: user.id })
         // Migration can be retried later
       }
 
@@ -350,7 +353,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
         setIsUnlocked(unlocked)
       }
     } catch (err) {
-      console.error('Error refreshing vault status:', err)
+      logger.error('vault.status.refresh_failed', err instanceof Error ? err : new Error(String(err)), {})
     }
   }, [user?.id])
 

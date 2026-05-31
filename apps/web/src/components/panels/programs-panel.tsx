@@ -23,6 +23,7 @@ import { useSavedResources } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
 import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
+import { logger } from '@/lib/logger'
 
 function CategoryBadge({ category }: { category: string }) {
   const display = CATEGORY_DISPLAY[category] ?? CATEGORY_DISPLAY['other']
@@ -234,7 +235,7 @@ export function ProgramsPanel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    console.log(JSON.stringify({ action: 'programs_panel_opened' }))
+    logger.info('programs.panel.opened', {})
   }, [])
 
   useEffect(() => {
@@ -253,12 +254,11 @@ export function ProgramsPanel() {
 
   useEffect(() => {
     if (!isLoading) {
-      console.log(JSON.stringify({
-        action: 'programs_filter',
-        category: filters.category,
-        search: filters.search,
-        resultCount: programs.length,
-      }))
+      logger.info('programs.filter', {
+        category: filters.category ?? null,
+        search: filters.search ?? null,
+        result_count: programs.length,
+      })
     }
   }, [filters, programs.length, isLoading])
 
@@ -270,12 +270,10 @@ export function ProgramsPanel() {
     const next = expandedId === id ? null : id
     setExpandedId(next)
     if (next) {
-      console.log(JSON.stringify({
-        action: 'program_expanded',
+      logger.info('programs.program.expanded', {
         programId: resource.id,
-        programName: resource.name,
         category: resource.category,
-      }))
+      })
     }
   }, [expandedId])
 
@@ -293,18 +291,17 @@ export function ProgramsPanel() {
       resource_website: resource.website,
     })
     if (ok) {
-      console.log(JSON.stringify({ action: 'program_saved', programId: resource.id }))
+      logger.info('programs.program.saved', { programId: resource.id })
     }
   }, [saveResource, isResourceSaved])
 
   const handleStartApplication = useCallback((resource: Resource) => {
     const formTypes = getFormTypesForCategory(resource.category as string)
-    console.log(JSON.stringify({
-      action: 'start_application',
+    logger.info('programs.application.start', {
       programId: resource.id,
       category: resource.category,
-      formTypes,
-    }))
+      formTypes: formTypes.join(','),
+    })
     setActivePanel('forms')
   }, [setActivePanel])
 

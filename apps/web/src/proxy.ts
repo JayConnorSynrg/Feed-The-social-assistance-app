@@ -1,6 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
+// Lightweight server-side logger — wraps console.* so Vercel Log Drain
+// receives structured JSON. NOT @vercel/analytics track(): that client-only
+// SDK is unavailable in the Node.js proxy runtime.
+function log(level: 'info' | 'warn' | 'error', event: string, fields: Record<string, unknown> = {}) {
+  const entry = JSON.stringify({ level, event, ...fields, timestamp: new Date().toISOString() })
+  if (level === 'error') console.error(entry)
+  else if (level === 'warn') console.warn(entry)
+  else console.log(entry)
+}
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -30,9 +40,15 @@ export async function proxy(request: NextRequest) {
   )
 
   // Get session - this will refresh the session if needed
+  const getUserStart = Date.now()
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  const getUserMs = Date.now() - getUserStart
+  // Log only slow getUser calls (>500 ms) to avoid noise on every request.
+  if (getUserMs > 500) {
+    log('warn', 'proxy.getUser.slow', { duration_ms: getUserMs, pathname: request.nextUrl.pathname })
+  }
 
   const { pathname } = request.nextUrl
 
@@ -53,12 +69,16 @@ export async function proxy(request: NextRequest) {
           const redirectUrl = new URL('/login', request.url)
           redirectUrl.searchParams.set('redirectTo', pathname)
           redirectUrl.searchParams.set('step', 'mfa')
+          log('info', 'proxy.redirect', { reason: 'mfa_required', from: pathname, to: '/login?step=mfa' })
           return NextResponse.redirect(redirectUrl)
         }
       }
     } catch (error) {
       // MFA check failed, continue with normal flow
-      console.error('MFA check error:', error)
+      log('error', 'proxy.mfa.error', {
+        pathname: request.nextUrl.pathname,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -88,6 +108,7 @@ export async function proxy(request: NextRequest) {
       // Only redirect to onboarding if profile EXISTS and onboarding is explicitly false
       // If profile is null (no row yet), let the user through — they'll onboard naturally
       if (profile && profile.onboarding_completed === false) {
+        log('info', 'proxy.redirect', { reason: 'onboarding_incomplete', from: '/', to: '/onboarding', userId: user.id })
         return NextResponse.redirect(new URL('/onboarding', request.url))
       }
     }
@@ -102,6 +123,7 @@ export async function proxy(request: NextRequest) {
   // Onboarding is accessible only to authenticated users
   if (pathname === '/onboarding') {
     if (!user) {
+      log('info', 'proxy.redirect', { reason: 'unauthenticated', from: pathname, to: '/login' })
       return NextResponse.redirect(new URL('/login', request.url))
     }
     return supabaseResponse
@@ -109,6 +131,7 @@ export async function proxy(request: NextRequest) {
 
   // Redirect authenticated users away from auth pages to root
   if (user && (pathname === '/login' || pathname === '/signup')) {
+    log('info', 'proxy.redirect', { reason: 'already_authenticated', from: pathname, to: '/' })
     return NextResponse.redirect(new URL('/', request.url))
   }
 
@@ -116,6 +139,7 @@ export async function proxy(request: NextRequest) {
   if (!isPublicRoute && !user) {
     const redirectUrl = new URL('/login', request.url)
     redirectUrl.searchParams.set('redirectTo', pathname)
+    log('info', 'proxy.redirect', { reason: 'unauthenticated', from: pathname, to: '/login' })
     return NextResponse.redirect(redirectUrl)
   }
 

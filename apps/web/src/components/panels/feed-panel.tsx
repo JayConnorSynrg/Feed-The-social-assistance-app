@@ -476,9 +476,9 @@ export function FeedPanel() {
     }
   }
 
-  const handleComment = (postId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleComment = (_postId: string) => {
     // TODO: Open comment thread
-    console.log('Comment on post:', postId)
   }
 
   const handleShare = (postId: string) => {
