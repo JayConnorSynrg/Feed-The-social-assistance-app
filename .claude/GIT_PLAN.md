@@ -16,9 +16,32 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave2-federation-foundation
+next_action_id: wave4-federation-validation
 
 ## Log
+
+```yaml
+id: wave3-edge-migration
+status: complete
+type: commit
+description: "feat(federation): Wave 3 — inbound edge fns (resources/inbox) + thin Next proxies, service_role off Next runtime. FED3: supabase/functions/federation-resources/index.ts (cavage verify via x-original-host+x-original-target, trust-level gate, paged+single-resource collection, last_seen_at update); supabase/functions/federation-inbox/index.ts (HMAC-SHA256 verify, timestamp replay window, upsert/delete federated_resources, federation_sync_log insert); supabase/functions/_shared/federation-db.ts (serviceClient + CORS helpers). FED4: apps/web/src/app/api/federation/resources/route.ts + [id]/route.ts + webhook/route.ts → thin proxies (no SERVICE_ROLE, forward Signature/HMAC headers + x-original-host + x-original-target, 30s timeout). FED5: supabase/config.toml (verify_jwt=false for 5 federation fns). FED6: Tier-0 rate-limit note in edge fns + docs/federation.md (Upstash Redis upgrade path). Gate: tsc 0, build PASS, npm test 52 vitest + node:test green, deno check both edge fns clean, grep SERVICE_ROLE in proxy routes = 0 runtime refs."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - supabase/functions/_shared/federation-db.ts
+  - supabase/functions/federation-resources/index.ts
+  - supabase/functions/federation-inbox/index.ts
+  - apps/web/src/app/api/federation/resources/route.ts
+  - apps/web/src/app/api/federation/resources/[id]/route.ts
+  - apps/web/src/app/api/federation/webhook/route.ts
+  - supabase/config.toml
+  - docs/federation.md
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T00:00:00.000Z
+completed_at: 2026-05-30T00:00:00.000Z
+```
 
 ```yaml
 id: wave2-federation-foundation

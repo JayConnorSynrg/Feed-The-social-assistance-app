@@ -1,256 +1,101 @@
 /**
- * Federation Resource API
+ * Federation Resources Proxy
  *
- * Serves local resources to authenticated federation partners.
- * Requires HTTP signature verification.
+ * Thin proxy to the federation-resources edge function.
+ * No service_role key — all privileged logic lives in the edge function.
  *
- * GET /api/federation/resources
- * Query params:
- * - since (ISO8601 timestamp) - only return resources updated after this
- * - category (string) - filter by resource category
- * - limit (number) - max resources to return (default 100, max 1000)
- * - cursor (string) - pagination cursor (base64 encoded last resource ID)
+ * Forwards the original Signature, Date, Digest headers so the edge
+ * function can verify the cavage HTTP Signature that the caller produced.
+ *
+ * Adds two passthrough headers required for correct signature verification:
+ *   x-original-host   — the Host value the signer used (this request's host)
+ *   x-original-target — "<METHOD> <path+query>" the signer used
+ *
+ * The edge function reconstructs the exact signing string from these.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { Database } from '@feed/database'
-import {
-  withFederationAuth,
-  requireTrustLevel,
-  VerifiedInstance,
-} from '@/lib/federation/verify-federation'
 
-type ResourceRow = Database['public']['Tables']['resources']['Row']
+const EDGE_FN_URL =
+  process.env.FEDERATION_RESOURCES_EDGE_URL ??
+  'https://ndtpovonpadugthmcntl.supabase.co/functions/v1/federation-resources'
 
-interface FederationResource {
-  id: string
-  name: string
-  description: string | null
-  resource_type: string
-  address_line1: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  latitude: number | null
-  longitude: number | null
-  hours_of_operation: Record<string, unknown> | null
-  updated_at: string
-  created_at: string
-}
-
-interface ResourcesResponse {
-  resources: FederationResource[]
-  cursor: string | null
-  has_more: boolean
-  total: number
-}
+const PROXY_TIMEOUT_MS = 30_000
 
 /**
- * Parse query parameters from request
- */
-function parseQueryParams(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-
-  const since = searchParams.get('since') || undefined
-  const category = searchParams.get('category') || undefined
-  const limitParam = searchParams.get('limit')
-  const cursorParam = searchParams.get('cursor')
-
-  // Parse and validate limit
-  let limit = 100
-  if (limitParam) {
-    const parsed = parseInt(limitParam, 10)
-    if (!isNaN(parsed) && parsed > 0) {
-      limit = Math.min(parsed, 1000) // Cap at 1000
-    }
-  }
-
-  // Decode cursor (base64 encoded resource ID)
-  let cursor: string | undefined
-  if (cursorParam) {
-    try {
-      cursor = Buffer.from(cursorParam, 'base64').toString('utf-8')
-    } catch {
-      // Invalid cursor, ignore it
-    }
-  }
-
-  // Validate since timestamp
-  let sinceDate: Date | undefined
-  if (since) {
-    const parsed = new Date(since)
-    if (!isNaN(parsed.getTime())) {
-      sinceDate = parsed
-    }
-  }
-
-  return {
-    since: sinceDate,
-    category,
-    limit,
-    cursor,
-  }
-}
-
-/**
- * Convert database resource to federation format
- */
-function toFederationResource(
-  row: ResourceRow & { latitude?: number; longitude?: number }
-): FederationResource {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    resource_type: row.category as string,
-    address_line1: row.address_line1,
-    city: row.city,
-    state: row.state,
-    zip_code: row.zip_code,
-    phone: row.phone,
-    email: row.email,
-    website: row.website,
-    latitude: row.latitude ?? null,
-    longitude: row.longitude ?? null,
-    hours_of_operation: row.hours_of_operation as Record<string, unknown> | null,
-    updated_at: row.updated_at!,
-    created_at: row.created_at!,
-  }
-}
-
-/**
- * GET handler - fetch local resources
- */
-async function getResources(
-  request: NextRequest,
-  context: { instance: VerifiedInstance }
-): Promise<NextResponse> {
-  // Check minimum trust level (must be at least 'pending')
-  if (!requireTrustLevel(context.instance, 'pending')) {
-    return NextResponse.json(
-      {
-        error: 'Insufficient trust level',
-        message: 'Your instance must have at least pending trust level to access resources',
-        required_level: 'pending',
-        current_level: context.instance.trust_level || 'untrusted',
-      },
-      { status: 403 }
-    )
-  }
-
-  // Parse query parameters
-  const { since, category, limit, cursor } = parseQueryParams(request)
-
-  // SECURITY NOTE: Uses service role key for legitimate admin access.
-  // This route is protected by HTTP signature verification (withFederationAuth wrapper).
-  // Only verified federation instances can access this endpoint.
-  // Returns only approved, verified resources (see WHERE clause line 175).
-  //
-  // DEFERRED 2026-05-29 (federation dormant: 0 peers, 0 federated_resources, 0 sync_log entries).
-  // The service_role key here is server-only (not client-exposed) and protected by HTTP signature
-  // verification above. Trigger to action: when federation_peers > 0 (a real partner onboards),
-  // consolidate this service_role logic onto the existing supabase/functions/federation-* edge
-  // functions and remove this duplicated Next.js route.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
-
-  try {
-    // Query approved, verified resources via standard query builder
-    let resourceQuery = supabase
-      .from('resources')
-      .select('*')
-      .eq('status', 'approved')
-      .eq('is_verified', true)
-      .order('id', { ascending: true })
-      .limit(limit + 1)
-
-    if (since) {
-      resourceQuery = resourceQuery.gt('updated_at', since.toISOString())
-    }
-
-    if (category) {
-      resourceQuery = resourceQuery.eq('category', category as never)
-    }
-
-    if (cursor) {
-      resourceQuery = resourceQuery.gt('id', cursor)
-    }
-
-    const { data, error } = await resourceQuery
-
-    if (error) {
-      console.error('Resource query error:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch resources', details: error.message },
-        { status: 500 }
-      )
-    }
-
-    const rows = (data || []) as ResourceRow[]
-    const hasMore = rows.length > limit
-    const results = rows.slice(0, limit)
-
-    // Get total count (approximate for performance)
-    const { count } = await supabase
-      .from('resources')
-      .select('*', { count: 'estimated', head: true })
-      .eq('status', 'approved')
-      .eq('is_verified', true)
-
-    const response: ResourcesResponse = {
-      resources: results.map((row) => toFederationResource(row)),
-      cursor: hasMore
-        ? Buffer.from(results[results.length - 1].id).toString('base64')
-        : null,
-      has_more: hasMore,
-      total: count || 0,
-    }
-
-    return NextResponse.json(response, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Signature, Digest',
-        'Content-Type': 'application/json',
-      },
-    })
-  } catch (err) {
-    console.error('Unexpected error fetching resources:', err)
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        message: err instanceof Error ? err.message : 'Unknown error',
-      },
-      { status: 500 }
-    )
-  }
-}
-
-/**
- * OPTIONS handler - CORS preflight
+ * OPTIONS handler — CORS preflight
  */
 export async function OPTIONS() {
-  return NextResponse.json(
-    {},
-    {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Signature, Digest',
-        'Access-Control-Max-Age': '86400', // 24 hours
-      },
-    }
-  )
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Signature, Digest, Date',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
 }
 
 /**
- * GET handler wrapped with federation authentication
+ * GET handler — proxy to federation-resources edge function
  */
-export const GET = withFederationAuth(getResources)
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const url = new URL(request.url)
+  const originalHost = request.headers.get('host') ?? url.host
+  const originalTarget = `GET ${url.pathname}${url.search}`
+
+  const forwardHeaders: Record<string, string> = {
+    'x-original-host': originalHost,
+    'x-original-target': originalTarget,
+  }
+
+  // Forward cavage auth headers
+  const signature = request.headers.get('signature')
+  if (signature) forwardHeaders['signature'] = signature
+
+  const date = request.headers.get('date')
+  if (date) forwardHeaders['date'] = date
+
+  const digest = request.headers.get('digest')
+  if (digest) forwardHeaders['digest'] = digest
+
+  const authorization = request.headers.get('authorization')
+  if (authorization) forwardHeaders['authorization'] = authorization
+
+  // Forward query string to edge function
+  const edgeUrl = new URL(EDGE_FN_URL)
+  url.searchParams.forEach((v, k) => edgeUrl.searchParams.set(k, v))
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS)
+
+  try {
+    const edgeResponse = await fetch(edgeUrl.toString(), {
+      method: 'GET',
+      headers: forwardHeaders,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    const body = await edgeResponse.text()
+    const responseHeaders: Record<string, string> = {
+      'Content-Type': edgeResponse.headers.get('content-type') ?? 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    }
+
+    return new NextResponse(body, {
+      status: edgeResponse.status,
+      headers: responseHeaders,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    return NextResponse.json(
+      {
+        error: 'Federation proxy error',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      },
+      { status: 502 }
+    )
+  }
+}
