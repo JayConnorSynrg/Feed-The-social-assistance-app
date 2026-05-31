@@ -16,24 +16,26 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: audit-log-harden
+next_action_id: null
 
 ## Log
 
 ```yaml
 id: audit-log-harden
-status: in_progress
-type: commit
-description: "fix(security): harden log_audit_event SECURITY DEFINER (search_path=public + REVOKE anon/authenticated GRANT service_role only) + capture AUTH_LOGIN_FAILED server-side in check-lockout route (replaces anon 42501-ing client call) + instrument auth.record_attempt sub-path with logger.time for latency/outcome metrics. Migration: 20260531120000_harden_log_audit_event.sql. Behavior-neutral: zero app callers of log_audit_event confirmed via grep."
+status: complete
+type: merge
+description: "fix(security): harden log_audit_event SECURITY DEFINER (search_path=public + REVOKE anon/authenticated GRANT service_role only) + capture AUTH_LOGIN_FAILED server-side in check-lockout route (replaces anon 42501-ing client call) + instrument auth.record_attempt sub-path with logger.time for latency/outcome metrics. Migration: 20260531120000_harden_log_audit_event.sql (prod-applied). Merged feature/audit-log-harden → develop @ b76934c. Behavior-neutral: zero app callers of log_audit_event confirmed via grep."
 branch: feature/audit-log-harden
 base: develop
+merged_into: develop
+merge_sha: b76934c1f4f068ce03959b2c3ce8d9a7e2858c8b
 files:
   - supabase/migrations/20260531120000_harden_log_audit_event.sql
   - apps/web/src/app/api/auth/check-lockout/route.ts
   - apps/web/src/app/(auth)/login/page.tsx
   - .claude/GIT_PLAN.md
 created_at: 2026-05-31T12:00:00.000Z
-completed_at: null
+completed_at: 2026-05-31T12:30:00.000Z
 ```
 
 ```yaml
