@@ -16,9 +16,25 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: deploy-develop-launch-hardening
+next_action_id: audit-log-harden
 
 ## Log
+
+```yaml
+id: audit-log-harden
+status: in_progress
+type: commit
+description: "fix(security): harden log_audit_event SECURITY DEFINER (search_path=public + REVOKE anon/authenticated GRANT service_role only) + capture AUTH_LOGIN_FAILED server-side in check-lockout route (replaces anon 42501-ing client call) + instrument auth.record_attempt sub-path with logger.time for latency/outcome metrics. Migration: 20260531120000_harden_log_audit_event.sql. Behavior-neutral: zero app callers of log_audit_event confirmed via grep."
+branch: feature/audit-log-harden
+base: develop
+files:
+  - supabase/migrations/20260531120000_harden_log_audit_event.sql
+  - apps/web/src/app/api/auth/check-lockout/route.ts
+  - apps/web/src/app/(auth)/login/page.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-31T12:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: deploy-develop-launch-hardening
