@@ -16,9 +16,34 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: fix-vitest-build
+next_action_id: wave1-present-gaps
 
 ## Log
+
+```yaml
+id: wave1-present-gaps
+status: complete
+type: branch
+description: "Wave 1 launch-hardening — 6 present-gap fixes: F1 smoke-tests repoint middleware→proxy assertions, F5 eslint no-restricted-syntax glob extends to *.ts/proxy.ts/middleware/**/*.ts, F7 observability.md metric catalog full sync, F4 schema_migrations repair for two untracked prod migrations (20260529000003+20260529000004), F6 proxy.ts lightweight auth-path logging (logger, additive), F8 route raw console.logs through logger / drop debug ones. Gate: tsc 0, build PASS, npm test green, lint no new violations."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - apps/web/src/__tests__/smoke-tests.ts
+  - apps/web/eslint.config.mjs
+  - docs/observability.md
+  - apps/web/src/proxy.ts
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/forms/form-wizard.tsx
+  - apps/web/src/components/forms/pdf-annotator.tsx
+  - apps/web/src/contexts/vault-context.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/app/(admin)/federation/sync/page.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T00:00:00.000Z
+completed_at: 2026-05-30T21:36:00.000Z
+```
 
 ```yaml
 id: fix-vitest-build
