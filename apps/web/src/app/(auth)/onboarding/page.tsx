@@ -205,12 +205,49 @@ export default function OnboardingPage() {
       logger.info('onboarding.complete.start', { userId, hasPhone: !!phone })
       const timer = logger.time('auth.onboarding.complete')
 
+      // Resolve city/state before building upsert payload.
+      // The reverse-geocode in handleUseLocation is async; the upsert can fire
+      // before state/city React state resolves. If state is still empty here
+      // and we have coords or zip, do a best-effort geocode now (5s timeout).
+      let resolvedCity = city
+      let resolvedState = state
+      if (!resolvedState && (latitude !== null || zipCode.length >= 5)) {
+        const geocodeController = new AbortController()
+        const geocodeTimer = setTimeout(() => geocodeController.abort(), 5_000)
+        try {
+          const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+          let geocodeUrl: string
+          if (latitude !== null && longitude !== null) {
+            geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${token}&types=postcode,place,region`
+          } else {
+            geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(zipCode)}.json?types=postcode&access_token=${token}&limit=1`
+          }
+          const geoRes = await fetch(geocodeUrl, { signal: geocodeController.signal })
+          const geoData = await geoRes.json()
+          if (geoData.features?.length) {
+            for (const feature of geoData.features) {
+              if (!resolvedCity && feature.place_type?.includes('place')) resolvedCity = feature.text as string
+              if (!resolvedState && feature.place_type?.includes('region')) resolvedState = feature.text as string
+            }
+          }
+          logger.info('onboarding.location.resolved', {
+            hasState: !!resolvedState,
+            source: latitude !== null ? 'reverse_geocode' : 'zip_geocode',
+          })
+        } catch {
+          // Geocode timed out or failed — proceed with whatever we have; location_state may be null.
+          logger.info('onboarding.location.resolved', { hasState: false, source: 'geocode_failed' })
+        } finally {
+          clearTimeout(geocodeTimer)
+        }
+      }
+
       const profileData = {
         id: userId,
         user_role: userRole,
         zip_code: zipCode || null,
-        location_city: city || null,
-        location_state: normalizeState(state) || null,
+        location_city: resolvedCity || null,
+        location_state: normalizeState(resolvedState) || normalizeState(state) || null,
         latitude: latitude,
         longitude: longitude,
         needs: selectedNeeds,
