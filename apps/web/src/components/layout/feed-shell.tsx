@@ -7,6 +7,7 @@
 
 import React, { useState, createContext, useContext, useCallback, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   MessageSquare,
   Map,
@@ -129,6 +130,7 @@ interface TopNavProps {
 function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { activePanel, setActivePanel } = useShellContext()
+  const router = useRouter()
 
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-white flex-shrink-0">
@@ -169,7 +171,11 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
             </div>
             {onSignOut && (
               <button
-                onClick={onSignOut}
+                onClick={async () => {
+                  logger.info('auth.signout', { surface: 'topnav' })
+                  await onSignOut()
+                  router.push('/login')
+                }}
                 className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
               >
                 Sign out

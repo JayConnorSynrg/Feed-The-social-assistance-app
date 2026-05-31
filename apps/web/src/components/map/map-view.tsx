@@ -25,6 +25,8 @@ interface MapViewProps {
   onViewStateChange?: (viewState: ViewState) => void
   onBoundsChange?: (bounds: Bounds) => void
   onMapLoad?: () => void
+  /** Called once when the user first intentionally drags or zooms the map. */
+  onUserInteraction?: () => void
   children?: React.ReactNode
   className?: string
 }
@@ -40,6 +42,7 @@ export function MapView({
   onViewStateChange,
   onBoundsChange,
   onMapLoad,
+  onUserInteraction,
   children,
   className = '',
 }: MapViewProps) {
@@ -77,6 +80,22 @@ export function MapView({
     }
   }, [getBounds, onBoundsChange])
 
+  // Only fire onUserInteraction for genuine user gestures.
+  // mapbox-gl attaches originalEvent to drag/zoom events initiated by the user,
+  // but leaves it undefined for programmatic moves (flyTo, jumpTo, setCenter).
+  // Checking its presence prevents the auto-center animation from self-blocking
+  // the profile-based center. Cast required: the TS type for ViewStateChangeEvent
+  // is the union MapEvent<...> which doesn't declare originalEvent, but mapbox-gl
+  // does attach it at runtime on all user-initiated map events.
+  const handleUserInteraction = useCallback(
+    (e: ViewStateChangeEvent) => {
+      if ((e as ViewStateChangeEvent & { originalEvent?: Event }).originalEvent) {
+        onUserInteraction?.()
+      }
+    },
+    [onUserInteraction]
+  )
+
   const handleLoad = useCallback(() => {
     setIsLoading(false)
     onMapLoad?.()
@@ -101,7 +120,10 @@ export function MapView({
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div
+      className={`relative ${className}`}
+      data-map-center={`${viewState.latitude.toFixed(4)},${viewState.longitude.toFixed(4)}`}
+    >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted z-10">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -112,6 +134,8 @@ export function MapView({
         {...viewState}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
+        onDragStart={handleUserInteraction}
+        onZoomStart={handleUserInteraction}
         onLoad={handleLoad}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/streets-v12"

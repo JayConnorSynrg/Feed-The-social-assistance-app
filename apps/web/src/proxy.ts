@@ -105,9 +105,8 @@ export async function proxy(request: NextRequest) {
         .eq('id', user.id)
         .maybeSingle()
 
-      // Only redirect to onboarding if profile EXISTS and onboarding is explicitly false
-      // If profile is null (no row yet), let the user through — they'll onboard naturally
-      if (profile && profile.onboarding_completed === false) {
+      // Redirect to onboarding if no profile row or onboarding not completed
+      if (!profile || !(profile as any).onboarding_completed) {
         log('info', 'proxy.redirect', { reason: 'onboarding_incomplete', from: '/', to: '/onboarding', userId: user.id })
         return NextResponse.redirect(new URL('/onboarding', request.url))
       }

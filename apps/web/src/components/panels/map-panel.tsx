@@ -4,7 +4,7 @@
 // Resource Map panel - shows resources on an interactive Mapbox map
 // Three-column layout: Resource List | Interactive Map | Resource Details
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   Search,
   Filter,
@@ -33,6 +33,47 @@ import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
+import { logger } from '@/lib/logger'
+
+// ============================================
+// GEOCODE CACHE (localStorage + in-memory, keyed by "city, state")
+// ============================================
+const GEOCODE_CACHE_KEY = 'feed:geocode-cache'
+const GEOCODE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const GEOCODE_TIMEOUT_MS = 5_000
+
+interface GeocodeEntry {
+  lng: number
+  lat: number
+  ts: number
+}
+
+function readGeocodeCache(): Record<string, GeocodeEntry> {
+  try {
+    const raw = localStorage.getItem(GEOCODE_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, GeocodeEntry>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeGeocodeCache(key: string, value: GeocodeEntry): void {
+  try {
+    const cache = readGeocodeCache()
+    // Evict stale entries
+    const now = Date.now()
+    const fresh = Object.fromEntries(
+      Object.entries(cache).filter(([, v]) => now - v.ts < GEOCODE_CACHE_TTL_MS)
+    )
+    fresh[key] = value
+    localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(fresh))
+  } catch {
+    // localStorage quota or SSR — ignore
+  }
+}
+
+// Module-level in-memory cache so the same city isn't geocoded twice in one session
+const memGeocodeCache = new Map<string, GeocodeEntry>()
 
 // ============================================
 // TYPES
@@ -272,7 +313,12 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     zoom: 4,
   })
   const [bounds, setBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null)
-  const [hasAutocentered, setHasAutocentered] = useState(false)
+  // userHasMovedMap: set true ONLY when the user manually pans/zooms the map.
+  // Profile-based auto-centering (Priority 1a/1b) is allowed until this is true.
+  // Browser geolocation (Priority 2) uses a separate hasGeocentered flag so it
+  // never pre-empts the profile center.
+  const [userHasMovedMap, setUserHasMovedMap] = useState(false)
+  const [hasGeocentered, setHasGeocentered] = useState(false)
 
   // Shell panel navigation
   const { setActivePanel } = usePanelContext()
@@ -299,9 +345,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     return null
   }, [position?.coords, profile?.latitude, profile?.longitude])
 
-  // Priority 1a: Use stored lat/lng from profile (instant, no network call)
+  // Priority 1a: Use stored lat/lng from profile (instant, no network call).
+  // Fires whenever profile lat/lng become available; respects manual pans only.
   useEffect(() => {
-    if (hasAutocentered) return
+    if (userHasMovedMap) return
     if (!profile?.latitude || !profile?.longitude) return
 
     setViewState((prev) => ({
@@ -310,51 +357,103 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       latitude: profile.latitude!,
       zoom: 11,
     }))
-    setHasAutocentered(true)
-  }, [profile?.latitude, profile?.longitude, hasAutocentered])
+    // Profile center applied — block further auto-centering by marking map as "moved"
+    // so browser-geo and the geocode fallback don't override it.
+    setUserHasMovedMap(true)
+  }, [profile?.latitude, profile?.longitude, userHasMovedMap])
 
-  // Priority 1b: Geocode profile city/state via Mapbox (when lat/lng not stored)
+  // Priority 1b: Geocode profile city/state via Mapbox — async, non-blocking, cached.
+  // Only runs when profile has no stored lat/lng and user hasn't manually panned.
+  const geocodeAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    if (hasAutocentered) return
+    if (userHasMovedMap) return
     if (!profile?.location_city || !profile?.location_state) return
-    // Skip if lat/lng already present (handled above)
-    if (profile?.latitude && profile?.longitude) return
+    if (profile?.latitude && profile?.longitude) return // lat/lng stored — Priority 1a handles it
 
-    const query = encodeURIComponent(`${profile.location_city}, ${profile.location_state}`)
+    const city = `${profile.location_city}, ${profile.location_state}`
+    const t0 = Date.now()
+
+    // 1. In-memory cache hit — instant, no network
+    const memHit = memGeocodeCache.get(city)
+    if (memHit) {
+      logger.info('map.geocode', { city, ms: 0, cached: 'memory' })
+      setViewState((prev) => ({ ...prev, longitude: memHit.lng, latitude: memHit.lat, zoom: 11 }))
+      setUserHasMovedMap(true)
+      return
+    }
+
+    // 2. localStorage cache hit — instant, no network
+    const diskCache = readGeocodeCache()
+    const diskHit = diskCache[city]
+    if (diskHit && Date.now() - diskHit.ts < GEOCODE_CACHE_TTL_MS) {
+      memGeocodeCache.set(city, diskHit)
+      logger.info('map.geocode', { city, ms: 0, cached: 'localStorage' })
+      setViewState((prev) => ({ ...prev, longitude: diskHit.lng, latitude: diskHit.lat, zoom: 11 }))
+      setUserHasMovedMap(true)
+      return
+    }
+
+    // 3. Network call — async, 5s timeout, does NOT block map render
+    geocodeAbortRef.current?.abort()
+    const controller = new AbortController()
+    geocodeAbortRef.current = controller
+    const timeoutId = setTimeout(() => controller.abort(), GEOCODE_TIMEOUT_MS)
+
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+    const query = encodeURIComponent(city)
     fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`,
+      { signal: controller.signal }
     )
       .then((r) => r.json())
       .then((data) => {
+        clearTimeout(timeoutId)
         if (data.features?.[0]?.center) {
           const [lng, lat] = data.features[0].center as [number, number]
+          const ms = Date.now() - t0
+          const entry: GeocodeEntry = { lng, lat, ts: Date.now() }
+          memGeocodeCache.set(city, entry)
+          writeGeocodeCache(city, entry)
+          logger.info('map.geocode', { city, ms, cached: false })
           setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat, zoom: 11 }))
-          setHasAutocentered(true)
+          setUserHasMovedMap(true)
         }
       })
-      .catch(() => {
-        // Geocoding failed — fall through to browser geolocation
+      .catch((err: unknown) => {
+        clearTimeout(timeoutId)
+        if (err instanceof DOMException && err.name === 'AbortError') return // timeout or unmount — expected
+        logger.info('map.geocode', { city, ms: Date.now() - t0, cached: false, error: String(err) })
+        // Fall through — browser geolocation (Priority 2) takes over
       })
-  }, [profile?.location_city, profile?.location_state, profile?.latitude, profile?.longitude, hasAutocentered])
 
-  // Priority 2: Browser geolocation (fires if profile geocoding didn't center)
-  useEffect(() => {
-    if (!hasAutocentered) {
-      getCurrentPosition()
+    return () => {
+      controller.abort()
+      clearTimeout(timeoutId)
     }
+  }, [profile?.location_city, profile?.location_state, profile?.latitude, profile?.longitude, userHasMovedMap])
+
+  // Priority 2: Browser geolocation — fallback only when profile has no location.
+  // Kicks off the GPS request once on mount.
+  useEffect(() => {
+    getCurrentPosition()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Apply browser-geo position only when profile provided no center (userHasMovedMap
+  // is still false) and we haven't already applied it.
   useEffect(() => {
-    if (position && !hasAutocentered) {
-      setViewState({
-        longitude: position.coords.longitude,
-        latitude: position.coords.latitude,
-        zoom: 12,
-      })
-      setHasAutocentered(true)
-    }
-  }, [position, hasAutocentered])
+    if (userHasMovedMap) return
+    if (hasGeocentered) return
+    if (!position) return
+
+    setViewState({
+      longitude: position.coords.longitude,
+      latitude: position.coords.latitude,
+      zoom: 12,
+    })
+    setHasGeocentered(true)
+    // Do NOT set userHasMovedMap here — profile center (Priority 1a/1b) may still
+    // arrive after GPS and should override browser-geo for the initial center.
+  }, [position, userHasMovedMap, hasGeocentered])
 
   // Real Supabase resources query
   const { resources: realResources, loading: resourcesLoading } = useViewportResources({
@@ -594,6 +693,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
           onBoundsChange={handleBoundsChange}
+          onUserInteraction={() => setUserHasMovedMap(true)}
           className="h-full"
         >
           {clusters.map((cluster) =>

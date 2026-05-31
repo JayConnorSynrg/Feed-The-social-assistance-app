@@ -106,7 +106,6 @@ completed_at: 2026-05-30T00:00:00.000Z
 ```
 
 ```yaml
->>>>>>> feature/launch-hardening
 id: wave1-present-gaps
 status: complete
 type: branch
@@ -339,6 +338,23 @@ base: develop
 remote: origin
 worktree: /Users/jelalconnor/CODING/CURSOR/FEED-obs
 created_at: 2026-05-29T15:15:00.000Z
+completed_at: null
+```
+
+```yaml
+id: auth-fixes-signout-delete
+status: in_progress
+type: commit
+description: "Fix 1: TopNav sign-out handler adds router.push('/login') + logger.info. Fix 2: safeNullify('federation_trust_events','created_by') in delete-account fn + ON DELETE SET NULL migration (20260529221945). Edge-fn redeploy + db push are PENDING (next gated step)."
+branch: feature/auth-fixes
+base: origin/develop
+remote: origin
+files:
+  - apps/web/src/components/layout/feed-shell.tsx
+  - supabase/functions/delete-account/index.ts
+  - supabase/migrations/20260529221945_fix_federation_trust_events_fk_on_delete.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-29T22:19:45.000Z
 completed_at: null
 ```
 
