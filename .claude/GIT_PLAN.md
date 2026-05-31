@@ -16,9 +16,29 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave1-present-gaps
+next_action_id: wave2-federation-foundation
 
 ## Log
+
+```yaml
+id: wave2-federation-foundation
+status: complete
+type: commit
+description: "Wave 2 — align edge signer to cavage Signature scheme + single-resource route. FED1: (1) fix false RFC 9421 label in packages/shared/lib/http-signatures.ts (was cavage all along); (2) create supabase/functions/_shared/http-signatures.ts — Deno/WebCrypto signer byte-identical to Next verifier (same draft-cavage signing string, RSASSA-PKCS1-v1_5/SHA-256, base64 Signature header); (3) fix federation-sync/index.ts: replace X-Federation-Signature:<ts>:<hex> bespoke scheme with cavage Signature+Host+Date headers via _shared signer; (4) parity test apps/web/src/lib/__tests__/federation-signature-parity.test.mjs — 5 tests all pass (GET round-trip, POST+body round-trip, tampered sig rejected, wrong key rejected, signing-string reconstruction). FED2: create apps/web/src/app/api/federation/resources/[id]/route.ts — single-resource GET gated by withFederationAuth+requireTrustLevel 'pending', 404-safe, mirrors collection route auth/service_role/CORS. Gate: tsc 0, build PASS (route visible in build output), npm test 35/35 node:test + 52 vitest all green."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - packages/shared/lib/http-signatures.ts
+  - supabase/functions/_shared/http-signatures.ts
+  - supabase/functions/federation-sync/index.ts
+  - apps/web/src/app/api/federation/resources/[id]/route.ts
+  - apps/web/src/lib/__tests__/federation-signature-parity.test.mjs
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T00:00:00.000Z
+completed_at: 2026-05-30T00:00:00.000Z
+```
 
 ```yaml
 id: wave1-present-gaps

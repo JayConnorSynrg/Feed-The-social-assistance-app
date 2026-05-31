@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { signRequest } from '../_shared/http-signatures.ts'
 
 // CORS configuration - restrict to app domains
 const ALLOWED_ORIGINS = [
@@ -77,58 +78,9 @@ interface SyncResult {
   duration_ms: number
 }
 
-/**
- * Sign a request using the local instance's private key
- */
-async function signRequest(
-  method: string,
-  path: string,
-  body: string | null,
-  privateKeyPem: string
-): Promise<string> {
-  // Create canonical request string
-  const timestamp = new Date().toISOString()
-  const bodyHash = body
-    ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body))
-    : new ArrayBuffer(0)
-  const bodyHashHex = Array.from(new Uint8Array(bodyHash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-
-  const canonicalString = `${method}\n${path}\n${timestamp}\n${bodyHashHex}`
-
-  // Import private key
-  const pemContent = privateKeyPem
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s/g, '')
-
-  const binaryDer = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0))
-
-  const privateKey = await crypto.subtle.importKey(
-    'pkcs8',
-    binaryDer,
-    {
-      name: 'RSASSA-PKCS1-v1_5',
-      hash: 'SHA-256',
-    },
-    false,
-    ['sign']
-  )
-
-  // Sign the canonical string
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    privateKey,
-    new TextEncoder().encode(canonicalString)
-  )
-
-  const signatureHex = Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-
-  return `${timestamp}:${signatureHex}`
-}
+// signRequest is imported from ../_shared/http-signatures.ts.
+// It produces a draft-cavage Signature header accepted by the Next.js
+// verifySignature() in packages/shared/lib/http-signatures.ts.
 
 /**
  * Fetch resources from a remote instance
@@ -155,7 +107,21 @@ async function fetchRemoteResources(
     const path = `/api/federation/resources?${params.toString()}`
     const url = `${instanceUrl}${path}`
 
-    const signature = await signRequest('GET', path, null, privateKeyPem)
+    // selfInstanceUrl is set by the caller (syncPeer) and flows down via privateKeyPem context.
+    // We derive the keyId here from the SUPABASE_URL env var as the canonical self-URL.
+    // Format: "<selfUrl>#main-key" — verify-federation.ts splits on '#' to get instance_url.
+    const selfInstanceUrl = Deno.env.get('APP_URL') || Deno.env.get('SUPABASE_URL') || 'http://localhost:3000'
+    const keyId = `${selfInstanceUrl}#main-key`
+
+    // BEFORE: emitted X-Federation-Signature: <timestamp>:<hex> over a bespoke canonical string.
+    // AFTER:  emits Signature: keyId="...",algorithm="rsa-sha256",... (draft-cavage) accepted by
+    //         the Next.js verifySignature() in packages/shared/lib/http-signatures.ts.
+    const signedHeaders = await signRequest({
+      privateKeyPem,
+      method: 'GET',
+      url,
+      keyId,
+    })
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -165,7 +131,9 @@ async function fetchRemoteResources(
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Federation-Signature': signature,
+          'Signature': signedHeaders.Signature,
+          'Host': signedHeaders.Host,
+          'Date': signedHeaders.Date,
         },
         signal: controller.signal,
       })
