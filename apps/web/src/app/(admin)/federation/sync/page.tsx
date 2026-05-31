@@ -116,8 +116,8 @@ export default function SyncStatusPage() {
       const resourcesSyncedToday = todayLogs.reduce((sum, log) => {
         return sum + (log.resources_created || 0) + (log.resources_updated || 0)
       }, 0)
-      const activeSyncs = (logs || []).filter(log => log.sync_status === 'in_progress').length
-      const errorCount = todayLogs.filter(log => log.sync_status === 'error').length
+      const activeSyncs = (logs || []).filter(log => log.sync_status === 'partial').length
+      const errorCount = todayLogs.filter(log => log.sync_status === 'failed').length
 
       setStats({
         totalSyncsToday,

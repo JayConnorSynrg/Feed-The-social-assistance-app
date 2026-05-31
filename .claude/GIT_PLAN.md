@@ -16,7 +16,25 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave4-federation-validation
+next_action_id: wave4b-syncstatus-fix
+
+```yaml
+id: wave4b-syncstatus-fix
+status: complete
+type: commit
+description: "fix(federation): sync_log status must be 'success' not 'completed' (DB constraint). Constraint on federation_sync_log.sync_status CHECK IN ('success','partial','failed'). Three invalid values fixed: (1) federation-inbox/index.ts:344 'completed'→'success'; (2) federation-sync/index.ts:177 'in_progress'→'partial' (initial insert sentinel); (3) federation-sync/index.ts:289 'error'→'failed'. Admin UI corrected to match: federation/sync/page.tsx:119 'in_progress'→'partial', :120 'error'→'failed'. deno check federation-inbox: clean. federation-inbox redeployed to ndtpovonpadugthmcntl (version 2, ACTIVE). tsc 0 errors (4/4 packages)."
+branch: feature/launch-hardening
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-harden
+files:
+  - supabase/functions/federation-inbox/index.ts
+  - supabase/functions/federation-sync/index.ts
+  - apps/web/src/app/(admin)/federation/sync/page.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-05-30T03:47:00.000Z
+completed_at: 2026-05-30T03:47:00.000Z
+```
 
 ## Log
 

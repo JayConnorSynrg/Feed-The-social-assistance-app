@@ -341,7 +341,7 @@ serve(async (req: Request) => {
       if (peer) {
         await supabase.from('federation_sync_log').insert({
           peer_id: peer.id,
-          sync_status: processSuccess ? 'completed' : 'failed',
+          sync_status: processSuccess ? 'success' : 'failed',
           started_at: payload.timestamp,
           completed_at: new Date().toISOString(),
           resources_fetched: actionTaken === 'upserted' ? 1 : 0,

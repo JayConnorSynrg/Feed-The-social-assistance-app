@@ -174,7 +174,7 @@ async function syncPeer(
   await supabase.from('federation_sync_log').insert({
     id: syncLogId,
     peer_id: peer.id,
-    sync_status: 'in_progress',
+    sync_status: 'partial',
     started_at: new Date().toISOString(),
   })
 
@@ -286,7 +286,7 @@ async function syncPeer(
     await supabase
       .from('federation_sync_log')
       .update({
-        sync_status: 'error',
+        sync_status: 'failed',
         completed_at: new Date().toISOString(),
         error_message: errorMessage,
         sync_duration_ms: duration,
