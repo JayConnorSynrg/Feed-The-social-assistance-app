@@ -22,13 +22,13 @@ next_action_id: deploy-develop-launch-hardening
 
 ```yaml
 id: deploy-develop-launch-hardening
-status: in_progress
+status: complete
 type: push
 description: "push develop -> origin (27 commits: launch-hardening + federation edge migration + P7-T11) to trigger Vercel production deploy"
 branch: develop
 remote: origin
 created_at: 2026-05-31T00:00:00.000Z
-completed_at: null
+completed_at: 2026-05-31T00:00:00.000Z
 ```
 
 ```yaml
