@@ -39,46 +39,79 @@ export const POST = withRateLimit(async (req: NextRequest) => {
 
     // --- Record attempt (non-blocking) ---
     if (action === 'record_attempt') {
-      await supabase.from('auth_login_attempts').insert({
-        email,
-        ip_address: clientIp,
-        user_agent: clientUserAgent,
-        success: success ?? false,
-        failure_reason: failure_reason ?? null,
-      })
+      const attemptTimer = logger.time('auth.record_attempt')
 
-      // On successful login, clear any active lockout
-      if (success) {
-        await supabase.from('account_lockouts').delete().eq('email', email)
-        timer.end({ action, email })
-        return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS })
-      }
-
-      // Count failures in rolling 15-minute window
-      const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
-      const { count } = await supabase
-        .from('auth_login_attempts')
-        .select('id', { count: 'exact', head: true })
-        .eq('email', email)
-        .eq('success', false)
-        .gte('created_at', windowStart)
-
-      const failures = count ?? 0
-
-      if (failures >= MAX_ATTEMPTS) {
-        const lockedUntil = new Date(Date.now() + WINDOW_MS).toISOString()
-        await supabase.from('account_lockouts').upsert({
+      try {
+        await supabase.from('auth_login_attempts').insert({
           email,
-          locked_until: lockedUntil,
-          attempt_count: failures,
-          last_attempt_at: new Date().toISOString(),
+          ip_address: clientIp,
+          user_agent: clientUserAgent,
+          success: success ?? false,
+          failure_reason: failure_reason ?? null,
         })
-        timer.end({ action, email, isLocked: true })
-        return NextResponse.json({ isLocked: true, remainingAttempts: 0, lockedUntil })
-      }
 
-      timer.end({ action, email, isLocked: false })
-      return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS - failures })
+        // Capture failed login server-side into audit_log (best-effort).
+        // Replaces the client-side logPredefinedEvent('AUTH_LOGIN_FAILED') call
+        // in login/page.tsx which silently 42501'd under the anon RLS policy.
+        // Values match AUDIT_EVENTS.AUTH_LOGIN_FAILED in audit-logger.ts.
+        if (!success) {
+          try {
+            await supabase.from('audit_log').insert({
+              user_id: null,
+              event_type: 'auth.login_failed',
+              event_category: 'auth',
+              action: 'verify',
+              severity: 'warning',
+              ip_address: clientIp ?? null,
+              user_agent: clientUserAgent ?? null,
+              details: { email, failure_reason: failure_reason ?? 'invalid_credentials' },
+            })
+          } catch (auditErr) {
+            logger.warn('auth.record_attempt: audit_log insert failed (non-fatal)', {
+              error_message: auditErr instanceof Error ? auditErr.message : String(auditErr),
+            })
+          }
+        }
+
+        // On successful login, clear any active lockout
+        if (success) {
+          await supabase.from('account_lockouts').delete().eq('email', email)
+          attemptTimer.end({ outcome: 'success', email })
+          timer.end({ action, email })
+          return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS })
+        }
+
+        // Count failures in rolling 15-minute window
+        const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
+        const { count } = await supabase
+          .from('auth_login_attempts')
+          .select('id', { count: 'exact', head: true })
+          .eq('email', email)
+          .eq('success', false)
+          .gte('created_at', windowStart)
+
+        const failures = count ?? 0
+
+        if (failures >= MAX_ATTEMPTS) {
+          const lockedUntil = new Date(Date.now() + WINDOW_MS).toISOString()
+          await supabase.from('account_lockouts').upsert({
+            email,
+            locked_until: lockedUntil,
+            attempt_count: failures,
+            last_attempt_at: new Date().toISOString(),
+          })
+          attemptTimer.end({ outcome: 'failure', isLocked: true, failures, email })
+          timer.end({ action, email, isLocked: true })
+          return NextResponse.json({ isLocked: true, remainingAttempts: 0, lockedUntil })
+        }
+
+        attemptTimer.end({ outcome: 'failure', isLocked: false, failures, email })
+        timer.end({ action, email, isLocked: false })
+        return NextResponse.json({ isLocked: false, remainingAttempts: MAX_ATTEMPTS - failures })
+      } catch (attemptErr) {
+        attemptTimer.error(attemptErr, { email })
+        throw attemptErr
+      }
     }
 
     // --- Check lockout status (action === 'check') ---

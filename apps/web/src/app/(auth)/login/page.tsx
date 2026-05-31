@@ -97,11 +97,8 @@ function LoginForm() {
         }).catch(err => console.error('Failed to record login attempt:', err))
 
         if (error) {
-          // Log failed login attempt
-          logPredefinedEvent('AUTH_LOGIN_FAILED', {
-            action: 'verify',
-            details: { email, reason: 'invalid_credentials' },
-          })
+          // AUTH_LOGIN_FAILED is now captured server-side in check-lockout/route.ts
+          // (service-role insert avoids the anon RLS 42501 that silently dropped it here)
           throw error
         }
 
