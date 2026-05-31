@@ -80,9 +80,21 @@ export function MapView({
     }
   }, [getBounds, onBoundsChange])
 
-  const handleUserInteraction = useCallback(() => {
-    onUserInteraction?.()
-  }, [onUserInteraction])
+  // Only fire onUserInteraction for genuine user gestures.
+  // mapbox-gl attaches originalEvent to drag/zoom events initiated by the user,
+  // but leaves it undefined for programmatic moves (flyTo, jumpTo, setCenter).
+  // Checking its presence prevents the auto-center animation from self-blocking
+  // the profile-based center. Cast required: the TS type for ViewStateChangeEvent
+  // is the union MapEvent<...> which doesn't declare originalEvent, but mapbox-gl
+  // does attach it at runtime on all user-initiated map events.
+  const handleUserInteraction = useCallback(
+    (e: ViewStateChangeEvent) => {
+      if ((e as ViewStateChangeEvent & { originalEvent?: Event }).originalEvent) {
+        onUserInteraction?.()
+      }
+    },
+    [onUserInteraction]
+  )
 
   const handleLoad = useCallback(() => {
     setIsLoading(false)
