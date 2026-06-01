@@ -605,18 +605,20 @@ completed_at: 2026-05-29T18:55:00.000Z
 
 ```yaml
 id: wire-supabase-mcp-project
-status: in_progress
+status: complete
 type: branch
 description: "chore(mcp): wire project-scoped read-only Supabase MCP for the FEED repo. Creates .mcp.json (HTTP transport to mcp.supabase.com, project_ref=ndtpovonpadugthmcntl, read_only=true, Authorization header uses ${SUPABASE_ACCESS_TOKEN} env-expansion — secret-free, committed). Adds '## MCP Servers & Database Access' section to CLAUDE.md documenting config, auth flow (token from gitignored apps/web/.env.local, never committed), zshrc export pattern, and write-channel separation (reads via MCP, writes via Management API). Token source: shell env expanded at launch by Claude Code >=2.1.119."
 branch: feature/wire-supabase-mcp-project
 base: develop
 remote: origin
+merged_into: develop
+merge_sha: 89a20bde17b21e18fe32aa5b52c12f23e3b9f17d
 files:
   - .mcp.json
   - CLAUDE.md
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-01T00:10:00.000Z
 ```
 
 ```yaml
