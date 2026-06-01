@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: fix-ci-lockfile-sync
+next_action_id: lint-correctness-restore
 
 ## Log
 
@@ -773,6 +773,20 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T12:41:00.000Z
 completed_at: 2026-06-01T12:41:00.000Z
+```
+
+```yaml
+id: lint-correctness-restore
+status: in_progress
+type: commit
+description: "restore 3 correctness lint rules to error + fix all 60 pre-existing violations"
+branch: feature/lint-correctness-restore
+base: develop
+files:
+  - apps/web/eslint.config.mjs
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T13:00:00.000Z
+completed_at: null
 ```
 
 ```yaml

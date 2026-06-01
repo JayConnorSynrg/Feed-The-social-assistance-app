@@ -35,11 +35,11 @@ const eslintConfig = defineConfig([
   // the lint output so engineers can address them incrementally.
   {
     rules: {
-      // Widespread — needs a dedicated cleanup pass.
-      "@typescript-eslint/no-explicit-any": "warn",
-      // React Compiler — patterns that existed before the compiler was added.
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/preserve-manual-memoization": "warn",
+      // Correctness rules — enforced at error; all pre-existing violations must be fixed.
+      "@typescript-eslint/no-explicit-any": "error",
+      // React Compiler correctness — enforce; pre-existing violations must be fixed.
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/preserve-manual-memoization": "error",
       // Cosmetic — can be addressed incrementally.
       "react/no-unescaped-entities": "warn",
       "@next/next/no-html-link-for-pages": "warn",
