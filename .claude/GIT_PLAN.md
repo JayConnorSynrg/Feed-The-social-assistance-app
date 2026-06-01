@@ -16,9 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: documents-panel-refetch-on-subtab-fix
 
 ## Log
+
+```yaml
+id: documents-panel-refetch-on-subtab-fix
+status: in_progress
+type: commit
+description: "fix(documents): add viewMode to fetch-effect deps so returning to documents subtab from forms refetches the list. Root cause: useEffect([user?.id]) never re-fired on same-panel subtab switch (forms→documents). Fix: [user?.id, viewMode]. TDD: hardened P5 assertion (DOM-only, no DB fallback) confirmed FAILS on unfixed code, PASSES after fix. 0 errors on type-check/lint/build. messages/feed case flagged DIFFERENT (realtime subscriptions auto-update)."
+branch: feature/documents-refetch-on-subtab
+base: develop
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/e2e/pdf-annotator.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T20:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: merge-pdf-annotator-fix-pr26

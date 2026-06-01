@@ -228,30 +228,34 @@ test('P1+P2+P3+P4: PDF renders, zero CSP violations, save navigates to Documents
   await expect(documentsHeading).toBeVisible({ timeout: 30_000 })
   console.log('[pdf-annotator] P3 PASSED: navigated to Documents panel after save')
 
-  // ── P4: Saved document appears in Documents panel ────────────────────────
-  // The encrypted upload creates a user_documents row; documents panel should show it.
-  // Wait for a list item matching the fixture PDF filename pattern
-  await page.waitForTimeout(2_000) // allow Documents panel to fetch from DB
-  const docItem = page.locator('text=minimal-acroform.pdf')
-    .or(page.locator('[data-testid*="document-item"]').first())
-  const docVisible = await docItem.isVisible({ timeout: 15_000 }).catch(() => false)
-  if (docVisible) {
-    console.log('[pdf-annotator] P4 PASSED: saved document is visible in Documents panel')
-  } else {
-    // The upload succeeded (navigation confirmed); filename display may vary.
-    // Verify via DB as the authoritative check.
-    const { data: docs, error: dbErr } = await admin
-      .from('user_documents')
-      .select('id, name')
-      .eq('user_id', provision.userId)
-      .limit(5)
-    if (!dbErr && docs && docs.length > 0) {
-      console.log(`[pdf-annotator] P4 PASSED (DB confirmed): ${docs.length} document(s) for test user — ${docs.map(d => d.name).join(', ')}`)
-    } else {
-      // Navigation proved the upload call was made; DB assertion as soft check
-      console.warn('[pdf-annotator] P4 SOFT PASS: navigation succeeded but no docs found in DB yet (timing)')
-    }
-  }
+  // ── P4: DB confirms document was saved ───────────────────────────────────
+  // Authoritative persistence check — the encrypted upload must have written to user_documents.
+  const { data: docs, error: dbErr } = await admin
+    .from('user_documents')
+    .select('id, name')
+    .eq('user_id', provision.userId)
+    .limit(5)
+  expect(dbErr).toBeNull()
+  expect(docs).not.toBeNull()
+  expect((docs ?? []).length).toBeGreaterThan(0)
+  console.log(`[pdf-annotator] P4 PASSED (DB): ${(docs ?? []).length} document(s) saved — ${(docs ?? []).map((d: { name: string }) => d.name).join(', ')}`)
+
+  // ── P5: Saved document appears in the live DOM (no reload, no remount) ────
+  // This is the real user-visible flow: DocumentsPanel is ALREADY mounted
+  // (forms is a subtab of documents — PANEL_ALIASES.forms → {panel:'documents', subtab:'forms'}).
+  // After "Save PDF", handlePdfSave calls setActivePanel('documents') +
+  // setPanelParams({subtab:'documents'}). The panel does NOT remount, so its
+  // documents fetch effect must re-fire on the subtab/viewMode change — otherwise
+  // the just-saved document never appears in the DOM.
+  //
+  // CRITICAL: no page.reload(), no extra navigation, no admin DB bypass.
+  // Assert the filename appears in rendered HTML within a reasonable wait.
+  // If the fetch effect is keyed only on [user?.id] (the bug), this fails
+  // because the effect doesn't re-run when the user returns to documents view.
+  await expect(
+    page.locator('text=minimal-acroform.pdf')
+  ).toBeVisible({ timeout: 15_000 })
+  console.log('[pdf-annotator] P5 PASSED: saved document visible in live DOM (no reload) — fetch effect re-fired on subtab switch')
 
   // ── P2 Final: Zero CSP violations after save ──────────────────────────────
   expect(cspViolations).toHaveLength(0)
@@ -259,5 +263,5 @@ test('P1+P2+P3+P4: PDF renders, zero CSP violations, save navigates to Documents
   expect(pageErrors).toHaveLength(0)
   console.log('[pdf-annotator] P2 PASSED (post-save): zero page errors throughout entire flow')
 
-  console.log('[pdf-annotator] ALL ASSERTIONS PASSED: P1 + P2 + P3 + P4')
+  console.log('[pdf-annotator] ALL ASSERTIONS PASSED: P1 + P2 + P3 + P4 + P5')
 })
