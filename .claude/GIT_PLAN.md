@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: forms-pr-to-develop
+next_action_id: fix-ci-lockfile-sync
 
 ## Log
 
@@ -758,6 +758,21 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T04:30:54.000Z
 completed_at: null
+```
+
+```yaml
+id: fix-ci-lockfile-sync
+status: complete
+type: commit
+description: "fix(ci): sync lockfile with workspace deps (restore npm ci). Root cause: packages/ui/package.json declared react peerDependency as ^18.0.0 but the project runs React 19 (apps/web uses 19.2.6 throughout all visible history). Lockfile had only react@19.2.6 at apps/web/node_modules/react, not hoisted to node_modules/react, so npm ci on a clean install failed with 'Missing: react@18.3.1 from lock file'. Fix: update packages/ui peerDependencies to ^19.0.0, run npm install to regenerate lockfile (react@19.2.6 now hoisted to node_modules/react). npm ci EXIT 0, build EXIT 0, type-check EXIT 0."
+branch: develop
+remote: origin
+files:
+  - packages/ui/package.json
+  - package-lock.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T12:41:00.000Z
+completed_at: 2026-06-01T12:41:00.000Z
 ```
 
 ```yaml
