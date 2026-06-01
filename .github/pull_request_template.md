@@ -35,6 +35,7 @@
 - [ ] No hardcoded credentials or secrets
 - [ ] Input validation is present where needed
 - [ ] No sensitive data logged or exposed
+- [ ] Any new `SECURITY DEFINER` migration pins `search_path` (CI runs `npm run lint:security-definer`, enforcing Supabase advisor 0011)
 
 ### Documentation
 - [ ] I have updated relevant documentation

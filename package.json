@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
+    "lint:security-definer": "node scripts/check-security-definer.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "federation:generate-keys": "npx ts-node scripts/federation/generate-keypair.ts",
     "federation:register-local": "npx ts-node scripts/federation/register-local-instance.ts"
