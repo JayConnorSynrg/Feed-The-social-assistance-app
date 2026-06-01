@@ -545,6 +545,7 @@ export const medicaidApplicationTemplate: FormTemplateSchema = {
   fields: medicaidFields,
   metadata: {
     category: 'benefits',
+    formType: 'medicaid',
     agency: 'HHS',
     estimatedTime: 25,
     requiredDocuments: [

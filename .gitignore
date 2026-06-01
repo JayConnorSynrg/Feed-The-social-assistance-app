@@ -82,6 +82,13 @@ vault/
 backups/
 exports/
 
+# PDF spike sample files (large binary assets, dev-only)
+apps/web/public/spike/*.pdf
+
+# Ontology state artifacts (generated files)
+specs/001-feed-platform/.feed-ontology-state.json
+.feed-ontology-state.md
+
 # Debug and profiling
 *.heapsnapshot
 *.cpuprofile

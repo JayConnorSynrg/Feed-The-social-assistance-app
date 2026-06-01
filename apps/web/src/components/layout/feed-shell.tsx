@@ -257,6 +257,7 @@ function IconSidebar() {
         return (
           <button
             key={panel}
+            data-testid={`sidebar-${panel}`}
             onClick={() => setActivePanel(panel)}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all group relative ${
               isActive

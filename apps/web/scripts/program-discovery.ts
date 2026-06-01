@@ -255,16 +255,28 @@ Example:
 Include both federal programs administered by ${state} and state-specific programs.
 Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON object described above, no other text.`
 
-  let rawContent: string
-  try {
-    rawContent = await callOpenRouter(
-      [{ role: 'user', content: prompt }],
-      model,
-      90_000 // 90s — cloud inference is fast (5-15s typically)
-    )
-  } catch (err) {
-    console.error(`OpenRouter generate step failed: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
+  const MAX_GENERATE_ATTEMPTS = 3
+  const RETRY_DELAY_MS = [1_000, 2_000] // delays before attempt 2 and 3
+
+  let rawContent: string = ''
+  for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
+    try {
+      rawContent = await callOpenRouter(
+        [{ role: 'user', content: prompt }],
+        model,
+        90_000 // 90s — cloud inference is fast (5-15s typically)
+      )
+      break // success — exit retry loop
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (attempt < MAX_GENERATE_ATTEMPTS) {
+        const delay = RETRY_DELAY_MS[attempt - 1] ?? 2_000
+        console.warn(`OpenRouter generate attempt ${attempt}/${MAX_GENERATE_ATTEMPTS} failed (${msg}). Retrying in ${delay}ms…`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      } else {
+        throw new Error(`OpenRouter generate step failed: ${msg}`)
+      }
+    }
   }
 
   let candidates: ProgramCandidate[] = []
@@ -274,7 +286,7 @@ Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON 
   } catch {
     console.error('Failed to parse OpenRouter JSON response')
     console.error('Raw content:', rawContent.slice(0, 500))
-    process.exit(1)
+    throw new Error('Failed to parse OpenRouter JSON response')
   }
 
   // Filter to objects with at least a name field

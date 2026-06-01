@@ -35,7 +35,7 @@ const snapFields: FormFieldSchema[] = [
     type: 'select',
     label: 'Suffix',
     options: [
-      { value: '', label: 'None' },
+      { value: 'none', label: 'None' },
       { value: 'jr', label: 'Jr.' },
       { value: 'sr', label: 'Sr.' },
       { value: 'ii', label: 'II' },
@@ -525,6 +525,7 @@ export const snapApplicationTemplate: FormTemplateSchema = {
   fields: snapFields,
   metadata: {
     category: 'benefits',
+    formType: 'snap',
     agency: 'USDA',
     estimatedTime: 30,
     requiredDocuments: [

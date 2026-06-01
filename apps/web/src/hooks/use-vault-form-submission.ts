@@ -61,7 +61,7 @@ interface UseVaultFormSubmissionState {
 interface UseVaultFormSubmissionReturn extends UseVaultFormSubmissionState {
   createDraft: (templateId: string) => Promise<string | null>
   saveDraft: (formData: Record<string, unknown>) => Promise<boolean>
-  submitForm: (formData: Record<string, unknown>, signatureData?: string) => Promise<boolean>
+  submitForm: (formData: Record<string, unknown>, signatureData?: string, fallbackTemplateId?: string) => Promise<boolean>
   loadSubmission: (submissionId: string) => Promise<boolean>
   updateStatus: (status: SubmissionStatus, notes?: string) => Promise<boolean>
 }
@@ -373,14 +373,14 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
 
   /**
    * Submit the form (changes status from draft to submitted)
+   *
+   * If createDraft raced against the vault unlock and never resolved, state.submission
+   * may be null at submit time. In that case we INSERT a new row directly at submitted
+   * status rather than failing — the templateId is always available from the hook caller.
+   * The templateId must be passed via the optional third parameter in that fallback path.
    */
   const submitForm = useCallback(
-    async (formData: Record<string, unknown>, signatureData?: string): Promise<boolean> => {
-      if (!state.submission) {
-        setState((prev) => ({ ...prev, error: 'No submission loaded' }))
-        return false
-      }
-
+    async (formData: Record<string, unknown>, signatureData?: string, fallbackTemplateId?: string): Promise<boolean> => {
       if (!isUnlocked) {
         setState((prev) => ({ ...prev, error: 'Vault is locked. Please unlock first.' }))
         return false
@@ -393,47 +393,108 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
         const encryptedData = await encryptFormSubmission(formData, signatureData)
 
         const now = new Date().toISOString()
-        const updates = {
-          // SECURITY: Plaintext form_data is explicitly null on submission.
-          // Submitted forms contain the most sensitive data (completed SSN,
-          // full income figures, immigration status). All data must be retrieved
-          // exclusively through decryptFormSubmission() using the user's vault DEK.
-          // Writing plaintext at submission constitutes an FTC Section 5 deception
-          // violation given the zero-knowledge encryption representations made to users.
-          form_data: null,
-          ...encryptedData,
-          encryption_migrated: true,
-          status: 'submitted' as const,
-          submitted_at: now,
-          updated_at: now,
+
+        if (state.submission) {
+          // Happy path: draft exists — UPDATE it to submitted.
+          // RLS: UPDATE allowed when current status is draft or in_progress.
+          const updates = {
+            // SECURITY: Plaintext form_data is explicitly null on submission.
+            // Submitted forms contain the most sensitive data (completed SSN,
+            // full income figures, immigration status). All data must be retrieved
+            // exclusively through decryptFormSubmission() using the user's vault DEK.
+            // Writing plaintext at submission constitutes an FTC Section 5 deception
+            // violation given the zero-knowledge encryption representations made to users.
+            form_data: null,
+            ...encryptedData,
+            encryption_migrated: true,
+            status: 'submitted' as const,
+            submitted_at: now,
+            updated_at: now,
+          }
+
+          const { error: updateError } = await withMetric(
+            'forms.submit',
+            { template_id: state.submission.templateId, has_signature: signatureData != null },
+            async () => await supabase
+              .from('form_submissions')
+              .update(updates)
+              .eq('id', state.submission!.id)
+          )
+
+          if (updateError) throw updateError
+
+          setState((prev) => ({
+            ...prev,
+            submission: prev.submission
+              ? {
+                  ...prev.submission,
+                  formData,
+                  signatureData,
+                  status: 'submitted',
+                  submittedAt: now,
+                  updatedAt: now,
+                }
+              : null,
+            saving: false,
+            error: null,
+          }))
+        } else {
+          // Fallback path: no draft row in state (createDraft raced and lost).
+          // INSERT directly at submitted status. Requires templateId from caller.
+          const templateId = fallbackTemplateId
+          if (!templateId) {
+            throw new Error('No draft loaded and no templateId provided for direct submit')
+          }
+
+          const {
+            data: { user },
+          } = await supabase.auth.getUser()
+
+          if (!user) {
+            throw new Error('Not authenticated')
+          }
+
+          const submission = {
+            template_id: templateId,
+            user_id: user.id,
+            status: 'submitted' as SubmissionStatus,
+            form_data: null,
+            ...encryptedData,
+            encryption_migrated: true,
+            submitted_at: now,
+          }
+
+          const { data, error: insertError } = await withMetric(
+            'forms.submit_direct',
+            { template_id: templateId, has_signature: signatureData != null },
+            async () => await supabase
+              .from('form_submissions')
+              .insert(submission)
+              .select('id, template_id, user_id, status, created_at, updated_at, submitted_at')
+              .single()
+          )
+
+          if (insertError) throw insertError
+
+          setState((prev) => ({
+            ...prev,
+            submission: {
+              id: data.id,
+              templateId: data.template_id,
+              userId: data.user_id,
+              status: 'submitted' as SubmissionStatus,
+              formData,
+              signatureData,
+              submittedAt: data.submitted_at || now,
+              processedAt: undefined,
+              notes: undefined,
+              createdAt: data.created_at || now,
+              updatedAt: data.updated_at || now,
+            },
+            saving: false,
+            error: null,
+          }))
         }
-
-        const { error: updateError } = await withMetric(
-          'forms.submit',
-          { template_id: state.submission.templateId, has_signature: signatureData != null },
-          async () => await supabase
-            .from('form_submissions')
-            .update(updates)
-            .eq('id', state.submission!.id)
-        )
-
-        if (updateError) throw updateError
-
-        setState((prev) => ({
-          ...prev,
-          submission: prev.submission
-            ? {
-                ...prev.submission,
-                formData,
-                signatureData,
-                status: 'submitted',
-                submittedAt: now,
-                updatedAt: now,
-              }
-            : null,
-          saving: false,
-          error: null,
-        }))
 
         return true
       } catch (error) {

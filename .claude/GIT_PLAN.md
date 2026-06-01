@@ -16,9 +16,117 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: forms-pr-to-develop
 
 ## Log
+
+```yaml
+id: forms-e2e-runtime-verification
+status: complete
+type: commit
+description: "test(forms): Playwright runtime e2e (apps/web/e2e/forms-flow.spec.ts) — vault fixture (Node crypto + pre-insert self-check) + data-testids on forms/programs/vault-unlock surfaces. Drove out 5 real defects: (1) snap-application Select value ''→'none' (Radix crash → PanelErrorBoundary killed forms panel); (2) form-wizard autofill single once-guard locked before vault resolved → split into two independent guards (public fields / vault fields); (3) form-wizard draft-init gated on isUnlocked to avoid vault race; (4) use-vault-form-submission submitForm null-draft fallback with templateId passed through; (5) form_submissions UPDATE RLS WITH CHECK allowed self-approval into reviewer-only states — constrained to draft/in_progress/submitted (migrations 20260601060000 superseded by 20260601070000, both applied to prod)."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/e2e/forms-flow.spec.ts
+  - apps/web/e2e/helpers/vault-fixture.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/lib/form-templates/snap-application.ts
+  - apps/web/src/components/layout/feed-shell.tsx
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/vault/vault-unlock-modal.tsx
+  - supabase/migrations/20260601060000_fix_form_submissions_update_rls_with_check.sql
+  - supabase/migrations/20260601070000_tighten_form_submissions_update_with_check.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T06:00:00.000Z
+completed_at: 2026-06-01T06:00:00.000Z
+```
+
+```yaml
+id: forms-p5-sourcing-hardening
+status: complete
+type: commit
+description: "feat(forms): P5 sourcing hardening — program-discovery.ts generate step changed from process.exit(1) to throw+3x retry with exponential backoff so transient OpenRouter/JSON parse failures no longer kill the run silently; federal-forms.ts SNAP/WIC entries populated with authoritative USDA FNS locator URLs (were null)."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/scripts/program-discovery.ts
+  - apps/web/scripts/federal-forms.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
+
+```yaml
+id: forms-p2-autofill-bridge
+status: complete
+type: commit
+description: "feat(forms): P2 profile→form autofill bridge — new pure mapProfileToAutofill mapper (full_name split into first_name/last_name, residential_address.zip_code remapped to zip) injected via react-hook-form setValue in form-wizard.tsx draft-init effect. SSN, date_of_birth, and income deliberately NOT autofilled (heuristic source is household_members[0] which risks wrong-person data). Adds form-field-mapper unit test (7 cases). New files: apps/web/src/lib/form-field-mapper.ts + form-field-mapper.test.ts."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/lib/form-field-mapper.ts
+  - apps/web/src/lib/form-field-mapper.test.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
+
+```yaml
+id: forms-p1-program-form-linkage
+status: complete
+type: commit
+description: "feat(forms): P1 program→form deep-link — Programs panel 'Start Application' button passes panelParams.formsTarget (template id derived from program category) to forms panel via setActivePanel/usePanelContext. Forms panel reads panelParams.formsTarget and auto-selects the matching TS template on mount; fails open to full template list when no TS template exists for the category, or opens external URL when program.applicationUrl is set and no template matches."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
+
+```yaml
+id: forms-p0-forms-as-code
+status: complete
+type: commit
+description: "fix(forms): P0 master unblock — Forms-as-Code loader + prod schema reconciliation. Root cause (forensic): live form_templates empty (0 rows) AND id/template_id were uuid in prod while app+TS templates use text ids (snap-application-v1) → 22P02 on every submit. Origin: diverged 20260120 (applied content != committed). Fix: use-form-templates.ts reads TS modules (allTemplates/getTemplateById); metadata.formType added; LIVE migrations via MCP 20260601035919 reconcile uuid->text (idempotent, empty tables, RLS-safe, FK ON DELETE RESTRICT preserved) + 20260601035959 seed 2 referential rows; repo aligned to ledger, drift note on 20260120. FK smoke PASSED. type-check EXIT 0."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/hooks/use-form-templates.ts
+  - apps/web/src/lib/form-schemas.ts
+  - apps/web/src/lib/form-templates/snap-application.ts
+  - apps/web/src/lib/form-templates/medicaid-application.ts
+  - supabase/migrations/20260120_form_system.sql
+  - supabase/migrations/20260601035919_reconcile_form_template_ids_uuid_to_text.sql
+  - supabase/migrations/20260601035959_seed_form_templates.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T04:00:00.000Z
+completed_at: 2026-06-01T04:00:00.000Z
+```
+
+```yaml
+id: forms-p3-pdf-spike
+status: complete
+type: commit
+description: "chore(forms): P3 dev-only PDF engine spike — /spike/pdf + @cantoo/pdf-lib@^2.7.1 (npm pdf-lib@1.17.1 abandoned since 2022). Tests AcroForm fill+flatten, free-position drawText overlay, image->PDF embedJpg. Gated behind device test before P3 engine commitment. Additive; route unlinked."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/package.json
+  - package-lock.json
+  - .gitignore
+  - apps/web/src/app/spike/pdf/page.tsx
+  - apps/web/src/app/spike/pdf/spike-pdf-inner.tsx
+  - apps/web/public/spike/README.md
+  - docs/pdf-spike-notes.md
+created_at: 2026-06-01T04:01:00.000Z
+completed_at: 2026-06-01T04:01:00.000Z
+```
 
 ```yaml
 id: audit-log-harden
@@ -601,6 +709,21 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-05-29T18:45:00.000Z
 completed_at: 2026-05-29T18:55:00.000Z
+```
+
+```yaml
+id: forms-pr-to-develop
+status: complete
+type: merge
+description: "Merge origin/develop (PR #22 security-definer hardening) into feature/forms-subsystem-rebuild, push branch, and open PR to develop. Resolves append-append conflict in .claude/GIT_PLAN.md (union both sides, no entry dropped). Post-merge regression gate: type-check EXIT 0 + build EXIT 0."
+branch: feature/forms-subsystem-rebuild
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/23
+files:
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T07:00:00.000Z
+completed_at: 2026-06-01T07:15:00.000Z
 ```
 
 ```yaml
