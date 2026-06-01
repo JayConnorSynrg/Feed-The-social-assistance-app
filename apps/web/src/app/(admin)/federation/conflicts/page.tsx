@@ -318,7 +318,7 @@ export default function FederationConflictsPage() {
     }).length
   }
 
-  const renderFieldComparison = (field: string, label: string, localValue: any, remoteValue: any) => {
+  const renderFieldComparison = (field: string, label: string, localValue: unknown, remoteValue: unknown) => {
     const hasConflict = JSON.stringify(localValue) !== JSON.stringify(remoteValue)
     const decision = mergeDecisions[field] || 'local'
 

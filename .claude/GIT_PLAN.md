@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: fix-ci-lockfile-sync
+next_action_id: lint-correctness-restore
 
 ## Log
 
@@ -773,6 +773,40 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T12:41:00.000Z
 completed_at: 2026-06-01T12:41:00.000Z
+```
+
+```yaml
+id: lint-correctness-restore
+status: complete
+type: commit
+description: "fix(lint): restore 3 correctness rules (no-explicit-any, react-hooks/rules-of-hooks, react-hooks/exhaustive-deps) to error level + resolve all 60 pre-existing violations across 20 files. 47 no-explicit-any replaced with real types (Database types / unknown / typed interfaces); 13 react-hooks violations refactored or justifiably disabled; 2 stale-type join findings worked around with typed local interfaces (supabase gen types regen follow-up recommended). Cross-file reconciliation: use-conversations.ts selectConversation widened to (id: string|null) + null cleanup branch; messages-panel.tsx null cast removed; vault-guard.tsx already clean. ESLint 0 errors / 111 warnings; type-check EXIT 0; build EXIT 0."
+branch: feature/lint-correctness-restore
+base: develop
+files:
+  - apps/web/eslint.config.mjs
+  - apps/web/src/app/(admin)/federation/conflicts/page.tsx
+  - apps/web/src/app/(admin)/federation/search-analytics/page.tsx
+  - apps/web/src/app/(auth)/onboarding/page.tsx
+  - apps/web/src/app/page.tsx
+  - apps/web/src/components/layout/feed-shell.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/components/panels/map-panel.tsx
+  - apps/web/src/components/panels/messages-panel.tsx
+  - apps/web/src/components/panels/overview-panel.tsx
+  - apps/web/src/components/vault/vault-guard.tsx
+  - apps/web/src/hooks/use-audit-log.ts
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-csrf-token.ts
+  - apps/web/src/hooks/use-notifications.ts
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/lib/audit-logger.ts
+  - apps/web/src/lib/field-encryption.ts
+  - apps/web/src/lib/mfa.ts
+  - apps/web/src/lib/migrate-to-encrypted.ts
+  - apps/web/src/proxy.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T13:00:00.000Z
+completed_at: 2026-06-01T13:30:00.000Z
 ```
 
 ```yaml

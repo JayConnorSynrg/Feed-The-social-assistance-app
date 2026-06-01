@@ -39,7 +39,7 @@ export class MFAService {
   async isMFAEnabled(): Promise<boolean> {
     try {
       const { data } = await this.supabase.auth.mfa.listFactors()
-      return data?.all?.some((f: any) => f.status === 'verified') ?? false
+      return data?.all?.some((f: { status: string }) => f.status === 'verified') ?? false
     } catch (error) {
       console.error('Error checking MFA status:', error)
       return false

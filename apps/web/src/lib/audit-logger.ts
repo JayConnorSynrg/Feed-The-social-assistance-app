@@ -12,6 +12,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client'
+import type { Json } from '@feed/database'
 
 // ============================================
 // Types
@@ -42,7 +43,7 @@ export interface AuditEvent {
   severity?: AuditSeverity
   resourceType?: string
   resourceId?: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
 }
 
 interface AuditEventDefinition {
@@ -268,7 +269,7 @@ class AuditLogger {
         resource_type: event.resourceType || null,
         resource_id: event.resourceId || null,
         action: event.action,
-        details: event.details || null,
+        details: (event.details ?? null) as Json | null,
         // IP address and user agent would be extracted server-side via Edge Function
         // if we want to avoid exposing them to client code
       })
@@ -279,7 +280,7 @@ class AuditLogger {
       }
     } catch (err) {
       // Never throw - audit logging failure should not break the app
-      const msg = err instanceof Error ? err.message : (err as any)?.message ?? String(err)
+      const msg = err instanceof Error ? err.message : String(err)
       console.error('Audit logging error:', msg)
     }
   }
@@ -293,7 +294,7 @@ class AuditLogger {
       action: AuditAction
       resourceType?: string
       resourceId?: string
-      details?: Record<string, any>
+      details?: Record<string, unknown>
     }
   ): Promise<void> {
     const eventDef = AUDIT_EVENTS[eventKey]
@@ -347,7 +348,7 @@ export function logPredefinedEvent(
     action: AuditAction
     resourceType?: string
     resourceId?: string
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   }
 ): void {
   // Fire and forget

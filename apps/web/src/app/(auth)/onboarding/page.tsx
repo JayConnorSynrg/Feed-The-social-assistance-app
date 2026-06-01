@@ -11,6 +11,11 @@ import { useGeolocation } from '@/hooks/use-geolocation'
 import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { normalizeState } from '@/lib/us-states'
+import type { Database } from '@feed/database'
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
 
 const ROLE_OPTIONS = [
   {
@@ -169,7 +174,7 @@ export default function OnboardingPage() {
         }
       }).catch((err: unknown) => {
         logger.warn('onboarding.skip.best_effort_failed', {
-          message: (err as any)?.message ?? String(err),
+          message: getErrorMessage(err),
           userId,
         })
       })
@@ -242,7 +247,7 @@ export default function OnboardingPage() {
         }
       }
 
-      const profileData = {
+      const profileData: Database['public']['Tables']['profiles']['Insert'] = {
         id: userId,
         user_role: userRole,
         zip_code: zipCode || null,
@@ -254,7 +259,7 @@ export default function OnboardingPage() {
         phone: phone || null,
         onboarding_completed: true,
         updated_at: new Date().toISOString(),
-      } as any
+      }
 
       // Inner upsert with AbortController. Next.js patches global fetch and may
       // abort in-flight requests on re-render; the server-side write usually
@@ -264,15 +269,15 @@ export default function OnboardingPage() {
 
       let upsertError: { message: string; code?: string } | null = null
       try {
-        const result = await (supabase
+        const result = await supabase
           .from('profiles')
-          .upsert(profileData, { onConflict: 'id' }) as any)
+          .upsert(profileData, { onConflict: 'id' })
           .abortSignal(controller.signal)
         upsertError = result.error ?? null
       } catch (raceErr: unknown) {
-        const msg = (raceErr as any)?.message ?? ''
+        const msg = raceErr instanceof Error ? raceErr.message : ''
         const isAbortOrTimeout =
-          (raceErr as any)?.name === 'AbortError' ||
+          (raceErr instanceof Error && raceErr.name === 'AbortError') ||
           msg.includes('signal') ||
           msg.includes('aborted')
 
@@ -320,7 +325,7 @@ export default function OnboardingPage() {
         // Verification failed — navigate anyway; middleware will catch loops.
         logger.warn('onboarding.complete.verify_error', {
           userId,
-          message: (verifyErr as any)?.message ?? String(verifyErr),
+          message: getErrorMessage(verifyErr),
         })
       }
 
@@ -338,10 +343,10 @@ export default function OnboardingPage() {
         ),
       ])
     } catch (err: unknown) {
-      const msg = (err as any)?.message ?? String(err)
+      const msg = getErrorMessage(err)
       const isAbort =
-        (err as any)?.name === 'AbortError' ||
-        (typeof msg === 'string' && (msg.includes('signal') || msg.includes('aborted')))
+        (err instanceof Error && err.name === 'AbortError') ||
+        (msg.includes('signal') || msg.includes('aborted'))
       const isTimeout = msg === 'onboarding_timeout'
 
       if (isAbort || isTimeout) {

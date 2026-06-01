@@ -7,7 +7,7 @@
  * Wraps components that require encrypted data access.
  */
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { useVault } from '@/contexts/vault-context'
 import { VaultUnlockModal } from './vault-unlock-modal'
 import { Loader2 } from 'lucide-react'
@@ -19,23 +19,10 @@ interface VaultGuardProps {
 
 export function VaultGuard({ children, fallback }: VaultGuardProps) {
   const { isUnlocked, loading } = useVault()
-  const [showUnlockModal, setShowUnlockModal] = useState(false)
 
-  // Show setup/unlock modal whenever the vault is not unlocked (covers both
-  // new users with no vault and returning users whose vault is locked).
-  // VaultUnlockModal auto-selects setup vs unlock mode from isSetup internally.
-  useEffect(() => {
-    if (!loading && !isUnlocked) {
-      setShowUnlockModal(true)
-    }
-  }, [loading, isUnlocked])
-
-  // Close modal when vault is unlocked
-  useEffect(() => {
-    if (isUnlocked) {
-      setShowUnlockModal(false)
-    }
-  }, [isUnlocked])
+  // showUnlockModal is purely derived from vault state — compute during render,
+  // no effect needed.
+  const showUnlockModal = !loading && !isUnlocked
 
   // Show loading state
   if (loading) {
@@ -54,7 +41,9 @@ export function VaultGuard({ children, fallback }: VaultGuardProps) {
       <>
         <VaultUnlockModal
           open={showUnlockModal}
-          onOpenChange={setShowUnlockModal}
+          onOpenChange={() => {
+            // Modal stays open until vault is unlocked; dismissal is a no-op.
+          }}
         />
         {fallback || (
           <div className="flex items-center justify-center p-8 text-center">

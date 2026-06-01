@@ -270,18 +270,15 @@ export function useNotifications(): UseNotificationsReturn {
 
 // Push notification support check
 export function usePushNotifications() {
-  const [isSupported, setIsSupported] = useState(false)
-  const [permission, setPermission] = useState<NotificationPermission>('default')
-  const [isSubscribed, setIsSubscribed] = useState(false)
-
-  useEffect(() => {
-    const supported = 'Notification' in window && 'serviceWorker' in navigator
-    setIsSupported(supported)
-
-    if (supported) {
-      setPermission(Notification.permission)
-    }
-  }, [])
+  // Compute supported/permission during render — safe with typeof window guard (SSR returns false/'default').
+  const isSupported =
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    'serviceWorker' in navigator
+  const [permission, setPermission] = useState<NotificationPermission>(
+    isSupported ? (Notification.permission as NotificationPermission) : 'default'
+  )
+  const [isSubscribed] = useState(false)
 
   const requestPermission = useCallback(async () => {
     if (!isSupported) return false

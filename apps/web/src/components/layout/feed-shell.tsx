@@ -824,11 +824,15 @@ export function FeedShell({
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Initialize from hash on mount — resolve aliases so #forms boots into
-  // documents panel with subtab='forms'
+  // documents panel with subtab='forms'. Reads window.location (browser API,
+  // unavailable during SSR), so setState in effect is the correct idiom here.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const hash = window.location.hash.slice(1)
     const resolved = resolveHashToPanel(hash)
+    // Initializing panel state from window.location.hash — browser API only
+    // available after mount, so setState in effect is the correct idiom here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePanelState(resolved.panel)
     if (resolved.subtab) {
       setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))

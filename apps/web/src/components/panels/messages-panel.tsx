@@ -182,7 +182,7 @@ export function MessagesPanel() {
             {/* Thread Header */}
             <div className="p-4 border-b border-stone-200/50 flex items-center gap-3">
               <button
-                onClick={() => selectConversation(null as any)}
+                onClick={() => selectConversation(null)}
                 className="md:hidden text-stone-400 hover:text-stone-600"
               >
                 <ArrowLeft className="w-5 h-5" />

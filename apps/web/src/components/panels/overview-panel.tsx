@@ -196,17 +196,26 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
         }
       }
 
-      // Fetch user's recent likes
-      const { data: likes } = await supabase
+      // Fetch user's recent likes.
+      // FINDING: The generated Database types for post_likes do not include the
+      // embedded post:posts(content) join shape. Cast to a local interface
+      // instead of `any` until types are regenerated with this relation.
+      interface PostLikeWithPost {
+        post_id: string
+        created_at: string | null
+        post: { content: string } | null
+      }
+      const { data: likesRaw } = await supabase
         .from('post_likes')
         .select('post_id, created_at, post:posts(content)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(3)
+      const likes = (likesRaw ?? []) as unknown as PostLikeWithPost[]
 
       if (likes) {
         for (const like of likes) {
-          const postContent = (like as any).post?.content || 'a post'
+          const postContent = like.post?.content || 'a post'
           const likeTime = like.created_at ? new Date(like.created_at) : new Date()
           activities.push({
             id: `like-${like.post_id}`,

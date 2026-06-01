@@ -21,6 +21,10 @@ import {
   type SecureProfileInput,
   type EncryptedSecureProfile,
   type EncryptedFormSubmission,
+  type HouseholdMember,
+  type EmployerInfo,
+  type EmergencyContact,
+  type Address,
 } from '@/lib/field-encryption'
 
 // ============================================
@@ -112,27 +116,27 @@ export async function migrateUserSecureProfile(
     const plaintextData: SecureProfileInput = {}
 
     if (profile.household_members) {
-      plaintextData.household_members = profile.household_members as any
+      plaintextData.household_members = profile.household_members as unknown as HouseholdMember[]
       result.migratedFields.push('household_members')
     }
 
     if (profile.employer_info) {
-      plaintextData.employer_info = profile.employer_info as any
+      plaintextData.employer_info = profile.employer_info as unknown as EmployerInfo
       result.migratedFields.push('employer_info')
     }
 
     if (profile.emergency_contact) {
-      plaintextData.emergency_contact = profile.emergency_contact as any
+      plaintextData.emergency_contact = profile.emergency_contact as unknown as EmergencyContact
       result.migratedFields.push('emergency_contact')
     }
 
     if (profile.mailing_address) {
-      plaintextData.mailing_address = profile.mailing_address as any
+      plaintextData.mailing_address = profile.mailing_address as unknown as Address
       result.migratedFields.push('mailing_address')
     }
 
     if (profile.residential_address) {
-      plaintextData.residential_address = profile.residential_address as any
+      plaintextData.residential_address = profile.residential_address as unknown as Address
       result.migratedFields.push('residential_address')
     }
 
@@ -264,7 +268,7 @@ export async function migrateFormSubmission(
     let encryptedData: EncryptedFormSubmission
     try {
       encryptedData = await encryptFormSubmission(
-        submission.form_data,
+        submission.form_data as unknown as Record<string, unknown>,
         submission.signature_data || undefined
       )
     } catch (encryptError) {
