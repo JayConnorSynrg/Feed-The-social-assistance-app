@@ -88,21 +88,6 @@ export default function SearchAnalyticsPage() {
     }
   }, [dateRange, supabase])
 
-  // NOTE: federated_instances is an embedded join in the Supabase query below.
-  // The generated Database types do not include this relation shape on
-  // federated_resources, so the row type from the SDK does not expose
-  // .federated_instances. We define a local interface for the join result and
-  // cast the query data to it instead of using `as any`.
-  interface FederatedResourceWithInstance {
-    source_instance_id: string
-    trust_score: number | null
-    last_synced_at: string | null
-    federated_instances: {
-      instance_name: string
-      instance_url: string
-    } | null
-  }
-
   // Accumulator type for the groupBy reduce — named so Object.values is typed.
   interface GroupedInstance {
     instance_name: string
@@ -131,11 +116,10 @@ export default function SearchAnalyticsPage() {
         return
       }
 
-      // Cast to local interface — the SDK types don't model this embedded join.
-      // FINDING: federated_instances relation is absent from generated Database
-      // types for federated_resources. Regenerate types after confirming the FK
-      // relation is present in the schema.
-      const rows = (data || []) as unknown as FederatedResourceWithInstance[]
+      // The FK federated_resources→federated_instances is now in the generated
+      // Database types (regen 2026-06-01). The query builder infers the embedded
+      // join shape directly — no local interface or cast needed.
+      const rows = data ?? []
 
       // Group by instance
       const grouped = rows.reduce<Record<string, GroupedInstance>>((acc, resource) => {

@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: lint-correctness-restore
+next_action_id: none
 
 ## Log
 
@@ -832,4 +832,20 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T12:39:17.000Z
 completed_at: 2026-06-01T12:39:17.000Z
+```
+
+```yaml
+id: types-regen
+status: complete
+type: commit
+description: "chore(types): regenerate Database types from live schema (ndtpovonpadugthmcntl) + reconcile stale-join workarounds (FederatedResourceWithInstance + PostLikeWithPost local interfaces). Replace any/unknown workarounds with real Database join types where generated, or document why kept. Regen added: app_logs table (new), form_templates.id now required (not optional), get_instance_uptime arg renamed instance_id→p_instance_id. Both local interfaces REPLACED: FK relationships now in Relationships[] so SDK v2.105.3 infers embedded join shape. Also: npm warn line stripped from generated output. Gate: type-check EXIT 0, ESLint 0 errors, build EXIT 0."
+branch: feature/types-regen
+base: develop
+files:
+  - packages/database/types.ts
+  - apps/web/src/app/(admin)/federation/search-analytics/page.tsx
+  - apps/web/src/components/panels/overview-panel.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T14:00:00.000Z
+completed_at: 2026-06-01T14:30:00.000Z
 ```

@@ -197,21 +197,16 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
       }
 
       // Fetch user's recent likes.
-      // FINDING: The generated Database types for post_likes do not include the
-      // embedded post:posts(content) join shape. Cast to a local interface
-      // instead of `any` until types are regenerated with this relation.
-      interface PostLikeWithPost {
-        post_id: string
-        created_at: string | null
-        post: { content: string } | null
-      }
+      // The FK post_likes→posts is now in the generated Database types
+      // (regen 2026-06-01). The query builder infers the embedded join shape
+      // directly — no local interface or cast needed.
       const { data: likesRaw } = await supabase
         .from('post_likes')
         .select('post_id, created_at, post:posts(content)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(3)
-      const likes = (likesRaw ?? []) as unknown as PostLikeWithPost[]
+      const likes = likesRaw ?? []
 
       if (likes) {
         for (const like of likes) {
