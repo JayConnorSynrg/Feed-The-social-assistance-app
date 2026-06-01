@@ -16,13 +16,30 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: documents-panel-refetch-on-subtab-fix
+next_action_id: merge-documents-refetch-pr28
 
 ## Log
 
 ```yaml
+id: merge-documents-refetch-pr28
+status: complete
+type: merge
+description: "Merge PR #28 (feature/documents-refetch-on-subtab @ 1c3569a) into develop. Pre-merge CI verified GREEN: Install/Type Check/Lint/Security Audit/Test/Build/CI Success all SUCCESS + Vercel + Deploy Preview pass. PR state: OPEN, mergeable: MERGEABLE. Post-merge develop CI run 26782623217: all 7 jobs SUCCESS (Install/Lint/SecurityAudit/Test/TypeCheck/Build/CISuccess)."
+branch: feature/documents-refetch-on-subtab
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/28
+merged_into: develop
+merge_sha: 54ca0e970299ffd6f17ff6a56530f680309a2df2
+post_merge_ci_run: 26782623217
+post_merge_ci_conclusion: success
+created_at: 2026-06-01T21:15:00.000Z
+completed_at: 2026-06-01T21:20:14.000Z
+```
+
+```yaml
 id: documents-panel-refetch-on-subtab-fix
-status: in_progress
+status: complete
 type: commit
 description: "fix(documents): add viewMode to fetch-effect deps so returning to documents subtab from forms refetches the list. Root cause: useEffect([user?.id]) never re-fired on same-panel subtab switch (forms→documents). Fix: [user?.id, viewMode]. TDD: hardened P5 assertion (DOM-only, no DB fallback) confirmed FAILS on unfixed code, PASSES after fix. 0 errors on type-check/lint/build. messages/feed case flagged DIFFERENT (realtime subscriptions auto-update)."
 branch: feature/documents-refetch-on-subtab
@@ -32,7 +49,9 @@ files:
   - apps/web/e2e/pdf-annotator.spec.ts
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T20:00:00.000Z
-completed_at: null
+completed_at: 2026-06-01T20:30:00.000Z
+commit_sha: 1c3569a
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/28
 ```
 
 ```yaml
