@@ -335,7 +335,7 @@ export function FeedPanel() {
       if (error) throw error
 
       const rows = data || []
-      const postIds = rows.map((p: any) => p.id)
+      const postIds = rows.map((p) => p.id)
 
       let likeCounts: Record<string, number> = {}
       let userLikes: Set<string> = new Set()
@@ -380,7 +380,7 @@ export function FeedPanel() {
       }
 
       // Transform to Post interface (runs even when postIds is empty)
-      const transformed: Post[] = rows.map((row: any) => ({
+      const transformed: Post[] = rows.map((row) => ({
         id: row.id,
         author: {
           id: row.user?.id || '',
@@ -389,7 +389,7 @@ export function FeedPanel() {
           role: row.user?.is_admin ? 'Admin' : 'Community Member',
         },
         content: row.content,
-        timestamp: new Date(row.created_at),
+        timestamp: new Date(row.created_at ?? Date.now()),
         likes: likeCounts[row.id] || 0,
         comments: commentCounts[row.id] || 0,
         isLiked: userLikes.has(row.id),
@@ -398,7 +398,7 @@ export function FeedPanel() {
 
       setPosts(transformed)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : (err as any)?.message ?? JSON.stringify(err)
+      const msg = err instanceof Error ? err.message : String(err)
       console.error('Error fetching posts:', msg, err)
       setError(msg)
     } finally {

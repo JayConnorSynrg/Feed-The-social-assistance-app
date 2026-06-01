@@ -83,8 +83,34 @@ export default function SearchAnalyticsPage() {
       console.error('Error fetching metrics:', error)
       setTableExists(false)
       setMetrics([])
+    } finally {
+      setLoading(false)
     }
   }, [dateRange, supabase])
+
+  // NOTE: federated_instances is an embedded join in the Supabase query below.
+  // The generated Database types do not include this relation shape on
+  // federated_resources, so the row type from the SDK does not expose
+  // .federated_instances. We define a local interface for the join result and
+  // cast the query data to it instead of using `as any`.
+  interface FederatedResourceWithInstance {
+    source_instance_id: string
+    trust_score: number | null
+    last_synced_at: string | null
+    federated_instances: {
+      instance_name: string
+      instance_url: string
+    } | null
+  }
+
+  // Accumulator type for the groupBy reduce — named so Object.values is typed.
+  interface GroupedInstance {
+    instance_name: string
+    instance_url: string
+    resource_count: number
+    total_trust_score: number
+    last_sync: string | null
+  }
 
   const fetchPartnerContributions = useCallback(async () => {
     try {
@@ -105,29 +131,35 @@ export default function SearchAnalyticsPage() {
         return
       }
 
+      // Cast to local interface — the SDK types don't model this embedded join.
+      // FINDING: federated_instances relation is absent from generated Database
+      // types for federated_resources. Regenerate types after confirming the FK
+      // relation is present in the schema.
+      const rows = (data || []) as unknown as FederatedResourceWithInstance[]
+
       // Group by instance
-      const grouped = (data || []).reduce((acc, resource) => {
+      const grouped = rows.reduce<Record<string, GroupedInstance>>((acc, resource) => {
         const instanceId = resource.source_instance_id
         if (!acc[instanceId]) {
           acc[instanceId] = {
-            instance_name: (resource.federated_instances as any)?.instance_name || 'Unknown',
-            instance_url: (resource.federated_instances as any)?.instance_url || '',
+            instance_name: resource.federated_instances?.instance_name ?? 'Unknown',
+            instance_url: resource.federated_instances?.instance_url ?? '',
             resource_count: 0,
             total_trust_score: 0,
-            last_sync: null as string | null,
+            last_sync: null,
           }
         }
         acc[instanceId].resource_count++
         acc[instanceId].total_trust_score += resource.trust_score || 0
         if (resource.last_synced_at) {
-          if (!acc[instanceId].last_sync || resource.last_synced_at > acc[instanceId].last_sync) {
+          if (!acc[instanceId].last_sync || resource.last_synced_at > acc[instanceId].last_sync!) {
             acc[instanceId].last_sync = resource.last_synced_at
           }
         }
         return acc
-      }, {} as Record<string, any>)
+      }, {})
 
-      const contributions: PartnerContribution[] = Object.values(grouped).map((item: any) => ({
+      const contributions: PartnerContribution[] = Object.values(grouped).map((item) => ({
         instance_name: item.instance_name,
         instance_url: item.instance_url,
         resource_count: item.resource_count,
@@ -145,11 +177,6 @@ export default function SearchAnalyticsPage() {
     fetchMetrics()
     fetchPartnerContributions()
   }, [fetchMetrics, fetchPartnerContributions])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 500)
-    return () => clearTimeout(timer)
-  }, [metrics])
 
   // Calculate stats
   const totalSearches = metrics.length
@@ -275,7 +302,7 @@ export default function SearchAnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={dateRange} onValueChange={(v) => setDateRange(v as any)}>
+          <Select value={dateRange} onValueChange={(v) => setDateRange(v as '24h' | '7d' | '30d')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>

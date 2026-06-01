@@ -333,6 +333,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { position, getCurrentPosition } = useGeolocation()
 
   // Origin point for distance estimates: live GPS if available, else profile.
+  // Deps use the exact property paths the React Compiler infers (non-optional)
+  // so the compiler can preserve this memo without bailing out on the component.
   const userOrigin = useMemo<[number, number] | null>(() => {
     if (position?.coords) return [position.coords.longitude, position.coords.latitude]
     if (
@@ -343,10 +345,13 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       return [profile.longitude, profile.latitude]
     }
     return null
-  }, [position?.coords, profile?.latitude, profile?.longitude])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position?.coords?.longitude, position?.coords?.latitude, profile?.latitude, profile?.longitude])
 
   // Priority 1a: Use stored lat/lng from profile (instant, no network call).
   // Fires whenever profile lat/lng become available; respects manual pans only.
+  // setState in effect is correct here: syncing Mapbox viewState from an external
+  // data source (Supabase profile) that arrives asynchronously after first render.
   useEffect(() => {
     if (userHasMovedMap) return
     if (!profile?.latitude || !profile?.longitude) return
@@ -364,6 +369,9 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Priority 1b: Geocode profile city/state via Mapbox — async, non-blocking, cached.
   // Only runs when profile has no stored lat/lng and user hasn't manually panned.
+  // setState in effect is correct here: syncing Mapbox viewState from an external
+  // geocoding service (Mapbox API + localStorage cache) whose result is unavailable
+  // at render time.
   const geocodeAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     if (userHasMovedMap) return
@@ -440,6 +448,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Apply browser-geo position only when profile provided no center (userHasMovedMap
   // is still false) and we haven't already applied it.
+  // setState in effect is correct here: syncing Mapbox viewState from the Geolocation
+  // API, an external platform API that delivers position asynchronously via a callback.
   useEffect(() => {
     if (userHasMovedMap) return
     if (hasGeocentered) return

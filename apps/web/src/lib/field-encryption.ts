@@ -99,7 +99,7 @@ export interface EncryptedFormSubmission {
  * Encrypt a structured object (JSONB fields)
  * Serializes to JSON, then encrypts
  */
-export async function encryptObject(data: Record<string, any>): Promise<EncryptedFieldResult> {
+export async function encryptObject(data: object): Promise<EncryptedFieldResult> {
   const jsonString = JSON.stringify(data)
   return vaultEncryptField(jsonString)
 }
@@ -272,7 +272,7 @@ export async function decryptSecureProfile(
  * Encrypts both form_data and signature_data (if provided)
  */
 export async function encryptFormSubmission(
-  formData: any,
+  formData: Record<string, unknown>,
   signatureData?: string
 ): Promise<EncryptedFormSubmission> {
   // Encrypt form data (always required)
@@ -299,14 +299,14 @@ export async function encryptFormSubmission(
  */
 export async function decryptFormSubmission(
   encrypted: EncryptedFormSubmission
-): Promise<{ formData: any; signatureData?: string }> {
+): Promise<{ formData: Record<string, unknown>; signatureData?: string }> {
   // Decrypt form data (always present)
-  const formData = await decryptObject<any>(
+  const formData = await decryptObject<Record<string, unknown>>(
     encrypted.encrypted_form_data,
     encrypted.form_data_iv
   )
 
-  const result: { formData: any; signatureData?: string } = { formData }
+  const result: { formData: Record<string, unknown>; signatureData?: string } = { formData }
 
   // Decrypt signature data (optional)
   if (encrypted.encrypted_signature_data && encrypted.signature_data_iv) {

@@ -128,7 +128,7 @@ export function useConversations() {
     const volChannel = supabase
       .channel(`conv-vol-${user.id}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
@@ -145,7 +145,7 @@ export function useConversations() {
     const reqChannel = supabase
       .channel(`conv-req-${user.id}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
@@ -170,8 +170,16 @@ export function useConversations() {
     }
   }, [supabase, user?.id, fetchConversations])
 
-  const selectConversation = useCallback(async (id: string) => {
+  const selectConversation = useCallback(async (id: string | null) => {
     setSelectedConversationId(id)
+    if (id === null) {
+      setMessages([])
+      if (msgChannelRef.current) {
+        supabase.removeChannel(msgChannelRef.current)
+        msgChannelRef.current = null
+      }
+      return
+    }
     await fetchMessages(id)
 
     // Unsubscribe from any previous message channel
@@ -184,7 +192,7 @@ export function useConversations() {
     const msgChannel = supabase
       .channel(`msg-${id}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',

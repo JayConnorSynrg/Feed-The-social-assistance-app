@@ -25,7 +25,7 @@ export interface AuditLogEntry {
   resourceType: string | null
   resourceId: string | null
   action: string
-  details: Record<string, any> | null
+  details: Record<string, unknown> | null
   createdAt: string
 }
 
@@ -113,7 +113,7 @@ export function useAuditLog(): UseAuditLogReturn {
           resourceType: row.resource_type,
           resourceId: row.resource_id,
           action: row.action,
-          details: row.details as Record<string, any> | null,
+          details: row.details as Record<string, unknown> | null,
           createdAt: row.created_at,
         }))
 
@@ -174,7 +174,7 @@ export function useAuditLog(): UseAuditLogReturn {
         resourceType: row.resource_type,
         resourceId: row.resource_id,
         action: row.action,
-        details: row.details as Record<string, any> | null,
+        details: row.details as Record<string, unknown> | null,
         createdAt: row.created_at,
       }))
 

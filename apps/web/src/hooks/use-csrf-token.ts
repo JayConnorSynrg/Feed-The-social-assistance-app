@@ -46,9 +46,11 @@ export function useCsrfToken(): UseCsrfTokenReturn {
   }
 
   useEffect(() => {
-    // Try to get existing token
+    // Read from localStorage (external system) to hydrate token state.
     const existingToken = csrfToken.get()
     if (existingToken) {
+      // Syncing state from localStorage on mount — legitimate external-system read.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setToken(existingToken)
     } else {
       // Generate new token if none exists

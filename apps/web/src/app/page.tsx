@@ -72,6 +72,10 @@ class PanelErrorBoundary extends React.Component<
   }
 }
 
+// PanelId is the parameter type of setActivePanel, inferred from context — no
+// need to re-export PanelType from feed-shell.
+type PanelId = Parameters<ReturnType<typeof usePanelContext>['setActivePanel']>[0]
+
 // Dynamic Panel Renderer - renders content based on active panel
 function PanelRenderer() {
   const { activePanel, setActivePanel } = usePanelContext()
@@ -82,7 +86,7 @@ function PanelRenderer() {
       return (
         <OverviewPanel
           userName={profile?.full_name || undefined}
-          onNavigateToPanel={(panel) => setActivePanel(panel as any)}
+          onNavigateToPanel={(panel) => setActivePanel(panel as PanelId)}
         />
       )
 
@@ -93,7 +97,7 @@ function PanelRenderer() {
       return (
         <MapPanel
           onNavigateToChat={(resourceContext) => {
-            setActivePanel('chat' as any)
+            setActivePanel('chat')
           }}
         />
       )
@@ -125,7 +129,7 @@ function PanelRenderer() {
       return (
         <OverviewPanel
           userName={profile?.full_name || undefined}
-          onNavigateToPanel={(panel) => setActivePanel(panel as any)}
+          onNavigateToPanel={(panel) => setActivePanel(panel as PanelId)}
         />
       )
   }
