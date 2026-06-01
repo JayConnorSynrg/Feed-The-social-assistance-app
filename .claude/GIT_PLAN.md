@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: forms-e2e-runtime-verification
+next_action_id: forms-pr-to-develop
 
 ## Log
 
@@ -709,4 +709,18 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-05-29T18:45:00.000Z
 completed_at: 2026-05-29T18:55:00.000Z
+```
+
+```yaml
+id: forms-pr-to-develop
+status: in_progress
+type: merge
+description: "Merge origin/develop (PR #22 security-definer hardening) into feature/forms-subsystem-rebuild, push branch, and open PR to develop. Resolves append-append conflict in .claude/GIT_PLAN.md (union both sides, no entry dropped). Post-merge regression gate: type-check EXIT 0 + build EXIT 0."
+branch: feature/forms-subsystem-rebuild
+base: develop
+remote: origin
+files:
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T07:00:00.000Z
+completed_at: null
 ```
