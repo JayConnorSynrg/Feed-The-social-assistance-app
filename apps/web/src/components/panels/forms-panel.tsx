@@ -657,7 +657,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   if (wizardState.mode === 'pdf') {
     return (
-      <VaultGuard>
+      <VaultGuard onDismiss={handlePdfCancel}>
         {pdfSaveError && (
           <div className="px-4 py-2 bg-red-50 border-b border-red-200">
             <p className="text-xs text-red-600">{pdfSaveError}</p>
@@ -674,7 +674,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   if (wizardState.mode === 'wizard') {
     return (
-      <VaultGuard>
+      <VaultGuard onDismiss={handleWizardCancel}>
         <FormWizard
           templateId={wizardState.templateId}
           existingSubmissionId={wizardState.submissionId}

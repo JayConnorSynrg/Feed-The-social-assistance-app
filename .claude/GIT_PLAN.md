@@ -943,3 +943,17 @@ files:
 created_at: 2026-06-01T09:00:00.000Z
 completed_at: 2026-06-01T09:00:00.000Z
 ```
+
+```yaml
+id: vault-modal-no-vault-setup-and-escape-fix
+status: in_progress
+type: commit
+description: "fix(vault): no-vault users see setup mode (not unlock) + modal is always escapable. BUG A: VaultGuard.onOpenChange was a hard no-op, trapping users with no escape path. BUG B: VaultGuard never exposed a dismiss mechanism so forms/PDF vault guard had no way to return to list on Cancel. FIX: VaultGuard gains optional onDismiss prop; when provided the Cancel/✕ path is live and calls onDismiss, which sets local dismissed state and renders the fallback placeholder. When omitted (no callers change), existing non-dismissible behaviour is preserved. Modal create-vs-unlock mode was already correct (isSetup=false → 'setup' mode / 'Set Up Your Vault' title). forms-panel both VaultGuard call sites now pass onDismiss=handlePdfCancel / handleWizardCancel so vault-blocked users return to the forms list. Verified: type-check EXIT 0, lint 0 errors, build success, all component structure assertions pass."
+branch: feature/vault-modal-setup-escape-fix
+base: develop
+files:
+  - apps/web/src/components/vault/vault-guard.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T15:00:00.000Z
+```
