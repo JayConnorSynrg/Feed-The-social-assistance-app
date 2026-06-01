@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
-import type { FieldValues } from 'react-hook-form'
 import { ChevronLeft, ChevronRight, CheckCircle, Loader2, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +19,8 @@ import { useVaultFormSubmission } from '@/hooks/use-vault-form-submission'
 import { getVisibleFields } from '@/lib/form-schemas'
 import type { FormFieldSchema, FormSection } from '@/lib/form-schemas'
 import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
+import { useAuth } from '@/hooks/use-auth'
+import { mapProfileToAutofill } from '@/lib/form-field-mapper'
 import { logger } from '@/lib/logger'
 
 export interface FormWizardProps {
@@ -353,6 +354,7 @@ export function FormWizard({
   const { template, loading: templateLoading, error: templateError } = useFormTemplate(templateId)
   const submissionHook = useVaultFormSubmission()
   const { profile: profileData } = useVaultSecureProfile()
+  const { user, profile: publicProfile } = useAuth()
 
   const [currentStep, setCurrentStep] = useState(0)
   const [isReviewStep, setIsReviewStep] = useState(false)
@@ -363,10 +365,11 @@ export function FormWizard({
   const startTimeRef = useRef<number>(Date.now())
   const stepStartTimeRef = useRef<number>(Date.now())
   const draftInitialized = useRef(false)
+  const autofillApplied = useRef(false)
 
   type WizardFormValues = Record<string, unknown>
 
-  const { register, control, trigger, getValues, formState: { errors } } = useForm<WizardFormValues>({
+  const { register, control, trigger, getValues, setValue, formState: { errors } } = useForm<WizardFormValues>({
     defaultValues: {},
     mode: 'onChange',
   })
@@ -389,6 +392,57 @@ export function FormWizard({
       }
     })
   }, [template])
+
+  // Autofill effect — runs once after template is loaded and profile data is available.
+  // Gated by autofillApplied ref so re-renders (e.g. vault unlock) do not overwrite
+  // values the user may have already edited.
+  useEffect(() => {
+    if (!template || autofillApplied.current) return
+    // Vault profile may still be loading — wait for it to resolve (null = vault locked/loading)
+    if (profileData === null && !publicProfile && !user?.email) return
+
+    autofillApplied.current = true
+
+    const autofillValues = mapProfileToAutofill({
+      vaultProfile: profileData,
+      publicProfile: publicProfile
+        ? {
+            full_name: publicProfile.full_name,
+            phone: publicProfile.phone,
+            location_city: publicProfile.location_city,
+            location_state: publicProfile.location_state,
+            zip_code: publicProfile.zip_code,
+          }
+        : null,
+      email: user?.email,
+    })
+
+    // Only set values for fields that are present in this template and have an autofillKey
+    const templateFieldNames = new Set(template.fields.map((f) => f.name))
+    const autofillKeyToFieldName: Record<string, string> = {
+      first_name: 'first_name',
+      last_name: 'last_name',
+      email: 'email',
+      phone: 'phone',
+      address: 'address',
+      // ssn, date_of_birth, income intentionally omitted — see form-field-mapper.ts
+    }
+
+    for (const field of template.fields) {
+      const key = field.autofillKey
+      if (!key) continue
+      const fieldName = autofillKeyToFieldName[key]
+      if (!fieldName || !templateFieldNames.has(fieldName)) continue
+
+      const value = autofillValues[fieldName as keyof typeof autofillValues]
+      if (value === undefined) continue
+
+      setValue(fieldName as keyof WizardFormValues & string, value, {
+        shouldValidate: false,
+        shouldDirty: false,
+      })
+    }
+  }, [template, profileData, publicProfile, user, setValue])
 
   const sections = template?.sections ?? []
   const allFields = template?.fields ?? []

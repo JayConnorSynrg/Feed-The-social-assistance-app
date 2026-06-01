@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import {
   FileText,
   Clock,
@@ -24,6 +24,7 @@ import { createClient } from '@/lib/supabase/client'
 import { FormWizard } from '@/components/forms/form-wizard'
 import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 import { VaultGuard } from '@/components/vault'
+import { usePanelContext } from '@/components/layout/feed-shell'
 
 // ============================================
 // TYPES
@@ -66,6 +67,13 @@ type WizardState =
   | { mode: 'wizard'; templateId: string; submissionId?: string }
   | { mode: 'view'; submissionId: string }
   | { mode: 'pdf'; pdfUrl: string; fileName: string }
+
+interface FormsTarget {
+  programId: string
+  programName: string
+  formType?: string
+  applicationUrl: string | null
+}
 
 // ============================================
 // ADAPTERS: Hook data → Panel types
@@ -501,6 +509,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const { panelParams, setPanelParams } = usePanelContext()
 
   const handleTabKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
     let next = index
@@ -544,6 +553,33 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const isLoading = templatesLoading || submissionsLoading
   const error = templatesError || submissionsError
+
+  // Deep-link from programs panel: open the correct template directly
+  useEffect(() => {
+    const ft = panelParams.formsTarget as FormsTarget | undefined
+    if (!ft) return
+    // Consume the param immediately so back-nav / re-render doesn't re-trigger
+    setPanelParams((prev) => {
+      const { formsTarget: _, ...rest } = prev
+      return rest
+    })
+    // Both branches land on the available tab; synchronising tab with an external
+    // trigger (panelParams deep-link) is the intended use of this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab('available')
+    if (!ft.formType) {
+      // No TS wizard module for this category — fail-open to template list
+      return
+    }
+    const matched = templates.find((t) => {
+      const raw = rawTemplates.find((r) => r.id === t.id)
+      return raw?.form_type === ft.formType
+    })
+    if (matched) {
+      setWizardState({ mode: 'wizard', templateId: matched.id })
+    }
+    // If no template matches, fail-open: stay on list view (wizardState already 'list')
+  }, [panelParams.formsTarget, templates, rawTemplates, setPanelParams])
 
   // Handlers
   const handleStartForm = (templateId: string) => {

@@ -229,7 +229,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
 export function ProgramsPanel() {
   const { programs, categories, isLoading, error, filters, setFilters } = useProgramBrowser()
   const { saveResource, removeResource, isResourceSaved } = useSavedResources()
-  const { setActivePanel } = usePanelContext()
+  const { setActivePanel, setPanelParams } = usePanelContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -297,13 +297,23 @@ export function ProgramsPanel() {
 
   const handleStartApplication = useCallback((resource: Resource) => {
     const formTypes = getFormTypesForCategory(resource.category as string)
+    const formType = formTypes[0] as string | undefined
     logger.info('programs.application.start', {
       programId: resource.id,
       category: resource.category,
       formTypes: formTypes.join(','),
     })
+    setPanelParams((prev) => ({
+      ...prev,
+      formsTarget: {
+        programId: resource.id,
+        programName: resource.name,
+        formType,
+        applicationUrl: resource.application_url ?? null,
+      },
+    }))
     setActivePanel('forms')
-  }, [setActivePanel])
+  }, [setActivePanel, setPanelParams])
 
   return (
     <div className="h-full flex flex-col bg-[#faf9f6]">

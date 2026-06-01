@@ -16,9 +16,55 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: forms-p0-forms-as-code
+next_action_id: forms-p1-program-form-linkage
 
 ## Log
+
+```yaml
+id: forms-p5-sourcing-hardening
+status: complete
+type: commit
+description: "feat(forms): P5 sourcing hardening — program-discovery.ts generate step changed from process.exit(1) to throw+3x retry with exponential backoff so transient OpenRouter/JSON parse failures no longer kill the run silently; federal-forms.ts SNAP/WIC entries populated with authoritative USDA FNS locator URLs (were null)."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/scripts/program-discovery.ts
+  - apps/web/scripts/federal-forms.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
+
+```yaml
+id: forms-p2-autofill-bridge
+status: complete
+type: commit
+description: "feat(forms): P2 profile→form autofill bridge — new pure mapProfileToAutofill mapper (full_name split into first_name/last_name, residential_address.zip_code remapped to zip) injected via react-hook-form setValue in form-wizard.tsx draft-init effect. SSN, date_of_birth, and income deliberately NOT autofilled (heuristic source is household_members[0] which risks wrong-person data). Adds form-field-mapper unit test (7 cases). New files: apps/web/src/lib/form-field-mapper.ts + form-field-mapper.test.ts."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/lib/form-field-mapper.ts
+  - apps/web/src/lib/form-field-mapper.test.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
+
+```yaml
+id: forms-p1-program-form-linkage
+status: complete
+type: commit
+description: "feat(forms): P1 program→form deep-link — Programs panel 'Start Application' button passes panelParams.formsTarget (template id derived from program category) to forms panel via setActivePanel/usePanelContext. Forms panel reads panelParams.formsTarget and auto-selects the matching TS template on mount; fails open to full template list when no TS template exists for the category, or opens external URL when program.applicationUrl is set and no template matches."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T08:00:00.000Z
+completed_at: 2026-06-01T08:00:00.000Z
+```
 
 ```yaml
 id: forms-p0-forms-as-code

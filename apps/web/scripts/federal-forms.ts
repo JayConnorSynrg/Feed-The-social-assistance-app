@@ -22,8 +22,8 @@ export const FEDERAL_FORMS: FederalFormMapping[] = [
   { programName: 'Public Housing', category: 'housing', applicationUrl: null, formUrl: 'https://www.hud.gov/sites/dfiles/PIH/documents/HUD-50058.pdf', formNumber: 'HUD-50058' },
 
   // USDA / Food
-  { programName: 'SNAP (Food Stamps)', category: 'food', applicationUrl: null, formUrl: null, formNumber: null },
-  { programName: 'WIC', category: 'food', applicationUrl: null, formUrl: null, formNumber: null },
+  { programName: 'SNAP (Food Stamps)', category: 'food', applicationUrl: 'https://www.fns.usda.gov/snap/state-directory', formUrl: null, formNumber: null },
+  { programName: 'WIC', category: 'food', applicationUrl: 'https://www.fns.usda.gov/wic/apply', formUrl: null, formNumber: null },
 
   // DOL / Employment
   { programName: 'Unemployment Insurance', category: 'employment', applicationUrl: null, formUrl: null, formNumber: null },
