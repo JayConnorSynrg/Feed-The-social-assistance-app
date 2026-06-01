@@ -849,3 +849,16 @@ files:
 created_at: 2026-06-01T14:00:00.000Z
 completed_at: 2026-06-01T14:30:00.000Z
 ```
+
+```yaml
+id: security-advisor-remediation
+status: complete
+type: commit
+description: "fix(security): restrict notifications INSERT to prevent cross-user forgery + revoke anon/authenticated access to federation_trust_overview matview. FIX 1 (P1): DROP notifications_insert_system policy (was CMD=INSERT WITH CHECK (true) TO PUBLIC — any auth user could forge notifications for any user_id). Caller recon confirms zero client INSERT callers; notifications are system-only (triggers/service_role bypass RLS). No replacement policy authored — RLS enabled + no INSERT policy = INSERT blocked for all non-superuser roles. SELECT/UPDATE/DELETE policies untouched. FIX 2 (P3): REVOKE SELECT ON public.federation_trust_overview FROM anon, authenticated. Caller recon confirms zero non-admin/non-service reads of this matview. service_role retains access. Applied to prod ndtpovonpadugthmcntl. Verified live: pg_policies shows 0 INSERT policies on notifications (relrowsecurity=true); has_table_privilege(anon/authenticated, federation_trust_overview, SELECT)=false; service_role SELECT=true."
+branch: develop
+files:
+  - supabase/migrations/20260601090000_security_advisor_remediation.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T09:00:00.000Z
+completed_at: 2026-06-01T09:00:00.000Z
+```
