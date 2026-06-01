@@ -21,6 +21,32 @@ next_action_id: none
 ## Log
 
 ```yaml
+id: merge-pdf-annotator-fix-pr26
+status: complete
+type: merge
+description: "Merge PR #26 (feature/pdf-annotator-fix @ e090a68) into develop. Pre-merge CI verified GREEN: Install/Type Check/Lint/Security Audit/Test/Build/CI Success all SUCCESS + Vercel pass. PR state: OPEN, mergeable: MERGEABLE. Runtime-verified end-to-end: CSP-safe file.arrayBuffer PDF load, encrypted save pipeline, @cantoo/pdf-lib migration, pdf.* metrics, vitest smoke + Playwright e2e. Post-merge develop CI run 26775600971: all 7 jobs SUCCESS."
+branch: feature/pdf-annotator-fix
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/26
+merged_into: develop
+merge_sha: 2ab4eb0d4fe8134aee7be79e371b9bcc3573ef96
+post_merge_ci_run: 26775600971
+post_merge_ci_conclusion: success
+files:
+  - apps/web/src/hooks/use-pdf-annotation.ts
+  - apps/web/src/components/forms/pdf-annotator.tsx
+  - apps/web/src/components/forms/pdf-annotator-dynamic.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/package.json
+  - apps/web/src/lib/__tests__/pdf-cantoo-smoke.test.ts
+  - apps/web/e2e/pdf-annotator.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T18:55:00.000Z
+completed_at: 2026-06-01T19:15:00.000Z
+```
+
+```yaml
 id: pdf-annotator-fix
 status: complete
 type: commit
