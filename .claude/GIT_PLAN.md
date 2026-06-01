@@ -759,3 +759,28 @@ files:
 created_at: 2026-06-01T04:30:54.000Z
 completed_at: null
 ```
+
+```yaml
+id: forms-pr23-merge-to-develop
+status: complete
+type: merge
+description: "Merge PR #23 (feature/forms-subsystem-rebuild) into develop. Pre-merge conflict: append-append in .claude/GIT_PLAN.md caused by PR #24 landing on develop after last sync — resolved by unioning both entries. Post-merge regression gate: type-check EXIT 0, build EXIT 0. Forms artifacts verified present."
+branch: feature/forms-subsystem-rebuild
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/23
+merged_into: develop
+merge_sha: cd402d0f263c73f6cd7c2c29da97bf9b71935eac
+validation:
+  type_check: EXIT 0
+  build: EXIT 0
+  artifacts_verified:
+    - apps/web/src/lib/form-field-mapper.ts
+    - apps/web/e2e/forms-flow.spec.ts
+    - supabase/migrations/20260601070000_tighten_form_submissions_update_with_check.sql
+  branch_fully_merged: true
+files:
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T12:39:17.000Z
+completed_at: 2026-06-01T12:39:17.000Z
+```
