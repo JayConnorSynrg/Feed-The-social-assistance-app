@@ -713,16 +713,17 @@ completed_at: 2026-05-29T18:55:00.000Z
 
 ```yaml
 id: forms-pr-to-develop
-status: in_progress
+status: complete
 type: merge
 description: "Merge origin/develop (PR #22 security-definer hardening) into feature/forms-subsystem-rebuild, push branch, and open PR to develop. Resolves append-append conflict in .claude/GIT_PLAN.md (union both sides, no entry dropped). Post-merge regression gate: type-check EXIT 0 + build EXIT 0."
 branch: feature/forms-subsystem-rebuild
 base: develop
 remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/23
 files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T07:00:00.000Z
-completed_at: null
+completed_at: 2026-06-01T07:15:00.000Z
 ```
 
 ```yaml
