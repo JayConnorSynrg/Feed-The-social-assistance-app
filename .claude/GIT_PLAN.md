@@ -602,3 +602,19 @@ files:
 created_at: 2026-05-29T18:45:00.000Z
 completed_at: 2026-05-29T18:55:00.000Z
 ```
+
+```yaml
+id: harden-security-definer-fns
+status: in_progress
+type: migration
+description: "Harden SECURITY DEFINER functions in public schema (satisfies Supabase linter 0011 function_search_path_mutable). (a) Pin SET search_path on 11 unpinned SECURITY DEFINER fns via minimal ALTER FUNCTION (no body restate): cleanup_old_webhook_logs, get_recent_webhook_failures, get_webhook_stats, get_stale_federated_resources, handle_new_user, on_resource_change_webhook, notify_federation_webhook, set_resource_location, set_resource_location_by_id, nearby_resources, resources_in_bounds. Value = public for all (PostGIS verified installed in public schema, so ST_*/&&/<-> resolve without an extensions entry). (b) Least-privilege EXECUTE: REVOKE FROM PUBLIC,anon,authenticated then GRANT service_role-only for set_resource_location, notify_federation_webhook, cleanup_old_webhook_logs, get_recent_webhook_failures, get_webhook_stats, get_stale_federated_resources, cleanup_expired_lockouts, cleanup_inactive_sessions, cleanup_old_login_attempts, is_account_locked, get_instance_uptime; REVOKE-all-no-grant for trigger-only handle_new_user/on_resource_change_webhook/enforce_password_history_limit; keep-grant exceptions set_resource_location_by_id and nearby_resources (REVOKE PUBLIC,anon; GRANT authenticated,service_role); resources_in_bounds grants UNTOUCHED (public pre-login map must stay anon-callable). (d) get_instance_uptime CREATE OR REPLACE from verbatim live body, fixing always-true tautology (param instance_id renamed p_instance_id, WHERE corrected) + SET search_path=public. (e) nearby_resources CREATE OR REPLACE verbatim live body (backfills missing migration so clean rebuild reproduces it) + SET search_path=public. Whole migration wrapped BEGIN/COMMIT. Authored in isolated worktree to avoid disturbing main checkout on feature/forms-subsystem-rebuild. NOT applied to prod, NOT committed, NOT pushed — review-only."
+branch: feature/harden-security-definer-fns
+base: develop
+remote: origin
+worktree: /Users/jelalconnor/CODING/CURSOR/FEED-secdef
+files:
+  - supabase/migrations/20260601043054_harden_security_definer_fns.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T04:30:54.000Z
+completed_at: null
+```

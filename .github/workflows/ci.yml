@@ -205,6 +205,32 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      # ----------------------------------------------------------------------
+      # SECURITY DEFINER search_path guard (always-on, zero-dependency).
+      # Enforces Supabase advisor 0011 "function_search_path_mutable" at PR
+      # time: every SECURITY DEFINER function in supabase/migrations must pin
+      # search_path. Pure Node built-ins, no DB needed, runs in milliseconds.
+      # Fails the job (no continue-on-error) so an unpinned definer function
+      # cannot merge. Local equivalent: npm run lint:security-definer.
+      # ----------------------------------------------------------------------
+      - name: Check SECURITY DEFINER functions pin search_path
+        run: node scripts/check-security-definer.mjs
+
+      # ----------------------------------------------------------------------
+      # OPTIONAL canonical advisor (Supabase Splinter linter). Disabled by
+      # default: it needs DB connectivity + a linked project, which requires a
+      # SUPABASE_ACCESS_TOKEN secret and a project ref. Enable by setting the
+      # secret and flipping `if: false` to a condition (e.g.
+      # `if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}`). The static check
+      # above is the always-on guard; this is the authoritative DB-side check.
+      # ----------------------------------------------------------------------
+      - name: (optional) Supabase db lint — advisor 0011
+        if: false
+        run: |
+          npx supabase db lint --level error --linked
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Run npm audit
         run: npm audit --audit-level=high || true
         continue-on-error: true
