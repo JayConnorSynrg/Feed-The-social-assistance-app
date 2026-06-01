@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      app_logs: {
+        Row: {
+          context: Json | null
+          created_at: string
+          event: string
+          id: string
+          level: string
+          request_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          event: string
+          id?: string
+          level: string
+          request_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          event?: string
+          id?: string
+          level?: string
+          request_id?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -837,7 +864,7 @@ export type Database = {
           estimated_time_minutes?: number | null
           field_mappings?: Json | null
           form_type: Database["public"]["Enums"]["form_type"]
-          id?: string
+          id: string
           is_active?: boolean | null
           name: string
           required_documents?: string[] | null
@@ -2327,7 +2354,7 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
-      get_instance_uptime: { Args: { instance_id: string }; Returns: number }
+      get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
       get_recent_webhook_failures: {
         Args: { p_limit?: number }
         Returns: {
