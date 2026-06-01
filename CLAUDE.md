@@ -249,6 +249,22 @@ Session Summary:
 
 ---
 
+## MCP Servers & Database Access
+
+### Supabase MCP (`supabase-mcp`) — project-scoped, read-only
+Project-scoped MCP wired in `.mcp.json` at the repo root (committed, secret-free). Provides read-only access to the production Supabase project `ndtpovonpadugthmcntl` for schema, RLS, migration, and log inspection.
+
+- **Config**: `.mcp.json` (repo root) — HTTP transport to `https://mcp.supabase.com/mcp`, scoped `read_only=true` + `project_ref=ndtpovonpadugthmcntl` (least-privilege, per Supabase guidance).
+- **Auth**: the `${SUPABASE_ACCESS_TOKEN}` (a Supabase Personal Access Token) is expanded from your shell environment at launch — it is never committed. The token lives in `apps/web/.env.local` (gitignored).
+- **Enable it once**: export the token so Claude Code can read it. Add to your `~/.zshrc`:
+  ```
+  export SUPABASE_ACCESS_TOKEN="$(grep '^SUPABASE_ACCESS_TOKEN=' '/Users/jelalconnor/CODING/CURSOR/FEED./apps/web/.env.local' 2>/dev/null | sed -E 's/^SUPABASE_ACCESS_TOKEN=//' | tr -d '\"')"
+  ```
+  Then restart Claude Code. Requires Claude Code >= 2.1.119 (header env-expansion). On first use, approve the project server when prompted; re-approve later with `claude mcp reset-project-choices`.
+- **Writes stay separate**: the MCP is read-only by design. Deliberate writes / migrations go through the Supabase Management API SQL endpoint (`POST https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query`) using the same PAT — read and write are kept on separate channels for least-privilege.
+
+---
+
 ## Version
 - Checklist Version: 1.0.0
 - Last Updated: 2026-01-19
