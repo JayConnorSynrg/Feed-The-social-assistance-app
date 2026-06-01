@@ -52,6 +52,12 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
   // independent of what React-PDF / pdfjs may have done to the ArrayBuffer.
   const originalBytesRef = useRef<Uint8Array | null>(null)
 
+  // Stable ref to current annotations — lets savePdf read the latest annotations
+  // without including `state` (an object) in its dependency array, which would
+  // recreate savePdf on every render and trigger an infinite re-render loop via
+  // handleSave → onSave → setProgress → re-render → new savePdf → repeat.
+  const annotationsRef = useRef<TextAnnotation[]>([])
+
   const loadPdf = useCallback(async (file: File) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -68,6 +74,7 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
       })
 
       originalBytesRef.current = bytes.uint8
+      annotationsRef.current = []
 
       setState(prev => ({
         ...prev,
@@ -86,30 +93,35 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
 
   const addAnnotation = useCallback((annotation: Omit<TextAnnotation, 'id'>) => {
     const newAnnotation: TextAnnotation = { ...annotation, id: generateId() }
-    setState(prev => ({
-      ...prev,
-      annotations: [...prev.annotations, newAnnotation],
-    }))
+    setState(prev => {
+      const next = [...prev.annotations, newAnnotation]
+      annotationsRef.current = next
+      return { ...prev, annotations: next }
+    })
   }, [])
 
   const updateAnnotation = useCallback((id: string, updates: Partial<TextAnnotation>) => {
-    setState(prev => ({
-      ...prev,
-      annotations: prev.annotations.map(ann =>
+    setState(prev => {
+      const next = prev.annotations.map(ann =>
         ann.id === id ? { ...ann, ...updates } : ann
-      ),
-    }))
+      )
+      annotationsRef.current = next
+      return { ...prev, annotations: next }
+    })
   }, [])
 
   const removeAnnotation = useCallback((id: string) => {
-    setState(prev => ({
-      ...prev,
-      annotations: prev.annotations.filter(ann => ann.id !== id),
-    }))
+    setState(prev => {
+      const next = prev.annotations.filter(ann => ann.id !== id)
+      annotationsRef.current = next
+      return { ...prev, annotations: next }
+    })
   }, [])
 
   const savePdf = useCallback(async (scale: number): Promise<Uint8Array> => {
-    const { annotations } = state
+    // Read annotations from stable ref — avoids `state` object in dep array which
+    // would cause savePdf to be recreated on every render → infinite loop.
+    const annotations = annotationsRef.current
     const sourceBytes = originalBytesRef.current
 
     if (!sourceBytes) {
@@ -159,7 +171,8 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
     } finally {
       setState(prev => ({ ...prev, isSaving: false }))
     }
-  }, [state])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return {
     ...state,

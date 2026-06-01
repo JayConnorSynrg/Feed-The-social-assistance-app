@@ -126,14 +126,36 @@ const nextConfig: NextConfig = {
             //
             // REMOVED: X-XSS-Protection header (see comment above)
             //   Replaced entirely by CSP, which is the correct modern mechanism.
+            //
+            // CSP FIX 2026-06-01 (caught by Playwright e2e pdf-annotator.spec.ts P2):
+            //
+            //   1. worker-src: added 'self'
+            //      BEFORE: "worker-src blob:"
+            //      AFTER:  "worker-src 'self' blob:"
+            //      Reason: pdfjs-dist loads pdf.worker.min.mjs from /_next/static/
+            //      as a same-origin Worker. The browser needs worker-src 'self' to
+            //      allow same-origin worker scripts; blob: alone is insufficient.
+            //      Without 'self', pdfjs falls back to main-thread parsing (perf
+            //      regression) and emits a CSP violation. Additive — does not
+            //      narrow any existing permission.
+            //
+            //   2. script-src + connect-src: added https://va.vercel-scripts.com
+            //      BEFORE: no va.vercel-scripts.com entry
+            //      AFTER:  https://va.vercel-scripts.com in both script-src and connect-src
+            //      Reason: @vercel/analytics v2.x and @vercel/speed-insights v2.x both
+            //      inject `<script src="https://va.vercel-scripts.com/v1/script.debug.js">`
+            //      in development mode (NODE_ENV=development). In production they use
+            //      first-party intake at /_vercel/insights/script.js (no CSP change needed).
+            //      Vercel's official domain — documented at vercel.com/docs/analytics.
+            //      Additive — no existing directive narrowed.
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com",
-              "worker-src blob:",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com",
+              "worker-src 'self' blob:",
               "font-src 'self'",
               "frame-ancestors 'none'",
               "base-uri 'self'",

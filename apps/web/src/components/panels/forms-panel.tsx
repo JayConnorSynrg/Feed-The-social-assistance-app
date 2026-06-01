@@ -637,6 +637,11 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       const filledFile = new File([pdfBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
       await uploadFile(filledFile, 'other')
       setWizardState({ mode: 'list' })
+      // Clear the 'forms' subtab so DocumentsPanel mounts in 'documents' (My Documents)
+      // view, not back in the forms subtab. Without this, the stale subtab='forms' from
+      // the current navigation causes the Documents panel to re-enter FormsPanel,
+      // preventing the P3 assertion (Documents heading visible) from passing.
+      setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
       setActivePanel('documents')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save PDF'

@@ -309,8 +309,14 @@ export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
   const [scale, setScale] = useState(1)
   const [saveError, setSaveError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Guard: react-pdf fires onLoadSuccess on every re-render (including scale changes).
+  // Without this guard, setScale triggers a render → Page re-fires onLoadSuccess →
+  // setScale again → infinite "Maximum update depth exceeded" loop.
+  // Reset to false in the loadPdf effect so a new document recalculates scale once.
+  const scaleSetRef = useRef(false)
 
   useEffect(() => {
+    scaleSetRef.current = false
     loadPdf(file)
   }, [file, loadPdf])
 
@@ -324,9 +330,13 @@ export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
   }, [pdfBytes])
 
   const handlePageLoadSuccess = useCallback(({ width }: { width: number }) => {
+    // Only compute scale once per document load — onLoadSuccess fires on every
+    // Page re-render (e.g. when scale prop changes), which would loop forever.
+    if (scaleSetRef.current) return
     if (containerRef.current) {
       const containerWidth = containerRef.current.clientWidth - 32
       const computedScale = Math.min(containerWidth / width, 1.5)
+      scaleSetRef.current = true
       setScale(computedScale)
     }
   }, [])
