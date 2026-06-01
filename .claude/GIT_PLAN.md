@@ -21,6 +21,27 @@ next_action_id: none
 ## Log
 
 ```yaml
+id: pdf-annotator-fix
+status: complete
+type: commit
+description: "fix(forms): eliminate blob-fetch PDF load (CSP-safe file.arrayBuffer), reuse encrypted pipeline for save, migrate to @cantoo/pdf-lib, add pdf.* metrics. Root cause: PdfAnnotator hook did fetch(blob:URL) which CSP connect-src blocked (no blob: in next.config.ts). Fix: loadPdf(File) reads bytes via file.arrayBuffer() — zero fetch, zero blob URL, zero CSP touch. Save path: ad-hoc supabase.storage.upload replaced with useEncryptedUpload().uploadFile (canonical encrypted pipeline, auto-inserts user_documents row). Stray pdf-lib import migrated to @cantoo/pdf-lib. withMetric wraps pdf.load + pdf.save. React-pdf gets a memoized separate .slice() copy (pdfjs worker never shares the buffer pdf-lib uses). Tests: vitest unit smoke (@cantoo byte-diff), Playwright PDF render+CSP+nav-to-documents assertion, existing forms-flow + auth regressions guarded."
+branch: feature/pdf-annotator-fix
+base: develop
+files:
+  - apps/web/src/hooks/use-pdf-annotation.ts
+  - apps/web/src/components/forms/pdf-annotator.tsx
+  - apps/web/src/components/forms/pdf-annotator-dynamic.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - apps/web/package.json
+  - apps/web/src/lib/__tests__/pdf-cantoo-smoke.test.ts
+  - apps/web/e2e/pdf-annotator.spec.ts
+  - apps/web/e2e/fixtures/minimal-acroform.pdf (generated at test runtime)
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T15:00:00.000Z
+completed_at: 2026-06-01T15:30:00.000Z
+```
+
+```yaml
 id: forms-e2e-runtime-verification
 status: complete
 type: commit
