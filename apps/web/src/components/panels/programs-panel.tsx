@@ -48,7 +48,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
   const hasForm = hasApplicationForm(resource.category as string)
 
   return (
-    <div className="bg-white border border-stone-200 rounded-xl shadow-sm overflow-hidden">
+    <div data-testid={`program-card-${resource.id}`} className="bg-white border border-stone-200 rounded-xl shadow-sm overflow-hidden">
       <button
         className="w-full text-left p-4 hover:bg-stone-50 transition-colors"
         onClick={onToggle}
@@ -171,6 +171,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
 
               {hasForm ? (
                 <button
+                  data-testid={`program-start-application-${resource.id}`}
                   onClick={(e) => {
                     e.stopPropagation()
                     onStartApplication(resource)

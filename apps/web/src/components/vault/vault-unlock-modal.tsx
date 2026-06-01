@@ -131,6 +131,7 @@ export function VaultUnlockModal({
               <Label htmlFor="password">Master Password</Label>
               <Input
                 id="password"
+                data-testid="vault-unlock-password-input"
                 type="password"
                 placeholder={mode === 'setup' ? 'Create a strong password' : 'Enter your master password'}
                 value={password}
@@ -179,6 +180,7 @@ export function VaultUnlockModal({
               Cancel
             </Button>
             <Button
+              data-testid="vault-unlock-submit-button"
               type="submit"
               disabled={
                 loading ||

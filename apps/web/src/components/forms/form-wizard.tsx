@@ -19,6 +19,7 @@ import { useVaultFormSubmission } from '@/hooks/use-vault-form-submission'
 import { getVisibleFields } from '@/lib/form-schemas'
 import type { FormFieldSchema, FormSection } from '@/lib/form-schemas'
 import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
+import { useVault } from '@/contexts/vault-context'
 import { useAuth } from '@/hooks/use-auth'
 import { mapProfileToAutofill } from '@/lib/form-field-mapper'
 import { logger } from '@/lib/logger'
@@ -354,6 +355,7 @@ export function FormWizard({
   const { template, loading: templateLoading, error: templateError } = useFormTemplate(templateId)
   const submissionHook = useVaultFormSubmission()
   const { profile: profileData } = useVaultSecureProfile()
+  const { isUnlocked } = useVault()
   const { user, profile: publicProfile } = useAuth()
 
   const [currentStep, setCurrentStep] = useState(0)
@@ -365,7 +367,11 @@ export function FormWizard({
   const startTimeRef = useRef<number>(Date.now())
   const stepStartTimeRef = useRef<number>(Date.now())
   const draftInitialized = useRef(false)
-  const autofillApplied = useRef(false)
+  // Two independent guards — public-sourced fields (name/email/phone) lock separately
+  // from vault-sourced fields (address.*) so each applies exactly once when its
+  // data source resolves, regardless of which arrives first.
+  const publicAutofillApplied = useRef(false)
+  const vaultAutofillApplied = useRef(false)
 
   type WizardFormValues = Record<string, unknown>
 
@@ -374,14 +380,25 @@ export function FormWizard({
     mode: 'onChange',
   })
 
+  // Draft init effect — waits for both the template and the vault to be unlocked
+  // before creating the draft. createDraft calls encryptFormSubmission which
+  // requires the vault DEK in IndexedDB. If the vault isn't unlocked yet (e.g.
+  // VaultGuard modal just closed), the effect will re-fire when isUnlocked flips
+  // to true. draftInitialized is only set after a successful call so a DEK-not-ready
+  // failure on first render doesn't permanently prevent draft creation.
   useEffect(() => {
     if (!template || draftInitialized.current) return
-    draftInitialized.current = true
 
     if (existingSubmissionId) {
+      draftInitialized.current = true
       submissionHook.loadSubmission(existingSubmissionId)
       return
     }
+
+    // Vault must be unlocked before createDraft (encryption requires DEK)
+    if (!isUnlocked) return
+
+    draftInitialized.current = true
 
     submissionHook.createDraft(templateId).then((id) => {
       if (id) {
@@ -389,22 +406,25 @@ export function FormWizard({
           templateId,
           total_steps: template.sections.length,
         })
+      } else {
+        // createDraft returned null — reset guard so the effect can retry if
+        // the vault state changes (e.g. DEK wasn't in IDB yet despite isUnlocked)
+        draftInitialized.current = false
       }
     })
-  }, [template])
+  }, [template, isUnlocked])
 
-  // Autofill effect — runs once after template is loaded and profile data is available.
-  // Gated by autofillApplied ref so re-renders (e.g. vault unlock) do not overwrite
-  // values the user may have already edited.
+  // PUBLIC autofill effect — applies first_name / last_name / email / phone exactly once
+  // when public sources (publicProfile or user.email) are available. Locks immediately
+  // so user edits are never overwritten by subsequent re-renders.
   useEffect(() => {
-    if (!template || autofillApplied.current) return
-    // Vault profile may still be loading — wait for it to resolve (null = vault locked/loading)
-    if (profileData === null && !publicProfile && !user?.email) return
+    if (!template || publicAutofillApplied.current) return
+    if (!publicProfile && !user?.email) return
 
-    autofillApplied.current = true
+    publicAutofillApplied.current = true
 
     const autofillValues = mapProfileToAutofill({
-      vaultProfile: profileData,
+      vaultProfile: null, // vault fields handled by the vault effect below
       publicProfile: publicProfile
         ? {
             full_name: publicProfile.full_name,
@@ -417,21 +437,20 @@ export function FormWizard({
       email: user?.email,
     })
 
-    // Only set values for fields that are present in this template and have an autofillKey
     const templateFieldNames = new Set(template.fields.map((f) => f.name))
-    const autofillKeyToFieldName: Record<string, string> = {
+    // Only public-sourced keys — address is intentionally excluded here
+    const publicAutofillKeys: Record<string, string> = {
       first_name: 'first_name',
       last_name: 'last_name',
       email: 'email',
       phone: 'phone',
-      address: 'address',
       // ssn, date_of_birth, income intentionally omitted — see form-field-mapper.ts
     }
 
     for (const field of template.fields) {
       const key = field.autofillKey
       if (!key) continue
-      const fieldName = autofillKeyToFieldName[key]
+      const fieldName = publicAutofillKeys[key]
       if (!fieldName || !templateFieldNames.has(fieldName)) continue
 
       const value = autofillValues[fieldName as keyof typeof autofillValues]
@@ -442,7 +461,45 @@ export function FormWizard({
         shouldDirty: false,
       })
     }
-  }, [template, profileData, publicProfile, user, setValue])
+  }, [template, publicProfile, user, setValue])
+
+  // VAULT autofill effect — applies address.* exactly once when the vault secure
+  // profile has resolved (profileData !== null). Fires independently so a delayed
+  // vault unlock does not race against or re-clobber public-sourced fields.
+  useEffect(() => {
+    if (!template || vaultAutofillApplied.current) return
+    if (profileData === null) return // still loading or vault locked — wait
+
+    vaultAutofillApplied.current = true
+
+    const autofillValues = mapProfileToAutofill({
+      vaultProfile: profileData,
+      publicProfile: null, // public fields already applied above
+      email: undefined,
+    })
+
+    // Only vault-sourced key: address
+    const vaultAutofillKeys: Record<string, string> = {
+      address: 'address',
+    }
+
+    const templateFieldNames = new Set(template.fields.map((f) => f.name))
+
+    for (const field of template.fields) {
+      const key = field.autofillKey
+      if (!key) continue
+      const fieldName = vaultAutofillKeys[key]
+      if (!fieldName || !templateFieldNames.has(fieldName)) continue
+
+      const value = autofillValues[fieldName as keyof typeof autofillValues]
+      if (value === undefined) continue
+
+      setValue(fieldName as keyof WizardFormValues & string, value, {
+        shouldValidate: false,
+        shouldDirty: false,
+      })
+    }
+  }, [template, profileData, setValue])
 
   const sections = template?.sections ?? []
   const allFields = template?.fields ?? []
@@ -519,7 +576,7 @@ export function FormWizard({
       const signatureField = allFields.find((f) => f.type === 'signature')
       const signatureData = signatureField ? (data[signatureField.name] as string | undefined) : undefined
 
-      const ok = await submissionHook.submitForm(data, signatureData)
+      const ok = await submissionHook.submitForm(data, signatureData, templateId)
       if (!ok) {
         throw new Error(submissionHook.error ?? 'Submission failed')
       }
@@ -575,12 +632,12 @@ export function FormWizard({
   const hasAutofillData = profileData !== null && allFields.some((f) => f.autofillKey)
 
   return (
-    <div className="h-full flex flex-col">
+    <div data-testid="form-wizard-container" className="h-full flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-stone-900">{template.name}</h1>
+              <h1 data-testid="form-wizard-title" className="text-xl font-bold text-stone-900">{template.name}</h1>
               <p className="text-sm text-stone-500 mt-0.5">
                 Step {displayStep} of {displayTotal}
                 {isReviewStep ? ' — Review & Submit' : currentSection ? ` — ${currentSection.title}` : ''}
@@ -664,6 +721,7 @@ export function FormWizard({
 
           {isReviewStep ? (
             <Button
+              data-testid="form-submit-button"
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
@@ -675,6 +733,7 @@ export function FormWizard({
             </Button>
           ) : (
             <Button
+              data-testid="form-next-button"
               type="button"
               onClick={handleNext}
               disabled={isSaving}

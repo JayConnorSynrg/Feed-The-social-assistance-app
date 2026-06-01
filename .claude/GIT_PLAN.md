@@ -16,9 +16,32 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: forms-p1-program-form-linkage
+next_action_id: forms-e2e-runtime-verification
 
 ## Log
+
+```yaml
+id: forms-e2e-runtime-verification
+status: complete
+type: commit
+description: "test(forms): Playwright runtime e2e (apps/web/e2e/forms-flow.spec.ts) — vault fixture (Node crypto + pre-insert self-check) + data-testids on forms/programs/vault-unlock surfaces. Drove out 5 real defects: (1) snap-application Select value ''→'none' (Radix crash → PanelErrorBoundary killed forms panel); (2) form-wizard autofill single once-guard locked before vault resolved → split into two independent guards (public fields / vault fields); (3) form-wizard draft-init gated on isUnlocked to avoid vault race; (4) use-vault-form-submission submitForm null-draft fallback with templateId passed through; (5) form_submissions UPDATE RLS WITH CHECK allowed self-approval into reviewer-only states — constrained to draft/in_progress/submitted (migrations 20260601060000 superseded by 20260601070000, both applied to prod)."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/e2e/forms-flow.spec.ts
+  - apps/web/e2e/helpers/vault-fixture.ts
+  - apps/web/src/components/forms/form-wizard.tsx
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/lib/form-templates/snap-application.ts
+  - apps/web/src/components/layout/feed-shell.tsx
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/vault/vault-unlock-modal.tsx
+  - supabase/migrations/20260601060000_fix_form_submissions_update_rls_with_check.sql
+  - supabase/migrations/20260601070000_tighten_form_submissions_update_with_check.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T06:00:00.000Z
+completed_at: 2026-06-01T06:00:00.000Z
+```
 
 ```yaml
 id: forms-p5-sourcing-hardening
