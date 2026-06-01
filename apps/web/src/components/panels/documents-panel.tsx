@@ -482,7 +482,9 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
 
     loadDocuments()
-  }, [user?.id])
+  // viewMode added to deps: when the user returns to the 'documents' subtab from
+  // forms (same panel, no remount), the effect re-fires and shows newly-saved docs.
+  }, [user?.id, viewMode])
 
   // Calculate document counts per category
   const documentCounts = documents.reduce<Record<DocumentCategory, number>>(
