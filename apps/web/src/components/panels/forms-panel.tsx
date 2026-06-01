@@ -25,6 +25,8 @@ import { FormWizard } from '@/components/forms/form-wizard'
 import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 import { VaultGuard } from '@/components/vault'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
+import { logger } from '@/lib/logger'
 
 // ============================================
 // TYPES
@@ -66,7 +68,7 @@ type WizardState =
   | { mode: 'list' }
   | { mode: 'wizard'; templateId: string; submissionId?: string }
   | { mode: 'view'; submissionId: string }
-  | { mode: 'pdf'; pdfUrl: string; fileName: string }
+  | { mode: 'pdf'; file: File; fileName: string }
 
 interface FormsTarget {
   programId: string
@@ -509,7 +511,8 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const { panelParams, setPanelParams } = usePanelContext()
+  const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
+  const { uploadFile } = useEncryptedUpload()
 
   const handleTabKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
     let next = index
@@ -620,44 +623,52 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const handlePdfFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    setWizardState({ mode: 'pdf', pdfUrl: url, fileName: file.name })
+    setWizardState({ mode: 'pdf', file, fileName: file.name })
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const [pdfSaveError, setPdfSaveError] = useState<string | null>(null)
+
   const handlePdfSave = async (pdfBytes: Uint8Array) => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
+    setPdfSaveError(null)
     const fileName = wizardState.mode === 'pdf' ? wizardState.fileName : 'annotated.pdf'
-    const storagePath = `${user.id}/pdf-forms/${Date.now()}-${fileName}`
 
-    const plainBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer
-    const blob = new Blob([plainBuffer], { type: 'application/pdf' })
-    await supabase.storage.from('documents').upload(storagePath, blob, {
-      contentType: 'application/pdf',
-      upsert: false,
-    })
-
-    setWizardState({ mode: 'list' })
-    setActiveTab('submitted')
+    try {
+      const filledFile = new File([pdfBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
+      await uploadFile(filledFile, 'other')
+      setWizardState({ mode: 'list' })
+      // Clear the 'forms' subtab so DocumentsPanel mounts in 'documents' (My Documents)
+      // view, not back in the forms subtab. Without this, the stale subtab='forms' from
+      // the current navigation causes the Documents panel to re-enter FormsPanel,
+      // preventing the P3 assertion (Documents heading visible) from passing.
+      setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
+      setActivePanel('documents')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save PDF'
+      setPdfSaveError(message)
+      logger.error('pdf.save.error', err, { fileName })
+      // Do NOT navigate — stay on annotator so user can retry
+    }
   }
 
   const handlePdfCancel = () => {
-    if (wizardState.mode === 'pdf') {
-      URL.revokeObjectURL(wizardState.pdfUrl)
-    }
     setWizardState({ mode: 'list' })
   }
 
   if (wizardState.mode === 'pdf') {
     return (
-      <PdfAnnotator
-        pdfUrl={wizardState.pdfUrl}
-        onSave={handlePdfSave}
-        onCancel={handlePdfCancel}
-      />
+      <VaultGuard>
+        {pdfSaveError && (
+          <div className="px-4 py-2 bg-red-50 border-b border-red-200">
+            <p className="text-xs text-red-600">{pdfSaveError}</p>
+          </div>
+        )}
+        <PdfAnnotator
+          file={wizardState.file}
+          onSave={handlePdfSave}
+          onCancel={handlePdfCancel}
+        />
+      </VaultGuard>
     )
   }
 

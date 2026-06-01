@@ -5,6 +5,7 @@ import React, {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
 } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
@@ -15,12 +16,13 @@ import { usePdfAnnotation } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 import { logger } from '@/lib/logger'
 
+// Version-matched 5.4.296 worker — do NOT change without updating react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
 const FONT_SIZES = [12, 14, 16, 18, 24] as const
 
 export interface PdfAnnotatorProps {
-  pdfUrl: string
+  file: File
   onSave: (pdfBytes: Uint8Array) => Promise<void>
   onCancel: () => void
 }
@@ -287,7 +289,7 @@ function PageOverlay({
   )
 }
 
-export function PdfAnnotator({ pdfUrl, onSave, onCancel }: PdfAnnotatorProps) {
+export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
   const {
     pdfBytes,
     numPages,
@@ -307,18 +309,47 @@ export function PdfAnnotator({ pdfUrl, onSave, onCancel }: PdfAnnotatorProps) {
   const [scale, setScale] = useState(1)
   const [saveError, setSaveError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Guard: react-pdf fires onLoadSuccess on every re-render (including scale changes).
+  // Without this guard, setScale triggers a render → Page re-fires onLoadSuccess →
+  // setScale again → infinite "Maximum update depth exceeded" loop.
+  // Reset to false in the loadPdf effect so a new document recalculates scale once.
+  const scaleSetRef = useRef(false)
 
   useEffect(() => {
-    loadPdf(pdfUrl)
-  }, [pdfUrl, loadPdf])
+    scaleSetRef.current = false
+    loadPdf(file)
+  }, [file, loadPdf])
+
+  // Memoize the document data so react-pdf does not reload on every render.
+  // We must pass a SEPARATE .slice() copy — pdfjs may transfer/detach the
+  // ArrayBuffer in its worker, and that buffer must never be the same one that
+  // pdf-lib uses during savePdf. Memoized on pdfBytes identity.
+  const docData = useMemo(() => {
+    if (!pdfBytes) return null
+    return { data: pdfBytes.slice() }
+  }, [pdfBytes])
 
   const handlePageLoadSuccess = useCallback(({ width }: { width: number }) => {
+    // Only compute scale once per document load — onLoadSuccess fires on every
+    // Page re-render (e.g. when scale prop changes), which would loop forever.
+    if (scaleSetRef.current) return
     if (containerRef.current) {
       const containerWidth = containerRef.current.clientWidth - 32
       const computedScale = Math.min(containerWidth / width, 1.5)
+      scaleSetRef.current = true
       setScale(computedScale)
     }
   }, [])
+
+  const handleDocumentLoadError = useCallback((err: Error) => {
+    logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
+    setSaveError(err.message || 'Failed to render PDF')
+  }, [pdfBytes?.length])
+
+  const handlePageLoadError = useCallback((err: Error) => {
+    logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
+    setSaveError(err.message || 'Failed to render PDF page')
+  }, [pdfBytes?.length])
 
   const handleSave = useCallback(async () => {
     setSaveError(null)
@@ -414,9 +445,10 @@ export function PdfAnnotator({ pdfUrl, onSave, onCancel }: PdfAnnotatorProps) {
         ref={containerRef}
         className="flex-1 overflow-y-auto flex flex-col items-center gap-4 py-6 px-4"
       >
-        {pdfBytes && (
+        {docData && (
           <Document
-            file={pdfBytes.buffer as ArrayBuffer}
+            file={docData}
+            onLoadError={handleDocumentLoadError}
             loading={
               <div className="flex items-center gap-2 text-stone-500 text-sm">
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -433,6 +465,7 @@ export function PdfAnnotator({ pdfUrl, onSave, onCancel }: PdfAnnotatorProps) {
                   pageIndex={i}
                   scale={scale}
                   onLoadSuccess={i === 0 ? handlePageLoadSuccess : undefined}
+                  onLoadError={handlePageLoadError}
                   renderAnnotationLayer
                   renderTextLayer
                 />
