@@ -16,9 +16,48 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: forms-p0-forms-as-code
 
 ## Log
+
+```yaml
+id: forms-p0-forms-as-code
+status: complete
+type: commit
+description: "fix(forms): P0 master unblock — Forms-as-Code loader + prod schema reconciliation. Root cause (forensic): live form_templates empty (0 rows) AND id/template_id were uuid in prod while app+TS templates use text ids (snap-application-v1) → 22P02 on every submit. Origin: diverged 20260120 (applied content != committed). Fix: use-form-templates.ts reads TS modules (allTemplates/getTemplateById); metadata.formType added; LIVE migrations via MCP 20260601035919 reconcile uuid->text (idempotent, empty tables, RLS-safe, FK ON DELETE RESTRICT preserved) + 20260601035959 seed 2 referential rows; repo aligned to ledger, drift note on 20260120. FK smoke PASSED. type-check EXIT 0."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/src/hooks/use-form-templates.ts
+  - apps/web/src/lib/form-schemas.ts
+  - apps/web/src/lib/form-templates/snap-application.ts
+  - apps/web/src/lib/form-templates/medicaid-application.ts
+  - supabase/migrations/20260120_form_system.sql
+  - supabase/migrations/20260601035919_reconcile_form_template_ids_uuid_to_text.sql
+  - supabase/migrations/20260601035959_seed_form_templates.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T04:00:00.000Z
+completed_at: 2026-06-01T04:00:00.000Z
+```
+
+```yaml
+id: forms-p3-pdf-spike
+status: complete
+type: commit
+description: "chore(forms): P3 dev-only PDF engine spike — /spike/pdf + @cantoo/pdf-lib@^2.7.1 (npm pdf-lib@1.17.1 abandoned since 2022). Tests AcroForm fill+flatten, free-position drawText overlay, image->PDF embedJpg. Gated behind device test before P3 engine commitment. Additive; route unlinked."
+branch: feature/forms-subsystem-rebuild
+base: develop
+files:
+  - apps/web/package.json
+  - package-lock.json
+  - .gitignore
+  - apps/web/src/app/spike/pdf/page.tsx
+  - apps/web/src/app/spike/pdf/spike-pdf-inner.tsx
+  - apps/web/public/spike/README.md
+  - docs/pdf-spike-notes.md
+created_at: 2026-06-01T04:01:00.000Z
+completed_at: 2026-06-01T04:01:00.000Z
+```
 
 ```yaml
 id: audit-log-harden

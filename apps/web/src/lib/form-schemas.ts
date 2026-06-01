@@ -85,6 +85,12 @@ export interface FormTemplateSchema {
   fields: FormFieldSchema[]
   metadata?: {
     category: string
+    /**
+     * Discrete program form type used for program→form matching
+     * (aligns with CATEGORY_FORM_MAP in lib/category-form-map.ts and the
+     * DB form_templates.form_type column). Falls back to `category` when absent.
+     */
+    formType?: string
     agency?: string
     estimatedTime?: number // minutes
     requiredDocuments?: string[]

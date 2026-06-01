@@ -525,6 +525,7 @@ export const snapApplicationTemplate: FormTemplateSchema = {
   fields: snapFields,
   metadata: {
     category: 'benefits',
+    formType: 'snap',
     agency: 'USDA',
     estimatedTime: 30,
     requiredDocuments: [

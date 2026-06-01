@@ -1,3 +1,11 @@
+-- ⚠️ DRIFT NOTE (2026-06-01): This already-applied migration's committed content diverges
+-- from the LIVE production schema (live form_templates uses uuid->text id + form_type ENUM +
+-- field_mappings/required_documents/agency_name; this file shows category/agency TEXT and
+-- creates form_signatures which does not exist live). Live is the source of truth. The forms
+-- id-type drift is reconciled forward by 20260601035919. Full column-set parity for a fresh
+-- `db reset` is a tracked follow-up (regenerate this baseline from live via `supabase db pull`).
+-- Do NOT edit the SQL below — it is historical/applied; reconcile forward only.
+
 -- Form System Migration
 -- Creates tables for form templates, secure profiles, and form submissions
 
