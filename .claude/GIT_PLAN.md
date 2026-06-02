@@ -16,9 +16,28 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: documents-view-unlock-prompt
 
 ## Log
+
+```yaml
+id: documents-view-unlock-prompt
+status: in_progress
+type: branch
+description: "Wire PdfDocumentViewer + VaultUnlockModal into documents-panel.tsx. Adds useVault isUnlocked gate on handleView/handleDownload: locked vault opens VaultUnlockModal with pendingAction stored for retry on onSuccess. View path: downloadFile → setViewerFile/setViewerOpen (no window.open). Download path: existing <a download> anchor (CSP-safe), now vault-gated. Adds data-testid=doc-view-btn and data-testid=doc-download-btn to card action buttons. Renders PdfDocumentViewer and VaultUnlockModal at panel root. TDD: documents-view.spec.ts T1-T4+PHASE1."
+branch: feature/documents-view-unlock-prompt
+base: develop
+remote: origin
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/components/documents/pdf-document-viewer.tsx
+  - apps/web/src/components/documents/pdf-document-viewer-dynamic.tsx
+  - apps/web/e2e/documents-view.spec.ts
+  - apps/web/e2e/fixtures/minimal-acroform.pdf
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T23:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: merge-vault-escape-trap-pr27
