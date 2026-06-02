@@ -65,7 +65,10 @@ export function VaultUnlockModal({
         setPassword('')
         setConfirmPassword('')
         onSuccess?.()
-        onOpenChange?.(false)
+        // Do NOT call onOpenChange(false) here — VaultGuard's isUnlocked becoming
+        // true causes it to render children directly, naturally unmounting this
+        // modal without triggering onDismiss. Calling onOpenChange(false) would
+        // fire handleDismiss → onDismiss → cancel the guarded flow (P0 regression).
       } catch (err) {
         // Error is handled by context
       }
@@ -75,7 +78,10 @@ export function VaultUnlockModal({
         if (success) {
           setPassword('')
           onSuccess?.()
-          onOpenChange?.(false)
+          // Same rationale as setup path: let VaultGuard's isUnlocked→true unmount
+          // the modal naturally. Callers that own their own modal open-state
+          // (encrypted-upload, documents-panel) close it via onSuccess callback,
+          // not via onOpenChange, so they are unaffected.
         }
       } catch (err) {
         // Error is handled by context
