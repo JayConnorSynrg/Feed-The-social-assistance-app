@@ -451,7 +451,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { isUnlocked } = useVault()
   const { downloadFile, downloadForEdit, updateAnnotations, deleteFile, isDownloading } = useEncryptedUpload()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
-  const { panelParams, setActivePanel } = usePanelContext()
+  const { panelParams, setPanelParams } = usePanelContext()
   const [documents, setDocuments] = useState<Document[]>([])
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -724,23 +724,20 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
   }
 
-  // Tab switch handler: drives via setActivePanel alias path so hash + state
-  // stay in sync through one code path.
+  // Tab switch handler: uniform — all three tabs set both the local render var
+  // (viewMode) and the durable context truth (panelParams.subtab) so they can
+  // never desync. The sync effect at L477-482 remains the entry point for
+  // sidebar/deep-link alias switching (setActivePanel → effect → viewMode); its
+  // viewMode !== tab guard makes it a no-op when we already set viewMode here.
   const handleTabSwitch = useCallback((tab: 'documents' | 'resources' | 'forms') => {
     logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
     track('nav_subtab', { panel: 'documents', subtab: tab })
-    if (tab === 'forms') {
-      setActivePanel('forms')
-    } else if (tab === 'resources') {
-      // 'resources' is not an alias — update viewMode directly and update hash
-      setViewMode('resources')
-      if (typeof window !== 'undefined') {
-        window.history.replaceState(null, '', '#documents')
-      }
-    } else {
-      setActivePanel('documents')
+    setViewMode(tab)
+    setPanelParams((prev) => ({ ...prev, subtab: tab }))
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', tab === 'forms' ? '#forms' : '#documents')
     }
-  }, [setActivePanel])
+  }, [setPanelParams])
 
   // ARIA roving tabindex keyboard handler for the Documents tablist
   const handleDocsTabKeyDown = useCallback((
@@ -785,6 +782,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         <button
           role="tab"
           id="docs-tab-documents"
+          data-testid="docs-tab-documents"
           aria-selected={viewMode === 'documents'}
           aria-controls="docs-panel-documents"
           tabIndex={viewMode === 'documents' ? 0 : -1}
@@ -804,6 +802,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         <button
           role="tab"
           id="docs-tab-resources"
+          data-testid="docs-tab-resources"
           aria-selected={viewMode === 'resources'}
           aria-controls="docs-panel-resources"
           tabIndex={viewMode === 'resources' ? 0 : -1}
@@ -828,6 +827,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         <button
           role="tab"
           id="docs-tab-forms"
+          data-testid="docs-tab-forms"
           aria-selected={viewMode === 'forms'}
           aria-controls="docs-panel-forms"
           tabIndex={viewMode === 'forms' ? 0 : -1}
