@@ -1706,9 +1706,11 @@ export type Database = {
       }
       user_documents: {
         Row: {
+          annotations_iv: string | null
           category: string | null
           created_at: string | null
           document_type: string
+          encrypted_annotations: string | null
           encrypted_name_iv: string | null
           encrypted_original_name: string | null
           encryption_iv: string | null
@@ -1728,9 +1730,11 @@ export type Database = {
           verified_at: string | null
         }
         Insert: {
+          annotations_iv?: string | null
           category?: string | null
           created_at?: string | null
           document_type: string
+          encrypted_annotations?: string | null
           encrypted_name_iv?: string | null
           encrypted_original_name?: string | null
           encryption_iv?: string | null
@@ -1750,9 +1754,11 @@ export type Database = {
           verified_at?: string | null
         }
         Update: {
+          annotations_iv?: string | null
           category?: string | null
           created_at?: string | null
           document_type?: string
+          encrypted_annotations?: string | null
           encrypted_name_iv?: string | null
           encrypted_original_name?: string | null
           encryption_iv?: string | null
