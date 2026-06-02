@@ -48,7 +48,7 @@ import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resourc
 import { FormsPanel } from './forms-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { VaultUnlockModal } from '@/components/vault'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 import { track } from '@vercel/analytics'
 
 // ============================================
@@ -596,20 +596,27 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
       setDownloadingId(doc.id)
       let file: File
 
-      if (doc.hasAnnotations) {
-        // Re-editable doc: download source + annotations, flatten for in-app viewing
-        const { sourceFile, annotations } = await downloadForEdit(doc.id)
-        const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
-        const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
-        file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
-      } else {
-        // Legacy flattened doc: download directly
-        file = await downloadFile(doc.id)
-      }
+      await withMetric(
+        'documents.view',
+        { documentId: doc.id, has_annotations: doc.hasAnnotations ?? false, flattened: doc.hasAnnotations ?? false },
+        async () => {
+          if (doc.hasAnnotations) {
+            // Re-editable doc: download source + annotations, flatten for in-app viewing
+            const { sourceFile, annotations } = await downloadForEdit(doc.id)
+            const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
+            const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
+            file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
+          } else {
+            // Legacy flattened doc: download directly
+            file = await downloadFile(doc.id)
+          }
+        }
+      )
 
-      setViewerFile(file)
+      setViewerFile(file!)
       setViewerOpen(true)
     } catch (err) {
+      logger.error('documents.view.error', err, { documentId: doc.id })
       console.error('Failed to view document:', err)
     } finally {
       setDownloadingId(null)
@@ -624,29 +631,37 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
     try {
       setDownloadingId(doc.id)
-      let file: File
 
-      if (doc.hasAnnotations) {
-        // Re-editable doc: flatten before download
-        const { sourceFile, annotations } = await downloadForEdit(doc.id)
-        const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
-        const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
-        file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
-      } else {
-        // Legacy flattened doc: download directly
-        file = await downloadFile(doc.id)
-      }
+      await withMetric(
+        'documents.download',
+        { documentId: doc.id, has_annotations: doc.hasAnnotations ?? false },
+        async () => {
+          let file: File
 
-      // CSP-safe anchor download pattern
-      const url = URL.createObjectURL(file)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = file.name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+          if (doc.hasAnnotations) {
+            // Re-editable doc: flatten before download
+            const { sourceFile, annotations } = await downloadForEdit(doc.id)
+            const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
+            const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
+            file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
+          } else {
+            // Legacy flattened doc: download directly
+            file = await downloadFile(doc.id)
+          }
+
+          // CSP-safe anchor download pattern
+          const url = URL.createObjectURL(file)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = file.name
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }
+      )
     } catch (err) {
+      logger.error('documents.download.error', err, { documentId: doc.id })
       console.error('Failed to download document:', err)
     } finally {
       setDownloadingId(null)
@@ -661,10 +676,19 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
     try {
       setDownloadingId(doc.id)
-      const { sourceFile, annotations } = await downloadForEdit(doc.id)
+      const { sourceFile, annotations } = await withMetric(
+        'documents.edit.open',
+        { documentId: doc.id, annotation_count: 0 },
+        async () => {
+          const result = await downloadForEdit(doc.id)
+          return result
+        }
+      )
+      logger.info('documents.edit.open.annotations', { documentId: doc.id, annotation_count: annotations.length })
       setEditingDoc(doc)
       setEditSource({ file: sourceFile, annotations })
     } catch (err) {
+      logger.error('documents.edit.open.error', err, { documentId: doc.id })
       console.error('Failed to open document for editing:', err)
     } finally {
       setDownloadingId(null)
@@ -673,7 +697,14 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
 
   const handleEditSave = useCallback(async (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => {
     if (!editingDoc) return
-    await updateAnnotations(editingDoc.id, data.annotations)
+    await withMetric(
+      'documents.annotations.update',
+      { documentId: editingDoc.id, annotation_count: data.annotations.length },
+      () => updateAnnotations(editingDoc.id, data.annotations)
+    ).catch((err) => {
+      logger.error('documents.annotations.update.error', err, { documentId: editingDoc.id, annotation_count: data.annotations.length })
+      throw err
+    })
     // Refresh document list so hasAnnotations flag updates
     setEditingDoc(null)
     setEditSource(null)
