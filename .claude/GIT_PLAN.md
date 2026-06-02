@@ -23,11 +23,15 @@ next_action_id: none
 ```yaml
 id: documents-view-unlock-prompt
 status: complete
-type: branch
-description: "Wire PdfDocumentViewer + VaultUnlockModal into documents-panel.tsx. Adds useVault isUnlocked gate on handleView/handleDownload: locked vault opens VaultUnlockModal with pendingAction stored for retry on onSuccess. View path: downloadFile → setViewerFile/setViewerOpen (no window.open). Download path: existing <a download> anchor (CSP-safe), now vault-gated. Adds data-testid=doc-view-btn and data-testid=doc-download-btn to card action buttons. Renders PdfDocumentViewer and VaultUnlockModal at panel root. TDD: documents-view.spec.ts T1-T4+PHASE1."
+type: merge
+description: "Wire PdfDocumentViewer + VaultUnlockModal into documents-panel.tsx. Adds useVault isUnlocked gate on handleView/handleDownload: locked vault opens VaultUnlockModal with pendingAction stored for retry on onSuccess. View path: downloadFile → setViewerFile/setViewerOpen (no window.open). Download path: existing <a download> anchor (CSP-safe), now vault-gated. Adds data-testid=doc-view-btn and data-testid=doc-download-btn to card action buttons. Renders PdfDocumentViewer and VaultUnlockModal at panel root. TDD: documents-view.spec.ts 5/5. Merged PR #29 → develop @ 66334ce. CI: Install/Lint/SecurityAudit/Test/TypeCheck/Build/CISuccess/DeployPreview/Vercel all pass."
 branch: feature/documents-view-unlock-prompt
 base: develop
 remote: origin
+merged_into: develop
+merge_sha: 66334ce62c4097e4bfdc0df96db607624b0f0168
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/29
+post_merge_ci_conclusion: success
 files:
   - apps/web/src/components/panels/documents-panel.tsx
   - apps/web/src/components/documents/pdf-document-viewer.tsx
@@ -36,7 +40,7 @@ files:
   - apps/web/e2e/fixtures/minimal-acroform.pdf
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T23:00:00.000Z
-completed_at: null
+completed_at: 2026-06-02T00:00:00.000Z
 ```
 
 ```yaml
