@@ -16,9 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: vault-unlock-preserves-flow
 
 ## Log
+
+```yaml
+id: vault-unlock-preserves-flow
+status: in_progress
+type: branch
+description: "fix(vault): preserve guarded flow on unlock-success — remove onOpenChange?.(false) from setup-success (L67-68) and unlock-success (L76-78) paths in vault-unlock-modal.tsx so success does not fire onDismiss. VaultGuard early-returns children when isUnlocked flips true, naturally unmounting the modal. handleClose (Cancel/Esc/X) path unchanged. TDD: pdf-annotator.spec.ts P1+P5 (canvas visible after unlock) + forms-flow.spec.ts P1 (wizard visible after unlock) must go GREEN; auth.spec.ts + documents-view.spec.ts regression guard. Gates: type-check 0, lint 0 new errors, build success."
+branch: feature/vault-unlock-preserves-flow
+base: develop
+remote: origin
+files:
+  - apps/web/src/components/vault/vault-unlock-modal.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-01T23:30:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: documents-view-unlock-prompt
