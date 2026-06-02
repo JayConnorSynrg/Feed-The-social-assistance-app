@@ -338,3 +338,56 @@ export function estimateEncryptedSize(originalSize: number): number {
   const numChunks = Math.ceil(originalSize / CHUNK_SIZE)
   return originalSize + (numChunks * GCM_TAG_BYTES)
 }
+
+/**
+ * Encrypt a UTF-8 string using the vault DEK (AES-GCM).
+ * Returns base64-encoded ciphertext and IV.
+ * Throws 'Vault is locked...' when DEK is unavailable.
+ */
+export async function encryptString(
+  plaintext: string
+): Promise<{ ciphertext: string; iv: string }> {
+  const dek = await getDEK()
+  if (!dek) {
+    throw new Error('Vault is locked. Please unlock your vault first.')
+  }
+
+  const iv = generateIV()
+  const encoder = new TextEncoder()
+
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+    dek,
+    encoder.encode(plaintext)
+  )
+
+  return {
+    ciphertext: arrayBufferToBase64(cipherBuf),
+    iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
+  }
+}
+
+/**
+ * Decrypt a base64-encoded AES-GCM ciphertext string back to UTF-8 plaintext.
+ * Throws 'Vault is locked...' when DEK is unavailable.
+ */
+export async function decryptString(
+  ciphertext: string,
+  iv: string
+): Promise<string> {
+  const dek = await getDEK()
+  if (!dek) {
+    throw new Error('Vault is locked. Please unlock your vault first.')
+  }
+
+  const cipherBuf = base64ToArrayBuffer(ciphertext)
+  const ivBuf = new Uint8Array(base64ToArrayBuffer(iv))
+
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivBuf as Uint8Array<ArrayBuffer> },
+    dek,
+    cipherBuf
+  )
+
+  return new TextDecoder().decode(plainBuf)
+}
