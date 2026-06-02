@@ -25,17 +25,58 @@ interface PdfAnnotationState {
 }
 
 export interface PdfAnnotationActions {
-  loadPdf: (file: File) => Promise<void>
+  loadPdf: (file: File, initialAnnotations?: TextAnnotation[]) => Promise<void>
   addAnnotation: (annotation: Omit<TextAnnotation, 'id'>) => void
   updateAnnotation: (id: string, updates: Partial<TextAnnotation>) => void
   removeAnnotation: (id: string) => void
-  savePdf: (scale: number) => Promise<Uint8Array>
+  savePdf: (scale: number) => Promise<{ sourceBytes: Uint8Array; annotations: TextAnnotation[] }>
 }
 
 export type UsePdfAnnotationReturn = PdfAnnotationState & PdfAnnotationActions
 
 function generateId(): string {
   return `ann_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+}
+
+/**
+ * Flatten source PDF bytes with annotations drawn — used for view/download.
+ * Exported so callers (documents-panel) can produce a printable copy without
+ * re-uploading the source.
+ */
+export async function exportFlattened(
+  sourceBytes: Uint8Array,
+  annotations: TextAnnotation[],
+  scale: number
+): Promise<Uint8Array> {
+  // Always work from a fresh copy so the caller's buffer is never transferred
+  const pdfDoc = await PDFDocument.load(sourceBytes.slice())
+  const pages = pdfDoc.getPages()
+
+  for (const annotation of annotations) {
+    const page = pages[annotation.pageIndex]
+    if (!page) continue
+
+    const { height: pageHeight } = page.getSize()
+
+    const pdfX = annotation.x / scale
+    const pdfY = pageHeight - (annotation.y / scale) - (annotation.height / scale)
+
+    page.drawText(annotation.text, {
+      x: pdfX,
+      y: pdfY,
+      size: annotation.fontSize / scale,
+      color: rgb(0, 0, 0),
+    })
+  }
+
+  try {
+    pdfDoc.getForm().flatten()
+  } catch {
+    // No AcroForm fields present — safe to ignore
+  }
+
+  const saved = await pdfDoc.save()
+  return new Uint8Array(saved)
 }
 
 export function usePdfAnnotation(): UsePdfAnnotationReturn {
@@ -58,7 +99,7 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
   // handleSave → onSave → setProgress → re-render → new savePdf → repeat.
   const annotationsRef = useRef<TextAnnotation[]>([])
 
-  const loadPdf = useCallback(async (file: File) => {
+  const loadPdf = useCallback(async (file: File, initialAnnotations?: TextAnnotation[]) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
@@ -74,13 +115,16 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
       })
 
       originalBytesRef.current = bytes.uint8
-      annotationsRef.current = []
+
+      // Seed annotations from initialAnnotations if provided (re-edit flow)
+      const seedAnnotations = initialAnnotations ?? []
+      annotationsRef.current = seedAnnotations
 
       setState(prev => ({
         ...prev,
         pdfBytes: bytes.uint8,
         numPages: bytes.numPages,
-        annotations: [],
+        annotations: seedAnnotations,
         error: null,
       }))
     } catch (err) {
@@ -118,61 +162,43 @@ export function usePdfAnnotation(): UsePdfAnnotationReturn {
     })
   }, [])
 
-  const savePdf = useCallback(async (scale: number): Promise<Uint8Array> => {
-    // Read annotations from stable ref — avoids `state` object in dep array which
-    // would cause savePdf to be recreated on every render → infinite loop.
-    const annotations = annotationsRef.current
-    const sourceBytes = originalBytesRef.current
+  /**
+   * savePdf returns the ORIGINAL (unflattened) source bytes plus the current
+   * annotations so the caller can store them separately as a sidecar.
+   * Flattening for view/download is handled by exportFlattened().
+   */
+  const savePdf = useCallback(
+    async (_scale: number): Promise<{ sourceBytes: Uint8Array; annotations: TextAnnotation[] }> => {
+      // Read annotations from stable ref — avoids `state` object in dep array which
+      // would cause savePdf to be recreated on every render → infinite loop.
+      const annotations = annotationsRef.current
+      const sourceBytes = originalBytesRef.current
 
-    if (!sourceBytes) {
-      throw new Error('No PDF loaded')
-    }
+      if (!sourceBytes) {
+        throw new Error('No PDF loaded')
+      }
 
-    setState(prev => ({ ...prev, isSaving: true, error: null }))
+      setState(prev => ({ ...prev, isSaving: true, error: null }))
 
-    try {
-      const result = await withMetric('pdf.save', { byte_size: sourceBytes.length }, async () => {
-        // Always load from a FRESH COPY — never share the buffer react-pdf already owns
-        const pdfDoc = await PDFDocument.load(sourceBytes.slice())
-        const pages = pdfDoc.getPages()
+      try {
+        // Return the unflattened source + current annotations for sidecar storage.
+        // We record the metric so observability still captures save events.
+        await withMetric('pdf.save', { byte_size: sourceBytes.length, annotation_count: annotations.length }, async () => {
+          // No-op body: metric wraps the intent, actual data is returned below
+        })
 
-        for (const annotation of annotations) {
-          const page = pages[annotation.pageIndex]
-          if (!page) continue
-
-          const { height: pageHeight } = page.getSize()
-
-          const pdfX = annotation.x / scale
-          const pdfY = pageHeight - (annotation.y / scale) - (annotation.height / scale)
-
-          page.drawText(annotation.text, {
-            x: pdfX,
-            y: pdfY,
-            size: annotation.fontSize / scale,
-            color: rgb(0, 0, 0),
-          })
-        }
-
-        try {
-          pdfDoc.getForm().flatten()
-        } catch {
-          // No AcroForm fields present — safe to ignore
-        }
-
-        const saved = await pdfDoc.save()
-        return new Uint8Array(saved)
-      })
-
-      return result
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save PDF'
-      setState(prev => ({ ...prev, error: message }))
-      throw err
-    } finally {
-      setState(prev => ({ ...prev, isSaving: false }))
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+        return { sourceBytes: sourceBytes.slice(), annotations }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to save PDF'
+        setState(prev => ({ ...prev, error: message }))
+        throw err
+      } finally {
+        setState(prev => ({ ...prev, isSaving: false }))
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
 
   return {
     ...state,

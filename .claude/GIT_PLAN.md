@@ -21,6 +21,23 @@ next_action_id: none
 ## Log
 
 ```yaml
+id: pdf-true-edit-schema
+status: complete
+type: migration
+description: "feat(db): add encrypted_annotations sidecar columns to user_documents. Two nullable text columns: encrypted_annotations (base64 AES-GCM ciphertext of annotation JSON envelope) and annotations_iv (base64 IV). No RLS change — existing four user_documents policies (select/insert/update/delete) all gate by auth.uid()=user_id and cover new columns automatically. Migration 20260602120000_add_user_documents_annotations.sql applied to hosted project ndtpovonpadugthmcntl via Management API. Types regenerated."
+branch: feature/pdf-true-edit
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260602120000_add_user_documents_annotations.sql
+  - packages/database/types.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-02T12:00:00.000Z
+completed_at: 2026-06-02T12:30:00.000Z
+commit_sha: d2af94d
+```
+
+```yaml
 id: vault-unlock-preserves-flow
 status: complete
 type: branch

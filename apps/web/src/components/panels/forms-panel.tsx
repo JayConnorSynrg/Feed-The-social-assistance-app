@@ -629,13 +629,19 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const [pdfSaveError, setPdfSaveError] = useState<string | null>(null)
 
-  const handlePdfSave = async (pdfBytes: Uint8Array) => {
+  const handlePdfSave = async (data: { sourceBytes: Uint8Array; annotations: import('@/hooks/use-pdf-annotation').TextAnnotation[] }) => {
     setPdfSaveError(null)
     const fileName = wizardState.mode === 'pdf' ? wizardState.fileName : 'annotated.pdf'
 
     try {
-      const filledFile = new File([pdfBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
-      await uploadFile(filledFile, 'other')
+      // Build the source File from unflattened bytes
+      const sourceFile = new File(
+        [data.sourceBytes as Uint8Array<ArrayBuffer>],
+        fileName,
+        { type: 'application/pdf' }
+      )
+      // Store source + encrypted annotations sidecar — document is re-editable
+      await uploadFile(sourceFile, 'other', data.annotations)
       setWizardState({ mode: 'list' })
       // Clear the 'forms' subtab so DocumentsPanel mounts in 'documents' (My Documents)
       // view, not back in the forms subtab. Without this, the stale subtab='forms' from

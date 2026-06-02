@@ -29,13 +29,18 @@ import {
   ExternalLink,
   MapPin,
   Phone,
+  Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EncryptedUpload } from '@/components/documents/encrypted-upload'
 import { ResourceDetailDialog } from '@/components/documents/resource-detail-dialog'
 import { PdfDocumentViewer } from '@/components/documents/pdf-document-viewer-dynamic'
+import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
+import { exportFlattened } from '@/hooks/use-pdf-annotation'
+import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
+import { VaultGuard } from '@/components/vault'
 import { useAuthContext } from '@/providers/auth-provider'
 import { useVault } from '@/contexts/vault-context'
 import { createClient } from '@/lib/supabase/client'
@@ -60,6 +65,7 @@ interface Document {
   uploadedAt: Date
   thumbnailUrl?: string
   isEncrypted?: boolean
+  hasAnnotations?: boolean // true if encrypted_annotations sidecar is present
 }
 
 interface DocumentsPanelProps {
@@ -255,11 +261,12 @@ interface DocumentCardProps {
   document: Document
   onView: (doc: Document) => void
   onDownload: (doc: Document) => void
+  onEdit: (doc: Document) => void
   onDelete: (doc: Document) => void
   isDownloading?: boolean
 }
 
-function DocumentCard({ document, onView, onDownload, onDelete, isDownloading }: DocumentCardProps) {
+function DocumentCard({ document, onView, onDownload, onEdit, onDelete, isDownloading }: DocumentCardProps) {
   const [showActions, setShowActions] = useState(false)
 
   const getDocumentIcon = () => {
@@ -339,6 +346,19 @@ function DocumentCard({ document, onView, onDownload, onDelete, isDownloading }:
           >
             <Eye className="w-4 h-4" />
           </Button>
+          {document.type === 'pdf' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onEdit(document)}
+              className="h-8 w-8 text-stone-500 hover:text-blue-600 hover:bg-blue-50"
+              disabled={isDownloading}
+              data-testid="doc-edit-btn"
+              aria-label="Edit PDF annotations"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -419,12 +439,17 @@ function EmptyState({ category, searchQuery }: EmptyStateProps) {
 // ============================================
 // MAIN DOCUMENTS PANEL
 // ============================================
-type PendingAction = { type: 'view'; doc: Document } | { type: 'download'; doc: Document }
+type PendingAction = { type: 'view'; doc: Document } | { type: 'download'; doc: Document } | { type: 'edit'; doc: Document }
+
+interface EditSource {
+  file: File
+  annotations: TextAnnotation[]
+}
 
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { user } = useAuthContext()
   const { isUnlocked } = useVault()
-  const { downloadFile, deleteFile, isDownloading } = useEncryptedUpload()
+  const { downloadFile, downloadForEdit, updateAnnotations, deleteFile, isDownloading } = useEncryptedUpload()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
   const { panelParams, setActivePanel } = usePanelContext()
   const [documents, setDocuments] = useState<Document[]>([])
@@ -445,6 +470,8 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   })
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null)
+  const [editSource, setEditSource] = useState<EditSource | null>(null)
 
   // Sync viewMode when panelParams.subtab changes (e.g. back-button resolves alias)
   useEffect(() => {
@@ -483,6 +510,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           size: doc.original_size || doc.file_size || 0,
           uploadedAt: new Date(doc.created_at || Date.now()),
           isEncrypted: doc.is_encrypted || false,
+          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
         }))
 
         setDocuments(mappedDocs)
@@ -546,6 +574,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           size: doc.original_size || doc.file_size || 0,
           uploadedAt: new Date(doc.created_at || Date.now()),
           isEncrypted: doc.is_encrypted || false,
+          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
         }))
         setDocuments(mappedDocs)
       }
@@ -553,6 +582,9 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
 
     loadDocuments()
   }, [user?.id])
+
+  // Default scale used when flattening for view/download — mirrors annotator default
+  const DEFAULT_FLATTEN_SCALE = 1.5
 
   const handleView = useCallback(async (doc: Document) => {
     if (!isUnlocked) {
@@ -562,7 +594,19 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
     try {
       setDownloadingId(doc.id)
-      const file = await downloadFile(doc.id)
+      let file: File
+
+      if (doc.hasAnnotations) {
+        // Re-editable doc: download source + annotations, flatten for in-app viewing
+        const { sourceFile, annotations } = await downloadForEdit(doc.id)
+        const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
+        const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
+        file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
+      } else {
+        // Legacy flattened doc: download directly
+        file = await downloadFile(doc.id)
+      }
+
       setViewerFile(file)
       setViewerOpen(true)
     } catch (err) {
@@ -570,7 +614,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [isUnlocked, downloadFile])
+  }, [isUnlocked, downloadFile, downloadForEdit])
 
   const handleDownload = useCallback(async (doc: Document) => {
     if (!isUnlocked) {
@@ -580,7 +624,18 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
     try {
       setDownloadingId(doc.id)
-      const file = await downloadFile(doc.id)
+      let file: File
+
+      if (doc.hasAnnotations) {
+        // Re-editable doc: flatten before download
+        const { sourceFile, annotations } = await downloadForEdit(doc.id)
+        const sourceBytes = new Uint8Array(await sourceFile.arrayBuffer())
+        const flatBytes = await exportFlattened(sourceBytes, annotations, DEFAULT_FLATTEN_SCALE)
+        file = new File([flatBytes as Uint8Array<ArrayBuffer>], sourceFile.name, { type: 'application/pdf' })
+      } else {
+        // Legacy flattened doc: download directly
+        file = await downloadFile(doc.id)
+      }
 
       // CSP-safe anchor download pattern
       const url = URL.createObjectURL(file)
@@ -596,7 +651,64 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [isUnlocked, downloadFile])
+  }, [isUnlocked, downloadFile, downloadForEdit])
+
+  const handleEdit = useCallback(async (doc: Document) => {
+    if (!isUnlocked) {
+      setPendingAction({ type: 'edit', doc })
+      setShowUnlockModal(true)
+      return
+    }
+    try {
+      setDownloadingId(doc.id)
+      const { sourceFile, annotations } = await downloadForEdit(doc.id)
+      setEditingDoc(doc)
+      setEditSource({ file: sourceFile, annotations })
+    } catch (err) {
+      console.error('Failed to open document for editing:', err)
+    } finally {
+      setDownloadingId(null)
+    }
+  }, [isUnlocked, downloadForEdit])
+
+  const handleEditSave = useCallback(async (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => {
+    if (!editingDoc) return
+    await updateAnnotations(editingDoc.id, data.annotations)
+    // Refresh document list so hasAnnotations flag updates
+    setEditingDoc(null)
+    setEditSource(null)
+    // Re-trigger document fetch by toggling viewMode (same trick used elsewhere)
+    setViewMode(prev => {
+      // Force re-render with same value — use a dummy toggle then back via timeout
+      return prev
+    })
+    // Reload documents directly
+    if (user?.id) {
+      const supabase = createClient()
+      const { data: rows, error } = await supabase
+        .from('user_documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (!error && rows) {
+        setDocuments(rows.map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
+          category: (doc.category || 'other') as DocumentCategory,
+          size: doc.original_size || doc.file_size || 0,
+          uploadedAt: new Date(doc.created_at || Date.now()),
+          isEncrypted: doc.is_encrypted || false,
+          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
+        })))
+      }
+    }
+  }, [editingDoc, updateAnnotations, user?.id])
+
+  const handleEditCancel = useCallback(() => {
+    setEditingDoc(null)
+    setEditSource(null)
+  }, [])
 
   const handleDelete = async (doc: Document) => {
     if (!confirm(`Are you sure you want to delete "${doc.name}"?`)) {
@@ -647,6 +759,20 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     tabEls?.[next]?.focus()
     handleTabSwitch(tabs[next])
   }, [handleTabSwitch])
+
+  // Inline PDF edit mode — full-panel annotator
+  if (editingDoc && editSource) {
+    return (
+      <VaultGuard onDismiss={handleEditCancel}>
+        <PdfAnnotator
+          file={editSource.file}
+          initialAnnotations={editSource.annotations}
+          onSave={handleEditSave}
+          onCancel={handleEditCancel}
+        />
+      </VaultGuard>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -788,6 +914,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
                       document={doc}
                       onView={handleView}
                       onDownload={handleDownload}
+                      onEdit={handleEdit}
                       onDelete={handleDelete}
                       isDownloading={downloadingId === doc.id}
                     />
@@ -931,6 +1058,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           setPendingAction(null)
           if (a?.type === 'view') handleView(a.doc)
           else if (a?.type === 'download') handleDownload(a.doc)
+          else if (a?.type === 'edit') handleEdit(a.doc)
         }}
       />
     </div>
