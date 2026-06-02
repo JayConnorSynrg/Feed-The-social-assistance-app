@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: documents-subtab-nav-fix
+next_action_id: none
 
 ## Log
 
@@ -1035,19 +1035,22 @@ completed_at: 2026-06-01T14:30:00.000Z
 
 ```yaml
 id: documents-subtab-nav-fix
-status: in_progress
+status: complete
 type: commit
-description: "fix(documents): unify subtab navigation so all three tabs (My Documents, My Resources, Forms) set both viewMode and panelParams.subtab atomically. Root cause: handleTabSwitch had 3 inconsistent paths — the 'documents' branch called setActivePanel('documents') which never set viewMode, causing the My Documents tab to be non-clickable after switching away. Fix: single uniform callback sets both state vars for all three tabs. TDD: e2e/documents-subtabs.spec.ts full cycle (default → resources → documents → forms → documents). Regression: auth/documents-view/pdf-annotator/forms-flow/pdf-true-edit all green."
+description: "fix(documents): unify subtab navigation so all three tabs (My Documents, My Resources, Forms) set both viewMode and panelParams.subtab atomically. Root cause: handleTabSwitch had 3 inconsistent paths — the 'documents' branch called setActivePanel('documents') which never set viewMode, causing the My Documents tab to be non-clickable after switching away. Fix: single uniform callback sets both state vars for all three tabs. TDD: e2e/documents-subtabs.spec.ts full cycle (default → resources → documents → forms → documents). Regression: auth/documents-view/pdf-annotator/forms-flow/pdf-true-edit all green (13/13). CI: 10/10 (Build/CI-Success/Deploy-Preview/Install/Lint/Security-Audit/Test/Type-Check/Vercel/Vercel-Preview). Merged PR #32 → develop."
 branch: feature/documents-subtab-nav-fix
 base: develop
 remote: origin
-next_action_id: documents-subtab-nav-fix
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/32
+merged_into: develop
+merge_sha: 833d7fb92d67188ad3710e2d9369086e2ecc2a53
+post_merge_ci_conclusion: success
 files:
   - apps/web/src/components/panels/documents-panel.tsx
   - apps/web/e2e/documents-subtabs.spec.ts
   - .claude/GIT_PLAN.md
 created_at: 2026-06-02T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-02T14:10:00.000Z
 ```
 
 ```yaml
