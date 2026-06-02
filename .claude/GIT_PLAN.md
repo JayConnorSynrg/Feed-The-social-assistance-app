@@ -16,9 +16,23 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-documents-refetch-pr28
+next_action_id: merge-vault-escape-trap-pr27
 
 ## Log
+
+```yaml
+id: merge-vault-escape-trap-pr27
+status: in_progress
+type: merge
+description: "Merge PR #27 (feature/vault-modal-setup-escape-fix @ a08a9c2) into develop. Adds optional onDismiss to VaultGuard so the modal is no longer a non-dismissible escape-trap; isSetup-aware fallback text; forms-panel passes onDismiss to its two VaultGuard usages; ZK crypto unchanged."
+branch: feature/vault-modal-setup-escape-fix
+base: develop
+remote: origin
+pr_url: null
+merge_sha: null
+created_at: 2026-06-01T22:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: merge-documents-refetch-pr28

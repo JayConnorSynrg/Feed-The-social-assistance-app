@@ -3,53 +3,83 @@
 /**
  * Vault Guard
  *
- * Component that automatically shows the vault unlock modal when needed.
+ * Component that automatically shows the vault unlock/setup modal when needed.
  * Wraps components that require encrypted data access.
+ *
+ * Props:
+ *   children  — content that requires vault access
+ *   fallback  — optional custom locked-state placeholder
+ *   onDismiss — called when the user dismisses the modal without unlocking/
+ *               setting up (e.g. Cancel). Providing this makes the modal
+ *               dismissible; omitting it keeps the modal non-dismissible
+ *               (legacy behaviour, used when vault access is strictly required).
  */
 
-import { type ReactNode } from 'react'
+import { useState } from 'react'
 import { useVault } from '@/contexts/vault-context'
 import { VaultUnlockModal } from './vault-unlock-modal'
 import { Loader2 } from 'lucide-react'
 
 interface VaultGuardProps {
-  children: ReactNode
-  fallback?: ReactNode
+  children: React.ReactNode
+  fallback?: React.ReactNode
+  /**
+   * When provided the modal Cancel/✕ button is active and calls onDismiss.
+   * Use this for contexts where vault access is optional (e.g. upload flows).
+   * Omit to keep the non-dismissible behaviour for required-vault surfaces
+   * (form wizard, PDF annotator).
+   */
+  onDismiss?: () => void
 }
 
-export function VaultGuard({ children, fallback }: VaultGuardProps) {
-  const { isUnlocked, loading } = useVault()
-
-  // showUnlockModal is purely derived from vault state — compute during render,
-  // no effect needed.
-  const showUnlockModal = !loading && !isUnlocked
+export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
+  const { isUnlocked, isSetup, loading } = useVault()
+  // Track whether the user has explicitly dismissed the modal this render cycle.
+  // Resets if vault state changes (e.g. user sets up vault in another tab).
+  const [dismissed, setDismissed] = useState(false)
 
   // Show loading state
   if (loading) {
     return (
-      fallback || (
-        <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )
+      <>
+        {fallback || (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+      </>
     )
   }
 
-  // Show unlock modal if needed
-  if (!isUnlocked) {
+  // Vault is unlocked — render children
+  if (isUnlocked) {
+    return <>{children}</>
+  }
+
+  // Vault locked or not yet set up.
+  // The modal title/copy is driven by isSetup inside VaultUnlockModal:
+  //   isSetup===false → "Set Up Your Vault" (setup mode)
+  //   isSetup===true  → "Unlock Your Vault" (unlock mode)
+  const handleDismiss = onDismiss
+    ? (open: boolean) => {
+        if (!open) {
+          setDismissed(true)
+          onDismiss()
+        }
+      }
+    : undefined
+
+  // If onDismiss was provided and user already dismissed, show fallback/placeholder.
+  if (dismissed) {
     return (
       <>
-        <VaultUnlockModal
-          open={showUnlockModal}
-          onOpenChange={() => {
-            // Modal stays open until vault is unlocked; dismissal is a no-op.
-          }}
-        />
         {fallback || (
           <div className="flex items-center justify-center p-8 text-center">
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Your vault is locked. Unlock it to view encrypted data.
+                {isSetup
+                  ? 'Unlock your vault to access encrypted data.'
+                  : 'Set up your vault to encrypt and store sensitive data.'}
               </p>
             </div>
           </div>
@@ -58,6 +88,28 @@ export function VaultGuard({ children, fallback }: VaultGuardProps) {
     )
   }
 
-  // Vault is unlocked - render children
-  return <>{children}</>
+  return (
+    <>
+      <VaultUnlockModal
+        open={!dismissed}
+        onOpenChange={
+          handleDismiss ??
+          (() => {
+            // No onDismiss provided — modal stays open until vault is unlocked.
+          })
+        }
+      />
+      {fallback || (
+        <div className="flex items-center justify-center p-8 text-center">
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {isSetup
+                ? 'Your vault is locked. Unlock it to view encrypted data.'
+                : 'Set up your vault to access encrypted features.'}
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }
