@@ -23,7 +23,8 @@ const FONT_SIZES = [12, 14, 16, 18, 24] as const
 
 export interface PdfAnnotatorProps {
   file: File
-  onSave: (pdfBytes: Uint8Array) => Promise<void>
+  initialAnnotations?: TextAnnotation[]
+  onSave: (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => Promise<void>
   onCancel: () => void
 }
 
@@ -289,7 +290,7 @@ function PageOverlay({
   )
 }
 
-export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
+export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: PdfAnnotatorProps) {
   const {
     pdfBytes,
     numPages,
@@ -317,7 +318,11 @@ export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
 
   useEffect(() => {
     scaleSetRef.current = false
-    loadPdf(file)
+    loadPdf(file, initialAnnotations)
+  // initialAnnotations is intentionally excluded from deps: it is provided once
+  // on mount and must not trigger a reload if the parent re-renders with the same
+  // array reference or a new one. File identity is the correct reload signal.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file, loadPdf])
 
   // Memoize the document data so react-pdf does not reload on every render.
@@ -356,8 +361,8 @@ export function PdfAnnotator({ file, onSave, onCancel }: PdfAnnotatorProps) {
     logger.info('forms.pdf.save_initiated', { annotation_count: annotations.length })
 
     try {
-      const bytes = await savePdf(scale)
-      await onSave(bytes)
+      const result = await savePdf(scale)
+      await onSave(result)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed')
     }
