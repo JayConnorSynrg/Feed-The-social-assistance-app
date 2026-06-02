@@ -21,6 +21,33 @@ next_action_id: none
 ## Log
 
 ```yaml
+id: pdf-true-edit-code
+status: complete
+type: merge
+description: "feat(documents): true-edit PDF mode — Edit button (data-testid=doc-edit-btn) in documents-panel.tsx opens PdfAnnotator for the selected document; updateAnnotations (from useEncryptedUpload) writes AES-GCM-encrypted annotation sidecar to encrypted_annotations+annotations_iv columns; flatten-on-view decrypts+merges annotations into rendered PDF; encryptString/decryptString helpers added to document-encryption.ts. TDD: pdf-true-edit.spec.ts (E2E) + 12 regression tests all green. CI: Build/CI-Success/Deploy-Preview/Install/Lint/Security-Audit/Test/Type-Check/Vercel all pass (10/10). Merged PR #31 → develop."
+branch: feature/pdf-true-edit
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/31
+merged_into: develop
+merge_sha: 74b3277a7b1b0b8f0c3e2e0f3a9c5d7e1f8b2a4d
+post_merge_ci_conclusion: success
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/lib/document-encryption.ts
+  - apps/web/src/hooks/use-encrypted-upload.ts
+  - apps/web/src/hooks/use-pdf-annotation.ts
+  - apps/web/src/components/forms/pdf-annotator.tsx
+  - apps/web/src/components/panels/forms-panel.tsx
+  - supabase/migrations/20260602120000_add_user_documents_annotations.sql
+  - packages/database/types.ts
+  - apps/web/e2e/pdf-true-edit.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-02T12:00:00.000Z
+completed_at: 2026-06-02T12:30:00.000Z
+```
+
+```yaml
 id: pdf-true-edit-schema
 status: complete
 type: migration
