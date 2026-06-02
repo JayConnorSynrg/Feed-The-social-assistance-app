@@ -1054,6 +1054,23 @@ completed_at: 2026-06-02T14:10:00.000Z
 ```
 
 ```yaml
+id: observability-documents-pdf
+status: in_progress
+type: branch
+description: "feat(observability): structured timing+error logging across documents/pdf paths. Events added: documents.view (documentId, has_annotations, flattened, duration_ms), documents.download (documentId, has_annotations, duration_ms), documents.edit.open (documentId, annotation_count, duration_ms), documents.annotations.update (documentId, annotation_count, duration_ms) in documents-panel.tsx; documents.annotations.update (documentId, annotation_count, ciphertext_bytes, duration_ms), documents.download_for_edit (documentId, has_annotations, annotation_count, duration_ms) in use-encrypted-upload.ts; pdf.export_flattened (annotation_count, source_bytes, page_count, output_bytes, duration_ms) in use-pdf-annotation.ts; pdf.viewer.load (page_count, byte_size, duration_ms) and pdf.viewer.error in pdf-document-viewer.tsx. PII-safe: only documentId (uuid), counts, byte sizes, durations logged — no annotation text, file names, decrypted content. ZERO behavior change: control flow, error propagation, return values all unchanged. Regression: 14/14 e2e specs green (auth+documents-view+pdf-annotator+forms-flow+pdf-true-edit+documents-subtabs). Gates: type-check EXIT 0, lint 0 new errors, build success."
+branch: feature/observability-documents-pdf
+base: develop
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/hooks/use-encrypted-upload.ts
+  - apps/web/src/hooks/use-pdf-annotation.ts
+  - apps/web/src/components/documents/pdf-document-viewer.tsx
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-02T00:00:00.000Z
+completed_at: null
+```
+
+```yaml
 id: security-advisor-remediation
 status: complete
 type: commit

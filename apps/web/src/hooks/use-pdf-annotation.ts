@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { PDFDocument, rgb } from '@cantoo/pdf-lib'
-import { withMetric } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 
 export interface TextAnnotation {
   id: string
@@ -48,35 +48,51 @@ export async function exportFlattened(
   annotations: TextAnnotation[],
   scale: number
 ): Promise<Uint8Array> {
-  // Always work from a fresh copy so the caller's buffer is never transferred
-  const pdfDoc = await PDFDocument.load(sourceBytes.slice())
-  const pages = pdfDoc.getPages()
+  return withMetric(
+    'pdf.export_flattened',
+    { annotation_count: annotations.length, source_bytes: sourceBytes.length },
+    async () => {
+      // Always work from a fresh copy so the caller's buffer is never transferred
+      const pdfDoc = await PDFDocument.load(sourceBytes.slice())
+      const pages = pdfDoc.getPages()
+      const page_count = pages.length
 
-  for (const annotation of annotations) {
-    const page = pages[annotation.pageIndex]
-    if (!page) continue
+      for (const annotation of annotations) {
+        const page = pages[annotation.pageIndex]
+        if (!page) continue
 
-    const { height: pageHeight } = page.getSize()
+        const { height: pageHeight } = page.getSize()
 
-    const pdfX = annotation.x / scale
-    const pdfY = pageHeight - (annotation.y / scale) - (annotation.height / scale)
+        const pdfX = annotation.x / scale
+        const pdfY = pageHeight - (annotation.y / scale) - (annotation.height / scale)
 
-    page.drawText(annotation.text, {
-      x: pdfX,
-      y: pdfY,
-      size: annotation.fontSize / scale,
-      color: rgb(0, 0, 0),
+        page.drawText(annotation.text, {
+          x: pdfX,
+          y: pdfY,
+          size: annotation.fontSize / scale,
+          color: rgb(0, 0, 0),
+        })
+      }
+
+      try {
+        pdfDoc.getForm().flatten()
+      } catch {
+        // No AcroForm fields present — safe to ignore
+      }
+
+      const saved = await pdfDoc.save()
+      const result = new Uint8Array(saved)
+      // Log page_count as an additional dimension not available at withMetric call-site
+      logger.info('pdf.export_flattened.pages', { page_count, output_bytes: result.length })
+      return result
+    }
+  ).catch((err) => {
+    logger.error('pdf.export_flattened.error', err, {
+      annotation_count: annotations.length,
+      source_bytes: sourceBytes.length,
     })
-  }
-
-  try {
-    pdfDoc.getForm().flatten()
-  } catch {
-    // No AcroForm fields present — safe to ignore
-  }
-
-  const saved = await pdfDoc.save()
-  return new Uint8Array(saved)
+    throw err
+  })
 }
 
 export function usePdfAnnotation(): UsePdfAnnotationReturn {

@@ -16,7 +16,7 @@
  * (slice prevents pdfjs ArrayBuffer-detachment from affecting the caller's File).
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 // Version-matched worker — reuse same path as pdf-annotator.tsx
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
@@ -53,6 +54,8 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null)
   const [isLoadingBytes, setIsLoadingBytes] = useState(false)
+  // Track when react-pdf Document starts rendering so we can emit load duration
+  const pdfRenderStartRef = useRef<number>(0)
 
   const isPdf = file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf')
   const isImage = file?.type?.startsWith('image/')
@@ -91,6 +94,8 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
   // (same pattern as pdf-annotator.tsx docData memo)
   const docData = useMemo(() => {
     if (!pdfBytes) return null
+    // Record when we hand bytes to react-pdf so onLoadSuccess can emit duration
+    pdfRenderStartRef.current = performance.now()
     return { data: pdfBytes.slice() }
   }, [pdfBytes])
 
@@ -116,11 +121,20 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
     setNumPages(n)
     setCurrentPage(1)
     setLoadError(null)
-  }, [])
+    const duration_ms = pdfRenderStartRef.current > 0
+      ? Math.round(performance.now() - pdfRenderStartRef.current)
+      : undefined
+    logger.info('pdf.viewer.load', {
+      page_count: n,
+      byte_size: pdfBytes?.length ?? 0,
+      ...(duration_ms !== undefined ? { duration_ms } : {}),
+    })
+  }, [pdfBytes])
 
   const handleDocumentLoadError = useCallback((err: Error) => {
     setLoadError(err.message || 'Failed to render PDF')
-  }, [])
+    logger.error('pdf.viewer.error', err, { byte_size: pdfBytes?.length ?? 0 })
+  }, [pdfBytes])
 
   const handleClose = useCallback(() => {
     onOpenChange(false)

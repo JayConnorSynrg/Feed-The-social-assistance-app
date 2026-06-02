@@ -19,7 +19,7 @@ import {
   decryptString,
   type DocumentEncryptionProgress,
 } from '@/lib/document-encryption'
-import { logger, createOpId } from '@/lib/logger'
+import { logger, withMetric, createOpId } from '@/lib/logger'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 
 const STORAGE_BUCKET = 'user-documents'
@@ -174,6 +174,7 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
           fileSizeBytes: file.size,
           durationMs: Math.round(performance.now() - uploadStart),
           hasAnnotations: encryptedAnnotations !== null,
+          annotation_count: annotations?.length ?? 0,
         })
 
         return {
@@ -287,25 +288,32 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
         throw new Error('User not authenticated')
       }
 
-      const envelope: AnnotationsEnvelope = { schemaVersion: 1, annotations }
-      const { ciphertext, iv } = await encryptString(JSON.stringify(envelope))
+      await withMetric(
+        'documents.annotations.update',
+        { documentId, annotation_count: annotations.length },
+        async () => {
+          const envelope: AnnotationsEnvelope = { schemaVersion: 1, annotations }
+          const { ciphertext, iv } = await encryptString(JSON.stringify(envelope))
 
-      const supabase = createClient()
-      const { error: dbError } = await supabase
-        .from('user_documents')
-        .update({
-          encrypted_annotations: ciphertext,
-          annotations_iv: iv,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', documentId)
-        .eq('user_id', user.id)
+          const supabase = createClient()
+          const { error: dbError } = await supabase
+            .from('user_documents')
+            .update({
+              encrypted_annotations: ciphertext,
+              annotations_iv: iv,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', documentId)
+            .eq('user_id', user.id)
 
-      if (dbError) {
-        throw new Error(`Failed to update annotations: ${dbError.message}`)
-      }
-
-      logger.info('document.annotations.updated', { documentId, annotationCount: annotations.length })
+          if (dbError) {
+            throw new Error(`Failed to update annotations: ${dbError.message}`)
+          }
+        }
+      ).catch((err) => {
+        logger.error('documents.annotations.update.error', err, { documentId, annotation_count: annotations.length })
+        throw err
+      })
     },
     [user?.id]
   )
@@ -326,72 +334,88 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
       setError(null)
 
       try {
-        const supabase = createClient()
+        const result = await withMetric(
+          'documents.download_for_edit',
+          { documentId },
+          async () => {
+            const supabase = createClient()
 
-        // Fetch full row including annotation sidecar columns
-        const { data: document, error: dbError } = await supabase
-          .from('user_documents')
-          .select('*')
-          .eq('id', documentId)
-          .eq('user_id', user.id)
-          .single()
+            // Fetch full row including annotation sidecar columns
+            const { data: document, error: dbError } = await supabase
+              .from('user_documents')
+              .select('*')
+              .eq('id', documentId)
+              .eq('user_id', user.id)
+              .single()
 
-        if (dbError || !document) {
-          throw new Error('Document not found')
-        }
+            if (dbError || !document) {
+              throw new Error('Document not found')
+            }
 
-        if (!document.is_encrypted || !document.encryption_iv || !document.encrypted_original_name || !document.encrypted_name_iv) {
-          throw new Error('Document encryption metadata is missing')
-        }
+            if (!document.is_encrypted || !document.encryption_iv || !document.encrypted_original_name || !document.encrypted_name_iv) {
+              throw new Error('Document encryption metadata is missing')
+            }
 
-        setProgress(20)
+            setProgress(20)
 
-        // Download encrypted source from Storage
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .download(document.file_path)
+            // Download encrypted source from Storage
+            const { data: fileData, error: downloadError } = await supabase.storage
+              .from(STORAGE_BUCKET)
+              .download(document.file_path)
 
-        if (downloadError || !fileData) {
-          throw new Error(`Download failed: ${downloadError?.message || 'Unknown error'}`)
-        }
+            if (downloadError || !fileData) {
+              throw new Error(`Download failed: ${downloadError?.message || 'Unknown error'}`)
+            }
 
-        setProgress(50)
+            setProgress(50)
 
-        // Decrypt source file
-        const sourceFile = await decryptFile(
-          fileData,
-          document.encryption_iv,
-          document.encrypted_original_name,
-          document.encrypted_name_iv,
-          document.mime_type || 'application/octet-stream',
-          (progressData: DocumentEncryptionProgress) => {
-            setProgress(50 + Math.round(progressData.percentage * 0.4))
+            // Decrypt source file
+            const sourceFile = await decryptFile(
+              fileData,
+              document.encryption_iv,
+              document.encrypted_original_name,
+              document.encrypted_name_iv,
+              document.mime_type || 'application/octet-stream',
+              (progressData: DocumentEncryptionProgress) => {
+                setProgress(50 + Math.round(progressData.percentage * 0.4))
+              }
+            )
+
+            setProgress(90)
+
+            // Decrypt annotations sidecar if present
+            let annotations: TextAnnotation[] = []
+            if (document.encrypted_annotations && document.annotations_iv) {
+              try {
+                const plaintext = await decryptString(
+                  document.encrypted_annotations,
+                  document.annotations_iv
+                )
+                const envelope = JSON.parse(plaintext) as AnnotationsEnvelope
+                annotations = envelope.annotations ?? []
+              } catch (err) {
+                logger.error('document.annotations.decrypt.error', err, { documentId })
+                // Fail-open: return empty annotations rather than blocking edit
+                annotations = []
+              }
+            }
+
+            setProgress(100)
+
+            return { sourceFile, annotations, has_annotations: annotations.length > 0, annotation_count: annotations.length }
           }
         )
 
-        setProgress(90)
+        // Re-emit the annotation dimensions now that we have them (withMetric emits on complete)
+        logger.info('documents.download_for_edit.annotations', {
+          documentId,
+          has_annotations: result.has_annotations,
+          annotation_count: result.annotation_count,
+        })
 
-        // Decrypt annotations sidecar if present
-        let annotations: TextAnnotation[] = []
-        if (document.encrypted_annotations && document.annotations_iv) {
-          try {
-            const plaintext = await decryptString(
-              document.encrypted_annotations,
-              document.annotations_iv
-            )
-            const envelope = JSON.parse(plaintext) as AnnotationsEnvelope
-            annotations = envelope.annotations ?? []
-          } catch (err) {
-            logger.error('document.annotations.decrypt.error', err, { documentId })
-            // Fail-open: return empty annotations rather than blocking edit
-            annotations = []
-          }
-        }
-
-        setProgress(100)
-
-        return { sourceFile, annotations }
+        return { sourceFile: result.sourceFile, annotations: result.annotations }
       } catch (err) {
+        logger.error('documents.download_for_edit.error', err, { documentId })
         const errorMessage = err instanceof Error ? err.message : 'Download failed'
         setError(errorMessage)
         throw err
