@@ -34,12 +34,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EncryptedUpload } from '@/components/documents/encrypted-upload'
 import { ResourceDetailDialog } from '@/components/documents/resource-detail-dialog'
+import { PdfDocumentViewer } from '@/components/documents/pdf-document-viewer-dynamic'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
 import { useAuthContext } from '@/providers/auth-provider'
+import { useVault } from '@/contexts/vault-context'
 import { createClient } from '@/lib/supabase/client'
 import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
 import { FormsPanel } from './forms-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { VaultUnlockModal } from '@/components/vault'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
 
@@ -332,6 +335,7 @@ function DocumentCard({ document, onView, onDownload, onDelete, isDownloading }:
             onClick={() => onView(document)}
             className="h-8 w-8 text-stone-500 hover:text-[#4a5d23] hover:bg-[#4a5d23]/10"
             disabled={isDownloading}
+            data-testid="doc-view-btn"
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -341,6 +345,7 @@ function DocumentCard({ document, onView, onDownload, onDelete, isDownloading }:
             onClick={() => onDownload(document)}
             className="h-8 w-8 text-stone-500 hover:text-[#4a5d23] hover:bg-[#4a5d23]/10"
             disabled={isDownloading}
+            data-testid="doc-download-btn"
           >
             {isDownloading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -414,8 +419,11 @@ function EmptyState({ category, searchQuery }: EmptyStateProps) {
 // ============================================
 // MAIN DOCUMENTS PANEL
 // ============================================
+type PendingAction = { type: 'view'; doc: Document } | { type: 'download'; doc: Document }
+
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { user } = useAuthContext()
+  const { isUnlocked } = useVault()
   const { downloadFile, deleteFile, isDownloading } = useEncryptedUpload()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
   const { panelParams, setActivePanel } = usePanelContext()
@@ -424,6 +432,10 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerFile, setViewerFile] = useState<File | null>(null)
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   // viewMode is driven by panelParams.subtab when set (deep-link / alias routing)
   const [viewMode, setViewMode] = useState<'documents' | 'resources' | 'forms'>(() => {
     const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
@@ -542,29 +554,35 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     loadDocuments()
   }, [user?.id])
 
-  const handleView = async (doc: Document) => {
-    // Download and view in new tab
+  const handleView = useCallback(async (doc: Document) => {
+    if (!isUnlocked) {
+      setPendingAction({ type: 'view', doc })
+      setShowUnlockModal(true)
+      return
+    }
     try {
       setDownloadingId(doc.id)
       const file = await downloadFile(doc.id)
-      const url = URL.createObjectURL(file)
-      window.open(url, '_blank')
-      // Clean up object URL after some time
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      setViewerFile(file)
+      setViewerOpen(true)
     } catch (err) {
       console.error('Failed to view document:', err)
-      alert('Failed to view document. Please ensure your vault is unlocked.')
     } finally {
       setDownloadingId(null)
     }
-  }
+  }, [isUnlocked, downloadFile])
 
-  const handleDownload = async (doc: Document) => {
+  const handleDownload = useCallback(async (doc: Document) => {
+    if (!isUnlocked) {
+      setPendingAction({ type: 'download', doc })
+      setShowUnlockModal(true)
+      return
+    }
     try {
       setDownloadingId(doc.id)
       const file = await downloadFile(doc.id)
 
-      // Create download link
+      // CSP-safe anchor download pattern
       const url = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = url
@@ -575,11 +593,10 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Failed to download document:', err)
-      alert('Failed to download document. Please ensure your vault is unlocked.')
     } finally {
       setDownloadingId(null)
     }
-  }
+  }, [isUnlocked, downloadFile])
 
   const handleDelete = async (doc: Document) => {
     if (!confirm(`Are you sure you want to delete "${doc.name}"?`)) {
@@ -897,6 +914,23 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         open={selectedResourceId !== null}
         onOpenChange={(open) => {
           if (!open) setSelectedResourceId(null)
+        }}
+      />
+      <PdfDocumentViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        file={viewerFile}
+      />
+      <VaultUnlockModal
+        open={showUnlockModal}
+        onOpenChange={setShowUnlockModal}
+        mode="unlock"
+        onSuccess={() => {
+          setShowUnlockModal(false)
+          const a = pendingAction
+          setPendingAction(null)
+          if (a?.type === 'view') handleView(a.doc)
+          else if (a?.type === 'download') handleDownload(a.doc)
         }}
       />
     </div>
