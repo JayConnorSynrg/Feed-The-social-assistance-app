@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: documents-subtab-nav-fix
 
 ## Log
 
@@ -1031,6 +1031,23 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T14:00:00.000Z
 completed_at: 2026-06-01T14:30:00.000Z
+```
+
+```yaml
+id: documents-subtab-nav-fix
+status: in_progress
+type: commit
+description: "fix(documents): unify subtab navigation so all three tabs (My Documents, My Resources, Forms) set both viewMode and panelParams.subtab atomically. Root cause: handleTabSwitch had 3 inconsistent paths — the 'documents' branch called setActivePanel('documents') which never set viewMode, causing the My Documents tab to be non-clickable after switching away. Fix: single uniform callback sets both state vars for all three tabs. TDD: e2e/documents-subtabs.spec.ts full cycle (default → resources → documents → forms → documents). Regression: auth/documents-view/pdf-annotator/forms-flow/pdf-true-edit all green."
+branch: feature/documents-subtab-nav-fix
+base: develop
+remote: origin
+next_action_id: documents-subtab-nav-fix
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/e2e/documents-subtabs.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-02T00:00:00.000Z
+completed_at: null
 ```
 
 ```yaml
