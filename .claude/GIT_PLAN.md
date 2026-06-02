@@ -16,13 +16,13 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: documents-view-unlock-prompt
+next_action_id: none
 
 ## Log
 
 ```yaml
 id: documents-view-unlock-prompt
-status: in_progress
+status: complete
 type: branch
 description: "Wire PdfDocumentViewer + VaultUnlockModal into documents-panel.tsx. Adds useVault isUnlocked gate on handleView/handleDownload: locked vault opens VaultUnlockModal with pendingAction stored for retry on onSuccess. View path: downloadFile → setViewerFile/setViewerOpen (no window.open). Download path: existing <a download> anchor (CSP-safe), now vault-gated. Adds data-testid=doc-view-btn and data-testid=doc-download-btn to card action buttons. Renders PdfDocumentViewer and VaultUnlockModal at panel root. TDD: documents-view.spec.ts T1-T4+PHASE1."
 branch: feature/documents-view-unlock-prompt
