@@ -22,12 +22,14 @@ next_action_id: spinner-timeouts-p0-pr
 
 ```yaml
 id: spinner-timeouts-p0-pr
-status: in_progress
+status: complete
 type: branch
 description: "fix(reliability): add query timeouts to 4 primary-tab spinner reads — feed-panel.tsx, overview-panel.tsx, use-conversations.ts, use-resource-detail.ts. Pattern from PR#34/#36: .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)) + .retry(false) on .single() reads + isQueryTimeout() in catch + surfaced error state. Adds e2e spec: feed-spinner-timeout.spec.ts."
 branch: feature/spinner-timeouts-p0
 base: develop
 remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/39
+commit_sha: 3797c66
 files:
   - apps/web/src/components/panels/feed-panel.tsx
   - apps/web/src/components/panels/overview-panel.tsx
@@ -36,7 +38,7 @@ files:
   - apps/web/e2e/feed-spinner-timeout.spec.ts
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-03T00:00:00.000Z
 ```
 
 ```yaml
