@@ -837,12 +837,26 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  // phone is not included in the auth-provider select (PII hardening).
+  // Fetch own phone via the get_my_private_profile() RPC on mount.
+  const [ownPhone, setOwnPhone] = useState('')
+
+  useEffect(() => {
+    if (!user) return
+    supabase.rpc('get_my_private_profile').then(({ data }) => {
+      if (data && Array.isArray(data) && data.length > 0) {
+        setOwnPhone(data[0].phone ?? '')
+      } else if (data && !Array.isArray(data)) {
+        setOwnPhone((data as { phone?: string | null }).phone ?? '')
+      }
+    })
+  }, [user, supabase])
 
   // Build profile settings from auth data
   const profileSettings: SettingsData['profile'] = {
     name: profile?.full_name || '',
     email: user?.email || '',
-    phone: profile?.phone || '',
+    phone: ownPhone,
     location: [
       profile?.location_city,
       profile?.location_state

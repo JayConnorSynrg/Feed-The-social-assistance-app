@@ -61,9 +61,10 @@ export default async function SharedPostPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
+  // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join)
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(id, full_name, username, avatar_url, venmo_username, paypal_email)')
+    .select('*, user:profiles(id, full_name, username, avatar_url)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -75,19 +76,28 @@ export default async function SharedPostPage({ params }: Props) {
     full_name: string | null
     username: string | null
     avatar_url: string | null
-    venmo_username: string | null
-    paypal_email: string | null
   } | null
 
-  // Get engagement counts
-  const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
+  // Fetch donation handles via SECURITY DEFINER RPC — isolated column access
+  const [
+    { count: likeCount },
+    { count: commentCount },
+    handlesResult,
+  ] = await Promise.all([
     supabase.from('post_likes').select('*', { count: 'exact', head: true }).eq('post_id', id),
     supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', id),
+    user?.id
+      ? supabase.rpc('get_donation_handles', { target_id: user.id })
+      : Promise.resolve({ data: [] }),
   ])
+
+  const handles = Array.isArray(handlesResult.data) && handlesResult.data.length > 0
+    ? handlesResult.data[0] as { paypal_email: string | null; venmo_username: string | null }
+    : { paypal_email: null, venmo_username: null }
 
   const displayName = user?.full_name || 'Community Member'
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  const hasPayment = user?.venmo_username || user?.paypal_email
+  const hasPayment = handles.venmo_username || handles.paypal_email
 
   return (
     <div className="space-y-6">
@@ -164,17 +174,17 @@ export default async function SharedPostPage({ params }: Props) {
           <h2 className="text-lg font-semibold text-stone-800">Support {displayName}</h2>
           <p className="text-sm text-stone-500">Send direct support through their preferred payment method.</p>
           <div className="flex flex-col sm:flex-row gap-3">
-            {user?.venmo_username && (
+            {handles.venmo_username && (
               <a
-                href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(user.venmo_username)}`}
+                href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handles.venmo_username)}`}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-3 text-white font-medium hover:bg-[#0070cc] transition-colors"
               >
-                Venmo @{user.venmo_username}
+                Venmo @{handles.venmo_username}
               </a>
             )}
-            {user?.paypal_email && (
+            {handles.paypal_email && (
               <a
-                href={`https://paypal.me/${encodeURIComponent(user.paypal_email)}`}
+                href={`https://paypal.me/${encodeURIComponent(handles.paypal_email)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0070BA] px-4 py-3 text-white font-medium hover:bg-[#005ea6] transition-colors"

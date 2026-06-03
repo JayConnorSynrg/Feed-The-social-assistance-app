@@ -60,10 +60,13 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // Get current user
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Get profile by username
+  // Get profile by username — safe columns only (PII hardening: no phone/paypal/venmo/is_admin)
   const { data: profileData, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(
+      'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
+      'is_verified, created_at, is_staff'
+    )
     .eq('username', username)
     .single()
 
@@ -71,7 +74,17 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     notFound()
   }
 
-  const profile = profileData as Profile
+  const profile = profileData as unknown as Pick<Profile,
+    'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' |
+    'location_city' | 'location_state' | 'is_verified' | 'created_at'
+  > & { is_staff: boolean }
+
+  // Fetch payment handles via SECURITY DEFINER RPC — isolated column access
+  const { data: donationHandles } = await supabase
+    .rpc('get_donation_handles', { target_id: profile.id })
+  const handles = Array.isArray(donationHandles) && donationHandles.length > 0
+    ? donationHandles[0] as { paypal_email: string | null; venmo_username: string | null }
+    : { paypal_email: null, venmo_username: null }
 
   // Get user's posts
   const { data: postsData } = await supabase
@@ -153,16 +166,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           </div>
         </CardHeader>
 
-        {(profile.venmo_username || profile.paypal_email) && (
+        {(handles.venmo_username || handles.paypal_email) && (
           <CardContent className="border-t pt-4">
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
               Support This User
             </h2>
             <div className="flex flex-wrap gap-2">
-              {profile.venmo_username && (
+              {handles.venmo_username && (
                 <Button asChild variant="outline" size="sm">
                   <a
-                    href={`https://venmo.com/${profile.venmo_username.replace('@', '')}`}
+                    href={`https://venmo.com/${handles.venmo_username.replace('@', '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -171,10 +184,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   </a>
                 </Button>
               )}
-              {profile.paypal_email && (
+              {handles.paypal_email && (
                 <Button asChild variant="outline" size="sm">
                   <a
-                    href={`https://paypal.me/${profile.paypal_email}`}
+                    href={`https://paypal.me/${handles.paypal_email}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

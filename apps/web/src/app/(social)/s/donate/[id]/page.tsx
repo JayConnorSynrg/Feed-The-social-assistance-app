@@ -39,15 +39,26 @@ export default async function DonatePage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, full_name, username, avatar_url, bio, venmo_username, paypal_email')
-    .eq('id', id)
-    .single()
+  // Fetch public profile fields and donation handles separately (PII hardening).
+  // get_donation_handles() is a SECURITY DEFINER RPC that exposes only paypal_email
+  // and venmo_username — no other PII columns.
+  const [profileResult, handlesResult] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url, bio')
+      .eq('id', id)
+      .single(),
+    supabase.rpc('get_donation_handles', { target_id: id }),
+  ])
 
+  const profile = profileResult.data
   if (!profile) notFound()
 
-  const hasPayment = profile.venmo_username || profile.paypal_email
+  const rawHandles = Array.isArray(handlesResult.data) && handlesResult.data.length > 0
+    ? handlesResult.data[0] as { paypal_email: string | null; venmo_username: string | null }
+    : { paypal_email: null, venmo_username: null }
+
+  const hasPayment = rawHandles.venmo_username || rawHandles.paypal_email
   if (!hasPayment) notFound()
 
   const displayName = profile.full_name || 'Community Member'
@@ -101,20 +112,20 @@ export default async function DonatePage({ params }: Props) {
           Send direct support through their preferred payment method.
         </p>
         <div className="space-y-3">
-          {profile.venmo_username && (
+          {rawHandles.venmo_username && (
             <a
-              href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(profile.venmo_username)}`}
+              href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(rawHandles.venmo_username)}`}
               className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#008CFF] px-6 py-4 text-white text-lg font-semibold hover:bg-[#0070cc] transition-colors"
             >
               Send via Venmo
               <span className="text-sm font-normal opacity-80">
-                @{profile.venmo_username}
+                @{rawHandles.venmo_username}
               </span>
             </a>
           )}
-          {profile.paypal_email && (
+          {rawHandles.paypal_email && (
             <a
-              href={`https://paypal.me/${encodeURIComponent(profile.paypal_email)}`}
+              href={`https://paypal.me/${encodeURIComponent(rawHandles.paypal_email)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#0070BA] px-6 py-4 text-white text-lg font-semibold hover:bg-[#005ea6] transition-colors"
