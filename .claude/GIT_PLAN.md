@@ -16,9 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: lockdown-table-grants
+next_action_id: harden-function-search-path
 
 ## Log
+
+```yaml
+id: harden-function-search-path
+status: in_progress
+type: branch
+description: "chore(security): pin search_path on 8 public functions + REVOKE EXECUTE on SECDEF trigger-only webhook fn. Closes all 8 function_search_path_mutable advisor WARNs (proconfig was null on all 8). on_resource_change_webhook_fn is SECDEF + formerly PUBLIC-executable; confirmed trigger-only (TG_OP body, 0 client RPC calls in app); REVOKE removes anon/authenticated direct-call surface without affecting trigger execution. Migration: 20260603150000_harden_function_search_path.sql. Applied to prod + verified: all 8 PINNED, 0 grants remain, advisor lint count = 0."
+branch: feature/harden-fn-search-path
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260603150000_harden_function_search_path.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T15:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: client-log-rate-limit
