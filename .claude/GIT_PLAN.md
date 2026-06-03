@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: vault-unlock-timeout-resilience
+next_action_id: (pending next phase definition)
 
 ## Log
 
@@ -1114,4 +1114,27 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T00:00:00.000Z
 completed_at: 2026-06-03T00:00:00.000Z
+```
+
+```yaml
+id: document-download-timeout
+status: complete
+type: merge
+description: "fix(documents): timeout-guard document download + fix vault-unlock replay loop. Two defects made document preview/view hang after entering master password: (1) stale-closure in handleView/handleDownload/handleEdit captured isUnlocked from stale useCallback closure, so post-unlock onSuccess replay re-checked isUnlocked=false and re-opened unlock modal in loop. Fix: isUnlockedRef kept in sync via effect, set true synchronously before replay. (2) unguarded download — downloadFile/downloadForEdit awaited metadata read + storage.download() with no timeout, hanging spinner forever. Applied PR#34 pattern: AbortSignal.timeout(12s) + retry(false) on metadata read, { signal } on storage.download, clear loading state always, dismissible error banner. Tests: Playwright 17 green, vitest 56 green, type-check 0, build clean. Merged PR #35 → develop @ a445846."
+branch: feature/document-download-timeout
+base: develop
+remote: origin
+pr_target: develop
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/35
+merged_into: develop
+merge_sha: a445846757af5778e2f0cfe5f08f20ff02f81754
+files:
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/lib/document-download.ts
+  - apps/web/e2e/document-preview-timeout.spec.ts
+  - .claude/settings.json
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T14:00:00.000Z
+completed_at: 2026-06-03T16:30:00.000Z
 ```
