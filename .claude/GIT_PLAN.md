@@ -16,9 +16,23 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: pii-hardening-expand-contract
+next_action_id: pii-column-lockdown-reconcile
 
 ## Log
+
+```yaml
+id: pii-column-lockdown-reconcile
+status: complete
+type: commit
+description: "fix(security/migrations): reconcile 20260603130000_pii_hardening_revoke.sql to match what actually closed the PII leak. Bare column-level REVOKE SELECT (col) is ineffective while table-level SELECT grant exists — PostgreSQL allows access if either grant permits it. Applied and verified via Management API: (1) REVOKE SELECT ON public.profiles FROM authenticated + anon (table-level); (2) GRANT SELECT (17 safe cols) ON public.profiles TO authenticated + anon; (3) REVOKE EXECUTE ON get_my_private_profile/is_current_user_admin/sync_is_staff FROM anon (advisor lint 0028 — REVOKE FROM PUBLIC did not cover anon explicit grant at creation time). DoD verified: has_column_privilege('authenticated','public.profiles','phone','SELECT')=FALSE for all 4 PII cols x both roles; safe cols (full_name,avatar_url,etc.)=TRUE. Live REST proof: curl sensitive-col query returns {code:42501,message:'permission denied for table profiles'}; safe-col query returns row normally. Migration file updated with correct SQL, correctness note, and revised DoD verification commands."
+branch: develop
+remote: origin
+files:
+  - supabase/migrations/20260603130000_pii_hardening_revoke.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T00:00:00.000Z
+completed_at: 2026-06-03T00:00:00.000Z
+```
 
 ```yaml
 id: merge-pr37-rm-spike-route
