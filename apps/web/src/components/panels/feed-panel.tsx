@@ -325,7 +325,7 @@ export function FeedPanel() {
         { limit: 50 },
         async () => await supabase
           .from('posts')
-          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_admin)')
+          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff)')
           .eq('is_hidden', false)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
@@ -386,7 +386,7 @@ export function FeedPanel() {
           id: row.user?.id || '',
           name: row.user?.full_name || 'Anonymous',
           avatar: row.user?.avatar_url || undefined,
-          role: row.user?.is_admin ? 'Admin' : 'Community Member',
+          role: row.user?.is_staff ? 'Admin' : 'Community Member',
         },
         content: row.content,
         timestamp: new Date(row.created_at ?? Date.now()),

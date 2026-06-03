@@ -16,9 +16,33 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: document-download-timeout
+next_action_id: pii-hardening-expand-contract
 
 ## Log
+
+```yaml
+id: pii-hardening-expand-contract
+status: in_progress
+type: commit
+description: "feat(security): PII hardening — gate phone/payment-handles/is_admin behind SECDEF accessors. Expand/contract pattern: Phase-1 migration (20260603120000_pii_hardening_expand.sql) adds is_staff col + 3 SECURITY DEFINER accessors (get_my_phone, get_my_payment_handles, get_donation_handles) w/ pinned search_path + EXECUTE gated to authenticated (anon on get_donation_handles: public donate/post share pages). Phase-3 migration (20260603130000_pii_hardening_revoke.sql) revokes direct-column read of phone/paypal_email/venmo_username/is_admin from anon+authenticated — apply ONLY after deploy. Source files narrowed: auth-provider.tsx, settings-panel.tsx, (admin)/layout.tsx, (social)/s/donate/[id]+post/[id] pages, profile/[username]/page.tsx, feed-panel.tsx, packages/database/types.ts. Leak closed: authenticated users could previously bulk-read any user's phone/paypal_email/venmo_username/is_admin via REST."
+branch: feature/pii-hardening
+base: develop
+remote: origin
+files:
+  - apps/web/src/providers/auth-provider.tsx
+  - apps/web/src/components/panels/settings-panel.tsx
+  - apps/web/src/app/(admin)/layout.tsx
+  - apps/web/src/app/(social)/s/donate/[id]/page.tsx
+  - apps/web/src/app/(social)/s/post/[id]/page.tsx
+  - apps/web/src/app/profile/[username]/page.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - packages/database/types.ts
+  - supabase/migrations/20260603120000_pii_hardening_expand.sql
+  - supabase/migrations/20260603130000_pii_hardening_revoke.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T12:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: pdf-true-edit-code

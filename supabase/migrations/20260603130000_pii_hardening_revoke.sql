@@ -1,0 +1,63 @@
+-- ============================================
+-- PII HARDENING — PHASE 3 (CONTRACT / REVOKE)
+-- Migration: 20260603130000_pii_hardening_revoke.sql
+-- Ticket: FEED-SEC-PII-HARDENING
+-- Author: Jelal Connor / SYNRG SCALING, LLC
+-- ============================================
+--
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-- APPLY ONLY AFTER the Phase-2 code changes are DEPLOYED TO PRODUCTION
+-- (Vercel develop branch live). Applying before deploy breaks the currently-live
+-- auth-provider select('*') and the cross-user profile reads that haven't yet
+-- been rerouted to the new RPCs.
+--
+-- PRE-APPLY CHECKLIST (orchestrator must verify each before running):
+--   [ ] Vercel develop deployment for PR #38 (feature/pii-hardening) shows Status: Ready
+--   [ ] apps/web/src/providers/auth-provider.tsx select list does NOT include
+--       phone, paypal_email, venmo_username, is_admin (grep confirms)
+--   [ ] apps/web/src/app/profile/[username]/page.tsx uses public_profiles view
+--       (no direct select of venmo_username, paypal_email)
+--   [ ] apps/web/src/app/(social)/s/donate/[id]/page.tsx uses
+--       supabase.rpc('get_donation_handles', ...) not direct column select
+--   [ ] apps/web/src/app/(social)/s/post/[id]/page.tsx uses
+--       supabase.rpc('get_donation_handles', ...) not direct column select
+--   [ ] apps/web/src/components/panels/feed-panel.tsx embeds is_staff (not is_admin)
+--   [ ] apps/web/src/app/(admin)/layout.tsx uses rpc('is_current_user_admin')
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+--
+-- APPLY COMMAND (after deploy confirmed):
+--   TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' apps/web/.env.local | sed 's/SUPABASE_ACCESS_TOKEN=//' | tr -d '"')
+--   curl -s -X POST \
+--     "https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query" \
+--     -H "Authorization: Bearer $TOKEN" \
+--     -H "Content-Type: application/json" \
+--     -d '{"query": "REVOKE SELECT (phone, paypal_email, venmo_username, is_admin) ON public.profiles FROM authenticated, anon;"}' \
+--   | jq .
+--
+-- POST-REVOKE SECURITY VERIFICATION (orchestrator runs after apply):
+--   Obtain a valid authenticated JWT (log in as a non-admin test user via Supabase Dashboard
+--   or via curl POST /auth/v1/token). Then:
+--
+--   ANON_KEY=<your_project_anon_key>  # from Supabase dashboard — NOT the service role key
+--   JWT=<authenticated_user_jwt>
+--   OTHER_UUID=<any_other_user_uuid_from_profiles>
+--
+--   curl -s \
+--     "https://ndtpovonpadugthmcntl.supabase.co/rest/v1/profiles?select=phone,paypal_email,venmo_username,is_admin&id=eq.$OTHER_UUID" \
+--     -H "apikey: $ANON_KEY" \
+--     -H "Authorization: Bearer $JWT" \
+--     | jq .
+--
+--   EXPECTED RESULT: HTTP 200 with [] or record OMITTING the revoked columns,
+--   OR HTTP 400 "column ... does not exist" error.
+--   FAILURE RESULT: Record with phone/paypal_email/venmo_username/is_admin values populated.
+--
+-- REVERSIBLE (DOWN):
+--   GRANT SELECT (phone, paypal_email, venmo_username, is_admin)
+--     ON public.profiles TO authenticated, anon;
+--
+-- ============================================
+
+REVOKE SELECT (phone, paypal_email, venmo_username, is_admin)
+  ON public.profiles
+  FROM authenticated, anon;

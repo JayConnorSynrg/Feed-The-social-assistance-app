@@ -1197,6 +1197,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_admin: boolean | null
+          is_staff: boolean
           is_verified: boolean | null
           latitude: number | null
           location_city: string | null
@@ -1219,6 +1220,7 @@ export type Database = {
           full_name?: string | null
           id: string
           is_admin?: boolean | null
+          is_staff?: boolean
           is_verified?: boolean | null
           latitude?: number | null
           location_city?: string | null
@@ -1241,6 +1243,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_admin?: boolean | null
+          is_staff?: boolean
           is_verified?: boolean | null
           latitude?: number | null
           location_city?: string | null
@@ -2360,7 +2363,22 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_donation_handles: {
+        Args: { target_id: string }
+        Returns: {
+          paypal_email: string
+          venmo_username: string
+        }[]
+      }
       get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
+      get_my_private_profile: {
+        Args: never
+        Returns: {
+          paypal_email: string
+          phone: string
+          venmo_username: string
+        }[]
+      }
       get_recent_webhook_failures: {
         Args: { p_limit?: number }
         Returns: {
@@ -2400,6 +2418,7 @@ export type Database = {
           lockout_level: number
         }[]
       }
+      is_current_user_admin: { Args: never; Returns: boolean }
       log_audit_event: {
         Args: {
           p_action: string

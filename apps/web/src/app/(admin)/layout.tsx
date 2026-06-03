@@ -13,13 +13,12 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
+  // Use SECURITY DEFINER RPC — enforces own-row access at the Postgres layer.
+  // After PII hardening revokes direct is_admin column reads from authenticated role,
+  // this RPC remains the only supported gate for admin status.
+  const { data: isAdmin } = await supabase.rpc('is_current_user_admin')
 
-  if (!profile?.is_admin) {
+  if (!isAdmin) {
     redirect('/')
   }
 
