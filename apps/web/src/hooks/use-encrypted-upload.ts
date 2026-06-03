@@ -20,6 +20,7 @@ import {
   type DocumentEncryptionProgress,
 } from '@/lib/document-encryption'
 import { logger, withMetric, createOpId } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 
 const STORAGE_BUCKET = 'user-documents'
@@ -216,15 +217,26 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
       try {
         const supabase = createClient()
 
-        // Step 1: Fetch document metadata from database
+        // Step 1: Fetch document metadata from database (timeout-guarded)
         const { data: document, error: dbError } = await supabase
           .from('user_documents')
           .select('*')
           .eq('id', documentId)
           .eq('user_id', user.id)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          .retry(false)
           .single()
 
-        if (dbError || !document) {
+        if (dbError) {
+          if (isQueryTimeout(dbError)) {
+            const msg = 'Document timed out — please check your connection and retry.'
+            setError(msg)
+            throw new Error(msg)
+          }
+          throw new Error('Document not found')
+        }
+
+        if (!document) {
           throw new Error('Document not found')
         }
 
@@ -239,13 +251,34 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
 
         setProgress(25)
 
-        // Step 2: Download encrypted file from Storage
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .download(document.file_path)
+        // Step 2: Download encrypted file from Storage (timeout-guarded)
+        let fileData: Blob
+        try {
+          const { data, error: downloadError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .download(document.file_path, {}, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) })
 
-        if (downloadError || !fileData) {
-          throw new Error(`Download failed: ${downloadError?.message || 'Unknown error'}`)
+          if (downloadError) {
+            if (isQueryTimeout(downloadError)) {
+              const msg = 'Document timed out — please check your connection and retry.'
+              setError(msg)
+              throw new Error(msg)
+            }
+            throw new Error(`Download failed: ${downloadError.message}`)
+          }
+
+          if (!data) {
+            throw new Error('Download failed: no data returned')
+          }
+
+          fileData = data
+        } catch (storageErr) {
+          if (isQueryTimeout(storageErr)) {
+            const msg = 'Document timed out — please check your connection and retry.'
+            setError(msg)
+            throw new Error(msg)
+          }
+          throw storageErr
         }
 
         setProgress(50)
@@ -268,7 +301,10 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
         return decryptedFile
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Download failed'
-        setError(errorMessage)
+        // setError already set on timeout paths above; set for all other throws too
+        if (!isQueryTimeout(err)) {
+          setError(errorMessage)
+        }
         throw err
       } finally {
         setIsDownloading(false)
@@ -340,15 +376,26 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
           async () => {
             const supabase = createClient()
 
-            // Fetch full row including annotation sidecar columns
+            // Fetch full row including annotation sidecar columns (timeout-guarded)
             const { data: document, error: dbError } = await supabase
               .from('user_documents')
               .select('*')
               .eq('id', documentId)
               .eq('user_id', user.id)
+              .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+              .retry(false)
               .single()
 
-            if (dbError || !document) {
+            if (dbError) {
+              if (isQueryTimeout(dbError)) {
+                const msg = 'Document timed out — please check your connection and retry.'
+                setError(msg)
+                throw new Error(msg)
+              }
+              throw new Error('Document not found')
+            }
+
+            if (!document) {
               throw new Error('Document not found')
             }
 
@@ -358,13 +405,34 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
 
             setProgress(20)
 
-            // Download encrypted source from Storage
-            const { data: fileData, error: downloadError } = await supabase.storage
-              .from(STORAGE_BUCKET)
-              .download(document.file_path)
+            // Download encrypted source from Storage (timeout-guarded)
+            let fileData: Blob
+            try {
+              const { data, error: downloadError } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .download(document.file_path, {}, { signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) })
 
-            if (downloadError || !fileData) {
-              throw new Error(`Download failed: ${downloadError?.message || 'Unknown error'}`)
+              if (downloadError) {
+                if (isQueryTimeout(downloadError)) {
+                  const msg = 'Document timed out — please check your connection and retry.'
+                  setError(msg)
+                  throw new Error(msg)
+                }
+                throw new Error(`Download failed: ${downloadError.message}`)
+              }
+
+              if (!data) {
+                throw new Error('Download failed: no data returned')
+              }
+
+              fileData = data
+            } catch (storageErr) {
+              if (isQueryTimeout(storageErr)) {
+                const msg = 'Document timed out — please check your connection and retry.'
+                setError(msg)
+                throw new Error(msg)
+              }
+              throw storageErr
             }
 
             setProgress(50)

@@ -4,7 +4,7 @@
 // Documents Panel - Secure document management for uploaded files
 // Supports drag-and-drop upload, categorization, and document actions
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   FileText,
   Image,
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { EncryptedUpload } from '@/components/documents/encrypted-upload'
 import { ResourceDetailDialog } from '@/components/documents/resource-detail-dialog'
 import { PdfDocumentViewer } from '@/components/documents/pdf-document-viewer-dynamic'
@@ -449,7 +450,12 @@ interface EditSource {
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const { user } = useAuthContext()
   const { isUnlocked } = useVault()
-  const { downloadFile, downloadForEdit, updateAnnotations, deleteFile, isDownloading } = useEncryptedUpload()
+  // Ref so callbacks always read the CURRENT isUnlocked value, avoiding
+  // a stale-closure race where onSuccess fires handleView before the next
+  // render propagates isUnlocked=true to the useCallback dependency.
+  const isUnlockedRef = useRef(isUnlocked)
+  useEffect(() => { isUnlockedRef.current = isUnlocked }, [isUnlocked])
+  const { downloadFile, downloadForEdit, updateAnnotations, deleteFile, isDownloading, error: downloadError, clearError: clearDownloadError } = useEncryptedUpload()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
   const { panelParams, setPanelParams } = usePanelContext()
   const [documents, setDocuments] = useState<Document[]>([])
@@ -587,7 +593,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const DEFAULT_FLATTEN_SCALE = 1.5
 
   const handleView = useCallback(async (doc: Document) => {
-    if (!isUnlocked) {
+    if (!isUnlockedRef.current) {
       setPendingAction({ type: 'view', doc })
       setShowUnlockModal(true)
       return
@@ -621,10 +627,10 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [isUnlocked, downloadFile, downloadForEdit])
+  }, [downloadFile, downloadForEdit])
 
   const handleDownload = useCallback(async (doc: Document) => {
-    if (!isUnlocked) {
+    if (!isUnlockedRef.current) {
       setPendingAction({ type: 'download', doc })
       setShowUnlockModal(true)
       return
@@ -666,10 +672,10 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [isUnlocked, downloadFile, downloadForEdit])
+  }, [downloadFile, downloadForEdit])
 
   const handleEdit = useCallback(async (doc: Document) => {
-    if (!isUnlocked) {
+    if (!isUnlockedRef.current) {
       setPendingAction({ type: 'edit', doc })
       setShowUnlockModal(true)
       return
@@ -693,7 +699,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [isUnlocked, downloadForEdit])
+  }, [downloadForEdit])
 
   const handleEditSave = useCallback(async (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => {
     if (!editingDoc) return
@@ -913,6 +919,22 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
               onSearchChange={setSearchQuery}
             />
 
+            {/* Download error banner — surfaces timeout / network errors from the hook */}
+            {downloadError && (
+              <Alert variant="destructive" className="mb-4" role="alert" data-testid="doc-download-error">
+                <AlertDescription className="flex items-center justify-between gap-2">
+                  <span>{downloadError}</span>
+                  <button
+                    onClick={clearDownloadError}
+                    className="shrink-0 text-xs underline"
+                    aria-label="Dismiss error"
+                  >
+                    Dismiss
+                  </button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Encrypted Upload Zone */}
             <EncryptedUpload
               category={activeCategory === 'all' ? 'other' : activeCategory}
@@ -1085,6 +1107,9 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         mode="unlock"
         onSuccess={() => {
           setShowUnlockModal(false)
+          // Update ref synchronously before replaying the action so handleView/
+          // handleDownload/handleEdit see isUnlocked=true before the next render.
+          isUnlockedRef.current = true
           const a = pendingAction
           setPendingAction(null)
           if (a?.type === 'view') handleView(a.doc)
