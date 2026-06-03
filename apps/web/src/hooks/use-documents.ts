@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logger, withMetric } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 export type DocumentCategory =
   | 'identity'
@@ -102,13 +103,18 @@ export function useDocuments(): UseDocumentsReturn {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) throw fetchError
 
       setDocuments(data || [])
     } catch (err) {
       logger.error('documents.refresh.error', err)
-      setError(err as Error)
+      setError(
+        isQueryTimeout(err)
+          ? new Error('Documents timed out. Please try again.')
+          : err as Error
+      )
     } finally {
       setIsLoading(false)
     }

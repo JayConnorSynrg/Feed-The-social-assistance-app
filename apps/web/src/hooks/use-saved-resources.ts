@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 let _supabase: ReturnType<typeof createClient> | null = null
 function getSupabase() {
@@ -80,6 +81,7 @@ export function useSavedResources(): UseSavedResourcesReturn {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) {
         throw fetchError
@@ -87,7 +89,9 @@ export function useSavedResources(): UseSavedResourcesReturn {
 
       setSavedResources((data ?? []) as SavedResource[])
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load saved resources'
+      const message = isQueryTimeout(err)
+        ? 'Saved resources timed out. Please try again.'
+        : err instanceof Error ? err.message : 'Failed to load saved resources'
       setError(message)
     } finally {
       setIsLoading(false)

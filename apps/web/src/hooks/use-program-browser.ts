@@ -8,6 +8,7 @@ import type { Database } from '@feed/database'
 import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
 import { normalizeState } from '@/lib/us-states'
 import { logger, withMetric } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
@@ -93,7 +94,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
           state: filters.state ?? null,
           has_search: filters.search.trim().length > 0,
         },
-        async () => await query
+        async () => await query.abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       )
 
       if (fetchError) throw fetchError
@@ -101,7 +102,9 @@ export function useProgramBrowser(): ProgramBrowserResult {
       const results = (data ?? []) as Resource[]
       setPrograms(results)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load programs'
+      const message = isQueryTimeout(err)
+        ? 'Programs timed out. Please try again.'
+        : err instanceof Error ? err.message : 'Failed to load programs'
       setError(message)
     } finally {
       setIsLoading(false)
@@ -127,6 +130,7 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .eq('source', 'admin_added')
         .in('category', FORM_CATEGORIES)
         .eq('state', normalizeState(filters.state) ?? filters.state)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       const { data, error: fetchError } = await catQuery
 
@@ -146,7 +150,9 @@ export function useProgramBrowser(): ProgramBrowserResult {
     } catch (err) {
       // Non-fatal — categories bar degrades gracefully, but surface the cause.
       logger.warn('programs.categories.error', {
-        error_message: err instanceof Error ? err.message : String(err),
+        error_message: isQueryTimeout(err)
+          ? 'categories timed out'
+          : err instanceof Error ? err.message : String(err),
       })
     }
   }, [authLoading, filters.state])
