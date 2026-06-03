@@ -16,9 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: p1-spinner-timeouts
+next_action_id: client-log-rate-limit
 
 ## Log
+
+```yaml
+id: client-log-rate-limit
+status: in_progress
+type: branch
+description: "fix(api): wrap unauthenticated /api/client-log POST in withRateLimit('resource-api') to prevent flood writes to app_logs. Single-file change: adds import + converts export async function POST to export const POST = withRateLimit(..., 'resource-api'). All existing behavior preserved: MAX_BODY_BYTES, ALLOWED_LEVELS, service-role insert, unauthenticated access, response shape. Mirrors check-lockout/route.ts idiom exactly. Rate: 100 req/min per-IP (resource-api category) — generous enough for legitimate burst logging (5-10 events per crash), tight enough to block flood attacks. type-check 0 errors, lint 0 new errors, compile SUCCESS."
+branch: feature/client-log-rate-limit
+base: develop
+remote: origin
+files:
+  - apps/web/src/app/api/client-log/route.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: spinner-timeouts-p0-pr

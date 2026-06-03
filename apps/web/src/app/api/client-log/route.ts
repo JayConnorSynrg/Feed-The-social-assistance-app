@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { withRateLimit } from '@/middleware/federation-rate-limit'
 
 // Maximum body size accepted — prevents oversized payloads from being logged.
 const MAX_BODY_BYTES = 4096
@@ -15,7 +16,7 @@ const ALLOWED_LEVELS = new Set(['warn', 'error'])
  *
  * Body: { level: 'warn'|'error', event: string, context?: object }
  */
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse> => {
   try {
     // Size-cap: reject anything over MAX_BODY_BYTES
     const contentLength = req.headers.get('content-length')
@@ -103,4 +104,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error(JSON.stringify({ level: 'error', message: 'client-log.route_error', error: msg }))
     return NextResponse.json({ ok: false, error: 'internal' }, { status: 500 })
   }
-}
+}, 'resource-api')
