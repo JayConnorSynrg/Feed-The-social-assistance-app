@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { withMetric } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 interface ConversationProfile {
   full_name: string | null
@@ -84,8 +85,11 @@ export function useConversations() {
         .select(CONVERSATION_SELECT)
         .or(`volunteer_id.eq.${user.id},requester_id.eq.${user.id}`)
         .order('updated_at', { ascending: false })
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
-      if (fetchError) throw new Error(fetchError.message)
+      if (fetchError) throw new Error(isQueryTimeout(fetchError)
+        ? 'Messages timed out — please check your connection and retry.'
+        : fetchError.message)
 
       const rows = (data ?? []) as unknown as Conversation[]
       setConversations(rows)

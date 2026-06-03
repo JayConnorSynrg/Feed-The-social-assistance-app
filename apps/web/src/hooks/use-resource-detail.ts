@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 export interface SavedResourceTask {
   id: string
@@ -63,20 +64,29 @@ export function useResourceDetail(savedResourceId: string | null) {
 
     try {
       const [resourceRes, tasksRes, eventsRes, docsRes] = await Promise.all([
-        supabase.from('saved_resources').select('*').eq('id', savedResourceId).single(),
-        supabase.from('saved_resource_tasks').select('*').eq('saved_resource_id', savedResourceId).order('sort_order').order('created_at'),
-        supabase.from('saved_resource_events').select('*').eq('saved_resource_id', savedResourceId).order('event_date').order('event_time'),
-        supabase.from('saved_resource_documents').select('*').eq('saved_resource_id', savedResourceId).order('created_at', { ascending: false }),
+        supabase.from('saved_resources').select('*').eq('id', savedResourceId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)).retry(false).single(),
+        supabase.from('saved_resource_tasks').select('*').eq('saved_resource_id', savedResourceId).order('sort_order').order('created_at')
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)),
+        supabase.from('saved_resource_events').select('*').eq('saved_resource_id', savedResourceId).order('event_date').order('event_time')
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)),
+        supabase.from('saved_resource_documents').select('*').eq('saved_resource_id', savedResourceId).order('created_at', { ascending: false })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)),
       ])
 
-      if (resourceRes.error) throw new Error(resourceRes.error.message)
+      if (resourceRes.error) throw new Error(isQueryTimeout(resourceRes.error)
+        ? 'Resource details timed out — please check your connection and retry.'
+        : resourceRes.error.message)
       setResource(resourceRes.data)
       setNotes(resourceRes.data?.notes || '')
       setTasks(tasksRes.data ?? [])
       setEvents(eventsRes.data ?? [])
       setDocuments(docsRes.data ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load resource details')
+      const msg = isQueryTimeout(err)
+        ? 'Resource details timed out — please check your connection and retry.'
+        : err instanceof Error ? err.message : 'Failed to load resource details'
+      setError(msg)
     } finally {
       setIsLoading(false)
     }
