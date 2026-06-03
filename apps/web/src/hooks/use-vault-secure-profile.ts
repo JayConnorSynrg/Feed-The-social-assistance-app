@@ -22,6 +22,7 @@ import {
   type EncryptedSecureProfile,
 } from '@/lib/field-encryption'
 import { logPredefinedEvent } from '@/lib/audit-logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 export interface UseVaultSecureProfileReturn {
   // Data
@@ -88,6 +89,7 @@ export function useVaultSecureProfile(): UseVaultSecureProfileReturn {
         `
         )
         .eq('id', user.id)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         .single()
 
       if (fetchError) {
@@ -128,10 +130,12 @@ export function useVaultSecureProfile(): UseVaultSecureProfileReturn {
       }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
-      logPredefinedEvent('VAULT_UNLOCK_FAILED', {
-        action: 'read',
-        resourceType: 'secure_profile',
-      })
+      if (!isQueryTimeout(err)) {
+        logPredefinedEvent('VAULT_UNLOCK_FAILED', {
+          action: 'read',
+          resourceType: 'secure_profile',
+        })
+      }
       setError(err instanceof Error ? err.message : 'Failed to load profile')
     } finally {
       setLoading(false)

@@ -9,6 +9,7 @@
 import { useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logAuditEvent, logPredefinedEvent, AUDIT_EVENTS, type AuditEvent } from '@/lib/audit-logger'
+import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import type { AuditLogTable } from '@feed/database'
 
 type AuditLogRow = AuditLogTable['Row']
@@ -95,7 +96,7 @@ export function useAuditLog(): UseAuditLogReturn {
           query = query.eq('severity', severity)
         }
 
-        const { data, error: fetchError } = await query
+        const { data, error: fetchError } = await query.abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
         if (fetchError) {
           throw fetchError
@@ -156,7 +157,7 @@ export function useAuditLog(): UseAuditLogReturn {
         query = query.eq('severity', severity)
       }
 
-      const { data, error: fetchError } = await query
+      const { data, error: fetchError } = await query.abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) {
         throw fetchError

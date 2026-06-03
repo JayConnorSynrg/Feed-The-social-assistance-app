@@ -38,8 +38,14 @@ export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
   // Resets if vault state changes (e.g. user sets up vault in another tab).
   const [dismissed, setDismissed] = useState(false)
 
-  // Show loading state
-  if (loading) {
+  // Show loading state only for the INITIAL vault status check (before we know
+  // if the vault is locked or unlocked). Once isUnlocked is known, keep the
+  // VaultUnlockModal mounted even during loading — otherwise an unlock attempt
+  // (which sets loading=true) will unmount the modal and destroy its local
+  // password state, leaving the submit button permanently disabled after the
+  // operation completes (password='' → disabled). The modal handles loading
+  // itself by disabling inputs and showing a spinner on the submit button.
+  if (loading && !isUnlocked && !isSetup) {
     return (
       <>
         {fallback || (
