@@ -1126,6 +1126,7 @@ branch: feature/document-download-timeout
 base: develop
 remote: origin
 pr_target: develop
+note: "PRIOR PR#35 MIS-MERGED TO MAIN (repo default branch). Re-landing on develop (production branch) via PR#36. Commits 0787bef+c638969 cherry-picked clean (GIT_PLAN.md conflict only, resolved accepting incoming; no code conflicts)."
 files:
   - apps/web/src/components/panels/documents-panel.tsx
   - apps/web/src/hooks/use-encrypted-upload.ts
