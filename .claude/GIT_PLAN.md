@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: none
+next_action_id: vault-unlock-timeout-resilience
 
 ## Log
 
@@ -1086,4 +1086,29 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-01T09:00:00.000Z
 completed_at: 2026-06-01T09:00:00.000Z
+```
+
+```yaml
+id: vault-unlock-timeout-resilience
+status: in_progress
+type: branch
+scope: vault-unlock-timeout-resilience
+description: "fix(vault): timeout-guard vault unlock read + keep modal mounted during unlock. Two root causes for stuck-loading on Master Password: (1) unlockVault had no query timeout so a stalled user_secure_profiles read wedged the spinner forever; (2) VaultGuard unmounted the unlock modal the instant loading=true (losing password state). Fixes: vault.ts adds AbortSignal.timeout(12s)+retry(false) on unlock read + VaultTimeoutError; vault-guard.tsx guards spinner only for initial status check; vault-context.tsx decouples data migration into fire-and-forget effect; 3 sibling vault reads hardened with same timeout; false VAULT_UNLOCK_FAILED audit event gated on timeout path. Removes dead document-viewer.tsx (no importers). Tests: vitest unit (VaultTimeoutError on abort) + Playwright route-stall e2e."
+branch: feature/vault-unlock-timeout-resilience
+base: develop
+remote: origin
+pr_target: develop
+files:
+  - apps/web/src/lib/vault.ts
+  - apps/web/src/components/vault/vault-guard.tsx
+  - apps/web/src/contexts/vault-context.tsx
+  - apps/web/src/hooks/use-audit-log.ts
+  - apps/web/src/hooks/use-vault-form-submission.ts
+  - apps/web/src/hooks/use-vault-secure-profile.ts
+  - apps/web/src/components/documents/document-viewer.tsx (DELETED)
+  - apps/web/e2e/vault-unlock-timeout.spec.ts
+  - apps/web/src/lib/__tests__/vault-unlock-timeout.test.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T00:00:00.000Z
+completed_at: null
 ```

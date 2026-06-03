@@ -34,6 +34,28 @@ import {
   isSessionValid,
 } from '@/lib/key-store'
 
+export const QUERY_TIMEOUT_MS = 12_000
+
+export class VaultTimeoutError extends Error {
+  constructor(message = 'Vault operation timed out. Please check your connection and try again.') {
+    super(message)
+    this.name = 'VaultTimeoutError'
+  }
+}
+
+/** Detect a PostgREST/fetch abort or timeout from a resolved error object (postgrest resolves, not throws, on abort; error.code is '' so we key on message). */
+export function isQueryTimeout(error: unknown): boolean {
+  const msg =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : error && typeof error === 'object' && 'message' in error
+          ? String((error as { message?: unknown }).message ?? '')
+          : ''
+  return /AbortError|TimeoutError|abort|timeout/i.test(msg)
+}
+
 export interface VaultSetupResult {
   salt: string
   wrappedDEK: string
@@ -140,12 +162,22 @@ export async function unlockVault(
 ): Promise<boolean> {
   const supabase = createClient()
 
-  // 1. Fetch vault data from database
+  // 1. Fetch vault data from database.
+  //    .retry(false): disable PostgREST auto-retry (GET requests are retryable by default).
+  //    Without this, a timed-out first attempt triggers a retry that runs with an already-
+  //    aborted AbortSignal. Playwright route intercept can stall that retry too, extending
+  //    the hang beyond QUERY_TIMEOUT_MS. Disabling retries ensures one attempt = one timeout.
   const { data, error } = await supabase
     .from('user_secure_profiles')
     .select('encryption_salt, wrapped_dek, dek_iv, verification_ciphertext, verification_iv')
     .eq('id', userId)
+    .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+    .retry(false)
     .single()
+
+  if (error && isQueryTimeout(error)) {
+    throw new VaultTimeoutError()
+  }
 
   if (error || !data) {
     throw new Error('Vault not found. Please set up your vault first.')

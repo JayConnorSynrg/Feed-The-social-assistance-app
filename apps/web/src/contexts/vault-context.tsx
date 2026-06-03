@@ -20,6 +20,7 @@ import {
   decryptField,
   encryptFields,
   decryptFields,
+  VaultTimeoutError,
 } from '@/lib/vault'
 import { clearKeys } from '@/lib/key-store'
 import { migrateUserDataToEncrypted, needsMigration } from '@/lib/migrate-to-encrypted'
@@ -125,6 +126,22 @@ export function VaultProvider({ children }: VaultProviderProps) {
     }
   }, [isAuthenticated])
 
+  // Migration runs out-of-band after unlock so a slow/stalled migration read can never wedge the unlock spinner.
+  useEffect(() => {
+    if (!isUnlocked || !user?.id) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const needs = await needsMigration(user.id)
+        if (cancelled || !needs) return
+        await migrateUserDataToEncrypted(user.id)
+      } catch (err) {
+        logger.warn('vault.migration.failed', { userId: user.id, error: err instanceof Error ? err.message : String(err) })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isUnlocked, user?.id])
+
   // Setup vault for first-time users
   const setup = useCallback(async (masterPassword: string) => {
     if (!user?.id) {
@@ -190,46 +207,14 @@ export function VaultProvider({ children }: VaultProviderProps) {
         resourceId: user.id,
       })
 
-      // After successful unlock, check if user needs data migration
-      // This automatically migrates plaintext data to encrypted columns
-      try {
-        const shouldMigrate = await needsMigration(user.id)
-        if (shouldMigrate) {
-          logger.info('vault.migration.started', { userId: user.id })
-          const migrationResult = await migrateUserDataToEncrypted(user.id)
-
-          if (migrationResult.errors.length > 0) {
-            logger.error('vault.migration.errors', new Error('migration_partial'), {
-              error_count: migrationResult.errors.length,
-              userId: user.id,
-            })
-          } else {
-            logger.info('vault.migration.complete', {
-              profiles: migrationResult.migratedProfiles,
-              submissions: migrationResult.migratedSubmissions,
-            })
-
-            // Log successful migration
-            logPredefinedEvent('DATA_MIGRATION', {
-              action: 'update',
-              resourceType: 'user_data',
-              resourceId: user.id,
-              details: {
-                profiles: migrationResult.migratedProfiles,
-                submissions: migrationResult.migratedSubmissions,
-              },
-            })
-          }
-        }
-      } catch (migrationErr) {
-        // Don't fail unlock if migration fails - log error and continue
-        logger.error('vault.migration.failed', migrationErr instanceof Error ? migrationErr : new Error(String(migrationErr)), { userId: user.id })
-        // Migration can be retried later
-      }
-
       return success
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to unlock vault'
+      const message =
+        err instanceof VaultTimeoutError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to unlock vault'
       setError(message)
       return false
     } finally {

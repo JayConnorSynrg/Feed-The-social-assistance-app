@@ -21,6 +21,7 @@ import {
   decryptFormSubmission,
   type EncryptedFormSubmission,
 } from '@/lib/field-encryption'
+import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 
 // ============================================
 // Types
@@ -146,7 +147,7 @@ export function useUserSubmissions(
         query = query.eq('status', options.status)
       }
 
-      const { data, error: fetchError } = await query
+      const { data, error: fetchError } = await query.abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) throw fetchError
 
