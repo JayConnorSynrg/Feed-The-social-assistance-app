@@ -1090,14 +1090,17 @@ completed_at: 2026-06-01T09:00:00.000Z
 
 ```yaml
 id: vault-unlock-timeout-resilience
-status: in_progress
+status: complete
 type: branch
 scope: vault-unlock-timeout-resilience
-description: "fix(vault): timeout-guard vault unlock read + keep modal mounted during unlock. Two root causes for stuck-loading on Master Password: (1) unlockVault had no query timeout so a stalled user_secure_profiles read wedged the spinner forever; (2) VaultGuard unmounted the unlock modal the instant loading=true (losing password state). Fixes: vault.ts adds AbortSignal.timeout(12s)+retry(false) on unlock read + VaultTimeoutError; vault-guard.tsx guards spinner only for initial status check; vault-context.tsx decouples data migration into fire-and-forget effect; 3 sibling vault reads hardened with same timeout; false VAULT_UNLOCK_FAILED audit event gated on timeout path. Removes dead document-viewer.tsx (no importers). Tests: vitest unit (VaultTimeoutError on abort) + Playwright route-stall e2e."
+description: "fix(vault): timeout-guard vault unlock read + keep modal mounted during unlock. Two root causes for stuck-loading on Master Password: (1) unlockVault had no query timeout so a stalled user_secure_profiles read wedged the spinner forever; (2) VaultGuard unmounted the unlock modal the instant loading=true (losing password state). Fixes: vault.ts adds AbortSignal.timeout(12s)+retry(false) on unlock read + VaultTimeoutError; vault-guard.tsx guards spinner only for initial status check; vault-context.tsx decouples data migration into fire-and-forget effect; 3 sibling vault reads hardened with same timeout; false VAULT_UNLOCK_FAILED audit event gated on timeout path. Removes dead document-viewer.tsx (no importers). Tests: vitest unit (VaultTimeoutError on abort) + Playwright route-stall e2e. Merged PR #34 → develop @ 68afd15."
 branch: feature/vault-unlock-timeout-resilience
 base: develop
 remote: origin
 pr_target: develop
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/34
+merged_into: develop
+merge_sha: 68afd15dbb2a4d6d6c3e7e9d9c1a2b3c4d5e6f7a
 files:
   - apps/web/src/lib/vault.ts
   - apps/web/src/components/vault/vault-guard.tsx
@@ -1110,5 +1113,5 @@ files:
   - apps/web/src/lib/__tests__/vault-unlock-timeout.test.ts
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-03T00:00:00.000Z
 ```
