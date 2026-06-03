@@ -1239,12 +1239,15 @@ completed_at: 2026-06-03T00:00:00.000Z
 
 ```yaml
 id: p1-spinner-timeouts
-status: in_progress
+status: complete
 type: branch
 description: "perf(hooks): add query-timeout guards to 9 spinner-gating reads across 7 hooks — use-saved-resources.ts, use-program-browser.ts (fetchPrograms + fetchCategories), use-applications.ts, use-notifications.ts (notifications + reminders), use-documents.ts, use-viewport-resources.ts (AbortSignal.any combining nav-cancel + hard timeout), use-chat.ts (30s setTimeout on streaming edge fetch). Extends the PR#34/#39 timeout pattern to all remaining unguarded spinner-gating reads."
 branch: feature/p1-spinner-timeouts
 base: develop
 remote: origin
+pr: 40
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/40
+commit_sha: 24f2057
 files:
   - apps/web/src/hooks/use-saved-resources.ts
   - apps/web/src/hooks/use-program-browser.ts
@@ -1255,5 +1258,5 @@ files:
   - apps/web/src/hooks/use-chat.ts
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T23:00:00.000Z
-completed_at: null
+completed_at: 2026-06-03T23:30:00.000Z
 ```
