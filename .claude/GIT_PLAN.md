@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: p1-spinner-timeouts
+next_action_id: lockdown-table-grants
 
 ## Log
 
@@ -1259,4 +1259,19 @@ files:
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T23:00:00.000Z
 completed_at: 2026-06-03T23:30:00.000Z
+```
+
+```yaml
+id: lockdown-table-grants
+status: in_progress
+type: branch
+description: "chore(security): revoke browser-role DML grants on 4 RLS-deny tables — account_lockouts, app_logs, auth_login_attempts, password_history. All 4 have RLS enabled + zero policies (default-deny). anon+authenticated held full DML grants (latent exposure). All legitimate access confirmed service_role only. REVOKE ALL adds second independent denial layer. Applied + verified live: 0 anon/authenticated grants remain; service_role intact (7/7 privileges per table). Migration: 20260603140000_lockdown_security_table_grants.sql"
+branch: feature/lockdown-table-grants
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260603140000_lockdown_security_table_grants.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T23:45:00.000Z
+completed_at: null
 ```
