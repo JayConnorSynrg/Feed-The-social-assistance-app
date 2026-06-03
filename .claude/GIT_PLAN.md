@@ -21,6 +21,22 @@ next_action_id: pii-hardening-expand-contract
 ## Log
 
 ```yaml
+id: merge-pr37-rm-spike-route
+status: complete
+type: merge
+description: "chore(security): merge PR#37 (feature/rm-spike-route) into develop — removes public /spike/pdf dev route that was accidentally left in the production tree. CI: 10/10 checks SUCCESS (Install/Lint/Security-Audit/Test/Type-Check/Build/CI-Success/Deploy-Preview/Vercel/Vercel-Preview). mergeStateStatus: CLEAN. base: develop."
+branch: feature/rm-spike-route
+base: develop
+remote: origin
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/37
+merged_into: develop
+merge_sha: 2d7e1b0
+post_merge_ci_conclusion: pending
+created_at: 2026-06-03T20:00:00.000Z
+completed_at: 2026-06-03T22:00:57Z
+```
+
+```yaml
 id: pii-hardening-expand-contract
 status: in_progress
 type: commit
