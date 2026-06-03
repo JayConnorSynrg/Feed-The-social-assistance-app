@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: document-download-timeout
+next_action_id: rm-spike-route
 
 ## Log
 
@@ -1131,6 +1131,25 @@ files:
   - apps/web/src/components/panels/documents-panel.tsx
   - apps/web/src/hooks/use-encrypted-upload.ts
   - apps/web/e2e/document-preview-timeout.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T00:00:00.000Z
+completed_at: null
+```
+
+```yaml
+id: rm-spike-route
+status: in_progress
+type: commit
+description: "chore(security): remove public /spike/pdf dev route (no auth guard). apps/web/src/app/spike/ (page.tsx + spike-pdf-inner.tsx) was a leftover PDF-engine evaluation spike that deployed to production at sourcetofeed.com/spike/pdf with zero authentication or middleware guard. Also removes public/spike/README.md (static asset companion) and docs/pdf-spike-notes.md (spike notes). Zero importers confirmed via grep — no production source file outside apps/web/src/app/spike/ references the route. type-check 0 errors post-deletion (baseline: 0; post-delete: 0)."
+branch: feature/rm-spike-route
+base: develop
+remote: origin
+pr_target: develop
+files:
+  - apps/web/src/app/spike/pdf/page.tsx
+  - apps/web/src/app/spike/pdf/spike-pdf-inner.tsx
+  - apps/web/public/spike/README.md
+  - docs/pdf-spike-notes.md
   - .claude/GIT_PLAN.md
 created_at: 2026-06-03T00:00:00.000Z
 completed_at: null
