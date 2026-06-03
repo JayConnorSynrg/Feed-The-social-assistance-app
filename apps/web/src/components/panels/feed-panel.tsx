@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { track } from '@vercel/analytics'
 
 // ============================================
@@ -330,6 +331,7 @@ export function FeedPanel() {
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(50)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       )
 
       if (error) throw error
@@ -398,7 +400,9 @@ export function FeedPanel() {
 
       setPosts(transformed)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = isQueryTimeout(err)
+        ? 'Feed timed out — please check your connection and retry.'
+        : err instanceof Error ? err.message : String(err)
       console.error('Error fetching posts:', msg, err)
       setError(msg)
     } finally {

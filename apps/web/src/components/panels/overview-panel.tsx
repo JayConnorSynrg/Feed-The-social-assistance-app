@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 // ============================================
 // INTERFACES
@@ -163,6 +164,7 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
   const supabase = createClient()
   const [recentActivity, setRecentActivity] = useState<RecentActivityItemProps[]>([])
   const [loading, setLoading] = useState(true)
+  const [activityError, setActivityError] = useState<string | null>(null)
 
   // Fetch real recent activity for the user
   const fetchRecentActivity = useCallback(async () => {
@@ -172,6 +174,7 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
       return
     }
 
+    setActivityError(null)
     try {
       const activities: RecentActivityItemProps[] = []
 
@@ -182,6 +185,7 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(3)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (posts) {
         for (const post of posts) {
@@ -230,7 +234,11 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
 
       setRecentActivity(activities.slice(0, 5))
     } catch (err) {
-      console.error('Error fetching recent activity:', err)
+      const msg = isQueryTimeout(err)
+        ? 'Activity timed out — please check your connection and retry.'
+        : err instanceof Error ? err.message : 'Failed to load recent activity'
+      console.error('Error fetching recent activity:', msg, err)
+      setActivityError(msg)
     } finally {
       setLoading(false)
     }
@@ -318,6 +326,8 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
                 <div className="text-center py-8">
                   <Loader2 className="w-5 h-5 mx-auto animate-spin text-stone-400" />
                 </div>
+              ) : activityError ? (
+                <div className="text-center py-8 text-red-600 text-sm">{activityError}</div>
               ) : recentActivity.length > 0 ? (
                 <div className="space-y-2">
                   {recentActivity.map((activity) => (
