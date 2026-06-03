@@ -108,6 +108,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setMessages(prev => [...prev, assistantMessage])
 
+      // 30s hard timeout for the streaming edge fetch — cleared in finally on every exit path.
+      let chatTimeoutId: ReturnType<typeof setTimeout> | undefined
+
       try {
         // Get auth token
         logger.debug('chat.session.check', { opId })
@@ -126,6 +129,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         // Create abort controller for this request
         abortControllerRef.current = new AbortController()
+        // Wire the hard timeout now that we have a controller to abort against.
+        chatTimeoutId = setTimeout(() => abortControllerRef.current?.abort(), 30_000)
 
         // Call Edge Function
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`
@@ -318,6 +323,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           )
         )
       } finally {
+        clearTimeout(chatTimeoutId)
         setIsLoading(false)
         abortControllerRef.current = null
       }

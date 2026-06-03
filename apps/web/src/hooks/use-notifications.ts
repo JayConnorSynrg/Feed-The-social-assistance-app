@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 export type NotificationType =
   | 'status_update'
@@ -96,6 +97,7 @@ export function useNotifications(): UseNotificationsReturn {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (notifError) throw notifError
 
@@ -105,13 +107,18 @@ export function useNotifications(): UseNotificationsReturn {
         .select('*')
         .eq('user_id', user.id)
         .order('remind_at', { ascending: true })
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (remError) throw remError
 
       setNotifications(notifs || [])
       setReminders(rems || [])
     } catch (err) {
-      setError(err as Error)
+      setError(
+        isQueryTimeout(err)
+          ? new Error('Notifications timed out. Please try again.')
+          : err as Error
+      )
     } finally {
       setIsLoading(false)
     }

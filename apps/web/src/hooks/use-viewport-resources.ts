@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logger, withMetric } from '@/lib/logger'
 import type { Resource } from '@/components/map/resource-marker'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 interface Bounds {
   west: number
@@ -109,6 +110,13 @@ export function useViewportResources({
           max_results: limit,
         }
 
+        // Combine nav-cancel signal with a hard timeout — whichever fires first aborts the RPC.
+        // AbortSignal.any([]) is widely supported (Chrome 116+, Node 20+, 2026 baseline).
+        const combinedSignal = AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(QUERY_TIMEOUT_MS),
+        ])
+
         const { data, error: queryError } = await withMetric<{
           data: ResourceRow[] | null
           error: Error | null
@@ -118,7 +126,7 @@ export function useViewportResources({
           () =>
             supabase
               .rpc('resources_in_bounds', rpcParams)
-              .abortSignal(controller.signal) as unknown as Promise<{ data: ResourceRow[] | null; error: Error | null }>
+              .abortSignal(combinedSignal) as unknown as Promise<{ data: ResourceRow[] | null; error: Error | null }>
         )
 
         if (queryError) throw queryError
@@ -167,12 +175,17 @@ export function useViewportResources({
 
         setResources(filtered)
       } catch (err) {
-        if (err instanceof Error && err.name !== 'AbortError') {
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Nav-cancel: silent, loading cleared by finally guard below
+        } else if (isQueryTimeout(err)) {
+          logger.warn('viewport-resources.fetch.timeout', { bounds: currentBounds, category })
+          setError(new Error('Map resources timed out. Please try again.'))
+        } else {
           logger.error('viewport-resources.fetch.error', err, {
             bounds: currentBounds,
             category,
           })
-          setError(err)
+          setError(err instanceof Error ? err : new Error(String(err)))
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false)

@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { Database } from '@feed/database'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 // Module-level singleton — same pattern as auth-provider.tsx.
 // Prevents a new client reference on every render, which would
@@ -172,6 +173,7 @@ export function useApplications(): UseApplicationsReturn {
         `)
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false })
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) throw fetchError
 
@@ -196,7 +198,11 @@ export function useApplications(): UseApplicationsReturn {
       setApplications(transformedApps)
       setStats(calculateStats(transformedApps))
     } catch (err) {
-      setError(err as Error)
+      setError(
+        isQueryTimeout(err)
+          ? new Error('Applications timed out. Please try again.')
+          : err as Error
+      )
     } finally {
       setIsLoading(false)
     }
