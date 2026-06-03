@@ -1138,7 +1138,7 @@ completed_at: null
 
 ```yaml
 id: rm-spike-route
-status: in_progress
+status: complete
 type: commit
 description: "chore(security): remove public /spike/pdf dev route (no auth guard). apps/web/src/app/spike/ (page.tsx + spike-pdf-inner.tsx) was a leftover PDF-engine evaluation spike that deployed to production at sourcetofeed.com/spike/pdf with zero authentication or middleware guard. Also removes public/spike/README.md (static asset companion) and docs/pdf-spike-notes.md (spike notes). Zero importers confirmed via grep — no production source file outside apps/web/src/app/spike/ references the route. type-check 0 errors post-deletion (baseline: 0; post-delete: 0)."
 branch: feature/rm-spike-route
@@ -1151,6 +1151,9 @@ files:
   - apps/web/public/spike/README.md
   - docs/pdf-spike-notes.md
   - .claude/GIT_PLAN.md
+pr: 37
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/37
+commit_sha: aac5400
 created_at: 2026-06-03T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-03T00:00:00.000Z
 ```
