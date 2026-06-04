@@ -16,13 +16,29 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: harden-function-search-path
+next_action_id: fix-rls-is-admin-secdef
 
 ## Log
 
 ```yaml
-id: harden-function-search-path
+id: fix-rls-is-admin-secdef
 status: in_progress
+type: branch
+description: "fix(rls): use is_current_user_admin() in 18 admin policies to fix 42501. Cause: 20260603130000_pii_hardening_revoke.sql revoked profiles.is_admin SELECT from authenticated, but 18 RLS policies gated admin access via inline EXISTS(SELECT 1 FROM profiles WHERE id=auth.uid() AND is_admin) — which threw 42501 (permission denied for table profiles) for every authenticated user, breaking Applications/Programs/Forms reads. Fix: swap the 18 inline-EXISTS subqueries to (select public.is_current_user_admin()) — the existing SECDEF accessor that reads is_admin under the function owner, Supabase-recommended pattern; admin gating semantics preserved. Verified live on prod (ndtpovonpadugthmcntl): non-admin authenticated resources read 0→335 rows, admin gating intact, no advisor regression. Regression test: rls-is-admin-no-42501.spec.ts asserts non-admin reads of resources/form_submissions return no 42501."
+branch: fix/rls-is-admin-secdef
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260603160000_rls_is_admin_use_function.sql
+  - apps/web/e2e/rls-is-admin-no-42501.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-03T16:00:00.000Z
+completed_at: null
+```
+
+```yaml
+id: harden-function-search-path
+status: complete
 type: branch
 description: "chore(security): pin search_path on 8 public functions + REVOKE EXECUTE on SECDEF trigger-only webhook fn. Closes all 8 function_search_path_mutable advisor WARNs (proconfig was null on all 8). on_resource_change_webhook_fn is SECDEF + formerly PUBLIC-executable; confirmed trigger-only (TG_OP body, 0 client RPC calls in app); REVOKE removes anon/authenticated direct-call surface without affecting trigger execution. Migration: 20260603150000_harden_function_search_path.sql. Applied to prod + verified: all 8 PINNED, 0 grants remain, advisor lint count = 0."
 branch: feature/harden-fn-search-path
@@ -31,8 +47,11 @@ remote: origin
 files:
   - supabase/migrations/20260603150000_harden_function_search_path.sql
   - .claude/GIT_PLAN.md
+pr: 43
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/43
+commit_sha: df7cc95
 created_at: 2026-06-03T15:00:00.000Z
-completed_at: null
+completed_at: 2026-06-03T15:30:00.000Z
 ```
 
 ```yaml
