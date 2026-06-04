@@ -18,6 +18,7 @@ import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { track } from '@vercel/analytics'
+import { CommentThread } from '@/components/feed/comment-thread'
 
 // ============================================
 // TYPES
@@ -170,6 +171,7 @@ function CreatePostCard({ onPost }: CreatePostCardProps) {
 // POST REACTIONS
 // ============================================
 interface PostReactionsProps {
+  postId: string
   likes: number
   comments: number
   isLiked: boolean
@@ -179,7 +181,7 @@ interface PostReactionsProps {
   shareCopied?: boolean
 }
 
-function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
+function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
   return (
     <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
       <button
@@ -194,6 +196,8 @@ function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare, s
 
       <button
         onClick={onComment}
+        data-testid={`comment-btn-${postId}`}
+        aria-label="Comment"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
       >
         <MessageCircle className="w-4 h-4" />
@@ -260,6 +264,7 @@ function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardPro
 
       {/* Reactions */}
       <PostReactions
+        postId={post.id}
         likes={post.likes}
         comments={post.comments}
         isLiked={post.isLiked}
@@ -281,6 +286,8 @@ export function FeedPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
+  // Set of post IDs whose comment threads are currently open
+  const [openCommentPostIds, setOpenCommentPostIds] = useState<Set<string>>(new Set())
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel } = usePanelContext()
@@ -486,9 +493,16 @@ export function FeedPanel() {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleComment = (_postId: string) => {
-    // TODO: Open comment thread
+  const handleComment = (postId: string) => {
+    setOpenCommentPostIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(postId)) {
+        next.delete(postId)
+      } else {
+        next.add(postId)
+      }
+      return next
+    })
   }
 
   const handleShare = (postId: string) => {
@@ -612,14 +626,25 @@ export function FeedPanel() {
               </div>
             ) : (
               filteredPosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onLike={handleLike}
-                  onComment={handleComment}
-                  onShare={handleShare}
-                  shareCopied={shareCopiedPostId === post.id}
-                />
+                <div key={post.id} data-testid={`post-${post.id}`}>
+                  <PostCard
+                    post={post}
+                    onLike={handleLike}
+                    onComment={handleComment}
+                    onShare={handleShare}
+                    shareCopied={shareCopiedPostId === post.id}
+                  />
+                  {openCommentPostIds.has(post.id) && (
+                    <CommentThread
+                      postId={post.id}
+                      onCountChange={(count) => {
+                        setPosts((prev) =>
+                          prev.map((p) => (p.id === post.id ? { ...p, comments: count } : p))
+                        )
+                      }}
+                    />
+                  )}
+                </div>
               ))
             )}
           </div>
