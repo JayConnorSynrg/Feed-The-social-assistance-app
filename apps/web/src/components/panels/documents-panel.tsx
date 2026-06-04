@@ -1031,6 +1031,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
                       {resources.map((resource) => (
                         <div
                           key={resource.id}
+                          data-testid={`saved-resource-${resource.id}`}
                           className="px-4 py-3 hover:bg-stone-50 cursor-pointer"
                           onClick={() => setSelectedResourceId(resource.id)}
                         >

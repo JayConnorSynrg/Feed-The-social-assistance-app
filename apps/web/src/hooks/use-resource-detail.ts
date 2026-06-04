@@ -36,6 +36,7 @@ export interface ResourceDocument {
 
 interface SavedResource {
   id: string
+  resource_id: string | null
   resource_name: string
   resource_category: string | null
   resource_address: string | null
