@@ -111,20 +111,17 @@ test(
     await docsTab.click()
 
     // ── Verify the locked card is rendered ────────────────────────────────
-    // The card shows "Vault Locked" heading when isUnlocked=false
-    const lockedHeading = page.locator('h3').filter({ hasText: /Vault Locked/i })
-    await expect(lockedHeading).toBeVisible({ timeout: 10_000 })
+    // The card wrapper carries data-testid="vault-locked-card" (stable selector).
+    const lockedCard = page.getByTestId('vault-locked-card')
+    await expect(lockedCard).toBeVisible({ timeout: 10_000 })
     console.log('[upload-card] Vault Locked card visible')
 
     // ── Click the card wrapper (NOT the inner button) ─────────────────────
-    // Target the Lock icon (inside the orange circle) which is part of the card
-    // body but clearly outside the "Unlock Vault" button element.
-    // This exercises the wrapper onClick added by Change A.
-    const lockIcon = page.locator('h3').filter({ hasText: /Vault Locked/i })
-      .locator('..') // parent flex container
-      .locator('div').first() // the orange icon circle
-    await lockIcon.click({ force: true })
-    console.log('[upload-card] Clicked card body (lock icon area)')
+    // Click at an offset (top-left padding area) that is inside the card but
+    // outside the inner "Unlock Vault" button. This exercises the wrapper
+    // onClick added by Change A.
+    await lockedCard.click({ position: { x: 20, y: 20 } })
+    console.log('[upload-card] Clicked card body (wrapper padding area)')
 
     // ── Assert the VaultUnlockModal opened ────────────────────────────────
     const passwordInput = page.locator('[data-testid="vault-unlock-password-input"]')
@@ -153,8 +150,8 @@ test(
     await expect(docsTab).toBeVisible({ timeout: 10_000 })
     await docsTab.click()
 
-    const lockedHeading = page.locator('h3').filter({ hasText: /Vault Locked/i })
-    await expect(lockedHeading).toBeVisible({ timeout: 10_000 })
+    const lockedCard = page.getByTestId('vault-locked-card')
+    await expect(lockedCard).toBeVisible({ timeout: 10_000 })
 
     // ── Click the inner "Unlock Vault" button ─────────────────────────────
     const unlockBtn = page.locator('button').filter({ hasText: /Unlock Vault/i })

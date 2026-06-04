@@ -128,6 +128,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
       <>
         {/* Entire card is clickable — keyboard and pointer both open the unlock modal */}
         <div
+          data-testid="vault-locked-card"
           role="button"
           tabIndex={0}
           onClick={openUnlockModal}
