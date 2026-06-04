@@ -20,6 +20,42 @@ ALTER TABLE public.profiles
 GRANT SELECT (harmony_score, harmony_reviews_count) ON public.profiles TO authenticated;
 GRANT SELECT (harmony_score, harmony_reviews_count) ON public.profiles TO anon;
 
+-- Close harmony-score forge hole (E22f).
+--
+-- The profiles table previously had a broad table-level UPDATE grant for both
+-- authenticated and anon, which meant any authenticated user could directly
+-- overwrite harmony_score / harmony_reviews_count.  These two columns are
+-- computed exclusively by the recompute_harmony() SECURITY DEFINER trigger
+-- (which runs as the table owner and is unaffected by column-level REVOKEs).
+--
+-- Fix: revoke the table-level UPDATE entirely, then re-grant UPDATE on only
+-- the 16 user-editable columns.  anon receives no UPDATE grant at all.
+-- Column-level REVOKEs alone are insufficient when a table-level UPDATE grant
+-- exists; the table-level grant must be removed first.
+--
+-- This block is idempotent: REVOKE is a no-op when the privilege is absent,
+-- and GRANT is a no-op when the privilege is already present.
+REVOKE UPDATE ON public.profiles FROM authenticated;
+REVOKE UPDATE ON public.profiles FROM anon;
+GRANT UPDATE (
+  username,
+  full_name,
+  avatar_url,
+  bio,
+  venmo_username,
+  paypal_email,
+  location_city,
+  location_state,
+  updated_at,
+  zip_code,
+  latitude,
+  longitude,
+  needs,
+  onboarding_completed,
+  phone,
+  user_role
+) ON public.profiles TO authenticated;
+
 -- ============================================================
 -- 2. reviews table
 -- ============================================================

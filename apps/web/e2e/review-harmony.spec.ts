@@ -217,7 +217,9 @@ test('sourcer reviews seeker after completed opt-in → seeker harmony badge sho
 })
 
 // ---------------------------------------------------------------------------
-// Test 3: Duplicate review attempt is blocked
+// Test 3: Duplicate review attempt is blocked — UI hides button AND the
+//         submit_review RPC returns a friendly "already reviewed" error when
+//         called a second time for the same exchange/direction.
 // ---------------------------------------------------------------------------
 
 test('second review of same exchange by sourcer is blocked with friendly error', async ({ page }) => {
@@ -226,17 +228,48 @@ test('second review of same exchange by sourcer is blocked with friendly error',
   const postCard = page.locator(`[data-testid="post-${postId}"]`)
   await expect(postCard).toBeVisible({ timeout: 15_000 })
 
-  // The "Review seeker" button should be gone now that the sourcer has reviewed
-  // (the management list hides it when the opt-in is in authorReviewedOptInIds)
-  // But we can still attempt via the RPC directly — verify the UI hid the button
+  // 1. UI gate: "Review seeker" button must be absent (sourcer already reviewed in Test 1).
   const manageBtn = postCard.locator(`[data-testid="opt-in-manage-${postId}"]`)
   await expect(manageBtn).toBeVisible({ timeout: 10_000 })
   await manageBtn.click()
 
-  // The "Review seeker" button for this opt-in should NOT be visible
   const reviewBtn = postCard.locator('button', { hasText: 'Review seeker' })
   await expect(reviewBtn).not.toBeVisible({ timeout: 3_000 })
   console.log('[review-harmony] "Review seeker" button correctly hidden after review submitted')
+
+  // 2. RPC gate: a second submit_review for the same opt-in/sourcer direction must
+  //    return the unique_violation friendly message — proves the server-side guard
+  //    is real and not just a UI elision.
+  //    Strategy: sign in as the sourcer via signInWithPassword on a fresh anon-key
+  //    client (Node-side, not browser), then call submit_review a second time.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+  const { createClient } = await import('@supabase/supabase-js')
+  const sourcerClient = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  const { error: signInErr } = await sourcerClient.auth.signInWithPassword({
+    email: SOURCER_EMAIL,
+    password: USER_PASSWORD,
+  })
+  if (signInErr) throw new Error(`Sourcer sign-in failed for RPC test: ${signInErr.message}`)
+
+  const { error: dupError } = await sourcerClient.rpc('submit_review', {
+    p_opt_in_id: optInId,
+    p_rating: 3,
+    p_would_recommend: null,
+    p_comment: null,
+  })
+
+  console.log('[review-harmony] duplicate RPC error message:', dupError?.message)
+  expect(dupError).not.toBeNull()
+  // The SECDEF function raises EXCEPTION 'You have already reviewed this exchange'
+  // which PostgREST surfaces verbatim in the error message.
+  expect(dupError!.message).toMatch(/already reviewed/i)
+
+  await sourcerClient.auth.signOut()
 })
 
 // ---------------------------------------------------------------------------

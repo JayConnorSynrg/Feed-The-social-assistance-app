@@ -52,18 +52,29 @@ export function useReviews() {
       setError(null)
       setLoading(true)
       try {
-        const { data, error: rpcError } = await supabase.rpc('submit_review', {
-          p_opt_in_id: params.optInId,
-          p_rating: params.rating,
-          p_would_recommend: params.wouldRecommend ?? null,
-          p_comment: params.comment ?? null,
-        })
+        const { data, error: rpcError } = await supabase
+          .rpc('submit_review', {
+            p_opt_in_id: params.optInId,
+            p_rating: params.rating,
+            p_would_recommend: params.wouldRecommend ?? null,
+            p_comment: params.comment ?? null,
+          })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcError) {
-          const msg = getFriendlyErrorMessage(rpcError, "Couldn't submit review. Please try again.")
+          const msg = isQueryTimeout(rpcError)
+            ? 'Review submission timed out — please check your connection and retry.'
+            : getFriendlyErrorMessage(rpcError, "Couldn't submit review. Please try again.")
           setError(msg)
           throw new Error(msg)
         }
         return data as ReviewRow
+      } catch (err: unknown) {
+        if (isQueryTimeout(err)) {
+          const msg = 'Review submission timed out — please check your connection and retry.'
+          setError(msg)
+          throw new Error(msg)
+        }
+        throw err
       } finally {
         setLoading(false)
       }
