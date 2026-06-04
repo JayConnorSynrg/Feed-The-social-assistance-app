@@ -5,6 +5,13 @@ import { MessageSquare, Send, Check, XCircle, ArrowLeft, Clock, Loader2, Inbox }
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { useConversations } from '@/hooks/use-conversations'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -43,6 +50,8 @@ export function MessagesPanel() {
 
   const [messageInput, setMessageInput] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel'; id: string } | null
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -214,18 +223,18 @@ export function MessagesPanel() {
                     <Button size="sm" onClick={() => acceptRequest(selectedConv.id)} className="bg-green-600 hover:bg-green-700 text-white text-xs">
                       <Check className="w-3 h-3 mr-1" /> Accept
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => declineRequest(selectedConv.id)} className="text-xs">
+                    <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'decline', id: selectedConv.id })} className="text-xs">
                       Decline
                     </Button>
                   </>
                 )}
                 {selectedConv.status === 'pending' && !isVolunteer && (
-                  <Button size="sm" variant="outline" onClick={() => withdrawRequest(selectedConv.id)} className="text-xs">
+                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'withdraw', id: selectedConv.id })} className="text-xs">
                     Withdraw
                   </Button>
                 )}
                 {selectedConv.status === 'active' && isVolunteer && (
-                  <Button size="sm" variant="outline" onClick={() => cancelConversation(selectedConv.id)} className="text-xs text-red-600 hover:text-red-700">
+                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'cancel', id: selectedConv.id })} className="text-xs text-red-600 hover:text-red-700">
                     <XCircle className="w-3 h-3 mr-1" /> End
                   </Button>
                 )}
@@ -303,6 +312,44 @@ export function MessagesPanel() {
           {error}
         </div>
       )}
+
+      {/* Confirm dialog for destructive conversation actions */}
+      <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.type === 'decline' && 'Decline this request?'}
+              {confirmAction?.type === 'withdraw' && 'Withdraw your request?'}
+              {confirmAction?.type === 'cancel' && 'End this conversation?'}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-stone-600">
+            {confirmAction?.type === 'decline' && 'The requester will be notified that their request was declined.'}
+            {confirmAction?.type === 'withdraw' && 'Your request will be cancelled and cannot be recovered.'}
+            {confirmAction?.type === 'cancel' && 'This conversation will be closed and cannot be reopened.'}
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (!confirmAction) return
+                if (confirmAction.type === 'decline') declineRequest(confirmAction.id)
+                else if (confirmAction.type === 'withdraw') withdrawRequest(confirmAction.id)
+                else if (confirmAction.type === 'cancel') cancelConversation(confirmAction.id)
+                setConfirmAction(null)
+              }}
+            >
+              {confirmAction?.type === 'decline' && 'Decline Request'}
+              {confirmAction?.type === 'withdraw' && 'Withdraw Request'}
+              {confirmAction?.type === 'cancel' && 'End Conversation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

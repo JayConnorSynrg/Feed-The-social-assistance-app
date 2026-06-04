@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Send, User, Loader2 } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Send, User, Loader2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -176,9 +176,10 @@ interface PostReactionsProps {
   onLike: () => void
   onComment: () => void
   onShare: () => void
+  shareCopied?: boolean
 }
 
-function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare }: PostReactionsProps) {
+function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
   return (
     <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
       <button
@@ -201,9 +202,11 @@ function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare }:
 
       <button
         onClick={onShare}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors ml-auto"
+        className={`flex items-center gap-1.5 text-sm transition-colors ml-auto ${shareCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
+        aria-label={shareCopied ? 'Link copied' : 'Share post'}
       >
-        <Share2 className="w-4 h-4" />
+        {shareCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+        {shareCopied && <span className="text-xs font-medium">Copied</span>}
       </button>
     </div>
   )
@@ -217,9 +220,10 @@ interface PostCardProps {
   onLike: (postId: string) => void
   onComment: (postId: string) => void
   onShare: (postId: string) => void
+  shareCopied?: boolean
 }
 
-function PostCard({ post, onLike, onComment, onShare }: PostCardProps) {
+function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
 
   return (
@@ -262,6 +266,7 @@ function PostCard({ post, onLike, onComment, onShare }: PostCardProps) {
         onLike={() => onLike(post.id)}
         onComment={() => onComment(post.id)}
         onShare={() => onShare(post.id)}
+        shareCopied={shareCopied}
       />
     </div>
   )
@@ -275,6 +280,7 @@ export function FeedPanel() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel } = usePanelContext()
@@ -486,10 +492,21 @@ export function FeedPanel() {
   }
 
   const handleShare = (postId: string) => {
+    const url = `${window.location.origin}/post/${postId}`
     if (navigator.share) {
-      navigator.share({
-        title: 'FEED Community Post',
-        url: `${window.location.origin}/post/${postId}`,
+      navigator.share({ title: 'FEED Community Post', url }).catch((err: unknown) => {
+        // AbortError = user cancelled — swallow silently
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        // Any other share failure: fall back to clipboard
+        navigator.clipboard?.writeText(url).then(() => {
+          setShareCopiedPostId(postId)
+          setTimeout(() => setShareCopiedPostId(null), 2000)
+        }).catch(() => {})
+      })
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setShareCopiedPostId(postId)
+        setTimeout(() => setShareCopiedPostId(null), 2000)
       }).catch(() => {})
     }
   }
@@ -601,6 +618,7 @@ export function FeedPanel() {
                   onLike={handleLike}
                   onComment={handleComment}
                   onShare={handleShare}
+                  shareCopied={shareCopiedPostId === post.id}
                 />
               ))
             )}

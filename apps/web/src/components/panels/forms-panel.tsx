@@ -17,6 +17,13 @@ import {
   FilePlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { useFormTemplates, type FormTemplateWithMeta } from '@/hooks/use-form-templates'
 import { useUserSubmissions } from '@/hooks/use-vault-form-submission'
 import type { FormSubmission as HookFormSubmission } from '@/hooks/use-vault-form-submission'
@@ -509,6 +516,7 @@ const FORMS_TABS: { key: TabType; label: string; panelId: string }[] = [
 export function FormsPanel({ userId }: FormsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('available')
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
@@ -596,9 +604,15 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     }
   }
 
-  const handleDeleteDraft = async (formId: string) => {
+  const handleDeleteDraft = (formId: string) => {
+    setConfirmDeleteId(formId)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteId) return
     const supabase = createClient()
-    await supabase.from('form_submissions').delete().eq('id', formId)
+    await supabase.from('form_submissions').delete().eq('id', confirmDeleteId)
+    setConfirmDeleteId(null)
     await refreshSubmissions()
   }
 
@@ -886,6 +900,24 @@ export function FormsPanel({ userId }: FormsPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Delete draft confirm dialog */}
+      <Dialog open={confirmDeleteId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this draft?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-stone-600">This cannot be undone. Your progress will be permanently removed.</p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleConfirmDelete}>
+              Delete Draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
