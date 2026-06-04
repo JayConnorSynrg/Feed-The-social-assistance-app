@@ -22,7 +22,7 @@ next_action_id: comment-threads-phaseA
 
 ```yaml
 id: comment-threads-phaseA
-status: in_progress
+status: complete
 type: branch
 description: "feat(feed): threaded comments (Phase A) — add parent_id migration + composite index, use-comments hook (flat→tree builder), CommentThread UI component (composer + nested replies + realtime), wire handleComment in feed-panel, Playwright e2e + unit tests"
 branch: feature/comment-threads
@@ -36,8 +36,11 @@ files:
   - apps/web/src/hooks/__tests__/use-comments.tree.test.mjs
   - apps/web/e2e/comment-threads.spec.ts
   - .claude/GIT_PLAN.md
+pr: 47
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/47
+commit_sha: 54bdfed
 created_at: 2026-06-04T12:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T12:30:00.000Z
 ```
 
 ```yaml
