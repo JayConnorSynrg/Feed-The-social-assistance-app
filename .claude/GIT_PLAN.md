@@ -16,9 +16,29 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: client-log-rate-limit
+next_action_id: documents-button-coverall
 
 ## Log
+
+```yaml
+id: documents-button-coverall
+status: in_progress
+type: branch
+description: "fix(documents): 4 cover-all fixes for the Documents Upload button UX. (A) EncryptedUpload locked-card wrapper gets onClick+role=button+tabIndex+onKeyDown so clicking anywhere on the card (not just the inner button) opens VaultUnlockModal; inner button gets stopPropagation to prevent double-fire. (B) EmptyState 'Upload Document' button wired via onUploadClick prop → scrollIntoView on the EncryptedUpload ref (reuses the existing inline upload path). (C) getFriendlyErrorMessage helper (apps/web/src/lib/friendly-error.ts) maps permission-denied/42501 and network/abort/timeout errors to human text; applied to applications-panel.tsx {error.message} and use-program-browser.ts raw err.message path. (D) e2e spec documents-upload-locked-card.spec.ts asserts card-body click and inner-button click both open the modal (RED without A, GREEN with A)."
+branch: feature/documents-button-coverall
+base: develop
+remote: origin
+files:
+  - apps/web/src/components/documents/encrypted-upload.tsx
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/lib/friendly-error.ts
+  - apps/web/src/components/panels/applications-panel.tsx
+  - apps/web/src/hooks/use-program-browser.ts
+  - apps/web/e2e/documents-upload-locked-card.spec.ts
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-04T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: fix-rls-is-admin-secdef

@@ -123,9 +123,23 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
 
   // Show vault locked message if vault is not unlocked
   if (!isUnlocked) {
+    const openUnlockModal = () => setShowUnlockModal(true)
     return (
       <>
-        <div className={`p-6 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 ${className}`}>
+        {/* Entire card is clickable — keyboard and pointer both open the unlock modal */}
+        <div
+          data-testid="vault-locked-card"
+          role="button"
+          tabIndex={0}
+          onClick={openUnlockModal}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openUnlockModal()
+            }
+          }}
+          className={`p-6 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 cursor-pointer hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all ${className}`}
+        >
           <div className="flex flex-col items-center text-center">
             <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center mb-3">
               <Lock className="w-6 h-6" />
@@ -135,7 +149,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
               Unlock your vault to upload encrypted documents
             </p>
             <button
-              onClick={() => setShowUnlockModal(true)}
+              onClick={(e) => { e.stopPropagation(); openUnlockModal() }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4e1c] transition-colors"
             >
               <Lock className="w-4 h-4" />
