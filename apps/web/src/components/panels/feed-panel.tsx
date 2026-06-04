@@ -1144,13 +1144,12 @@ export function FeedPanel() {
             ) : (
               filteredPosts.map((post) => {
                 const seekerOptInId = seekerOptInIds[post.id] ?? null
-                const seekerOptInRow = seekerOptInId
-                  ? (authorOptInsMap[post.id] ?? []).find((oi) => oi.seekerId === user?.id)
-                  : null
                 const seekerHasReviewed =
                   seekerOptInId != null && myReviewMap.has(seekerOptInId)
+                // optInMap is the single source of truth for the current user's opt-in status.
+                // fetchOptInsForPosts returns all statuses (pending/accepted/completed/declined)
+                // with no filter, so this correctly clears to undefined after a withdraw.
                 const postOptInStatus = optInMap.get(post.id)
-                  ?? (seekerOptInRow ? seekerOptInRow.status : undefined)
 
                 return (
                   <div key={post.id} data-testid={`post-${post.id}`}>
