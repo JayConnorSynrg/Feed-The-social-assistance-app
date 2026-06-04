@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -15,19 +15,29 @@ import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
+import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
+import { HarmonyBadge } from '@/components/feed/harmony-badge'
+import { ReviewModal } from '@/components/feed/review-modal'
 
 // ============================================
 // TYPES
 // ============================================
 interface Post {
   id: string
-  author: { id: string; name: string; avatar?: string; role: string }
+  author: {
+    id: string
+    name: string
+    avatar?: string
+    role: string
+    harmonyScore: number | null
+    harmonyReviewsCount: number
+  }
   content: string
   timestamp: Date
   likes: number
@@ -38,6 +48,17 @@ interface Post {
   resourceName: string | null
   maxSeekers: number | null
   slotsRemaining: number | null
+}
+
+/** An opt-in row enriched with the seeker's profile for the author's management list. */
+interface EnrichedOptIn {
+  id: string
+  postId: string
+  seekerId: string
+  seekerName: string
+  seekerHarmonyScore: number | null
+  seekerHarmonyCount: number
+  status: string
 }
 
 type FilterType = 'all' | 'following' | 'mine' | 'announcements'
@@ -285,28 +306,46 @@ interface PostCardProps {
   post: Post
   currentUserId: string | null
   optInStatus: string | undefined   // current user's opt-in status for this post
+  /** opt-in id for the current user's seeker row (needed for review prompt) */
+  currentUserOptInId?: string | null
+  /** whether current user (seeker) has already reviewed this opt-in's sourcer */
+  seekerHasReviewed?: boolean
   onLike: (postId: string) => void
   onComment: (postId: string) => void
   onShare: (postId: string) => void
   onOptIn: (postId: string) => void
   onWithdraw: (postId: string) => void
+  onReviewSourcer?: (postId: string, optInId: string) => void
   optInError?: string | null
   shareCopied?: boolean
   optInCount?: number
+  /** Enriched opt-in rows for the author's management list */
+  authorOptIns?: EnrichedOptIn[]
+  onAuthorUpdateOptIn?: (optInId: string, status: 'accepted' | 'declined' | 'completed') => void
+  onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
+  /** set of opt-in ids the author has already reviewed */
+  authorReviewedOptInIds?: Set<string>
 }
 
 function PostCard({
   post,
   currentUserId,
   optInStatus,
+  currentUserOptInId,
+  seekerHasReviewed,
   onLike,
   onComment,
   onShare,
   onOptIn,
   onWithdraw,
+  onReviewSourcer,
   optInError,
   shareCopied,
   optInCount,
+  authorOptIns,
+  onAuthorUpdateOptIn,
+  onAuthorReviewSeeker,
+  authorReviewedOptInIds,
 }: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
@@ -314,6 +353,14 @@ function PostCard({
     post.maxSeekers != null &&
     post.slotsRemaining != null &&
     post.slotsRemaining <= 0
+
+  const [optInListOpen, setOptInListOpen] = useState(false)
+
+  const showReviewSourcerBtn =
+    !isAuthor &&
+    optInStatus === 'completed' &&
+    !seekerHasReviewed &&
+    currentUserOptInId != null
 
   return (
     <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-primary/30 transition-all">
@@ -330,8 +377,13 @@ function PostCard({
 
         {/* Author Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <h3 className="font-medium text-sm truncate">{post.author.name}</h3>
+            <HarmonyBadge
+              score={post.author.harmonyScore}
+              count={post.author.harmonyReviewsCount}
+              userId={post.author.id}
+            />
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${categoryColor}`}>
               {post.category}
             </span>
@@ -369,14 +421,20 @@ function PostCard({
             {post.slotsRemaining ?? 0} of {post.maxSeekers} spot{post.maxSeekers !== 1 ? 's' : ''} left
           </span>
 
-          {/* Author view: opt-in count */}
+          {/* Author view: expandable opt-in count */}
           {isAuthor ? (
-            <span
-              data-testid={`opt-in-count-${post.id}`}
-              className="text-xs font-medium text-lime-700"
+            <button
+              data-testid={`opt-in-manage-${post.id}`}
+              onClick={() => setOptInListOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs font-medium text-lime-700 hover:text-lime-900 transition-colors"
             >
               {optInCount ?? 0} opted in
-            </span>
+              {optInListOpen ? (
+                <ChevronUp className="w-3 h-3" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
+            </button>
           ) : (
             /* Seeker view: opt-in / opted-in + withdraw / full */
             optInStatus != null ? (
@@ -411,6 +469,85 @@ function PostCard({
               </button>
             )
           )}
+        </div>
+      )}
+
+      {/* Author's expandable opt-in management list */}
+      {isAuthor && optInListOpen && authorOptIns && authorOptIns.length > 0 && (
+        <div className="mb-3 border border-stone-200 rounded-lg divide-y divide-stone-100 bg-white">
+          {authorOptIns.map((oi) => (
+            <div key={oi.id} className="px-3 py-2 flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <User className="w-3 h-3 text-stone-400 flex-shrink-0" />
+                <span className="text-xs font-medium text-stone-700 truncate">
+                  {oi.seekerName}
+                </span>
+                <HarmonyBadge
+                  score={oi.seekerHarmonyScore}
+                  count={oi.seekerHarmonyCount}
+                  userId={oi.seekerId}
+                />
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                  oi.status === 'completed' ? 'bg-lime-100 text-lime-700' :
+                  oi.status === 'accepted'  ? 'bg-blue-100 text-blue-700' :
+                  oi.status === 'declined'  ? 'bg-red-100 text-red-600' :
+                  'bg-stone-100 text-stone-600'
+                }`}>
+                  {oi.status}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {oi.status === 'pending' && (
+                  <>
+                    <button
+                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
+                    >
+                      Decline
+                    </button>
+                  </>
+                )}
+                {oi.status === 'accepted' && (
+                  <button
+                    data-testid={`complete-optin-${oi.id}`}
+                    onClick={() => onAuthorUpdateOptIn?.(oi.id, 'completed')}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    Mark Completed
+                  </button>
+                )}
+                {oi.status === 'completed' && !authorReviewedOptInIds?.has(oi.id) && (
+                  <button
+                    onClick={() => onAuthorReviewSeeker?.(oi.id, oi.seekerName)}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                  >
+                    <Star className="w-2.5 h-2.5" />
+                    Review seeker
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Seeker: review sourcer prompt when exchange is completed and not yet reviewed */}
+      {showReviewSourcerBtn && (
+        <div className="mb-3">
+          <button
+            data-testid={`review-sourcer-${post.id}`}
+            onClick={() => onReviewSourcer?.(post.id, currentUserOptInId!)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+          >
+            <Star className="w-3 h-3" />
+            Review sourcer
+          </button>
         </div>
       )}
 
@@ -453,6 +590,19 @@ export function FeedPanel() {
   const [optInErrors, setOptInErrors] = useState<Record<string, string>>({})
   // Per-post opt-in count for the author view (postId → count)
   const [optInCounts, setOptInCounts] = useState<Record<string, number>>({})
+  // Full opt-in rows for author management (postId → enriched list)
+  const [authorOptInsMap, setAuthorOptInsMap] = useState<Record<string, EnrichedOptIn[]>>({})
+  // Current user's seeker opt-in id per post (postId → optInId)
+  const [seekerOptInIds, setSeekerOptInIds] = useState<Record<string, string>>({})
+  // Reviews the current user has submitted (keyed by optInId)
+  const [myReviewMap, setMyReviewMap] = useState<ReviewMap>(new Map())
+  // Reviews the author has submitted (set of optInIds they've reviewed)
+  const [authorReviewedSet, setAuthorReviewedSet] = useState<Set<string>>(new Set())
+  // Review modal state
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [reviewModalOptInId, setReviewModalOptInId] = useState<string | null>(null)
+  const [reviewModalRevieweeName, setReviewModalRevieweeName] = useState('')
+  const [reviewModalRevieweeRole, setReviewModalRevieweeRole] = useState('')
 
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
@@ -463,6 +613,7 @@ export function FeedPanel() {
     .filter((r) => r.resource_id != null)
     .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
   const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
+  const { fetchMyReviewsForOptIns } = useReviews()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -511,7 +662,7 @@ export function FeedPanel() {
         { limit: 50 },
         async () => await supabase
           .from('posts')
-          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff), resource:resources(id, name)')
+          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name)')
           .eq('is_hidden', false)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
@@ -593,6 +744,8 @@ export function FeedPanel() {
           name: row.user?.full_name || 'Anonymous',
           avatar: row.user?.avatar_url || undefined,
           role: row.user?.is_staff ? 'Admin' : 'Community Member',
+          harmonyScore: (row.user as { harmony_score?: number | null } | undefined)?.harmony_score ?? null,
+          harmonyReviewsCount: (row.user as { harmony_reviews_count?: number | null } | undefined)?.harmony_reviews_count ?? 0,
         },
         content: row.content,
         timestamp: new Date(row.created_at ?? Date.now()),
@@ -608,9 +761,54 @@ export function FeedPanel() {
 
       setPosts(transformed)
 
-      // Fetch this user's opt-in statuses for the loaded posts
+      // Fetch this user's opt-in statuses + seeker opt-in rows + author opt-in lists
       if (user && postIds.length > 0) {
         fetchOptInsForPosts(postIds).then(setOptInMap)
+
+        // Fetch full seeker opt-in rows (for review prompts and author management)
+        supabase
+          .from('resource_opt_ins')
+          .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, full_name, harmony_score, harmony_reviews_count)')
+          .in('post_id', postIds)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          .then(({ data: oisData }) => {
+            if (!oisData) return
+
+            // Map post_id → seeker opt-in id for the current user (seeker view)
+            const seekerIds: Record<string, string> = {}
+            // Map post_id → enriched list for the author view
+            const authorMap: Record<string, EnrichedOptIn[]> = {}
+
+            for (const oi of oisData) {
+              if (oi.seeker_id === user.id) {
+                seekerIds[oi.post_id] = oi.id
+              }
+              // Build author management list (one entry per seeker per post)
+              const seeker = oi.seeker as { id: string; full_name: string | null; harmony_score: number | null; harmony_reviews_count: number } | null
+              if (!authorMap[oi.post_id]) authorMap[oi.post_id] = []
+              authorMap[oi.post_id].push({
+                id: oi.id,
+                postId: oi.post_id,
+                seekerId: oi.seeker_id,
+                seekerName: seeker?.full_name ?? 'Unknown',
+                seekerHarmonyScore: seeker?.harmony_score ?? null,
+                seekerHarmonyCount: seeker?.harmony_reviews_count ?? 0,
+                status: oi.status,
+              })
+            }
+            setSeekerOptInIds(seekerIds)
+            setAuthorOptInsMap(authorMap)
+
+            // Fetch reviews the current user has submitted (seeker+author directions)
+            const allOptInIds = oisData.map((oi) => oi.id)
+            if (allOptInIds.length > 0) {
+              fetchMyReviewsForOptIns(allOptInIds).then((reviewMap) => {
+                setMyReviewMap(reviewMap)
+                // Build the set of opt-in ids the current user has reviewed (for author side)
+                setAuthorReviewedSet(new Set(reviewMap.keys()))
+              })
+            }
+          })
       }
     } catch (err: unknown) {
       const msg = isQueryTimeout(err)
@@ -712,6 +910,48 @@ export function FeedPanel() {
     }
   }
 
+  // Author updates an opt-in status (accept / decline / complete)
+  const handleAuthorUpdateOptIn = async (
+    optInId: string,
+    status: 'accepted' | 'declined' | 'completed'
+  ) => {
+    try {
+      const { error: updErr } = await supabase
+        .from('resource_opt_ins')
+        .update({ status })
+        .eq('id', optInId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      if (updErr) throw updErr
+      // Refresh post data so the management list and seeker view stay in sync
+      fetchPosts()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not update opt-in.'
+      logger.error('feed.optin.update', { error: msg })
+    }
+  }
+
+  // Author opens review modal for a specific seeker
+  const handleAuthorReviewSeeker = (optInId: string, seekerName: string) => {
+    setReviewModalOptInId(optInId)
+    setReviewModalRevieweeName(seekerName)
+    setReviewModalRevieweeRole('seeker')
+    setReviewModalOpen(true)
+  }
+
+  // Seeker opens review modal for the sourcer
+  const handleReviewSourcer = (_postId: string, optInId: string) => {
+    const post = posts.find((p) => p.id === _postId)
+    setReviewModalOptInId(optInId)
+    setReviewModalRevieweeName(post?.author.name ?? 'Sourcer')
+    setReviewModalRevieweeRole('sourcer')
+    setReviewModalOpen(true)
+  }
+
+  // After a review is submitted — refresh data
+  const handleReviewSubmitted = () => {
+    fetchPosts()
+  }
+
   const handleLike = async (postId: string) => {
     if (!user) return
 
@@ -788,6 +1028,23 @@ export function FeedPanel() {
   })
 
   return (
+    <>
+    {/* Review modal — rendered at panel root so it can overlay everything */}
+    {reviewModalOpen && reviewModalOptInId && (
+      <ReviewModal
+        open={reviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewModalOpen(false)
+            setReviewModalOptInId(null)
+          }
+        }}
+        optInId={reviewModalOptInId}
+        revieweeName={reviewModalRevieweeName}
+        revieweeRole={reviewModalRevieweeRole}
+        onSubmitted={handleReviewSubmitted}
+      />
+    )}
     <div className="h-full flex flex-col">
       {/* Top-level tablist: Feed | Messages
           Styled DISTINCT from FeedHeader's rounded-full filter pills:
@@ -885,37 +1142,55 @@ export function FeedPanel() {
                 <p className="text-xs mt-1">Be the first to share something!</p>
               </div>
             ) : (
-              filteredPosts.map((post) => (
-                <div key={post.id} data-testid={`post-${post.id}`}>
-                  <PostCard
-                    post={post}
-                    currentUserId={user?.id ?? null}
-                    optInStatus={optInMap.get(post.id)}
-                    onLike={handleLike}
-                    onComment={handleComment}
-                    onShare={handleShare}
-                    onOptIn={handleOptIn}
-                    onWithdraw={handleWithdraw}
-                    optInError={optInErrors[post.id] || null}
-                    shareCopied={shareCopiedPostId === post.id}
-                    optInCount={optInCounts[post.id]}
-                  />
-                  {openCommentPostIds.has(post.id) && (
-                    <CommentThread
-                      postId={post.id}
-                      onCountChange={(count) => {
-                        setPosts((prev) =>
-                          prev.map((p) => (p.id === post.id ? { ...p, comments: count } : p))
-                        )
-                      }}
+              filteredPosts.map((post) => {
+                const seekerOptInId = seekerOptInIds[post.id] ?? null
+                const seekerHasReviewed =
+                  seekerOptInId != null && myReviewMap.has(seekerOptInId)
+                // optInMap is the single source of truth for the current user's opt-in status.
+                // fetchOptInsForPosts returns all statuses (pending/accepted/completed/declined)
+                // with no filter, so this correctly clears to undefined after a withdraw.
+                const postOptInStatus = optInMap.get(post.id)
+
+                return (
+                  <div key={post.id} data-testid={`post-${post.id}`}>
+                    <PostCard
+                      post={post}
+                      currentUserId={user?.id ?? null}
+                      optInStatus={postOptInStatus}
+                      currentUserOptInId={seekerOptInId}
+                      seekerHasReviewed={seekerHasReviewed}
+                      onLike={handleLike}
+                      onComment={handleComment}
+                      onShare={handleShare}
+                      onOptIn={handleOptIn}
+                      onWithdraw={handleWithdraw}
+                      onReviewSourcer={handleReviewSourcer}
+                      optInError={optInErrors[post.id] || null}
+                      shareCopied={shareCopiedPostId === post.id}
+                      optInCount={optInCounts[post.id]}
+                      authorOptIns={authorOptInsMap[post.id]}
+                      onAuthorUpdateOptIn={handleAuthorUpdateOptIn}
+                      onAuthorReviewSeeker={handleAuthorReviewSeeker}
+                      authorReviewedOptInIds={authorReviewedSet}
                     />
-                  )}
-                </div>
-              ))
+                    {openCommentPostIds.has(post.id) && (
+                      <CommentThread
+                        postId={post.id}
+                        onCountChange={(count) => {
+                          setPosts((prev) =>
+                            prev.map((p) => (p.id === post.id ? { ...p, comments: count } : p))
+                          )
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+              })
             )}
           </div>
         </div>
       )}
     </div>
+    </>
   )
 }

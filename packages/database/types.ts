@@ -1211,6 +1211,8 @@ export type Database = {
           bio: string | null
           created_at: string | null
           full_name: string | null
+          harmony_reviews_count: number
+          harmony_score: number | null
           id: string
           is_admin: boolean | null
           is_staff: boolean
@@ -1234,6 +1236,8 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
+          harmony_reviews_count?: number
+          harmony_score?: number | null
           id: string
           is_admin?: boolean | null
           is_staff?: boolean
@@ -1257,6 +1261,8 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
+          harmony_reviews_count?: number
+          harmony_score?: number | null
           id?: string
           is_admin?: boolean | null
           is_staff?: boolean
@@ -1533,6 +1539,64 @@ export type Database = {
           {
             foreignKeyName: "resource_opt_ins_seeker_id_fkey"
             columns: ["seeker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          opt_in_id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          updated_at: string
+          would_recommend: boolean | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          opt_in_id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          updated_at?: string
+          would_recommend?: boolean | null
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          opt_in_id?: string
+          rating?: number
+          reviewee_id?: string
+          reviewer_id?: string
+          updated_at?: string
+          would_recommend?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_opt_in_id_fkey"
+            columns: ["opt_in_id"]
+            isOneToOne: false
+            referencedRelation: "resource_opt_ins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_reviewee_id_fkey"
+            columns: ["reviewee_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2506,6 +2570,25 @@ export type Database = {
       withdraw_opt_in: {
         Args: { p_post_id: string }
         Returns: boolean
+      }
+      submit_review: {
+        Args: {
+          p_opt_in_id: string
+          p_rating: number
+          p_would_recommend?: boolean | null
+          p_comment?: string | null
+        }
+        Returns: {
+          comment: string | null
+          created_at: string
+          id: string
+          opt_in_id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          updated_at: string
+          would_recommend: boolean | null
+        }
       }
       log_audit_event: {
         Args: {
