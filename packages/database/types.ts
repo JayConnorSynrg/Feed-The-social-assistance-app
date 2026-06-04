@@ -1149,7 +1149,9 @@ export type Database = {
           image_url: string | null
           is_hidden: boolean | null
           is_pinned: boolean | null
+          max_seekers: number | null
           resource_id: string | null
+          slots_remaining: number | null
           updated_at: string | null
           user_id: string
         }
@@ -1160,7 +1162,9 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          max_seekers?: number | null
           resource_id?: string | null
+          slots_remaining?: number | null
           updated_at?: string | null
           user_id: string
         }
@@ -1171,7 +1175,9 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          max_seekers?: number | null
           resource_id?: string | null
+          slots_remaining?: number | null
           updated_at?: string | null
           user_id?: string
         }
@@ -1474,6 +1480,61 @@ export type Database = {
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_opt_ins: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          post_id: string
+          resource_id: string | null
+          seeker_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          post_id: string
+          resource_id?: string | null
+          seeker_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          post_id?: string
+          resource_id?: string | null
+          seeker_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_opt_ins_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_opt_ins_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_opt_ins_seeker_id_fkey"
+            columns: ["seeker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2429,6 +2490,23 @@ export type Database = {
         }[]
       }
       is_current_user_admin: { Args: never; Returns: boolean }
+      opt_in_to_post: {
+        Args: { p_post_id: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          post_id: string
+          resource_id: string | null
+          seeker_id: string
+          status: string
+          updated_at: string
+        }
+      }
+      withdraw_opt_in: {
+        Args: { p_post_id: string }
+        Returns: boolean
+      }
       log_audit_event: {
         Args: {
           p_action: string

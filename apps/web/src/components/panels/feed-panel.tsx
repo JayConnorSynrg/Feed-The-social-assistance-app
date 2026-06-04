@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
 import { useSavedResources } from '@/hooks/use-saved-resources'
+import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
@@ -35,6 +36,8 @@ interface Post {
   category: 'update' | 'request' | 'offer' | 'announcement'
   resourceId: string | null
   resourceName: string | null
+  maxSeekers: number | null
+  slotsRemaining: number | null
 }
 
 type FilterType = 'all' | 'following' | 'mine' | 'announcements'
@@ -110,7 +113,7 @@ interface ResourceOption {
 }
 
 interface CreatePostCardProps {
-  onPost: (content: string, resourceId: string | null) => void
+  onPost: (content: string, resourceId: string | null, maxSeekers: number | null) => void
   resourceOptions: ResourceOption[]
 }
 
@@ -118,6 +121,7 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string>('')
+  const [maxSeekersInput, setMaxSeekersInput] = useState<string>('')
 
   const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
     limiterType: 'formSubmit',
@@ -128,11 +132,20 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
     if (!content.trim()) return
     setError(null)
 
+    // Parse max_seekers — blank = unlimited (null)
+    const maxSeekers =
+      maxSeekersInput.trim() !== '' ? parseInt(maxSeekersInput, 10) : null
+    if (maxSeekers !== null && (isNaN(maxSeekers) || maxSeekers <= 0)) {
+      setError('Seeker limit must be a positive number.')
+      return
+    }
+
     const result = await executeRateLimited(async () => {
       const sanitizedContent = sanitizeInput(content)
-      onPost(sanitizedContent, selectedResourceId || null)
+      onPost(sanitizedContent, selectedResourceId || null, maxSeekers)
       setContent('')
       setSelectedResourceId('')
+      setMaxSeekersInput('')
     })
 
     if (!result) {
@@ -196,6 +209,20 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
               </div>
             </div>
           )}
+
+          {/* Capacity input — shown whenever a resource is linked */}
+          {selectedResourceId && (
+            <Input
+              type="number"
+              min={1}
+              value={maxSeekersInput}
+              onChange={(e) => setMaxSeekersInput(e.target.value)}
+              placeholder="Limit number of seekers (optional)"
+              className="bg-white text-xs"
+              aria-label="Limit number of seekers"
+              data-testid="max-seekers-input"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -256,14 +283,37 @@ function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, on
 // ============================================
 interface PostCardProps {
   post: Post
+  currentUserId: string | null
+  optInStatus: string | undefined   // current user's opt-in status for this post
   onLike: (postId: string) => void
   onComment: (postId: string) => void
   onShare: (postId: string) => void
+  onOptIn: (postId: string) => void
+  onWithdraw: (postId: string) => void
+  optInError?: string | null
   shareCopied?: boolean
+  optInCount?: number
 }
 
-function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardProps) {
+function PostCard({
+  post,
+  currentUserId,
+  optInStatus,
+  onLike,
+  onComment,
+  onShare,
+  onOptIn,
+  onWithdraw,
+  optInError,
+  shareCopied,
+  optInCount,
+}: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
+  const isAuthor = currentUserId != null && post.author.id === currentUserId
+  const isFull =
+    post.maxSeekers != null &&
+    post.slotsRemaining != null &&
+    post.slotsRemaining <= 0
 
   return (
     <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-primary/30 transition-all">
@@ -308,6 +358,69 @@ function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardPro
         </div>
       )}
 
+      {/* Capacity + Opt-In section — only shown on posts with a capacity set */}
+      {post.maxSeekers != null && (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {/* Capacity meter */}
+          <span
+            data-testid={`capacity-${post.id}`}
+            className="text-xs text-stone-600"
+          >
+            {post.slotsRemaining ?? 0} of {post.maxSeekers} spot{post.maxSeekers !== 1 ? 's' : ''} left
+          </span>
+
+          {/* Author view: opt-in count */}
+          {isAuthor ? (
+            <span
+              data-testid={`opt-in-count-${post.id}`}
+              className="text-xs font-medium text-lime-700"
+            >
+              {optInCount ?? 0} opted in
+            </span>
+          ) : (
+            /* Seeker view: opt-in / opted-in + withdraw / full */
+            optInStatus != null ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-lime-700 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Opted In
+                </span>
+                {optInStatus === 'pending' && (
+                  <button
+                    data-testid={`withdraw-btn-${post.id}`}
+                    onClick={() => onWithdraw(post.id)}
+                    className="text-xs text-stone-500 underline hover:text-stone-700"
+                  >
+                    Withdraw
+                  </button>
+                )}
+              </div>
+            ) : isFull ? (
+              <button
+                disabled
+                className="px-3 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-400 cursor-not-allowed"
+              >
+                Full
+              </button>
+            ) : (
+              <button
+                data-testid={`opt-in-btn-${post.id}`}
+                onClick={() => onOptIn(post.id)}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
+              >
+                Opt In
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Opt-in error alert */}
+      {optInError && (
+        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
+          {optInError}
+        </div>
+      )}
+
       {/* Reactions */}
       <PostReactions
         postId={post.id}
@@ -334,6 +447,13 @@ export function FeedPanel() {
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
   // Set of post IDs whose comment threads are currently open
   const [openCommentPostIds, setOpenCommentPostIds] = useState<Set<string>>(new Set())
+  // Opt-in state: map of post_id → current user's opt-in status
+  const [optInMap, setOptInMap] = useState<OptInMap>(new Map())
+  // Per-post opt-in error (postId → message)
+  const [optInErrors, setOptInErrors] = useState<Record<string, string>>({})
+  // Per-post opt-in count for the author view (postId → count)
+  const [optInCounts, setOptInCounts] = useState<Record<string, number>>({})
+
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel } = usePanelContext()
@@ -342,6 +462,7 @@ export function FeedPanel() {
   const resourceOptions: ResourceOption[] = savedResources
     .filter((r) => r.resource_id != null)
     .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
+  const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -403,30 +524,42 @@ export function FeedPanel() {
       const rows = data || []
       const postIds = rows.map((p) => p.id)
 
+      // Posts with a capacity set — need opt-in counts for the author view
+      const cappedPostIds = rows
+        .filter((r) => r.max_seekers != null)
+        .map((r) => r.id)
+
       let likeCounts: Record<string, number> = {}
       let userLikes: Set<string> = new Set()
       let commentCounts: Record<string, number> = {}
 
       if (postIds.length > 0) {
-        // Fetch all three in parallel — eliminates sequential N+1 waterfall
-        const [likesResult, myLikesResult, commentsResult] = await Promise.all([
-          supabase
-            .from('post_likes')
-            .select('post_id')
-            .in('post_id', postIds),
-          user
-            ? supabase
-                .from('post_likes')
-                .select('post_id')
-                .in('post_id', postIds)
-                .eq('user_id', user.id)
-            : Promise.resolve({ data: [] }),
-          supabase
-            .from('post_comments')
-            .select('post_id')
-            .in('post_id', postIds)
-            .eq('is_hidden', false),
-        ])
+        type PostIdRow = { post_id: string }
+        type QueryResult = { data: PostIdRow[] | null }
+
+        // Fetch likes, my-likes, comments, and opt-in counts in parallel
+        const [likesResult, myLikesResult, commentsResult, optInResult] =
+          await Promise.all([
+            supabase.from('post_likes').select('post_id').in('post_id', postIds) as unknown as Promise<QueryResult>,
+            user
+              ? supabase
+                  .from('post_likes')
+                  .select('post_id')
+                  .in('post_id', postIds)
+                  .eq('user_id', user.id) as unknown as Promise<QueryResult>
+              : Promise.resolve({ data: [] as PostIdRow[] }),
+            supabase
+              .from('post_comments')
+              .select('post_id')
+              .in('post_id', postIds)
+              .eq('is_hidden', false) as unknown as Promise<QueryResult>,
+            cappedPostIds.length > 0
+              ? supabase
+                  .from('resource_opt_ins')
+                  .select('post_id')
+                  .in('post_id', cappedPostIds) as unknown as Promise<QueryResult>
+              : Promise.resolve({ data: [] as PostIdRow[] }),
+          ])
 
         if (likesResult.data) {
           for (const like of likesResult.data) {
@@ -442,6 +575,13 @@ export function FeedPanel() {
           for (const comment of commentsResult.data) {
             commentCounts[comment.post_id] = (commentCounts[comment.post_id] || 0) + 1
           }
+        }
+        if (optInResult?.data) {
+          const counts: Record<string, number> = {}
+          for (const row of optInResult.data) {
+            counts[row.post_id] = (counts[row.post_id] || 0) + 1
+          }
+          setOptInCounts(counts)
         }
       }
 
@@ -462,9 +602,16 @@ export function FeedPanel() {
         category: row.is_pinned ? 'announcement' : 'update',
         resourceId: row.resource?.id ?? null,
         resourceName: row.resource?.name ?? null,
+        maxSeekers: row.max_seekers ?? null,
+        slotsRemaining: row.slots_remaining ?? null,
       }))
 
       setPosts(transformed)
+
+      // Fetch this user's opt-in statuses for the loaded posts
+      if (user && postIds.length > 0) {
+        fetchOptInsForPosts(postIds).then(setOptInMap)
+      }
     } catch (err: unknown) {
       const msg = isQueryTimeout(err)
         ? 'Feed timed out — please check your connection and retry.'
@@ -474,7 +621,7 @@ export function FeedPanel() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, user])
+  }, [supabase, user, fetchOptInsForPosts])
 
   // Initial fetch
   useEffect(() => {
@@ -493,22 +640,75 @@ export function FeedPanel() {
     enabled: !authLoading,
   })
 
-  const handleCreatePost = async (content: string, resourceId: string | null) => {
+  const handleCreatePost = async (
+    content: string,
+    resourceId: string | null,
+    maxSeekers: number | null
+  ) => {
     if (!user) return
 
     try {
-      const { error } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          content,
-          resource_id: resourceId ?? null,
-        })
+      const { error } = await supabase.from('posts').insert({
+        user_id: user.id,
+        content,
+        resource_id: resourceId ?? null,
+        max_seekers: maxSeekers ?? null,
+      })
 
       if (error) throw error
       // Real-time subscription will handle adding the post
     } catch (err) {
       console.error('Error creating post:', err)
+    }
+  }
+
+  const handleOptIn = async (postId: string) => {
+    setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
+    try {
+      await doOptIn(postId)
+      // Refresh opt-in map and slots
+      fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
+      // Decrement slots_remaining optimistically
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId && p.slotsRemaining != null
+            ? { ...p, slotsRemaining: p.slotsRemaining - 1 }
+            : p
+        )
+      )
+      // Update opt-in count
+      setOptInCounts((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + 1 }))
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not opt in.'
+      setOptInErrors((prev) => ({ ...prev, [postId]: msg }))
+    }
+  }
+
+  const handleWithdraw = async (postId: string) => {
+    setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
+    try {
+      await doWithdraw(postId)
+      // Refresh opt-in map
+      fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
+      // Restore slot optimistically
+      const post = posts.find((p) => p.id === postId)
+      if (post?.maxSeekers != null && post.slotsRemaining != null) {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === postId
+              ? { ...p, slotsRemaining: Math.min(p.slotsRemaining! + 1, p.maxSeekers!) }
+              : p
+          )
+        )
+      }
+      // Update opt-in count
+      setOptInCounts((prev) => ({
+        ...prev,
+        [postId]: Math.max((prev[postId] ?? 1) - 1, 0),
+      }))
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not withdraw.'
+      setOptInErrors((prev) => ({ ...prev, [postId]: msg }))
     }
   }
 
@@ -661,6 +861,7 @@ export function FeedPanel() {
             />
           )}
 
+
           {/* Scrollable Feed */}
           <div className="flex-1 overflow-y-auto space-y-3">
             {error ? (
@@ -688,10 +889,16 @@ export function FeedPanel() {
                 <div key={post.id} data-testid={`post-${post.id}`}>
                   <PostCard
                     post={post}
+                    currentUserId={user?.id ?? null}
+                    optInStatus={optInMap.get(post.id)}
                     onLike={handleLike}
                     onComment={handleComment}
                     onShare={handleShare}
+                    onOptIn={handleOptIn}
+                    onWithdraw={handleWithdraw}
+                    optInError={optInErrors[post.id] || null}
                     shareCopied={shareCopiedPostId === post.id}
+                    optInCount={optInCounts[post.id]}
                   />
                   {openCommentPostIds.has(post.id) && (
                     <CommentThread
