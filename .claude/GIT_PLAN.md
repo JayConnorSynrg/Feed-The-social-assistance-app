@@ -22,7 +22,7 @@ next_action_id: button-hardening-phase3
 
 ```yaml
 id: button-hardening-phase3
-status: in_progress
+status: complete
 type: branch
 description: "fix(ui): confirm dialogs for destructive actions (A), Share desktop fallback (B), wire dead nav buttons (C), avatar camera wired (D). (A) forms-panel handleDeleteDraft now opens Dialog confirm before deleting; messages-panel decline/withdraw/cancel each open a Dialog confirm. (B) feed-panel handleShare falls back to navigator.clipboard.writeText + shows Check/Copied state when navigator.share is unavailable or throws non-AbortError. (C) applications-panel handleContactSupport → setActivePanel('chat'); handleUploadDocument → setActivePanel('documents'). (D7) settings-panel camera button replaced with AvatarUpload component (avatars storage bucket + profiles.avatar_url write already existed). (D6) Comment: post_comments table+RLS+realtime exists but no thread component — surfaced as PRODUCT DECISION NEEDED."
 branch: feature/button-hardening-phase3
@@ -35,8 +35,14 @@ files:
   - apps/web/src/components/panels/applications-panel.tsx
   - apps/web/src/components/panels/settings-panel.tsx
   - .claude/GIT_PLAN.md
+pr: 46
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/46
+pr_state: MERGED
+commit_sha: 8902cbf
+merge_sha: 0886b0fa662e825acc0002b82664a34a924c5f5d
+merged_at: 2026-06-04T06:09:37Z
 created_at: 2026-06-04T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T06:09:37Z
 ```
 
 ```yaml
