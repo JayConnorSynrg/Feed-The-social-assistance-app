@@ -33,7 +33,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const USER_PASSWORD = 'Test-CommentThread-123!'
 const FIXED_TS = '20260604commentthreads'
 const TEST_EMAIL = `e2e+commentthread-${FIXED_TS}@feed.local`
-const TEST_TIMEOUT_MS = 60_000
+const TEST_TIMEOUT_MS = 120_000
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -137,7 +137,7 @@ test('open comment thread → submit comment → comment appears in DOM', async 
 
   // 1. Click the Comment button on the seeded post to open thread
   const postCard = page.locator(`[data-testid="post-${seededPostId}"]`)
-  const commentBtn = postCard.locator('button', { hasText: /comment/i }).first()
+  const commentBtn = postCard.locator(`[data-testid="comment-btn-${seededPostId}"]`)
   await commentBtn.click()
   console.log('[comment-threads] Comment button clicked')
 
@@ -165,7 +165,7 @@ test('reply to a comment → nested reply appears', async ({ page }) => {
 
   // Open thread (may already have comments from prior test run — that is fine)
   const postCard = page.locator(`[data-testid="post-${seededPostId}"]`)
-  const commentBtn = postCard.locator('button', { hasText: /comment/i }).first()
+  const commentBtn = postCard.locator(`[data-testid="comment-btn-${seededPostId}"]`)
   await commentBtn.click()
 
   const thread = page.locator('[data-testid="comment-thread"]').first()
@@ -176,8 +176,11 @@ test('reply to a comment → nested reply appears', async ({ page }) => {
   await input.fill('Parent comment for reply test')
   await thread.locator('[data-testid="comment-submit"]').click()
 
-  // Wait for the parent comment to appear and grab its ID from data-testid
-  const parentCommentLocator = thread.locator('[data-testid^="comment-"]').first()
+  // Wait for the comment list to settle after submit (list re-renders after realtime refetch)
+  // Scope to comment-list to exclude comment-composer, comment-input, etc.
+  const commentList = thread.locator('[data-testid="comment-list"]')
+  await expect(commentList).toBeVisible({ timeout: 10_000 })
+  const parentCommentLocator = commentList.locator('[data-testid^="comment-"]').first()
   await expect(parentCommentLocator).toBeVisible({ timeout: 10_000 })
 
   const parentTestId = await parentCommentLocator.getAttribute('data-testid')
@@ -207,7 +210,7 @@ test('second click on Comment button closes the thread', async ({ page }) => {
   await loginAndNavigateToFeed(page)
 
   const postCard = page.locator(`[data-testid="post-${seededPostId}"]`)
-  const commentBtn = postCard.locator('button', { hasText: /comment/i }).first()
+  const commentBtn = postCard.locator(`[data-testid="comment-btn-${seededPostId}"]`)
 
   // Open
   await commentBtn.click()

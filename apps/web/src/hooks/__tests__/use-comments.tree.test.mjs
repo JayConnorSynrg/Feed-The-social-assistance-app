@@ -11,7 +11,9 @@ import assert from 'node:assert/strict'
 
 // ---------------------------------------------------------------------------
 // Inline the pure function (mirrors apps/web/src/hooks/use-comments.ts)
-// This avoids needing a bundler/transpiler for the ESM import.
+// Cannot import directly: use-comments.ts has 'use client' + TypeScript syntax +
+// @/ path aliases — none of which are resolvable from a plain .mjs without a
+// bundler/transpiler. Inline copy kept intentionally; kept in sync manually.
 // ---------------------------------------------------------------------------
 
 /**

@@ -171,6 +171,7 @@ function CreatePostCard({ onPost }: CreatePostCardProps) {
 // POST REACTIONS
 // ============================================
 interface PostReactionsProps {
+  postId: string
   likes: number
   comments: number
   isLiked: boolean
@@ -180,7 +181,7 @@ interface PostReactionsProps {
   shareCopied?: boolean
 }
 
-function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
+function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
   return (
     <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
       <button
@@ -195,6 +196,8 @@ function PostReactions({ likes, comments, isLiked, onLike, onComment, onShare, s
 
       <button
         onClick={onComment}
+        data-testid={`comment-btn-${postId}`}
+        aria-label="Comment"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
       >
         <MessageCircle className="w-4 h-4" />
@@ -261,6 +264,7 @@ function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardPro
 
       {/* Reactions */}
       <PostReactions
+        postId={post.id}
         likes={post.likes}
         comments={post.comments}
         isLiked={post.isLiked}

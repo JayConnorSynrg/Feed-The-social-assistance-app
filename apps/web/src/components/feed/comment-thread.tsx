@@ -42,11 +42,17 @@ interface CommentRowProps {
   onReply: (parentId: string, content: string) => Promise<boolean>
   submitting: boolean
   isAuthenticated: boolean
+  /** IDs of comments whose reply composer is currently open (lifted to CommentThread) */
+  replyOpenIds: Set<string>
+  onToggleReply: (id: string) => void
+  /** Reply text per comment id (lifted to CommentThread so it survives realtime refetches) */
+  replyTexts: Map<string, string>
+  onReplyTextChange: (id: string, text: string) => void
 }
 
-function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated }: CommentRowProps) {
-  const [replyOpen, setReplyOpen] = useState(false)
-  const [replyText, setReplyText] = useState('')
+function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated, replyOpenIds, onToggleReply, replyTexts, onReplyTextChange }: CommentRowProps) {
+  const replyOpen = replyOpenIds.has(comment.id)
+  const replyText = replyTexts.get(comment.id) ?? ''
   const [localSubmitting, setLocalSubmitting] = useState(false)
 
   const authorName = comment.user?.full_name ?? 'Anonymous'
@@ -62,8 +68,8 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated }
     setLocalSubmitting(true)
     const ok = await onReply(comment.id, replyText)
     if (ok) {
-      setReplyText('')
-      setReplyOpen(false)
+      onReplyTextChange(comment.id, '')
+      onToggleReply(comment.id) // close after successful submit
     }
     setLocalSubmitting(false)
   }
@@ -105,7 +111,7 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated }
           {isAuthenticated && depth === 0 && (
             <button
               data-testid={`reply-btn-${comment.id}`}
-              onClick={() => setReplyOpen((v) => !v)}
+              onClick={() => onToggleReply(comment.id)}
               className="mt-1 text-[11px] text-stone-400 hover:text-[#4a5d23] transition-colors flex items-center gap-1"
               aria-label={replyOpen ? 'Cancel reply' : 'Reply to this comment'}
             >
@@ -120,7 +126,7 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated }
               <Textarea
                 data-testid={`reply-input-${comment.id}`}
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => onReplyTextChange(comment.id, e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Write a reply… (Cmd+Enter to submit)"
                 rows={2}
@@ -153,6 +159,10 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated }
           onReply={onReply}
           submitting={submitting}
           isAuthenticated={isAuthenticated}
+          replyOpenIds={replyOpenIds}
+          onToggleReply={onToggleReply}
+          replyTexts={replyTexts}
+          onReplyTextChange={onReplyTextChange}
         />
       ))}
     </div>
@@ -170,6 +180,30 @@ export function CommentThread({ postId, onCountChange }: CommentThreadProps) {
 
   const [newComment, setNewComment] = useState('')
   const [showAll, setShowAll] = useState(false)
+  // Lifted reply-open state: survives realtime refetches (which remount CommentRows)
+  const [replyOpenIds, setReplyOpenIds] = useState<Set<string>>(new Set())
+  // Lifted reply text: survives realtime refetches so in-progress text isn't lost
+  const [replyTexts, setReplyTexts] = useState<Map<string, string>>(new Map())
+
+  const handleToggleReply = useCallback((id: string) => {
+    setReplyOpenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const handleReplyTextChange = useCallback((id: string, text: string) => {
+    setReplyTexts((prev) => {
+      const next = new Map(prev)
+      next.set(id, text)
+      return next
+    })
+  }, [])
 
   // Fetch on mount
   useEffect(() => {
@@ -241,7 +275,7 @@ export function CommentThread({ postId, onCountChange }: CommentThreadProps) {
 
       {/* Comment list */}
       {!loading && (
-        <div className="divide-y divide-stone-100">
+        <div data-testid="comment-list" className="divide-y divide-stone-100">
           {visibleComments.map((comment) => (
             <CommentRow
               key={comment.id}
@@ -249,6 +283,10 @@ export function CommentThread({ postId, onCountChange }: CommentThreadProps) {
               onReply={addReply}
               submitting={submitting}
               isAuthenticated={isAuthenticated}
+              replyOpenIds={replyOpenIds}
+              onToggleReply={handleToggleReply}
+              replyTexts={replyTexts}
+              onReplyTextChange={handleReplyTextChange}
             />
           ))}
         </div>
