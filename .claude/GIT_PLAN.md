@@ -1408,7 +1408,7 @@ completed_at: 2026-06-03T23:55:00.000Z
 
 ```yaml
 id: resource-linked-posts-phaseB
-status: in_progress
+status: complete
 type: branch
 description: "feat(feed): Phase B resource-linked posts — posts.resource_id FK+index migration, feed composer resource selector, resource-chip on PostCard, Community Posts section in ResourceDetailDialog, embed Date.now() bug fix in post-composer.tsx"
 branch: feature/resource-linked-posts
@@ -1424,6 +1424,9 @@ files:
   - apps/web/src/components/feed/post-composer.tsx
   - apps/web/e2e/resource-linked-posts.spec.ts
   - .claude/GIT_PLAN.md
+pr: 48
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/48
+commit_sha: 0d2406d
 created_at: 2026-06-04T17:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T17:25:00.000Z
 ```
