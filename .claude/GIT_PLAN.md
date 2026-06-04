@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: comment-threads-phaseA
+next_action_id: resource-linked-posts-phaseB
 
 ## Log
 
@@ -1404,4 +1404,29 @@ pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/42
 commit_sha: 8ab90b4
 created_at: 2026-06-03T23:45:00.000Z
 completed_at: 2026-06-03T23:55:00.000Z
+```
+
+```yaml
+id: resource-linked-posts-phaseB
+status: complete
+type: branch
+description: "feat(feed): Phase B resource-linked posts — posts.resource_id FK+index migration, feed composer resource selector, resource-chip on PostCard, Community Posts section in ResourceDetailDialog, embed Date.now() bug fix in post-composer.tsx"
+branch: feature/resource-linked-posts
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260604130000_posts_resource_id_fk.sql
+  - packages/database/types.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/components/documents/resource-detail-dialog.tsx
+  - apps/web/src/hooks/use-resource-detail.ts
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/src/components/feed/post-composer.tsx
+  - apps/web/e2e/resource-linked-posts.spec.ts
+  - .claude/GIT_PLAN.md
+pr: 48
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/48
+commit_sha: 0d2406d
+created_at: 2026-06-04T17:00:00.000Z
+completed_at: 2026-06-04T17:25:00.000Z
 ```

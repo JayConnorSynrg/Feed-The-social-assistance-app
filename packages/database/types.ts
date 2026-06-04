@@ -1149,6 +1149,7 @@ export type Database = {
           image_url: string | null
           is_hidden: boolean | null
           is_pinned: boolean | null
+          resource_id: string | null
           updated_at: string | null
           user_id: string
         }
@@ -1159,6 +1160,7 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          resource_id?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -1169,10 +1171,18 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          resource_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "posts_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "posts_user_id_fkey"
             columns: ["user_id"]

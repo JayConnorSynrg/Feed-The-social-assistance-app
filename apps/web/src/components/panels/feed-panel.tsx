@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Send, User, Loader2, Check } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -13,6 +13,7 @@ import { sanitizeInput } from '@/lib/security'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
+import { useSavedResources } from '@/hooks/use-saved-resources'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
@@ -32,6 +33,8 @@ interface Post {
   comments: number
   isLiked: boolean
   category: 'update' | 'request' | 'offer' | 'announcement'
+  resourceId: string | null
+  resourceName: string | null
 }
 
 type FilterType = 'all' | 'following' | 'mine' | 'announcements'
@@ -101,13 +104,20 @@ function FeedHeader({ activeFilter, onFilterChange }: FeedHeaderProps) {
 // ============================================
 // CREATE POST CARD
 // ============================================
-interface CreatePostCardProps {
-  onPost: (content: string) => void
+interface ResourceOption {
+  id: string
+  name: string
 }
 
-function CreatePostCard({ onPost }: CreatePostCardProps) {
+interface CreatePostCardProps {
+  onPost: (content: string, resourceId: string | null) => void
+  resourceOptions: ResourceOption[]
+}
+
+function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [selectedResourceId, setSelectedResourceId] = useState<string>('')
 
   const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
     limiterType: 'formSubmit',
@@ -119,10 +129,10 @@ function CreatePostCard({ onPost }: CreatePostCardProps) {
     setError(null)
 
     const result = await executeRateLimited(async () => {
-      // Sanitize content before posting
       const sanitizedContent = sanitizeInput(content)
-      onPost(sanitizedContent)
+      onPost(sanitizedContent, selectedResourceId || null)
       setContent('')
+      setSelectedResourceId('')
     })
 
     if (!result) {
@@ -143,24 +153,49 @@ function CreatePostCard({ onPost }: CreatePostCardProps) {
           <User className="w-5 h-5 text-white" />
         </div>
 
-        {/* Input and Button */}
-        <div className="flex-1 flex gap-2">
-          <Input
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !isLimited && handleSubmit()}
-            placeholder="Share an update, request, or offer..."
-            className="flex-1 bg-white"
-            disabled={isLimited}
-          />
-          <Button
-            onClick={handleSubmit}
-            disabled={!content.trim() || isLimited}
-            size="icon"
-            className="rounded-lg"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+        {/* Input, Resource Selector, and Send */}
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Input
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !isLimited && handleSubmit()}
+              placeholder="Share an update, request, or offer..."
+              className="flex-1 bg-white"
+              disabled={isLimited}
+            />
+            <Button
+              onClick={handleSubmit}
+              disabled={!content.trim() || isLimited}
+              size="icon"
+              className="rounded-lg"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Optional resource link selector */}
+          {resourceOptions.length > 0 && (
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
+                <LinkIcon className="w-3.5 h-3.5 text-stone-400" />
+              </div>
+              <select
+                value={selectedResourceId}
+                onChange={(e) => setSelectedResourceId(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-stone-200 bg-white pl-7 pr-7 py-1.5 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
+                aria-label="Link a resource (optional)"
+              >
+                <option value="">Link a resource (optional)</option>
+                {resourceOptions.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -262,6 +297,17 @@ function PostCard({ post, onLike, onComment, onShare, shareCopied }: PostCardPro
       {/* Content */}
       <p className="text-sm leading-relaxed mb-3">{post.content}</p>
 
+      {/* Resource chip — shown when the post is linked to a resource */}
+      {post.resourceId && post.resourceName && (
+        <div
+          data-testid={`resource-chip-${post.id}`}
+          className="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 rounded-full bg-lime-50 border border-lime-200 text-xs font-medium text-lime-700"
+        >
+          <LinkIcon className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate max-w-[180px]">{post.resourceName}</span>
+        </div>
+      )}
+
       {/* Reactions */}
       <PostReactions
         postId={post.id}
@@ -291,6 +337,11 @@ export function FeedPanel() {
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel } = usePanelContext()
+  // Saved resources for the resource-link selector in the composer
+  const { savedResources } = useSavedResources()
+  const resourceOptions: ResourceOption[] = savedResources
+    .filter((r) => r.resource_id != null)
+    .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -339,7 +390,7 @@ export function FeedPanel() {
         { limit: 50 },
         async () => await supabase
           .from('posts')
-          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff)')
+          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff), resource:resources(id, name)')
           .eq('is_hidden', false)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
@@ -409,6 +460,8 @@ export function FeedPanel() {
         comments: commentCounts[row.id] || 0,
         isLiked: userLikes.has(row.id),
         category: row.is_pinned ? 'announcement' : 'update',
+        resourceId: row.resource?.id ?? null,
+        resourceName: row.resource?.name ?? null,
       }))
 
       setPosts(transformed)
@@ -440,7 +493,7 @@ export function FeedPanel() {
     enabled: !authLoading,
   })
 
-  const handleCreatePost = async (content: string) => {
+  const handleCreatePost = async (content: string, resourceId: string | null) => {
     if (!user) return
 
     try {
@@ -449,6 +502,7 @@ export function FeedPanel() {
         .insert({
           user_id: user.id,
           content,
+          resource_id: resourceId ?? null,
         })
 
       if (error) throw error
@@ -600,7 +654,12 @@ export function FeedPanel() {
           <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
 
           {/* Create Post Card */}
-          {isAuthenticated && <CreatePostCard onPost={handleCreatePost} />}
+          {isAuthenticated && (
+            <CreatePostCard
+              onPost={handleCreatePost}
+              resourceOptions={resourceOptions}
+            />
+          )}
 
           {/* Scrollable Feed */}
           <div className="flex-1 overflow-y-auto space-y-3">

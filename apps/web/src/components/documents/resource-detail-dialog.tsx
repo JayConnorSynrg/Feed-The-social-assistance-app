@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   CheckSquare, Calendar, FileText, StickyNote, Plus, Trash2, Download,
-  MapPin, Phone, ExternalLink, Loader2, Upload, Check
+  MapPin, Phone, ExternalLink, Loader2, Upload, Check, MessageSquare, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { useResourceDetail } from '@/hooks/use-resource-detail'
+import { createClient } from '@/lib/supabase/client'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 interface ResourceDetailDialogProps {
   savedResourceId: string | null
@@ -29,6 +31,131 @@ const CATEGORY_LABELS: Record<string, string> = {
   food: 'Food', housing: 'Housing', employment: 'Jobs', transportation: 'Transportation',
   legal: 'Legal', healthcare: 'Healthcare', education: 'Education', other: 'General',
   mental_health: 'Mental Health', substance_abuse: 'Treatment', childcare: 'Childcare',
+}
+
+// ── Posts about this resource ──
+interface ResourcePost {
+  id: string
+  content: string
+  created_at: string | null
+  author_name: string | null
+  author_avatar: string | null
+}
+
+function getRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+  return d.toLocaleDateString()
+}
+
+interface ResourcePostsProps {
+  resourceId: string
+}
+
+function ResourcePosts({ resourceId }: ResourcePostsProps) {
+  const supabase = createClient()
+  const [posts, setPosts] = useState<ResourcePost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchPosts = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('posts')
+        .select('id, content, created_at, user:profiles!posts_user_id_fkey(full_name, avatar_url)')
+        .eq('resource_id', resourceId)
+        .eq('is_hidden', false)
+        .order('created_at', { ascending: false })
+        .limit(20)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+
+      if (fetchError) throw fetchError
+
+      const rows = (data ?? []) as Array<{
+        id: string
+        content: string
+        created_at: string | null
+        user: { full_name: string | null; avatar_url: string | null } | null
+      }>
+
+      setPosts(rows.map((row) => ({
+        id: row.id,
+        content: row.content,
+        created_at: row.created_at,
+        author_name: row.user?.full_name ?? null,
+        author_avatar: row.user?.avatar_url ?? null,
+      })))
+    } catch (err) {
+      const msg = isQueryTimeout(err)
+        ? 'Posts timed out — please retry.'
+        : err instanceof Error ? err.message : 'Failed to load posts'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase, resourceId])
+
+  useEffect(() => {
+    fetchPosts()
+  }, [fetchPosts])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        <Loader2 className="w-4 h-4 animate-spin text-stone-400" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return <p className="text-xs text-red-500 py-2">{error}</p>
+  }
+
+  if (posts.length === 0) {
+    return (
+      <p className="text-sm text-stone-400 text-center py-3">
+        No community posts about this resource yet.
+      </p>
+    )
+  }
+
+  return (
+    <div data-testid="resource-posts-list" className="space-y-3">
+      {posts.map((post) => (
+        <div
+          key={post.id}
+          data-testid={`resource-post-${post.id}`}
+          className="flex gap-2.5"
+        >
+          <div className="w-7 h-7 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0 mt-0.5">
+            {post.author_avatar ? (
+              <img src={post.author_avatar} alt={post.author_name ?? ''} className="w-full h-full rounded-full object-cover" />
+            ) : (
+              <User className="w-3.5 h-3.5 text-white" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-xs font-medium text-stone-700 truncate">
+                {post.author_name ?? 'Community Member'}
+              </span>
+              <span className="text-[10px] text-stone-400 flex-shrink-0">
+                {getRelativeTime(post.created_at)}
+              </span>
+            </div>
+            <p className="text-sm text-stone-600 leading-relaxed">{post.content}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: ResourceDetailDialogProps) {
@@ -152,6 +279,18 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+              {/* ── Community Posts Section (only when resource has a canonical ID) ── */}
+              {resource.resource_id && (
+                <section data-testid="resource-posts-section">
+                  <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" /> Community Posts
+                  </h3>
+                  <div className="border border-stone-200 rounded-xl bg-white p-4">
+                    <ResourcePosts resourceId={resource.resource_id} />
+                  </div>
+                </section>
+              )}
+
               {/* ── Tasks Section ── */}
               <section>
                 <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-3 flex items-center gap-2">

@@ -14,7 +14,8 @@ import { sanitizeInput, validateFileUpload } from '@/lib/security'
 interface PostComposerProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (post: PostData) => Promise<void>
+  // onSubmit returns the created post's id so embed links use the real id
+  onSubmit: (post: PostData) => Promise<{ id: string } | void>
   userName?: string
   userAvatar?: string
 }
@@ -155,7 +156,7 @@ export function PostComposer({
           }
         }
 
-        await onSubmit({
+        const submitResult = await onSubmit({
           content: sanitizedContent,
           type: postType,
           category: category || undefined,
@@ -163,12 +164,13 @@ export function PostComposer({
           imageUrl,
         })
 
-        // If embed was selected, generate embed code
+        // If embed was selected, generate embed code using the real post id
         if (publishTo === 'embed') {
+          const postId = submitResult?.id ?? ''
           const embedSnippet = `<div class="feed-embed" data-type="${postType}" data-category="${category}">
   <blockquote>${sanitizedContent}</blockquote>
   <cite>— ${userName} on FEED</cite>
-  <a href="${getAppUrl()}/s/post/${Date.now()}" target="_blank">View on FEED</a>
+  <a href="${getAppUrl()}/s/post/${postId}" target="_blank">View on FEED</a>
 </div>`
           setEmbedCode(embedSnippet)
         } else {
@@ -191,6 +193,9 @@ export function PostComposer({
       setIsSubmitting(false)
     }
   }, [content, postType, category, publishTo, onSubmit, onClose, userName, executeRateLimited, imageFile, uploadImage])
+  // Note: post-composer.tsx is not currently mounted in the SPA feed flow.
+  // The live composer is CreatePostCard in feed-panel.tsx.
+  // This component and its embed generation are preserved for future use.
 
   const handleCopyEmbed = useCallback(() => {
     navigator.clipboard.writeText(embedCode)
