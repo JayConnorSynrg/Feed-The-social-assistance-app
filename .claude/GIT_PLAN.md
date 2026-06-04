@@ -22,7 +22,7 @@ next_action_id: documents-button-coverall
 
 ```yaml
 id: documents-button-coverall
-status: in_progress
+status: complete
 type: branch
 description: "fix(documents): 4 cover-all fixes for the Documents Upload button UX. (A) EncryptedUpload locked-card wrapper gets onClick+role=button+tabIndex+onKeyDown so clicking anywhere on the card (not just the inner button) opens VaultUnlockModal; inner button gets stopPropagation to prevent double-fire. (B) EmptyState 'Upload Document' button wired via onUploadClick prop → scrollIntoView on the EncryptedUpload ref (reuses the existing inline upload path). (C) getFriendlyErrorMessage helper (apps/web/src/lib/friendly-error.ts) maps permission-denied/42501 and network/abort/timeout errors to human text; applied to applications-panel.tsx {error.message} and use-program-browser.ts raw err.message path. (D) e2e spec documents-upload-locked-card.spec.ts asserts card-body click and inner-button click both open the modal (RED without A, GREEN with A)."
 branch: feature/documents-button-coverall
@@ -36,8 +36,14 @@ files:
   - apps/web/src/hooks/use-program-browser.ts
   - apps/web/e2e/documents-upload-locked-card.spec.ts
   - .claude/GIT_PLAN.md
+pr: 45
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/45
+commit_sha: c243dd3
+merged_into: develop
+merge_sha: 245446ceb7fd49c1c9a703f2edb605e95ecaa6f0
+merged_at: 2026-06-04T05:40:06Z
 created_at: 2026-06-04T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T05:40:06Z
 ```
 
 ```yaml
