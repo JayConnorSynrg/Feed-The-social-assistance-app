@@ -395,9 +395,10 @@ function DocumentCard({ document, onView, onDownload, onEdit, onDelete, isDownlo
 interface EmptyStateProps {
   category: DocumentCategory
   searchQuery: string
+  onUploadClick?: () => void
 }
 
-function EmptyState({ category, searchQuery }: EmptyStateProps) {
+function EmptyState({ category, searchQuery, onUploadClick }: EmptyStateProps) {
   const config = CATEGORY_CONFIG[category]
   const Icon = config.icon
 
@@ -429,7 +430,7 @@ function EmptyState({ category, searchQuery }: EmptyStateProps) {
           : `Upload documents to this category for easy access`
         }
       </p>
-      <Button className="gap-2">
+      <Button className="gap-2" onClick={onUploadClick}>
         <Plus className="w-4 h-4" />
         Upload Document
       </Button>
@@ -478,6 +479,8 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null)
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [editSource, setEditSource] = useState<EditSource | null>(null)
+  // Ref for the EncryptedUpload zone so the empty-state button can scroll to it
+  const uploadZoneRef = useRef<HTMLDivElement>(null)
 
   // Sync viewMode when panelParams.subtab changes (e.g. back-button resolves alias)
   useEffect(() => {
@@ -936,11 +939,13 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
             )}
 
             {/* Encrypted Upload Zone */}
-            <EncryptedUpload
-              category={activeCategory === 'all' ? 'other' : activeCategory}
-              onUploadComplete={handleUploadComplete}
-              className="mb-6"
-            />
+            <div ref={uploadZoneRef}>
+              <EncryptedUpload
+                category={activeCategory === 'all' ? 'other' : activeCategory}
+                onUploadComplete={handleUploadComplete}
+                className="mb-6"
+              />
+            </div>
 
             {/* Category Tabs (Mobile/Tablet) */}
             <div className="lg:hidden">
@@ -958,7 +963,11 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
                   <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
                 </div>
               ) : filteredDocuments.length === 0 ? (
-                <EmptyState category={activeCategory} searchQuery={searchQuery} />
+                <EmptyState
+                  category={activeCategory}
+                  searchQuery={searchQuery}
+                  onUploadClick={() => uploadZoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredDocuments.map((doc) => (

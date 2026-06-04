@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useApplications, type Application as HookApplication, type ApplicationStatus as HookApplicationStatus } from '@/hooks/use-applications'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 
 // ============================================
 // TYPES
@@ -680,7 +681,7 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
       <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
         <AlertTriangle className="w-8 h-8 text-orange-500" />
         <p className="text-sm text-stone-700 font-medium">Failed to load applications</p>
-        <p className="text-xs text-muted-foreground">{error.message}</p>
+        <p className="text-xs text-muted-foreground">{getFriendlyErrorMessage(error, "We couldn't load your applications. Please try again.")}</p>
       </div>
     )
   }

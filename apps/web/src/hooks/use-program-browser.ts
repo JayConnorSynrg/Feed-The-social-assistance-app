@@ -9,6 +9,7 @@ import { CATEGORY_FORM_MAP } from '@/lib/category-form-map'
 import { normalizeState } from '@/lib/us-states'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 
 const FORM_CATEGORIES = Object.keys(CATEGORY_FORM_MAP) as Database['public']['Enums']['resource_category'][]
 
@@ -102,9 +103,11 @@ export function useProgramBrowser(): ProgramBrowserResult {
       const results = (data ?? []) as Resource[]
       setPrograms(results)
     } catch (err) {
+      // Log the raw error for observability before mapping to user-friendly text
+      logger.warn('programs.fetch.error', { error_message: err instanceof Error ? err.message : String(err) })
       const message = isQueryTimeout(err)
         ? 'Programs timed out. Please try again.'
-        : err instanceof Error ? err.message : 'Failed to load programs'
+        : getFriendlyErrorMessage(err, 'Failed to load programs. Please try again.')
       setError(message)
     } finally {
       setIsLoading(false)
