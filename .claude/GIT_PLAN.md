@@ -16,13 +16,13 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: fix-rls-is-admin-secdef
+next_action_id: client-log-rate-limit
 
 ## Log
 
 ```yaml
 id: fix-rls-is-admin-secdef
-status: in_progress
+status: complete
 type: branch
 description: "fix(rls): use is_current_user_admin() in 18 admin policies to fix 42501. Cause: 20260603130000_pii_hardening_revoke.sql revoked profiles.is_admin SELECT from authenticated, but 18 RLS policies gated admin access via inline EXISTS(SELECT 1 FROM profiles WHERE id=auth.uid() AND is_admin) — which threw 42501 (permission denied for table profiles) for every authenticated user, breaking Applications/Programs/Forms reads. Fix: swap the 18 inline-EXISTS subqueries to (select public.is_current_user_admin()) — the existing SECDEF accessor that reads is_admin under the function owner, Supabase-recommended pattern; admin gating semantics preserved. Verified live on prod (ndtpovonpadugthmcntl): non-admin authenticated resources read 0→335 rows, admin gating intact, no advisor regression. Regression test: rls-is-admin-no-42501.spec.ts asserts non-admin reads of resources/form_submissions return no 42501."
 branch: fix/rls-is-admin-secdef
@@ -32,8 +32,12 @@ files:
   - supabase/migrations/20260603160000_rls_is_admin_use_function.sql
   - apps/web/e2e/rls-is-admin-no-42501.spec.ts
   - .claude/GIT_PLAN.md
+pr: 44
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/44
+merged_into: develop
+merge_sha: abcc4cf9d8626cf7476155b731610d6bb991603f
 created_at: 2026-06-03T16:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T04:50:59.000Z
 ```
 
 ```yaml
