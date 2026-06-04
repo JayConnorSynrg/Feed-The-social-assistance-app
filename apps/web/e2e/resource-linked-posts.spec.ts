@@ -81,7 +81,7 @@ test.beforeAll(async () => {
   const userId = provision.userId
 
   // Insert a resource row directly (admin client, service role bypasses RLS)
-  const { data: resourceRow, error: resourceErr } = await (admin as any)
+  const { data: resourceRow, error: resourceErr } = await admin
     .from('resources')
     .insert({
       name: RESOURCE_NAME,
@@ -101,7 +101,7 @@ test.beforeAll(async () => {
   console.log(`[resource-linked-posts] resource created: ${resourceId}`)
 
   // Insert a post linked to the resource
-  const { data: linkedPost, error: linkedPostErr } = await (admin as any)
+  const { data: linkedPost, error: linkedPostErr } = await admin
     .from('posts')
     .insert({
       user_id: userId,
@@ -118,7 +118,7 @@ test.beforeAll(async () => {
   console.log(`[resource-linked-posts] linked post created: ${linkedPostId}`)
 
   // Insert a post with NO resource link
-  const { data: unlinkedPost, error: unlinkedPostErr } = await (admin as any)
+  const { data: unlinkedPost, error: unlinkedPostErr } = await admin
     .from('posts')
     .insert({
       user_id: userId,
@@ -134,7 +134,7 @@ test.beforeAll(async () => {
   console.log(`[resource-linked-posts] unlinked post created: ${unlinkedPostId}`)
 
   // Insert a saved_resource row so the resource detail dialog is accessible
-  const { data: savedRow, error: savedErr } = await (admin as any)
+  const { data: savedRow, error: savedErr } = await admin
     .from('saved_resources')
     .insert({
       user_id: userId,
@@ -155,10 +155,10 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   try {
     // Clean up posts, resource, saved_resource, then user
-    if (linkedPostId) await (admin as any).from('posts').delete().eq('id', linkedPostId)
-    if (unlinkedPostId) await (admin as any).from('posts').delete().eq('id', unlinkedPostId)
-    if (savedResourceId) await (admin as any).from('saved_resources').delete().eq('id', savedResourceId)
-    if (resourceId) await (admin as any).from('resources').delete().eq('id', resourceId)
+    if (linkedPostId) await admin.from('posts').delete().eq('id', linkedPostId)
+    if (unlinkedPostId) await admin.from('posts').delete().eq('id', unlinkedPostId)
+    if (savedResourceId) await admin.from('saved_resources').delete().eq('id', savedResourceId)
+    if (resourceId) await admin.from('resources').delete().eq('id', resourceId)
     if (provision?.userId) {
       await deleteProvisionedUser(admin, provision.userId)
       console.log(`[resource-linked-posts] deleted test user ${provision.userId}`)
