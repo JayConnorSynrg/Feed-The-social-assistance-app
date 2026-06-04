@@ -656,11 +656,11 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   }
 
   const handleUploadDocument = (_applicationId: string, _actionId: string) => {
-    // TODO: Wire to Documents panel upload flow
+    setActivePanel('documents')
   }
 
   const handleContactSupport = (_id: string) => {
-    // TODO: Wire to support/chat panel
+    setActivePanel('chat')
   }
 
   const handleToggleExpand = (id: string) => {

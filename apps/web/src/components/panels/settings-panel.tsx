@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Save,
   X,
-  Camera,
   Mail,
   Phone,
   MapPin,
@@ -24,8 +23,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import Image from 'next/image'
 import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
 import { SecurityActivity } from '@/components/security/security-activity'
+import { AvatarUpload } from '@/components/profile/avatar-upload'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
 import { normalizeState } from '@/lib/us-states'
@@ -226,9 +227,11 @@ interface ProfileSectionProps {
   profile: SettingsData['profile']
   onUpdate: (profile: SettingsData['profile']) => void
   saving?: boolean
+  userId?: string
+  avatarUrl?: string | null
 }
 
-function ProfileSection({ profile, onUpdate, saving }: ProfileSectionProps) {
+function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: ProfileSectionProps) {
   const [editMode, setEditMode] = useState(false)
   const [localProfile, setLocalProfile] = useState(profile)
 
@@ -248,27 +251,36 @@ function ProfileSection({ profile, onUpdate, saving }: ProfileSectionProps) {
       description="Manage your personal information and how others see you"
     >
       {/* Avatar */}
-      <div className="flex items-center gap-4 p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-[#4a5d23] flex items-center justify-center text-white text-xl font-semibold">
-            {profile.name.split(' ').map(n => n[0]).join('')}
+      {editMode && userId ? (
+        <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
+          <AvatarUpload
+            userId={userId}
+            currentAvatarUrl={avatarUrl ?? null}
+            fullName={profile.name}
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-4 p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
+          <div className="relative">
+            {avatarUrl ? (
+              <Image src={avatarUrl} alt={profile.name} width={64} height={64} className="rounded-full object-cover" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-[#4a5d23] flex items-center justify-center text-white text-xl font-semibold">
+                {profile.name.split(' ').map(n => n[0]).join('')}
+              </div>
+            )}
           </div>
-          {editMode && (
-            <button className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-md">
-              <Camera className="w-3 h-3 text-white" />
-            </button>
+          <div className="flex-1">
+            <p className="font-medium">{profile.name}</p>
+            <p className="text-sm text-stone-600">{profile.email}</p>
+          </div>
+          {!editMode && (
+            <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>
+              Edit
+            </Button>
           )}
         </div>
-        <div className="flex-1">
-          <p className="font-medium">{profile.name}</p>
-          <p className="text-sm text-stone-600">{profile.email}</p>
-        </div>
-        {!editMode && (
-          <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>
-            Edit
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Editable Fields */}
       {editMode ? (
@@ -949,7 +961,13 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl">
           {activeSection === 'profile' && (
-            <ProfileSection profile={profileSettings} onUpdate={updateProfile} saving={saving} />
+            <ProfileSection
+              profile={profileSettings}
+              onUpdate={updateProfile}
+              saving={saving}
+              userId={user?.id}
+              avatarUrl={profile?.avatar_url}
+            />
           )}
           {activeSection === 'notifications' && (
             <NotificationSection notifications={localPrefs.notifications} onUpdate={updateNotifications} />
