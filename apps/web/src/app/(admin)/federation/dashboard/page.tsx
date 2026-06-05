@@ -258,6 +258,7 @@ export default function FederationDashboardPage() {
       if (updateError) throw updateError
 
       // Log the event
+      const { data: { user: adminUser } } = await supabase.auth.getUser()
       await supabase.from('federation_trust_events').insert({
         peer_id: selectedPeer.id,
         event_type: adjustment > 0 ? 'manual_boost' : 'manual_penalty',
@@ -265,7 +266,7 @@ export default function FederationDashboardPage() {
         new_trust_score: newScore,
         reason: adjustmentReason,
         metadata: { admin_adjustment: adjustment },
-        created_by: 'admin', // TODO: Get actual admin ID
+        created_by: adminUser?.id ?? null,
       })
 
       // Refresh data
@@ -295,6 +296,7 @@ export default function FederationDashboardPage() {
       // Log the event
       const peer = peers.find((p) => p.id === peerId)
       if (peer) {
+        const { data: { user: statusAdminUser } } = await supabase.auth.getUser()
         await supabase.from('federation_trust_events').insert({
           peer_id: peerId,
           event_type: status === 'blocked' ? 'instance_blocked' : 'instance_suspended',
@@ -302,7 +304,7 @@ export default function FederationDashboardPage() {
           new_trust_score: peer.trust_score,
           reason: `Instance status changed to ${status}`,
           metadata: { new_status: status },
-          created_by: 'admin',
+          created_by: statusAdminUser?.id ?? null,
         })
       }
 
