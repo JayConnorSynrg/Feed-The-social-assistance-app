@@ -4,8 +4,8 @@
 // Community Feed panel - posts, updates, and interactions from mutual aid community
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -21,6 +21,7 @@ import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -135,24 +136,87 @@ interface ResourceOption {
 }
 
 interface CreatePostCardProps {
-  onPost: (content: string, resourceId: string | null, maxSeekers: number | null) => void
+  /** Returns the new post id on success, or null on error */
+  onPost: (
+    content: string,
+    resourceId: string | null,
+    maxSeekers: number | null
+  ) => Promise<string | null>
   resourceOptions: ResourceOption[]
 }
 
+const GEO_RADIUS_OPTIONS = [5, 10, 25, 50] as const
+type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
+
 function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
+  const supabase = createClient()
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string>('')
   const [maxSeekersInput, setMaxSeekersInput] = useState<string>('')
+
+  // Geo-outreach state
+  const [geoNotify, setGeoNotify] = useState(false)
+  const [geoRadius, setGeoRadius] = useState<GeoRadius>(10)
+  const [seekerCount, setSeekerCount] = useState<number | null>(null)
+  const [seekerCountError, setSeekerCountError] = useState<string | null>(null)
+  const [geoNotifyResult, setGeoNotifyResult] = useState<string | null>(null)
+  const countAbortRef = useRef<AbortController | null>(null)
 
   const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
     limiterType: 'formSubmit',
     onRateLimited: () => setError('Posting too quickly. Please wait a moment.'),
   })
 
+  // Fetch seeker count whenever geo toggle is on and a resource is selected
+  useEffect(() => {
+    if (!geoNotify || !selectedResourceId) {
+      setSeekerCount(null)
+      setSeekerCountError(null)
+      return
+    }
+
+    // Abort any in-flight request
+    if (countAbortRef.current) {
+      countAbortRef.current.abort()
+    }
+    const ctrl = new AbortController()
+    countAbortRef.current = ctrl
+
+    setSeekerCount(null)
+    setSeekerCountError(null)
+
+    const fetchCount = async () => {
+      try {
+        const { data, error: rpcErr } = await supabase.rpc('seekers_within_radius', {
+          p_resource_id: selectedResourceId,
+          p_radius_miles: geoRadius,
+        })
+        if (ctrl.signal.aborted) return
+        if (rpcErr) {
+          setSeekerCountError(getFriendlyErrorMessage(rpcErr, 'Could not load seeker count.'))
+        } else {
+          setSeekerCount(typeof data === 'number' ? data : null)
+        }
+      } catch (err: unknown) {
+        if (ctrl.signal.aborted) return
+        if (!isQueryTimeout(err)) {
+          setSeekerCountError(getFriendlyErrorMessage(err, 'Could not load seeker count.'))
+        }
+      }
+    }
+
+    void fetchCount()
+
+    return () => {
+      ctrl.abort()
+    }
+  }, [geoNotify, selectedResourceId, geoRadius, supabase])
+
   const handleSubmit = async () => {
     if (!content.trim()) return
     setError(null)
+    setGeoNotifyResult(null)
 
     // Parse max_seekers — blank = unlimited (null)
     const maxSeekers =
@@ -164,10 +228,35 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
 
     const result = await executeRateLimited(async () => {
       const sanitizedContent = sanitizeInput(content)
-      onPost(sanitizedContent, selectedResourceId || null, maxSeekers)
+      const resourceId = selectedResourceId || null
+      const shouldNotify = geoNotify && !!resourceId
+      const radiusSnapshot = geoRadius
+
+      const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers)
       setContent('')
       setSelectedResourceId('')
       setMaxSeekersInput('')
+      setGeoNotify(false)
+      setSeekerCount(null)
+
+      // Fan-out geo notifications after post is created — failure does NOT block the post
+      if (shouldNotify && newPostId) {
+        try {
+          const { data: notifyData, error: notifyErr } = await supabase
+            .rpc('notify_seekers_near_resource', {
+              p_post_id: newPostId,
+              p_radius_miles: radiusSnapshot,
+            })
+          if (notifyErr) throw notifyErr
+          const count = typeof notifyData === 'number' ? notifyData : 0
+          setGeoNotifyResult(
+            `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
+          )
+        } catch (notifyEx: unknown) {
+          logger.error('geo.notify.fanout', { error: String(notifyEx) })
+          setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
+        }
+      }
     })
 
     if (!result) {
@@ -180,6 +269,14 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
       {error && (
         <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
           {error}
+        </div>
+      )}
+      {geoNotifyResult && (
+        <div
+          className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-700"
+          data-testid="geo-notify-result"
+        >
+          {geoNotifyResult}
         </div>
       )}
       <div className="flex gap-3">
@@ -217,7 +314,11 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
               </div>
               <select
                 value={selectedResourceId}
-                onChange={(e) => setSelectedResourceId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedResourceId(e.target.value)
+                  setGeoNotify(false)
+                  setSeekerCount(null)
+                }}
                 className="w-full appearance-none rounded-lg border border-stone-200 bg-white pl-7 pr-7 py-1.5 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
                 aria-label="Link a resource (optional)"
               >
@@ -244,6 +345,63 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
               aria-label="Limit number of seekers"
               data-testid="max-seekers-input"
             />
+          )}
+
+          {/* Geo-outreach controls — shown only when a resource is linked */}
+          {selectedResourceId && (
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {/* Toggle */}
+              <label className="flex items-center gap-1.5 text-xs text-stone-600 cursor-pointer select-none">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={geoNotify}
+                  data-testid="geo-outreach-toggle"
+                  onClick={() => setGeoNotify((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1 ${
+                    geoNotify ? 'bg-[#4a5d23]' : 'bg-stone-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      geoNotify ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <MapPin className="w-3.5 h-3.5" />
+                Notify nearby seekers
+              </label>
+
+              {/* Radius selector */}
+              {geoNotify && (
+                <select
+                  value={geoRadius}
+                  onChange={(e) => setGeoRadius(Number(e.target.value) as GeoRadius)}
+                  data-testid="geo-outreach-radius"
+                  aria-label="Notification radius in miles"
+                  className="appearance-none rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
+                >
+                  {GEO_RADIUS_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{r} mi</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Live seeker count */}
+              {geoNotify && (
+                <span
+                  className="text-xs text-stone-500"
+                  data-testid="geo-seeker-count"
+                  aria-live="polite"
+                >
+                  {seekerCountError
+                    ? seekerCountError
+                    : seekerCount === null
+                      ? 'Loading…'
+                      : `${seekerCount} seeker${seekerCount !== 1 ? 's' : ''} within ${geoRadius} mi`}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -896,21 +1054,27 @@ export function FeedPanel() {
     content: string,
     resourceId: string | null,
     maxSeekers: number | null
-  ) => {
-    if (!user) return
+  ): Promise<string | null> => {
+    if (!user) return null
 
     try {
-      const { error } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content,
-        resource_id: resourceId ?? null,
-        max_seekers: maxSeekers ?? null,
-      })
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          content,
+          resource_id: resourceId ?? null,
+          max_seekers: maxSeekers ?? null,
+        })
+        .select('id')
+        .single()
 
       if (error) throw error
-      // Real-time subscription will handle adding the post
+      // Real-time subscription will handle adding the post to the feed
+      return data?.id ?? null
     } catch (err) {
       console.error('Error creating post:', err)
+      return null
     }
   }
 
