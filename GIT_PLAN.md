@@ -98,3 +98,29 @@ Fix the onboarding "stuck at Saving..." bug: upsert hung with no timeout, no err
 - type-check: exit 0
 - build: exit 0 (`/api/client-log` listed in route table)
 - Merged PR #16; origin/develop HEAD = d2ac0c3
+
+---
+
+## Entry: geo-outreach-d2b
+
+**ID:** geo-outreach-d2b
+**Status:** open
+**Branch:** feature/geo-outreach
+**PR:** #54 — open, awaiting human merge into develop
+**Commit:** 0213405
+**Base:** 58e2b9c (develop tip at branch time)
+
+### Objective
+Phase D2b: geo-outreach layer on top of the D2a geo foundation. Two SECDEF RPCs (seekers_within_radius, notify_seekers_near_resource) + live composer UI + e2e suite.
+
+### Changes
+- `supabase/migrations/20260605130000_geo_outreach_rpcs.sql` — two SECURITY DEFINER functions, anon EXECUTE revoked, authenticated+service_role granted, SET search_path=public. Applied to prod (verified prosecdef=true, anon_can_exec=false, auth_can_exec=true).
+- `packages/database/types.ts` — hand-added seekers_within_radius + notify_seekers_near_resource to Database['public']['Functions'].
+- `apps/web/src/components/panels/feed-panel.tsx` — CreatePostCard gains geo-outreach toggle/radius/count/result controls; handleCreatePost returns new post id.
+- `apps/web/e2e/geo-outreach.spec.ts` — 4 tests (radius math, privacy, notify+dedup, UI). 4/4 green on two independent runs.
+
+### Validation
+- type-check: 0 errors
+- lint: 0 new errors
+- e2e geo-outreach: 4/4 pass (run 1 + run 2)
+- CI: all checks pass (Analyze, Build, Lint, Test, Type Check, Security Audit, Deploy Preview, Vercel)
