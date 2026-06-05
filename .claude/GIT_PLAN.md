@@ -22,7 +22,7 @@ next_action_id: embed-opt-in-widget-phaseC5
 
 ```yaml
 id: embed-opt-in-widget-phaseC5
-status: in_progress
+status: complete
 type: branch
 description: "feat(feed): public embeddable opt-in widget + composer embed generator (Phase C.5). New SSR route /s/embed/[id] (anon-readable, iframe-safe, compact card with slot count + opt-in CTA). Per-route frame policy in next.config.ts: global source changed to negative-lookahead /((?!s/embed/).*) preserving X-Frame-Options:DENY+frame-ancestors 'none' everywhere except embed route which gets frame-ancestors *. Embed-code button (data-testid=embed-code-btn) in PostReactions/PostCard generates <iframe src=.../s/embed/...> snippet and copies to clipboard. Proxy publicRoutes expanded to include /s/post, /s/donate, /s/resource, /s/embed so social+embed routes are accessible unauthenticated. DB: GRANT EXECUTE on is_current_user_admin() to anon (resources ALL RLS policy evaluated against anon was throwing permission-denied on posts→resources join; anon always returns false — correct behavior). E2e: embed-widget.spec.ts 3/3 green; opt-in-flow.spec.ts 4/4 + review-harmony.spec.ts 3/3 green (no regression)."
 branch: feature/embed-opt-in-widget
@@ -38,8 +38,11 @@ files:
   - apps/web/e2e/embed-widget.spec.ts
   - supabase/migrations/20260604160000_grant_is_current_user_admin_to_anon.sql
   - .claude/GIT_PLAN.md
+pr: 51
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/51
+commit_sha: ea07e20
 created_at: 2026-06-04T16:00:00.000Z
-completed_at: null
+completed_at: 2026-06-04T16:30:00.000Z
 ```
 
 ```yaml
