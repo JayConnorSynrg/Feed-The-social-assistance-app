@@ -16,9 +16,31 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: resource-linked-posts-phaseB
+next_action_id: embed-opt-in-widget-phaseC5
 
 ## Log
+
+```yaml
+id: embed-opt-in-widget-phaseC5
+status: in_progress
+type: branch
+description: "feat(feed): public embeddable opt-in widget + composer embed generator (Phase C.5). New SSR route /s/embed/[id] (anon-readable, iframe-safe, compact card with slot count + opt-in CTA). Per-route frame policy in next.config.ts: global source changed to negative-lookahead /((?!s/embed/).*) preserving X-Frame-Options:DENY+frame-ancestors 'none' everywhere except embed route which gets frame-ancestors *. Embed-code button (data-testid=embed-code-btn) in PostReactions/PostCard generates <iframe src=.../s/embed/...> snippet and copies to clipboard. Proxy publicRoutes expanded to include /s/post, /s/donate, /s/resource, /s/embed so social+embed routes are accessible unauthenticated. DB: GRANT EXECUTE on is_current_user_admin() to anon (resources ALL RLS policy evaluated against anon was throwing permission-denied on posts→resources join; anon always returns false — correct behavior). E2e: embed-widget.spec.ts 3/3 green; opt-in-flow.spec.ts 4/4 + review-harmony.spec.ts 3/3 green (no regression)."
+branch: feature/embed-opt-in-widget
+base: develop
+base_sha: 15683b5
+remote: origin
+files:
+  - apps/web/src/app/(social)/s/embed/[id]/page.tsx
+  - apps/web/src/app/(social)/s/embed/[id]/layout.tsx
+  - apps/web/next.config.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/proxy.ts
+  - apps/web/e2e/embed-widget.spec.ts
+  - supabase/migrations/20260604160000_grant_is_current_user_admin_to_anon.sql
+  - .claude/GIT_PLAN.md
+created_at: 2026-06-04T16:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: comment-threads-phaseA

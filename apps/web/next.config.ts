@@ -58,7 +58,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // All routes EXCEPT the public embed widget.
+        // Next.js header source uses path-to-regexp — a negative-lookahead
+        // segment excludes /s/embed/* so that route can be iframed by 3rd parties.
+        // X-Frame-Options: DENY and frame-ancestors 'none' remain on every other route.
+        source: '/((?!s/embed/).*)',
         headers: [
           {
             key: 'X-Content-Type-Options',
@@ -160,6 +164,45 @@ const nextConfig: NextConfig = {
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        // Embed widget route: allow any site to iframe it.
+        // - frame-ancestors * replaces 'none' so 3rd-party iframes are permitted.
+        // - X-Frame-Options is intentionally OMITTED: there is no valid "allow all"
+        //   value; modern browsers use frame-ancestors, legacy browsers accept the
+        //   absence of X-Frame-Options as "allow". Setting SAMEORIGIN/DENY here
+        //   would conflict with the permissive frame-ancestors in some older UAs.
+        // - All other security headers (HSTS, nosniff, etc.) are retained.
+        source: '/s/embed/:id',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.supabase.co",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              "font-src 'self'",
+              // Allow any origin to embed this widget in an iframe
+              "frame-ancestors *",
+              "base-uri 'self'",
+              "form-action 'none'",
             ].join('; '),
           },
         ],

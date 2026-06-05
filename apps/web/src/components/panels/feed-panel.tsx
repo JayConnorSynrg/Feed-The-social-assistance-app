@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -262,9 +262,11 @@ interface PostReactionsProps {
   onComment: () => void
   onShare: () => void
   shareCopied?: boolean
+  onEmbed: () => void
+  embedCopied?: boolean
 }
 
-function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied }: PostReactionsProps) {
+function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied, onEmbed, embedCopied }: PostReactionsProps) {
   return (
     <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
       <button
@@ -289,11 +291,21 @@ function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, on
 
       <button
         onClick={onShare}
-        className={`flex items-center gap-1.5 text-sm transition-colors ml-auto ${shareCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
+        className={`flex items-center gap-1.5 text-sm transition-colors ${shareCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
         aria-label={shareCopied ? 'Link copied' : 'Share post'}
       >
         {shareCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
         {shareCopied && <span className="text-xs font-medium">Copied</span>}
+      </button>
+
+      <button
+        onClick={onEmbed}
+        data-testid="embed-code-btn"
+        className={`flex items-center gap-1.5 text-sm transition-colors ml-auto ${embedCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
+        aria-label={embedCopied ? 'Embed code copied' : 'Copy embed code'}
+      >
+        {embedCopied ? <Check className="w-4 h-4" /> : <Code className="w-4 h-4" />}
+        {embedCopied && <span className="text-xs font-medium">Embed copied</span>}
       </button>
     </div>
   )
@@ -313,11 +325,13 @@ interface PostCardProps {
   onLike: (postId: string) => void
   onComment: (postId: string) => void
   onShare: (postId: string) => void
+  onEmbed: (postId: string) => void
   onOptIn: (postId: string) => void
   onWithdraw: (postId: string) => void
   onReviewSourcer?: (postId: string, optInId: string) => void
   optInError?: string | null
   shareCopied?: boolean
+  embedCopied?: boolean
   optInCount?: number
   /** Enriched opt-in rows for the author's management list */
   authorOptIns?: EnrichedOptIn[]
@@ -336,11 +350,13 @@ function PostCard({
   onLike,
   onComment,
   onShare,
+  onEmbed,
   onOptIn,
   onWithdraw,
   onReviewSourcer,
   optInError,
   shareCopied,
+  embedCopied,
   optInCount,
   authorOptIns,
   onAuthorUpdateOptIn,
@@ -568,6 +584,8 @@ function PostCard({
         onComment={() => onComment(post.id)}
         onShare={() => onShare(post.id)}
         shareCopied={shareCopied}
+        onEmbed={() => onEmbed(post.id)}
+        embedCopied={embedCopied}
       />
     </div>
   )
@@ -582,6 +600,7 @@ export function FeedPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
+  const [embedCopiedPostId, setEmbedCopiedPostId] = useState<string | null>(null)
   // Set of post IDs whose comment threads are currently open
   const [openCommentPostIds, setOpenCommentPostIds] = useState<Set<string>>(new Set())
   // Opt-in state: map of post_id → current user's opt-in status
@@ -1019,6 +1038,17 @@ export function FeedPanel() {
     }
   }
 
+  const handleEmbed = (postId: string) => {
+    const origin = window.location.origin
+    const snippet = `<iframe src="${origin}/s/embed/${postId}" width="100%" height="220" style="border:1px solid #e7e5e4;border-radius:12px;" title="FEED opt-in"></iframe>`
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(snippet).then(() => {
+        setEmbedCopiedPostId(postId)
+        setTimeout(() => setEmbedCopiedPostId(null), 2500)
+      }).catch(() => {})
+    }
+  }
+
   // Filter posts
   const filteredPosts = posts.filter(post => {
     if (activeFilter === 'all') return true
@@ -1162,11 +1192,13 @@ export function FeedPanel() {
                       onLike={handleLike}
                       onComment={handleComment}
                       onShare={handleShare}
+                      onEmbed={handleEmbed}
                       onOptIn={handleOptIn}
                       onWithdraw={handleWithdraw}
                       onReviewSourcer={handleReviewSourcer}
                       optInError={optInErrors[post.id] || null}
                       shareCopied={shareCopiedPostId === post.id}
+                      embedCopied={embedCopiedPostId === post.id}
                       optInCount={optInCounts[post.id]}
                       authorOptIns={authorOptInsMap[post.id]}
                       onAuthorUpdateOptIn={handleAuthorUpdateOptIn}

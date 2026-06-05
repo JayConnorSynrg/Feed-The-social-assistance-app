@@ -1,0 +1,16 @@
+-- Migration: grant EXECUTE on is_current_user_admin() to anon
+--
+-- Root cause: the resources table has an "Admins can manage all resources"
+-- policy with cmd=ALL that evaluates `SELECT is_current_user_admin()` as
+-- its USING expression. Because it is ALL (not just INSERT/UPDATE/DELETE),
+-- PostgreSQL evaluates it on every SELECT too — including FK joins from
+-- posts→resources. The anon role had no EXECUTE grant on the function, so
+-- any unauthenticated query that joins posts→resources threw:
+--   "permission denied for function is_current_user_admin"
+--
+-- Fix: grant EXECUTE to anon. The function is SECURITY DEFINER; an anon
+-- caller always returns false (no admin), which is the correct behavior.
+-- This does not weaken any security invariant — anon was always denied admin
+-- actions by the policy body returning false; now it can evaluate that body
+-- without erroring.
+GRANT EXECUTE ON FUNCTION public.is_current_user_admin() TO anon;
