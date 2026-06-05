@@ -184,11 +184,13 @@ test.afterAll(async () => {
         await admin.from('posts').delete().eq('id', p.id)
       }
     }
-    // saved_resources
+    // saved_resources — clean by current-run id first (REST client, unblocked for saved_resources)
     if (resourceId) {
       await admin.from('saved_resources').delete().eq('resource_id', resourceId)
-      await admin.from('resources').delete().eq('id', resourceId)
     }
+    // resources — use Management API SQL to bypass PostgREST RLS and sweep ALL cross-run
+    // leaked rows by name pattern, not just the current run's id. Idempotent: 0 rows = success.
+    await runSql(`DELETE FROM public.resources WHERE name ILIKE 'E2E Geo Outreach%';`)
     // Seekers
     for (const sid of seekerIds ?? []) {
       await admin.from('profiles').delete().eq('id', sid)
