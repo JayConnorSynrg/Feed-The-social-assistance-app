@@ -2653,6 +2653,14 @@ export type Database = {
           zip_code: string
         }[]
       }
+      notify_seekers_near_resource: {
+        Args: { p_post_id: string; p_radius_miles: number }
+        Returns: number
+      }
+      seekers_within_radius: {
+        Args: { p_resource_id: string; p_radius_miles: number }
+        Returns: number
+      }
       nearby_resources: {
         Args: { lat: number; lng: number; radius_miles?: number }
         Returns: {
