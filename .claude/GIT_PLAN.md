@@ -16,9 +16,30 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: embed-opt-in-widget-phaseC5
+next_action_id: follows-graph-phaseD1
 
 ## Log
+
+```yaml
+id: follows-graph-phaseD1
+status: in_progress
+type: branch
+description: "feat(feed): follows social graph — follow/unfollow + real 'following' filter (Phase D1). New hook use-follows.ts (fetchFollowing→Set<string>, follow/unfollow with optimistic update+revert, isFollowing helper, AbortSignal.timeout+getFriendlyErrorMessage pattern). feed-panel.tsx: import useFollows, wire followingIds in FeedPanel, add Follow/Following toggle button in PostCard author row (data-testid=follow-btn-{authorId}, hidden on own posts, earth-tone styling), fix dead 'following' filter fallthrough (was return true → now followingIds.has(post.author.id)). E2e: follows-graph.spec.ts 3 scenarios. No migration created — follows table confirmed live in production."
+branch: feature/follows-graph
+base: develop
+base_sha: 9225f34
+remote: origin
+files:
+  - apps/web/src/hooks/use-follows.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/e2e/follows-graph.spec.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+commit_sha: null
+created_at: 2026-06-05T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: embed-opt-in-widget-phaseC5

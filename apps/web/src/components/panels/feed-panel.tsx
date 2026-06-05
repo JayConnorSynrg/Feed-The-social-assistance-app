@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
+import { useFollows } from '@/hooks/use-follows'
 import { MessagesPanel } from './messages-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
@@ -339,6 +340,11 @@ interface PostCardProps {
   onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
   /** set of opt-in ids the author has already reviewed */
   authorReviewedOptInIds?: Set<string>
+  /** whether the current user follows this post's author */
+  isFollowingAuthor?: boolean
+  /** follow/unfollow the post author — only passed when currentUserId != post.author.id */
+  onFollow?: (authorId: string) => void
+  onUnfollow?: (authorId: string) => void
 }
 
 function PostCard({
@@ -362,6 +368,9 @@ function PostCard({
   onAuthorUpdateOptIn,
   onAuthorReviewSeeker,
   authorReviewedOptInIds,
+  isFollowingAuthor,
+  onFollow,
+  onUnfollow,
 }: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
@@ -410,6 +419,24 @@ function PostCard({
             <span>{getRelativeTime(post.timestamp)}</span>
           </div>
         </div>
+
+        {/* Follow/Following toggle — only shown for other authors when authenticated */}
+        {currentUserId != null && !isAuthor && onFollow && onUnfollow && (
+          <button
+            data-testid={`follow-btn-${post.author.id}`}
+            onClick={() =>
+              isFollowingAuthor ? onUnfollow(post.author.id) : onFollow(post.author.id)
+            }
+            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+              isFollowingAuthor
+                ? 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'
+                : 'bg-lime-50 border-lime-300 text-lime-700 hover:bg-lime-100'
+            }`}
+            aria-label={isFollowingAuthor ? `Unfollow ${post.author.name}` : `Follow ${post.author.name}`}
+          >
+            {isFollowingAuthor ? 'Following' : 'Follow'}
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -633,6 +660,7 @@ export function FeedPanel() {
     .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
   const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
   const { fetchMyReviewsForOptIns } = useReviews()
+  const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow } = useFollows()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -845,6 +873,13 @@ export function FeedPanel() {
     fetchPosts()
   }, [fetchPosts])
 
+  // Load following ids on mount (and when auth resolves)
+  useEffect(() => {
+    if (!authLoading) {
+      fetchFollowing()
+    }
+  }, [authLoading, fetchFollowing])
+
   // Real-time updates
   useRealtimeFeed({
     onInsert: () => {
@@ -1054,6 +1089,7 @@ export function FeedPanel() {
     if (activeFilter === 'all') return true
     if (activeFilter === 'announcements') return post.category === 'announcement'
     if (activeFilter === 'mine') return user != null && post.author.id === user.id
+    if (activeFilter === 'following') return user != null && followingIds.has(post.author.id)
     return true
   })
 
@@ -1204,6 +1240,9 @@ export function FeedPanel() {
                       onAuthorUpdateOptIn={handleAuthorUpdateOptIn}
                       onAuthorReviewSeeker={handleAuthorReviewSeeker}
                       authorReviewedOptInIds={authorReviewedSet}
+                      isFollowingAuthor={followingIds.has(post.author.id)}
+                      onFollow={doFollow}
+                      onUnfollow={doUnfollow}
                     />
                     {openCommentPostIds.has(post.id) && (
                       <CommentThread
