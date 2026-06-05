@@ -1218,6 +1218,8 @@ export type Database = {
           is_staff: boolean
           is_verified: boolean | null
           latitude: number | null
+          /** Trigger-derived geography(POINT,4326). PostgREST serializes as WKT string. Read-only for clients. */
+          location: string | null
           location_city: string | null
           location_state: string | null
           longitude: number | null
@@ -2104,6 +2106,24 @@ export type Database = {
           location_info?: Json | null
           session_token?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      zip_centroids: {
+        Row: {
+          lat: number
+          lng: number
+          zip: string
+        }
+        Insert: {
+          lat: number
+          lng: number
+          zip: string
+        }
+        Update: {
+          lat?: number
+          lng?: number
+          zip?: string
         }
         Relationships: []
       }

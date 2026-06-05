@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: follows-graph-phaseD1
+next_action_id: geo-foundation-phaseD2a
 
 ## Log
 
@@ -39,6 +39,29 @@ pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/52
 commit_sha: 559b8e1
 created_at: 2026-06-05T00:00:00.000Z
 completed_at: 2026-06-05T00:30:00.000Z
+```
+
+```yaml
+id: geo-foundation-phaseD2a
+status: in_progress
+type: branch
+description: "feat(geo): zip-centroid table + profile location geocoding foundation (Phase D2a). Creates public.zip_centroids (US Census 2020 ZCTA public-domain reference data, 33,144 rows, RLS SELECT for authenticated, no client writes). Adds geography(POINT,4326) location column to profiles with GIST index. BEFORE trigger geocode_profile_location() (SECDEF, SET search_path=public, REVOKE EXECUTE from PUBLIC/anon/authenticated): (1) fallback fills lat/lng from zip_centroids ONLY when zip present AND lat/lng NULL — never clobbers precise Mapbox fix; (2) derives location = ST_SetSRID(ST_MakePoint(lng,lat),4326)::geography. Backfill: existing rows with zip_code → lat/lng → location populated. location column: GRANT SELECT only (SELECT-only ACL in pg_attribute; no UPDATE grant for anon/authenticated). Migrations applied to prod. E2e: 4 scenarios cover seed spot-check, fallback geocode, precision preservation, null-coord case."
+branch: feature/geo-foundation
+base: develop
+base_sha: a0b019e
+remote: origin
+files:
+  - supabase/migrations/20260605120000_create_zip_centroids.sql
+  - supabase/migrations/20260605120100_seed_zip_centroids.sql
+  - supabase/migrations/20260605120200_geocode_profiles_from_zip.sql
+  - packages/database/types.ts
+  - apps/web/e2e/geo-foundation.spec.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+commit_sha: null
+created_at: 2026-06-05T01:00:00.000Z
+completed_at: null
 ```
 
 ```yaml
