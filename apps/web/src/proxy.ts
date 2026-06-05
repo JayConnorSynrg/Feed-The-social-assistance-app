@@ -94,6 +94,11 @@ export async function proxy(request: NextRequest) {
     '/mission',
     '/blog',
     '/resources',
+    // Public share / embed routes — anon-readable SSR pages
+    '/s/post',
+    '/s/donate',
+    '/s/resource',
+    '/s/embed',
   ]
 
   // Root SPA - if authenticated, check onboarding completion
@@ -114,9 +119,11 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Check if the current path is a public route
+  // Check if the current path is a public route.
+  // Routes that start with a listed prefix (e.g. /s/embed, /s/post) are
+  // treated as public so dynamic segments like /s/embed/[id] are included.
   const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith('/api/')
+    (route) => pathname === route || pathname.startsWith(route + '/') || pathname.startsWith('/api/')
   )
 
   // Onboarding is accessible only to authenticated users
