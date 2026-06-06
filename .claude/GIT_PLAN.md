@@ -16,9 +16,31 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: profiles-write-grant-lockdown
+next_action_id: profiles-coord-read-lockdown
 
 ## Log
+
+```yaml
+id: profiles-coord-read-lockdown
+status: in_progress
+type: branch
+description: "security(profiles): close cross-user coordinate-read privacy hole. authenticated held column SELECT on latitude/longitude/location/zip_code + cross-user RLS policy (auth.uid()<>id) let any user bulk-read home coords via PostgREST bypassing count-only seekers_within_radius. Fix: SECDEF get_my_coordinates() accessor (own-row only, pinned search_path, anon/PUBLIC revoked, authenticated granted). auth-provider.tsx updated: drop latitude/longitude from 3 .select() sites, centralized PROFILE_COLUMNS constant, fetchCoords() helper runs in parallel with profile select (Promise.all). packages/database/types.ts: hand-added get_my_coordinates function type. Migration 20260606130000_profiles_coord_read_lockdown.sql: Phase1=accessor (APPLIED to prod, verified prosecdef=true + search_path pinned + anon_can_exec=false + auth_can_exec=true); Phase2=REVOKE SELECT(lat/lng/location/zip_code) included in migration for fresh-DB but NOT applied to prod yet (post-deploy step). type-check 0 errors, lint 0 new errors. PR --base develop."
+branch: feature/profiles-coord-read-lockdown
+base: develop
+base_sha: 22334bd
+remote: origin
+files:
+  - supabase/migrations/20260606130000_profiles_coord_read_lockdown.sql
+  - apps/web/src/providers/auth-provider.tsx
+  - packages/database/types.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+commit_sha: null
+created_at: 2026-06-06T13:00:00.000Z
+completed_at: null
+```
+
 
 ```yaml
 id: profiles-write-grant-lockdown

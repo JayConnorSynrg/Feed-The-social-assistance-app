@@ -33,6 +33,28 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
+// ─── coord helper ───────────────────────────────────────────────────────────
+// latitude/longitude are REVOKED from direct column SELECT (coord-read lockdown,
+// migration 20260606130000). We fetch them via the SECDEF accessor get_my_coordinates()
+// which enforces own-row access only (WHERE id = auth.uid()).
+// Callers null-guard already (map-panel, use-chat, use-volunteer-resource).
+async function fetchCoords(
+  supabase: ReturnType<typeof createClient>
+): Promise<{ latitude: number | null; longitude: number | null }> {
+  const { data } = await supabase.rpc('get_my_coordinates')
+  const row = Array.isArray(data) ? data[0] : null
+  return {
+    latitude: row?.latitude ?? null,
+    longitude: row?.longitude ?? null,
+  }
+}
+
+// 11-column list — excludes latitude, longitude (coord lockdown), phone,
+// paypal_email, venmo_username, is_admin (PII hardening, 20260603120000).
+const PROFILE_COLUMNS =
+  'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
+  'is_verified, created_at, is_staff, onboarding_completed'
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -45,25 +67,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const supabase = getSupabase()
 
     const fetchProfile = async (userId: string) => {
-      // Explicit column list — excludes phone, paypal_email, venmo_username, is_admin.
-      // Those columns are DB-revoked from cross-user reads (PII hardening).
-      // Own-row phone: read via rpc('get_my_private_profile') in settings-panel.
-      // Own-row is_admin gate: rpc('is_current_user_admin') in admin layout.
-      // is_staff mirrors is_admin and is safe for display (e.g. feed badge).
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(
-          'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
-          'is_verified, created_at, latitude, longitude, is_staff, onboarding_completed'
-        )
-        .eq('id', userId)
-        .maybeSingle()
+      // Run profile select and coord RPC in parallel to avoid an extra round-trip.
+      const [profileResult, coords] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select(PROFILE_COLUMNS)
+          .eq('id', userId)
+          .maybeSingle(),
+        fetchCoords(supabase),
+      ])
 
+      const { data, error } = profileResult
       if (error) {
         console.error('Error fetching profile:', error.message, error.code)
         return null
       }
-      return data as unknown as Profile | null
+      if (!data) return null
+      // Merge coords sourced from SECDEF accessor into the profile object.
+      return Object.assign({}, data, coords) as unknown as Profile
     }
 
     const mountTime = Date.now()
@@ -171,14 +192,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (error) {
       setError(error)
     } else if (newSession) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select(
-          'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
-          'is_verified, created_at, latitude, longitude, is_staff, onboarding_completed'
-        )
-        .eq('id', newSession.user.id)
-        .maybeSingle()
+      // Run profile select and coord RPC in parallel.
+      const [profileResult, coords] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select(PROFILE_COLUMNS)
+          .eq('id', newSession.user.id)
+          .maybeSingle(),
+        fetchCoords(supabase),
+      ])
+      const profileData = profileResult.data
+        ? Object.assign({}, profileResult.data, coords)
+        : null
       setUser(newSession.user)
       setSession(newSession)
       setProfile(profileData as unknown as Profile)
@@ -189,21 +214,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const updateProfile = useCallback(async (updates: ProfileUpdate) => {
     if (!user) return
 
-    const { data, error } = await getSupabase()
-      .from('profiles')
-      .update(updates)
-      .eq('id', user.id)
-      .select(
-        'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
-        'is_verified, created_at, latitude, longitude, is_staff, onboarding_completed'
-      )
-      .single()
+    const supabase = getSupabase()
+    // UPDATE...RETURNING cannot include revoked columns — run profile update
+    // and coord RPC in parallel, then merge.
+    const [updateResult, coords] = await Promise.all([
+      supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id)
+        .select(PROFILE_COLUMNS)
+        .single(),
+      fetchCoords(supabase),
+    ])
 
+    const { data, error } = updateResult
     if (error) {
       throw error
     }
 
-    setProfile(data as unknown as Profile)
+    setProfile(Object.assign({}, data, coords) as unknown as Profile)
   }, [user])
 
   const value: AuthContextType = {
