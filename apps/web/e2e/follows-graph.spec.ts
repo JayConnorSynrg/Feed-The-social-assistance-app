@@ -14,8 +14,8 @@
  *  - Tests 1 & 2 drive the UI end-to-end with real Supabase DML calls.
  *  - Test 3 seeds a follows row via admin, then unfollows via UI and asserts
  *    the 'following' view empties.
- *  - page.route() mocks discriminate on `following_id` to avoid collisions with
- *    other concurrent specs (mirrors opt-in-flow.spec.ts strategy).
+ *  - Tests drive the UI end-to-end with real Supabase DML; no page.route() mocks
+ *    are needed because admin-provisioned users isolate the data by user id.
  *
  * Run:
  *   cd apps/web && npx playwright test e2e/follows-graph.spec.ts --reporter=line

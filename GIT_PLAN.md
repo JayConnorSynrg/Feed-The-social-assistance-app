@@ -124,3 +124,31 @@ Phase D2b: geo-outreach layer on top of the D2a geo foundation. Two SECDEF RPCs 
 - lint: 0 new errors
 - e2e geo-outreach: 4/4 pass (run 1 + run 2)
 - CI: all checks pass (Analyze, Build, Lint, Test, Type Check, Security Audit, Deploy Preview, Vercel)
+
+---
+
+## Entry: chore/social-cleanup
+
+**ID:** social-cleanup
+**Status:** open
+**Branch:** chore/social-cleanup
+**Commit:** 5d6d4b6
+**Base:** 3a1d381 (develop tip)
+
+### Objective
+Social system cleanup: delete dead feed components, fix uuid type mismatch in federation trust events, embed security header parity, revoke unused column INSERT privilege, surface follow errors to users.
+
+### Changes
+- `apps/web/src/components/feed/feed-list.tsx` — DELETED (zero imports; was sole N+1 like-count site)
+- `apps/web/src/components/feed/post-composer.tsx` — DELETED (zero imports)
+- `apps/web/src/app/(admin)/federation/dashboard/page.tsx` — replace `created_by: 'admin'` string literal with real uuid from auth.getUser() in adjustTrustScore + updateInstanceStatus
+- `apps/web/next.config.ts` — add Permissions-Policy + X-DNS-Prefetch-Control to /s/embed/:id header block (parity with global block; frame-ancestors * intact)
+- `supabase/migrations/20260605140000_revoke_profiles_location_insert.sql` — REVOKE INSERT(location) from anon, authenticated. Applied to prod. Before: {anon=r/postgres,authenticated=r/postgres} column ACL (read-only at column level). After: verified same (REVOKE idempotent; table INSERT still exists for trigger use).
+- `apps/web/src/components/panels/feed-panel.tsx` — destructure error from useFollows; add visible alert banner for follow/unfollow errors
+- `apps/web/e2e/follows-graph.spec.ts` — fix inaccurate docstring (page.route mocks claimed but not used)
+
+### Validation
+- type-check: 0 errors
+- lint: 0 new errors (109 pre-existing warnings unchanged)
+- build: passes
+- e2e: 44 pass / 5 fail (all 5 are pre-existing known failures: auth email signup, documents-view T1/T3/T4, forms-flow) / 1 skipped

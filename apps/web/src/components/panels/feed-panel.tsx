@@ -818,7 +818,7 @@ export function FeedPanel() {
     .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
   const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
   const { fetchMyReviewsForOptIns } = useReviews()
-  const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow } = useFollows()
+  const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -1348,6 +1348,16 @@ export function FeedPanel() {
             />
           )}
 
+
+          {/* Follow/unfollow error banner */}
+          {followError && (
+            <div
+              role="alert"
+              className="mx-2 mt-1 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
+            >
+              {followError}
+            </div>
+          )}
 
           {/* Scrollable Feed */}
           <div className="flex-1 overflow-y-auto space-y-3">
