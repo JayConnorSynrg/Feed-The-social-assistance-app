@@ -2526,6 +2526,13 @@ export type Database = {
         }[]
       }
       get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
+      get_my_coordinates: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          latitude: number
+          longitude: number
+        }[]
+      }
       get_my_private_profile: {
         Args: never
         Returns: {
