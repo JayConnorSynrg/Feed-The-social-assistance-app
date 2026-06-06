@@ -34,9 +34,9 @@ files:
   - apps/web/src/providers/auth-provider.tsx
   - packages/database/types.ts
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
-commit_sha: null
+pr: 57
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/57
+commit_sha: ae7c3c1
 created_at: 2026-06-06T13:00:00.000Z
 completed_at: null
 ```
