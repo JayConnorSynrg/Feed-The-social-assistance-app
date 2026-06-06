@@ -31,9 +31,9 @@ remote: origin
 files:
   - supabase/migrations/20260606120000_harden_profiles_write_grants.sql
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
-commit_sha: null
+pr: 56
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/56
+commit_sha: ca81004
 created_at: 2026-06-06T12:00:00.000Z
 completed_at: null
 ```
