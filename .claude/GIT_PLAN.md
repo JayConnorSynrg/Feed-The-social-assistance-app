@@ -16,9 +16,27 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: geo-foundation-phaseD2a
+next_action_id: profiles-write-grant-lockdown
 
 ## Log
+
+```yaml
+id: profiles-write-grant-lockdown
+status: in_progress
+type: branch
+description: "security(profiles): close is_admin self-INSERT priv-esc surface. PostgreSQL table-level INSERT grant + RLS WITH CHECK(auth.uid()=id) lets authenticated users self-INSERT rows with is_admin=true because RLS only gates which row, not which columns. Fix: REVOKE table-level INSERT from anon+authenticated; GRANT INSERT on 11-col onboarding column-set to authenticated only (id, user_role, zip_code, location_city, location_state, latitude, longitude, needs, phone, onboarding_completed, updated_at). anon gets no column-level INSERT — signup row is handled by SECDEF trigger handle_new_user. REVOKE DELETE/TRUNCATE/TRIGGER/REFERENCES from both roles (no client path uses these; account deletion is service_role edge fn). Migration: 20260606120000_harden_profiles_write_grants.sql. Applied to prod, verified: (a) onboarding upsert path succeeds, (b) is_admin INSERT blocked with 42501, (c) grant state matches column set. PR --base develop."
+branch: feature/profiles-write-grant-lockdown
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260606120000_harden_profiles_write_grants.sql
+  - .claude/GIT_PLAN.md
+pr: 56
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/56
+commit_sha: ca81004
+created_at: 2026-06-06T12:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: follows-graph-phaseD1
