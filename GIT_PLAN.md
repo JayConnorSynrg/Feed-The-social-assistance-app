@@ -143,7 +143,7 @@ Social system cleanup: delete dead feed components, fix uuid type mismatch in fe
 - `apps/web/src/components/feed/post-composer.tsx` — DELETED (zero imports)
 - `apps/web/src/app/(admin)/federation/dashboard/page.tsx` — replace `created_by: 'admin'` string literal with real uuid from auth.getUser() in adjustTrustScore + updateInstanceStatus
 - `apps/web/next.config.ts` — add Permissions-Policy + X-DNS-Prefetch-Control to /s/embed/:id header block (parity with global block; frame-ancestors * intact)
-- `supabase/migrations/20260605140000_revoke_profiles_location_insert.sql` — REVOKE INSERT(location) from anon, authenticated. Applied to prod. Before: {anon=r/postgres,authenticated=r/postgres} column ACL (read-only at column level). After: verified same (REVOKE idempotent; table INSERT still exists for trigger use).
+- `supabase/migrations/20260605140000_revoke_profiles_location_insert.sql` — REMOVED (was a no-op: REVOKE INSERT(location) is superseded by a table-level INSERT grant; column-level REVOKE under a table-level grant is a no-op in PostgreSQL). Migration file deleted from tree; not applied to prod. Effective column-scope lockdown was shipped instead via PR #56 (20260606_profiles_write_lockdown.sql).
 - `apps/web/src/components/panels/feed-panel.tsx` — destructure error from useFollows; add visible alert banner for follow/unfollow errors
 - `apps/web/e2e/follows-graph.spec.ts` — fix inaccurate docstring (page.route mocks claimed but not used)
 

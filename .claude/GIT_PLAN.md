@@ -16,7 +16,25 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: profiles-coord-read-lockdown
+next_action_id: docsync-phase8
+
+```yaml
+id: docsync-phase8
+status: in_progress
+type: branch
+description: "docs(specs): sync Phase 8 Social Resource-Matching + Pre-Launch Security Hardening (PRs #47-57) into .phase-state.json and ralph-loop-checklist.md; reconcile 86-vs-96 headline metric contradiction; trim stale root GIT_PLAN.md entry for removed migration 20260605140000. Docs-only — zero app/DB/prod changes."
+branch: chore/docsync-phase8
+base: develop
+base_sha: c9c4cc0
+remote: origin
+files:
+  - specs/001-feed-platform/.phase-state.json
+  - specs/001-feed-platform/ralph-loop-checklist.md
+  - GIT_PLAN.md
+  - .claude/GIT_PLAN.md
+created_at: "2026-06-06T00:00:00.000Z"
+completed_at: null
+```
 
 ## Log
 

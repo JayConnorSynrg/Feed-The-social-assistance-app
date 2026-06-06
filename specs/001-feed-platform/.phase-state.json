@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-05-29T23:59:00.000Z",
+  "lastUpdated": "2026-06-06T00:00:00.000Z",
   "currentPhase": 7,
   "currentTask": "P7-T11",
   "status": "IN_PROGRESS",
@@ -75,22 +75,34 @@
       "completedTasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10"],
       "startedAt": "2026-02-22T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken — useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK — vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 — false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) — runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step.",
+      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken — useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK — vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 — false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) — runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step. SOLE REMAINING LAUNCH GATE: P7-T11 human auth e2e (Google OAuth consent screen).",
       "panelWiringComplete": true,
       "migrationGapsClosed": true
+    },
+    "8": {
+      "name": "Social Resource-Matching + Pre-Launch Security Hardening",
+      "status": "COMPLETE",
+      "tasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
+      "completedTasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
+      "startedAt": "2026-05-26T00:00:00.000Z",
+      "completedAt": "2026-06-06T00:00:00.000Z",
+      "notes": "Beyond-plan phase shipped in full. P8-T1 through P8-T6 = earlier unplanned enhancements (programs panel, messaging, wizard, PDF annotator, saved resources, resource detail tables). P8-T7 through P8-T17 = Social Resource-Matching + Pre-Launch Security Hardening (PRs #47-57): P8-T7=#47 threaded comments; P8-T8=#48 resource-linked posts; P8-T9=#49 opt-in core (posts.max_seekers/slots_remaining, resource_opt_ins, opt_in/withdraw RPCs); P8-T10=#50 reviews + harmony score (reviews table, submit_review RPC, profiles.harmony_score trigger); P8-T11=#51 shareable embed widget (/s/embed public route); P8-T12=#52 follows/connections (follows table, use-follows hook); P8-T13=#53 geo foundation (zip_centroids 33,144 rows, profiles.location geography + GIST, geocode trigger); P8-T14=#54 privacy geo outreach (seekers_within_radius + notify_seekers_near_resource SECDEF RPCs — count-only, coords never exposed); P8-T15=#55 social cleanup (dead components removed, federation uuid fix); P8-T16=#56 profiles write-grant lockdown (column-scoped INSERT, revoke DELETE/TRUNCATE — closed is_admin self-INSERT forge); P8-T17=#57 profiles coordinate-read lockdown (revoke cross-user SELECT on lat/lng/location/zip_code + get_my_coordinates SECDEF self-accessor — closed cross-user coordinate leak). All merged to develop; prod migrations verified live.",
+      "prs": ["#47", "#48", "#49", "#50", "#51", "#52", "#53", "#54", "#55", "#56", "#57"]
     }
   },
   "metrics": {
-    "totalTasks": 98,
-    "completedTasks": 96,
+    "totalTasks": 109,
+    "completedTasks": 107,
     "progressPercentage": 98,
+    "remainingLaunchGate": "P7-T11 (Auth E2E — human: Google OAuth consent screen)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 8
+    "sessionsCompleted": 11,
+    "metricsNote": "Baseline 96/98 (Phases 0-7) + 11 Phase 8 tasks all complete = 107/109. The 2 remaining: P7-T11 (sole planned launch gate) + 1 from original 98-96 baseline gap (pre-existing). Phase 8 tasks folded in per 2026-06-06 docsync (chore/docsync-phase8)."
   },
   "ralphLoop": {
     "enabled": true,
-    "lastSessionId": "session-008",
-    "lastSessionStart": "2026-01-30T00:00:00.000Z",
+    "lastSessionId": "session-011",
+    "lastSessionStart": "2026-06-06T00:00:00.000Z",
     "lastSessionEnd": null,
     "sessionHistory": [
       {
@@ -179,6 +191,14 @@
         "status": "complete",
         "phase": "Phase 7: Production Hardening",
         "notes": "P7-T11 auth E2E harness built and committed (playwright.config.ts + apps/web/e2e/auth.spec.ts). Execution env-blocked (Node TLS sandbox); runs via npm run test:e2e on unrestricted env. Google consent screen = 1 documented manual step. All other session work was discovery-driven repair of silently-broken Phase 3 and Phase 5/6 paths."
+      },
+      {
+        "id": "session-011",
+        "startedAt": "2026-06-06T00:00:00.000Z",
+        "tasksCompleted": ["P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
+        "status": "complete",
+        "phase": "Phase 8: Social Resource-Matching + Pre-Launch Security Hardening",
+        "notes": "Retroactive docs-sync session (chore/docsync-phase8). PRs #47-57 were shipped to develop but not reflected in tracking docs. Session records them as complete and folds Phase 8 into the headline metrics. No prod/DB/app changes made in this session — docs only."
       }
     ]
   }
