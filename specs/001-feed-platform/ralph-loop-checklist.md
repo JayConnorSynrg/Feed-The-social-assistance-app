@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.1.0"
+version: "1.2.0"
 created: "2026-01-19"
-last_updated: "2026-05-29"
+last_updated: "2026-06-06"
 status: "IN_PROGRESS"
 current_phase: 7
 current_task: "P7-T11"
-total_phases: 7
-total_tasks: 98
-completed_tasks: 96
+total_phases: 8
+total_tasks: 109
+completed_tasks: 107
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -69,11 +69,13 @@ WHEN all tasks in a phase are [x]:
 | 5 | Case Management | 12 | 11 | COMPLETE* |
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 10 | IN_PROGRESS |
+| 8 | Social Resource-Matching + Pre-Launch Security Hardening | 17 | 17 | COMPLETE |
 
-**Overall Progress**: 96 / 98 tasks (98%)
+**Overall Progress**: 107 / 109 tasks (98%)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete = 107/109. Sole remaining planned launch gate: P7-T11 (Auth E2E — human: Google OAuth consent screen).
 
 ---
 
@@ -1596,12 +1598,101 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ---
 
+> **SOCIAL + SECURITY NOTE (2026-06-06):** Tasks P8-T7 through P8-T17 below were shipped to develop (PRs #47-57) but not previously documented in this checklist. Added retroactively via chore/docsync-phase8 to close the ambient-doc coupling gap. No app/DB/prod changes — docs only.
+
+### P8-T7: Threaded Comments (PR #47)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T7
+- **Dependencies**: P8-T1, P8-T8
+- **Description**: Threaded comment system on posts. Nested replies with depth limit.
+- **PR**: #47 — merged to develop
+
+### P8-T8: Resource-Linked Posts (PR #48)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T8
+- **Dependencies**: P1-T6, P1-T7
+- **Description**: Posts can reference resources (posts.resource_id FK). Resource card embedded in post display.
+- **PR**: #48 — merged to develop
+
+### P8-T9: Opt-In Core (PR #49)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T9
+- **Dependencies**: P8-T8
+- **Description**: Seeker opt-in system. `posts.max_seekers` + `posts.slots_remaining` columns. `resource_opt_ins` table. `opt_in` / `withdraw` SECDEF RPCs with atomic slot decrement (SELECT FOR UPDATE). RLS: opt-ins readable by owner + resource owner only.
+- **Migrations**: `20260604_opt_in_core.sql`
+- **PR**: #49 — merged to develop
+
+### P8-T10: Reviews + Harmony Score (PR #50)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T10
+- **Dependencies**: P8-T9
+- **Description**: Peer reviews on completed resource exchanges. `reviews` table. `submit_review` RPC (completed-exchange-gated). `profiles.harmony_score` trigger-maintained denormalized score. Bidirectional review flow.
+- **Migrations**: `20260604_reviews_harmony.sql`
+- **PR**: #50 — merged to develop
+
+### P8-T11: Shareable Embed Widget (PR #51)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T11
+- **Dependencies**: Phase 2 Complete
+- **Description**: Public `/s/embed` route exposing resource cards as embeddable iframes. No auth required. Embed security headers (frame-ancestors * for cross-origin embed; Permissions-Policy parity).
+- **PR**: #51 — merged to develop
+
+### P8-T12: Follows / Connections (PR #52)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T12
+- **Dependencies**: P1-T5
+- **Description**: User follow graph. `follows` table (follower_id, following_id, unique constraint). `use-follows` hook. Follow/unfollow actions with visible error banner on failure.
+- **Migrations**: `20260605_follows.sql`
+- **PR**: #52 — merged to develop
+
+### P8-T13: Geo Foundation (PR #53)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T13
+- **Dependencies**: P1-T7
+- **Description**: Geographic foundation for proximity outreach. `zip_centroids` table (33,144 US ZIP codes seeded). `profiles.location` geography(Point,4326) column + GIST index. SECDEF geocode trigger sets profile location from zip_code on upsert. Coordinates stored lng-first (PostGIS convention).
+- **Migrations**: `20260605_geo_foundation.sql`, `20260605_zip_centroids_seed.sql`
+- **PR**: #53 — merged to develop
+
+### P8-T14: Privacy Geo Outreach (PR #54)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T14
+- **Dependencies**: P8-T13
+- **Description**: Count-only proximity outreach. `seekers_within_radius` SECDEF RPC (keyed by resource_id; client NEVER handles coordinates). `notify_seekers_near_resource` SECDEF fan-out RPC (owner-gated, dedup, bypasses notifications INSERT RLS via SECURITY DEFINER). Returns seeker COUNT only — coordinates never exposed to client.
+- **Migrations**: `20260605130000_geo_outreach_rpcs.sql`
+- **PR**: #54 — merged to develop
+
+### P8-T15: Social Cleanup (PR #55)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T15
+- **Dependencies**: P8-T12, P8-T14
+- **Description**: Dead feed components removed (`feed-list.tsx`, `post-composer.tsx` — zero imports). Federation `created_by` string literal replaced with real UUID from `auth.getUser()`. Embed header parity (Permissions-Policy + X-DNS-Prefetch-Control). Follow error surfaced to users via alert banner. E2E docstring corrected.
+- **PR**: #55 — merged to develop
+
+### P8-T16: Profiles Write-Grant Lockdown (PR #56)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T16
+- **Dependencies**: P1-T5
+- **Description**: Closed `is_admin` self-INSERT forge. Column-scoped INSERT grant on profiles (only allowed columns). REVOKE DELETE and TRUNCATE from authenticated + anon. Prevents privilege escalation via direct profile row insertion.
+- **Migrations**: `20260606_profiles_write_lockdown.sql`
+- **PR**: #56 — merged to develop
+
+### P8-T17: Profiles Coordinate-Read Lockdown (PR #57)
+- [x] **Status**: COMPLETE
+- **ID**: P8-T17
+- **Dependencies**: P8-T13, P8-T16
+- **Description**: Closed cross-user coordinate leak. REVOKE SELECT on `latitude`, `longitude`, `location`, `zip_code` columns from authenticated (cross-user RLS + PostgREST column filter was insufficient). SECDEF `get_my_coordinates()` self-accessor (own-row only, pinned `search_path`, anon/PUBLIC revoked, authenticated granted). `auth-provider.tsx` updated: dropped lat/lng from 3 `.select()` sites; centralized `PROFILE_COLUMNS` constant; `fetchCoords()` helper runs in parallel via `Promise.all`.
+- **Migrations**: `20260606130000_profiles_coord_read_lockdown.sql`
+- **PR**: #57 — merged to develop
+
+---
+
 ## PHASE 8 EXIT CRITERIA
 
 - [x] All P8 features committed on develop branch
 - [x] All migrations applied to production DB (ndtpovonpadugthmcntl)
 - [x] All new panels wired into PanelRenderer (app/page.tsx confirmed)
 - [x] All new hooks have finally blocks (confirmed via audit 2026-05-28)
+- [x] PRs #47-57 (Social Resource-Matching + Pre-Launch Security Hardening) merged to develop (2026-06-04 through 2026-06-06)
 - [ ] Phase 8 features included in P7-T11 auth E2E smoke test (pending P7-T11 execution)
 
 ---
@@ -1612,9 +1703,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 |---------|------|---------|
 | 1.0.0 | 2026-01-19 | Initial checklist creation |
 | 1.1.0 | 2026-02-22 | Added Phase 7: Production Hardening (11 tasks). Discovered via full codebase recon: exposed secrets, middleware .single() crash, missing error boundaries, dead proxy.ts code. |
+| 1.2.0 | 2026-06-06 | Added Phase 8 Social + Security tasks P8-T7 through P8-T17 (PRs #47-57). Folded Phase 8 into headline metric: 107/109 (was 96/98 for Phases 0-7). Updated total_phases to 8, total_tasks to 109, completed_tasks to 107. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: None
+**Last Agent Session**: chore/docsync-phase8 (2026-06-06)
 **Total Development Time**: 0 hours
