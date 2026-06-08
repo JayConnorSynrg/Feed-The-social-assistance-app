@@ -1218,8 +1218,7 @@ export type Database = {
           is_staff: boolean
           is_verified: boolean | null
           latitude: number | null
-          /** Trigger-derived geography(POINT,4326). PostgREST serializes as WKT string. Read-only for clients. */
-          location: string | null
+          location: unknown
           location_city: string | null
           location_state: string | null
           longitude: number | null
@@ -1245,6 +1244,7 @@ export type Database = {
           is_staff?: boolean
           is_verified?: boolean | null
           latitude?: number | null
+          location?: unknown
           location_city?: string | null
           location_state?: string | null
           longitude?: number | null
@@ -1270,6 +1270,7 @@ export type Database = {
           is_staff?: boolean
           is_verified?: boolean | null
           latitude?: number | null
+          location?: unknown
           location_city?: string | null
           location_state?: string | null
           longitude?: number | null
@@ -1352,6 +1353,68 @@ export type Database = {
           {
             foreignKeyName: "resource_bookmarks_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_opt_ins: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          post_id: string
+          resource_id: string | null
+          seeker_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          post_id: string
+          resource_id?: string | null
+          seeker_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          post_id?: string
+          resource_id?: string | null
+          seeker_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_opt_ins_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_opt_ins_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_opt_ins_seeker_id_fkey"
+            columns: ["seeker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_opt_ins_seeker_id_fkey"
+            columns: ["seeker_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
@@ -1492,61 +1555,6 @@ export type Database = {
           },
         ]
       }
-      resource_opt_ins: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          id: string
-          post_id: string
-          resource_id: string | null
-          seeker_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          post_id: string
-          resource_id?: string | null
-          seeker_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          post_id?: string
-          resource_id?: string | null
-          seeker_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "resource_opt_ins_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_ins_resource_id_fkey"
-            columns: ["resource_id"]
-            isOneToOne: false
-            referencedRelation: "resources"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_ins_seeker_id_fkey"
-            columns: ["seeker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       reviews: {
         Row: {
           comment: string | null
@@ -1590,8 +1598,8 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "reviews_reviewer_id_fkey"
-            columns: ["reviewer_id"]
+            foreignKeyName: "reviews_reviewee_id_fkey"
+            columns: ["reviewee_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1600,7 +1608,21 @@ export type Database = {
             foreignKeyName: "reviews_reviewee_id_fkey"
             columns: ["reviewee_id"]
             isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2527,7 +2549,7 @@ export type Database = {
       }
       get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
       get_my_coordinates: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           latitude: number
           longitude: number
@@ -2581,42 +2603,6 @@ export type Database = {
         }[]
       }
       is_current_user_admin: { Args: never; Returns: boolean }
-      opt_in_to_post: {
-        Args: { p_post_id: string }
-        Returns: {
-          completed_at: string | null
-          created_at: string
-          id: string
-          post_id: string
-          resource_id: string | null
-          seeker_id: string
-          status: string
-          updated_at: string
-        }
-      }
-      withdraw_opt_in: {
-        Args: { p_post_id: string }
-        Returns: boolean
-      }
-      submit_review: {
-        Args: {
-          p_opt_in_id: string
-          p_rating: number
-          p_would_recommend?: boolean | null
-          p_comment?: string | null
-        }
-        Returns: {
-          comment: string | null
-          created_at: string
-          id: string
-          opt_in_id: string
-          rating: number
-          reviewee_id: string
-          reviewer_id: string
-          updated_at: string
-          would_recommend: boolean | null
-        }
-      }
       log_audit_event: {
         Args: {
           p_action: string
@@ -2659,14 +2645,6 @@ export type Database = {
           website: string
           zip_code: string
         }[]
-      }
-      notify_seekers_near_resource: {
-        Args: { p_post_id: string; p_radius_miles: number }
-        Returns: number
-      }
-      seekers_within_radius: {
-        Args: { p_resource_id: string; p_radius_miles: number }
-        Returns: number
       }
       nearby_resources: {
         Args: { lat: number; lng: number; radius_miles?: number }
@@ -2718,6 +2696,29 @@ export type Database = {
           p_resource_type: string
         }
         Returns: undefined
+      }
+      notify_seekers_near_resource: {
+        Args: { p_post_id: string; p_radius_miles: number }
+        Returns: number
+      }
+      opt_in_to_post: {
+        Args: { p_post_id: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          post_id: string
+          resource_id: string | null
+          seeker_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "resource_opt_ins"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
@@ -2782,6 +2783,10 @@ export type Database = {
           state: string
           website: string
         }[]
+      }
+      seekers_within_radius: {
+        Args: { p_radius_miles: number; p_resource_id: string }
+        Returns: number
       }
       set_resource_location: {
         Args: {
@@ -3379,6 +3384,31 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      submit_review: {
+        Args: {
+          p_comment?: string
+          p_opt_in_id: string
+          p_rating: number
+          p_would_recommend?: boolean
+        }
+        Returns: {
+          comment: string | null
+          created_at: string
+          id: string
+          opt_in_id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          updated_at: string
+          would_recommend: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       trust_score_to_level: { Args: { score: number }; Returns: string }
       unlockrows: { Args: { "": string }; Returns: number }
       updategeometrysrid: {
@@ -3391,6 +3421,7 @@ export type Database = {
         }
         Returns: string
       }
+      withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
     }
     Enums: {
       conversation_status: "pending" | "active" | "declined" | "cancelled"
@@ -3433,6 +3464,12 @@ export type Database = {
         | "veteran_services"
         | "immigration"
         | "other"
+        | "eitc_tax_filing"
+        | "free_legal"
+        | "prenatal_natal_care"
+        | "waste_disposal"
+        | "free_camping"
+        | "free_goods_donation"
       resource_source:
         | "user_submitted"
         | "211_api"
@@ -3637,6 +3674,12 @@ export const Constants = {
         "veteran_services",
         "immigration",
         "other",
+        "eitc_tax_filing",
+        "free_legal",
+        "prenatal_natal_care",
+        "waste_disposal",
+        "free_camping",
+        "free_goods_donation",
       ],
       resource_source: [
         "user_submitted",

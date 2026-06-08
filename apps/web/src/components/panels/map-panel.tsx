@@ -102,6 +102,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   employment: 'bg-green-100 text-green-700',
   education: 'bg-purple-100 text-purple-700',
   legal: 'bg-yellow-100 text-yellow-700',
+  eitc_tax_filing: 'bg-sky-100 text-sky-700',
+  free_legal: 'bg-indigo-100 text-indigo-700',
+  prenatal_natal_care: 'bg-pink-100 text-pink-700',
+  waste_disposal: 'bg-lime-100 text-lime-700',
+  free_camping: 'bg-green-100 text-green-800',
+  free_goods_donation: 'bg-rose-100 text-rose-700',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -111,6 +117,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   employment: 'Employment',
   education: 'Education',
   legal: 'Legal',
+  eitc_tax_filing: 'Tax Filing & EITC',
+  free_legal: 'Free Legal Help',
+  prenatal_natal_care: 'Prenatal & Newborn Care',
+  waste_disposal: 'Waste & Disposal',
+  free_camping: 'Free Camping',
+  free_goods_donation: 'Free Goods & Donations',
 }
 
 // ============================================

@@ -25,6 +25,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'General',
   healthcare: 'Healthcare',
   education: 'Education',
+  eitc_tax_filing: 'Tax Filing & EITC',
+  free_legal: 'Free Legal Help',
+  prenatal_natal_care: 'Prenatal & Newborn Care',
+  waste_disposal: 'Waste & Disposal',
+  free_camping: 'Free Camping',
+  free_goods_donation: 'Free Goods & Donations',
 }
 
 export function MessagesPanel() {
