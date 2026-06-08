@@ -34,6 +34,12 @@ const RESOURCE_CATEGORIES = [
   { value: 'veteran_services', label: 'Veteran Services' },
   { value: 'immigration', label: 'Immigration' },
   { value: 'other', label: 'Other' },
+  { value: 'eitc_tax_filing', label: 'Tax Filing & EITC' },
+  { value: 'free_legal', label: 'Free Legal Help' },
+  { value: 'prenatal_natal_care', label: 'Prenatal & Newborn Care' },
+  { value: 'waste_disposal', label: 'Waste & Disposal' },
+  { value: 'free_camping', label: 'Free Camping' },
+  { value: 'free_goods_donation', label: 'Free Goods & Donations' },
 ]
 
 interface ResourceSearchProps {

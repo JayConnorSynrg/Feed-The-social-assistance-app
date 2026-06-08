@@ -119,4 +119,34 @@ export const CATEGORY_DISPLAY: Record<string, CategoryDisplay> = {
     icon: 'MoreHorizontal',
     color: 'bg-stone-100 text-stone-700',
   },
+  eitc_tax_filing: {
+    label: 'Tax Filing & EITC',
+    icon: 'Receipt',
+    color: 'bg-sky-100 text-sky-800',
+  },
+  free_legal: {
+    label: 'Free Legal Help',
+    icon: 'Gavel',
+    color: 'bg-indigo-100 text-indigo-800',
+  },
+  prenatal_natal_care: {
+    label: 'Prenatal & Newborn Care',
+    icon: 'Baby',
+    color: 'bg-pink-100 text-pink-800',
+  },
+  waste_disposal: {
+    label: 'Waste & Disposal',
+    icon: 'Trash2',
+    color: 'bg-lime-100 text-lime-800',
+  },
+  free_camping: {
+    label: 'Free Camping',
+    icon: 'Tent',
+    color: 'bg-green-100 text-green-800',
+  },
+  free_goods_donation: {
+    label: 'Free Goods & Donations',
+    icon: 'Gift',
+    color: 'bg-rose-100 text-rose-800',
+  },
 }

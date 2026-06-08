@@ -23,6 +23,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   veteran_services: '#1d4ed8',
   immigration: '#7c2d12',
   other: '#737373',
+  eitc_tax_filing: '#0ea5e9',
+  free_legal: '#6366f1',
+  prenatal_natal_care: '#ec4899',
+  waste_disposal: '#84cc16',
+  free_camping: '#16a34a',
+  free_goods_donation: '#f43f5e',
 }
 
 export async function GET(

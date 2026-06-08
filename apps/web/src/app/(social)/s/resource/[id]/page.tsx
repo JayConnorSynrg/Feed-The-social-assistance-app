@@ -28,6 +28,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   veteran_services: 'bg-blue-100 text-blue-800',
   immigration: 'bg-orange-100 text-orange-800',
   other: 'bg-gray-100 text-gray-800',
+  eitc_tax_filing: 'bg-sky-100 text-sky-800',
+  free_legal: 'bg-indigo-100 text-indigo-800',
+  prenatal_natal_care: 'bg-pink-100 text-pink-800',
+  waste_disposal: 'bg-lime-100 text-lime-800',
+  free_camping: 'bg-green-100 text-green-800',
+  free_goods_donation: 'bg-rose-100 text-rose-800',
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

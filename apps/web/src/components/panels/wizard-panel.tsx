@@ -11,11 +11,18 @@ import {
   Car,
   Scale,
   Heart,
+  Receipt,
+  Gavel,
+  Baby,
+  Trash2,
+  Tent,
+  Gift,
   type LucideProps,
 } from 'lucide-react'
 import { ResourceWizard } from './resource-wizard'
 import { CATEGORY_WIZARDS, type CategoryWizardConfig } from '@/lib/ai/resource-wizard-config'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { logger } from '@/lib/logger'
 
 // Map icon name strings to Lucide components
 const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
@@ -25,6 +32,12 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Car,
   Scale,
   Heart,
+  Receipt,
+  Gavel,
+  Baby,
+  Trash2,
+  Tent,
+  Gift,
 }
 
 function CategoryCard({
@@ -57,6 +70,7 @@ export function WizardPanel() {
   function handleWizardComplete(answers: Record<string, string | string[]>) {
     if (!activeCategory) return
 
+    logger.info('wizard.complete', { category: activeCategory.id, stepCount: activeCategory.steps.length })
     setPanelParams({
       flow: activeCategory.id,
       wizardContext: JSON.stringify({ category: activeCategory.id, answers }),
@@ -90,7 +104,10 @@ export function WizardPanel() {
           <CategoryCard
             key={category.id}
             category={category}
-            onClick={() => setActiveCategory(category)}
+            onClick={() => {
+              logger.info('wizard.start', { category: category.id })
+              setActiveCategory(category)
+            }}
           />
         ))}
       </div>

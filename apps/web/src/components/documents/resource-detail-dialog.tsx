@@ -31,6 +31,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   food: 'Food', housing: 'Housing', employment: 'Jobs', transportation: 'Transportation',
   legal: 'Legal', healthcare: 'Healthcare', education: 'Education', other: 'General',
   mental_health: 'Mental Health', substance_abuse: 'Treatment', childcare: 'Childcare',
+  eitc_tax_filing: 'Tax Filing & EITC', free_legal: 'Free Legal Help',
+  prenatal_natal_care: 'Prenatal & Newborn Care', waste_disposal: 'Waste & Disposal',
+  free_camping: 'Free Camping', free_goods_donation: 'Free Goods & Donations',
 }
 
 // ── Posts about this resource ──
