@@ -56,8 +56,8 @@ export function useReviews() {
           .rpc('submit_review', {
             p_opt_in_id: params.optInId,
             p_rating: params.rating,
-            p_would_recommend: params.wouldRecommend ?? null,
-            p_comment: params.comment ?? null,
+            p_would_recommend: params.wouldRecommend ?? undefined,
+            p_comment: params.comment ?? undefined,
           })
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcError) {
