@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: docsync-phase8
+next_action_id: resource-categories-discovery
 
 ```yaml
 id: docsync-phase8
@@ -37,6 +37,44 @@ completed_at: null
 ```
 
 ## Log
+
+```yaml
+id: resource-categories-discovery
+status: in_progress
+type: branch
+description: "feat(resources): 6 new resource categories (eitc/legal/prenatal/waste/camping/donation) — full discovery, map, wizard, and VT seed. Migration 20260608000000_add_resource_categories.sql: adds 6 values to the resource_category enum applied live to prod (ndtpovonpadugthmcntl) via Mgmt-API SQL endpoint (canonical path). Seed migration 20260608000100_seed_vt_resources.sql: 23 real geocoded Rutland/VT resources across all 6 new categories, reversible via DELETE WHERE external_id LIKE 'seed-vt-2026-%'. Constants: packages/shared/lib/constants.ts CATEGORY_DISPLAY + ICON_MAP extended for 13 total enumeration sites covered (resource-marker, resource-search, volunteer-resource-detail, resource-detail-dialog, search-filters, map-panel, messages-panel, wizard-panel, category-form-map, og/resource, s/resource, moderation-queue, federation-directory). Wizards: apps/web/src/lib/ai/resource-wizard-config.ts adds 6 full wizard configs (step definitions, validation, prompts). Funnel logging: wizard.start and wizard.complete events emitted via withMetric/logger. Type fix: use-reviews.ts RPC signature updated (fallout from enum expansion). type-check 0 errors, build PASS 29/29 pages."
+branch: feature/resource-categories-discovery
+base: develop
+base_sha: c9c4cc0eed0c99fe07eb1a47c6008d486da02d88
+remote: origin
+files:
+  - supabase/migrations/20260608000000_add_resource_categories.sql
+  - supabase/migrations/20260608000100_seed_vt_resources.sql
+  - packages/shared/lib/constants.ts
+  - packages/database/types.ts
+  - apps/web/src/lib/ai/resource-wizard-config.ts
+  - apps/web/src/lib/category-form-map.ts
+  - apps/web/src/hooks/use-reviews.ts
+  - apps/web/src/components/map/resource-marker.tsx
+  - apps/web/src/components/map/resource-search.tsx
+  - apps/web/src/components/map/volunteer-resource-detail.tsx
+  - apps/web/src/components/panels/map-panel.tsx
+  - apps/web/src/components/panels/messages-panel.tsx
+  - apps/web/src/components/panels/wizard-panel.tsx
+  - apps/web/src/components/search/search-filters.tsx
+  - apps/web/src/components/documents/resource-detail-dialog.tsx
+  - apps/web/src/app/(admin)/moderation/moderation-queue.tsx
+  - apps/web/src/app/(admin)/federation/sync-config/page.tsx
+  - apps/web/src/app/(social)/s/resource/[id]/page.tsx
+  - apps/web/src/app/api/og/resource/[id]/route.tsx
+  - apps/web/src/app/federation/directory/page.tsx
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+commit_sha: d891eb9
+created_at: 2026-06-08T00:00:00.000Z
+completed_at: null
+```
 
 ```yaml
 id: profiles-coord-read-lockdown
