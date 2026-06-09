@@ -82,22 +82,32 @@
     "8": {
       "name": "Social Resource-Matching + Pre-Launch Security Hardening",
       "status": "COMPLETE",
-      "tasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
-      "completedTasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
+      "tasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17", "P8-T18", "P8-T19", "P8-T20"],
+      "completedTasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17", "P8-T18", "P8-T19", "P8-T20"],
       "startedAt": "2026-05-26T00:00:00.000Z",
-      "completedAt": "2026-06-06T00:00:00.000Z",
-      "notes": "Beyond-plan phase shipped in full. P8-T1 through P8-T6 = earlier unplanned enhancements (programs panel, messaging, wizard, PDF annotator, saved resources, resource detail tables). P8-T7 through P8-T17 = Social Resource-Matching + Pre-Launch Security Hardening (PRs #47-57): P8-T7=#47 threaded comments; P8-T8=#48 resource-linked posts; P8-T9=#49 opt-in core (posts.max_seekers/slots_remaining, resource_opt_ins, opt_in/withdraw RPCs); P8-T10=#50 reviews + harmony score (reviews table, submit_review RPC, profiles.harmony_score trigger); P8-T11=#51 shareable embed widget (/s/embed public route); P8-T12=#52 follows/connections (follows table, use-follows hook); P8-T13=#53 geo foundation (zip_centroids 33,144 rows, profiles.location geography + GIST, geocode trigger); P8-T14=#54 privacy geo outreach (seekers_within_radius + notify_seekers_near_resource SECDEF RPCs — count-only, coords never exposed); P8-T15=#55 social cleanup (dead components removed, federation uuid fix); P8-T16=#56 profiles write-grant lockdown (column-scoped INSERT, revoke DELETE/TRUNCATE — closed is_admin self-INSERT forge); P8-T17=#57 profiles coordinate-read lockdown (revoke cross-user SELECT on lat/lng/location/zip_code + get_my_coordinates SECDEF self-accessor — closed cross-user coordinate leak). All merged to develop; prod migrations verified live.",
-      "prs": ["#47", "#48", "#49", "#50", "#51", "#52", "#53", "#54", "#55", "#56", "#57"]
+      "completedAt": "2026-06-08T00:00:00.000Z",
+      "notes": "Beyond-plan phase shipped in full. P8-T1 through P8-T6 = earlier unplanned enhancements (programs panel, messaging, wizard, PDF annotator, saved resources, resource detail tables). P8-T7 through P8-T17 = Social Resource-Matching + Pre-Launch Security Hardening (PRs #47-57). P8-T18=#59 six new resource categories (eitc_tax_filing/free_legal/prenatal_natal_care/waste_disposal/free_camping/free_goods_donation, VT seed, wizard configs); P8-T19=#60 community petitions (post_type enum, petition_id FK, ESIGN server-stamped metadata, verified-signature-of-support copy, SECDEF count/has-signed RPCs); P8-T20=#61 all-roles safety pins (safety_alerts PostGIS GIST, severity-scaled TTL, publish-then-review, community confirm/clear votes, Sheet primitive, role-gated FAB). All merged to develop 2026-06-08; prod migrations verified live.",
+      "prs": ["#47", "#48", "#49", "#50", "#51", "#52", "#53", "#54", "#55", "#56", "#57", "#59", "#60", "#61"]
+    },
+    "9": {
+      "name": "Community Launch Readiness",
+      "status": "PLANNED",
+      "tasks": ["P9-T1", "P9-T2", "P9-T3", "P9-T4", "P9-T5", "P9-T6", "P9-T7", "P9-T8", "P9-T9"],
+      "completedTasks": [],
+      "startedAt": null,
+      "completedAt": null,
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=programs+resource allocation pipeline; P9-T2=social feed post UI for all resource types; P9-T3=copy-paste social embed templates; P9-T4=map pin + resource buttons complete; P9-T5=community trust layer (report + threshold takedown); P9-T6=full messages cycle with wheat-stalk reviews; P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
     }
   },
   "metrics": {
-    "totalTasks": 109,
-    "completedTasks": 107,
+    "totalTasks": 112,
+    "completedTasks": 110,
     "progressPercentage": 98,
     "remainingLaunchGate": "P7-T11 (Auth E2E — human: Google OAuth consent screen)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 11,
-    "metricsNote": "Baseline 96/98 (Phases 0-7) + 11 Phase 8 tasks all complete = 107/109. The 2 remaining: P7-T11 (sole planned launch gate) + 1 from original 98-96 baseline gap (pre-existing). Phase 8 tasks folded in per 2026-06-06 docsync (chore/docsync-phase8)."
+    "sessionsCompleted": 12,
+    "metricsNote": "Denominator = Phases 0-8 plannable-complete scope (112 = 109 + 3 from PRs #59-61). Phase 9 tasks (9 planned pillars) are NOT included in the denominator until implementation begins. 110/112 = 98.2%. The 2 remaining: P7-T11 (sole planned launch gate) + 1 from original 98-96 baseline gap. Updated 2026-06-09 docsync (chore/docsync-59-61).",
+    "lastUpdated": "2026-06-09T00:00:00.000Z"
   },
   "ralphLoop": {
     "enabled": true,
