@@ -20,7 +20,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { type SupabaseClient } from '@supabase/supabase-js'
 import {
   makeAdminClient,
   deleteProvisionedUser,
@@ -179,55 +179,108 @@ test('place a general hazard → pin appears on map', async ({ page }) => {
 })
 
 test('safety alert marker appears and vote buttons work', async ({ page }) => {
-  // Provision alert directly via admin RPC so we have a known alert to test
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  // Strategy: place the alert via the authenticated browser UI (same flow as test 4)
+  // and intercept the place_safety_alert RPC response to capture the new alert id.
+  // Then assert the marker renders on the map, click it to open the popup,
+  // assert the trust label, and exercise the confirm/clear vote buttons.
 
-  // Use Burlington VT as test pin location (same as geo-outreach tests)
-  const { data: alertRow, error: rpcErr } = await adminClient.rpc('place_safety_alert', {
-    p_type: 'general',
-    p_severity: 2,
-    p_description: TEST_DESCRIPTION + '-vote',
-    p_lng: -73.2121,
-    p_lat: 44.4759,
+  // ── 1. Intercept place_safety_alert RPC response to capture alert id ──────
+
+  let capturedAlertId: string | null = null
+
+  await page.route('**/rest/v1/rpc/place_safety_alert**', async (route, request) => {
+    // Let the real request proceed; clone the response body to extract the id.
+    const response = await route.fetch()
+    let bodyText = ''
+    try {
+      bodyText = await response.text()
+      const parsed = JSON.parse(bodyText)
+      // RPC returns the full safety_alerts row as a JSON object
+      const id = parsed?.id ?? (Array.isArray(parsed) ? parsed[0]?.id : null)
+      if (id) capturedAlertId = id
+    } catch {
+      // Non-fatal; we'll fall back to DOM-only assertions
+    }
+    await route.fulfill({ response, body: bodyText })
   })
 
-  // The RPC requires authentication — if it fails (anon), skip gracefully
-  if (rpcErr) {
-    console.log('[safety-pins] place_safety_alert via anon skipped (expected):', rpcErr.message)
-    test.skip()
-    return
-  }
-
-  const testAlertId = (alertRow as { id: string } | null)?.id
-  if (!testAlertId) {
-    test.skip()
-    return
-  }
+  // ── 2. Log in and navigate to the map ─────────────────────────────────────
 
   await loginAndGoToMap(page, SEEKER_EMAIL, SEEKER_PASSWORD)
 
-  // Vote buttons are in the popup; clicking a marker opens it.
-  // Since the marker position on screen depends on the map center (Burlington VT)
-  // which may not be at the default zoom, we use the data-testid on the marker.
-  const marker = page.locator(`[data-testid="safety-alert-marker-${testAlertId}"]`)
+  // ── 3. Open bubble menu and click "general hazard" ────────────────────────
 
-  // Marker may not be visible if the map is not centered on Burlington VT —
-  // assert via the vote confirmation flow using direct RPC instead.
-  // (The marker render test passes via the place-flow test above.)
+  await page.locator('[data-testid="hazard-menu-trigger"]').click()
+  await page.locator('[data-testid="hazard-general"]').click()
 
-  // Clean up this specific alert
-  await adminClient
-    .from('safety_alerts')
-    .update({ status: 'removed' })
-    .eq('id', testAlertId)
+  // Place dialog should appear
+  await expect(page.locator('[id="hazard-severity"]')).toBeVisible({ timeout: 5_000 })
 
-  // If marker is visible, click and assert vote buttons
-  if (await marker.isVisible()) {
-    await marker.click()
-    await expect(page.locator(`[data-testid="vote-confirm-${testAlertId}"]`)).toBeVisible({ timeout: 5_000 })
-    await expect(page.locator(`[data-testid="vote-clear-${testAlertId}"]`)).toBeVisible()
+  // Use the e2e-safety-pin pattern so afterAll cleanup sweeps it
+  const voteTestDesc = TEST_DESCRIPTION + '-vote'
+  await page.locator('[id="hazard-description"]').fill(voteTestDesc)
+
+  // ── 4. Submit and wait for success state + alert id from intercepted response
+
+  await page.locator('button:has-text("Report hazard")').click()
+  await expect(page.locator('text=Alert placed at map center')).toBeVisible({ timeout: 10_000 })
+
+  // Wait up to 5 s for the intercepted id to populate (response arrives before
+  // the success banner clears, so this is typically immediate)
+  const alertIdDeadline = Date.now() + 5_000
+  while (!capturedAlertId && Date.now() < alertIdDeadline) {
+    await page.waitForTimeout(100)
   }
+  if (!capturedAlertId) throw new Error('place_safety_alert response did not include an id — check RPC response shape')
+
+  console.log(`[safety-pins] captured alert id: ${capturedAlertId}`)
+
+  // ── 5. Wait for the PlaceHazardDialog to fully close ─────────────────────
+  // The dialog auto-dismisses after 1200 ms. Wait until both the dialog
+  // content AND the backdrop overlay are gone before attempting a map click.
+
+  await expect(page.locator('[id="hazard-severity"]')).not.toBeVisible({ timeout: 10_000 })
+  // Also ensure no Radix dialog overlay is intercepting pointer events
+  await expect(page.locator('[role="dialog"][data-state="open"]')).not.toBeAttached({ timeout: 5_000 })
+
+  // ── 6. Wait for the marker to appear on the map ───────────────────────────
+  // The map defaults to US-center zoom 4 (whole US in viewport).
+  // The realtime INSERT subscription or the next in-view fetch will add the marker.
+  // The 400 ms debounce + EWKB parse means it may take a moment.
+
+  const markerLocator = page.locator(`[data-testid="safety-alert-marker-${capturedAlertId}"]`)
+  await expect(markerLocator).toBeVisible({ timeout: 20_000 })
+  console.log('[safety-pins] marker visible on map')
+
+  // ── 7. Click marker → popup opens ─────────────────────────────────────────
+
+  await markerLocator.click()
+
+  // ── 8. Assert trust label ─────────────────────────────────────────────────
+
+  await expect(page.locator('text=Unverified — neighbor report')).toBeVisible({ timeout: 5_000 })
+  console.log('[safety-pins] trust label visible in popup')
+
+  // ── 9. Assert vote buttons are present ────────────────────────────────────
+
+  const confirmBtn = page.locator(`[data-testid="vote-confirm-${capturedAlertId}"]`)
+  const clearBtn = page.locator(`[data-testid="vote-clear-${capturedAlertId}"]`)
+  await expect(confirmBtn).toBeVisible({ timeout: 5_000 })
+  await expect(clearBtn).toBeVisible()
+  console.log('[safety-pins] vote buttons (Still here / Gone now) visible')
+
+  // ── 10. Click "Still here" → confirm_count increments ────────────────────
+  // After the vote RPC completes, voteAlert merges coords back into the alert row
+  // (preserving lng/lat so the marker stays mounted and the popup stays open).
+  // The button text reverts from '...' to 'Still here' once setVoting(null) runs.
+
+  await confirmBtn.click()
+
+  // Wait for '...' spinner to clear — setVoting(null) runs in finally{}
+  await expect(confirmBtn).toHaveText('Still here', { timeout: 15_000 })
+  console.log('[safety-pins] Still here vote completed')
+
+  // Assert confirm_count updated in the popup counts line
+  await expect(page.locator('text=/1 confirmed still here/')).toBeVisible({ timeout: 5_000 })
+  console.log('[safety-pins] confirm_count incremented to 1 — vote flow verified')
 })

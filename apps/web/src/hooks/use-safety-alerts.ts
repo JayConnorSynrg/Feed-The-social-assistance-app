@@ -250,11 +250,21 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
         if (rpcError) throw rpcError
         const row = data as unknown as SafetyAlert
         if (row) {
-          // Single-source-of-truth update; no ?? stale-state
+          // Single-source-of-truth update; no ?? stale-state.
+          // vote_safety_alert returns the raw safety_alerts row (geography location,
+          // NOT decomposed lng/lat).  Merge with the existing entry to preserve the
+          // numeric lng/lat values so SafetyAlertMarker never receives NaN coords
+          // and unmounts the popup mid-interaction.
           if (row.status !== 'live') {
             alertMapRef.current.delete(row.id)
           } else {
-            alertMapRef.current.set(row.id, row)
+            const existing = alertMapRef.current.get(row.id)
+            alertMapRef.current.set(row.id, {
+              ...(existing ?? {}),
+              ...row,
+              lng: existing?.lng ?? row.lng,
+              lat: existing?.lat ?? row.lat,
+            })
           }
           setAlerts(Array.from(alertMapRef.current.values()))
           logger.info(vote === 'confirm' ? 'pin.confirm' : 'pin.clear', { alertId })
