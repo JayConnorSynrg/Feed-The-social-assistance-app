@@ -49,15 +49,20 @@ completed_at: "2026-06-09T17:45:00.000Z"
 
 ```yaml
 id: advisor-hardening-prb
-status: pending
+status: in_progress
 type: branch
-description: "chore(security): revoke trigger-fn public execute; drop duplicate indexes; consolidate duplicate RLS policies; delete 6 dead files"
+description: "chore(security): drop duplicate indexes; consolidate duplicate RLS policies; delete 5 dead files (cache.ts has importers — kept)"
 branch: chore/advisor-hardening
 base: develop
-base_sha: null
+base_sha: 5bb5bb2
 remote: origin
 files:
-  - supabase/migrations/20260609HHMMSS_advisor_hardening.sql
+  - supabase/migrations/20260609213423_advisor_hardening.sql
+  - apps/web/src/components/documents/document-upload.tsx
+  - apps/web/src/components/resources/federated-resource-detail.tsx
+  - apps/web/src/components/resources/resource-source-badge.tsx
+  - apps/web/src/lib/query-utils.ts
+  - apps/web/src/lib/session-manager.ts
   - .claude/GIT_PLAN.md
 pr: null
 pr_url: null
