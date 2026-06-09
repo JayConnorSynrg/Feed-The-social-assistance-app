@@ -20,7 +20,7 @@ next_action_id: content-reports-p9-t5
 
 ```yaml
 id: content-reports-p9-t5
-status: in_progress
+status: complete
 type: branch
 description: "feat(trust): community content reports — 3-distinct-reporter auto-hide, admin resolve queue, report UI (P9-T5)"
 branch: feature/content-reports
@@ -35,8 +35,12 @@ files:
   - apps/web/e2e/content-reports.spec.ts
   - packages/database/types.ts
   - .claude/GIT_PLAN.md
+pr: 63
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/63
+merge_sha: 8ae6f63
+merged_into: develop
 created_at: "2026-06-09T00:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-09T00:00:00.000Z"
 ```
 
 ```yaml
