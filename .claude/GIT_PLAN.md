@@ -20,7 +20,7 @@ next_action_id: docsync-p9-progress
 
 ```yaml
 id: docsync-p9-progress
-status: in_progress
+status: complete
 type: branch
 description: "docs(specs): mark P9-T5/T6 complete (PRs #63-64), record P9-T1 progress (PRs #65-66). Updates ralph-loop-checklist.md (frontmatter v1.4.0, 112/114, P9 dashboard row, task statuses, version history) and .phase-state.json (phase.9 completedTasks=[P9-T5,P9-T6], status=IN_PROGRESS, metrics 114/112, PRs noted). Docs-only — zero app/DB/prod changes."
 branch: chore/docsync-p9-progress
@@ -31,9 +31,12 @@ files:
   - specs/001-feed-platform/ralph-loop-checklist.md
   - specs/001-feed-platform/.phase-state.json
   - .claude/GIT_PLAN.md
-pr: null
+pr: 67
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/67
+merge_sha: 9d38db9
+merged_into: develop
 created_at: "2026-06-09T19:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-09T19:30:00.000Z"
 ```
 
 ```yaml
