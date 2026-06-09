@@ -7,6 +7,10 @@
  * Writes go through the submit_review SECDEF RPC — direct table inserts are
  * blocked by RLS (no INSERT policy).
  *
+ * Supports two review paths:
+ *  - opt-in path: pass optInId (resource-sharing exchange)
+ *  - conversation path: pass conversationId (volunteer messaging exchange)
+ *
  * PII note: comment content is never logged.
  */
 
@@ -23,7 +27,9 @@ import type { Database } from '@feed/database'
 export type ReviewRow = Database['public']['Tables']['reviews']['Row']
 
 export interface SubmitReviewParams {
-  optInId: string
+  /** Provide exactly one of optInId or conversationId. */
+  optInId?: string
+  conversationId?: string
   rating: number
   wouldRecommend?: boolean | null
   comment?: string | null
@@ -31,6 +37,9 @@ export interface SubmitReviewParams {
 
 /** Map of opt_in_id → ReviewRow for reviews the current user has authored. */
 export type ReviewMap = Map<string, ReviewRow>
+
+/** Map of conversation_id → ReviewRow for conversation-path reviews. */
+export type ConversationReviewMap = Map<string, ReviewRow>
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -43,9 +52,10 @@ export function useReviews() {
   const [error, setError] = useState<string | null>(null)
 
   /**
-   * Submit a review for a completed opt-in exchange via the SECDEF RPC.
-   * The server determines the reviewer/reviewee from auth.uid() and opt-in
-   * participant data — the client never sends PII directly.
+   * Submit a review via the SECDEF RPC.
+   * For the opt-in path: pass optInId.
+   * For the conversation path: pass conversationId.
+   * The server determines reviewer/reviewee from auth.uid() and participant data.
    */
   const submitReview = useCallback(
     async (params: SubmitReviewParams): Promise<ReviewRow> => {
@@ -54,10 +64,11 @@ export function useReviews() {
       try {
         const { data, error: rpcError } = await supabase
           .rpc('submit_review', {
-            p_opt_in_id: params.optInId,
             p_rating: params.rating,
             p_would_recommend: params.wouldRecommend ?? undefined,
             p_comment: params.comment ?? undefined,
+            ...(params.optInId ? { p_opt_in_id: params.optInId } : {}),
+            ...(params.conversationId ? { p_conversation_id: params.conversationId } : {}),
           })
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcError) {
@@ -85,7 +96,6 @@ export function useReviews() {
   /**
    * Fetch the current user's reviews for a set of opt-in IDs in one query.
    * Returns a Map<opt_in_id, ReviewRow> for O(1) lookup per opt-in in the UI.
-   * Used to determine which completed exchanges the current user has already reviewed.
    */
   const fetchMyReviewsForOptIns = useCallback(
     async (optInIds: string[]): Promise<ReviewMap> => {
@@ -109,7 +119,7 @@ export function useReviews() {
 
         const map: ReviewMap = new Map()
         for (const row of data ?? []) {
-          map.set(row.opt_in_id, row)
+          if (row.opt_in_id) map.set(row.opt_in_id, row)
         }
         return map
       } catch (err: unknown) {
@@ -125,5 +135,32 @@ export function useReviews() {
     [supabase]
   )
 
-  return { loading, error, submitReview, fetchMyReviewsForOptIns }
+  /**
+   * Fetch the current user's review for a specific conversation (or null).
+   * Used by the messages panel review-prompt to detect if user already reviewed.
+   */
+  const fetchMyReviewForConversation = useCallback(
+    async (conversationId: string): Promise<ReviewRow | null> => {
+      setError(null)
+      try {
+        const { data, error: rpcError } = await supabase
+          .rpc('get_my_conversation_review', { p_conversation_id: conversationId })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcError) {
+          const msg = getFriendlyErrorMessage(rpcError, "Couldn't check review status.")
+          setError(msg)
+          return null
+        }
+        // PostgREST returns {} (not null) when a RETURNS-composite function returns NULL.
+        // Guard against this by checking for a real primary key value.
+        const row = data as ReviewRow | null
+        return (row && row.id) ? row : null
+      } catch {
+        return null
+      }
+    },
+    [supabase]
+  )
+
+  return { loading, error, submitReview, fetchMyReviewsForOptIns, fetchMyReviewForConversation }
 }

@@ -16,7 +16,24 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: content-reports-p9-t5
+next_action_id: conversation-reviews-p9-t6
+
+```yaml
+id: conversation-reviews-p9-t6
+status: in_progress
+type: branch
+description: "feat(messages): conversation completion → dual wheat-stalk reviews (bridge review gate to conversations)"
+branch: feature/conversation-reviews
+base: develop
+base_sha: null
+remote: origin
+files: []
+pr: null
+pr_url: null
+merge_sha: null
+created_at: "2026-06-09T00:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: content-reports-p9-t5

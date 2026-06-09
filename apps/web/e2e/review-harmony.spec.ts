@@ -175,11 +175,11 @@ test('sourcer reviews seeker after completed opt-in → seeker harmony badge sho
   console.log('[review-harmony] review modal opened')
 
   // Review modal should be visible
-  const reviewStars = page.locator('[data-testid="review-stars"]')
-  await expect(reviewStars).toBeVisible({ timeout: 5_000 })
+  const reviewStalks = page.locator('[data-testid="review-stalks"]')
+  await expect(reviewStalks).toBeVisible({ timeout: 5_000 })
 
   // Select 4 stars
-  await page.locator('[data-testid="review-star-4"]').click()
+  await page.locator('[data-testid="review-stalk-4"]').click()
   console.log('[review-harmony] selected 4 stars')
 
   // Toggle "Would recommend = Yes"
@@ -192,7 +192,7 @@ test('sourcer reviews seeker after completed opt-in → seeker harmony badge sho
   console.log('[review-harmony] review submitted')
 
   // Modal should close (dismiss); wait for it to disappear
-  await expect(reviewStars).not.toBeVisible({ timeout: 10_000 })
+  await expect(reviewStalks).not.toBeVisible({ timeout: 10_000 })
   console.log('[review-harmony] review modal closed after submit')
 
   // After submission, refresh the page data (page.reload re-fetches)
@@ -290,11 +290,11 @@ test('seeker reviews sourcer → sourcer harmony badge updates', async ({ page }
   await reviewSourcerBtn.click()
 
   // Review modal
-  const reviewStars = page.locator('[data-testid="review-stars"]')
-  await expect(reviewStars).toBeVisible({ timeout: 5_000 })
+  const reviewStalks = page.locator('[data-testid="review-stalks"]')
+  await expect(reviewStalks).toBeVisible({ timeout: 5_000 })
 
   // Select 5 stars
-  await page.locator('[data-testid="review-star-5"]').click()
+  await page.locator('[data-testid="review-stalk-5"]').click()
   console.log('[review-harmony] seeker selected 5 stars')
 
   // Submit
@@ -304,7 +304,7 @@ test('seeker reviews sourcer → sourcer harmony badge updates', async ({ page }
   console.log('[review-harmony] seeker review submitted')
 
   // Modal closes
-  await expect(reviewStars).not.toBeVisible({ timeout: 10_000 })
+  await expect(reviewStalks).not.toBeVisible({ timeout: 10_000 })
   console.log('[review-harmony] review modal closed')
 
   // Reload to get fresh data

@@ -21,7 +21,7 @@ interface Conversation {
   resource_id: string | null
   volunteer_id: string
   requester_id: string
-  status: 'pending' | 'active' | 'declined' | 'cancelled'
+  status: 'pending' | 'active' | 'completed' | 'declined' | 'cancelled'
   created_at: string | null
   updated_at: string | null
   volunteer: ConversationProfile | null
@@ -46,8 +46,8 @@ const CONVERSATION_SELECT = [
   'status',
   'created_at',
   'updated_at',
-  'volunteer:profiles!conversations_volunteer_id_fkey(full_name)',
-  'requester:profiles!conversations_requester_id_fkey(full_name)',
+  'volunteer:profiles!conversations_volunteer_id_profiles_fkey(full_name)',
+  'requester:profiles!conversations_requester_id_profiles_fkey(full_name)',
   'resource:resources!conversations_resource_id_fkey(name, category)',
 ].join(', ')
 
@@ -72,6 +72,7 @@ export function useConversations() {
     (c) => c.volunteer_id === user?.id && c.status === 'pending'
   )
   const activeConversations = conversations.filter((c) => c.status === 'active')
+  const completedConversations = conversations.filter((c) => c.status === 'completed')
   const history = conversations.filter(
     (c) => c.status === 'declined' || c.status === 'cancelled'
   )
@@ -338,6 +339,29 @@ export function useConversations() {
     }
   }, [supabase, user?.id, fetchConversations])
 
+  /**
+   * Complete a conversation (volunteer-only). Status transitions to 'completed',
+   * which unlocks the bilateral review prompt for both participants.
+   */
+  const completeConversation = useCallback(async (id: string) => {
+    if (!user?.id) return
+    setIsLoading(true)
+    try {
+      const { error: updateError } = await supabase
+        .from('conversations')
+        .update({ status: 'completed' })
+        .eq('id', id)
+        .eq('volunteer_id', user.id)
+
+      if (updateError) throw new Error(updateError.message)
+      await fetchConversations()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to complete conversation')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabase, user?.id, fetchConversations])
+
   const withdrawRequest = useCallback(async (id: string) => {
     if (!user?.id) return
     setIsLoading(true)
@@ -415,11 +439,13 @@ export function useConversations() {
     // Derived
     pendingRequests,
     activeConversations,
+    completedConversations,
     history,
     // Actions
     sendRequest,
     acceptRequest,
     declineRequest,
+    completeConversation,
     cancelConversation,
     withdrawRequest,
     sendMessage,

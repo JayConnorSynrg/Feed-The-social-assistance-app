@@ -1,7 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { MessageSquare, Send, Check, XCircle, ArrowLeft, Clock, Loader2, Inbox } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  MessageSquare,
+  Send,
+  Check,
+  ArrowLeft,
+  Clock,
+  Loader2,
+  Inbox,
+  CheckCircle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -14,7 +23,11 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { useConversations } from '@/hooks/use-conversations'
+import { useReviews } from '@/hooks/use-reviews'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { ReviewModal } from '@/components/feed/review-modal'
+import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
+import type { ReviewRow } from '@/hooks/use-reviews'
 
 const CATEGORY_LABELS: Record<string, string> = {
   food: 'Food',
@@ -40,6 +53,7 @@ export function MessagesPanel() {
     conversations,
     pendingRequests,
     activeConversations,
+    completedConversations,
     history,
     messages,
     selectedConversationId,
@@ -47,6 +61,7 @@ export function MessagesPanel() {
     sendMessage,
     acceptRequest,
     declineRequest,
+    completeConversation,
     cancelConversation,
     withdrawRequest,
     isLoading,
@@ -54,10 +69,17 @@ export function MessagesPanel() {
     error,
   } = useConversations()
 
+  const { fetchMyReviewForConversation } = useReviews()
+
   const [messageInput, setMessageInput] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel'; id: string } | null
+  type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel' | 'complete'; id: string } | null
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
+
+  // Review state for the selected completed conversation
+  const [myReview, setMyReview] = useState<ReviewRow | null | undefined>(undefined) // undefined = not yet fetched
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [reviewLoading, setReviewLoading] = useState(false)
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -82,6 +104,34 @@ export function MessagesPanel() {
     ? (isVolunteer ? selectedConv.requester?.full_name : selectedConv.volunteer?.full_name) ?? 'User'
     : ''
 
+  // Fetch review status when a completed conversation is selected
+  const convIdForReview = selectedConv?.status === 'completed' ? selectedConv.id : null
+
+  useEffect(() => {
+    if (!convIdForReview) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMyReview(undefined)
+      return
+    }
+    let cancelled = false
+    setReviewLoading(true)
+    fetchMyReviewForConversation(convIdForReview).then((result) => {
+      if (!cancelled) {
+        setMyReview(result)
+        setReviewLoading(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [convIdForReview, fetchMyReviewForConversation])
+
+  const checkReviewStatus = useCallback(async (convId: string) => {
+    setMyReview(undefined)
+    setReviewLoading(true)
+    const result = await fetchMyReviewForConversation(convId)
+    setMyReview(result)
+    setReviewLoading(false)
+  }, [fetchMyReviewForConversation])
+
   const handleSend = async () => {
     if (!messageInput.trim()) return
     await sendMessage(messageInput.trim())
@@ -92,6 +142,13 @@ export function MessagesPanel() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
+    }
+  }
+
+  const handleReviewSubmitted = async () => {
+    setReviewModalOpen(false)
+    if (selectedConv?.id) {
+      await checkReviewStatus(selectedConv.id)
     }
   }
 
@@ -167,6 +224,26 @@ export function MessagesPanel() {
               </div>
             )}
 
+            {/* Completed */}
+            {completedConversations.length > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-lime-50">
+                  <span className="text-xs font-medium text-lime-700 uppercase tracking-wider">
+                    Completed ({completedConversations.length})
+                  </span>
+                </div>
+                {completedConversations.map(conv => (
+                  <ConversationCard
+                    key={conv.id}
+                    conversation={conv}
+                    userId={user?.id ?? ''}
+                    isSelected={conv.id === selectedConversationId}
+                    onClick={() => selectConversation(conv.id)}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* History */}
             {history.length > 0 && (
               <div>
@@ -209,6 +286,7 @@ export function MessagesPanel() {
                     className={`text-xs ${
                       selectedConv.status === 'active' ? 'bg-green-100 text-green-700' :
                       selectedConv.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                      selectedConv.status === 'completed' ? 'bg-lime-100 text-lime-700' :
                       'bg-stone-100 text-stone-500'
                     }`}
                   >
@@ -240,8 +318,14 @@ export function MessagesPanel() {
                   </Button>
                 )}
                 {selectedConv.status === 'active' && isVolunteer && (
-                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'cancel', id: selectedConv.id })} className="text-xs text-red-600 hover:text-red-700">
-                    <XCircle className="w-3 h-3 mr-1" /> End
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConfirmAction({ type: 'complete', id: selectedConv.id })}
+                    className="text-xs text-lime-700 hover:text-lime-800 border-lime-300"
+                    data-testid="end-and-review-btn"
+                  >
+                    <CheckCircle className="w-3 h-3 mr-1" /> End &amp; review
                   </Button>
                 )}
               </div>
@@ -272,8 +356,8 @@ export function MessagesPanel() {
               ))}
             </div>
 
-            {/* Input — only for active conversations (or pending requester's initial view) */}
-            {(selectedConv.status === 'active' || (selectedConv.status === 'pending' && !isVolunteer)) && (
+            {/* Input area — active only; completed shows disabled hint */}
+            {selectedConv.status === 'active' || (selectedConv.status === 'pending' && !isVolunteer) ? (
               <div className="p-4 border-t border-stone-200/50">
                 {selectedConv.status === 'pending' ? (
                   <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
@@ -300,7 +384,56 @@ export function MessagesPanel() {
                   </div>
                 )}
               </div>
-            )}
+            ) : selectedConv.status === 'completed' ? (
+              /* ── Review prompt card (both parties see this) ── */
+              <div className="p-4 border-t border-stone-200/50">
+                {reviewLoading || myReview === undefined ? (
+                  <div className="flex items-center justify-center py-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
+                  </div>
+                ) : myReview !== null ? (
+                  /* Already reviewed — show their rating */
+                  <div
+                    data-testid="review-submitted-card"
+                    className="flex items-center gap-3 bg-lime-50 border border-lime-200 rounded-xl p-4"
+                  >
+                    <CheckCircle className="w-5 h-5 text-lime-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-lime-800">Your review was submitted</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <WheatStalkRatingDisplay
+                          value={myReview.rating}
+                          size="sm"
+                          testIdPrefix={`my-review-stalks-${selectedConv.id}`}
+                        />
+                        <span className="text-xs text-lime-700">{myReview.rating}/5</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Not yet reviewed — show the prompt */
+                  <div
+                    data-testid="review-prompt-card"
+                    className="bg-amber-50 border border-amber-200 rounded-xl p-4"
+                  >
+                    <p className="text-sm font-semibold text-stone-800 mb-1">
+                      How did it go?
+                    </p>
+                    <p className="text-sm text-stone-600 mb-3">
+                      Leave a review for <span className="font-medium">{otherUserName}</span>
+                    </p>
+                    <Button
+                      size="sm"
+                      data-testid="open-review-modal-btn"
+                      onClick={() => setReviewModalOpen(true)}
+                      className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white text-xs"
+                    >
+                      Rate your experience
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-center p-8">
@@ -319,7 +452,7 @@ export function MessagesPanel() {
         </div>
       )}
 
-      {/* Confirm dialog for destructive conversation actions */}
+      {/* Confirm dialog for conversation actions */}
       <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -327,35 +460,53 @@ export function MessagesPanel() {
               {confirmAction?.type === 'decline' && 'Decline this request?'}
               {confirmAction?.type === 'withdraw' && 'Withdraw your request?'}
               {confirmAction?.type === 'cancel' && 'End this conversation?'}
+              {confirmAction?.type === 'complete' && 'End conversation?'}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-stone-600">
             {confirmAction?.type === 'decline' && 'The requester will be notified that their request was declined.'}
             {confirmAction?.type === 'withdraw' && 'Your request will be cancelled and cannot be recovered.'}
             {confirmAction?.type === 'cancel' && 'This conversation will be closed and cannot be reopened.'}
+            {confirmAction?.type === 'complete' && 'Both of you will be able to leave a review once the conversation is marked complete.'}
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>
-              Cancel
+              Keep chatting
             </Button>
             <Button
-              variant="destructive"
+              variant={confirmAction?.type === 'complete' ? 'default' : 'destructive'}
               size="sm"
+              data-testid="confirm-end-btn"
+              className={confirmAction?.type === 'complete' ? 'bg-lime-700 hover:bg-lime-800 text-white' : ''}
               onClick={() => {
                 if (!confirmAction) return
                 if (confirmAction.type === 'decline') declineRequest(confirmAction.id)
                 else if (confirmAction.type === 'withdraw') withdrawRequest(confirmAction.id)
                 else if (confirmAction.type === 'cancel') cancelConversation(confirmAction.id)
+                else if (confirmAction.type === 'complete') completeConversation(confirmAction.id)
                 setConfirmAction(null)
               }}
             >
               {confirmAction?.type === 'decline' && 'Decline Request'}
               {confirmAction?.type === 'withdraw' && 'Withdraw Request'}
               {confirmAction?.type === 'cancel' && 'End Conversation'}
+              {confirmAction?.type === 'complete' && 'End & review'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Review modal — conversation path */}
+      {selectedConv && (
+        <ReviewModal
+          open={reviewModalOpen}
+          onOpenChange={setReviewModalOpen}
+          conversationId={selectedConv.id}
+          revieweeName={otherUserName}
+          revieweeRole={isVolunteer ? 'requester' : 'volunteer'}
+          onSubmitted={handleReviewSubmitted}
+        />
+      )}
     </div>
   )
 }

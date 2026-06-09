@@ -1743,9 +1743,10 @@ export type Database = {
       reviews: {
         Row: {
           comment: string | null
+          conversation_id: string | null
           created_at: string
           id: string
-          opt_in_id: string
+          opt_in_id: string | null
           rating: number
           reviewee_id: string
           reviewer_id: string
@@ -1754,9 +1755,10 @@ export type Database = {
         }
         Insert: {
           comment?: string | null
+          conversation_id?: string | null
           created_at?: string
           id?: string
-          opt_in_id: string
+          opt_in_id?: string | null
           rating: number
           reviewee_id: string
           reviewer_id: string
@@ -1765,9 +1767,10 @@ export type Database = {
         }
         Update: {
           comment?: string | null
+          conversation_id?: string | null
           created_at?: string
           id?: string
-          opt_in_id?: string
+          opt_in_id?: string | null
           rating?: number
           reviewee_id?: string
           reviewer_id?: string
@@ -1775,6 +1778,13 @@ export type Database = {
           would_recommend?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reviews_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reviews_opt_in_id_fkey"
             columns: ["opt_in_id"]
@@ -2862,6 +2872,27 @@ export type Database = {
         }[]
       }
       get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
+      get_my_conversation_review: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          comment: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          opt_in_id: string | null
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          updated_at: string
+          would_recommend: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_my_coordinates: {
         Args: never
         Returns: {
@@ -3765,15 +3796,17 @@ export type Database = {
       submit_review: {
         Args: {
           p_comment?: string
-          p_opt_in_id: string
-          p_rating: number
+          p_conversation_id?: string
+          p_opt_in_id?: string
+          p_rating?: number
           p_would_recommend?: boolean
         }
         Returns: {
           comment: string | null
+          conversation_id: string | null
           created_at: string
           id: string
-          opt_in_id: string
+          opt_in_id: string | null
           rating: number
           reviewee_id: string
           reviewer_id: string
@@ -3824,7 +3857,12 @@ export type Database = {
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
     }
     Enums: {
-      conversation_status: "pending" | "active" | "declined" | "cancelled"
+      conversation_status:
+        | "pending"
+        | "active"
+        | "completed"
+        | "declined"
+        | "cancelled"
       form_type:
         | "snap"
         | "medicaid"
@@ -4041,7 +4079,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      conversation_status: ["pending", "active", "declined", "cancelled"],
+      conversation_status: [
+        "pending",
+        "active",
+        "completed",
+        "declined",
+        "cancelled",
+      ],
       form_type: [
         "snap",
         "medicaid",
