@@ -16,7 +16,28 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: P7-T11-auth-e2e
+next_action_id: content-reports-p9-t5
+
+```yaml
+id: content-reports-p9-t5
+status: in_progress
+type: branch
+description: "feat(trust): community content reports — 3-distinct-reporter auto-hide, admin resolve queue, report UI (P9-T5)"
+branch: feature/content-reports
+base: develop
+base_sha: a8564d4
+remote: origin
+files:
+  - supabase/migrations/20260609000000_content_reports.sql
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/app/(admin)/moderation/reports-queue.tsx
+  - apps/web/src/app/(admin)/moderation/page.tsx
+  - apps/web/e2e/content-reports.spec.ts
+  - packages/database/types.ts
+  - .claude/GIT_PLAN.md
+created_at: "2026-06-09T00:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: docsync-phase8
