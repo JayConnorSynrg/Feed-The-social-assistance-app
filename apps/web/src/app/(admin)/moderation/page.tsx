@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ModerationQueue } from './moderation-queue'
+import { SafetyAlertsReview } from './safety-alerts-review'
 import { Loader2 } from 'lucide-react'
 
 export const metadata = {
@@ -95,6 +96,11 @@ export default function ModerationPage() {
       >
         <ModerationContent />
       </Suspense>
+
+      {/* Safety alerts post-hoc review — pins go live instantly, admins review here */}
+      <div className="mt-10">
+        <SafetyAlertsReview />
+      </div>
     </div>
   )
 }

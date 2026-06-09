@@ -42,12 +42,24 @@ const volunteerFormSchema = z.object({
 
 type VolunteerFormData = z.infer<typeof volunteerFormSchema>
 
-export function VolunteerResourceFAB() {
+interface VolunteerResourceFABProps {
+  /** When true, the category speed-dial opens (controlled externally). */
+  externalOpen?: boolean
+  /** Called when external-open state changes (e.g. backdrop click). */
+  onExternalOpenChange?: (open: boolean) => void
+}
+
+export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: VolunteerResourceFABProps = {}) {
   const { profile } = useAuth()
   const { setActivePanel } = usePanelContext()
   const { registerResource, isRegistering, hasLocation } = useVolunteerResource()
 
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpenInternal, setIsOpenInternal] = useState(false)
+  const isOpen = externalOpen ?? isOpenInternal
+  const setIsOpen = (v: boolean) => {
+    setIsOpenInternal(v)
+    onExternalOpenChange?.(v)
+  }
   const [selectedCategory, setSelectedCategory] = useState<ResourceCategory | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [success, setSuccess] = useState(false)

@@ -49,11 +49,12 @@ async function fetchCoords(
   }
 }
 
-// 11-column list — excludes latitude, longitude (coord lockdown), phone,
+// 12-column list — excludes latitude, longitude (coord lockdown), phone,
 // paypal_email, venmo_username, is_admin (PII hardening, 20260603120000).
+// user_role added: has column-level SELECT grant (safe to read); unblocks role-gated UI.
 const PROFILE_COLUMNS =
   'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
-  'is_verified, created_at, is_staff, onboarding_completed'
+  'is_verified, created_at, is_staff, onboarding_completed, user_role'
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)

@@ -1758,6 +1758,109 @@ export type Database = {
           },
         ]
       }
+      safety_alert_votes: {
+        Row: {
+          alert_id: string
+          created_at: string
+          id: string
+          vote: string
+          voter_id: string
+        }
+        Insert: {
+          alert_id: string
+          created_at?: string
+          id?: string
+          vote: string
+          voter_id: string
+        }
+        Update: {
+          alert_id?: string
+          created_at?: string
+          id?: string
+          vote?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_alert_votes_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "safety_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alert_votes_voter_id_fkey"
+            columns: ["voter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alert_votes_voter_id_fkey"
+            columns: ["voter_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safety_alerts: {
+        Row: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string
+          id: string
+          location: unknown
+          severity: number
+          status: string
+        }
+        Insert: {
+          alert_type: string
+          clear_count?: number
+          confirm_count?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at: string
+          id?: string
+          location: unknown
+          severity: number
+          status?: string
+        }
+        Update: {
+          alert_type?: string
+          clear_count?: number
+          confirm_count?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string
+          id?: string
+          location?: unknown
+          severity?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_alerts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alerts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_resource_documents: {
         Row: {
           created_at: string | null
@@ -2509,6 +2612,28 @@ export type Database = {
             }
             Returns: string
           }
+      admin_remove_safety_alert: {
+        Args: { p_alert_id: string }
+        Returns: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string
+          id: string
+          location: unknown
+          severity: number
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_alerts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       calculate_trust_score: {
         Args: {
           community_score: number
@@ -2856,6 +2981,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      place_safety_alert: {
+        Args: {
+          p_description: string
+          p_lat: number
+          p_lng: number
+          p_severity: number
+          p_type: string
+        }
+        Returns: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string
+          id: string
+          location: unknown
+          severity: number
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_alerts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
@@ -2918,6 +3071,28 @@ export type Database = {
           phone: string
           state: string
           website: string
+        }[]
+      }
+      safety_alerts_in_view: {
+        Args: {
+          p_max_lat: number
+          p_max_lng: number
+          p_min_lat: number
+          p_min_lng: number
+        }
+        Returns: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string
+          description: string
+          expires_at: string
+          id: string
+          lat: number
+          lng: number
+          severity: number
+          status: string
         }[]
       }
       seekers_within_radius: {
@@ -3556,6 +3731,28 @@ export type Database = {
           table_name: string
         }
         Returns: string
+      }
+      vote_safety_alert: {
+        Args: { p_alert_id: string; p_vote: string }
+        Returns: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string
+          id: string
+          location: unknown
+          severity: number
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_alerts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
     }
