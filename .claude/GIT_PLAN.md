@@ -16,23 +16,36 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: conversation-reviews-p9-t6
+next_action_id: null
 
 ```yaml
 id: conversation-reviews-p9-t6
-status: in_progress
+status: complete
 type: branch
 description: "feat(messages): conversation completion → dual wheat-stalk reviews (bridge review gate to conversations)"
 branch: feature/conversation-reviews
 base: develop
-base_sha: null
+base_sha: cf15dcd
 remote: origin
-files: []
-pr: null
-pr_url: null
-merge_sha: null
+files:
+  - supabase/migrations/20260609100000_conversation_status_completed.sql
+  - supabase/migrations/20260609100100_conversation_reviews.sql
+  - supabase/migrations/20260609100200_conversations_profile_fkeys.sql
+  - apps/web/src/components/ui/wheat-stalk-rating.tsx
+  - apps/web/src/components/panels/messages-panel.tsx
+  - apps/web/src/components/feed/review-modal.tsx
+  - apps/web/src/hooks/use-conversations.ts
+  - apps/web/src/hooks/use-reviews.ts
+  - apps/web/e2e/conversation-reviews.spec.ts
+  - apps/web/e2e/review-harmony.spec.ts
+  - packages/database/types.ts
+  - .claude/GIT_PLAN.md
+pr: 64
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/64
+merge_sha: a0bbaa0
+merged_into: develop
 created_at: "2026-06-09T00:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-09T00:00:00.000Z"
 ```
 
 ```yaml
