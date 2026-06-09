@@ -5,9 +5,25 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2 } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
 import { sanitizeInput } from '@/lib/security'
 import { createClient } from '@/lib/supabase/client'
@@ -53,6 +69,7 @@ interface Post {
   slotsRemaining: number | null
   postType: 'feed' | 'resource_post' | 'petition'
   petitionId: string | null
+  isHidden: boolean
 }
 
 /** An opt-in row enriched with the seeker's profile for the author's management list. */
@@ -516,7 +533,18 @@ interface PostCardProps {
     isSigning: boolean
   }
   onSignPetition?: (petitionId: string) => void
+  onReport?: (postId: string, reason: string, details: string | null) => Promise<{ hidden: boolean }>
 }
+
+const REPORT_REASONS: { value: string; label: string }[] = [
+  { value: 'spam', label: 'Spam' },
+  { value: 'abusive', label: 'Abusive content' },
+  { value: 'harassment', label: 'Harassment' },
+  { value: 'misinformation', label: 'Misinformation' },
+  { value: 'illegal', label: 'Illegal content' },
+  { value: 'off_topic', label: 'Off topic' },
+  { value: 'other', label: 'Other' },
+]
 
 function PostCard({
   post,
@@ -544,6 +572,7 @@ function PostCard({
   onUnfollow,
   petitionEmbed,
   onSignPetition,
+  onReport,
 }: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
@@ -554,14 +583,63 @@ function PostCard({
 
   const [optInListOpen, setOptInListOpen] = useState(false)
 
+  // Report dialog state
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [reportReason, setReportReason] = useState<string>('')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reportDone, setReportDone] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
+  const [isHiddenLocally, setIsHiddenLocally] = useState(false)
+
+  const handleReportSubmit = async () => {
+    if (!reportReason || !onReport) return
+    setReportSubmitting(true)
+    setReportError(null)
+    try {
+      const result = await onReport(post.id, reportReason, reportDetails.trim() || null)
+      setReportDone(true)
+      if (result.hidden) {
+        setIsHiddenLocally(true)
+      }
+      setTimeout(() => setReportDialogOpen(false), 1800)
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setReportSubmitting(false)
+    }
+  }
+
   const showReviewSourcerBtn =
     !isAuthor &&
     optInStatus === 'completed' &&
     !seekerHasReviewed &&
     currentUserOptInId != null
 
+  // Effective hidden state: either from DB (initial load) or from this session's report
+  const effectivelyHidden = post.isHidden || isHiddenLocally
+
+  // Non-author sees a hidden post only transiently (local state for immediate feedback);
+  // the RLS policy already excludes DB-hidden posts from non-authors on the next fetch.
+  if (effectivelyHidden && !isAuthor) {
+    return null
+  }
+
   return (
-    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-primary/30 transition-all">
+    <div
+      className={`p-4 rounded-xl bg-[#faf9f6] border transition-all ${
+        effectivelyHidden
+          ? 'border-orange-200 opacity-70'
+          : 'border-stone-200 hover:border-primary/30'
+      }`}
+    >
+      {/* Hidden-pending-review banner — shown to post author only */}
+      {effectivelyHidden && isAuthor && (
+        <div className="mb-3 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs font-medium text-orange-700">
+          Hidden pending review — only you can see this post right now.
+        </div>
+      )}
+
       {/* Author Row */}
       <div className="flex items-start gap-3 mb-3">
         {/* Avatar */}
@@ -830,6 +908,106 @@ function PostCard({
         onEmbed={() => onEmbed(post.id)}
         embedCopied={embedCopied}
       />
+
+      {/* Report post — only shown to non-authors when authenticated */}
+      {currentUserId != null && !isAuthor && onReport && (
+        <div className="mt-2 flex justify-end">
+          <button
+            data-testid={`report-btn-${post.id}`}
+            onClick={() => {
+              setReportReason('')
+              setReportDetails('')
+              setReportDone(false)
+              setReportError(null)
+              setReportDialogOpen(true)
+            }}
+            className="flex items-center gap-1 text-xs text-stone-400 hover:text-orange-500 transition-colors"
+            aria-label="Report post"
+          >
+            <Flag className="w-3 h-3" />
+            Report
+          </button>
+        </div>
+      )}
+
+      {/* Report dialog */}
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Report this post</DialogTitle>
+          </DialogHeader>
+
+          {reportDone ? (
+            <div className="py-4 text-center text-sm text-stone-700">
+              Thanks — your report helps keep the community safe.
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor={`report-reason-${post.id}`}>Reason</Label>
+                <Select value={reportReason} onValueChange={setReportReason}>
+                  <SelectTrigger id={`report-reason-${post.id}`} data-testid={`report-reason-select-${post.id}`}>
+                    <SelectValue placeholder="Select a reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REPORT_REASONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`report-details-${post.id}`}>
+                  Additional details{' '}
+                  <span className="text-stone-400 font-normal">(optional)</span>
+                </Label>
+                <Textarea
+                  id={`report-details-${post.id}`}
+                  data-testid={`report-details-${post.id}`}
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  maxLength={1000}
+                  placeholder="Describe the issue..."
+                  className="resize-none text-stone-900 placeholder:text-stone-400"
+                  rows={3}
+                />
+                <p className="text-xs text-stone-400 text-right">
+                  {reportDetails.length}/1000
+                </p>
+              </div>
+
+              {reportError && (
+                <p className="text-sm text-destructive">{reportError}</p>
+              )}
+            </div>
+          )}
+
+          {!reportDone && (
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setReportDialogOpen(false)}
+                disabled={reportSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReportSubmit}
+                disabled={!reportReason || reportSubmitting}
+                data-testid={`report-submit-${post.id}`}
+              >
+                {reportSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                Submit report
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -927,7 +1105,6 @@ export function FeedPanel() {
         async () => await supabase
           .from('posts')
           .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name)')
-          .eq('is_hidden', false)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(50)
@@ -1023,6 +1200,7 @@ export function FeedPanel() {
         slotsRemaining: row.slots_remaining ?? null,
         postType: (row.post_type as 'feed' | 'resource_post' | 'petition') ?? 'feed',
         petitionId: (row as { petition_id?: string | null }).petition_id ?? null,
+        isHidden: (row as { is_hidden?: boolean }).is_hidden ?? false,
       }))
 
       setPosts(transformed)
@@ -1266,6 +1444,33 @@ export function FeedPanel() {
     }
   }
 
+  // Submit a content report via SECDEF RPC
+  const handleReport = async (
+    postId: string,
+    reason: string,
+    details: string | null
+  ): Promise<{ hidden: boolean }> => {
+    type ReportReason = 'spam' | 'abusive' | 'harassment' | 'misinformation' | 'illegal' | 'off_topic' | 'other'
+    const { data, error } = await supabase.rpc('submit_content_report', {
+      p_content_type: 'post',
+      p_content_id: postId,
+      p_reason: reason as ReportReason,
+      p_details: details ?? undefined,
+    })
+    if (error) throw new Error(getFriendlyErrorMessage(error))
+    const result = data as { report_count: number; hidden: boolean }
+    if (result.hidden) {
+      // Remove hidden post from the feed list for non-authors
+      // (PostCard itself will handle the author's own hidden post with a badge)
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId ? { ...p, isHidden: true } : p
+        )
+      )
+    }
+    return { hidden: result.hidden }
+  }
+
   const handleComment = (postId: string) => {
     setOpenCommentPostIds((prev) => {
       const next = new Set(prev)
@@ -1496,6 +1701,7 @@ export function FeedPanel() {
                           : undefined
                       }
                       onSignPetition={signPetition}
+                      onReport={user ? handleReport : undefined}
                     />
                     {openCommentPostIds.has(post.id) && (
                       <CommentThread

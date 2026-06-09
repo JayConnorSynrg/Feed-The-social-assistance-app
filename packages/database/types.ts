@@ -176,6 +176,54 @@ export type Database = {
         }
         Relationships: []
       }
+      content_reports: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          details: string | null
+          id: string
+          reason: Database["public"]["Enums"]["report_reason"]
+          reporter_id: string
+          status: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason: Database["public"]["Enums"]["report_reason"]
+          reporter_id: string
+          status?: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason?: Database["public"]["Enums"]["report_reason"]
+          reporter_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -1263,6 +1311,8 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          hidden_at: string | null
+          hidden_reason: string | null
           id: string
           image_url: string | null
           is_hidden: boolean | null
@@ -1278,6 +1328,8 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          hidden_at?: string | null
+          hidden_reason?: string | null
           id?: string
           image_url?: string | null
           is_hidden?: boolean | null
@@ -1293,6 +1345,8 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          hidden_at?: string | null
+          hidden_reason?: string | null
           id?: string
           image_url?: string | null
           is_hidden?: boolean | null
@@ -2634,6 +2688,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_resolve_report: {
+        Args: { p_action: string; p_report_id: string }
+        Returns: Json
+      }
       calculate_trust_score: {
         Args: {
           community_score: number
@@ -3695,6 +3753,15 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      submit_content_report: {
+        Args: {
+          p_content_id: string
+          p_content_type: string
+          p_details?: string
+          p_reason: Database["public"]["Enums"]["report_reason"]
+        }
+        Returns: Json
+      }
       submit_review: {
         Args: {
           p_comment?: string
@@ -3778,6 +3845,14 @@ export type Database = {
         | "denial"
         | "general"
       post_type: "feed" | "resource_post" | "petition"
+      report_reason:
+        | "spam"
+        | "abusive"
+        | "harassment"
+        | "misinformation"
+        | "illegal"
+        | "off_topic"
+        | "other"
       resource_category:
         | "food"
         | "housing"
@@ -3989,6 +4064,15 @@ export const Constants = {
         "general",
       ],
       post_type: ["feed", "resource_post", "petition"],
+      report_reason: [
+        "spam",
+        "abusive",
+        "harassment",
+        "misinformation",
+        "illegal",
+        "off_topic",
+        "other",
+      ],
       resource_category: [
         "food",
         "housing",
