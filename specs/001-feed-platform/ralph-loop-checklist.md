@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.3.0"
+version: "1.4.0"
 created: "2026-01-19"
 last_updated: "2026-06-09"
 status: "IN_PROGRESS"
 current_phase: 7
 current_task: "P7-T11"
 total_phases: 9
-total_tasks: 112
-completed_tasks: 110
+total_tasks: 114
+completed_tasks: 112
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 10 | IN_PROGRESS |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 0 | PLANNED |
+| 9 | Community Launch Readiness | 9 | 2 | IN_PROGRESS |
 
-**Overall Progress**: 110 / 112 tasks (98%)
+**Overall Progress**: 112 / 114 tasks (98%)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. Phase 9 = 9 planned community-launch pillars (not started; outside denominator calculation for current-phase progress).
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. Phase 9 remaining tasks (7) included in denominator as implementation progresses.
 
 ---
 
@@ -1730,6 +1730,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ### P9-T1: Programs + Resource Allocation Pipeline Operational
 - [ ] **Status**: PENDING — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
+  - PROGRESS 2026-06-09: PRs #65/#66 — benefits-screening wired into eligibility chat flow; Saved-programs tab; VT application_url seed; category SSOT (lib/resource-categories.ts) + 12-category volunteer FAB; advisor hardening (duplicate indexes + RLS policies dropped, 5 dead files removed). REMAINING: programs↔community-posts bridge, applications→program back-link, fulfillment view.
 
 ### P9-T2: Social Feed Post UI for All Resource Types
 - [ ] **Status**: PENDING — distinct composer + feed rendering per post type (resource, petition, safety, general)
@@ -1741,10 +1742,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 - [ ] **Status**: PENDING — all pin placement + resource action buttons audited and wired
 
 ### P9-T5: Community Trust Layer — Report + Threshold Takedown
-- [ ] **Status**: PENDING — report feature; N reports from distinct users auto-hides a flagged post pending review
+- [x] **Status**: COMPLETE — PR #63 (8ae6f63, 2026-06-09). content_reports table + report_reason enum; submit_content_report SECDEF RPC auto-hides a post at 3 distinct reporters; admin_resolve_report (dismiss restores / uphold keeps hidden); report dialog in feed-panel; admin Reports queue; e2e content-reports.spec.ts 4/4.
 
 ### P9-T6: Full Messages Cycle with Wheat-Stalk Reviews
-- [ ] **Status**: PENDING — seeker→sourcer request → approve/decline → conversation → sourcer-can-end-anytime → dual 5-star review (stars = wheat stalks turning green)
+- [x] **Status**: COMPLETE — PR #64 (a0bbaa0, 2026-06-09). conversation_status += 'completed'; submit_review extended to accept conversation_id OR opt_in_id; End→completed (volunteer); dual review prompts in messages-panel; WheatStalkRating component (green-fill SVG) replaces stars in review-modal + harmony-badge; e2e conversation-reviews.spec.ts green.
 
 ### P9-T7: Document Drive + Form Autofill Complete Lifecycle
 - [ ] **Status**: PENDING — full drive UX + autofill lifecycle verified end-to-end
@@ -1765,9 +1766,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.1.0 | 2026-02-22 | Added Phase 7: Production Hardening (11 tasks). Discovered via full codebase recon: exposed secrets, middleware .single() crash, missing error boundaries, dead proxy.ts code. |
 | 1.2.0 | 2026-06-06 | Added Phase 8 Social + Security tasks P8-T7 through P8-T17 (PRs #47-57). Folded Phase 8 into headline metric: 107/109 (was 96/98 for Phases 0-7). Updated total_phases to 8, total_tasks to 109, completed_tasks to 107. |
 | 1.3.0 | 2026-06-09 | Docsync PRs #59-61 into Phase 8 (P8-T18..T20, 110/112). P7-T4 reworded (proxy.ts is the live Next.js 16 entrypoint — never delete). Added Phase 9 community-launch pillars (9 planned tasks, not started). |
+| 1.4.0 | 2026-06-09 | P9-T5 + P9-T6 shipped (PRs #63-64); P9-T1 progress (PRs #65-66). |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: chore/docsync-phase8 (2026-06-06)
+**Last Agent Session**: chore/docsync-p9-progress (2026-06-09)
 **Total Development Time**: 0 hours

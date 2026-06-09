@@ -91,22 +91,22 @@
     },
     "9": {
       "name": "Community Launch Readiness",
-      "status": "PLANNED",
+      "status": "IN_PROGRESS",
       "tasks": ["P9-T1", "P9-T2", "P9-T3", "P9-T4", "P9-T5", "P9-T6", "P9-T7", "P9-T8", "P9-T9"],
-      "completedTasks": [],
-      "startedAt": null,
+      "completedTasks": ["P9-T5", "P9-T6"],
+      "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=programs+resource allocation pipeline; P9-T2=social feed post UI for all resource types; P9-T3=copy-paste social embed templates; P9-T4=map pin + resource buttons complete; P9-T5=community trust layer (report + threshold takedown); P9-T6=full messages cycle with wheat-stalk reviews; P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=programs+resource allocation pipeline (PRs #65/#66 in progress: benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; REMAINING: programs↔community-posts bridge, applications→program back-link, fulfillment view); P9-T2=social feed post UI for all resource types; P9-T3=copy-paste social embed templates; P9-T4=map pin + resource buttons complete; P9-T5=COMPLETE PR #63 (8ae6f63, 2026-06-09) community trust layer (content_reports table+report_reason enum, submit_content_report SECDEF RPC 3-distinct-reporter auto-hide, admin_resolve_report dismiss/uphold, report dialog in feed-panel, admin Reports queue, e2e 4/4); P9-T6=COMPLETE PR #64 (a0bbaa0, 2026-06-09) full messages cycle with wheat-stalk reviews (conversation_status+=completed, submit_review extended for conversation_id OR opt_in_id, End→completed volunteer flow, dual review prompts, WheatStalkRating green-fill SVG, e2e green); P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
     }
   },
   "metrics": {
-    "totalTasks": 112,
-    "completedTasks": 110,
+    "totalTasks": 114,
+    "completedTasks": 112,
     "progressPercentage": 98,
     "remainingLaunchGate": "P7-T11 (Auth E2E — human: Google OAuth consent screen)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 12,
-    "metricsNote": "Denominator = Phases 0-8 plannable-complete scope (112 = 109 + 3 from PRs #59-61). Phase 9 tasks (9 planned pillars) are NOT included in the denominator until implementation begins. 110/112 = 98.2%. The 2 remaining: P7-T11 (sole planned launch gate) + 1 from original 98-96 baseline gap. Updated 2026-06-09 docsync (chore/docsync-59-61).",
+    "sessionsCompleted": 13,
+    "metricsNote": "Denominator = Phases 0-8 plannable-complete scope (112) + P9-T5 + P9-T6 now complete = 114. 112/114 = 98.2%. P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress PRs #65/#66. Updated 2026-06-09 docsync (chore/docsync-p9-progress).",
     "lastUpdated": "2026-06-09T00:00:00.000Z"
   },
   "ralphLoop": {
