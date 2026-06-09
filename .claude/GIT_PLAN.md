@@ -16,7 +16,25 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: advisor-hardening-prb
+next_action_id: docsync-p9-progress
+
+```yaml
+id: docsync-p9-progress
+status: in_progress
+type: branch
+description: "docs(specs): mark P9-T5/T6 complete (PRs #63-64), record P9-T1 progress (PRs #65-66). Updates ralph-loop-checklist.md (frontmatter v1.4.0, 112/114, P9 dashboard row, task statuses, version history) and .phase-state.json (phase.9 completedTasks=[P9-T5,P9-T6], status=IN_PROGRESS, metrics 114/112, PRs noted). Docs-only — zero app/DB/prod changes."
+branch: chore/docsync-p9-progress
+base: develop
+base_sha: 4e40bd4
+remote: origin
+files:
+  - specs/001-feed-platform/ralph-loop-checklist.md
+  - specs/001-feed-platform/.phase-state.json
+  - .claude/GIT_PLAN.md
+pr: null
+created_at: "2026-06-09T19:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: pipeline-wiring-pra
