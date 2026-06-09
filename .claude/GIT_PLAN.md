@@ -49,7 +49,7 @@ completed_at: "2026-06-09T17:45:00.000Z"
 
 ```yaml
 id: advisor-hardening-prb
-status: in_progress
+status: complete
 type: branch
 description: "chore(security): drop duplicate indexes; consolidate duplicate RLS policies; delete 5 dead files (cache.ts has importers — kept)"
 branch: chore/advisor-hardening
@@ -64,12 +64,12 @@ files:
   - apps/web/src/lib/query-utils.ts
   - apps/web/src/lib/session-manager.ts
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
-merge_sha: null
-merged_into: null
+pr: 66
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/66
+merge_sha: 17b1cbc
+merged_into: develop
 created_at: "2026-06-09T17:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-09T18:00:00.000Z"
 ```
 
 ```yaml
