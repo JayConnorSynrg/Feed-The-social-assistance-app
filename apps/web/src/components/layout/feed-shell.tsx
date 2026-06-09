@@ -34,6 +34,7 @@ import {
   ExternalLink,
   Compass,
   Search,
+  ScrollText,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
@@ -57,7 +58,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard'
+type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -107,6 +108,7 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
+  { panel: 'petitions', icon: ScrollText, label: 'Petitions' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -785,7 +787,7 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing (aliases included for deep-link init)
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions']
 
 // Resolve a hash value to a panel + optional subtab.
 // Alias hashes (#forms, #messages) map to their parent panel + subtab.

@@ -15,6 +15,7 @@ import { ApplicationsPanel } from '@/components/panels/applications-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
 import { ProgramsPanel } from '@/components/panels/programs-panel'
+import { PetitionsPanel } from '@/components/panels/petitions-panel'
 import { useAuth } from '@/hooks/use-auth'
 
 // MapPanel pulls supercluster + react-map-gl into its chunk. Map is not the
@@ -124,6 +125,9 @@ function PanelRenderer() {
 
     case 'wizard':
       return <WizardPanel />
+
+    case 'petitions':
+      return <PetitionsPanel />
 
     default:
       return (

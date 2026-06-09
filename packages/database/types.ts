@@ -1039,6 +1039,124 @@ export type Database = {
         }
         Relationships: []
       }
+      petition_signatures: {
+        Row: {
+          affirmation_text: string
+          id: string
+          ip_address: unknown
+          petition_id: string
+          petition_version_hash: string
+          signed_at: string
+          signer_display_name: string
+          signer_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          affirmation_text: string
+          id?: string
+          ip_address?: unknown
+          petition_id: string
+          petition_version_hash: string
+          signed_at?: string
+          signer_display_name: string
+          signer_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          affirmation_text?: string
+          id?: string
+          ip_address?: unknown
+          petition_id?: string
+          petition_version_hash?: string
+          signed_at?: string
+          signer_display_name?: string
+          signer_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "petition_signatures_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "petitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petition_signatures_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petition_signatures_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      petitions: {
+        Row: {
+          body: string
+          body_version_hash: string
+          cause_category: string | null
+          created_at: string
+          created_by: string | null
+          external_ref: string | null
+          id: string
+          status: string
+          summary: string
+          target_signatures: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          body_version_hash: string
+          cause_category?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_ref?: string | null
+          id?: string
+          status?: string
+          summary: string
+          target_signatures?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          body_version_hash?: string
+          cause_category?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_ref?: string | null
+          id?: string
+          status?: string
+          summary?: string
+          target_signatures?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "petitions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petitions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           content: string
@@ -1150,6 +1268,8 @@ export type Database = {
           is_hidden: boolean | null
           is_pinned: boolean | null
           max_seekers: number | null
+          petition_id: string | null
+          post_type: Database["public"]["Enums"]["post_type"]
           resource_id: string | null
           slots_remaining: number | null
           updated_at: string | null
@@ -1163,6 +1283,8 @@ export type Database = {
           is_hidden?: boolean | null
           is_pinned?: boolean | null
           max_seekers?: number | null
+          petition_id?: string | null
+          post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
           updated_at?: string | null
@@ -1176,12 +1298,21 @@ export type Database = {
           is_hidden?: boolean | null
           is_pinned?: boolean | null
           max_seekers?: number | null
+          petition_id?: string | null
+          post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "posts_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "petitions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "posts_resource_id_fkey"
             columns: ["resource_id"]
@@ -2563,6 +2694,10 @@ export type Database = {
           venmo_username: string
         }[]
       }
+      get_petition_signature_count: {
+        Args: { p_petition_id: string }
+        Returns: number
+      }
       get_recent_webhook_failures: {
         Args: { p_limit?: number }
         Returns: {
@@ -2594,6 +2729,7 @@ export type Database = {
         }[]
       }
       gettransactionid: { Args: never; Returns: unknown }
+      has_signed_petition: { Args: { p_petition_id: string }; Returns: boolean }
       is_account_locked: {
         Args: { p_email: string }
         Returns: {
@@ -3444,6 +3580,7 @@ export type Database = {
         | "approval"
         | "denial"
         | "general"
+      post_type: "feed" | "resource_post" | "petition"
       resource_category:
         | "food"
         | "housing"
@@ -3654,6 +3791,7 @@ export const Constants = {
         "denial",
         "general",
       ],
+      post_type: ["feed", "resource_post", "petition"],
       resource_category: [
         "food",
         "housing",
