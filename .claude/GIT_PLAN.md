@@ -20,7 +20,7 @@ next_action_id: advisor-hardening-prb
 
 ```yaml
 id: pipeline-wiring-pra
-status: in_progress
+status: complete
 type: branch
 description: "feat(programs): wire benefits-screening into eligibility flow; saved-programs tab; VT application URLs; category SSOT + full volunteer FAB"
 branch: feature/pipeline-wiring
@@ -39,12 +39,12 @@ files:
   - supabase/migrations/20260609120000_seed_vt_application_urls.sql
   - apps/web/e2e/eligibility-wiring.spec.ts
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
-merge_sha: null
-merged_into: null
+pr: 65
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/65
+merge_sha: 0f63f50
+merged_into: develop
 created_at: "2026-06-09T17:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-09T17:45:00.000Z"
 ```
 
 ```yaml
