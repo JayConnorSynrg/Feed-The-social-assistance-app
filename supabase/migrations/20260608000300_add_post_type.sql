@@ -61,6 +61,9 @@ ALTER TABLE public.posts
 -- ============================================================
 -- 6. Seed: create posts for the 2 seeded petitions
 --    These are the petition post rows that appear in the feed.
+--    Uses the oldest profile (by created_at) as the post owner so
+--    a fresh-reset DB always produces 2 rows regardless of is_staff.
+--    Idempotent: ON CONFLICT (id) DO NOTHING.
 -- ============================================================
 INSERT INTO public.posts (
   id,
@@ -79,9 +82,7 @@ SELECT
   '30f09104-6904-43c7-9d43-9e0c480ceaa5',
   true,
   false
-FROM public.profiles p
-WHERE p.is_staff = true
-LIMIT 1
+FROM (SELECT id FROM public.profiles ORDER BY created_at LIMIT 1) p
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.posts (
@@ -101,10 +102,9 @@ SELECT
   '1dfe76a1-5dd4-4fd3-bdf1-2d60a7c7510a',
   false,
   false
-FROM public.profiles p
-WHERE p.is_staff = true
-LIMIT 1
+FROM (SELECT id FROM public.profiles ORDER BY created_at LIMIT 1) p
 ON CONFLICT (id) DO NOTHING;
 
--- If no staff user exists, seed with NULL user_id (will be skipped if user_id NOT NULL)
--- The seed rows can also be inserted manually via Mgmt API if needed.
+-- Note: if the profiles table is empty on a completely fresh DB (no users yet),
+-- the SELECT returns 0 rows and no posts are inserted — run the seed after
+-- creating at least one user (e.g. via supabase auth admin createUser).

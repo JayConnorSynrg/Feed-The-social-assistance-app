@@ -14,6 +14,11 @@
  *  - Intercept /api/petitions/sign to assert the request body and stub the response.
  *  - Verify the DOM state before and after the sign action.
  *
+ * Auth pattern: go directly to /login, fill credentials, waitForURL('/').
+ * Sidebar buttons emit data-testid="sidebar-{panel}" (no aria-label).
+ * Petitions sidebar button: data-testid="sidebar-petitions"
+ * Chat sidebar button: data-testid="sidebar-chat"
+ *
  * Run:
  *   cd apps/web && npx playwright test e2e/community-petitions.spec.ts --reporter=line
  */
@@ -44,6 +49,26 @@ function makeAdminClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
+/** Log in directly via /login page. Handles the case where the browser session
+ *  is already authenticated by checking for the shell before attempting login. */
+async function loginAs(page: import('@playwright/test').Page, email: string, password: string) {
+  await page.goto('/login')
+  // If the app immediately redirects to / (already authed session), the URL
+  // will not be /login — detect that and skip filling the form.
+  if (!page.url().includes('/login')) {
+    // Already authenticated — navigate to root and wait for the shell.
+    await page.goto('/')
+    await page.waitForSelector('[data-testid="sidebar-chat"]', { timeout: 20_000 })
+    return
+  }
+  await page.fill('#email', email)
+  await page.fill('#password', password)
+  await page.click('button[type="submit"]')
+  await page.waitForURL('http://localhost:3000/', { timeout: 30_000 })
+  // Confirm the shell is mounted before proceeding
+  await page.waitForSelector('[data-testid="sidebar-chat"]', { timeout: 15_000 })
+}
+
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
@@ -71,10 +96,11 @@ test.beforeAll(async () => {
   if (error || !data.user) throw new Error(`Failed to create test user: ${error?.message}`)
   userId = data.user.id
 
-  // Ensure profile row has full_name
+  // Ensure profile row has full_name and onboarding_completed so the app
+  // lands on / rather than redirecting to /onboarding after login.
   await admin
     .from('profiles')
-    .update({ full_name: TEST_FULL_NAME })
+    .update({ full_name: TEST_FULL_NAME, onboarding_completed: true })
     .eq('id', userId)
 })
 
@@ -94,52 +120,30 @@ test.afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 test('petitions panel navigates from sidebar', async ({ page }) => {
-  // Sign in
-  await page.goto('/')
-  await page.waitForSelector('[data-testid="auth-form"], [aria-label="AI Assistant"]', { timeout: 15_000 })
-
-  // If auth form shown, sign in first
-  const authForm = page.locator('[data-testid="auth-form"]')
-  if (await authForm.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page.goto('/auth/login')
-    await page.fill('input[type="email"]', TEST_EMAIL)
-    await page.fill('input[type="password"]', USER_PASSWORD)
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/', { timeout: 15_000 })
-  }
+  await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
   // Navigate to petitions via sidebar
-  const petitionsBtn = page.locator('[aria-label="Petitions"], button:has-text("Petitions")')
-  await expect(petitionsBtn.first()).toBeVisible({ timeout: 10_000 })
-  await petitionsBtn.first().click()
+  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
+  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
+  await petitionsBtn.click()
 
   // Panel should show header
   await expect(page.locator('text=Community Petitions')).toBeVisible({ timeout: 10_000 })
 })
 
 test('petitions panel shows sign button and signed-as microcopy', async ({ page }) => {
-  // Sign in
-  await page.goto('/')
-  await page.waitForSelector('[aria-label="AI Assistant"], [data-testid="auth-form"]', { timeout: 15_000 })
+  await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const authForm = page.locator('[data-testid="auth-form"]')
-  if (await authForm.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page.goto('/auth/login')
-    await page.fill('input[type="email"]', TEST_EMAIL)
-    await page.fill('input[type="password"]', USER_PASSWORD)
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/', { timeout: 15_000 })
-  }
-
-  const petitionsBtn = page.locator('[aria-label="Petitions"], button:has-text("Petitions")')
-  await petitionsBtn.first().click()
+  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
+  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
+  await petitionsBtn.click()
 
   // Sign button visible
   const signBtn = page.locator('button:has-text("Add your verified signature of support")').first()
   await expect(signBtn).toBeVisible({ timeout: 10_000 })
 
-  // Signing-as microcopy
-  await expect(page.locator(`text=Signing as`)).toBeVisible({ timeout: 5_000 })
+  // Signing-as microcopy (there may be multiple petition cards — check first one)
+  await expect(page.locator(`text=Signing as`).first()).toBeVisible({ timeout: 5_000 })
 })
 
 test('sign action calls /api/petitions/sign and marks petition signed', async ({ page }) => {
@@ -157,20 +161,11 @@ test('sign action calls /api/petitions/sign and marks petition signed', async ({
     })
   })
 
-  await page.goto('/')
-  await page.waitForSelector('[aria-label="AI Assistant"], [data-testid="auth-form"]', { timeout: 15_000 })
+  await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const authForm = page.locator('[data-testid="auth-form"]')
-  if (await authForm.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page.goto('/auth/login')
-    await page.fill('input[type="email"]', TEST_EMAIL)
-    await page.fill('input[type="password"]', USER_PASSWORD)
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/', { timeout: 15_000 })
-  }
-
-  const petitionsBtn = page.locator('[aria-label="Petitions"], button:has-text("Petitions")')
-  await petitionsBtn.first().click()
+  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
+  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
+  await petitionsBtn.click()
 
   const signBtn = page.locator('button:has-text("Add your verified signature of support")').first()
   await expect(signBtn).toBeVisible({ timeout: 10_000 })
@@ -194,20 +189,11 @@ test('get_petition_signature_count displayed on petition card', async ({ page })
     await route.continue()
   })
 
-  await page.goto('/')
-  await page.waitForSelector('[aria-label="AI Assistant"], [data-testid="auth-form"]', { timeout: 15_000 })
+  await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const authForm = page.locator('[data-testid="auth-form"]')
-  if (await authForm.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page.goto('/auth/login')
-    await page.fill('input[type="email"]', TEST_EMAIL)
-    await page.fill('input[type="password"]', USER_PASSWORD)
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/', { timeout: 15_000 })
-  }
-
-  const petitionsBtn = page.locator('[aria-label="Petitions"], button:has-text("Petitions")')
-  await petitionsBtn.first().click()
+  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
+  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
+  await petitionsBtn.click()
 
   // Wait for panel to load
   await expect(page.locator('text=Community Petitions')).toBeVisible({ timeout: 10_000 })
