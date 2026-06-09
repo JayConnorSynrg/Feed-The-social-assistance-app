@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.2.0"
+version: "1.3.0"
 created: "2026-01-19"
-last_updated: "2026-06-06"
+last_updated: "2026-06-09"
 status: "IN_PROGRESS"
 current_phase: 7
 current_task: "P7-T11"
-total_phases: 8
-total_tasks: 109
-completed_tasks: 107
+total_phases: 9
+total_tasks: 112
+completed_tasks: 110
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -69,13 +69,14 @@ WHEN all tasks in a phase are [x]:
 | 5 | Case Management | 12 | 11 | COMPLETE* |
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 10 | IN_PROGRESS |
-| 8 | Social Resource-Matching + Pre-Launch Security Hardening | 17 | 17 | COMPLETE |
+| 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
+| 9 | Community Launch Readiness | 9 | 0 | PLANNED |
 
-**Overall Progress**: 107 / 109 tasks (98%)
+**Overall Progress**: 110 / 112 tasks (98%)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete = 107/109. Sole remaining planned launch gate: P7-T11 (Auth E2E — human: Google OAuth consent screen).
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. Phase 9 = 9 planned community-launch pillars (not started; outside denominator calculation for current-phase progress).
 
 ---
 
@@ -1247,27 +1248,24 @@ npx cap sync && npx cap run ios
 ---
 
 ### P7-T4: Delete proxy.ts Dead Code (HIGH)
-- [x] **Status**: COMPLETE
+- [x] **Status**: SUPERSEDED 2026-06-09
 - **ID**: P7-T4
 - **Severity**: ⚠️ HIGH
 - **Dependencies**: None
-- **Problem**: `apps/web/src/proxy.ts` is an incorrectly-named copy of middleware.ts.
-  Next.js only loads `middleware.ts` — `proxy.ts` does nothing and causes confusion.
-  The file was created in a previous session to replace middleware.ts (incorrectly).
-  `middleware.ts` has been restored and is correct; proxy.ts should be deleted.
+- **Problem**: SUPERSEDED 2026-06-09: `apps/web/src/proxy.ts` is the ACTIVE Next.js 16 routing entrypoint (`middleware.ts` was RENAMED to `proxy.ts` in commit 20ea8a9; no `middleware.ts` exists in `src/`). The original premise ("proxy.ts is dead code") is obsolete. DO NOT delete `proxy.ts` — deleting it unwires auth routing.
 - **Fix**:
   ```bash
-  rm apps/web/src/proxy.ts
+  # NO ACTION — proxy.ts must NOT be deleted (it is the live Next.js 16 entrypoint)
   ```
-- **File**: `apps/web/src/proxy.ts` (delete)
+- **File**: `apps/web/src/proxy.ts` (ACTIVE — do not delete)
 - **Validation**:
   ```bash
-  ls apps/web/src/proxy.ts  # Should not exist
-  ls apps/web/src/middleware.ts  # Should exist
+  ls apps/web/src/proxy.ts  # Must exist — it is the active routing entrypoint
+  # middleware.ts does NOT exist (was renamed to proxy.ts in commit 20ea8a9)
   ```
 - **Acceptance Criteria**:
-  - [x] `proxy.ts` deleted
-  - [x] `middleware.ts` still present and correct
+  - [x] `proxy.ts` confirmed ACTIVE Next.js 16 routing entrypoint (supersedes deletion premise)
+  - [x] Original task premise verified obsolete 2026-06-09 — task cannot be executed as written
 
 ---
 
@@ -1492,7 +1490,7 @@ npx cap sync && npx cap run ios
 - [ ] All secrets rotated and `.env.local` removed from git tracking
 - [ ] `middleware.ts` uses `.maybeSingle()` (no crash on missing profile)
 - [ ] `auth-provider.tsx` uses `.maybeSingle()`
-- [ ] `proxy.ts` deleted
+- [x] ~~`proxy.ts` deleted~~ SUPERSEDED — proxy.ts is the active Next.js 16 routing entrypoint; must NOT be deleted
 - [ ] `error.tsx` created and working
 - [ ] Error boundary wraps panel content
 - [ ] `npm run type-check` passes (0 errors)
@@ -1684,6 +1682,33 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 - **Migrations**: `20260606130000_profiles_coord_read_lockdown.sql`
 - **PR**: #57 — merged to develop
 
+### P8-T18: Six New Resource Categories (PR #59)
+- [x] **Status**: COMPLETE — PR #59 (e0240eb, merged 2026-06-08)
+- **ID**: P8-T18
+- **Dependencies**: P8-T3
+- **Description**: Six new `resource_category` enum values: `eitc_tax_filing`, `free_legal`, `prenatal_natal_care`, `waste_disposal`, `free_camping`, `free_goods_donation`. Registered across all enumeration sites (discovery, map category filters, resource wizard configs, search filters, federation directory, moderation queue, OG route). VT seed data added for all 6 categories. Icon mapping, display labels, and funnel logging wired via structured `wizard.start` / `wizard.complete` events.
+- **Files**: `apps/web/src/lib/category-form-map.ts`, `apps/web/src/lib/ai/resource-wizard-config.ts`, `apps/web/src/components/panels/wizard-panel.tsx`, `apps/web/src/components/map/resource-marker.tsx`, `apps/web/src/components/map/map-panel.tsx`, `packages/shared/lib/constants.ts`
+- **Migrations**: `20260608000000_add_resource_categories.sql`, `20260608000100_seed_vt_resources.sql`
+- **PR**: #59 — merged to develop
+
+### P8-T19: Community Petitions (PR #60)
+- [x] **Status**: COMPLETE — PR #60 (9fbad7d, merged 2026-06-08)
+- **ID**: P8-T19
+- **Dependencies**: P8-T7, P8-T8
+- **Description**: Community petitions with verified signatures. `post_type` enum (`feed`/`resource_post`/`petition`). `petition_id` FK on posts. Petition-strict `CHECK` constraint. `petitions` + `petition_signatures` tables. Server-stamped ESIGN metadata (affirmation text, signer display name snapshot, petition version hash, IP address, user agent, signed_at UTC) via service-role `/api/petitions/sign` — never client-forgeable. Idempotent on UNIQUE(petition_id, signer_id). SECDEF `get_petition_signature_count` + `has_signed_petition` RPCs. Feed embed (petition branch in PostCard). "Verified signature of support" copy only — no "legally binding" language.
+- **Files**: `apps/web/src/components/panels/petitions-panel.tsx`, `apps/web/src/hooks/use-petitions.ts`, `apps/web/src/app/api/petitions/sign/route.ts`, `apps/web/src/components/panels/feed-panel.tsx`, `apps/web/src/app/(social)/s/embed/[id]/page.tsx`
+- **Migrations**: `20260608000200_petitions_and_signatures.sql`, `20260608000300_add_post_type.sql`
+- **PR**: #60 — merged to develop
+
+### P8-T20: All-Roles Safety Pins (PR #61)
+- [x] **Status**: COMPLETE — PR #61 (559755c, merged 2026-06-08)
+- **ID**: P8-T20
+- **Dependencies**: P8-T13
+- **Description**: Map-based safety hazard reporting available to all roles. PostGIS `geography(POINT,4326)` + GIST index on `safety_alerts`. SECDEF RPCs: `place_safety_alert`, `safety_alerts_in_view` (returns `lng`/`lat` floats, filters `expires_at>now()` — severity-scaled TTL auto-expires pins with no cron needed), `vote_safety_alert`, `admin_remove_safety_alert`. Publish-then-review model: alert is visible immediately with "Unverified — neighbor report" label. Community confirm/clear votes with UNIQUE(alert, voter). Sheet primitive (`@radix-ui/react-dialog` right-slide-out). Role-gated FAB (`HazardBubbleMenu`) — all roles place alerts; providers/facilitators see add-resource entry. `SafetyAlertsReview` admin section on `/moderation`. NaN-coordinate guard prevents crash on realtime EWKB parse delay.
+- **Files**: `apps/web/src/hooks/use-safety-alerts.ts`, `apps/web/src/components/map/hazard-bubble-menu.tsx`, `apps/web/src/components/map/safety-alert-marker.tsx`, `apps/web/src/components/ui/sheet.tsx`, `apps/web/src/app/(admin)/moderation/safety-alerts-review.tsx`, `apps/web/src/components/panels/map-panel.tsx`
+- **Migrations**: `20260608000400_safety_alerts.sql`
+- **PR**: #61 — merged to develop
+
 ---
 
 ## PHASE 8 EXIT CRITERIA
@@ -1693,7 +1718,42 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 - [x] All new panels wired into PanelRenderer (app/page.tsx confirmed)
 - [x] All new hooks have finally blocks (confirmed via audit 2026-05-28)
 - [x] PRs #47-57 (Social Resource-Matching + Pre-Launch Security Hardening) merged to develop (2026-06-04 through 2026-06-06)
+- [x] PRs #59-61 (Six categories, community petitions, all-roles safety pins) merged to develop (2026-06-08)
 - [ ] Phase 8 features included in P7-T11 auth E2E smoke test (pending P7-T11 execution)
+
+---
+
+## PHASE 9: Community Launch Readiness (PLANNED 2026-06-09)
+
+> Pillars stated by the product owner 2026-06-09. Scope per task to be refined by the
+> empirical gap probe before implementation. None of these are started.
+
+### P9-T1: Programs + Resource Allocation Pipeline Operational
+- [ ] **Status**: PENDING — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
+
+### P9-T2: Social Feed Post UI for All Resource Types
+- [ ] **Status**: PENDING — distinct composer + feed rendering per post type (resource, petition, safety, general)
+
+### P9-T3: Copy-Paste Social Embed Templates from Posts
+- [ ] **Status**: PENDING — embed-code generator on every post (extends Phase C.5 widget)
+
+### P9-T4: Map Pin + Resource Buttons Complete
+- [ ] **Status**: PENDING — all pin placement + resource action buttons audited and wired
+
+### P9-T5: Community Trust Layer — Report + Threshold Takedown
+- [ ] **Status**: PENDING — report feature; N reports from distinct users auto-hides a flagged post pending review
+
+### P9-T6: Full Messages Cycle with Wheat-Stalk Reviews
+- [ ] **Status**: PENDING — seeker→sourcer request → approve/decline → conversation → sourcer-can-end-anytime → dual 5-star review (stars = wheat stalks turning green)
+
+### P9-T7: Document Drive + Form Autofill Complete Lifecycle
+- [ ] **Status**: PENDING — full drive UX + autofill lifecycle verified end-to-end
+
+### P9-T8: Web Form Retrieval
+- [ ] **Status**: PENDING — retrieve real government forms from the web (direct fetch/scrape pipeline)
+
+### P9-T9: Grandma-Grade Security + Usability Validation
+- [ ] **Status**: PENDING — security posture + ease-of-use audit for non-technical users (builds on P7-T11)
 
 ---
 
@@ -1704,6 +1764,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.0.0 | 2026-01-19 | Initial checklist creation |
 | 1.1.0 | 2026-02-22 | Added Phase 7: Production Hardening (11 tasks). Discovered via full codebase recon: exposed secrets, middleware .single() crash, missing error boundaries, dead proxy.ts code. |
 | 1.2.0 | 2026-06-06 | Added Phase 8 Social + Security tasks P8-T7 through P8-T17 (PRs #47-57). Folded Phase 8 into headline metric: 107/109 (was 96/98 for Phases 0-7). Updated total_phases to 8, total_tasks to 109, completed_tasks to 107. |
+| 1.3.0 | 2026-06-09 | Docsync PRs #59-61 into Phase 8 (P8-T18..T20, 110/112). P7-T4 reworded (proxy.ts is the live Next.js 16 entrypoint — never delete). Added Phase 9 community-launch pillars (9 planned tasks, not started). |
 
 ---
 
