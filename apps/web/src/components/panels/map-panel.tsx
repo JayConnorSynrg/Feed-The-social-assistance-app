@@ -33,6 +33,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
+import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
+import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
+import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
 
 // ============================================
@@ -331,6 +334,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // never pre-empts the profile center.
   const [userHasMovedMap, setUserHasMovedMap] = useState(false)
   const [hasGeocentered, setHasGeocentered] = useState(false)
+  // Controls the VolunteerResourceFAB category-picker externally from the HazardBubbleMenu
+  const [volunteerFabOpen, setVolunteerFabOpen] = useState(false)
 
   // Shell panel navigation
   const { setActivePanel } = usePanelContext()
@@ -482,6 +487,15 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     bounds,
     enabled: !!bounds && !authLoading,
   })
+
+  // Safety alerts layer — live alerts in the current viewport
+  const viewportBoundsForAlerts = bounds
+    ? { west: bounds.west, south: bounds.south, east: bounds.east, north: bounds.north }
+    : null
+  const { alerts: safetyAlerts, placeAlert, voteAlert } = useSafetyAlerts(viewportBoundsForAlerts)
+
+  // Current map center — used as default pin location for hazard reports
+  const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
 
   // Map real resources to MapResource interface
   const mapResources: MapResource[] = useMemo(() => {
@@ -747,8 +761,29 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               />
             )
           )}
+          {/* Safety alert markers — rendered on top of resource markers */}
+          {safetyAlerts.map((alert) => (
+            <SafetyAlertMarker
+              key={alert.id}
+              alert={alert}
+              onVote={voteAlert}
+            />
+          ))}
         </MapView>
-        <VolunteerResourceFAB />
+        {/* Bubble menu — all roles report hazards; providers also add resources */}
+        <HazardBubbleMenu
+          viewCenter={currentMapCenter}
+          onPlaceAlert={placeAlert}
+          onAddResource={() => {
+            // Delegate to the existing VolunteerResourceFAB by mounting it in open state.
+            // Simplest approach: keep VolunteerResourceFAB mounted; it renders null for
+            // non-providers automatically. The bubble menu opens VolunteerResourceFAB's
+            // dialog via a shared open-state ref exposed below.
+            setVolunteerFabOpen(true)
+          }}
+        />
+        {/* VolunteerResourceFAB kept for providers — controlled via volunteerFabOpen */}
+        <VolunteerResourceFAB externalOpen={volunteerFabOpen} onExternalOpenChange={setVolunteerFabOpen} />
       </div>
 
       {/* Right Panel: Resource Details (conditional) */}
