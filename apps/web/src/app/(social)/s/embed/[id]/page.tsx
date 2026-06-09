@@ -1,8 +1,12 @@
 /**
- * Public embeddable opt-in widget — /s/embed/[id]
+ * Public embeddable widget — /s/embed/[id]
  *
- * Rendered inside a 3rd-party iframe. Anon SSR: reads posts + approved resource
- * name. No app shell, no nav. Opt-In pops out to the FEED app (target="_top").
+ * Rendered inside a 3rd-party iframe. Anon SSR: reads posts + resource or petition.
+ * No app shell, no nav. Actions link out to the FEED app (target="_top").
+ *
+ * Supports two post types:
+ *   - resource_post / feed: opt-in widget (original behaviour)
+ *   - petition: shows petition title, count, and "Sign on FEED" CTA
  */
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -19,14 +23,89 @@ export default async function EmbedWidgetPage({ params }: Props) {
 
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, slots_remaining, max_seekers, resource:resources(name)')
+    .select('id, content, slots_remaining, max_seekers, post_type, petition_id, resource:resources(name)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
 
   if (!post) notFound()
 
-  const resource = post.resource as { name: string } | null
+  const postType = (post.post_type as string | null) ?? 'feed'
+  const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
+
+  // ── Petition branch ──────────────────────────────────────────────────────
+  if (postType === 'petition' && petitionId) {
+    const { data: petition } = await supabase
+      .from('petitions')
+      .select('id, title, summary, target_signatures')
+      .eq('id', petitionId)
+      .eq('status', 'approved')
+      .single()
+
+    const { data: countData } = await supabase
+      .rpc('get_petition_signature_count', { p_petition_id: petitionId })
+
+    const signatureCount = (countData as number | null) ?? 0
+    const targetSignatures = petition?.target_signatures ?? 0
+    const hasTarget = targetSignatures > 0
+    const pct = hasTarget ? Math.min(100, Math.round((signatureCount / targetSignatures) * 100)) : 0
+
+    return (
+      <div
+        data-testid="embed-widget"
+        className="p-3 rounded-xl border border-lime-200 bg-lime-50 font-sans text-sm"
+      >
+        {/* Label */}
+        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1">
+          Community Petition
+        </p>
+
+        {/* Title */}
+        <p className="text-stone-900 font-semibold leading-snug line-clamp-2 mb-1">
+          {petition?.title ?? post.content}
+        </p>
+
+        {/* Summary */}
+        {petition?.summary && (
+          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed mb-2">
+            {petition.summary}
+          </p>
+        )}
+
+        {/* Signature count */}
+        <p className="text-xs text-stone-600 mb-1">
+          <span className="font-semibold text-stone-800">{signatureCount.toLocaleString()}</span>
+          {hasTarget && <> of {targetSignatures.toLocaleString()} signatures &mdash; {pct}%</>}
+          {!hasTarget && <> verified signatures</>}
+        </p>
+
+        {/* Progress bar */}
+        {hasTarget && (
+          <div className="w-full bg-lime-200 rounded-full h-1 mb-2">
+            <div className="bg-lime-600 h-1 rounded-full" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+
+        {/* CTA: links to FEED app petitions panel */}
+        <a
+          data-testid="embed-petition-sign-btn"
+          href={`${appUrl}/#petitions`}
+          target="_top"
+          rel="noopener"
+          className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"
+        >
+          Sign on FEED
+        </a>
+
+        <p className="mt-2 text-[10px] text-stone-400">
+          Powered by FEED · Mutual Aid Resource Sharing
+        </p>
+      </div>
+    )
+  }
+
+  // ── Resource / feed post branch (original) ───────────────────────────────
+  const resource = (post.resource as { name: string } | null)
 
   const isFull =
     post.max_seekers != null &&

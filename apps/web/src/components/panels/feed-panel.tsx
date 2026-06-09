@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
@@ -26,6 +26,7 @@ import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
+import { usePetitions } from '@/hooks/use-petitions'
 
 // ============================================
 // TYPES
@@ -50,6 +51,8 @@ interface Post {
   resourceName: string | null
   maxSeekers: number | null
   slotsRemaining: number | null
+  postType: 'feed' | 'resource_post' | 'petition'
+  petitionId: string | null
 }
 
 /** An opt-in row enriched with the seeker's profile for the author's management list. */
@@ -503,6 +506,16 @@ interface PostCardProps {
   /** follow/unfollow the post author — only passed when currentUserId != post.author.id */
   onFollow?: (authorId: string) => void
   onUnfollow?: (authorId: string) => void
+  /** petition data for petition-type posts */
+  petitionEmbed?: {
+    title: string
+    summary: string
+    signatureCount: number
+    targetSignatures: number
+    hasSigned: boolean
+    isSigning: boolean
+  }
+  onSignPetition?: (petitionId: string) => void
 }
 
 function PostCard({
@@ -529,6 +542,8 @@ function PostCard({
   isFollowingAuthor,
   onFollow,
   onUnfollow,
+  petitionEmbed,
+  onSignPetition,
 }: PostCardProps) {
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
@@ -608,6 +623,49 @@ function PostCard({
         >
           <LinkIcon className="w-3 h-3 flex-shrink-0" />
           <span className="truncate max-w-[180px]">{post.resourceName}</span>
+        </div>
+      )}
+
+      {/* Petition embed card — shown on petition-type posts */}
+      {post.postType === 'petition' && petitionEmbed && (
+        <div
+          data-testid={`petition-embed-${post.id}`}
+          className="mb-3 rounded-xl border border-lime-200 bg-lime-50/60 p-3 flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-1.5">
+            <ScrollText className="w-3.5 h-3.5 text-lime-700 flex-shrink-0" aria-hidden="true" />
+            <span className="text-xs font-semibold text-lime-800 uppercase tracking-wide">Petition</span>
+          </div>
+          <p className="text-sm font-semibold text-stone-900 leading-snug line-clamp-2">
+            {petitionEmbed.title}
+          </p>
+          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
+            {petitionEmbed.summary}
+          </p>
+          <div className="text-xs text-stone-600">
+            <span className="font-semibold text-stone-800">{petitionEmbed.signatureCount.toLocaleString()}</span>
+            {petitionEmbed.targetSignatures > 0 && (
+              <> of {petitionEmbed.targetSignatures.toLocaleString()} signatures</>
+            )}
+          </div>
+          {petitionEmbed.hasSigned ? (
+            <div className="flex items-center gap-1.5 text-xs font-medium text-lime-800">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+              Signed
+            </div>
+          ) : (
+            <button
+              data-testid={`petition-sign-btn-${post.id}`}
+              onClick={() => post.petitionId && onSignPetition?.(post.petitionId)}
+              disabled={petitionEmbed.isSigning}
+              className="w-full text-xs font-semibold bg-lime-700 hover:bg-lime-800 disabled:opacity-60 text-white rounded-lg py-1.5 px-3 transition-colors flex items-center justify-center gap-1.5"
+            >
+              {petitionEmbed.isSigning ? (
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+              ) : null}
+              Add your verified signature of support
+            </button>
+          )}
         </div>
       )}
 
@@ -819,6 +877,7 @@ export function FeedPanel() {
   const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
   const { fetchMyReviewsForOptIns } = useReviews()
   const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
+  const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
   const activeSubtab: 'feed' | 'messages' =
@@ -962,6 +1021,8 @@ export function FeedPanel() {
         resourceName: row.resource?.name ?? null,
         maxSeekers: row.max_seekers ?? null,
         slotsRemaining: row.slots_remaining ?? null,
+        postType: (row.post_type as 'feed' | 'resource_post' | 'petition') ?? 'feed',
+        petitionId: (row as { petition_id?: string | null }).petition_id ?? null,
       }))
 
       setPosts(transformed)
@@ -1417,6 +1478,24 @@ export function FeedPanel() {
                       isFollowingAuthor={followingIds.has(post.author.id)}
                       onFollow={doFollow}
                       onUnfollow={doUnfollow}
+                      petitionEmbed={
+                        post.postType === 'petition' && post.petitionId
+                          ? (() => {
+                              const p = petitionsList.find((x) => x.id === post.petitionId)
+                              return p
+                                ? {
+                                    title: p.title,
+                                    summary: p.summary,
+                                    signatureCount: p.signatureCount,
+                                    targetSignatures: p.target_signatures,
+                                    hasSigned: p.hasSigned,
+                                    isSigning: signingPetitionId === p.id,
+                                  }
+                                : undefined
+                            })()
+                          : undefined
+                      }
+                      onSignPetition={signPetition}
                     />
                     {openCommentPostIds.has(post.id) && (
                       <CommentThread
