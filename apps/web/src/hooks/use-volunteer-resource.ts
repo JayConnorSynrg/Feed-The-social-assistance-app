@@ -4,7 +4,10 @@ import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 
-type ResourceCategory = 'food' | 'housing' | 'employment' | 'transportation' | 'legal' | 'other'
+// All volunteer-offerable categories (expanded to include Phase 8 additions).
+// Sourced from lib/resource-categories.ts VOLUNTEER_CATEGORIES — kept as string here
+// so the hook remains decoupled from the UI layer import.
+type ResourceCategory = string
 
 interface VolunteerResourceFormData {
   category: ResourceCategory
@@ -72,7 +75,8 @@ export function useVolunteerResource() {
         .from('resources')
         .insert({
           name: resourceName,
-          category: formData.category,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          category: formData.category as any,
           description: formData.description,
           phone: formData.contact || null,
           address_line1: formData.directions || null,

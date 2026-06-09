@@ -6,35 +6,7 @@ import { MapPin, Phone, Globe, Clock, Navigation, ExternalLink } from 'lucide-re
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openDirections, formatAddress } from '@/lib/directions'
-
-// Category colors matching design tokens
-const CATEGORY_COLORS: Record<string, string> = {
-  food: '#22c55e',
-  housing: '#3b82f6',
-  healthcare: '#ef4444',
-  employment: '#8b5cf6',
-  education: '#f59e0b',
-  legal: '#6366f1',
-  transportation: '#14b8a6',
-  utilities: '#ec4899',
-  clothing: '#f97316',
-  financial: '#10b981',
-  mental_health: '#06b6d4',
-  substance_abuse: '#84cc16',
-  domestic_violence: '#dc2626',
-  childcare: '#a855f7',
-  senior_services: '#0ea5e9',
-  disability_services: '#7c3aed',
-  veteran_services: '#059669',
-  immigration: '#d946ef',
-  other: '#6b7280',
-  eitc_tax_filing: '#0ea5e9',
-  free_legal: '#6366f1',
-  prenatal_natal_care: '#ec4899',
-  waste_disposal: '#84cc16',
-  free_camping: '#16a34a',
-  free_goods_donation: '#f43f5e',
-}
+import { getCategoryHex } from '@/lib/resource-categories'
 
 interface Resource {
   id: string
@@ -60,7 +32,7 @@ interface ResourceMarkerProps {
 export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
   const [showPopup, setShowPopup] = useState(false)
 
-  const color = CATEGORY_COLORS[resource.category] || CATEGORY_COLORS.other
+  const color = getCategoryHex(resource.category)
 
   const handleClick = useCallback(() => {
     setShowPopup(true)

@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Utensils, Home, Briefcase, Car, Scale, Heart } from 'lucide-react'
+import React, { useState } from 'react'
+import {
+  Plus, Utensils, Home, Briefcase, Car, Scale, Heart,
+  Calculator, Gavel, Baby, Trash2, Tent, Gift,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useVolunteerResource } from '@/hooks/use-volunteer-resource'
@@ -21,16 +24,24 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { type VolunteerCategory, getCategoryLabel } from '@/lib/resource-categories'
 
-type ResourceCategory = 'food' | 'housing' | 'employment' | 'transportation' | 'legal' | 'other'
+// Re-export so callers that typed ResourceCategory still compile
+type ResourceCategory = VolunteerCategory
 
-const CATEGORIES = [
-  { icon: Utensils, label: 'Food', value: 'food' as ResourceCategory },
-  { icon: Home, label: 'Housing', value: 'housing' as ResourceCategory },
-  { icon: Briefcase, label: 'Jobs', value: 'employment' as ResourceCategory },
-  { icon: Car, label: 'Transportation', value: 'transportation' as ResourceCategory },
-  { icon: Scale, label: 'Legal', value: 'legal' as ResourceCategory },
-  { icon: Heart, label: 'General', value: 'other' as ResourceCategory },
+const CATEGORIES: { icon: React.ElementType; value: ResourceCategory }[] = [
+  { icon: Utensils, value: 'food' },
+  { icon: Home, value: 'housing' },
+  { icon: Briefcase, value: 'employment' },
+  { icon: Car, value: 'transportation' },
+  { icon: Scale, value: 'legal' },
+  { icon: Calculator, value: 'eitc_tax_filing' },
+  { icon: Gavel, value: 'free_legal' },
+  { icon: Baby, value: 'prenatal_natal_care' },
+  { icon: Trash2, value: 'waste_disposal' },
+  { icon: Tent, value: 'free_camping' },
+  { icon: Gift, value: 'free_goods_donation' },
+  { icon: Heart, value: 'other' },
 ]
 
 const volunteerFormSchema = z.object({
@@ -103,7 +114,7 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
     }
   }
 
-  const categoryLabel = CATEGORIES.find(c => c.value === selectedCategory)?.label ?? ''
+  const categoryLabel = selectedCategory ? getCategoryLabel(selectedCategory) : ''
 
   return (
     <>
@@ -121,7 +132,7 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
             style={{ transitionDelay: isOpen ? `${index * 40}ms` : '0ms' }}
           >
             <span className="text-sm font-medium text-stone-700 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
-              {cat.label}
+              {getCategoryLabel(cat.value)}
             </span>
             <button
               onClick={() => handleCategoryClick(cat.value)}
