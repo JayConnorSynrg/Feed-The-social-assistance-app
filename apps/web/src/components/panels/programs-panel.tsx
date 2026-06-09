@@ -17,9 +17,11 @@ import {
   FileText,
   ExternalLink,
   FileDown,
+  Bookmark,
+  BookmarkX,
 } from 'lucide-react'
 import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
-import { useSavedResources } from '@/hooks/use-saved-resources'
+import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
 import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
@@ -227,10 +229,140 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
   )
 }
 
+// ============================================================
+// SAVED PROGRAMS TAB
+// ============================================================
+function SavedProgramTile({
+  saved,
+  onUnsave,
+  isRemoving,
+}: {
+  saved: SavedResource
+  onUnsave: (id: string) => void
+  isRemoving: boolean
+}) {
+  const display = saved.resource_category ? (CATEGORY_DISPLAY[saved.resource_category] ?? CATEGORY_DISPLAY['other']) : null
+
+  return (
+    <div
+      data-testid={`saved-program-card-${saved.id}`}
+      className="bg-white border border-stone-200 rounded-xl shadow-sm p-4 flex items-start gap-3"
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="font-semibold text-stone-900 text-sm leading-snug">{saved.resource_name}</span>
+        </div>
+        {display && (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${display.color}`}>
+            {display.label}
+          </span>
+        )}
+        {saved.resource_address && (
+          <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
+            <MapPin className="w-3 h-3" />
+            {saved.resource_address}
+          </p>
+        )}
+        {saved.resource_phone && (
+          <a
+            href={`tel:${saved.resource_phone}`}
+            className="text-xs text-[#4a5d23] hover:underline flex items-center gap-1 mt-0.5"
+          >
+            <Phone className="w-3 h-3" />
+            {saved.resource_phone}
+          </a>
+        )}
+        {saved.resource_website && (
+          <a
+            href={saved.resource_website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#4a5d23] hover:underline flex items-center gap-1 mt-0.5"
+          >
+            <Globe className="w-3 h-3" />
+            <span className="truncate max-w-[180px]">{saved.resource_website}</span>
+          </a>
+        )}
+      </div>
+      <button
+        data-testid={`unsave-btn-${saved.id}`}
+        onClick={() => onUnsave(saved.id)}
+        disabled={isRemoving}
+        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
+      >
+        <BookmarkX className="w-3.5 h-3.5" />
+        Unsave
+      </button>
+    </div>
+  )
+}
+
+function SavedProgramsTab() {
+  const { savedResources, isLoading, error, removeResource } = useSavedResources()
+  const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const handleUnsave = useCallback(async (id: string) => {
+    setRemovingId(id)
+    await removeResource(id)
+    setRemovingId(null)
+  }, [removeResource])
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-[#4a5d23]" />
+        <p className="text-sm text-stone-500">Loading saved programs...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+        <AlertCircle className="w-8 h-8 text-red-400" />
+        <p className="text-sm text-stone-700">{error}</p>
+      </div>
+    )
+  }
+
+  if (savedResources.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
+          <Bookmark className="w-8 h-8 text-stone-400" />
+        </div>
+        <h3 className="font-semibold text-stone-900">No saved programs yet</h3>
+        <p className="text-sm text-stone-500 max-w-xs leading-relaxed">
+          Browse programs and tap &ldquo;Save to My Plan&rdquo; to keep track of the ones that look right for you.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 pb-4 pr-1">
+      {savedResources.map((saved) => (
+        <SavedProgramTile
+          key={saved.id}
+          saved={saved}
+          onUnsave={handleUnsave}
+          isRemoving={removingId === saved.id}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ============================================================
+// MAIN PROGRAMS PANEL
+// ============================================================
+type ProgramsTab = 'browse' | 'saved'
+
 export function ProgramsPanel() {
   const { programs, categories, isLoading, error, filters, setFilters } = useProgramBrowser()
-  const { saveResource, removeResource, isResourceSaved } = useSavedResources()
+  const { saveResource, isResourceSaved } = useSavedResources()
   const { setActivePanel, setPanelParams } = usePanelContext()
+  const [activeTab, setActiveTab] = useState<ProgramsTab>('browse')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -319,164 +451,202 @@ export function ProgramsPanel() {
   return (
     <div className="h-full flex flex-col bg-[#faf9f6]">
       <div className="flex-shrink-0 px-1 pt-1 pb-3 space-y-3">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Browse Programs</h1>
-          <p className="text-xs text-stone-500 mt-0.5">Find benefits and services available near you</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-stone-900">Programs</h1>
+            <p className="text-xs text-stone-500 mt-0.5">Find benefits and services available near you</p>
+          </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search programs..."
-            className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
-          />
-        </div>
-
-        <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-          <select
-            value={filters.state ?? ''}
-            onChange={(e) => setFilters({ ...filters, state: e.target.value || null })}
-            className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
-          >
-            <option value="" disabled>Select your state</option>
-            {US_STATES.map((s) => (
-              <option key={s} value={STATE_TO_ABBR[s]}>{s}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {/* Tab switcher */}
+        <div className="flex rounded-lg border border-stone-200 bg-white p-0.5 gap-0.5">
           <button
-            onClick={() => handleCategoryFilter(null)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filters.category === null
+            data-testid="tab-browse"
+            onClick={() => setActiveTab('browse')}
+            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+              activeTab === 'browse'
                 ? 'bg-[#4a5d23] text-white'
-                : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            All
+            Browse
           </button>
-          {categories.map((cat) => {
-            const display = CATEGORY_DISPLAY[cat.name]
-            return (
+          <button
+            data-testid="tab-saved"
+            onClick={() => setActiveTab('saved')}
+            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+              activeTab === 'saved'
+                ? 'bg-[#4a5d23] text-white'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            Saved
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'saved' ? (
+        <div className="flex-1 overflow-y-auto min-h-0 px-1">
+          <SavedProgramsTab />
+        </div>
+      ) : (
+        <>
+          <div className="flex-shrink-0 px-1 space-y-3 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search programs..."
+                className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
+              />
+            </div>
+
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+              <select
+                value={filters.state ?? ''}
+                onChange={(e) => setFilters({ ...filters, state: e.target.value || null })}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-stone-200 rounded-lg text-stone-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
+              >
+                <option value="" disabled>Select your state</option>
+                {US_STATES.map((s) => (
+                  <option key={s} value={STATE_TO_ABBR[s]}>{s}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               <button
-                key={cat.name}
-                onClick={() => handleCategoryFilter(cat.name)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  filters.category === cat.name
+                onClick={() => handleCategoryFilter(null)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filters.category === null
                     ? 'bg-[#4a5d23] text-white'
                     : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
                 }`}
               >
-                {display?.label ?? cat.name}
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                  filters.category === cat.name
-                    ? 'bg-white/20 text-white'
-                    : 'bg-stone-100 text-stone-500'
-                }`}>
-                  {cat.count}
-                </span>
+                All
               </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto min-h-0">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-[#4a5d23]" />
-            <p className="text-sm text-stone-500">Loading programs...</p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-            <AlertCircle className="w-8 h-8 text-red-400" />
-            <p className="text-sm text-stone-700">{error}</p>
-            <button
-              onClick={() => setFilters({ ...filters })}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Retry
-            </button>
-          </div>
-        ) : !filters.state ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
-              <MapPin className="w-8 h-8 text-stone-400" />
-            </div>
-            <h3 className="font-semibold text-stone-900">Select your state</h3>
-            <p className="text-sm text-stone-500">
-              Programs are state-specific. Choose your state above to see available benefits.
-            </p>
-          </div>
-        ) : programs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
-              <Search className="w-8 h-8 text-stone-400" />
-            </div>
-            <h3 className="font-semibold text-stone-900">No programs found</h3>
-            <p className="text-sm text-stone-500">
-              Try adjusting your search or selecting a different category.
-            </p>
-          </div>
-        ) : filters.category ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4 pr-1">
-            {programs.map((resource) => (
-              <ProgramTile
-                key={resource.id}
-                resource={resource}
-                isExpanded={expandedId === resource.id}
-                onToggle={() => handleToggle(resource.id, resource)}
-                onSave={handleSave}
-                isSaved={isResourceSaved(resource.id)}
-                onStartApplication={handleStartApplication}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-6 pb-4 pr-1">
-            {Object.entries(
-              programs.reduce<Record<string, Resource[]>>((acc, r) => {
-                const cat = r.category as string
-                if (!acc[cat]) acc[cat] = []
-                acc[cat].push(r)
-                return acc
-              }, {})
-            ).map(([cat, items]) => {
-              const display = CATEGORY_DISPLAY[cat] ?? CATEGORY_DISPLAY['other']
-              return (
-                <div key={cat}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-base font-bold text-stone-900">{display.label}</h2>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500">
-                      {items.length}
+              {categories.map((cat) => {
+                const display = CATEGORY_DISPLAY[cat.name]
+                return (
+                  <button
+                    key={cat.name}
+                    onClick={() => handleCategoryFilter(cat.name)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      filters.category === cat.name
+                        ? 'bg-[#4a5d23] text-white'
+                        : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                    }`}
+                  >
+                    {display?.label ?? cat.name}
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                      filters.category === cat.name
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-500'
+                    }`}>
+                      {cat.count}
                     </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {items.map((resource) => (
-                      <ProgramTile
-                        key={resource.id}
-                        resource={resource}
-                        isExpanded={expandedId === resource.id}
-                        onToggle={() => handleToggle(resource.id, resource)}
-                        onSave={handleSave}
-                        isSaved={isResourceSaved(resource.id)}
-                        onStartApplication={handleStartApplication}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-[#4a5d23]" />
+                <p className="text-sm text-stone-500">Loading programs...</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+                <p className="text-sm text-stone-700">{error}</p>
+                <button
+                  onClick={() => setFilters({ ...filters })}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry
+                </button>
+              </div>
+            ) : !filters.state ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
+                  <MapPin className="w-8 h-8 text-stone-400" />
+                </div>
+                <h3 className="font-semibold text-stone-900">Select your state</h3>
+                <p className="text-sm text-stone-500">
+                  Programs are state-specific. Choose your state above to see available benefits.
+                </p>
+              </div>
+            ) : programs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
+                  <Search className="w-8 h-8 text-stone-400" />
+                </div>
+                <h3 className="font-semibold text-stone-900">No programs found</h3>
+                <p className="text-sm text-stone-500">
+                  Try adjusting your search or selecting a different category.
+                </p>
+              </div>
+            ) : filters.category ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4 pr-1">
+                {programs.map((resource) => (
+                  <ProgramTile
+                    key={resource.id}
+                    resource={resource}
+                    isExpanded={expandedId === resource.id}
+                    onToggle={() => handleToggle(resource.id, resource)}
+                    onSave={handleSave}
+                    isSaved={isResourceSaved(resource.id)}
+                    onStartApplication={handleStartApplication}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6 pb-4 pr-1">
+                {Object.entries(
+                  programs.reduce<Record<string, Resource[]>>((acc, r) => {
+                    const cat = r.category as string
+                    if (!acc[cat]) acc[cat] = []
+                    acc[cat].push(r)
+                    return acc
+                  }, {})
+                ).map(([cat, items]) => {
+                  const display = CATEGORY_DISPLAY[cat] ?? CATEGORY_DISPLAY['other']
+                  return (
+                    <div key={cat}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h2 className="text-base font-bold text-stone-900">{display.label}</h2>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500">
+                          {items.length}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {items.map((resource) => (
+                          <ProgramTile
+                            key={resource.id}
+                            resource={resource}
+                            isExpanded={expandedId === resource.id}
+                            onToggle={() => handleToggle(resource.id, resource)}
+                            onSave={handleSave}
+                            isSaved={isResourceSaved(resource.id)}
+                            onStartApplication={handleStartApplication}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

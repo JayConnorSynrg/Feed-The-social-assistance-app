@@ -16,7 +16,56 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: advisor-hardening-prb
+
+```yaml
+id: pipeline-wiring-pra
+status: in_progress
+type: branch
+description: "feat(programs): wire benefits-screening into eligibility flow; saved-programs tab; VT application URLs; category SSOT + full volunteer FAB"
+branch: feature/pipeline-wiring
+base: develop
+base_sha: 9d68c3b
+remote: origin
+files:
+  - apps/web/src/lib/resource-categories.ts
+  - apps/web/src/components/panels/chat-panel.tsx
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/components/map/map-panel.tsx
+  - apps/web/src/components/map/resource-marker.tsx
+  - apps/web/src/components/map/volunteer-resource-detail.tsx
+  - apps/web/src/components/volunteer/volunteer-resource-fab.tsx
+  - apps/web/src/hooks/use-volunteer-resource.ts
+  - supabase/migrations/20260609120000_seed_vt_application_urls.sql
+  - apps/web/e2e/eligibility-wiring.spec.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-06-09T17:00:00.000Z"
+completed_at: null
+```
+
+```yaml
+id: advisor-hardening-prb
+status: pending
+type: branch
+description: "chore(security): revoke trigger-fn public execute; drop duplicate indexes; consolidate duplicate RLS policies; delete 6 dead files"
+branch: chore/advisor-hardening
+base: develop
+base_sha: null
+remote: origin
+files:
+  - supabase/migrations/20260609HHMMSS_advisor_hardening.sql
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-06-09T17:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: conversation-reviews-p9-t6

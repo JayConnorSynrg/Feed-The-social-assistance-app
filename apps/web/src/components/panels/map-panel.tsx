@@ -37,6 +37,7 @@ import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
+import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
 
 // ============================================
 // GEOCODE CACHE (localStorage + in-memory, keyed by "city, state")
@@ -98,35 +99,7 @@ function formatDistance(km: number): string {
 
 // DEMO_RESOURCES removed - now using real Supabase data via useViewportResources
 
-const CATEGORY_COLORS: Record<string, string> = {
-  food: 'bg-orange-100 text-orange-700',
-  housing: 'bg-blue-100 text-blue-700',
-  healthcare: 'bg-red-100 text-red-700',
-  employment: 'bg-green-100 text-green-700',
-  education: 'bg-purple-100 text-purple-700',
-  legal: 'bg-yellow-100 text-yellow-700',
-  eitc_tax_filing: 'bg-sky-100 text-sky-700',
-  free_legal: 'bg-indigo-100 text-indigo-700',
-  prenatal_natal_care: 'bg-pink-100 text-pink-700',
-  waste_disposal: 'bg-lime-100 text-lime-700',
-  free_camping: 'bg-green-100 text-green-800',
-  free_goods_donation: 'bg-rose-100 text-rose-700',
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  food: 'Food',
-  housing: 'Housing',
-  healthcare: 'Healthcare',
-  employment: 'Employment',
-  education: 'Education',
-  legal: 'Legal',
-  eitc_tax_filing: 'Tax Filing & EITC',
-  free_legal: 'Free Legal Help',
-  prenatal_natal_care: 'Prenatal & Newborn Care',
-  waste_disposal: 'Waste & Disposal',
-  free_camping: 'Free Camping',
-  free_goods_donation: 'Free Goods & Donations',
-}
+// Category display helpers are now sourced from lib/resource-categories.ts (SSOT)
 
 // ============================================
 // RESOURCE LIST ITEM
@@ -138,8 +111,8 @@ interface ResourceListItemProps {
 }
 
 function ResourceListItem({ resource, isSelected, onClick }: ResourceListItemProps) {
-  const categoryColor = CATEGORY_COLORS[resource.category] || 'bg-gray-100 text-gray-700'
-  const categoryLabel = CATEGORY_LABELS[resource.category] || resource.category
+  const categoryColor = getCategoryTailwind(resource.category)
+  const categoryLabel = getCategoryLabel(resource.category)
 
   return (
     <button
@@ -212,8 +185,8 @@ interface ResourceDetailProps {
 }
 
 function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveResource, isSaved }: ResourceDetailProps) {
-  const categoryColor = CATEGORY_COLORS[resource.category] || 'bg-gray-100 text-gray-700'
-  const categoryLabel = CATEGORY_LABELS[resource.category] || resource.category
+  const categoryColor = getCategoryTailwind(resource.category)
+  const categoryLabel = getCategoryLabel(resource.category)
 
   return (
     <div className="h-full flex flex-col">
@@ -679,7 +652,11 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               >
                 All
               </button>
-              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              {[
+                'food','housing','healthcare','employment','education','legal',
+                'eitc_tax_filing','free_legal','prenatal_natal_care',
+                'waste_disposal','free_camping','free_goods_donation',
+              ].map((key) => (
                 <button
                   key={key}
                   onClick={() => setSelectedCategory(selectedCategory === key ? null : key)}
@@ -687,7 +664,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                     selectedCategory === key ? 'bg-[#4a5d23] text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                   }`}
                 >
-                  {label}
+                  {getCategoryLabel(key)}
                 </button>
               ))}
             </div>

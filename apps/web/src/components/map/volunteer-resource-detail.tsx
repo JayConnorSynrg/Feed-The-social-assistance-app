@@ -15,6 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { getCategoryLabel } from '@/lib/resource-categories'
 
 interface VolunteerResourceDetailProps {
   resource: {
@@ -32,23 +33,6 @@ interface VolunteerResourceDetailProps {
   onNavigateToMessages?: () => void
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  food: 'Food',
-  housing: 'Housing',
-  employment: 'Jobs',
-  transportation: 'Transportation',
-  legal: 'Legal',
-  other: 'General',
-  healthcare: 'Healthcare',
-  education: 'Education',
-  eitc_tax_filing: 'Tax Filing & EITC',
-  free_legal: 'Free Legal Help',
-  prenatal_natal_care: 'Prenatal & Newborn Care',
-  waste_disposal: 'Waste & Disposal',
-  free_camping: 'Free Camping',
-  free_goods_donation: 'Free Goods & Donations',
-}
-
 export function VolunteerResourceDetail({ resource, onClose, onNavigateToMessages }: VolunteerResourceDetailProps) {
   const { user } = useAuth()
   const { sendRequest, error: convError } = useConversations()
@@ -59,7 +43,7 @@ export function VolunteerResourceDetail({ resource, onClose, onNavigateToMessage
   const [sendError, setSendError] = useState<string | null>(null)
 
   const isOwnResource = resource.submitted_by === user?.id
-  const categoryLabel = CATEGORY_LABELS[resource.category] ?? resource.category
+  const categoryLabel = getCategoryLabel(resource.category)
 
   const handleSendRequest = async () => {
     if (!messageText.trim() || !resource.submitted_by) return

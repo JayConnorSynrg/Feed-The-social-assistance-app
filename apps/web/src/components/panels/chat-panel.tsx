@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useChat, type ChatMessage } from '@/hooks/use-chat'
 import { useAuth } from '@/hooks/use-auth'
+import { createClient } from '@/lib/supabase/client'
 import { GuidedFlowComponent } from '@/components/chat/guided-flow'
 import { resourceFinderFlow, eligibilityCheckerFlow, formHelpFlow } from '@/lib/ai/guided-flows'
 import type { GuidedFlow } from '@/lib/ai/guided-flows'
@@ -297,6 +298,70 @@ function parseMessageContent(
   return parts
 }
 
+// ============================================
+// ELIGIBILITY SCREENING HELPERS
+// ============================================
+
+interface EligibilityProgram {
+  name: string
+  eligible: boolean
+  estimated_monthly_amount: number
+  description: string
+}
+
+/** Map guided-flow answers to the benefits-screening edge function request shape. */
+function buildScreeningRequest(answers: Record<string, string>) {
+  // household-size: '1' | '2' | '3' | '4' | '5' | '6+'
+  const householdSize = answers['household-size'] === '6+' ? 6 : parseInt(answers['household-size'] ?? '1', 10)
+
+  // income: bucket string → midpoint annual income
+  const incomeMap: Record<string, number> = {
+    '0': 0,
+    'under-1000': 6000,
+    '1000-2000': 18000,
+    '2000-3000': 30000,
+    '3000-4000': 42000,
+    '4000-5000': 54000,
+    'over-5000': 72000,
+  }
+  const annualIncome = incomeMap[answers['income'] ?? '0'] ?? 0
+
+  // state: text field — normalize to 2-letter abbreviation
+  const stateRaw = (answers['state'] ?? '').trim().toUpperCase()
+  // If already 2 chars, use as-is; otherwise try to match name → abbr via common map
+  const STATE_ABBR: Record<string, string> = {
+    VERMONT: 'VT', 'NEW YORK': 'NY', CALIFORNIA: 'CA', TEXAS: 'TX',
+    FLORIDA: 'FL', ILLINOIS: 'IL', PENNSYLVANIA: 'PA', OHIO: 'OH',
+    GEORGIA: 'GA', 'NORTH CAROLINA': 'NC', MICHIGAN: 'MI', 'NEW JERSEY': 'NJ',
+    VIRGINIA: 'VA', WASHINGTON: 'WA', ARIZONA: 'AZ', MASSACHUSETTS: 'MA',
+    TENNESSEE: 'TN', INDIANA: 'IN', MISSOURI: 'MO', MARYLAND: 'MD',
+    WISCONSIN: 'WI', COLORADO: 'CO', MINNESOTA: 'MN', 'SOUTH CAROLINA': 'SC',
+    ALABAMA: 'AL', LOUISIANA: 'LA', KENTUCKY: 'KY', OREGON: 'OR',
+    OKLAHOMA: 'OK', CONNECTICUT: 'CT', UTAH: 'UT', NEVADA: 'NV',
+    IOWA: 'IA', ARKANSAS: 'AR', MISSISSIPPI: 'MS', KANSAS: 'KS',
+    'NEW MEXICO': 'NM', NEBRASKA: 'NE', 'WEST VIRGINIA': 'WV', IDAHO: 'ID',
+    HAWAII: 'HI', 'NEW HAMPSHIRE': 'NH', MAINE: 'ME', MONTANA: 'MT',
+    'RHODE ISLAND': 'RI', DELAWARE: 'DE', 'SOUTH DAKOTA': 'SD',
+    'NORTH DAKOTA': 'ND', ALASKA: 'AK', 'DISTRICT OF COLUMBIA': 'DC',
+    DC: 'DC', WYOMING: 'WY',
+  }
+  const state = stateRaw.length === 2 ? stateRaw : (STATE_ABBR[stateRaw] ?? 'VT')
+
+  const hasChildren = answers['children'] === 'yes'
+  const isDisabled = (answers['employment'] ?? '') === 'disability'
+
+  // Default age to 35 — the flow doesn't collect age directly
+  return {
+    household_size: isNaN(householdSize) || householdSize < 1 ? 1 : householdSize,
+    annual_income: annualIncome,
+    state,
+    age: 35,
+    has_children: hasChildren,
+    is_disabled: isDisabled,
+  }
+}
+
+
 function postProcessResourceMarkers(
   content: string,
   injectedResources?: string[]
@@ -432,7 +497,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated } = useAuth()
   const { saveResource, isResourceSavedByName } = useSavedResources()
-  const { panelParams, setPanelParams } = usePanelContext()
+  const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
+  const supabaseRef = useRef(createClient())
 
   const {
     messages,
@@ -450,10 +516,77 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const wizardSentRef = useRef(false)
 
   const handleFlowSelect = (flow: GuidedFlow) => setSelectedFlow(flow)
-  const handleFlowComplete = (answers: Record<string, string>, aiResponse: string) => {
-    sendMessage(aiResponse)
+
+  const handleFlowComplete = useCallback(async (answers: Record<string, string>, aiResponse: string) => {
     setSelectedFlow(null)
-  }
+
+    // Eligibility-checker flow: invoke the benefits-screening edge function
+    if (answers['household-size'] !== undefined && answers['state'] !== undefined) {
+      const reqBody = buildScreeningRequest(answers)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+      try {
+        const { data, error: fnError } = await supabaseRef.current.functions.invoke(
+          'benefits-screening',
+          { body: reqBody }
+        )
+        clearTimeout(timeoutId)
+
+        if (fnError) throw new Error(fnError.message)
+
+        const programs: EligibilityProgram[] = data?.programs ?? []
+
+        // Inject eligibility results as a synthetic assistant message via sendMessage
+        // We render results as JSX via a special marker in the message.
+        // Instead: inject a pre-built results message directly by sending a formatted text.
+        const eligible = programs.filter((p) => p.eligible)
+        const lines: string[] = []
+
+        if (eligible.length > 0) {
+          lines.push(`Based on your household information, you may qualify for ${eligible.length} program${eligible.length > 1 ? 's' : ''}:\n`)
+          for (const p of eligible) {
+            const amt = p.estimated_monthly_amount > 0 ? ` (~$${Math.round(p.estimated_monthly_amount)}/mo)` : ''
+            lines.push(`**${p.name}**${amt}\n${p.description}`)
+          }
+          const ineligibleNames = programs.filter((p) => !p.eligible).map((p) => p.name)
+          if (ineligibleNames.length > 0) {
+            lines.push(`\n_${ineligibleNames.join(', ')} did not meet estimated thresholds._`)
+          }
+        } else {
+          lines.push('Based on the information you shared, we were unable to identify programs you currently qualify for. Eligibility rules vary — apply directly to get an official determination.')
+        }
+
+        lines.push('\n_This is a general estimate only. Actual eligibility is determined by your state agency._')
+        lines.push('\nOpen the **Programs panel** to search and apply for programs near you.')
+
+        await sendMessage(lines.join('\n'))
+        return
+      } catch (err: unknown) {
+        clearTimeout(timeoutId)
+        // Handle Next.js fetch abort as success-like (operation may have completed server-side)
+        if (
+          (err instanceof DOMException && err.name === 'AbortError') ||
+          (err instanceof Error && (err.message.includes('signal') || err.message.includes('aborted')))
+        ) {
+          // Timed out — fall through to AI response
+        } else {
+          // Service unavailable — show friendly message then fall through to AI response
+          await sendMessage(
+            'The eligibility screening service is temporarily unavailable. Based on your answers, I recommend checking the Programs panel to find benefits in your area.'
+          )
+          return
+        }
+      }
+    }
+
+    // Default: send the AI-generated response from the guided flow
+    if (aiResponse) {
+      await sendMessage(aiResponse)
+    }
+  }, [sendMessage, setActivePanel])  // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFlowCancel = () => setSelectedFlow(null)
 
   // Auto-scroll to bottom on new messages
