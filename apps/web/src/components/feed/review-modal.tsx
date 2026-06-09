@@ -5,6 +5,7 @@
  *
  * Modal for submitting a post-exchange review.
  * Supports both directions: seeker reviewing sourcer, and sourcer reviewing seeker.
+ * Also supports the conversation path (p_conversation_id) introduced in Phase 9.
  *
  * PII: comment content is never logged.
  */
@@ -20,8 +21,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, Star } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useReviews } from '@/hooks/use-reviews'
+import { WheatStalkRatingInteractive } from '@/components/ui/wheat-stalk-rating'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +32,9 @@ import { useReviews } from '@/hooks/use-reviews'
 interface ReviewModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  optInId: string
+  /** Provide exactly one of optInId or conversationId. */
+  optInId?: string
+  conversationId?: string
   /** Human-readable name of the person being reviewed. */
   revieweeName: string
   /** Role label shown in the description (e.g. "sourcer" or "seeker"). */
@@ -46,6 +50,7 @@ export function ReviewModal({
   open,
   onOpenChange,
   optInId,
+  conversationId,
   revieweeName,
   revieweeRole,
   onSubmitted,
@@ -53,7 +58,6 @@ export function ReviewModal({
   const { submitReview, loading, error } = useReviews()
 
   const [rating, setRating] = useState<number>(0)
-  const [hoverRating, setHoverRating] = useState<number>(0)
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null)
   const [comment, setComment] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
@@ -61,7 +65,6 @@ export function ReviewModal({
   const handleClose = () => {
     if (!loading) {
       setRating(0)
-      setHoverRating(0)
       setWouldRecommend(null)
       setComment('')
       setLocalError(null)
@@ -74,20 +77,20 @@ export function ReviewModal({
     setLocalError(null)
 
     if (rating === 0) {
-      setLocalError('Please select a star rating before submitting.')
+      setLocalError('Please select a stalk rating before submitting.')
       return
     }
 
     try {
       await submitReview({
         optInId,
+        conversationId,
         rating,
         wouldRecommend,
         comment: comment.trim() || null,
       })
       // Reset form then notify parent
       setRating(0)
-      setHoverRating(0)
       setWouldRecommend(null)
       setComment('')
       onOpenChange(false)
@@ -118,39 +121,14 @@ export function ReviewModal({
               </Alert>
             )}
 
-            {/* Star rating */}
+            {/* Wheat-stalk rating */}
             <div>
               <p className="text-sm font-medium mb-2">Rating</p>
-              <div
-                data-testid="review-stars"
-                className="flex gap-1"
-                role="group"
-                aria-label="Star rating"
-              >
-                {[1, 2, 3, 4, 5].map((n) => {
-                  const filled = n <= (hoverRating || rating)
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      data-testid={`review-star-${n}`}
-                      aria-label={`${n} star${n !== 1 ? 's' : ''}`}
-                      onClick={() => setRating(n)}
-                      onMouseEnter={() => setHoverRating(n)}
-                      onMouseLeave={() => setHoverRating(0)}
-                      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
-                    >
-                      <Star
-                        className={`w-7 h-7 transition-colors ${
-                          filled
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'fill-none text-stone-300 hover:text-amber-300'
-                        }`}
-                      />
-                    </button>
-                  )
-                })}
-              </div>
+              <WheatStalkRatingInteractive
+                value={rating}
+                onChange={setRating}
+                testIdPrefix="review"
+              />
             </div>
 
             {/* Would recommend toggle */}
