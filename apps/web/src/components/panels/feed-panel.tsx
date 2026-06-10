@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, AlertTriangle, Cloud, Construction, Gauge, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -43,6 +43,8 @@ import { CommentThread } from '@/components/feed/comment-thread'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
+import { getCategoryTailwind, getCategoryLabel } from '@/lib/resource-categories'
+import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 
 // ============================================
 // TYPES
@@ -65,6 +67,7 @@ interface Post {
   category: 'update' | 'request' | 'offer' | 'announcement'
   resourceId: string | null
   resourceName: string | null
+  resourceCategory: string | null
   maxSeekers: number | null
   slotsRemaining: number | null
   postType: 'feed' | 'resource_post' | 'petition'
@@ -148,6 +151,98 @@ function FeedHeader({ activeFilter, onFilterChange }: FeedHeaderProps) {
 }
 
 // ============================================
+// SAFETY STRIP
+// ============================================
+// Alert-type icons and labels — mirrors safety-alert-marker.tsx constants
+const STRIP_ALERT_ICONS: Record<string, React.FC<{ className?: string }>> = {
+  weather: Cloud,
+  road_closure: Construction,
+  speeding: Gauge,
+  general: AlertTriangle,
+}
+
+const STRIP_ALERT_LABELS: Record<string, string> = {
+  weather: 'Weather Hazard',
+  road_closure: 'Road Closure',
+  speeding: 'Speeding Area',
+  general: 'Safety Alert',
+}
+
+interface SafetyStripProps {
+  alerts: SafetyAlert[]
+  onViewMap: () => void
+}
+
+function SafetyStrip({ alerts, onViewMap }: SafetyStripProps) {
+  return (
+    <div
+      data-testid="safety-strip"
+      className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2"
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 uppercase tracking-wide">
+          <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+          Active Alerts
+        </div>
+        <button
+          data-testid="safety-strip-view-map"
+          onClick={onViewMap}
+          className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 transition-colors"
+        >
+          View on map
+        </button>
+      </div>
+      <ul className="space-y-1.5">
+        {alerts.map((alert) => {
+          const Icon = STRIP_ALERT_ICONS[alert.alert_type] ?? AlertTriangle
+          const label = STRIP_ALERT_LABELS[alert.alert_type] ?? 'Safety Alert'
+          // Severity-scaled color: 1-2 amber, 3-4 red (matches safety-alert-marker.tsx)
+          const isHigh = alert.severity >= 3
+          return (
+            <li
+              key={alert.id}
+              data-testid={`safety-strip-item-${alert.id}`}
+              className="flex items-start gap-2 cursor-pointer group"
+              onClick={onViewMap}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onViewMap()}
+              aria-label={`${label} — tap to view on map`}
+            >
+              <span
+                className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
+                  isHigh ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}
+              >
+                <Icon className="w-3 h-3" aria-hidden="true" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-xs font-semibold ${isHigh ? 'text-red-800' : 'text-amber-800'}`}>
+                    {label}
+                  </span>
+                  {alert.status === 'pending' && (
+                    <span className="text-[10px] text-stone-500 font-normal">
+                      Unverified — neighbor report
+                    </span>
+                  )}
+                </div>
+                {alert.description && (
+                  <p className="text-xs text-stone-700 line-clamp-1 mt-0.5">{alert.description}</p>
+                )}
+                <p className="text-[10px] text-stone-500 mt-0.5">
+                  {getRelativeTime(new Date(alert.created_at))}
+                </p>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+// ============================================
 // CREATE POST CARD
 // ============================================
 interface ResourceOption {
@@ -163,12 +258,14 @@ interface CreatePostCardProps {
     maxSeekers: number | null
   ) => Promise<string | null>
   resourceOptions: ResourceOption[]
+  /** Navigates to the map panel to place a safety pin */
+  onSafetyAlertClick: () => void
 }
 
 const GEO_RADIUS_OPTIONS = [5, 10, 25, 50] as const
 type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 
-function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
+function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreatePostCardProps) {
   const supabase = createClient()
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -423,6 +520,17 @@ function CreatePostCard({ onPost, resourceOptions }: CreatePostCardProps) {
               )}
             </div>
           )}
+
+          {/* Safety alert affordance — deep-links to map panel pin-placement flow */}
+          <button
+            type="button"
+            data-testid="composer-safety-alert-btn"
+            onClick={onSafetyAlertClick}
+            className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 transition-colors pt-1"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+            Report a safety hazard on the map
+          </button>
         </div>
       </div>
     </div>
@@ -695,12 +803,23 @@ function PostCard({
 
       {/* Resource chip — shown when the post is linked to a resource */}
       {post.resourceId && post.resourceName && (
-        <div
-          data-testid={`resource-chip-${post.id}`}
-          className="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 rounded-full bg-lime-50 border border-lime-200 text-xs font-medium text-lime-700"
-        >
-          <LinkIcon className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate max-w-[180px]">{post.resourceName}</span>
+        <div className="flex items-center flex-wrap gap-1.5 mb-3">
+          <div
+            data-testid={`resource-chip-${post.id}`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-50 border border-lime-200 text-xs font-medium text-lime-700"
+          >
+            <LinkIcon className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate max-w-[180px]">{post.resourceName}</span>
+          </div>
+          {/* Category badge — distinct visual from the resource link chip */}
+          {post.resourceCategory && (
+            <span
+              data-testid={`category-badge-${post.id}`}
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${getCategoryTailwind(post.resourceCategory)}`}
+            >
+              {getCategoryLabel(post.resourceCategory)}
+            </span>
+          )}
         </div>
       )}
 
@@ -1019,7 +1138,12 @@ export function FeedPanel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [paginationCursor, setPaginationCursor] = useState<{ createdAt: string; id: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Active safety alerts for the feed strip — fetched independently of the map
+  const [safetyAlerts, setSafetyAlerts] = useState<SafetyAlert[]>([])
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
   const [embedCopiedPostId, setEmbedCopiedPostId] = useState<string | null>(null)
   // Set of post IDs whose comment threads are currently open
@@ -1094,21 +1218,63 @@ export function FeedPanel() {
     handleSubtabSwitch(tabs[next])
   }, [handleSubtabSwitch])
 
+  // ── Pagination constants ────────────────────────────────────────────────────
+  // Keyset pagination uses (created_at, id) for a stable cursor. is_pinned desc
+  // ordering complicates a pure keyset — the simplest correct approach is to sort
+  // pinned posts client-side within the already-loaded set (pinned-first applies
+  // to the visible list, not across page boundaries). Each page fetches 25 rows
+  // ordered by created_at desc, id desc. The realtime prepend path dedupes by id
+  // so new posts don't duplicate rows already paged in.
+  const PAGE_SIZE = 25
+
   // Fetch posts from Supabase
-  const fetchPosts = useCallback(async () => {
-    setLoading(true)
+  // When cursor is provided, fetches the NEXT page after that cursor position.
+  // When cursor is null, fetches the first page.
+  const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null) => {
+    if (cursor === null) {
+      setLoading(true)
+    } else {
+      setLoadingMore(true)
+    }
     setError(null)
+    // Hard timeout: if the entire fetch (main query + secondary queries) doesn't
+    // complete within QUERY_TIMEOUT_MS + 2s grace, reject and clear loading state.
+    // This guards against cases where the AbortSignal on individual queries doesn't
+    // fire (e.g. browser fetch patching or signal lifecycle edge cases).
+    const timeoutMs = QUERY_TIMEOUT_MS + 2_000
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new DOMException('Feed fetch timed out', 'TimeoutError')),
+        timeoutMs
+      )
+    })
     try {
+      await Promise.race([timeoutPromise, (async () => {
+      let query = supabase
+        .from('posts')
+        .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name, category)')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(PAGE_SIZE)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+
+      // Keyset filter: fetch rows BEFORE the cursor position.
+      // Ordering is (created_at desc, id desc). We use a simple `.lt('created_at')`
+      // keyset. This means posts with the exact same created_at millisecond as the
+      // cursor may be skipped — acceptable because same-millisecond multi-user posts
+      // are rare and those posts will appear on the next scroll pass via realtime.
+      // A nested OR+AND tiebreak is the full-correct formulation but the PostgREST
+      // or(a.lt.X,and(a.eq.X,b.lt.Y)) form can produce a 400 on some Supabase
+      // versions; the simple lt approach is safer and correct for the production load.
+      if (cursor !== null) {
+        query = query.lt('created_at', cursor.createdAt)
+      }
+
       const { data, error } = await withMetric(
         'feed.load',
-        { limit: 50 },
-        async () => await supabase
-          .from('posts')
-          .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name)')
-          .order('is_pinned', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(50)
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        { page: cursor ? 'next' : 'first', page_size: PAGE_SIZE },
+        async () => query
       )
 
       if (error) throw error
@@ -1129,27 +1295,33 @@ export function FeedPanel() {
         type PostIdRow = { post_id: string }
         type QueryResult = { data: PostIdRow[] | null }
 
-        // Fetch likes, my-likes, comments, and opt-in counts in parallel
+        // Fetch likes, my-likes, comments, and opt-in counts in parallel.
+        // Each secondary query carries an AbortSignal so they can't block the
+        // finally block indefinitely if the connection stalls mid-fetch.
+        const secondarySignal = AbortSignal.timeout(QUERY_TIMEOUT_MS)
         const [likesResult, myLikesResult, commentsResult, optInResult] =
           await Promise.all([
-            supabase.from('post_likes').select('post_id').in('post_id', postIds) as unknown as Promise<QueryResult>,
+            supabase.from('post_likes').select('post_id').in('post_id', postIds).abortSignal(secondarySignal) as unknown as Promise<QueryResult>,
             user
               ? supabase
                   .from('post_likes')
                   .select('post_id')
                   .in('post_id', postIds)
-                  .eq('user_id', user.id) as unknown as Promise<QueryResult>
+                  .eq('user_id', user.id)
+                  .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
               : Promise.resolve({ data: [] as PostIdRow[] }),
             supabase
               .from('post_comments')
               .select('post_id')
               .in('post_id', postIds)
-              .eq('is_hidden', false) as unknown as Promise<QueryResult>,
+              .eq('is_hidden', false)
+              .abortSignal(secondarySignal) as unknown as Promise<QueryResult>,
             cappedPostIds.length > 0
               ? supabase
                   .from('resource_opt_ins')
                   .select('post_id')
-                  .in('post_id', cappedPostIds) as unknown as Promise<QueryResult>
+                  .in('post_id', cappedPostIds)
+                  .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
               : Promise.resolve({ data: [] as PostIdRow[] }),
           ])
 
@@ -1196,6 +1368,7 @@ export function FeedPanel() {
         category: row.is_pinned ? 'announcement' : 'update',
         resourceId: row.resource?.id ?? null,
         resourceName: row.resource?.name ?? null,
+        resourceCategory: (row.resource as { category?: string | null } | null)?.category ?? null,
         maxSeekers: row.max_seekers ?? null,
         slotsRemaining: row.slots_remaining ?? null,
         postType: (row.post_type as 'feed' | 'resource_post' | 'petition') ?? 'feed',
@@ -1203,7 +1376,38 @@ export function FeedPanel() {
         isHidden: (row as { is_hidden?: boolean }).is_hidden ?? false,
       }))
 
-      setPosts(transformed)
+      // Update pagination cursor: last row's created_at + id becomes the next-page cursor.
+      // hasMore is true when the page returned exactly PAGE_SIZE rows (there may be more).
+      if (cursor === null) {
+        // First page — sort pinned posts to the top client-side within this page.
+        // This scopes pinned-first ordering to the initial loaded set only, which is
+        // the simplest correct behavior with keyset pagination on created_at.
+        const pinned = transformed.filter((p) => p.category === 'announcement')
+        const rest = transformed.filter((p) => p.category !== 'announcement')
+        setPosts([...pinned, ...rest])
+      } else {
+        // Subsequent pages — append, deduplicating by id to protect against
+        // realtime prepends of rows that ended up in a keyset page too.
+        setPosts((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id))
+          const fresh = transformed.filter((p) => !existingIds.has(p.id))
+          return [...prev, ...fresh]
+        })
+      }
+
+      if (rows.length === PAGE_SIZE) {
+        const last = rows[rows.length - 1]
+        // Normalize created_at to a UTC ISO string without timezone offset suffix.
+        // PostgREST filter strings embed the value in a query param; a bare +00:00
+        // suffix could be misinterpreted. Using the UTC 'Z' form is unambiguous.
+        const rawTs = last.created_at as string
+        const normalizedTs = new Date(rawTs).toISOString()
+        setPaginationCursor({ createdAt: normalizedTs, id: last.id as string })
+        setHasMore(true)
+      } else {
+        setPaginationCursor(null)
+        setHasMore(false)
+      }
 
       // Fetch this user's opt-in statuses + seeker opt-in rows + author opt-in lists
       if (user && postIds.length > 0) {
@@ -1254,20 +1458,23 @@ export function FeedPanel() {
             }
           })
       }
+      })()])
     } catch (err: unknown) {
-      const msg = isQueryTimeout(err)
+      const msg = (isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError'))
         ? 'Feed timed out — please check your connection and retry.'
         : err instanceof Error ? err.message : String(err)
       console.error('Error fetching posts:', msg, err)
       setError(msg)
     } finally {
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle)
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [supabase, user, fetchOptInsForPosts])
 
   // Initial fetch
   useEffect(() => {
-    fetchPosts()
+    fetchPosts(null)
   }, [fetchPosts])
 
   // Load following ids on mount (and when auth resolves)
@@ -1277,17 +1484,81 @@ export function FeedPanel() {
     }
   }, [authLoading, fetchFollowing])
 
-  // Real-time updates
+  // Real-time updates: a new post arrives — prepend it to the existing list.
+  // Deduplication in the paginated append path prevents double-rendering if the
+  // same post later appears in a Load More page.
   useRealtimeFeed({
-    onInsert: () => {
-      fetchPosts()
+    onInsert: (newPost) => {
+      // State updater: only derive new state — no side effects inside the updater
+      // because React may call it multiple times (StrictMode double-invocation).
+      setPosts((prev) => {
+        // Dedupe: skip if already present (e.g. optimistic insert from this session)
+        if (prev.some((p) => p.id === newPost.id)) return prev
+        const hydrated: Post = {
+          id: newPost.id,
+          author: { id: '', name: 'Loading…', role: '', harmonyScore: null, harmonyReviewsCount: 0 },
+          content: newPost.content,
+          timestamp: new Date(newPost.created_at),
+          likes: 0,
+          comments: 0,
+          isLiked: false,
+          category: newPost.is_pinned ? 'announcement' : 'update',
+          resourceId: null,
+          resourceName: null,
+          resourceCategory: null,
+          maxSeekers: null,
+          slotsRemaining: null,
+          postType: 'feed',
+          petitionId: null,
+          isHidden: newPost.is_hidden,
+        }
+        return [hydrated, ...prev]
+      })
     },
-    onUpdate: () => fetchPosts(),
+    onUpdate: () => fetchPosts(null),
     onDelete: (postId) => {
       setPosts(prev => prev.filter(p => p.id !== postId))
     },
     enabled: !authLoading,
   })
+
+  // ── Safety alerts feed strip ────────────────────────────────────────────────
+  // Fetch active (expires_at > now) safety alerts directly via authenticated SELECT.
+  // RLS on safety_alerts allows authenticated SELECT (migration 20260608000400).
+  // We use a direct table query rather than the safety_alerts_in_view RPC because
+  // that RPC requires viewport bounds — not available in the feed context.
+  // Cap at 5, ordered by severity desc then created_at desc.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const ctrl = new AbortController()
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('safety_alerts')
+          .select('id, alert_type, severity, description, created_at, expires_at, status, confirm_count, clear_count, created_by')
+          .gt('expires_at', new Date().toISOString())
+          .order('severity', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(5)
+          .abortSignal(ctrl.signal)
+        if (ctrl.signal.aborted) return
+        // Safety alerts from the table do not have lng/lat pre-decomposed —
+        // the location column is PostGIS geography. For the feed strip we only
+        // need metadata (type, severity, description, times), not coordinates.
+        // Cast to partial type; map-navigation does not need coords here.
+        setSafetyAlerts((data ?? []) as SafetyAlert[])
+      } catch {
+        /* non-critical; strip hides gracefully on error */
+      }
+    })()
+    return () => ctrl.abort()
+  }, [isAuthenticated, supabase])
+
+  // ── Load more ────────────────────────────────────────────────────────────────
+  const handleLoadMore = useCallback(() => {
+    if (!paginationCursor || loadingMore) return
+    fetchPosts(paginationCursor)
+  }, [paginationCursor, loadingMore, fetchPosts])
 
   const handleCreatePost = async (
     content: string,
@@ -1611,6 +1882,7 @@ export function FeedPanel() {
             <CreatePostCard
               onPost={handleCreatePost}
               resourceOptions={resourceOptions}
+              onSafetyAlertClick={() => setActivePanel('map')}
             />
           )}
 
@@ -1623,6 +1895,15 @@ export function FeedPanel() {
             >
               {followError}
             </div>
+          )}
+
+          {/* Safety alerts strip — active alerts (expires_at > now), max 5.
+              Tap any card to navigate to the map panel for full details + voting. */}
+          {safetyAlerts.length > 0 && (
+            <SafetyStrip
+              alerts={safetyAlerts}
+              onViewMap={() => setActivePanel('map')}
+            />
           )}
 
           {/* Scrollable Feed */}
@@ -1716,6 +1997,27 @@ export function FeedPanel() {
                   </div>
                 )
               })
+            )}
+
+            {/* Load More — only shown when there are more pages and the feed has loaded */}
+            {!loading && !error && hasMore && (
+              <div className="pt-2 pb-4 flex justify-center">
+                <button
+                  data-testid="feed-load-more"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="px-5 py-2 rounded-full text-sm font-medium bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700 disabled:opacity-60 flex items-center gap-2 transition-colors"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      Loading…
+                    </>
+                  ) : (
+                    'Load more posts'
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>

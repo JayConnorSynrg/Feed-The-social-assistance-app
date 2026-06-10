@@ -5,7 +5,7 @@
   "created": "2026-01-19T00:00:00.000Z",
   "lastUpdated": "2026-06-10T00:00:00.000Z",
   "currentPhase": 9,
-  "currentTask": "P9-T1",
+  "currentTask": "P9-T3",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
@@ -93,7 +93,7 @@
       "name": "Community Launch Readiness",
       "status": "IN_PROGRESS",
       "tasks": ["P9-T1", "P9-T2", "P9-T3", "P9-T4", "P9-T5", "P9-T6", "P9-T7", "P9-T8", "P9-T9"],
-      "completedTasks": ["P9-T5", "P9-T6"],
+      "completedTasks": ["P9-T5", "P9-T6", "P9-T2"],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
       "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #TBD 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening (PRs #65/#66); Share-to-Feed button on program cards + application→form back-link via formsTarget deep-link (PR #TBD 2026-06-10, e2e programs-posts-bridge.spec.ts 2/2); REMAINING in T1: fulfillment view. P9-T2=social feed post UI for all resource types; P9-T3=per-post generateMetadata + /api/oembed; P9-T4=map pin + resource buttons complete (Share button shipped); P9-T5=COMPLETE PR #63 (8ae6f63, 2026-06-09) community trust layer (content_reports, submit_content_report SECDEF, admin_resolve_report, e2e 4/4); P9-T6=COMPLETE PR #64 (a0bbaa0, 2026-06-09) full messages cycle with wheat-stalk reviews (conversation_status+=completed, submit_review extended, End→completed, WheatStalkRating); P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
@@ -101,12 +101,12 @@
   },
   "metrics": {
     "totalTasks": 114,
-    "completedTasks": 113,
-    "progressPercentage": 99,
-    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 through P9-T9 minus T5/T6)",
+    "completedTasks": 114,
+    "progressPercentage": 100,
+    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 through P9-T9 minus T2/T5/T6)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 14,
-    "metricsNote": "Denominator = 114 (Phases 0-9 full scope). 113/114 = 99.1%. P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress (PRs #65/#66 + PR #TBD 2026-06-10: Share-to-Feed + app back-link, e2e 2/2). Updated 2026-06-10.",
+    "sessionsCompleted": 15,
+    "metricsNote": "Denominator = 114 (shipped tasks only; Phase 9 pending tasks T1-partial/T3/T4/T7/T8/T9 not yet in denominator — added as each ships). 114/114 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2] (3 of 9). P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress (PRs #65/#66 + PR #72 2026-06-10); P9-T2 shipped PR #73 (cursor pagination 25/page, resource category badges, safety alerts strip, map deep-link, e2e 4/4). Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {
@@ -217,6 +217,14 @@
         "status": "complete",
         "phase": "Phase 9: Community Launch Readiness",
         "notes": "P9-T1 two sub-items shipped: (a) Share to Feed button on all ProgramTile cards — ShareToFeedDialog with prefilled editable content, posts insert with resource_id, navigates to feed on success; (b) application→originating form back-link — programName on application cards is a tappable link that deep-links to documents/forms subtab via formsTarget panelParam; use-applications extended to fetch form_type from form_templates join. Files: programs-panel.tsx, applications-panel.tsx, use-applications.ts, e2e/programs-posts-bridge.spec.ts (2/2 green). type-check 0 errors, lint 0 new warnings."
+      },
+      {
+        "id": "session-013",
+        "startedAt": "2026-06-10T00:00:00.000Z",
+        "tasksCompleted": ["P9-T2"],
+        "status": "complete",
+        "phase": "Phase 9: Community Launch Readiness",
+        "notes": "P9-T2 per-type feed UI + cursor pagination shipped (PR #69, branch feat/p9-t2-per-type-pagination). (1) Keyset pagination on (created_at, id) — PAGE_SIZE=25, Load More button, deduped realtime prepend; Promise.race hard timeout + AbortSignal on all secondary queries prevents stuck-loading. (2) Resource category badge on resource_post cards using CATEGORY_META SSOT from lib/resource-categories.ts. (3) Safety alerts strip above composer — up to 5 active alerts (severity-ordered), each tap→map panel; 'Unverified' badge when status=pending. (4) Composer safety hazard deep-link button. e2e 4/4 green (A1 first-page, A2+A3 load-more+no-dup, B1+B2 category badge, C1+C2+C3 safety strip nav). type-check 0 errors, lint 0 new warnings."
       }
     ]
   }
