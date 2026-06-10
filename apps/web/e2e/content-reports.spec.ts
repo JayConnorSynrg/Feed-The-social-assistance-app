@@ -275,25 +275,51 @@ test('(c) author sees own hidden post with "Hidden pending review" badge', async
 
 // ─────────────────────────────────────────────────────────────────────────────
 // (d) Admin dismiss → post returns to visible for neutral user
+//
+// Uses the REAL admin_resolve_report RPC with reporter3's authenticated session
+// (is_staff=true, anon-key client, signInWithPassword). The admin UI route at
+// /(admin)/moderation requires is_admin=true (via is_current_user_admin() RPC),
+// which reporter3 does NOT have — only is_staff=true. The RPC path is therefore
+// the correct staff path for this user. Test fails if the RPC rejects reporter3.
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('(d) admin dismisses all reports → post restored for neutral user', async ({ page }) => {
-  // The admin_resolve_report SECDEF checks auth.uid() which is NULL in the Mgmt-API SQL
-  // context (service_role, no JWT). Directly update the DB as the service_role equivalent
-  // to simulate dismissal (same outcome the RPC produces for each report).
-  await mgmtQuery(
-    `UPDATE public.content_reports
-     SET status = 'dismissed'
-     WHERE content_id = '${postId}' AND status = 'open'`
-  )
-  // Since no open reports remain, un-hide the post (mirrors what admin_resolve_report does)
-  await mgmtQuery(
-    `UPDATE public.posts
-     SET is_hidden = false, hidden_at = NULL, hidden_reason = NULL
-     WHERE id = '${postId}'`
+test('(d) staff user calls admin_resolve_report RPC → post restored for neutral user', async ({ page }) => {
+  const { createClient: createAnonClient } = await import('@supabase/supabase-js')
+  const staffClient = createAnonClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // Verify via admin client that post is no longer hidden
+  // Sign in as reporter3 (is_staff=true) with a real authenticated session
+  const { error: signInError } = await staffClient.auth.signInWithPassword({
+    email: REPORTER3_EMAIL,
+    password: USER_PASSWORD,
+  })
+  if (signInError) throw new Error(`reporter3 sign-in failed: ${signInError.message}`)
+
+  // Fetch all open reports for the test post — must dismiss each one individually
+  const { data: openReports, error: fetchError } = await staffClient
+    .from('content_reports')
+    .select('id')
+    .eq('content_id', postId)
+    .eq('status', 'open')
+  if (fetchError) throw new Error(`fetch open reports failed: ${fetchError.message}`)
+  expect(openReports?.length).toBeGreaterThan(0)
+
+  // Dismiss each open report via the REAL SECDEF RPC — test fails if RPC rejects reporter3
+  for (const report of openReports!) {
+    const { error: rpcError } = await staffClient.rpc('admin_resolve_report', {
+      p_report_id: report.id,
+      p_action: 'dismiss',
+    })
+    if (rpcError) throw new Error(`admin_resolve_report rejected staff user: ${rpcError.message}`)
+  }
+
+  // Sign out the staff client
+  await staffClient.auth.signOut()
+
+  // Verify via admin client that the post is no longer hidden
   const { data: postData } = await admin
     .from('posts')
     .select('is_hidden')
@@ -301,9 +327,9 @@ test('(d) admin dismisses all reports → post restored for neutral user', async
     .single()
   expect(postData?.is_hidden).toBe(false)
 
-  // Neutral user should now see the post
+  // Neutral user should now see the post in the feed (DOM assertion)
   await loginAndGoToFeed(page, NEUTRAL_EMAIL, USER_PASSWORD)
-  // Hard-reload to clear any cached feed state
+  // Hard-reload to clear any cached feed state from prior test
   await page.reload()
   await page.waitForTimeout(2_000)
   await expect(

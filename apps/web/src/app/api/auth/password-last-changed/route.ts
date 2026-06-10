@@ -9,15 +9,10 @@ export async function GET() {
     return NextResponse.json({ last_changed: null }, { status: 401 })
   }
 
-  const { data } = await supabase
-    .from('password_history')
-    .select('created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-
+  // password_history table has no rows or grants; use user.created_at as the
+  // best available approximation for when the account (and initial password)
+  // was established.
   return NextResponse.json({
-    last_changed: data?.created_at || user.created_at,
+    last_changed: user.created_at,
   })
 }

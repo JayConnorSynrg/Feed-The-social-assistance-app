@@ -131,9 +131,11 @@ async function openVaultUnlockModal(page: Page): Promise<void> {
 }
 
 async function unlockVaultViaButton(page: Page): Promise<void> {
-  // Click any "Unlock Vault" button that may be visible in the UI
-  const lockBtn = page.getByRole('button', { name: /unlock vault/i })
-  if (await lockBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+  // Use exact match to target only the inner "Unlock Vault" button, not the
+  // locked-card wrapper (role="button", accessible name includes surrounding
+  // text) — strict-mode would throw on the ambiguous /unlock vault/i selector.
+  const lockBtn = page.getByRole('button', { name: 'Unlock Vault', exact: true })
+  if (await lockBtn.isVisible({ timeout: 2_000 })) {
     await lockBtn.click()
     await openVaultUnlockModal(page)
   }
