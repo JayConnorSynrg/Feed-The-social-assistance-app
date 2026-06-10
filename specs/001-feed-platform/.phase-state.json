@@ -3,9 +3,9 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-06-06T00:00:00.000Z",
-  "currentPhase": 7,
-  "currentTask": "P7-T11",
+  "lastUpdated": "2026-06-10T00:00:00.000Z",
+  "currentPhase": 9,
+  "currentTask": "P9-T1",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
@@ -70,11 +70,11 @@
     },
     "7": {
       "name": "Production Hardening",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETE",
       "tasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10", "P7-T11"],
-      "completedTasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10"],
+      "completedTasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10", "P7-T11"],
       "startedAt": "2026-02-22T00:00:00.000Z",
-      "completedAt": null,
+      "completedAt": "2026-06-10T00:00:00.000Z",
       "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken — useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK — vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 — false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) — runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step. SOLE REMAINING LAUNCH GATE: P7-T11 human auth e2e (Google OAuth consent screen).",
       "panelWiringComplete": true,
       "migrationGapsClosed": true
@@ -101,13 +101,13 @@
   },
   "metrics": {
     "totalTasks": 114,
-    "completedTasks": 112,
-    "progressPercentage": 98,
-    "remainingLaunchGate": "P7-T11 (Auth E2E — human: Google OAuth consent screen)",
+    "completedTasks": 113,
+    "progressPercentage": 99,
+    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 through P9-T9 minus T5/T6)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 13,
-    "metricsNote": "Denominator = Phases 0-8 plannable-complete scope (112) + P9-T5 + P9-T6 now complete = 114. 112/114 = 98.2%. P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress PRs #65/#66. Updated 2026-06-09 docsync (chore/docsync-p9-progress).",
-    "lastUpdated": "2026-06-09T00:00:00.000Z"
+    "sessionsCompleted": 14,
+    "metricsNote": "Denominator = 114 (Phases 0-9 full scope). 113/114 = 99.1%. P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress PRs #65/#66. Updated 2026-06-10 docsync (docs/p7-t11-complete-sync).",
+    "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {
     "enabled": true,

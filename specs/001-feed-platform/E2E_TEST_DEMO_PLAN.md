@@ -357,7 +357,7 @@ npm run start
 ### 6.3 Security Headers
 
 ```bash
-curl -I https://feed-platform-kappa.vercel.app
+curl -I https://www.sourcetofeed.com
 ```
 
 **Expected Headers:**
