@@ -11,21 +11,195 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { Button } from '@/components/ui/button'
-import { Loader2, Plus, Save, X, Type } from 'lucide-react'
+import { Loader2, Plus, Save, Type, Wand2, X } from 'lucide-react'
 import { usePdfAnnotation } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 import { logger } from '@/lib/logger'
+import { PDFDocument } from '@cantoo/pdf-lib'
+import type { AutofillValues } from '@/lib/form-field-mapper'
 
 // Version-matched 5.4.296 worker — do NOT change without updating react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
 const FONT_SIZES = [12, 14, 16, 18, 24] as const
 
+// ============================================
+// AcroForm field-name → AutofillValues key alias table
+// Normalise: lowercase, strip non-alphanumeric chars, then match.
+// Only TextFields are filled (checkboxes/radios skipped silently).
+// ============================================
+
+/** Normalise a PDF field name for matching: lowercase + strip non-alphanumerics */
+function normaliseFieldName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Alias table: normalised AcroForm field name → AutofillValues key.
+ *
+ * Fields shipped with P9-T7:
+ *   firstname / fname / givenname / first → first_name
+ *   lastname / lname / familyname / surname / last → last_name
+ *   fullname / name / yourname → full display name (first + last joined)
+ *   emailaddress / email / emailid / mail → email
+ *   phonenumber / phone / tel / mobile / cellphone / cell → phone
+ *   streetaddress / address1 / addressline1 / street / line1 → address.line1
+ *   addressline2 / apt / suite / unit / line2 → address.line2
+ *   city / town / municipality → address.city
+ *   state / stateprovince / province / region → address.state
+ *   zip / zipcode / postalcode / postal → address.zip
+ */
+type AcroFillTarget =
+  | 'first_name'
+  | 'last_name'
+  | 'full_name'
+  | 'email'
+  | 'phone'
+  | 'address_line1'
+  | 'address_line2'
+  | 'address_city'
+  | 'address_state'
+  | 'address_zip'
+
+const FIELD_ALIAS_MAP: Record<string, AcroFillTarget> = {
+  // first name
+  firstname: 'first_name',
+  fname: 'first_name',
+  givenname: 'first_name',
+  first: 'first_name',
+  // last name
+  lastname: 'last_name',
+  lname: 'last_name',
+  familyname: 'last_name',
+  surname: 'last_name',
+  last: 'last_name',
+  // full name (join first + last)
+  fullname: 'full_name',
+  name: 'full_name',
+  yourname: 'full_name',
+  // email
+  emailaddress: 'email',
+  email: 'email',
+  emailid: 'email',
+  mail: 'email',
+  // phone
+  phonenumber: 'phone',
+  phone: 'phone',
+  tel: 'phone',
+  mobile: 'phone',
+  cellphone: 'phone',
+  cell: 'phone',
+  // address line 1
+  streetaddress: 'address_line1',
+  address1: 'address_line1',
+  addressline1: 'address_line1',
+  street: 'address_line1',
+  line1: 'address_line1',
+  // address line 2
+  addressline2: 'address_line2',
+  apt: 'address_line2',
+  suite: 'address_line2',
+  unit: 'address_line2',
+  line2: 'address_line2',
+  // city
+  city: 'address_city',
+  town: 'address_city',
+  municipality: 'address_city',
+  // state
+  state: 'address_state',
+  stateprovince: 'address_state',
+  province: 'address_state',
+  region: 'address_state',
+  // zip
+  zip: 'address_zip',
+  zipcode: 'address_zip',
+  postalcode: 'address_zip',
+  postal: 'address_zip',
+}
+
+/**
+ * Resolve a value string for an AcroFillTarget from the autofill bag.
+ * Returns undefined when the value is not available.
+ */
+function resolveValue(target: AcroFillTarget, autofill: AutofillValues): string | undefined {
+  switch (target) {
+    case 'first_name': return autofill.first_name
+    case 'last_name': return autofill.last_name
+    case 'full_name': {
+      const parts = [autofill.first_name, autofill.last_name].filter(Boolean)
+      return parts.length > 0 ? parts.join(' ') : undefined
+    }
+    case 'email': return autofill.email
+    case 'phone': return autofill.phone
+    case 'address_line1': return autofill.address?.line1
+    case 'address_line2': return autofill.address?.line2
+    case 'address_city': return autofill.address?.city
+    case 'address_state': return autofill.address?.state
+    case 'address_zip': return autofill.address?.zip
+    default: return undefined
+  }
+}
+
+/**
+ * Fill AcroForm TextFields from an AutofillValues bag.
+ * Returns { filled, total } counts for the toast message.
+ * Only TextFields are processed — checkboxes/radios skipped silently.
+ */
+export async function fillAcroFormFields(
+  pdfBytes: Uint8Array,
+  autofill: AutofillValues
+): Promise<{ filledBytes: Uint8Array; filled: number; total: number }> {
+  const pdfDoc = await PDFDocument.load(pdfBytes.slice())
+  const form = pdfDoc.getForm()
+  const fields = form.getFields()
+
+  let filled = 0
+  let total = 0
+
+  for (const field of fields) {
+    // Only handle TextField (the only safe TextContent type for autofill)
+    const fieldType = field.constructor.name
+    if (fieldType !== 'PDFTextField') continue
+
+    total++
+    const rawName = field.getName()
+    const normName = normaliseFieldName(rawName)
+    const target = FIELD_ALIAS_MAP[normName]
+
+    if (!target) continue
+
+    const value = resolveValue(target, autofill)
+    if (!value) continue
+
+    try {
+      // @cantoo/pdf-lib exposes setText on PDFTextField
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(field as any).setText(value)
+      filled++
+      logger.info('pdf.autofill.field', { field: rawName, target })
+    } catch (err) {
+      logger.warn('pdf.autofill.field.skip', { field: rawName, reason: err instanceof Error ? err.message : 'unknown' })
+    }
+  }
+
+  const savedBytes = await pdfDoc.save()
+  return { filledBytes: new Uint8Array(savedBytes), filled, total }
+}
+
 export interface PdfAnnotatorProps {
   file: File
   initialAnnotations?: TextAnnotation[]
   onSave: (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => Promise<void>
   onCancel: () => void
+  /**
+   * When provided, enables the "Fill from profile" toolbar button.
+   * The caller passes a resolved AutofillValues bag from mapProfileToAutofill.
+   * The annotator calls this to apply the values to AcroForm TextFields and
+   * re-loads the modified PDF bytes, then notifies the caller via onFillComplete.
+   */
+  autofillValues?: AutofillValues
+  /** Fired after successful autofill with { filled, total } counts. */
+  onFillComplete?: (result: { filled: number; total: number }) => void
 }
 
 interface DragState {
@@ -290,7 +464,7 @@ function PageOverlay({
   )
 }
 
-export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: PdfAnnotatorProps) {
+export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, autofillValues, onFillComplete }: PdfAnnotatorProps) {
   const {
     pdfBytes,
     numPages,
@@ -309,6 +483,8 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: Pdf
   const [fontSize, setFontSize] = useState<number>(14)
   const [scale, setScale] = useState(1)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isFilling, setIsFilling] = useState(false)
+  const [fillResult, setFillResult] = useState<{ filled: number; total: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   // Guard: react-pdf fires onLoadSuccess on every re-render (including scale changes).
   // Without this guard, setScale triggers a render → Page re-fires onLoadSuccess →
@@ -368,6 +544,41 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: Pdf
     }
   }, [annotations.length, savePdf, scale, onSave])
 
+  /**
+   * Fill AcroForm TextFields from the caller-supplied autofill bag.
+   * On success: reloads the modified PDF bytes into the annotator and fires
+   * onFillComplete with { filled, total } so the parent can show a toast.
+   * Unmatched fields are left untouched; ssn/dob/income are excluded by
+   * the alias table (not in FIELD_ALIAS_MAP).
+   */
+  const handleFillFromProfile = useCallback(async () => {
+    if (!autofillValues || !pdfBytes) return
+
+    setIsFilling(true)
+    setSaveError(null)
+
+    try {
+      logger.info('pdf.autofill.start', { has_address: !!autofillValues.address })
+      const { filledBytes, filled, total } = await fillAcroFormFields(pdfBytes, autofillValues)
+      logger.info('pdf.autofill.complete', { filled, total })
+
+      // Reload the annotator with the filled bytes; preserve existing annotations
+      const filledFile = new File([filledBytes.buffer as ArrayBuffer], file.name, { type: 'application/pdf' })
+      await loadPdf(filledFile, annotations)
+
+      const result = { filled, total }
+      setFillResult(result)
+      // Auto-clear the banner after 4 s
+      setTimeout(() => setFillResult(null), 4000)
+      onFillComplete?.(result)
+    } catch (err) {
+      logger.error('pdf.autofill.error', err)
+      setSaveError(err instanceof Error ? err.message : 'Fill from profile failed')
+    } finally {
+      setIsFilling(false)
+    }
+  }, [autofillValues, pdfBytes, annotations, file.name, loadPdf, onFillComplete])
+
   if (isLoading) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3">
@@ -400,6 +611,26 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: Pdf
           {isPlacementMode ? 'Click Page to Place' : 'Add Text Box'}
         </Button>
 
+        {/* Fill from profile — only shown when the caller provides autofillValues */}
+        {autofillValues && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleFillFromProfile}
+            disabled={isFilling || isLoading}
+            data-testid="pdf-fill-from-profile-btn"
+            className="text-lime-700 border-lime-300 hover:bg-lime-50"
+            title="Fill AcroForm fields from your saved profile"
+          >
+            {isFilling ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            Fill from Profile
+          </Button>
+        )}
+
         <div className="flex items-center gap-1">
           <span className="text-xs text-stone-500 mr-1">Size:</span>
           {FONT_SIZES.map(size => (
@@ -418,6 +649,15 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel }: Pdf
         </div>
 
         <div className="flex-1" />
+
+        {fillResult && (
+          <span
+            className="text-xs text-lime-700 font-medium"
+            data-testid="pdf-fill-result-banner"
+          >
+            Filled {fillResult.filled} of {fillResult.total} field{fillResult.total !== 1 ? 's' : ''}
+          </span>
+        )}
 
         {saveError && (
           <span className="text-xs text-red-600">{saveError}</span>

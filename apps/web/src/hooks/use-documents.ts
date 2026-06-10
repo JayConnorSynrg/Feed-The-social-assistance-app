@@ -11,6 +11,7 @@ export type DocumentCategory =
   | 'income'
   | 'residence'
   | 'medical'
+  | 'forms'
   | 'other'
 
 export interface Document {
@@ -29,11 +30,17 @@ export interface Document {
   url?: string
 }
 
+export interface UpdateDocumentInput {
+  name?: string
+  category?: string
+}
+
 export interface UseDocumentsReturn {
   documents: Document[]
   isLoading: boolean
   error: Error | null
   uploadDocument: (file: File, category: string, applicationId?: string, description?: string) => Promise<Document | null>
+  updateDocument: (id: string, updates: UpdateDocumentInput) => Promise<boolean>
   deleteDocument: (id: string) => Promise<void>
   getDocumentUrl: (filePath: string) => Promise<string | null>
   refreshDocuments: () => Promise<void>
@@ -61,6 +68,11 @@ const CATEGORY_INFO: Record<DocumentCategory, { label: string; icon: string; des
     label: 'Medical Documents',
     icon: '🏥',
     description: 'Insurance cards, medical records, prescriptions, etc.',
+  },
+  forms: {
+    label: 'Submitted Forms',
+    icon: '📋',
+    description: 'Completed benefit applications and forms',
   },
   other: {
     label: 'Other Documents',
@@ -184,6 +196,61 @@ export function useDocuments(): UseDocumentsReturn {
     }
   }, [supabase, refreshDocuments])
 
+  /**
+   * Rename a document and/or change its category.
+   *
+   * NOTE: The `name` column in user_documents is the PLAINTEXT display name
+   * (stored at upload-time as file.name). Encrypted documents also store an
+   * encrypted copy in encrypted_original_name / encrypted_name_iv. This hook
+   * only updates the plaintext `name` column — the encrypted copy is NOT
+   * updated here because use-documents does not hold the vault DEK. Callers
+   * that need both columns updated should use useEncryptedUpload.updateAnnotations
+   * or a dedicated rename path that has vault access.
+   *
+   * For P9-T7 rename we write ONLY the plaintext `name` column. This is safe
+   * because the plaintext `name` is what the Documents panel list renders; the
+   * encrypted_original_name is only read during download decryption (original
+   * file metadata) and is unaffected by a user-visible display rename.
+   */
+  const updateDocument = useCallback(async (id: string, updates: UpdateDocumentInput): Promise<boolean> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const payload: { name?: string; category?: string } = {}
+      if (updates.name !== undefined) payload.name = updates.name
+      if (updates.category !== undefined) payload.category = updates.category
+
+      if (Object.keys(payload).length === 0) return true
+
+      const { error: updateError } = await supabase
+        .from('user_documents')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+
+      if (updateError) throw updateError
+
+      // Optimistic local state update
+      setDocuments(prev => prev.map(d =>
+        d.id === id
+          ? { ...d, ...(updates.name ? { name: updates.name } : {}), ...(updates.category ? { category: updates.category } : {}) }
+          : d
+      ))
+
+      return true
+    } catch (err) {
+      logger.error('documents.update.error', err, { id })
+      setError(
+        isQueryTimeout(err)
+          ? new Error('Update timed out. Please try again.')
+          : err as Error
+      )
+      return false
+    }
+  }, [supabase])
+
   const deleteDocument = useCallback(async (id: string) => {
     try {
       const doc = documents.find(d => d.id === id)
@@ -245,6 +312,7 @@ export function useDocuments(): UseDocumentsReturn {
     isLoading,
     error,
     uploadDocument,
+    updateDocument,
     deleteDocument,
     getDocumentUrl,
     refreshDocuments,

@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.4.5"
+version: "1.4.6"
 created: "2026-01-19"
 last_updated: "2026-06-10"
 status: "IN_PROGRESS"
 current_phase: 9
-current_task: "P9-T4"
+current_task: "P9-T8"
 total_phases: 9
-total_tasks: 114
-completed_tasks: 114
+total_tasks: 115
+completed_tasks: 115
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 4 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 5 | IN_PROGRESS |
 
-**Overall Progress**: 114 / 114 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T4, T7, T8, T9 are pending and not yet in denominator)
+**Overall Progress**: 115 / 115 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T4, T8, T9 are pending and not yet in denominator)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. Phase 9 remaining tasks (T1 partial, T4, T7, T8, T9) pending — denominator grows as each ships.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. Phase 9 remaining tasks (T1 partial, T4, T8, T9) pending — denominator grows as each ships.
 
 ---
 
@@ -1759,7 +1759,16 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 - [x] **Status**: COMPLETE — PR #64 (a0bbaa0, 2026-06-09). conversation_status += 'completed'; submit_review extended to accept conversation_id OR opt_in_id; End→completed (volunteer); dual review prompts in messages-panel; WheatStalkRating component (green-fill SVG) replaces stars in review-modal + harmony-badge; e2e conversation-reviews.spec.ts green.
 
 ### P9-T7: Document Drive + Form Autofill Complete Lifecycle
-- [ ] **Status**: PENDING — full drive UX + autofill lifecycle verified end-to-end
+- [x] **Status**: COMPLETE — PR #TBD (feature/docs-forms-lifecycle, 2026-06-10).
+  (a) **PDF AcroForm autofill**: "Fill from Profile" toolbar button in PdfAnnotator. `FIELD_ALIAS_MAP` normalises AcroForm field names (lowercase + strip non-alphanum) and resolves to `AutofillValues` keys. `fillAcroFormFields()` exported for testability. `mapProfileToAutofill()` used — intentionally excludes SSN/DOB/annual_income. Shows fill-result banner "Filled N of M fields" auto-clearing after 4 s. Only TextFields filled; checkboxes/radios skipped silently. `autofillValues` prop + `onFillComplete` callback on `PdfAnnotatorProps`.
+  (b) **Document rename + category move**: overflow `DropdownMenu` (Rename + Move per category + Delete) on each DocumentCard in DocumentsPanel. `updateDocument(id, {name?, category?})` in `use-documents.ts` with `AbortSignal.timeout` + `.retry(false)` + finally-reset. Rename dialog (prefilled current name) + optimistic state update. NOTE: only updates plaintext `name` column (vault DEK not available at hook level; encrypted copy unchanged — plaintext `name` is what the list renders).
+  (c) **Submission→drive archival**: `archiveSubmission()` in `use-vault-form-submission.ts` generates a summary PDF via `@cantoo/pdf-lib` (title = template name + date, label:value lines from in-memory plaintext answers — NEVER decrypt-from-db), encrypts with `encryptFile()` (standalone, no hook nesting), uploads to `user-documents` bucket, inserts `user_documents` row with `submission_id` FK + `category='forms'`. Fire-and-forget: archival failure sets `archiveWarning` (never fails the submission). New state fields: `archivedDocumentId`, `archiveWarning`.
+  (d) **dropdown-menu.tsx**: new `src/components/ui/dropdown-menu.tsx` — minimal Radix-free implementation with context + outside-click + Escape close (no extra npm dependency).
+  (e) **testid additions**: `data-testid="document-card"` + `data-document-id={id}` on DocumentCard wrapper; `data-testid="documents-panel"` on outer container.
+  - **Files**: `apps/web/src/components/forms/pdf-annotator.tsx`, `apps/web/src/components/panels/documents-panel.tsx`, `apps/web/src/hooks/use-documents.ts`, `apps/web/src/hooks/use-vault-form-submission.ts`, `apps/web/src/components/ui/dropdown-menu.tsx`, `apps/web/e2e/docs-forms-lifecycle.spec.ts`
+  - **Zero migrations**: `submission_id` column verified in `20260214220000_add_document_encryption_fields.sql:19`; `category='forms'` is a text column with no enum constraint
+  - **type-check**: 0 errors; **lint**: 0 new errors (110 warnings, 1 fewer than baseline)
+  - **e2e spec**: `docs-forms-lifecycle.spec.ts` — 3 tests: (a) fill banner, (b) rename DOM + move, (c) DB archival row + Documents list appearance
 
 ### P9-T8: Web Form Retrieval
 - [ ] **Status**: PENDING — retrieve real government forms from the web (direct fetch/scrape pipeline)
@@ -1783,9 +1792,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
 | 1.4.4 | 2026-06-10 | Accounting fix: Phase 9 dashboard row corrected 2→3 completed (T2 was missing from count; T5/T6/T2 all complete). Overall headline clarified: 114/114 shipped tasks (denominator = shipped only; Phase 9 pending tasks not yet included). |
 | 1.4.5 | 2026-06-10 | P9-T3 COMPLETE: per-post generateMetadata on /s/embed/[id] + metadataBase on root layout + /api/oembed endpoint + discovery link on both embed and post pages. e2e 4/4. Phase 9 dashboard: 3→4 completed. Pending list: T1-partial, T4, T7, T8, T9. |
+| 1.4.6 | 2026-06-10 | P9-T7 COMPLETE (feature/docs-forms-lifecycle): AcroForm fill-from-profile (FIELD_ALIAS_MAP + fillAcroFormFields), document rename+move (overflow menu + updateDocument), submission→drive archival (non-blocking encrypted PDF, submission_id FK, archivedDocumentId state), dropdown-menu.tsx (Radix-free). e2e docs-forms-lifecycle.spec.ts 3 tests. Phase 9 dashboard: 4→5 completed. Pending list: T1-partial, T4, T8, T9. 115/115 shipped. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/embed-meta-oembed (2026-06-10)
+**Last Agent Session**: feature/docs-forms-lifecycle (2026-06-10)
 **Total Development Time**: 0 hours

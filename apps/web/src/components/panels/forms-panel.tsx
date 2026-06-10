@@ -766,7 +766,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto">
+    <div data-testid="forms-panel" className="h-full flex flex-col overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full px-4 py-6">
         <input
           ref={fileInputRef}
@@ -839,7 +839,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                   description="Check back later for available application forms."
                 />
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div data-testid="form-template-list" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {templates.map((template) => (
                     <FormTemplateCard
                       key={template.id}
