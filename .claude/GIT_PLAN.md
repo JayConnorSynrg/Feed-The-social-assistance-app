@@ -16,7 +16,27 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: docsync-p9-progress
+next_action_id: merge-pr68-onboarding-42501-fix
+
+```yaml
+id: merge-pr68-onboarding-42501-fix
+status: complete
+type: merge
+description: "fix(onboarding): merge PR #68 (fix/onboarding-profile-update-42501) into develop — P0 fix unblocking all new signups: profiles upsert 42501 → update + retry + logging. Squash merge on confirmed-green CI (same method as PRs #62-67). Single-file change: apps/web/src/app/(auth)/onboarding/page.tsx."
+branch: fix/onboarding-profile-update-42501
+base: develop
+remote: origin
+files:
+  - apps/web/src/app/(auth)/onboarding/page.tsx
+  - .claude/GIT_PLAN.md
+pr: 68
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/68
+commit_sha: 82ba933
+merge_sha: 28a71ac7c80f926713f0d4da0bf60810a68f5d22
+merged_into: develop
+created_at: "2026-06-10T00:00:00.000Z"
+completed_at: "2026-06-10T19:35:13.000Z"
+```
 
 ```yaml
 id: docsync-p9-progress
