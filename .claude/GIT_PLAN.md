@@ -1890,3 +1890,31 @@ merged_into: develop
 created_at: "2026-06-10T22:30:00.000Z"
 completed_at: "2026-06-10T22:32:57.000Z"
 ```
+
+```yaml
+id: verify-pr75-docs-forms-lifecycle
+status: blocked
+type: merge
+description: "feat(docs): P9-T7 document drive + form autofill complete lifecycle (PR #75, feature/docs-forms-lifecycle → develop). Verification BLOCKED — e2e failures detected."
+branch: feature/docs-forms-lifecycle
+base: develop
+remote: origin
+pr: 75
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/75
+merge_sha: null
+merged_into: null
+created_at: "2026-06-10T23:05:00.000Z"
+completed_at: null
+blocking_defects:
+  - id: "e2e-1ab"
+    tests: "(a) and (b) in docs-forms-lifecycle.spec.ts"
+    location: "apps/web/e2e/docs-forms-lifecycle.spec.ts:unlockVault() helper (lines 156-165)"
+    root_cause: "unlockVault() waits for [data-testid=vault-unlock-password-input] but does not first click the vault-locked-card 'Unlock Vault' button that opens the modal. EncryptedUpload renders a vault-locked card (not an open modal) when vault is locked. Input[type=file] only renders when isUnlocked=true. Fix: adopt documents-view.spec.ts unlockVaultViaButton pattern (click the button first, THEN fill password)."
+    result: "TIMEOUT 60s on locator('input[type=file]').first()"
+  - id: "e2e-c"
+    tests: "(c) in docs-forms-lifecycle.spec.ts"
+    location: "apps/web/e2e/docs-forms-lifecycle.spec.ts:333 AND apps/web/src/components/panels/forms-panel.tsx"
+    root_cause: "Spec waits for [data-testid=forms-panel] or [data-testid=form-template-list] — neither testid exists in FormsPanel component. FormsPanel renders correctly but has no data-testid attribute on its container or template list. Fix: add data-testid='forms-panel' to FormsPanel root div, or change locator to [data-testid='form-wizard-container'] or heading selector."
+    result: "element(s) not found timeout 10000ms"
+notes: "CI 11/11 SUCCESS (all required GitHub checks pass). Docsync fix committed (c3a406d) and pushed — currentTask P9-T1→P9-T8, total_tasks 114→115, Phase 9 dashboard 4→5. Test-leak sweep: 0 lifecycle user rows in auth.users / user_documents / form_submissions / storage.objects. documents-view.spec.ts: 5/5 PASS (shared component regression clean)."
+```
