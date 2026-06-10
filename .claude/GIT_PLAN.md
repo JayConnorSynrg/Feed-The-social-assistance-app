@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-pr73-feed-per-type-pagination
+next_action_id: next-p9-task
 
 ```yaml
 id: merge-pr72-programs-posts-bridge
@@ -1856,7 +1856,7 @@ completed_at: 2026-06-04T17:25:00.000Z
 
 ```yaml
 id: merge-pr73-feed-per-type-pagination
-status: in_progress
+status: complete
 type: merge
 description: "Squash-merge PR #73 feat(feed): P9-T2 cursor pagination, per-type cards, safety alerts strip — after docsync accounting fix (Phase 9 dashboard row 2→3, metricsNote clarified)"
 branch: feature/feed-per-type-pagination
@@ -1870,7 +1870,7 @@ files:
   - .claude/GIT_PLAN.md
 pr: 73
 pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/73
-commit_sha: null
+commit_sha: 21a22e90d857177ffccc763a88f6f638005587ea
 created_at: 2026-06-10T00:00:00.000Z
-completed_at: null
+completed_at: 2026-06-10T22:12:42.000Z
 ```
