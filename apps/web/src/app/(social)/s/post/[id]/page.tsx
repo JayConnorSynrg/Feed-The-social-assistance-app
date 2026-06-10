@@ -31,6 +31,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     ? post.content.slice(0, 157) + '...'
     : post.content
 
+  const canonicalUrl = `${appUrl}/s/post/${id}`
+  const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(`${appUrl}/s/embed/${id}`)}`
+
   return {
     title: `${authorName} on FEED`,
     description,
@@ -39,6 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       type: 'article',
       siteName: 'FEED',
+      url: canonicalUrl,
       images: [
         {
           url: `${appUrl}/api/og/post/${id}`,
@@ -53,6 +57,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: `${authorName} on FEED`,
       description,
       images: [`${appUrl}/api/og/post/${id}`],
+    },
+    alternates: {
+      types: {
+        'application/json+oembed': oEmbedUrl,
+      },
     },
   }
 }
