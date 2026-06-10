@@ -31,6 +31,9 @@ export interface Application {
   user_id: string
   template_id: string
   template_name: string
+  /** form_type enum value from form_templates (e.g. 'snap', 'medicaid'). Used by
+   *  applications-panel to deep-link back to the correct form wizard. */
+  form_type: string | null
   status: ApplicationStatus
   submitted_at: string | null
   last_updated: string
@@ -103,13 +106,13 @@ type FormSubmissionRow = {
   updated_at: string
   created_at: string
   notes: string | null
-  form_templates: { name: string } | null
+  form_templates: { name: string; form_type: string | null } | null
 }
 
 // Type for the single-record query result (includes data + schema)
 type SingleSubmissionRow = FormSubmissionRow & {
   data: unknown
-  form_templates: { name: string; schema: unknown } | null
+  form_templates: { name: string; form_type: string | null; schema: unknown } | null
 }
 
 export function useApplications(): UseApplicationsReturn {
@@ -155,7 +158,7 @@ export function useApplications(): UseApplicationsReturn {
     try {
       const supabase = getSupabase()
 
-      // Fetch applications with joined template name
+      // Fetch applications with joined template name + form_type (for back-link deep nav)
       const { data: apps, error: fetchError } = await supabase
         .from('form_submissions')
         .select(`
@@ -168,7 +171,8 @@ export function useApplications(): UseApplicationsReturn {
           created_at,
           notes,
           form_templates (
-            name
+            name,
+            form_type
           )
         `)
         .eq('user_id', user.id)
@@ -183,6 +187,7 @@ export function useApplications(): UseApplicationsReturn {
         user_id: app.user_id,
         template_id: app.template_id,
         template_name: app.form_templates?.name || 'Unknown Form',
+        form_type: app.form_templates?.form_type ?? null,
         status: (app.status as ApplicationStatus) || 'draft',
         submitted_at: app.submitted_at,
         last_updated: app.updated_at,
@@ -224,6 +229,7 @@ export function useApplications(): UseApplicationsReturn {
           data,
           form_templates (
             name,
+            form_type,
             schema
           )
         `)
@@ -240,6 +246,7 @@ export function useApplications(): UseApplicationsReturn {
         user_id: typedData.user_id,
         template_id: typedData.template_id,
         template_name: typedData.form_templates?.name || 'Unknown Form',
+        form_type: typedData.form_templates?.form_type ?? null,
         status: (typedData.status as ApplicationStatus) || 'draft',
         submitted_at: typedData.submitted_at,
         last_updated: typedData.updated_at,

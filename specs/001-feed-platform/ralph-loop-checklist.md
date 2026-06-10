@@ -1729,8 +1729,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 > empirical gap probe before implementation. None of these are started.
 
 ### P9-T1: Programs + Resource Allocation Pipeline Operational
-- [ ] **Status**: PENDING — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
-  - PROGRESS 2026-06-09: PRs #65/#66 — benefits-screening wired into eligibility chat flow; Saved-programs tab; VT application_url seed; category SSOT (lib/resource-categories.ts) + 12-category volunteer FAB; advisor hardening (duplicate indexes + RLS policies dropped, 5 dead files removed). REMAINING: programs↔community-posts bridge, applications→program back-link, fulfillment view.
+- [ ] **Status**: IN_PROGRESS — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
+  - COMPLETE 2026-06-09 (PRs #65/#66): benefits-screening wired into eligibility chat flow; Saved-programs tab; VT application_url seed; category SSOT (lib/resource-categories.ts) + 12-category volunteer FAB; advisor hardening (duplicate indexes + RLS policies dropped, 5 dead files removed).
+  - COMPLETE 2026-06-10 (PR #TBD, chore/docsync-phase8 branch): (a) "Share to Feed" button on all program cards — opens inline dialog with prefilled editable text, inserts post with `resource_id` link, navigates to feed on success. (b) Application → originating form back-link — `programName` on application cards is now a tappable link (`data-testid="app-form-link-<id>"`) that deep-links to documents/forms subtab via `formsTarget` param; `use-applications` extended to fetch `form_type` from `form_templates` join. e2e: programs-posts-bridge.spec.ts 2/2 green.
+  - REMAINING: fulfillment view (post-allocation outcome tracking).
 
 ### P9-T2: Social Feed Post UI for All Resource Types
 - [ ] **Status**: PENDING — distinct composer + feed rendering per post type (resource, petition, safety, general)
@@ -1768,6 +1770,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.3.0 | 2026-06-09 | Docsync PRs #59-61 into Phase 8 (P8-T18..T20, 110/112). P7-T4 reworded (proxy.ts is the live Next.js 16 entrypoint — never delete). Added Phase 9 community-launch pillars (9 planned tasks, not started). |
 | 1.4.0 | 2026-06-09 | P9-T5 + P9-T6 shipped (PRs #63-64); P9-T1 progress (PRs #65-66). |
 | 1.4.1 | 2026-06-10 | P7-T11 COMPLETE (harness 5/5 + manual prod confirmation); Phase 7 ALL exit criteria checked; Phase 8 smoke-test criterion checked; P9-T3 reframed (per-post generateMetadata + /api/oembed); P9-T4 Share button annotated as shipped; mobile/store deferred boxes annotated; 113/114 overall; current_task → P9-T1. |
+| 1.4.2 | 2026-06-10 | P9-T1 two sub-items COMPLETE: (a) Share to Feed on program cards + (b) application→originating form back-link. e2e programs-posts-bridge.spec.ts 2/2. REMAINING in P9-T1: fulfillment view. |
 
 ---
 
