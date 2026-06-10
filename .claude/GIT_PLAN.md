@@ -16,7 +16,67 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-pr68-onboarding-42501-fix
+next_action_id: merge-pr71-docsync-p7-t11
+
+```yaml
+id: merge-chain-pr69-70-71
+status: complete
+type: merge
+description: "Merge chain: PR #69 (chore/federation-webhook-null-guard — null-guard notify_federation_webhook), PR #70 (fix/e2e-route-cleanup — documents-view locator fix + admin_resolve_report staff RPC + dead query removal + page.tsx cleanup), PR #71 (docs/docsync-p7-t11-complete — checklist v1.4.1 + .phase-state.json + dead kappa URL fix). All squash-merge --base develop on confirmed-green CI. Post #69: apply 20260610200000_federation_webhook_null_guard.sql to prod ndtpovonpadugthmcntl via Management API + verify prosrc/proconfig/privilege."
+prs: [69, 70, 71]
+merge_shas:
+  pr69: fbcdbb966c8d25ea45815422473738414bc4dcbb
+  pr70: 4ebaca5347140c0efa82df54d5a4ca8dfd9b523d
+  pr71: 21d3f1e9b349a51553530d5531b1fe3749afa6e7
+merged_into: develop
+bases: [develop, develop, develop]
+remote: origin
+files:
+  - supabase/migrations/20260610200000_federation_webhook_null_guard.sql
+  - apps/web/e2e/documents-view.spec.ts
+  - apps/web/src/app/page.tsx
+  - specs/001-feed-platform/ralph-loop-checklist.md
+  - specs/001-feed-platform/.phase-state.json
+  - .claude/GIT_PLAN.md
+created_at: "2026-06-10T20:00:00.000Z"
+completed_at: "2026-06-10T20:30:46Z"
+```
+
+```yaml
+id: prod-migration-federation-webhook-null-guard
+status: complete
+type: migration
+description: "Apply 20260610200000_federation_webhook_null_guard.sql to prod (ndtpovonpadugthmcntl) via Management API POST /v1/projects/.../database/query. Verify: prosrc contains early-return null guard, proconfig contains search_path=public, EXECUTE revoked from anon."
+project_ref: ndtpovonpadugthmcntl
+migration: supabase/migrations/20260610200000_federation_webhook_null_guard.sql
+verification:
+  prosrc_null_guard: confirmed (IF v_supabase_url IS NULL OR ... THEN RETURN)
+  proconfig_search_path: confirmed (search_path=public)
+  proacl: "{postgres=X/postgres,service_role=X/postgres}" (anon/authenticated/PUBLIC absent = EXECUTE revoked)
+created_at: "2026-06-10T20:00:00.000Z"
+completed_at: "2026-06-10T20:31:00.000Z"
+```
+
+
+```yaml
+id: merge-pr69-federation-webhook-null-guard
+status: complete
+type: merge
+description: "fix(federation): merge PR #69 (chore/federation-webhook-null-guard) into develop — null-guard notify_federation_webhook: early-return when app.supabase_url / app.service_role_key GUCs are unset (current_setting(...,true) returns NULL → net.http_post(url:=NULL) NOT NULL violation → ~50 'Failed to trigger webhook notification' warnings/day on every resources write; federation_peers=0 so no delivery is lost). Squash merge on confirmed-green CI (same method as PR #68). Single-file change: supabase/migrations/20260610200000_federation_webhook_null_guard.sql. Post-merge: apply migration to prod ndtpovonpadugthmcntl via Management-API SQL endpoint + verify prosrc guard, proconfig search_path pin, trigger wiring."
+branch: chore/federation-webhook-null-guard
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260610200000_federation_webhook_null_guard.sql
+  - .claude/GIT_PLAN.md
+pr: 69
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/69
+commit_sha: null
+merge_sha: fbcdbb966c8d25ea45815422473738414bc4dcbb
+merged_into: develop
+created_at: "2026-06-10T00:00:00.000Z"
+completed_at: "2026-06-10T20:30:06Z"
+```
 
 ```yaml
 id: merge-pr68-onboarding-42501-fix
