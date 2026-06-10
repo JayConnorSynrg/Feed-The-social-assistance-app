@@ -1,11 +1,11 @@
 ---
 feature: "FEED Platform"
-version: "1.4.4"
+version: "1.4.5"
 created: "2026-01-19"
 last_updated: "2026-06-10"
 status: "IN_PROGRESS"
 current_phase: 9
-current_task: "P9-T3"
+current_task: "P9-T4"
 total_phases: 9
 total_tasks: 114
 completed_tasks: 114
@@ -70,9 +70,9 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 3 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 4 | IN_PROGRESS |
 
-**Overall Progress**: 114 / 114 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T3, T4, T7, T8, T9 are pending and not yet in denominator)
+**Overall Progress**: 114 / 114 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T4, T7, T8, T9 are pending and not yet in denominator)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
@@ -1738,7 +1738,16 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 - [x] **Status**: COMPLETE — PR #69 (feature/feed-per-type-pagination, 2026-06-10). (1) Keyset cursor pagination on (created_at, id): PAGE_SIZE=25, "Load more posts" button, deduplication on append. (2) Resource-post category badge via CATEGORY_META SSOT. (3) Safety alerts feed strip above composer (authenticated SELECT on safety_alerts, cap 5, severity desc). (4) Composer "Report a safety hazard on the map" button deep-linking to map panel. e2e feed-per-type-pagination.spec.ts 4/4.
 
 ### P9-T3: Per-Post Social Metadata + oEmbed Endpoint
-- [ ] **Status**: PENDING — runtime probe confirmed embed page inherits only GENERIC site og/twitter tags from root layout; actual gap is (a) per-post `generateMetadata` exporting `og:title`, `og:description`, `og:image`, `og:url` for each post ID at `/s/[id]`, and (b) an `/api/oembed` endpoint returning oEmbed JSON so third-party embeds resolve post-level previews
+- [x] **Status**: COMPLETE — PR #TBD (feature/embed-meta-oembed, 2026-06-10).
+  (a) `generateMetadata` added to `/s/embed/[id]/page.tsx` — exports `og:title` (`{authorName} on FEED` or petition title + `— FEED Community Petition`), `og:description` (first 160 chars of content/petition summary), `og:image` (`/api/og/post/{id}`, 1200×630), `og:url` (canonical embed URL), `twitter:card summary_large_image`, and `alternates.types['application/json+oembed']` discovery link. Uses `profiles!posts_user_id_fkey` FK hint to avoid PGRST201 ambiguity. Petition metadata falls back to generic copy if petition is not yet approved (no new policies added — anon SELECT on petitions already gates on `status='approved'`).
+  (b) `metadataBase: new URL(siteUrl)` added to root layout (`apps/web/src/app/layout.tsx`) — resolves all relative og/twitter image URLs. Priority: `NEXT_PUBLIC_APP_URL` → `VERCEL_URL` → `https://www.sourcetofeed.com`.
+  (c) `/api/oembed/route.ts` — oEmbed 1.0 GET endpoint (JSON only; `format=xml` → 501 per spec). Validates URL origin (reject foreign origins; localhost is always allowed for dev). Extracts post ID from `/s/embed/{id}` or `/s/post/{id}` paths. Returns `{type:'rich', version:'1.0', provider_name:'FEED', html:'<iframe …>', width:480, height:270, thumbnail_url, thumbnail_width:1200, thumbnail_height:630}`. `Cache-Control: public, s-maxage=300`. 400 for bad/foreign URL, 404 for missing/hidden post, 501 for XML format.
+  (d) oEmbed discovery `<link>` also added to `/s/post/[id]/page.tsx` (`alternates.types`).
+  **image_url drift**: VERIFIED non-issue — `image_url` IS in `packages/database/types.ts` (Row line 1317, type `string | null`). The reference in `/s/post/[id]/page.tsx:155` is valid.
+  **Petitions anon RLS**: VERIFIED safe — `petition_select_approved` policy `USING (status='approved')` + `GRANT SELECT ON petitions TO anon` already live (20260608000200). Metadata falls back to generic title/description if petition is not found.
+  - **Files**: `apps/web/src/app/(social)/s/embed/[id]/page.tsx`, `apps/web/src/app/(social)/s/post/[id]/page.tsx`, `apps/web/src/app/layout.tsx`, `apps/web/src/app/api/oembed/route.ts`, `apps/web/e2e/embed-meta-oembed.spec.ts`
+  - **e2e**: embed-meta-oembed.spec.ts 4/4 green (A: og tags + discovery link, B: oEmbed JSON + iframe, C: 404 behaviour, D: foreign-origin 400)
+  - **type-check**: 0 errors; **lint**: 0 new warnings
 
 ### P9-T4: Map Pin + Resource Buttons Complete
 - [ ] **Status**: PENDING — PARTIAL: Share button already shipped (apps/web/src/components/panels/feed-panel.tsx:472-476, Share2 icon + copied state); remaining scope = suggest-resource flow only
@@ -1773,9 +1782,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.2 | 2026-06-10 | P9-T1 two sub-items COMPLETE: (a) Share to Feed on program cards + (b) application→originating form back-link. e2e programs-posts-bridge.spec.ts 2/2. REMAINING in P9-T1: fulfillment view. |
 | 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
 | 1.4.4 | 2026-06-10 | Accounting fix: Phase 9 dashboard row corrected 2→3 completed (T2 was missing from count; T5/T6/T2 all complete). Overall headline clarified: 114/114 shipped tasks (denominator = shipped only; Phase 9 pending tasks not yet included). |
+| 1.4.5 | 2026-06-10 | P9-T3 COMPLETE: per-post generateMetadata on /s/embed/[id] + metadataBase on root layout + /api/oembed endpoint + discovery link on both embed and post pages. e2e 4/4. Phase 9 dashboard: 3→4 completed. Pending list: T1-partial, T4, T7, T8, T9. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feat/p9-t2-per-type-pagination (2026-06-10)
+**Last Agent Session**: feature/embed-meta-oembed (2026-06-10)
 **Total Development Time**: 0 hours

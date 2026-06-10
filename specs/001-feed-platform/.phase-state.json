@@ -5,7 +5,7 @@
   "created": "2026-01-19T00:00:00.000Z",
   "lastUpdated": "2026-06-10T00:00:00.000Z",
   "currentPhase": 9,
-  "currentTask": "P9-T3",
+  "currentTask": "P9-T4",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
@@ -93,20 +93,20 @@
       "name": "Community Launch Readiness",
       "status": "IN_PROGRESS",
       "tasks": ["P9-T1", "P9-T2", "P9-T3", "P9-T4", "P9-T5", "P9-T6", "P9-T7", "P9-T8", "P9-T9"],
-      "completedTasks": ["P9-T5", "P9-T6", "P9-T2"],
+      "completedTasks": ["P9-T5", "P9-T6", "P9-T2", "P9-T3"],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #TBD 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening (PRs #65/#66); Share-to-Feed button on program cards + application→form back-link via formsTarget deep-link (PR #TBD 2026-06-10, e2e programs-posts-bridge.spec.ts 2/2); REMAINING in T1: fulfillment view. P9-T2=social feed post UI for all resource types; P9-T3=per-post generateMetadata + /api/oembed; P9-T4=map pin + resource buttons complete (Share button shipped); P9-T5=COMPLETE PR #63 (8ae6f63, 2026-06-09) community trust layer (content_reports, submit_content_report SECDEF, admin_resolve_report, e2e 4/4); P9-T6=COMPLETE PR #64 (a0bbaa0, 2026-06-09) full messages cycle with wheat-stalk reviews (conversation_status+=completed, submit_review extended, End→completed, WheatStalkRating); P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app→form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped); P9-T5=COMPLETE PR #63; P9-T6=COMPLETE PR #64; P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
     }
   },
   "metrics": {
     "totalTasks": 114,
     "completedTasks": 114,
     "progressPercentage": 100,
-    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 through P9-T9 minus T2/T5/T6)",
+    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, T4, T7, T8, T9)",
     "estimatedHoursRemaining": null,
     "sessionsCompleted": 15,
-    "metricsNote": "Denominator = 114 (shipped tasks only; Phase 9 pending tasks T1-partial/T3/T4/T7/T8/T9 not yet in denominator — added as each ships). 114/114 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2] (3 of 9). P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress (PRs #65/#66 + PR #72 2026-06-10); P9-T2 shipped PR #73 (cursor pagination 25/page, resource category badges, safety alerts strip, map deep-link, e2e 4/4). Updated 2026-06-10.",
+    "metricsNote": "Denominator = 114 (shipped tasks only; Phase 9 pending tasks T1-partial/T4/T7/T8/T9 not yet in denominator — added as each ships). 114/114 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3] (4 of 9). P9-T3 shipped feature/embed-meta-oembed (2026-06-10): generateMetadata /s/embed/[id], metadataBase root layout, /api/oembed, discovery links, e2e 4/4. Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {

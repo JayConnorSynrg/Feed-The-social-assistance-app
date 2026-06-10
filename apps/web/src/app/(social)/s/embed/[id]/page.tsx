@@ -7,13 +7,97 @@
  * Supports two post types:
  *   - resource_post / feed: opt-in widget (original behaviour)
  *   - petition: shows petition title, count, and "Sign on FEED" CTA
+ *
+ * generateMetadata: per-post og:title/description/image/url + oEmbed discovery link.
  */
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 
 interface Props {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const supabase = await createClient()
+  const appUrl = await getAppUrlFromHeaders()
+
+  const { data: post } = await supabase
+    .from('posts')
+    // Use explicit FK hint to avoid PGRST201 ambiguity (posts has 2 FK paths to profiles)
+    .select('content, post_type, petition_id, user:profiles!posts_user_id_fkey(full_name, username)')
+    .eq('id', id)
+    .eq('is_hidden', false)
+    .single()
+
+  if (!post) {
+    return { title: 'Post Not Found - FEED' }
+  }
+
+  const postType = (post.post_type as string | null) ?? 'feed'
+  const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
+  const user = post.user as { full_name: string | null; username: string | null } | null
+  const authorName = user?.full_name || 'Community Member'
+
+  // For petitions, prefer the petition title as the og title if available
+  let title = `${authorName} on FEED`
+  let rawDescription = post.content
+
+  if (postType === 'petition' && petitionId) {
+    const { data: petition } = await supabase
+      .from('petitions')
+      .select('title, summary')
+      .eq('id', petitionId)
+      .eq('status', 'approved')
+      .single()
+
+    if (petition?.title) {
+      title = `${petition.title} — FEED Community Petition`
+    }
+    if (petition?.summary) {
+      rawDescription = petition.summary
+    }
+  }
+
+  const description = rawDescription.length > 160
+    ? rawDescription.slice(0, 157) + '...'
+    : rawDescription
+
+  const canonicalUrl = `${appUrl}/s/embed/${id}`
+  const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(canonicalUrl)}`
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      siteName: 'FEED',
+      url: canonicalUrl,
+      images: [
+        {
+          url: `${appUrl}/api/og/post/${id}`,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [`${appUrl}/api/og/post/${id}`],
+    },
+    alternates: {
+      types: {
+        'application/json+oembed': oEmbedUrl,
+      },
+    },
+  }
 }
 
 export default async function EmbedWidgetPage({ params }: Props) {
