@@ -154,6 +154,13 @@ async function loginAsTestUser(page: Page): Promise<void> {
 }
 
 async function unlockVault(page: Page): Promise<void> {
+  // First: click the "Unlock Vault" button (the locked-card CTA) if visible — this
+  // opens the VaultUnlockModal. Mirrors documents-view.spec.ts::unlockVaultViaButton.
+  const lockBtn = page.getByRole('button', { name: 'Unlock Vault', exact: true })
+  if (await lockBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await lockBtn.click()
+  }
+  // Then: fill and submit the modal if the password input is present
   const passwordInput = page.locator('[data-testid="vault-unlock-password-input"]')
   const isVisible = await passwordInput.isVisible({ timeout: 8_000 }).catch(() => false)
   if (isVisible) {
