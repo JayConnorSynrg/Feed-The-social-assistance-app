@@ -15,13 +15,16 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useVault } from '@/contexts/vault-context'
-import { withMetric } from '@/lib/logger'
+import { withMetric, logger } from '@/lib/logger'
 import {
   encryptFormSubmission,
   decryptFormSubmission,
   type EncryptedFormSubmission,
 } from '@/lib/field-encryption'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
+import { encryptFile } from '@/lib/document-encryption'
+import { getTemplateById } from '@/lib/form-templates'
+import { PDFDocument, rgb, StandardFonts } from '@cantoo/pdf-lib'
 
 // ============================================
 // Types
@@ -57,6 +60,10 @@ interface UseVaultFormSubmissionState {
   loading: boolean
   saving: boolean
   error: string | null
+  /** Non-null when archival to Documents succeeded after submission */
+  archivedDocumentId: string | null
+  /** Non-null when archival failed non-fatally (submission still succeeded) */
+  archiveWarning: string | null
 }
 
 interface UseVaultFormSubmissionReturn extends UseVaultFormSubmissionState {
@@ -223,6 +230,8 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
     loading: false,
     saving: false,
     error: null,
+    archivedDocumentId: null,
+    archiveWarning: null,
   })
 
   const supabase = createClient()
@@ -291,6 +300,8 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           loading: false,
           saving: false,
           error: null,
+          archivedDocumentId: null,
+          archiveWarning: null,
         })
 
         return data.id
@@ -373,12 +384,149 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
   )
 
   /**
+   * Archive a submitted form as an encrypted PDF in the user's Documents store.
+   *
+   * Generates a human-readable summary PDF (title + label:value lines from the
+   * in-memory plaintext answers), encrypts it with the vault DEK, uploads to
+   * the user-documents storage bucket, and inserts a user_documents row linked
+   * via submission_id.
+   *
+   * SECURITY: Uses IN-MEMORY plaintext formData only — never decrypts from DB.
+   *
+   * This is always called fire-and-forget. Archival failure MUST NOT surface as
+   * a submission error; only an archiveWarning state key is set.
+   */
+  const archiveSubmission = useCallback(
+    async (
+      submissionId: string,
+      userId: string,
+      templateId: string,
+      formData: Record<string, unknown>
+    ): Promise<string> => {
+      const template = getTemplateById(templateId)
+      const templateName = template?.name ?? templateId
+      const dateStr = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+      const docName = `${templateName} — submitted ${dateStr}`
+
+      // Build PDF summary
+      const pdfDoc = await PDFDocument.create()
+      const page = pdfDoc.addPage([595, 842]) // A4
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+      const margin = 50
+      const pageWidth = 595
+      const lineHeight = 16
+      let y = 792 // near top
+
+      // Title
+      page.drawText(docName, {
+        x: margin,
+        y,
+        size: 14,
+        font: boldFont,
+        color: rgb(0.1, 0.1, 0.1),
+      })
+      y -= lineHeight * 2
+
+      // Section: form fields
+      const entries = Object.entries(formData).filter(
+        ([, v]) => v !== null && v !== undefined && v !== ''
+      )
+
+      for (const [key, value] of entries) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+        const line = `${label}: ${displayValue}`
+
+        // Wrap long lines at ~70 chars
+        const chunks: string[] = []
+        let remaining = line
+        while (remaining.length > 90) {
+          chunks.push(remaining.slice(0, 90))
+          remaining = '    ' + remaining.slice(90)
+        }
+        chunks.push(remaining)
+
+        for (const chunk of chunks) {
+          if (y < margin + lineHeight) {
+            // Add a new page if we run out of space
+            const newPage = pdfDoc.addPage([pageWidth, 842])
+            y = 792
+            // Move drawing context — we capture page reference per iteration
+            newPage.drawText(chunk, { x: margin, y, size: 10, font, color: rgb(0.1, 0.1, 0.1) })
+          } else {
+            page.drawText(chunk, { x: margin, y, size: 10, font, color: rgb(0.1, 0.1, 0.1) })
+          }
+          y -= lineHeight
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save()
+      const pdfFile = new File([pdfBytes.buffer as ArrayBuffer], `${docName}.pdf`, { type: 'application/pdf' })
+
+      // Encrypt and upload
+      const encryptedResult = await encryptFile(pdfFile)
+
+      const uniqueId = crypto.randomUUID()
+      const storagePath = `${userId}/${uniqueId}.encrypted`
+
+      const supabaseClient = createClient()
+
+      const { error: uploadError } = await supabaseClient.storage
+        .from('user-documents')
+        .upload(storagePath, encryptedResult.encryptedBlob, {
+          contentType: 'application/octet-stream',
+          upsert: false,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: docRow, error: dbError } = await supabaseClient
+        .from('user_documents')
+        .insert({
+          user_id: userId,
+          name: docName,
+          document_type: 'application/pdf',
+          category: 'forms',
+          file_path: storagePath,
+          file_size: encryptedResult.originalSize,
+          mime_type: 'application/pdf',
+          encryption_iv: encryptedResult.iv,
+          encrypted_original_name: encryptedResult.encryptedName,
+          encrypted_name_iv: encryptedResult.encryptedNameIV,
+          original_size: encryptedResult.originalSize,
+          is_encrypted: true,
+          submission_id: submissionId,
+        })
+        .select('id')
+        .single()
+
+      if (dbError) {
+        // Cleanup orphaned storage object
+        await supabaseClient.storage.from('user-documents').remove([storagePath]).catch(() => {})
+        throw dbError
+      }
+
+      return docRow.id
+    // archiveSubmission creates its own supabase client — no closure deps
+    }, [])
+
+  /**
    * Submit the form (changes status from draft to submitted)
    *
    * If createDraft raced against the vault unlock and never resolved, state.submission
    * may be null at submit time. In that case we INSERT a new row directly at submitted
    * status rather than failing — the templateId is always available from the hook caller.
    * The templateId must be passed via the optional third parameter in that fallback path.
+   *
+   * After successful submission, fires a non-blocking archival that saves a summary PDF
+   * to the user's Documents drive (sets archivedDocumentId on success, archiveWarning on
+   * failure — submission result is unaffected either way).
    */
   const submitForm = useCallback(
     async (formData: Record<string, unknown>, signatureData?: string, fallbackTemplateId?: string): Promise<boolean> => {
@@ -387,13 +535,17 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
         return false
       }
 
-      setState((prev) => ({ ...prev, saving: true, error: null }))
+      setState((prev) => ({ ...prev, saving: true, error: null, archiveWarning: null, archivedDocumentId: null }))
 
       try {
         // Encrypt form data and signature
         const encryptedData = await encryptFormSubmission(formData, signatureData)
 
         const now = new Date().toISOString()
+
+        let resolvedSubmissionId: string
+        let resolvedUserId: string
+        let resolvedTemplateId: string
 
         if (state.submission) {
           // Happy path: draft exists — UPDATE it to submitted.
@@ -423,6 +575,10 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           )
 
           if (updateError) throw updateError
+
+          resolvedSubmissionId = state.submission.id
+          resolvedUserId = state.submission.userId
+          resolvedTemplateId = state.submission.templateId
 
           setState((prev) => ({
             ...prev,
@@ -477,6 +633,10 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
 
           if (insertError) throw insertError
 
+          resolvedSubmissionId = data.id
+          resolvedUserId = data.user_id
+          resolvedTemplateId = data.template_id
+
           setState((prev) => ({
             ...prev,
             submission: {
@@ -497,6 +657,18 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           }))
         }
 
+        // Non-blocking archival — failure must not affect the submission result
+        archiveSubmission(resolvedSubmissionId, resolvedUserId, resolvedTemplateId, formData)
+          .then((docId) => {
+            logger.info('forms.archive.complete', { submissionId: resolvedSubmissionId, documentId: docId })
+            setState((prev) => ({ ...prev, archivedDocumentId: docId }))
+          })
+          .catch((archErr) => {
+            const msg = archErr instanceof Error ? archErr.message : 'Could not save to Documents'
+            logger.warn('forms.archive.warning', { submissionId: resolvedSubmissionId, error: msg })
+            setState((prev) => ({ ...prev, archiveWarning: msg }))
+          })
+
         return true
       } catch (error) {
         setState((prev) => ({
@@ -507,7 +679,7 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
         return false
       }
     },
-    [supabase, state.submission, isUnlocked]
+    [supabase, state.submission, isUnlocked, archiveSubmission]
   )
 
   /**
@@ -584,6 +756,8 @@ export function useVaultFormSubmission(): UseVaultFormSubmissionReturn {
           loading: false,
           saving: false,
           error: null,
+          archivedDocumentId: null,
+          archiveWarning: null,
         })
 
         return true
