@@ -798,6 +798,8 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     const ok = await updateDocument(renameDoc.id, { name: newName })
     setRenameLoading(false)
     if (ok) {
+      // Optimistically update panel's own document list so the card re-renders immediately
+      setDocuments((prev) => prev.map((d) => d.id === renameDoc.id ? { ...d, name: newName } : d))
       setRenameDoc(null)
     } else {
       setRenameError('Failed to rename. Please try again.')
@@ -806,7 +808,10 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
 
   const handleMove = useCallback(async (doc: Document, newCategory: DocumentCategory) => {
     const ok = await updateDocument(doc.id, { category: newCategory })
-    if (!ok) {
+    if (ok) {
+      // Optimistically update panel's own document list so category filter updates immediately
+      setDocuments((prev) => prev.map((d) => d.id === doc.id ? { ...d, category: newCategory } : d))
+    } else {
       logger.warn('documents.move.error', { id: doc.id, category: newCategory })
     }
   }, [updateDocument])

@@ -102,42 +102,43 @@ test.beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.afterAll(async () => {
-  try {
-    // Delete user_documents rows via admin (RLS bypassed)
-    for (const docId of createdDocumentIds) {
+  // Delete user_documents rows via admin (RLS bypassed)
+  for (const docId of createdDocumentIds) {
+    try {
       const { data: doc } = await admin
         .from('user_documents')
         .select('file_path')
         .eq('id', docId)
         .single()
-
       if (doc?.file_path) {
-        await admin.storage.from('user-documents').remove([doc.file_path]).catch(() => {})
+        await admin.storage.from('user-documents').remove([doc.file_path])
       }
-      await admin.from('user_documents').delete().eq('id', docId).catch(() => {})
-    }
+      await admin.from('user_documents').delete().eq('id', docId)
+    } catch { /* non-fatal cleanup */ }
+  }
 
-    // Clean up any storage paths we tracked directly
-    for (const p of createdStoragePaths) {
-      await admin.storage.from('user-documents').remove([p]).catch(() => {})
-    }
+  // Clean up any storage paths tracked directly
+  for (const p of createdStoragePaths) {
+    try {
+      await admin.storage.from('user-documents').remove([p])
+    } catch { /* non-fatal cleanup */ }
+  }
 
-    // Delete form submission
-    if (createdSubmissionId) {
-      await admin
-        .from('form_submissions')
-        .delete()
-        .eq('id', createdSubmissionId)
-        .catch(() => {})
-    }
+  // Delete form submission
+  if (createdSubmissionId) {
+    try {
+      await admin.from('form_submissions').delete().eq('id', createdSubmissionId)
+    } catch { /* non-fatal cleanup */ }
+  }
 
-    // Delete the test user (cascades auth.users → profiles → user_documents)
-    if (provision?.userId) {
+  // Delete the test user (cascades auth.users → profiles → user_documents)
+  if (provision?.userId) {
+    try {
       await deleteProvisionedUser(admin, provision.userId)
       console.log(`[lifecycle] Deleted test user ${provision.userId}`)
+    } catch (err) {
+      console.error('[lifecycle] afterAll user-delete error (non-fatal):', err)
     }
-  } catch (err) {
-    console.error('[lifecycle] afterAll cleanup error (non-fatal):', err)
   }
 })
 
@@ -196,7 +197,17 @@ test('(a) Fill from Profile fills AcroForm fields with vault profile values', as
 
   // Upload the AcroForm fixture PDF
   const uploadInput = page.locator('input[type="file"]').first()
+  await expect(uploadInput).toBeAttached({ timeout: 5_000 })
   await uploadInput.setInputFiles(FIXTURE_PDF)
+
+  // EncryptedUpload shows "Encrypt and Upload" after file selection — click it
+  const uploadBtn = page.getByRole('button', { name: /encrypt.*upload/i })
+  await expect(uploadBtn).toBeVisible({ timeout: 5_000 })
+  await uploadBtn.click()
+
+  // Wait for upload success message
+  await expect(page.getByText(/upload.*complet|success/i)).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(1_000)
 
   // Wait for the PDF to appear in the list (encrypted upload may take a moment)
   await expect(
@@ -211,8 +222,11 @@ test('(a) Fill from Profile fills AcroForm fields with vault profile values', as
     .catch(() => null)
   if (docIdAttr) createdDocumentIds.push(docIdAttr)
 
-  // Open the first document in the annotator (click "View/Edit")
-  await page.locator('[data-testid="document-card"]').first().locator('button', { hasText: /view|edit|open/i }).first().click()
+  // Open the PDF annotator via the Edit button (pencil icon, data-testid="doc-edit-btn").
+  // "Fill from Profile" is only available in edit/annotator mode, not the read-only viewer.
+  const docCard = page.locator('[data-testid="document-card"]').first()
+  await docCard.hover()
+  await docCard.locator('[data-testid="doc-edit-btn"]').click()
 
   // Vault unlock may appear again after navigation
   await unlockVault(page)
@@ -251,7 +265,17 @@ test('(b) Rename renames the document in the DOM list; Move changes its category
 
   // Upload a fresh test document to rename/move
   const uploadInput = page.locator('input[type="file"]').first()
+  await expect(uploadInput).toBeAttached({ timeout: 5_000 })
   await uploadInput.setInputFiles(FIXTURE_PDF)
+
+  // EncryptedUpload shows "Encrypt and Upload" after file selection — click it
+  const uploadBtn2 = page.getByRole('button', { name: /encrypt.*upload/i })
+  await expect(uploadBtn2).toBeVisible({ timeout: 5_000 })
+  await uploadBtn2.click()
+
+  // Wait for upload success message
+  await expect(page.getByText(/upload.*complet|success/i)).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(1_000)
 
   // Wait for document card to appear
   const firstCard = page.locator('[data-testid="document-card"]').first()
@@ -278,12 +302,20 @@ test('(b) Rename renames the document in the DOM list; Move changes its category
   await expect(renameInput).toBeVisible({ timeout: 5_000 })
 
   const newName = 'Renamed-Lifecycle-Doc.pdf'
-  await renameInput.clear()
-  await renameInput.fill(newName)
+  // Use Playwright selectText() + Delete to clear the controlled input, then type
+  await renameInput.focus()
+  await renameInput.selectText()
+  await page.keyboard.press('Delete')
+  await page.keyboard.type(newName, { delay: 20 })
+  // Verify the input has the new value before submitting
+  await expect(renameInput).toHaveValue(newName, { timeout: 3_000 })
 
-  // Confirm
-  const confirmBtn = page.locator('[data-testid="rename-submit-btn"]')
-  await confirmBtn.click()
+  // Confirm by pressing Enter (the onKeyDown handler calls handleRenameSubmit)
+  await renameInput.press('Enter')
+
+  // Wait for the dialog to close and the optimistic update to render
+  await expect(page.locator('[data-testid="rename-dialog"]')).not.toBeVisible({ timeout: 10_000 })
+  await page.waitForTimeout(500)
 
   // Verify the new name appears in the document list (DOM assertion — not DB only)
   await expect(page.locator('[data-testid="document-card"]', { hasText: newName })).toBeVisible({ timeout: 10_000 })
@@ -344,63 +376,102 @@ test('(c) Form submission creates an archived user_documents row with submission
   await expect(startBtn).toBeVisible({ timeout: 10_000 })
   await startBtn.click()
 
-  // Wait for the wizard/form to appear
-  await expect(page.locator('[data-testid="form-wizard"], form, [data-testid="vault-form"]').first()).toBeVisible({ timeout: 10_000 })
+  // Wait for the wizard/form to appear (form-wizard renders data-testid="form-wizard-container")
+  await expect(page.locator('[data-testid="form-wizard-container"]').first()).toBeVisible({ timeout: 15_000 })
 
   // Unlock vault again if re-prompted inside the wizard
   await unlockVault(page)
 
-  // Navigate through wizard pages: step through each "Next" until submit
-  // We fill any required fields that aren't autofilled (SSN, DOB, income)
-  let nextBtnVisible = true
-  let maxSteps = 10
-  while (nextBtnVisible && maxSteps-- > 0) {
+  // Navigate through wizard pages: step through each "Next"/"Review" until "Submit Application"
+  // We fill any required fields that aren't autofilled (SSN, DOB, income, checkboxes, signature)
+  let submitted = false
+  let maxSteps = 15
+  while (!submitted && maxSteps-- > 0) {
+    await page.waitForTimeout(300)
+
     // Fill SSN if present (excluded from autofill)
     const ssnField = page.locator('input[name*="ssn"], input[placeholder*="SSN"], input[id*="ssn"]').first()
-    if (await ssnField.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await ssnField.isVisible({ timeout: 300 }).catch(() => false)) {
       await ssnField.fill('123-45-6789')
     }
 
     // Fill DOB if present
     const dobField = page.locator('input[name*="dob"], input[name*="date_of_birth"], input[type="date"]').first()
-    if (await dobField.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await dobField.isVisible({ timeout: 300 }).catch(() => false)) {
       await dobField.fill('1990-01-15')
     }
 
     // Fill income if present
     const incomeField = page.locator('input[name*="income"], input[name*="annual"]').first()
-    if (await incomeField.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await incomeField.isVisible({ timeout: 300 }).catch(() => false)) {
       await incomeField.fill('25000')
     }
 
     // Fill household_size if present
     const householdField = page.locator('input[name*="household"], input[name*="household_size"]').first()
-    if (await householdField.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await householdField.isVisible({ timeout: 300 }).catch(() => false)) {
       await householdField.fill('2')
     }
 
-    // Click Next if present, else Submit
-    const nextBtn = page.locator('button', { hasText: /next|continue/i }).first()
-    const submitBtn = page.locator('button', { hasText: /submit/i }).first()
+    // Fill signature if present (certification step — type full name)
+    const signatureField = page.locator('input[name*="signature"], input[placeholder*="full legal name"]').first()
+    if (await signatureField.isVisible({ timeout: 300 }).catch(() => false)) {
+      const currentVal = await signatureField.inputValue()
+      if (!currentVal) {
+        await signatureField.fill(TEST_USER.fullName)
+      }
+    }
 
-    if (await submitBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+    // Check any unchecked required checkboxes (certification statements)
+    const uncheckedBoxes = page.locator('[role="checkbox"][data-state="unchecked"]')
+    const uncheckedCount = await uncheckedBoxes.count()
+    for (let i = 0; i < uncheckedCount; i++) {
+      const box = uncheckedBoxes.nth(i)
+      if (await box.isVisible({ timeout: 200 }).catch(() => false)) {
+        await box.click()
+        await page.waitForTimeout(100)
+      }
+    }
+
+    // Check selects that still show placeholder (required dropdowns not autofilled)
+    const emptySelects = page.locator('[data-testid^="select-"], [role="combobox"]').filter({ hasText: 'Select...' })
+    const emptySelectCount = await emptySelects.count()
+    for (let i = 0; i < emptySelectCount; i++) {
+      const sel = emptySelects.nth(i)
+      if (await sel.isVisible({ timeout: 200 }).catch(() => false)) {
+        await sel.click()
+        // Pick the first option
+        const firstOpt = page.locator('[role="option"]').first()
+        if (await firstOpt.isVisible({ timeout: 1_000 }).catch(() => false)) {
+          await firstOpt.click()
+        }
+        await page.waitForTimeout(200)
+      }
+    }
+
+    // Check if Submit Application button is visible (review step)
+    const submitBtn = page.locator('[data-testid="form-submit-button"]')
+    if (await submitBtn.isVisible({ timeout: 300 }).catch(() => false)) {
       await submitBtn.click()
+      submitted = true
       break
     }
 
-    if (await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+    // Click Next or Review button (both advance the wizard)
+    const nextBtn = page.locator('[data-testid="form-next-button"]')
+    if (await nextBtn.isVisible({ timeout: 300 }).catch(() => false)) {
       await nextBtn.click()
-      await page.waitForTimeout(500)
     } else {
-      nextBtnVisible = false
+      break
     }
   }
 
-  // Wait for success state
-  const successEl = page.locator('[data-testid="form-success"], [data-testid="submission-success"]', {
-    hasText: /submitted|success/i,
-  })
-  await expect(successEl).toBeVisible({ timeout: 30_000 })
+  expect(submitted, 'wizard should reach submit step within 15 iterations').toBe(true)
+  console.log('[lifecycle] (c) Form submitted successfully')
+
+  // After submission, handleWizardComplete returns to list view with "Submitted" tab active.
+  // Wait for the forms panel to return to list mode (wizard container should disappear).
+  await expect(page.locator('[data-testid="forms-panel"]')).toBeVisible({ timeout: 30_000 })
   console.log('[lifecycle] (c) Form submitted successfully')
 
   // Poll DB for the form_submissions row
@@ -448,15 +519,22 @@ test('(c) Form submission creates an archived user_documents row with submission
   createdDocumentIds.push(archivedDoc!.id)
   console.log(`[lifecycle] (c) Archived doc: "${archivedDoc!.name}" (id=${archivedDoc!.id})`)
 
-  // Navigate to Documents panel → Forms tab and verify the document appears
+  // Navigate to Documents panel → "My Documents" subtab → "Submitted Forms" category
+  // The archived user_documents row has category='forms', shown in the DocumentsPanel's
+  // "Submitted Forms" folder (not the FormsPanel which shows form templates).
   await navigateToDocumentsTab(page)
 
-  // Switch to the Forms subtab
-  const formsTab2 = page.locator('#docs-tab-forms, [data-testid="docs-tab-forms"]').first()
-  await formsTab2.click()
+  // Ensure we are on the "My Documents" subtab
+  const myDocsTab2 = page.locator('[data-testid="docs-tab-documents"]').first()
+  await myDocsTab2.click()
 
-  // The archived document should appear in the Forms tab list
+  // Click the "Submitted Forms" category folder in the sidebar
+  const submittedFormsBtn = page.getByRole('button', { name: /submitted forms/i }).first()
+  await expect(submittedFormsBtn).toBeVisible({ timeout: 10_000 })
+  await submittedFormsBtn.click()
+
+  // The archived document should appear in the Submitted Forms category list
   const archivedCard = page.locator('[data-testid="document-card"]', { hasText: /submitted/i })
   await expect(archivedCard).toBeVisible({ timeout: 20_000 })
-  console.log('[lifecycle] (c) Archived document visible in Forms tab')
+  console.log('[lifecycle] (c) Archived document visible in Submitted Forms folder')
 })
