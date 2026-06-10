@@ -155,16 +155,6 @@ function LoadingSkeleton() {
 export default function HomePage() {
   const { user, profile, isAuthenticated, loading, signOut } = useAuth()
 
-  // TODO: Add onboarding_completed field to profiles table if needed
-  // const needsOnboarding = isAuthenticated && profile && !profile.onboarding_completed
-
-  // Redirect to onboarding if needed (but only after loading)
-  // React.useEffect(() => {
-  //   if (!loading && needsOnboarding) {
-  //     router.push('/onboarding')
-  //   }
-  // }, [loading, needsOnboarding, router])
-
   if (loading) {
     return (
       <FeedShell
