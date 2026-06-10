@@ -1,6 +1,6 @@
 ---
 feature: "FEED Platform"
-version: "1.4.3"
+version: "1.4.4"
 created: "2026-01-19"
 last_updated: "2026-06-10"
 status: "IN_PROGRESS"
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 2 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 3 | IN_PROGRESS |
 
-**Overall Progress**: 114 / 114 tasks (100%)
+**Overall Progress**: 114 / 114 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T3, T4, T7, T8, T9 are pending and not yet in denominator)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. Phase 9 remaining tasks (T1 partial, T3-T4, T7-T9) tracked but not yet in headline denominator.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. Phase 9 remaining tasks (T1 partial, T3, T4, T7, T8, T9) pending — denominator grows as each ships.
 
 ---
 
@@ -1772,6 +1772,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.1 | 2026-06-10 | P7-T11 COMPLETE (harness 5/5 + manual prod confirmation); Phase 7 ALL exit criteria checked; Phase 8 smoke-test criterion checked; P9-T3 reframed (per-post generateMetadata + /api/oembed); P9-T4 Share button annotated as shipped; mobile/store deferred boxes annotated; 113/114 overall; current_task → P9-T1. |
 | 1.4.2 | 2026-06-10 | P9-T1 two sub-items COMPLETE: (a) Share to Feed on program cards + (b) application→originating form back-link. e2e programs-posts-bridge.spec.ts 2/2. REMAINING in P9-T1: fulfillment view. |
 | 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
+| 1.4.4 | 2026-06-10 | Accounting fix: Phase 9 dashboard row corrected 2→3 completed (T2 was missing from count; T5/T6/T2 all complete). Overall headline clarified: 114/114 shipped tasks (denominator = shipped only; Phase 9 pending tasks not yet included). |
 
 ---
 
