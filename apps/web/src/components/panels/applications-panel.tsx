@@ -52,6 +52,8 @@ interface RequiredAction {
 interface Application {
   id: string
   programName: string
+  /** form_type from form_templates (e.g. 'snap', 'medicaid') — used to deep-link to form wizard */
+  formType: string | null
   programType: 'food' | 'healthcare' | 'housing' | 'utilities' | 'cash'
   status: ApplicationStatus
   submissionDate: Date
@@ -148,6 +150,7 @@ function adaptApplication(hookApp: HookApplication): Application {
   return {
     id: hookApp.id,
     programName: hookApp.template_name,
+    formType: hookApp.form_type ?? null,
     programType: deriveProgramType(hookApp.template_name),
     status: mappedStatus,
     submissionDate,
@@ -380,6 +383,7 @@ interface ApplicationCardProps {
   onViewDetails: (id: string) => void
   onUploadDocument: (applicationId: string, actionId: string) => void
   onContactSupport: (id: string) => void
+  onOpenForm: (application: Application) => void
   isExpanded: boolean
   onToggleExpand: () => void
 }
@@ -389,6 +393,7 @@ function ApplicationCard({
   onViewDetails,
   onUploadDocument,
   onContactSupport,
+  onOpenForm,
   isExpanded,
   onToggleExpand,
 }: ApplicationCardProps) {
@@ -410,9 +415,23 @@ function ApplicationCard({
           {/* Program Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-1">
-              <h3 className="font-medium text-sm text-stone-900 truncate">
-                {application.programName}
-              </h3>
+              {application.formType ? (
+                <button
+                  data-testid={`app-form-link-${application.id}`}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenForm(application)
+                  }}
+                  className="font-medium text-sm text-[#4a5d23] underline underline-offset-2 decoration-[#4a5d23]/40 hover:decoration-[#4a5d23] truncate text-left transition-colors"
+                >
+                  {application.programName}
+                </button>
+              ) : (
+                <h3 className="font-medium text-sm text-stone-900 truncate">
+                  {application.programName}
+                </h3>
+              )}
               <StatusBadge status={application.status} />
             </div>
 
@@ -616,13 +635,34 @@ function EmptyState({ onBrowsePrograms }: { onBrowsePrograms: () => void }) {
 // ============================================
 export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   const { applications: hookApps, isLoading, error, deleteApplication } = useApplications()
-  const { setActivePanel } = usePanelContext()
+  const { setActivePanel, setPanelParams } = usePanelContext()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const handleBrowsePrograms = useCallback(() => {
     setActivePanel('programs')
   }, [setActivePanel])
+
+  // Deep-link from an application card back to its originating form wizard.
+  // Sets documents panel subtab='forms' + formsTarget so forms-panel opens the
+  // correct template. If no formType is available, falls back to forms list view.
+  const handleOpenForm = useCallback((application: Application) => {
+    setPanelParams((prev) => ({
+      ...prev,
+      subtab: 'forms',
+      ...(application.formType
+        ? {
+            formsTarget: {
+              programId: undefined,
+              programName: application.programName,
+              formType: application.formType,
+              applicationUrl: null,
+            },
+          }
+        : {}),
+    }))
+    setActivePanel('documents')
+  }, [setActivePanel, setPanelParams])
 
   // Adapt hook data to panel types
   const applications = useMemo(() => hookApps.map(adaptApplication), [hookApps])
@@ -733,6 +773,7 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
                 onViewDetails={handleViewDetails}
                 onUploadDocument={handleUploadDocument}
                 onContactSupport={handleContactSupport}
+                onOpenForm={handleOpenForm}
                 isExpanded={expandedId === application.id}
                 onToggleExpand={() => handleToggleExpand(application.id)}
               />

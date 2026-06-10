@@ -96,7 +96,7 @@
       "completedTasks": ["P9-T5", "P9-T6"],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=programs+resource allocation pipeline (PRs #65/#66 in progress: benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; REMAINING: programs↔community-posts bridge, applications→program back-link, fulfillment view); P9-T2=social feed post UI for all resource types; P9-T3=copy-paste social embed templates; P9-T4=map pin + resource buttons complete; P9-T5=COMPLETE PR #63 (8ae6f63, 2026-06-09) community trust layer (content_reports table+report_reason enum, submit_content_report SECDEF RPC 3-distinct-reporter auto-hide, admin_resolve_report dismiss/uphold, report dialog in feed-panel, admin Reports queue, e2e 4/4); P9-T6=COMPLETE PR #64 (a0bbaa0, 2026-06-09) full messages cycle with wheat-stalk reviews (conversation_status+=completed, submit_review extended for conversation_id OR opt_in_id, End→completed volunteer flow, dual review prompts, WheatStalkRating green-fill SVG, e2e green); P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #TBD 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening (PRs #65/#66); Share-to-Feed button on program cards + application→form back-link via formsTarget deep-link (PR #TBD 2026-06-10, e2e programs-posts-bridge.spec.ts 2/2); REMAINING in T1: fulfillment view. P9-T2=social feed post UI for all resource types; P9-T3=per-post generateMetadata + /api/oembed; P9-T4=map pin + resource buttons complete (Share button shipped); P9-T5=COMPLETE PR #63 (8ae6f63, 2026-06-09) community trust layer (content_reports, submit_content_report SECDEF, admin_resolve_report, e2e 4/4); P9-T6=COMPLETE PR #64 (a0bbaa0, 2026-06-09) full messages cycle with wheat-stalk reviews (conversation_status+=completed, submit_review extended, End→completed, WheatStalkRating); P9-T7=document drive + form autofill lifecycle; P9-T8=web form retrieval; P9-T9=grandma-grade security + usability validation."
     }
   },
   "metrics": {
@@ -106,7 +106,7 @@
     "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 through P9-T9 minus T5/T6)",
     "estimatedHoursRemaining": null,
     "sessionsCompleted": 14,
-    "metricsNote": "Denominator = 114 (Phases 0-9 full scope). 113/114 = 99.1%. P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress PRs #65/#66. Updated 2026-06-10 docsync (docs/p7-t11-complete-sync).",
+    "metricsNote": "Denominator = 114 (Phases 0-9 full scope). 113/114 = 99.1%. P7-T11 COMPLETE 2026-06-10 (harness 5/5 + manual prod confirmation on sourcetofeed.com). P9-T5 shipped PR #63 (8ae6f63); P9-T6 shipped PR #64 (a0bbaa0); P9-T1 in progress (PRs #65/#66 + PR #TBD 2026-06-10: Share-to-Feed + app back-link, e2e 2/2). Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {
@@ -209,6 +209,14 @@
         "status": "complete",
         "phase": "Phase 8: Social Resource-Matching + Pre-Launch Security Hardening",
         "notes": "Retroactive docs-sync session (chore/docsync-phase8). PRs #47-57 were shipped to develop but not reflected in tracking docs. Session records them as complete and folds Phase 8 into the headline metrics. No prod/DB/app changes made in this session — docs only."
+      },
+      {
+        "id": "session-012",
+        "startedAt": "2026-06-10T00:00:00.000Z",
+        "tasksCompleted": ["P9-T1-share-to-feed", "P9-T1-app-backlink"],
+        "status": "complete",
+        "phase": "Phase 9: Community Launch Readiness",
+        "notes": "P9-T1 two sub-items shipped: (a) Share to Feed button on all ProgramTile cards — ShareToFeedDialog with prefilled editable content, posts insert with resource_id, navigates to feed on success; (b) application→originating form back-link — programName on application cards is a tappable link that deep-links to documents/forms subtab via formsTarget panelParam; use-applications extended to fetch form_type from form_templates join. Files: programs-panel.tsx, applications-panel.tsx, use-applications.ts, e2e/programs-posts-bridge.spec.ts (2/2 green). type-check 0 errors, lint 0 new warnings."
       }
     ]
   }

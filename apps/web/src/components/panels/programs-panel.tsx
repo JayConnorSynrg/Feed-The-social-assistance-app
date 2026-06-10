@@ -19,10 +19,14 @@ import {
   FileDown,
   Bookmark,
   BookmarkX,
+  Share2,
+  X,
 } from 'lucide-react'
 import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
 import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
+import { useAuth } from '@/hooks/use-auth'
+import { createClient } from '@/lib/supabase/client'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
 import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
 import { logger } from '@/lib/logger'
@@ -36,6 +40,127 @@ function CategoryBadge({ category }: { category: string }) {
   )
 }
 
+// ============================================================
+// SHARE TO FEED DIALOG
+// ============================================================
+
+interface ShareToFeedDialogProps {
+  resource: Resource
+  onClose: () => void
+  onShared: () => void
+}
+
+function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDialogProps) {
+  const { user } = useAuth()
+  const [content, setContent] = useState(
+    `Check out ${resource.name}${resource.description ? ` — ${resource.description.slice(0, 120)}${resource.description.length > 120 ? '…' : ''}` : ''}`
+  )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  const handleShare = async () => {
+    if (!user || !content.trim()) return
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          content: content.trim(),
+          resource_id: resource.id,
+        })
+      if (error) throw error
+      logger.info('programs.share.success', { programId: resource.id })
+      onShared()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to share. Please try again.'
+      setErrorMsg(msg)
+      logger.error('programs.share.error', { programId: resource.id, error: msg })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    /* Overlay — stop propagation so clicks inside don't toggle the parent tile */
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share to Feed"
+      data-testid="share-to-feed-dialog"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="w-full max-w-md bg-[#faf9f6] rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+        {/* Dialog header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-stone-100">
+          <h2 className="font-semibold text-stone-900 text-base">Share to Feed</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Resource chip */}
+        <div className="px-4 pt-3">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-50 border border-lime-200 text-xs font-medium text-lime-700">
+            <FileText className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate max-w-[220px]">{resource.name}</span>
+          </div>
+        </div>
+
+        {/* Editable post content */}
+        <div className="px-4 pt-3 pb-4">
+          <textarea
+            data-testid="share-content-input"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={4}
+            placeholder="What do you want to say about this program?"
+            className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
+          />
+          {errorMsg && (
+            <p role="alert" className="mt-2 text-xs text-red-600">{errorMsg}</p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 px-4 pb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2 rounded-xl border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            data-testid="share-to-feed-submit"
+            type="button"
+            onClick={handleShare}
+            disabled={isSubmitting || !content.trim()}
+            className="flex-1 py-2 rounded-xl bg-[#4a5d23] text-sm font-medium text-white hover:bg-[#3d4d1c] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          >
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Share2 className="w-4 h-4" />
+            )}
+            Share
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface ProgramTileProps {
   resource: Resource
   isExpanded: boolean
@@ -43,9 +168,10 @@ interface ProgramTileProps {
   onSave: (resource: Resource) => void
   isSaved: boolean
   onStartApplication: (resource: Resource) => void
+  onShare: (resource: Resource) => void
 }
 
-function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartApplication }: ProgramTileProps) {
+function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartApplication, onShare }: ProgramTileProps) {
   const locationParts = [resource.city, resource.state].filter(Boolean)
   const hasForm = hasApplicationForm(resource.category as string)
 
@@ -221,6 +347,19 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
                   Download Form
                 </a>
               )}
+
+              {/* Share to Feed — lets users post this program to the community feed */}
+              <button
+                data-testid={`share-to-feed-btn-${resource.id}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onShare(resource)
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-200 text-stone-700 bg-white hover:bg-stone-50 transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Share to Feed
+              </button>
             </div>
           </div>
         </div>
@@ -366,6 +505,8 @@ export function ProgramsPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Resource being shared — drives the ShareToFeedDialog open/closed state */
+  const [sharingResource, setSharingResource] = useState<Resource | null>(null)
 
   useEffect(() => {
     logger.info('programs.panel.opened', {})
@@ -448,8 +589,31 @@ export function ProgramsPanel() {
     setActivePanel('forms')
   }, [setActivePanel, setPanelParams])
 
+  const handleShare = useCallback((resource: Resource) => {
+    setSharingResource(resource)
+  }, [])
+
+  const handleShareDialogClose = useCallback(() => {
+    setSharingResource(null)
+  }, [])
+
+  const handleShared = useCallback(() => {
+    setSharingResource(null)
+    // Navigate to feed so user sees the post they just shared
+    setActivePanel('feed')
+  }, [setActivePanel])
+
   return (
     <div className="h-full flex flex-col bg-[#faf9f6]">
+      {/* Share to Feed dialog — portal-style fixed overlay */}
+      {sharingResource && (
+        <ShareToFeedDialog
+          resource={sharingResource}
+          onClose={handleShareDialogClose}
+          onShared={handleShared}
+        />
+      )}
+
       <div className="flex-shrink-0 px-1 pt-1 pb-3 space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -604,6 +768,7 @@ export function ProgramsPanel() {
                     onSave={handleSave}
                     isSaved={isResourceSaved(resource.id)}
                     onStartApplication={handleStartApplication}
+                    onShare={handleShare}
                   />
                 ))}
               </div>
@@ -636,6 +801,7 @@ export function ProgramsPanel() {
                             onSave={handleSave}
                             isSaved={isResourceSaved(resource.id)}
                             onStartApplication={handleStartApplication}
+                            onShare={handleShare}
                           />
                         ))}
                       </div>
