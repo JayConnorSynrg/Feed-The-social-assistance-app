@@ -16,7 +16,31 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: merge-pr71-docsync-p7-t11
+next_action_id: merge-pr72-programs-posts-bridge
+
+```yaml
+id: merge-pr72-programs-posts-bridge
+status: complete
+type: merge
+description: "feat(programs): merge PR #72 (chore/docsync-phase8 — P9-T1 programs-posts bridge + application back-link) into develop. (a) Share to Feed button on all ProgramTile cards — ShareToFeedDialog with prefilled editable content, posts insert with resource_id, navigates to feed on success. (b) Application → originating form back-link — programName on application cards is a tappable link that deep-links to documents/forms subtab via formsTarget panelParam; use-applications extended to fetch form_type from form_templates join (matching forms-panel.tsx:587 raw?.form_type===ft.formType). e2e: programs-posts-bridge.spec.ts 2/2 (POST_MARKER=e2e-ppbridge-20260610ppbridge, afterAll cleanup confirmed). Docsync: ralph-loop-checklist.md v1.4.2 + .phase-state.json. Pre-merge verifications: (1) OPEN/MERGEABLE/base=develop PASS; (2) test-leak 0 leftover posts PASS; (3) forms-target contract uses form_type PASS; (4) docsync present PASS. CI: 12/12 SUCCESS."
+branch: chore/docsync-phase8
+base: develop
+remote: origin
+files:
+  - apps/web/e2e/programs-posts-bridge.spec.ts
+  - apps/web/src/components/panels/applications-panel.tsx
+  - apps/web/src/components/panels/programs-panel.tsx
+  - apps/web/src/hooks/use-applications.ts
+  - specs/001-feed-platform/.phase-state.json
+  - specs/001-feed-platform/ralph-loop-checklist.md
+  - .claude/GIT_PLAN.md
+pr: 72
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/72
+merge_sha: d5543b618f7339ebcf1b1740a969c1b0b951fba0
+merged_into: develop
+created_at: "2026-06-10T00:00:00.000Z"
+completed_at: "2026-06-10T21:08:22Z"
+```
 
 ```yaml
 id: merge-chain-pr69-70-71
