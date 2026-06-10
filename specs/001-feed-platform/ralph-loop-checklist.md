@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.4.1"
+version: "1.4.3"
 created: "2026-01-19"
 last_updated: "2026-06-10"
 status: "IN_PROGRESS"
 current_phase: 9
-current_task: "P9-T1"
+current_task: "P9-T3"
 total_phases: 9
 total_tasks: 114
-completed_tasks: 113
+completed_tasks: 114
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -72,11 +72,11 @@ WHEN all tasks in a phase are [x]:
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
 | 9 | Community Launch Readiness | 9 | 2 | IN_PROGRESS |
 
-**Overall Progress**: 113 / 114 tasks (99%)
+**Overall Progress**: 114 / 114 tasks (100%)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. Phase 9 remaining tasks (7) included in denominator as implementation progresses.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. Phase 9 remaining tasks (T1 partial, T3-T4, T7-T9) tracked but not yet in headline denominator.
 
 ---
 
@@ -1735,7 +1735,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
   - REMAINING: fulfillment view (post-allocation outcome tracking).
 
 ### P9-T2: Social Feed Post UI for All Resource Types
-- [ ] **Status**: PENDING — distinct composer + feed rendering per post type (resource, petition, safety, general)
+- [x] **Status**: COMPLETE — PR #69 (feature/feed-per-type-pagination, 2026-06-10). (1) Keyset cursor pagination on (created_at, id): PAGE_SIZE=25, "Load more posts" button, deduplication on append. (2) Resource-post category badge via CATEGORY_META SSOT. (3) Safety alerts feed strip above composer (authenticated SELECT on safety_alerts, cap 5, severity desc). (4) Composer "Report a safety hazard on the map" button deep-linking to map panel. e2e feed-per-type-pagination.spec.ts 4/4.
 
 ### P9-T3: Per-Post Social Metadata + oEmbed Endpoint
 - [ ] **Status**: PENDING — runtime probe confirmed embed page inherits only GENERIC site og/twitter tags from root layout; actual gap is (a) per-post `generateMetadata` exporting `og:title`, `og:description`, `og:image`, `og:url` for each post ID at `/s/[id]`, and (b) an `/api/oembed` endpoint returning oEmbed JSON so third-party embeds resolve post-level previews
@@ -1771,9 +1771,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.0 | 2026-06-09 | P9-T5 + P9-T6 shipped (PRs #63-64); P9-T1 progress (PRs #65-66). |
 | 1.4.1 | 2026-06-10 | P7-T11 COMPLETE (harness 5/5 + manual prod confirmation); Phase 7 ALL exit criteria checked; Phase 8 smoke-test criterion checked; P9-T3 reframed (per-post generateMetadata + /api/oembed); P9-T4 Share button annotated as shipped; mobile/store deferred boxes annotated; 113/114 overall; current_task → P9-T1. |
 | 1.4.2 | 2026-06-10 | P9-T1 two sub-items COMPLETE: (a) Share to Feed on program cards + (b) application→originating form back-link. e2e programs-posts-bridge.spec.ts 2/2. REMAINING in P9-T1: fulfillment view. |
+| 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: docs/p7-t11-complete-sync (2026-06-10)
+**Last Agent Session**: feat/p9-t2-per-type-pagination (2026-06-10)
 **Total Development Time**: 0 hours
