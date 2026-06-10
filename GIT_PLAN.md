@@ -152,3 +152,42 @@ Social system cleanup: delete dead feed components, fix uuid type mismatch in fe
 - lint: 0 new errors (109 pre-existing warnings unchanged)
 - build: passes
 - e2e: 44 pass / 5 fail (all 5 are pre-existing known failures: auth email signup, documents-view T1/T3/T4, forms-flow) / 1 skipped
+
+---
+
+## Entry: feature/docs-forms-lifecycle — PR #75
+
+**ID:** docs-forms-lifecycle
+**Status:** complete
+**Branch:** feature/docs-forms-lifecycle
+**Commits:** c3a406d (initial) → 1c398d1 (original 2 defects) → fe22a37 (full fix)
+**Base:** develop
+**Merged:** squash merge to develop
+
+### Objective
+Fix 3 diagnosed e2e defects on `docs-forms-lifecycle.spec.ts` and bring 3/3 lifecycle + 5/5 documents-view to deterministic green.
+
+### Defects Fixed
+1. unlockVault never clicked "Unlock Vault" lockBtn before filling password input
+2. FormsPanel missing `data-testid="forms-panel"` and `data-testid="form-template-list"`
+3. EncryptedUpload is two-step: must click "Encrypt and Upload" button + wait for success after setInputFiles
+
+### Additional Fixes (discovered empirically)
+- Test (a): switch doc-view-btn → doc-edit-btn (Fill from Profile only in annotator/edit mode)
+- Rename input: focus+selectText+Delete+keyboard.type pattern for React 18 controlled input
+- Wizard loop: form-next-button/form-submit-button testids; handle certification checkboxes; wait for forms-panel not form-success
+- Archival verification: navigate DocumentsPanel → My Documents → Submitted Forms (not FormsPanel template list)
+- afterAll: replace .catch() chain with try/catch (Supabase JS v2 builder ≠ regular Promise)
+- Real app defect fix: documents-panel handleRenameSubmit + handleMove now call setDocuments() optimistically to keep panel's own useState in sync with hook state
+
+### Files Changed
+- `apps/web/e2e/docs-forms-lifecycle.spec.ts` — full spec rewrite
+- `apps/web/src/components/panels/forms-panel.tsx` — added forms-panel + form-template-list testids
+- `apps/web/src/components/panels/documents-panel.tsx` — handleRenameSubmit + handleMove optimistic panel state update
+
+### Validation
+- Local e2e: 8/8 pass (3/3 lifecycle + 5/5 documents-view), deterministic across multiple runs
+- type-check: 0 errors
+- CI: 10/10 checks pass (Build, Lint, Test, Type Check, Security Audit, Deploy Preview, CodeQL, Analyze, CI Success)
+- Test-leak sweep: 0 orphan auth.users, 0 orphan user_documents, 0 orphan form_submissions, 0 orphan storage objects for lifecycle/e2e patterns
+- Merged: squash to develop via `gh pr merge 75 --squash`
