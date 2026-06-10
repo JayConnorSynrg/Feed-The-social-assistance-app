@@ -10,11 +10,55 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { normalizeState } from '@/lib/us-states'
 import type { Database } from '@feed/database'
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/** Postgres error codes that are deterministic — never retry them. */
+function isDeterministicPgError(code: string | undefined): boolean {
+  if (!code) return false
+  // 42xxx = privilege/syntax errors, 23xxx = constraint errors, 22xxx = data errors
+  return /^(42|23|22)/.test(code)
+}
+
+/**
+ * Retry wrapper for transient failures only.
+ * Deterministic Postgres errors (42501, 42P01, 23xxx etc.) surface immediately.
+ * Network / AbortError / 5xx failures are retried with back-off.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: { attempts: number; backoffMs: number[] }
+): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < opts.attempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      lastErr = err
+      const msg = getErrorMessage(err)
+      // Surface deterministic errors immediately (no retry)
+      const code = (err as { code?: string })?.code
+      if (isDeterministicPgError(code)) throw err
+      // AbortError from a timeout is transient — retry
+      const isTransient =
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.name === 'AbortError') ||
+        msg.includes('signal') ||
+        msg.includes('aborted') ||
+        msg.includes('fetch') ||
+        msg.includes('network')
+      if (!isTransient) throw err
+      if (attempt < opts.attempts - 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, opts.backoffMs[attempt] ?? 1500))
+      }
+    }
+  }
+  throw lastErr
 }
 
 const ROLE_OPTIONS = [
@@ -81,7 +125,7 @@ export default function OnboardingPage() {
   // permanently disabled waiting for auth context to resolve.
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // showContinueAnyway becomes true when an upsert error/timeout occurs so the
+  // showContinueAnyway becomes true when a write error/timeout occurs so the
   // user can always escape the phone step.
   const [showContinueAnyway, setShowContinueAnyway] = useState(false)
 
@@ -151,33 +195,44 @@ export default function OnboardingPage() {
   }
 
   /**
-   * Navigate to `/` immediately, then fire a best-effort profile write as
-   * fire-and-forget. The user reaches the app instantly regardless of what
-   * Supabase does. Used by Skip and the "Continue anyway" escape hatch.
+   * Write onboarding_completed=true to the profile row, then navigate to /.
+   * The profile row is guaranteed to exist (handle_new_user trigger creates it
+   * at signup). .update().eq('id', userId) uses the column-scoped UPDATE grant
+   * which covers onboarding_completed but excludes id — avoids the 42501 that
+   * .upsert() caused by including id in DO UPDATE SET.
+   *
+   * AWAIT before navigate: navigating fire-and-forget meant proxy.ts bounced
+   * the user back to /onboarding when the write hadn't committed yet.
    */
   const markCompleteAndNavigate = useCallback(
-    (userId: string) => {
-      // Navigate FIRST — zero Supabase awaits before the user reaches the app.
-      logger.info('onboarding.skip.navigating', { userId })
-      router.push('/')
-      // Fire-and-forget profile write — result does not block navigation.
-      // Wrap in Promise.resolve() to get a real Promise (Supabase returns PromiseLike).
-      void Promise.resolve(
-        supabase
+    async (userId: string): Promise<void> => {
+      logger.info('onboarding.skip.start', { userId })
+
+      const doWrite = async () => {
+        const result = await supabase
           .from('profiles')
-          .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
-      ).then(({ error }) => {
-        if (error) {
-          logger.warn('onboarding.skip.best_effort_failed', { message: error.message, userId })
-        } else {
-          logger.info('onboarding.skip.ok', { userId })
-        }
-      }).catch((err: unknown) => {
-        logger.warn('onboarding.skip.best_effort_failed', {
-          message: getErrorMessage(err),
+          .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+          .eq('id', userId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (result.error) throw Object.assign(new Error(result.error.message), { code: result.error.code })
+      }
+
+      try {
+        await withRetry(doWrite, { attempts: 3, backoffMs: [500, 1500] })
+        logger.warn('onboarding.save.ok', { userId, path: 'skip' })
+        router.push('/')
+      } catch (err: unknown) {
+        const msg = getErrorMessage(err)
+        const code = (err as { code?: string })?.code
+        logger.error('onboarding.save.exhausted', err as Error, {
+          step: 'skip',
           userId,
+          code: code ?? 'unknown',
+          message: msg,
         })
-      })
+        setError(`Could not save your profile: ${msg}. Please try again.`)
+        setShowContinueAnyway(true)
+      }
     },
     [router, supabase]
   )
@@ -188,7 +243,7 @@ export default function OnboardingPage() {
     setShowContinueAnyway(false)
 
     // Hard 10s timeout wrapping the ENTIRE operation — including auth resolution,
-    // profile upsert, and verification. If anything stalls, the user always
+    // profile write, and verification. If anything stalls, the user always
     // escapes "Saving…" within ~10s.
     const doWork = async () => {
       const userId = userIdRef.current ?? authUser?.id ?? null
@@ -210,10 +265,7 @@ export default function OnboardingPage() {
       logger.info('onboarding.complete.start', { userId, hasPhone: !!phone })
       const timer = logger.time('auth.onboarding.complete')
 
-      // Resolve city/state before building upsert payload.
-      // The reverse-geocode in handleUseLocation is async; the upsert can fire
-      // before state/city React state resolves. If state is still empty here
-      // and we have coords or zip, do a best-effort geocode now (5s timeout).
+      // Resolve city/state before building update payload.
       let resolvedCity = city
       let resolvedState = state
       if (!resolvedState && (latitude !== null || zipCode.length >= 5)) {
@@ -247,8 +299,11 @@ export default function OnboardingPage() {
         }
       }
 
-      const profileData: Database['public']['Tables']['profiles']['Insert'] = {
-        id: userId,
+      // Build update payload WITHOUT id — id is excluded from the column-scoped
+      // UPDATE grant; including it in .upsert() caused 42501 (permission denied).
+      // The profiles row is guaranteed to exist via the handle_new_user trigger.
+      type ProfileUpdate = Omit<Database['public']['Tables']['profiles']['Update'], 'id'>
+      const profileUpdate: ProfileUpdate = {
         user_role: userRole,
         zip_code: zipCode || null,
         location_city: resolvedCity || null,
@@ -261,48 +316,58 @@ export default function OnboardingPage() {
         updated_at: new Date().toISOString(),
       }
 
-      // Inner upsert with AbortController. Next.js patches global fetch and may
-      // abort in-flight requests on re-render; the server-side write usually
-      // completes before the client abort fires.
-      const controller = new AbortController()
-      const timerId = setTimeout(() => controller.abort(), 8_000)
+      // Main write with retry (transient failures only; deterministic errors surface immediately).
+      let writeError: { message: string; code?: string } | null = null
+      let attempt = 0
 
-      let upsertError: { message: string; code?: string } | null = null
-      try {
+      const doWrite = async () => {
+        attempt++
+        logger.warn('onboarding.save.attempt', {
+          userId,
+          attempt,
+          step: 'main_write',
+        })
         const result = await supabase
           .from('profiles')
-          .upsert(profileData, { onConflict: 'id' })
-          .abortSignal(controller.signal)
-        upsertError = result.error ?? null
-      } catch (raceErr: unknown) {
-        const msg = raceErr instanceof Error ? raceErr.message : ''
-        const isAbortOrTimeout =
-          (raceErr instanceof Error && raceErr.name === 'AbortError') ||
-          msg.includes('signal') ||
-          msg.includes('aborted')
-
-        if (isAbortOrTimeout) {
-          logger.warn('onboarding.complete.upsert_aborted', { userId, reason: msg })
-          clearTimeout(timerId)
-          logger.info('onboarding.complete.ok', { userId, path: 'abort_navigate' })
-          router.push('/')
-          router.refresh()
-          return
+          .update(profileUpdate)
+          .eq('id', userId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (result.error) {
+          const err = Object.assign(new Error(result.error.message), { code: result.error.code })
+          throw err
         }
-        clearTimeout(timerId)
-        throw raceErr
-      } finally {
-        clearTimeout(timerId)
       }
 
-      if (upsertError) {
-        logger.error('onboarding.complete.failed', new Error(upsertError.message), {
-          step: 'upsert',
-          message: upsertError.message,
-          code: upsertError.code ?? 'unknown',
-          userId,
-        })
-        setError(`Could not save your profile: ${upsertError.message}`)
+      try {
+        await withRetry(doWrite, { attempts: 3, backoffMs: [500, 1500] })
+        writeError = null
+      } catch (err: unknown) {
+        const msg = getErrorMessage(err)
+        const code = (err as { code?: string })?.code
+        if (attempt > 1) {
+          // Recovery after retry succeeded on a prior attempt won't reach here,
+          // but log exhaustion for observability.
+          logger.error('onboarding.save.exhausted', err as Error, {
+            step: 'main_write',
+            userId,
+            attempt,
+            code: code ?? 'unknown',
+            message: msg,
+          })
+        } else {
+          logger.error('onboarding.save.failed', err as Error, {
+            step: 'main_write',
+            attempt,
+            userId,
+            code: code ?? 'unknown',
+            message: msg,
+          })
+        }
+        writeError = { message: msg, code: code }
+      }
+
+      if (writeError) {
+        setError(`Could not save your profile: ${writeError.message}`)
         setShowContinueAnyway(true)
         return
       }
@@ -310,16 +375,38 @@ export default function OnboardingPage() {
       // Verify the write committed — prevents the redirect loop where middleware
       // sees onboarding_completed=false and sends the user back.
       try {
-        const { data: verify } = await supabase
+        const { data: verify, error: verifyErr } = await supabase
           .from('profiles')
           .select('onboarding_completed')
           .eq('id', userId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
           .maybeSingle()
+
+        if (verifyErr && !isQueryTimeout(verifyErr)) {
+          logger.warn('onboarding.complete.verify_error', {
+            userId,
+            code: verifyErr.code,
+            message: verifyErr.message,
+          })
+        }
+
         if (!verify?.onboarding_completed) {
           logger.warn('onboarding.complete.verify_failed', { userId })
-          await supabase
+          // Retry-write the flag — deterministic error surfaces immediately
+          const retryResult = await supabase
             .from('profiles')
-            .upsert({ id: userId, onboarding_completed: true }, { onConflict: 'id' })
+            .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+            .eq('id', userId)
+            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          if (retryResult.error) {
+            logger.warn('onboarding.complete.verify_retry_failed', {
+              userId,
+              code: retryResult.error.code,
+              message: retryResult.error.message,
+            })
+          } else {
+            logger.warn('onboarding.save.ok', { userId, path: 'verify_retry' })
+          }
         }
       } catch (verifyErr: unknown) {
         // Verification failed — navigate anyway; middleware will catch loops.
@@ -330,7 +417,7 @@ export default function OnboardingPage() {
       }
 
       timer.end({ step: 'complete', userId })
-      logger.info('onboarding.complete.ok', { userId })
+      logger.warn('onboarding.save.ok', { userId, path: 'complete' })
       router.push('/')
       router.refresh()
     }
@@ -350,7 +437,7 @@ export default function OnboardingPage() {
       const isTimeout = msg === 'onboarding_timeout'
 
       if (isAbort || isTimeout) {
-        // Abort or hard timeout — the upsert may have committed server-side.
+        // Abort or hard timeout — the write may have committed server-side.
         // Navigate and let middleware detect any loop.
         logger.warn(
           isTimeout ? 'onboarding.complete.timeout' : 'onboarding.complete.outer_abort',
@@ -369,20 +456,23 @@ export default function OnboardingPage() {
     } finally {
       setSubmitting(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, router, supabase])
 
-  const handleSkip = useCallback(() => {
+  const handleSkip = useCallback(async () => {
     const userId = userIdRef.current ?? authUser?.id ?? null
     if (!userId) {
-      // No user — redirect immediately; skip the upsert entirely.
+      // No user — redirect immediately; skip the write entirely.
       logger.warn('onboarding.skip.no_user', { authLoading })
       router.push('/')
       return
     }
-    logger.info('onboarding.skip.start', { userId })
-    // markCompleteAndNavigate navigates first, writes second — synchronous return.
-    markCompleteAndNavigate(userId)
+    setSubmitting(true)
+    setError(null)
+    try {
+      await markCompleteAndNavigate(userId)
+    } finally {
+      setSubmitting(false)
+    }
   }, [authUser, authLoading, markCompleteAndNavigate, router])
 
   const canProceedStep1 = userRole !== null
@@ -435,12 +525,20 @@ export default function OnboardingPage() {
                 <button
                   onClick={async () => {
                     const userId = userIdRef.current ?? authUser?.id ?? null
-                    if (userId) await markCompleteAndNavigate(userId)
-                    else router.push('/')
+                    if (userId) {
+                      setSubmitting(true)
+                      try {
+                        await markCompleteAndNavigate(userId)
+                      } finally {
+                        setSubmitting(false)
+                      }
+                    } else {
+                      router.push('/')
+                    }
                   }}
                   className="underline font-medium text-destructive hover:text-destructive/80"
                 >
-                  Continue anyway
+                  Try again
                 </button>
               )}
             </div>
