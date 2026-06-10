@@ -1877,7 +1877,7 @@ completed_at: 2026-06-10T22:12:42.000Z
 
 ```yaml
 id: merge-pr74-embed-meta-oembed
-status: pending
+status: complete
 type: merge
 description: "feat(social): P9-T3 — per-post generateMetadata + /api/oembed endpoint (PR #74, feature/embed-meta-oembed → develop). Verifications: (1) OPEN/MERGEABLE/base=develop PASS; (2) docsync v1.4.5: currentTask=P9-T4, phase9 completedTasks=[T5,T6,T2,T3], headline T3 removed from pending, footnote *** T3 stale ref fixed on branch (commit 9cfd02b), JSON valid PASS; (3) test-leak sweep: marker=20260610embedmeta, 0 prod posts found/deleted PASS; (4) security: generateMetadata surfaces only content excerpt + display name (no email/phone/PII), oEmbed rejects foreign origins (submittedUrl.origin !== appOrigin check lines 67-81 of route.ts; localhost always allowed for dev), no service_role in new code (createClient anon only) PASS; (5) CI 12/12 SUCCESS (both original run 27310334949 and docs-fix run 27310431522 — all jobs complete/success)."
 branch: feature/embed-meta-oembed
@@ -1885,6 +1885,8 @@ base: develop
 remote: origin
 pr: 74
 pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/74
+merge_sha: 0b7308f48793add1e72017a0ce595c741107494f
+merged_into: develop
 created_at: "2026-06-10T22:30:00.000Z"
-completed_at: null
+completed_at: "2026-06-10T22:32:57.000Z"
 ```
