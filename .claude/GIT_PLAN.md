@@ -19,6 +19,22 @@ completed_at: <ISO timestamp or null>
 next_action_id: next-p9-task
 
 ```yaml
+id: verify-merge-pr78-grandma-pass
+status: complete
+type: merge
+description: "feat(ux): verify + squash-merge PR #78 (feature/usability-grandma-pass — P9-T9 grandma-grade usability pass). Verifications: (1) OPEN/MERGEABLE/base=develop PASS; (2) docsync v1.4.9: frontmatter 118/118, currentTask=P9-T1, Phase 9 dashboard 7→8, pending=T1-partial only, footnote ~L79 updated, version history 1.4.6→1.4.7→1.4.8→1.4.9 chronological, P9-T9 note includes deferred Find-Help-Now CTA, .phase-state.json currentTask=P9-T1+totalTasks=118+valid JSON PASS; (3) 4 failing specs — all PRE-EXISTING on origin/develop: eligibility-wiring:131 (vault-fixture adminClient.auth undefined), forms-flow:182 (phone autofill toHaveValue '5551234567' received ''), pdf-annotator:155 (docs.length toBeGreaterThan(0) received 0), safety-pins:181 (mapboxgl-marker intercepts pointer events — same timeout on both branches); (4) panel ids unchanged (wizard panel id 'wizard' preserved, only display label changed), no data-testids removed PASS; (5) test-leak sweep — 0 rows in auth.users/posts/resources/user_documents/form_submissions/safety_alerts/content_reports PASS; (6) CI 12/12 SUCCESS. Squash merged → c34aa64db10a646d35411b2fd086407e6ef71699 on origin/develop."
+branch: feature/usability-grandma-pass
+base: develop
+remote: origin
+pr: 78
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/78
+merge_sha: c34aa64db10a646d35411b2fd086407e6ef71699
+merged_into: develop
+created_at: "2026-06-10T00:00:00.000Z"
+completed_at: "2026-06-11T01:32:19Z"
+```
+
+```yaml
 id: verify-merge-pr77-suggest-resource
 status: complete
 type: merge
