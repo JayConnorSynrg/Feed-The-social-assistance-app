@@ -41,7 +41,7 @@ function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardP
       <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">
         {title}
       </h3>
-      <p className="text-xs text-stone-500 leading-relaxed">
+      <p className="text-sm text-stone-700 leading-relaxed">
         {description}
       </p>
     </button>
@@ -76,7 +76,7 @@ function QuickTag({ label, icon: Icon, onClick, isActive }: QuickTagProps) {
           : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
       }`}
     >
-      <Icon className="w-3 h-3" />
+      <Icon className="w-4 h-4" />
       {label}
     </button>
   )

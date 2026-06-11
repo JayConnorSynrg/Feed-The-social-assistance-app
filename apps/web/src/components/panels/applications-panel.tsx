@@ -314,7 +314,7 @@ function StatusTimeline({ timeline }: StatusTimelineProps) {
             {/* Step Content */}
             <div className="pb-2 flex-1">
               <p className={`text-sm font-medium ${
-                step.status === 'pending' ? 'text-stone-400' : 'text-stone-900'
+                step.status === 'pending' ? 'text-stone-600' : 'text-stone-900'
               }`}>
                 {step.label}
               </p>
@@ -711,7 +711,7 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
-        <p className="text-sm text-muted-foreground">Loading applications...</p>
+        <p className="text-sm text-muted-foreground">Checking your applications… (a few seconds)</p>
       </div>
     )
   }

@@ -41,6 +41,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { mapProfileToAutofill, type AutofillValues } from '@/lib/form-field-mapper'
 import { GOVERNMENT_FORMS, type GovernmentForm } from '@/lib/government-forms'
 import { logger } from '@/lib/logger'
+import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 
 // ============================================
 // TYPES
@@ -264,7 +265,7 @@ function RequiredDocs({ docs, maxShow = 3 }: RequiredDocsProps) {
           </li>
         ))}
         {remaining > 0 && (
-          <li className="text-xs text-stone-400">
+          <li className="text-xs text-stone-600">
             +{remaining} more document{remaining > 1 ? 's' : ''}
           </li>
         )}
@@ -927,7 +928,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
-        <p className="text-sm text-muted-foreground">Loading forms...</p>
+        <p className="text-sm text-stone-700">Checking available forms… (a few seconds)</p>
       </div>
     )
   }
@@ -937,7 +938,13 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
         <AlertCircle className="w-8 h-8 text-orange-500" />
         <p className="text-sm text-stone-700 font-medium">Failed to load forms</p>
-        <p className="text-xs text-muted-foreground">{error}</p>
+        <p className="text-xs text-stone-700">{getFriendlyErrorMessage(error, "We couldn't load the forms. Please try again.")}</p>
+        <button
+          onClick={refreshSubmissions}
+          className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors mt-1"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
@@ -1010,11 +1017,21 @@ export function FormsPanel({ userId }: FormsPanelProps) {
           {activeTab === 'available' && (
             <>
               {templates.length === 0 ? (
-                <EmptyState
-                  icon={FileText}
-                  title="No Forms Available"
-                  description="Check back later for available application forms."
-                />
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-4">
+                    <FileText className="w-8 h-8 text-stone-400" />
+                  </div>
+                  <h3 className="font-medium text-stone-700 mb-1">No Forms Available</h3>
+                  <p className="text-sm text-stone-500 max-w-sm mb-4">
+                    No application forms are set up yet. The AI Assistant can help you find benefit programs and walk you through what you need.
+                  </p>
+                  <button
+                    onClick={() => setActivePanel('chat')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
+                  >
+                    Ask the Assistant
+                  </button>
+                </div>
               ) : (
                 <div data-testid="form-template-list" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {templates.map((template) => (

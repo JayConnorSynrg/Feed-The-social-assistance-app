@@ -149,7 +149,7 @@ function DocumentsHeader({ documentCount, searchQuery, onSearchChange }: Documen
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" />
         <Input
           type="text"
           placeholder="Search documents..."
@@ -347,7 +347,7 @@ function DocumentCard({ document, onView, onDownload, onEdit, onDelete, onRename
             <span className="text-xs text-stone-500">
               {formatFileSize(document.size)}
             </span>
-            <span className="text-xs text-stone-400">
+            <span className="text-xs text-stone-600">
               {formatDate(document.uploadedAt)}
             </span>
           </div>

@@ -107,7 +107,7 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
   { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
-  { panel: 'wizard', icon: Compass, label: 'Resource Wizard' },
+  { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
   { panel: 'petitions', icon: ScrollText, label: 'Petitions' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -250,7 +250,7 @@ function IconSidebar() {
   )
 
   return (
-    <aside className="w-14 flex flex-col items-center py-4 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
+    <aside className="w-16 flex flex-col items-center py-4 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
       {visibleIcons.map(({ panel, icon: Icon, label }) => {
         // A sidebar entry is active when the resolved activePanel matches its panel.
         // Since aliases ('forms', 'messages') resolve to parent panels, the parent
@@ -261,7 +261,7 @@ function IconSidebar() {
             key={panel}
             data-testid={`sidebar-${panel}`}
             onClick={() => setActivePanel(panel)}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all group relative ${
+            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl transition-all group relative w-full ${
               isActive
                 ? 'bg-[#4a5d23] text-white shadow-lg'
                 : 'hover:bg-stone-100 text-stone-500 hover:text-stone-800'
@@ -269,9 +269,10 @@ function IconSidebar() {
             title={label}
           >
             <Icon className="w-5 h-5" />
-            {/* Tooltip */}
-            <span className="absolute left-14 bg-stone-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-              {label}
+            <span className={`text-[10px] leading-tight text-center break-words w-full ${
+              isActive ? 'text-white' : 'text-stone-700'
+            }`}>
+              {label.split(' ').slice(0, 2).join('\n')}
             </span>
           </button>
         )
@@ -311,7 +312,7 @@ function MetricTile({
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <h3 className="text-sm font-medium text-stone-600">{title}</h3>
-          {subtitle && <p className="text-xs text-stone-400">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-stone-600">{subtitle}</p>}
         </div>
         <Icon className="w-4 h-4 text-stone-400" />
       </div>
@@ -743,6 +744,22 @@ function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) 
 // ============================================
 // MOBILE BOTTOM NAV
 // ============================================
+
+// Short labels for mobile bottom nav — explicit map avoids truncation surprises
+// when full labels change (e.g. 'Get Help Finding Resources' → 'Get Help').
+const MOBILE_SHORT_LABELS: Record<string, string> = {
+  'Overview': 'Home',
+  'AI Assistant': 'Assistant',
+  'Resource Map': 'Map',
+  'Browse Programs': 'Programs',
+  'Community & Messages': 'Community',
+  'Applications': 'Applications',
+  'Documents & Forms': 'Documents',
+  'Get Help Finding Resources': 'Get Help',
+  'Petitions': 'Petitions',
+  'Settings': 'Settings',
+}
+
 function MobileBottomNav() {
   const { activePanel, setActivePanel, userRole } = useShellContext()
 
@@ -755,6 +772,7 @@ function MobileBottomNav() {
       <div className="flex justify-around py-2">
         {visibleIcons.map(({ panel, icon: Icon, label }) => {
           const isActive = activePanel === panel
+          const shortLabel = MOBILE_SHORT_LABELS[label] ?? label.split(' ')[0]
           return (
             <button
               key={panel}
@@ -764,7 +782,7 @@ function MobileBottomNav() {
               }`}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-[10px] mt-1">{label.split(' ')[0]}</span>
+              <span className="text-[10px] mt-1">{shortLabel}</span>
             </button>
           )
         })}
