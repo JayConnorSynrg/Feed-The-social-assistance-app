@@ -15,6 +15,15 @@ import { getDEK } from '@/lib/key-store'
 import { generateIV, arrayBufferToBase64, base64ToArrayBuffer } from '@/lib/crypto'
 import { validateFileUpload, type FileValidationResult } from '@/lib/security'
 
+/**
+ * Plaintext placeholder stored in the NOT-NULL `user_documents.name` column for
+ * encrypted documents. The real filename lives only in the encrypted
+ * `encrypted_original_name` / `encrypted_name_iv` columns (zero-knowledge at rest).
+ * The Documents list decrypts the real name for display when the vault is unlocked
+ * and shows this placeholder when locked.
+ */
+export const ENCRYPTED_DOCUMENT_NAME_PLACEHOLDER = 'Encrypted Document'
+
 const CHUNK_SIZE = 1024 * 1024 // 1MB plaintext chunks for large files
 const GCM_TAG_BYTES = 16 // AES-GCM authentication tag appended to each encrypted chunk
 const ENCRYPTED_CHUNK_SIZE = CHUNK_SIZE + GCM_TAG_BYTES // on-disk size per encrypted chunk

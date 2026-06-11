@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { logger, withMetric } from '@/lib/logger'
+import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 export type DocumentCategory =
@@ -39,7 +39,6 @@ export interface UseDocumentsReturn {
   documents: Document[]
   isLoading: boolean
   error: Error | null
-  uploadDocument: (file: File, category: string, applicationId?: string, description?: string) => Promise<Document | null>
   updateDocument: (id: string, updates: UpdateDocumentInput) => Promise<boolean>
   deleteDocument: (id: string) => Promise<void>
   getDocumentUrl: (filePath: string) => Promise<string | null>
@@ -86,14 +85,6 @@ export function getCategoryInfo(category: string) {
 }
 
 const STORAGE_BUCKET = 'documents'
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-]
 
 export function useDocuments(): UseDocumentsReturn {
   const [documents, setDocuments] = useState<Document[]>([])
@@ -132,85 +123,15 @@ export function useDocuments(): UseDocumentsReturn {
     }
   }, [supabase])
 
-  const uploadDocument = useCallback(async (
-    file: File,
-    category: string,
-    applicationId?: string,
-    description?: string
-  ): Promise<Document | null> => {
-    try {
-      // Validate file
-      if (file.size > MAX_FILE_SIZE) {
-        throw new Error('File size exceeds 10MB limit')
-      }
-
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        throw new Error('File type not supported. Please upload PDF, JPG, PNG, or WEBP files.')
-      }
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      // Generate unique file path
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}/${category}/${Date.now()}.${fileExt}`
-
-      // Upload to storage
-      const { error: uploadError } = await withMetric(
-        'documents.upload',
-        { category, file_size: file.size, document_type: file.type },
-        async () => await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false,
-          })
-      )
-
-      if (uploadError) throw uploadError
-
-      // Create database record
-      const { data: doc, error: insertError } = await supabase
-        .from('user_documents')
-        .insert({
-          user_id: user.id,
-          name: file.name,
-          file_path: fileName,
-          document_type: file.type,
-          file_size: file.size,
-          category,
-          submission_id: applicationId || null,
-          notes: description || null,
-        })
-        .select()
-        .single()
-
-      if (insertError) throw insertError
-
-      await refreshDocuments()
-      return doc
-    } catch (err) {
-      logger.error('documents.upload.error', err, { category, applicationId })
-      setError(err as Error)
-      return null
-    }
-  }, [supabase, refreshDocuments])
-
   /**
-   * Rename a document and/or change its category.
+   * Update a document's plaintext `name` and/or `category`.
    *
-   * NOTE: The `name` column in user_documents is the PLAINTEXT display name
-   * (stored at upload-time as file.name). Encrypted documents also store an
-   * encrypted copy in encrypted_original_name / encrypted_name_iv. This hook
-   * only updates the plaintext `name` column — the encrypted copy is NOT
-   * updated here because use-documents does not hold the vault DEK. Callers
-   * that need both columns updated should use useEncryptedUpload.updateAnnotations
-   * or a dedicated rename path that has vault access.
-   *
-   * For P9-T7 rename we write ONLY the plaintext `name` column. This is safe
-   * because the plaintext `name` is what the Documents panel list renders; the
-   * encrypted_original_name is only read during download decryption (original
-   * file metadata) and is unaffected by a user-visible display rename.
+   * This hook does NOT hold the vault DEK, so it can only write the plaintext
+   * `name` column. For ENCRYPTED documents the plaintext `name` is the non-PII
+   * placeholder and the real filename lives in encrypted_original_name — those
+   * are renamed via useEncryptedUpload.renameEncrypted (which has vault access).
+   * The Documents panel routes encrypted renames there and only uses this path
+   * for category moves and legacy unencrypted-document renames.
    */
   const updateDocument = useCallback(async (id: string, updates: UpdateDocumentInput): Promise<boolean> => {
     try {
@@ -311,7 +232,6 @@ export function useDocuments(): UseDocumentsReturn {
     documents,
     isLoading,
     error,
-    uploadDocument,
     updateDocument,
     deleteDocument,
     getDocumentUrl,

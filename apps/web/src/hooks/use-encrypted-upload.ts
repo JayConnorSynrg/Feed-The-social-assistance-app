@@ -17,6 +17,7 @@ import {
   decryptFile,
   encryptString,
   decryptString,
+  ENCRYPTED_DOCUMENT_NAME_PLACEHOLDER,
   type DocumentEncryptionProgress,
 } from '@/lib/document-encryption'
 import { logger, withMetric, createOpId } from '@/lib/logger'
@@ -47,6 +48,10 @@ export interface UseEncryptedUploadResult {
 
   // Download source file + decrypt annotations sidecar for re-editing.
   downloadForEdit: (documentId: string) => Promise<{ sourceFile: File; annotations: TextAnnotation[] }>
+
+  // Rename an encrypted document: encrypt the new filename into the ciphertext
+  // columns and keep the plaintext `name` column as the non-PII placeholder.
+  renameEncrypted: (documentId: string, newName: string) => Promise<void>
 
   // Delete a document
   deleteFile: (documentId: string) => Promise<void>
@@ -144,7 +149,10 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
           .from('user_documents')
           .insert({
             user_id: user.id,
-            name: encryptedResult.originalName,
+            // Zero-knowledge at rest: the NOT-NULL `name` column stores a non-PII
+            // placeholder. The real filename lives only in the encrypted
+            // `encrypted_original_name` / `encrypted_name_iv` columns below.
+            name: ENCRYPTED_DOCUMENT_NAME_PLACEHOLDER,
             document_type: category,
             category,
             file_path: storagePath,
@@ -355,6 +363,51 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
   )
 
   /**
+   * Rename an encrypted document.
+   *
+   * Encrypts the new filename with the vault DEK and writes it to the
+   * encrypted_original_name / encrypted_name_iv columns. The plaintext `name`
+   * column is kept as the non-PII placeholder so no cleartext filename is ever
+   * persisted (zero-knowledge at rest). Requires the vault to be unlocked.
+   * RLS on user_documents (auth.uid() = user_id) gates this UPDATE.
+   */
+  const renameEncrypted = useCallback(
+    async (documentId: string, newName: string): Promise<void> => {
+      if (!user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      await withMetric(
+        'documents.rename.encrypted',
+        { documentId },
+        async () => {
+          const { ciphertext, iv } = await encryptString(newName)
+
+          const supabase = createClient()
+          const { error: dbError } = await supabase
+            .from('user_documents')
+            .update({
+              name: ENCRYPTED_DOCUMENT_NAME_PLACEHOLDER,
+              encrypted_original_name: ciphertext,
+              encrypted_name_iv: iv,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+
+          if (dbError) {
+            throw new Error(`Failed to rename document: ${dbError.message}`)
+          }
+        }
+      ).catch((err) => {
+        logger.error('documents.rename.encrypted.error', err, { documentId })
+        throw err
+      })
+    },
+    [user?.id]
+  )
+
+  /**
    * Download the source file and decrypt the annotations sidecar for re-editing.
    * Returns the decrypted File and the parsed TextAnnotation array.
    * If no annotations sidecar is present, returns an empty array.
@@ -554,6 +607,7 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
     downloadFile,
     updateAnnotations,
     downloadForEdit,
+    renameEncrypted,
     deleteFile,
     isUploading,
     isDownloading,
