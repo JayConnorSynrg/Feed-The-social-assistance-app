@@ -5,38 +5,163 @@
   "created": "2026-01-19T00:00:00.000Z",
   "lastUpdated": "2026-06-10T00:00:00.000Z",
   "currentPhase": 9,
-  "currentTask": "P9-T8",
+  "currentTask": "P9-T4",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
       "name": "Pre-Flight Setup",
       "status": "COMPLETE",
-      "tasks": ["P0-T1", "P0-T2", "P0-T3"],
-      "completedTasks": ["P0-T1", "P0-T2", "P0-T3"],
+      "tasks": [
+        "P0-T1",
+        "P0-T2",
+        "P0-T3"
+      ],
+      "completedTasks": [
+        "P0-T1",
+        "P0-T2",
+        "P0-T3"
+      ],
       "startedAt": "2026-01-19T18:30:00.000Z",
       "completedAt": "2026-01-19T18:45:00.000Z"
     },
     "1": {
       "name": "Foundation",
       "status": "COMPLETE",
-      "tasks": ["P1-T1", "P1-T2", "P1-T3", "P1-T4", "P1-T5", "P1-T6", "P1-T7", "P1-T8", "P1-T9", "P1-T10", "P1-T11", "P1-T12", "P1-T13", "P1-T14", "P1-T15", "P1-T16", "P1-T17", "P1-T18", "P1-T19", "P1-T20", "P1-T21", "P1-T22", "P1-T23", "P1-T24", "P1-T25"],
-      "completedTasks": ["P1-T1", "P1-T2", "P1-T3", "P1-T4", "P1-T5", "P1-T6", "P1-T7", "P1-T8", "P1-T9", "P1-T10", "P1-T11", "P1-T12", "P1-T13", "P1-T14", "P1-T15", "P1-T16", "P1-T17", "P1-T18", "P1-T19", "P1-T20", "P1-T21", "P1-T22", "P1-T23", "P1-T24", "P1-T25"],
+      "tasks": [
+        "P1-T1",
+        "P1-T2",
+        "P1-T3",
+        "P1-T4",
+        "P1-T5",
+        "P1-T6",
+        "P1-T7",
+        "P1-T8",
+        "P1-T9",
+        "P1-T10",
+        "P1-T11",
+        "P1-T12",
+        "P1-T13",
+        "P1-T14",
+        "P1-T15",
+        "P1-T16",
+        "P1-T17",
+        "P1-T18",
+        "P1-T19",
+        "P1-T20",
+        "P1-T21",
+        "P1-T22",
+        "P1-T23",
+        "P1-T24",
+        "P1-T25"
+      ],
+      "completedTasks": [
+        "P1-T1",
+        "P1-T2",
+        "P1-T3",
+        "P1-T4",
+        "P1-T5",
+        "P1-T6",
+        "P1-T7",
+        "P1-T8",
+        "P1-T9",
+        "P1-T10",
+        "P1-T11",
+        "P1-T12",
+        "P1-T13",
+        "P1-T14",
+        "P1-T15",
+        "P1-T16",
+        "P1-T17",
+        "P1-T18",
+        "P1-T19",
+        "P1-T20",
+        "P1-T21",
+        "P1-T22",
+        "P1-T23",
+        "P1-T24",
+        "P1-T25"
+      ],
       "startedAt": "2026-01-19T18:45:00.000Z",
       "completedAt": "2026-01-20T01:15:00.000Z"
     },
     "2": {
       "name": "Resource Discovery",
       "status": "COMPLETE",
-      "tasks": ["P2-T1", "P2-T2", "P2-T3", "P2-T4", "P2-T5", "P2-T6", "P2-T7", "P2-T8", "P2-T9", "P2-T10", "P2-T11", "P2-T12", "P2-T13", "P2-T14", "P2-T15"],
-      "completedTasks": ["P2-T1", "P2-T2", "P2-T3", "P2-T4", "P2-T5", "P2-T6", "P2-T7", "P2-T8", "P2-T9", "P2-T10", "P2-T11", "P2-T12", "P2-T13", "P2-T14", "P2-T15"],
+      "tasks": [
+        "P2-T1",
+        "P2-T2",
+        "P2-T3",
+        "P2-T4",
+        "P2-T5",
+        "P2-T6",
+        "P2-T7",
+        "P2-T8",
+        "P2-T9",
+        "P2-T10",
+        "P2-T11",
+        "P2-T12",
+        "P2-T13",
+        "P2-T14",
+        "P2-T15"
+      ],
+      "completedTasks": [
+        "P2-T1",
+        "P2-T2",
+        "P2-T3",
+        "P2-T4",
+        "P2-T5",
+        "P2-T6",
+        "P2-T7",
+        "P2-T8",
+        "P2-T9",
+        "P2-T10",
+        "P2-T11",
+        "P2-T12",
+        "P2-T13",
+        "P2-T14",
+        "P2-T15"
+      ],
       "startedAt": "2026-01-20T01:15:00.000Z",
       "completedAt": "2026-01-20T18:00:00.000Z"
     },
     "3": {
       "name": "Form System",
       "status": "COMPLETE",
-      "tasks": ["P3-T1", "P3-T2", "P3-T3", "P3-T4", "P3-T5", "P3-T6", "P3-T7", "P3-T8", "P3-T9", "P3-T10", "P3-T11", "P3-T12", "P3-T13", "P3-T14", "P3-T15", "P3-T16"],
-      "completedTasks": ["P3-T1", "P3-T2", "P3-T3", "P3-T4", "P3-T5", "P3-T6", "P3-T7", "P3-T8", "P3-T9", "P3-T10", "P3-T11", "P3-T12", "P3-T13", "P3-T14", "P3-T15"],
+      "tasks": [
+        "P3-T1",
+        "P3-T2",
+        "P3-T3",
+        "P3-T4",
+        "P3-T5",
+        "P3-T6",
+        "P3-T7",
+        "P3-T8",
+        "P3-T9",
+        "P3-T10",
+        "P3-T11",
+        "P3-T12",
+        "P3-T13",
+        "P3-T14",
+        "P3-T15",
+        "P3-T16"
+      ],
+      "completedTasks": [
+        "P3-T1",
+        "P3-T2",
+        "P3-T3",
+        "P3-T4",
+        "P3-T5",
+        "P3-T6",
+        "P3-T7",
+        "P3-T8",
+        "P3-T9",
+        "P3-T10",
+        "P3-T11",
+        "P3-T12",
+        "P3-T13",
+        "P3-T14",
+        "P3-T15"
+      ],
       "startedAt": "2026-01-20T18:00:00.000Z",
       "completedAt": "2026-01-21T00:00:00.000Z",
       "notes": "P3-T16 (mobile testing) deferred - requires device/simulator testing"
@@ -44,8 +169,31 @@
     "4": {
       "name": "AI Assistant",
       "status": "COMPLETE",
-      "tasks": ["P4-T1", "P4-T2", "P4-T3", "P4-T4", "P4-T5", "P4-T6", "P4-T7", "P4-T8", "P4-T9", "P4-T10", "P4-T11"],
-      "completedTasks": ["P4-T1", "P4-T2", "P4-T3", "P4-T4", "P4-T5", "P4-T6", "P4-T7", "P4-T8", "P4-T9", "P4-T10"],
+      "tasks": [
+        "P4-T1",
+        "P4-T2",
+        "P4-T3",
+        "P4-T4",
+        "P4-T5",
+        "P4-T6",
+        "P4-T7",
+        "P4-T8",
+        "P4-T9",
+        "P4-T10",
+        "P4-T11"
+      ],
+      "completedTasks": [
+        "P4-T1",
+        "P4-T2",
+        "P4-T3",
+        "P4-T4",
+        "P4-T5",
+        "P4-T6",
+        "P4-T7",
+        "P4-T8",
+        "P4-T9",
+        "P4-T10"
+      ],
       "startedAt": "2026-01-21T00:00:00.000Z",
       "completedAt": "2026-01-21T12:00:00.000Z",
       "notes": "P4-T11 (mobile testing) deferred - requires device/simulator testing"
@@ -53,8 +201,33 @@
     "5": {
       "name": "Case Management",
       "status": "COMPLETE",
-      "tasks": ["P5-T1", "P5-T2", "P5-T3", "P5-T4", "P5-T5", "P5-T6", "P5-T7", "P5-T8", "P5-T9", "P5-T10", "P5-T11", "P5-T12"],
-      "completedTasks": ["P5-T1", "P5-T2", "P5-T3", "P5-T4", "P5-T5", "P5-T6", "P5-T7", "P5-T8", "P5-T9", "P5-T10", "P5-T11"],
+      "tasks": [
+        "P5-T1",
+        "P5-T2",
+        "P5-T3",
+        "P5-T4",
+        "P5-T5",
+        "P5-T6",
+        "P5-T7",
+        "P5-T8",
+        "P5-T9",
+        "P5-T10",
+        "P5-T11",
+        "P5-T12"
+      ],
+      "completedTasks": [
+        "P5-T1",
+        "P5-T2",
+        "P5-T3",
+        "P5-T4",
+        "P5-T5",
+        "P5-T6",
+        "P5-T7",
+        "P5-T8",
+        "P5-T9",
+        "P5-T10",
+        "P5-T11"
+      ],
       "startedAt": "2026-01-22T00:00:00.000Z",
       "completedAt": "2026-01-22T12:00:00.000Z",
       "notes": "P5-T12 (mobile testing) deferred - requires device/simulator testing"
@@ -62,8 +235,25 @@
     "6": {
       "name": "Polish & Launch",
       "status": "COMPLETE",
-      "tasks": ["P6-T1", "P6-T2", "P6-T3", "P6-T4", "P6-T5", "P6-T6", "P6-T7", "P6-T8"],
-      "completedTasks": ["P6-T1", "P6-T2", "P6-T3", "P6-T4", "P6-T5", "P6-T6", "P6-T7"],
+      "tasks": [
+        "P6-T1",
+        "P6-T2",
+        "P6-T3",
+        "P6-T4",
+        "P6-T5",
+        "P6-T6",
+        "P6-T7",
+        "P6-T8"
+      ],
+      "completedTasks": [
+        "P6-T1",
+        "P6-T2",
+        "P6-T3",
+        "P6-T4",
+        "P6-T5",
+        "P6-T6",
+        "P6-T7"
+      ],
       "startedAt": "2026-01-30T00:00:00.000Z",
       "completedAt": "2026-02-22T00:00:00.000Z",
       "notes": "P6-T8 superseded by Phase 7 comprehensive hardening. All performance/security/store-prep tasks complete."
@@ -71,42 +261,140 @@
     "7": {
       "name": "Production Hardening",
       "status": "COMPLETE",
-      "tasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10", "P7-T11"],
-      "completedTasks": ["P7-T1", "P7-T2", "P7-T3", "P7-T4", "P7-T5", "P7-T6", "P7-T7", "P7-T8", "P7-T9", "P7-T10", "P7-T11"],
+      "tasks": [
+        "P7-T1",
+        "P7-T2",
+        "P7-T3",
+        "P7-T4",
+        "P7-T5",
+        "P7-T6",
+        "P7-T7",
+        "P7-T8",
+        "P7-T9",
+        "P7-T10",
+        "P7-T11"
+      ],
+      "completedTasks": [
+        "P7-T1",
+        "P7-T2",
+        "P7-T3",
+        "P7-T4",
+        "P7-T5",
+        "P7-T6",
+        "P7-T7",
+        "P7-T8",
+        "P7-T9",
+        "P7-T10",
+        "P7-T11"
+      ],
       "startedAt": "2026-02-22T00:00:00.000Z",
       "completedAt": "2026-06-10T00:00:00.000Z",
-      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL → HIGH → MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken — useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK — vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 — false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) — runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step. SOLE REMAINING LAUNCH GATE: P7-T11 human auth e2e (Google OAuth consent screen).",
+      "notes": "Discovered via full codebase recon (2026-02-22). Critical bugs: exposed secrets in .env.local, middleware/.single() crash on missing profiles, dead proxy.ts, missing error boundaries. Tasks ordered by severity: CRITICAL \u2192 HIGH \u2192 MEDIUM. Panel wiring gap closed 2026-05-25: all 8 panels wired in (app)/page.tsx, VaultProvider mounted, auth state passed to FeedShell. Missing DB migrations added (posts, post_likes, post_comments). SESSION 2026-05-29 repairs: (1) Phase 3 encryption/autofill/e-signature was silently broken \u2014 useSecureProfile queried nonexistent table secure_profiles; form_signatures table absent; both masked by (supabase as any) casts. Fixed via Strategy B: vault hooks wired into form-wizard + forms-panel, VaultGuard gate, form_data-nullable migration applied to prod. (2) Critical vault crypto bug: wrapDEK used wrapKey('raw') on non-extractable DEK \u2014 vault setup/unlock/rotate always threw. Fixed via envelope encryption (AES-GCM-encrypt raw DEK bytes; in-use key stays non-extractable). (3) document-encryption chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed. (4) Phase 5/6 document-upload broken: use-documents wrote nonexistent columns (uploaded_at/file_type/application_id) masked by (supabase as any). Fixed in Phase C (regen types + correct columns). (5) npm test now runs 61 tests (was 0 \u2014 false-green). (6) P7-T11 auth E2E harness built and committed; execution env-blocked (Node TLS sandbox) \u2014 runs via npm run test:e2e on unrestricted env; Google consent = 1 manual step. SOLE REMAINING LAUNCH GATE: P7-T11 human auth e2e (Google OAuth consent screen).",
       "panelWiringComplete": true,
       "migrationGapsClosed": true
     },
     "8": {
       "name": "Social Resource-Matching + Pre-Launch Security Hardening",
       "status": "COMPLETE",
-      "tasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17", "P8-T18", "P8-T19", "P8-T20"],
-      "completedTasks": ["P8-T1", "P8-T2", "P8-T3", "P8-T4", "P8-T5", "P8-T6", "P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17", "P8-T18", "P8-T19", "P8-T20"],
+      "tasks": [
+        "P8-T1",
+        "P8-T2",
+        "P8-T3",
+        "P8-T4",
+        "P8-T5",
+        "P8-T6",
+        "P8-T7",
+        "P8-T8",
+        "P8-T9",
+        "P8-T10",
+        "P8-T11",
+        "P8-T12",
+        "P8-T13",
+        "P8-T14",
+        "P8-T15",
+        "P8-T16",
+        "P8-T17",
+        "P8-T18",
+        "P8-T19",
+        "P8-T20"
+      ],
+      "completedTasks": [
+        "P8-T1",
+        "P8-T2",
+        "P8-T3",
+        "P8-T4",
+        "P8-T5",
+        "P8-T6",
+        "P8-T7",
+        "P8-T8",
+        "P8-T9",
+        "P8-T10",
+        "P8-T11",
+        "P8-T12",
+        "P8-T13",
+        "P8-T14",
+        "P8-T15",
+        "P8-T16",
+        "P8-T17",
+        "P8-T18",
+        "P8-T19",
+        "P8-T20"
+      ],
       "startedAt": "2026-05-26T00:00:00.000Z",
       "completedAt": "2026-06-08T00:00:00.000Z",
       "notes": "Beyond-plan phase shipped in full. P8-T1 through P8-T6 = earlier unplanned enhancements (programs panel, messaging, wizard, PDF annotator, saved resources, resource detail tables). P8-T7 through P8-T17 = Social Resource-Matching + Pre-Launch Security Hardening (PRs #47-57). P8-T18=#59 six new resource categories (eitc_tax_filing/free_legal/prenatal_natal_care/waste_disposal/free_camping/free_goods_donation, VT seed, wizard configs); P8-T19=#60 community petitions (post_type enum, petition_id FK, ESIGN server-stamped metadata, verified-signature-of-support copy, SECDEF count/has-signed RPCs); P8-T20=#61 all-roles safety pins (safety_alerts PostGIS GIST, severity-scaled TTL, publish-then-review, community confirm/clear votes, Sheet primitive, role-gated FAB). All merged to develop 2026-06-08; prod migrations verified live.",
-      "prs": ["#47", "#48", "#49", "#50", "#51", "#52", "#53", "#54", "#55", "#56", "#57", "#59", "#60", "#61"]
+      "prs": [
+        "#47",
+        "#48",
+        "#49",
+        "#50",
+        "#51",
+        "#52",
+        "#53",
+        "#54",
+        "#55",
+        "#56",
+        "#57",
+        "#59",
+        "#60",
+        "#61"
+      ]
     },
     "9": {
       "name": "Community Launch Readiness",
       "status": "IN_PROGRESS",
-      "tasks": ["P9-T1", "P9-T2", "P9-T3", "P9-T4", "P9-T5", "P9-T6", "P9-T7", "P9-T8", "P9-T9"],
-      "completedTasks": ["P9-T5", "P9-T6", "P9-T2", "P9-T3", "P9-T7"],
+      "tasks": [
+        "P9-T1",
+        "P9-T2",
+        "P9-T3",
+        "P9-T4",
+        "P9-T5",
+        "P9-T6",
+        "P9-T7",
+        "P9-T8",
+        "P9-T9"
+      ],
+      "completedTasks": [
+        "P9-T5",
+        "P9-T6",
+        "P9-T2",
+        "P9-T3",
+        "P9-T7",
+        "P9-T8"
+      ],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app→form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10): AcroForm fill-from-profile toolbar (FIELD_ALIAS_MAP, fillAcroFormFields, autofillValues prop), document rename+move (overflow DropdownMenu, updateDocument), submission→drive archival (non-blocking archiveSubmission, @cantoo/pdf-lib summary, encryptFile, submission_id FK, archivedDocumentId + archiveWarning state), dropdown-menu.tsx Radix-free primitive, testids (document-card/data-document-id/documents-panel), e2e 3 tests. P9-T8=web form retrieval. P9-T9=grandma-grade security + usability validation."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app\u2192form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10): AcroForm fill-from-profile toolbar (FIELD_ALIAS_MAP, fillAcroFormFields, autofillValues prop), document rename+move (overflow DropdownMenu, updateDocument), submission\u2192drive archival (non-blocking archiveSubmission, @cantoo/pdf-lib summary, encryptFile, submission_id FK, archivedDocumentId + archiveWarning state), dropdown-menu.tsx Radix-free primitive, testids (document-card/data-document-id/documents-panel), e2e 3 tests. P9-T8=COMPLETE (feature/gov-forms-presync, 2026-06-10): pre-sync architecture; government-forms Supabase Storage bucket (private, authenticated SELECT); CLI sync script apps/web/scripts/sync-government-forms.ts (5/6 synced: IRS Schedule 8812 98KB, HUD-52641 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB); SSOT lib/government-forms.ts (6 entries); Migration 20260610210000_government_forms_bucket.sql; Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill); e2e government-forms.spec.ts 3/3 green; docs-forms-lifecycle 3/3 regression green. HUD-50058 retired 2022 (formUrl=null). P9-T9=grandma-grade security + usability validation. P9-T9=grandma-grade security + usability validation."
     }
   },
   "metrics": {
-    "totalTasks": 115,
-    "completedTasks": 115,
+    "totalTasks": 116,
+    "completedTasks": 116,
     "progressPercentage": 100,
-    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, P9-T4 partial, P9-T8, P9-T9)",
+    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, P9-T4 partial, P9-T9)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 16,
-    "metricsNote": "Denominator = 115 (shipped tasks only; Phase 9 pending tasks T1-partial/T4/T8/T9 not yet in denominator — added as each ships). 115/115 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7] (5 of 9). P9-T7 shipped feature/docs-forms-lifecycle (2026-06-10): AcroForm autofill, document rename+move, submission→drive archival, dropdown-menu.tsx, e2e 3 tests. Updated 2026-06-10.",
+    "sessionsCompleted": 17,
+    "metricsNote": "Denominator = 116 (shipped tasks only; Phase 9 pending tasks T1-partial/T4/T9 not yet in denominator \u2014 added as each ships). 116/116 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8] (6 of 9). P9-T8 shipped feature/gov-forms-presync (2026-06-10): pre-sync bucket, CLI sync, Government Forms UI, VaultGuard+PdfAnnotator+autofill, e2e 3/3, regression 3/3. Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {
@@ -118,32 +406,93 @@
       {
         "id": "session-001",
         "startedAt": "2026-01-19T18:30:00.000Z",
-        "tasksCompleted": ["P0-T1", "P0-T2", "P0-T3", "P1-T1", "P1-T2"],
+        "tasksCompleted": [
+          "P0-T1",
+          "P0-T2",
+          "P0-T3",
+          "P1-T1",
+          "P1-T2"
+        ],
         "status": "complete"
       },
       {
         "id": "session-002",
         "startedAt": "2026-01-19T19:30:00.000Z",
-        "tasksCompleted": ["P1-T3", "P1-T4", "P1-T5", "P1-T6", "P1-T7", "P1-T8", "P1-T10", "P1-T11", "P1-T12", "P1-T13", "P1-T14", "P1-T19", "P1-T20", "P1-T21", "P1-T22"],
+        "tasksCompleted": [
+          "P1-T3",
+          "P1-T4",
+          "P1-T5",
+          "P1-T6",
+          "P1-T7",
+          "P1-T8",
+          "P1-T10",
+          "P1-T11",
+          "P1-T12",
+          "P1-T13",
+          "P1-T14",
+          "P1-T19",
+          "P1-T20",
+          "P1-T21",
+          "P1-T22"
+        ],
         "status": "complete"
       },
       {
         "id": "session-003",
         "startedAt": "2026-01-20T01:00:00.000Z",
-        "tasksCompleted": ["P1-T15", "P1-T16", "P1-T17", "P1-T18", "P1-T23", "P1-T24"],
+        "tasksCompleted": [
+          "P1-T15",
+          "P1-T16",
+          "P1-T17",
+          "P1-T18",
+          "P1-T23",
+          "P1-T24"
+        ],
         "status": "complete"
       },
       {
         "id": "session-004",
         "startedAt": "2026-01-20T01:15:00.000Z",
-        "tasksCompleted": ["P2-T1", "P2-T2", "P2-T3", "P2-T4", "P2-T5", "P2-T6", "P2-T7", "P2-T8", "P2-T9", "P2-T10", "P2-T11", "P2-T12", "P2-T13", "P2-T14", "P2-T15", "P3-T1", "P3-T2", "P3-T3", "P3-T4"],
+        "tasksCompleted": [
+          "P2-T1",
+          "P2-T2",
+          "P2-T3",
+          "P2-T4",
+          "P2-T5",
+          "P2-T6",
+          "P2-T7",
+          "P2-T8",
+          "P2-T9",
+          "P2-T10",
+          "P2-T11",
+          "P2-T12",
+          "P2-T13",
+          "P2-T14",
+          "P2-T15",
+          "P3-T1",
+          "P3-T2",
+          "P3-T3",
+          "P3-T4"
+        ],
         "status": "complete",
         "phase": "Phase 2-3 transition"
       },
       {
         "id": "session-005",
         "startedAt": "2026-01-20T18:00:00.000Z",
-        "tasksCompleted": ["P3-T5", "P3-T6", "P3-T7", "P3-T8", "P3-T9", "P3-T10", "P3-T11", "P3-T12", "P3-T13", "P3-T14", "P3-T15"],
+        "tasksCompleted": [
+          "P3-T5",
+          "P3-T6",
+          "P3-T7",
+          "P3-T8",
+          "P3-T9",
+          "P3-T10",
+          "P3-T11",
+          "P3-T12",
+          "P3-T13",
+          "P3-T14",
+          "P3-T15"
+        ],
         "status": "complete",
         "phase": "Phase 3: Form System",
         "notes": "Created complete form system with dynamic rendering, templates (SNAP, Medicaid), autofill, signatures. Used native Web Crypto API - zero external dependencies."
@@ -151,15 +500,38 @@
       {
         "id": "session-006",
         "startedAt": "2026-01-21T00:00:00.000Z",
-        "tasksCompleted": ["P4-T1", "P4-T2", "P4-T3", "P4-T4", "P4-T5", "P4-T6", "P4-T7", "P4-T8", "P4-T9", "P4-T10"],
+        "tasksCompleted": [
+          "P4-T1",
+          "P4-T2",
+          "P4-T3",
+          "P4-T4",
+          "P4-T5",
+          "P4-T6",
+          "P4-T7",
+          "P4-T8",
+          "P4-T9",
+          "P4-T10"
+        ],
         "status": "complete",
         "phase": "Phase 4: AI Assistant",
-        "notes": "Implemented complete AI chat system: OpenRouter Edge Function with streaming, model fallback chain (mistral→llama→haiku→sonnet), rate limiting (20 req/min/user), chat interface with guided flows (resource finder, eligibility checker, form help), crisis detection and support."
+        "notes": "Implemented complete AI chat system: OpenRouter Edge Function with streaming, model fallback chain (mistral\u2192llama\u2192haiku\u2192sonnet), rate limiting (20 req/min/user), chat interface with guided flows (resource finder, eligibility checker, form help), crisis detection and support."
       },
       {
         "id": "session-007",
         "startedAt": "2026-01-22T00:00:00.000Z",
-        "tasksCompleted": ["P5-T1", "P5-T2", "P5-T3", "P5-T4", "P5-T5", "P5-T6", "P5-T7", "P5-T8", "P5-T9", "P5-T10", "P5-T11"],
+        "tasksCompleted": [
+          "P5-T1",
+          "P5-T2",
+          "P5-T3",
+          "P5-T4",
+          "P5-T5",
+          "P5-T6",
+          "P5-T7",
+          "P5-T8",
+          "P5-T9",
+          "P5-T10",
+          "P5-T11"
+        ],
         "status": "complete",
         "phase": "Phase 5: Case Management",
         "notes": "Implemented complete case management system: Dashboard layout with responsive sidebar/mobile nav, Application list/detail views with status updates, Document management with upload/viewer/organization, Notification system with reminders and push notification support. Build passed successfully."
@@ -167,7 +539,15 @@
       {
         "id": "session-008",
         "startedAt": "2026-01-30T00:00:00.000Z",
-        "tasksCompleted": ["P6-T1", "P6-T2", "P6-T3", "P6-T4", "P6-T5", "P6-T6", "P6-T7"],
+        "tasksCompleted": [
+          "P6-T1",
+          "P6-T2",
+          "P6-T3",
+          "P6-T4",
+          "P6-T5",
+          "P6-T6",
+          "P6-T7"
+        ],
         "status": "in_progress",
         "phase": "Phase 6: Polish & Launch",
         "notes": "Implemented performance optimizations (bundle, image, query, cache), security utilities, app store preparation docs, and comprehensive launch checklist with User Dev Test Session requirement. P6-T8 (Production Launch Verification) in progress - awaiting user testing."
@@ -177,8 +557,8 @@
         "startedAt": "2026-05-25T00:00:00.000Z",
         "tasksCompleted": [],
         "unplannedGapsClosed": [
-          "panel-wiring: all 8 panels wired into (app)/page.tsx; VaultProvider mounted in providers.tsx; auth state (isAuthenticated, userName) wired to FeedShell — commits 290c2d7 on feature/panel-wiring-vault-provider",
-          "db-migrations: added 20260220200000_add_community_feed_tables.sql (posts, post_likes, post_comments) — commit 8b26724"
+          "panel-wiring: all 8 panels wired into (app)/page.tsx; VaultProvider mounted in providers.tsx; auth state (isAuthenticated, userName) wired to FeedShell \u2014 commits 290c2d7 on feature/panel-wiring-vault-provider",
+          "db-migrations: added 20260220200000_add_community_feed_tables.sql (posts, post_likes, post_comments) \u2014 commit 8b26724"
         ],
         "status": "in_progress",
         "phase": "Phase 7: Production Hardening",
@@ -188,13 +568,15 @@
         "id": "session-010",
         "startedAt": "2026-05-29T00:00:00.000Z",
         "endedAt": "2026-05-29T23:59:00.000Z",
-        "tasksCompleted": ["P7-T11-harness"],
+        "tasksCompleted": [
+          "P7-T11-harness"
+        ],
         "unplannedRepairs": [
-          "Phase 3 — encryption/autofill/e-signature was silently broken (as-any-masked queries to nonexistent tables). Fixed: vault hooks wired, VaultGuard gate, form_data-nullable migration",
-          "vault-crypto — wrapDEK('raw') on non-extractable DEK always threw; fixed via AES-GCM envelope encryption",
-          "document-encryption — chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed",
-          "Phase 5/6 documents — use-documents queried nonexistent columns (uploaded_at/file_type/application_id); fixed after type regen",
-          "test-false-green — npm test ran 0 tests; now 61 (30 node:test + 31 vitest) + ESLint as-any guard",
+          "Phase 3 \u2014 encryption/autofill/e-signature was silently broken (as-any-masked queries to nonexistent tables). Fixed: vault hooks wired, VaultGuard gate, form_data-nullable migration",
+          "vault-crypto \u2014 wrapDEK('raw') on non-extractable DEK always threw; fixed via AES-GCM envelope encryption",
+          "document-encryption \u2014 chunk-offset bug (CHUNK_SIZE vs CHUNK_SIZE+16) fixed",
+          "Phase 5/6 documents \u2014 use-documents queried nonexistent columns (uploaded_at/file_type/application_id); fixed after type regen",
+          "test-false-green \u2014 npm test ran 0 tests; now 61 (30 node:test + 31 vitest) + ESLint as-any guard",
           "14 dead files / 4540 LOC deleted; 4 redundant indexes dropped; Geist removed for deterministic build",
           "withMetric woven into 7 hot paths + docs/observability.md"
         ],
@@ -205,34 +587,63 @@
       {
         "id": "session-011",
         "startedAt": "2026-06-06T00:00:00.000Z",
-        "tasksCompleted": ["P8-T7", "P8-T8", "P8-T9", "P8-T10", "P8-T11", "P8-T12", "P8-T13", "P8-T14", "P8-T15", "P8-T16", "P8-T17"],
+        "tasksCompleted": [
+          "P8-T7",
+          "P8-T8",
+          "P8-T9",
+          "P8-T10",
+          "P8-T11",
+          "P8-T12",
+          "P8-T13",
+          "P8-T14",
+          "P8-T15",
+          "P8-T16",
+          "P8-T17"
+        ],
         "status": "complete",
         "phase": "Phase 8: Social Resource-Matching + Pre-Launch Security Hardening",
-        "notes": "Retroactive docs-sync session (chore/docsync-phase8). PRs #47-57 were shipped to develop but not reflected in tracking docs. Session records them as complete and folds Phase 8 into the headline metrics. No prod/DB/app changes made in this session — docs only."
+        "notes": "Retroactive docs-sync session (chore/docsync-phase8). PRs #47-57 were shipped to develop but not reflected in tracking docs. Session records them as complete and folds Phase 8 into the headline metrics. No prod/DB/app changes made in this session \u2014 docs only."
       },
       {
         "id": "session-012",
         "startedAt": "2026-06-10T00:00:00.000Z",
-        "tasksCompleted": ["P9-T1-share-to-feed", "P9-T1-app-backlink"],
+        "tasksCompleted": [
+          "P9-T1-share-to-feed",
+          "P9-T1-app-backlink"
+        ],
         "status": "complete",
         "phase": "Phase 9: Community Launch Readiness",
-        "notes": "P9-T1 two sub-items shipped: (a) Share to Feed button on all ProgramTile cards — ShareToFeedDialog with prefilled editable content, posts insert with resource_id, navigates to feed on success; (b) application→originating form back-link — programName on application cards is a tappable link that deep-links to documents/forms subtab via formsTarget panelParam; use-applications extended to fetch form_type from form_templates join. Files: programs-panel.tsx, applications-panel.tsx, use-applications.ts, e2e/programs-posts-bridge.spec.ts (2/2 green). type-check 0 errors, lint 0 new warnings."
+        "notes": "P9-T1 two sub-items shipped: (a) Share to Feed button on all ProgramTile cards \u2014 ShareToFeedDialog with prefilled editable content, posts insert with resource_id, navigates to feed on success; (b) application\u2192originating form back-link \u2014 programName on application cards is a tappable link that deep-links to documents/forms subtab via formsTarget panelParam; use-applications extended to fetch form_type from form_templates join. Files: programs-panel.tsx, applications-panel.tsx, use-applications.ts, e2e/programs-posts-bridge.spec.ts (2/2 green). type-check 0 errors, lint 0 new warnings."
       },
       {
         "id": "session-013",
         "startedAt": "2026-06-10T00:00:00.000Z",
-        "tasksCompleted": ["P9-T2"],
+        "tasksCompleted": [
+          "P9-T2"
+        ],
         "status": "complete",
         "phase": "Phase 9: Community Launch Readiness",
-        "notes": "P9-T2 per-type feed UI + cursor pagination shipped (PR #69, branch feat/p9-t2-per-type-pagination). (1) Keyset pagination on (created_at, id) — PAGE_SIZE=25, Load More button, deduped realtime prepend; Promise.race hard timeout + AbortSignal on all secondary queries prevents stuck-loading. (2) Resource category badge on resource_post cards using CATEGORY_META SSOT from lib/resource-categories.ts. (3) Safety alerts strip above composer — up to 5 active alerts (severity-ordered), each tap→map panel; 'Unverified' badge when status=pending. (4) Composer safety hazard deep-link button. e2e 4/4 green (A1 first-page, A2+A3 load-more+no-dup, B1+B2 category badge, C1+C2+C3 safety strip nav). type-check 0 errors, lint 0 new warnings."
+        "notes": "P9-T2 per-type feed UI + cursor pagination shipped (PR #69, branch feat/p9-t2-per-type-pagination). (1) Keyset pagination on (created_at, id) \u2014 PAGE_SIZE=25, Load More button, deduped realtime prepend; Promise.race hard timeout + AbortSignal on all secondary queries prevents stuck-loading. (2) Resource category badge on resource_post cards using CATEGORY_META SSOT from lib/resource-categories.ts. (3) Safety alerts strip above composer \u2014 up to 5 active alerts (severity-ordered), each tap\u2192map panel; 'Unverified' badge when status=pending. (4) Composer safety hazard deep-link button. e2e 4/4 green (A1 first-page, A2+A3 load-more+no-dup, B1+B2 category badge, C1+C2+C3 safety strip nav). type-check 0 errors, lint 0 new warnings."
       },
       {
         "id": "session-014",
         "startedAt": "2026-06-10T00:00:00.000Z",
-        "tasksCompleted": ["P9-T7"],
+        "tasksCompleted": [
+          "P9-T7"
+        ],
         "status": "complete",
         "phase": "Phase 9: Community Launch Readiness",
-        "notes": "P9-T7 Document Drive + Form Autofill Complete Lifecycle shipped (feature/docs-forms-lifecycle). Three sub-items: (a) AcroForm fill-from-profile — FIELD_ALIAS_MAP + normaliseFieldName + fillAcroFormFields() exported; PdfAnnotatorProps.autofillValues + onFillComplete; shows fill-result banner; Wand2 toolbar button with data-testid. (b) Document rename+move — overflow DropdownMenu on each DocumentCard (Rename dialog, Move to category, Delete); updateDocument(id,{name?,category?}) in use-documents.ts with AbortSignal.timeout + optimistic update; only plaintext name column updated (vault DEK not available at hook level). (c) Submission→drive archival — archiveSubmission() useCallback in use-vault-form-submission.ts: @cantoo/pdf-lib summary PDF (template.name + date title, label:value lines from in-memory plaintext), encryptFile() standalone call (no hook-in-hook), upload to user-documents bucket, insert user_documents with submission_id FK + category=forms; fire-and-forget (Promise.then/catch); archivedDocumentId + archiveWarning state fields. Also: dropdown-menu.tsx (minimal Radix-free, DropdownMenu/Trigger/Content/Item); testids data-testid=document-card + data-document-id + data-testid=documents-panel. type-check 0 errors, lint 110 warnings (1 fewer than baseline). e2e docs-forms-lifecycle.spec.ts 3 tests."
+        "notes": "P9-T7 Document Drive + Form Autofill Complete Lifecycle shipped (feature/docs-forms-lifecycle). Three sub-items: (a) AcroForm fill-from-profile \u2014 FIELD_ALIAS_MAP + normaliseFieldName + fillAcroFormFields() exported; PdfAnnotatorProps.autofillValues + onFillComplete; shows fill-result banner; Wand2 toolbar button with data-testid. (b) Document rename+move \u2014 overflow DropdownMenu on each DocumentCard (Rename dialog, Move to category, Delete); updateDocument(id,{name?,category?}) in use-documents.ts with AbortSignal.timeout + optimistic update; only plaintext name column updated (vault DEK not available at hook level). (c) Submission\u2192drive archival \u2014 archiveSubmission() useCallback in use-vault-form-submission.ts: @cantoo/pdf-lib summary PDF (template.name + date title, label:value lines from in-memory plaintext), encryptFile() standalone call (no hook-in-hook), upload to user-documents bucket, insert user_documents with submission_id FK + category=forms; fire-and-forget (Promise.then/catch); archivedDocumentId + archiveWarning state fields. Also: dropdown-menu.tsx (minimal Radix-free, DropdownMenu/Trigger/Content/Item); testids data-testid=document-card + data-document-id + data-testid=documents-panel. type-check 0 errors, lint 110 warnings (1 fewer than baseline). e2e docs-forms-lifecycle.spec.ts 3 tests."
+      },
+      {
+        "id": "session-015",
+        "startedAt": "2026-06-10T00:00:00.000Z",
+        "tasksCompleted": [
+          "P9-T8"
+        ],
+        "status": "complete",
+        "phase": "Phase 9: Community Launch Readiness",
+        "notes": "P9-T8 Web Form Retrieval shipped (feature/gov-forms-presync). Pre-sync architecture: government PDFs fetched once via CLI into Supabase Storage; client downloads from bucket. SSOT lib/government-forms.ts (6 forms). Migration 20260610210000_government_forms_bucket.sql (private bucket + authenticated SELECT). Sync: 5/6 OK (IRS 98KB, HUD 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB; SSA-8000 403). UI: Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill). HUD-50058 retired (formUrl=null). e2e government-forms.spec.ts 3/3. Regression docs-forms-lifecycle 3/3."
       }
     ]
   }

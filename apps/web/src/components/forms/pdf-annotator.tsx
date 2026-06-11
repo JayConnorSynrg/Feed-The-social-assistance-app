@@ -599,7 +599,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, autof
   }
 
   return (
-    <div className="h-full flex flex-col bg-stone-50">
+    <div data-testid="pdf-annotator" className="h-full flex flex-col bg-stone-50">
       <div className="flex items-center gap-2 px-4 py-3 bg-stone-100 border-b border-stone-200 flex-wrap">
         <Button
           size="sm"
