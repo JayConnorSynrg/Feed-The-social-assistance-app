@@ -1807,12 +1807,12 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
 | 1.4.4 | 2026-06-10 | Accounting fix: Phase 9 dashboard row corrected 2→3 completed (T2 was missing from count; T5/T6/T2 all complete). Overall headline clarified: 114/114 shipped tasks (denominator = shipped only; Phase 9 pending tasks not yet included). |
 | 1.4.5 | 2026-06-10 | P9-T3 COMPLETE: per-post generateMetadata on /s/embed/[id] + metadataBase on root layout + /api/oembed endpoint + discovery link on both embed and post pages. e2e 4/4. Phase 9 dashboard: 3→4 completed. Pending list: T1-partial, T4, T7, T8, T9. |
-| 1.4.8 | 2026-06-10 | P9-T4 COMPLETE (feature/suggest-resource): suggest-resource flow — Suggest a Resource in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state/phone/website), INSERT status=pending, no migration needed (INSERT policy permits it). e2e 4/4 + safety-pins 5/5 regression. Phase 9 dashboard 6->7. 117/117 shipped. Pending: T1-partial, T9. |
-| 1.4.7 | 2026-06-10 | P9-T8 COMPLETE (feature/gov-forms-presync): pre-sync government forms bucket (IRS/HUD/VA/SSA, 5/6 synced), Government Forms UI section in forms-panel.tsx, VaultGuard + PdfAnnotator + autofill integration. Migration 20260610210000_government_forms_bucket.sql. e2e 3/3. Regression docs-forms-lifecycle 3/3. Phase 9 dashboard: 5→6. 116/116. Pending: T1-partial, T4, T9. |
 | 1.4.6 | 2026-06-10 | P9-T7 COMPLETE (feature/docs-forms-lifecycle): AcroForm fill-from-profile (FIELD_ALIAS_MAP + fillAcroFormFields), document rename+move (overflow menu + updateDocument), submission→drive archival (non-blocking encrypted PDF, submission_id FK, archivedDocumentId state), dropdown-menu.tsx (Radix-free). e2e docs-forms-lifecycle.spec.ts 3 tests. Phase 9 dashboard: 4→5 completed. Pending list: T1-partial, T4, T8, T9. 115/115 shipped. |
+| 1.4.7 | 2026-06-10 | P9-T8 COMPLETE (feature/gov-forms-presync): pre-sync government forms bucket (IRS/HUD/VA/SSA, 5/6 synced), Government Forms UI section in forms-panel.tsx, VaultGuard + PdfAnnotator + autofill integration. Migration 20260610210000_government_forms_bucket.sql. e2e 3/3. Regression docs-forms-lifecycle 3/3. Phase 9 dashboard: 5→6. 116/116. Pending: T1-partial, T4, T9. |
+| 1.4.8 | 2026-06-10 | P9-T4 COMPLETE (feature/suggest-resource): suggest-resource flow — Suggest a Resource in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state/phone/website), INSERT status=pending, no migration needed (INSERT policy permits it). e2e 4/4 + safety-pins 5/5 regression. Phase 9 dashboard 6->7. 117/117 shipped. Pending: T1-partial, T9. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/gov-forms-presync (2026-06-10)
+**Last Agent Session**: feature/suggest-resource (2026-06-10)
 **Total Development Time**: 0 hours
