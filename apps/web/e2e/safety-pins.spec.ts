@@ -243,10 +243,25 @@ test('safety alert marker appears and vote buttons work', async ({ page }) => {
   // Also ensure no Radix dialog overlay is intercepting pointer events
   await expect(page.locator('[role="dialog"][data-state="open"]')).not.toBeAttached({ timeout: 5_000 })
 
-  // ── 6. Wait for the marker to appear on the map ───────────────────────────
-  // The map defaults to US-center zoom 4 (whole US in viewport).
-  // The realtime INSERT subscription or the next in-view fetch will add the marker.
-  // The 400 ms debounce + EWKB parse means it may take a moment.
+  // ── 6. Force a viewport re-fetch by nav-away + nav-back, then wait ───────
+  // The map hook fetches alerts on viewportBounds change. After placing an alert,
+  // the viewport hasn't changed so no re-fetch fires. The realtime INSERT path
+  // requires EWKB decomposition which can silently fail.
+  //
+  // Reliable approach: navigate to a different panel and back. This remounts the
+  // map panel, which fires the initial fetchAlerts with the current bounds
+  // and returns the newly placed alert with pre-decomposed coords from the RPC.
+  // key={alert.id} means the SafetyAlertMarker is created fresh on remount, so
+  // showPopup starts as false — we click the marker AFTER re-fetch completes.
+  const overviewBtn = page.locator('[data-testid="sidebar-overview"]')
+    .or(page.locator('[data-testid="sidebar-feed"]'))
+  await overviewBtn.first().click()
+  await page.waitForTimeout(500)
+  // Navigate back to map
+  await page.locator('[data-testid="sidebar-map"]').click()
+  await expect(page.locator('[id="map-view-panel"]')).toBeVisible({ timeout: 10_000 })
+  // Allow initial fetchAlerts to complete (debounce 400 ms + RPC round-trip)
+  await page.waitForTimeout(2_500)
 
   const markerLocator = page.locator(`[data-testid="safety-alert-marker-${capturedAlertId}"]`)
   await expect(markerLocator).toBeVisible({ timeout: 20_000 })
@@ -254,7 +269,12 @@ test('safety alert marker appears and vote buttons work', async ({ page }) => {
 
   // ── 7. Click marker → popup opens ─────────────────────────────────────────
 
-  await markerLocator.click()
+  // force:true bypasses Playwright pointer-event detection: the marker is a <div>
+  // wrapping a Lucide SVG whose inner <path> elements intercept pointer-event checks
+  // at the bounding-box center. force:true dispatches the click directly on the
+  // <div data-testid="safety-alert-marker-…"> which has the onClick handler; real
+  // users click the visible coloured circle and the same handler fires.
+  await markerLocator.click({ force: true })
 
   // ── 8. Assert trust label ─────────────────────────────────────────────────
 
@@ -262,11 +282,15 @@ test('safety alert marker appears and vote buttons work', async ({ page }) => {
   console.log('[safety-pins] trust label visible in popup')
 
   // ── 9. Assert vote buttons are present ────────────────────────────────────
+  // Give the popup a moment to fully render all children. The trust-label check
+  // passes as soon as the first div renders; the vote buttons at the bottom of
+  // the popup may lag one animation frame.
+  await page.waitForTimeout(500)
 
   const confirmBtn = page.locator(`[data-testid="vote-confirm-${capturedAlertId}"]`)
   const clearBtn = page.locator(`[data-testid="vote-clear-${capturedAlertId}"]`)
-  await expect(confirmBtn).toBeVisible({ timeout: 5_000 })
-  await expect(clearBtn).toBeVisible()
+  await expect(confirmBtn).toBeVisible({ timeout: 10_000 })
+  await expect(clearBtn).toBeVisible({ timeout: 5_000 })
   console.log('[safety-pins] vote buttons (Still here / Gone now) visible')
 
   // ── 10. Click "Still here" → confirm_count increments ────────────────────

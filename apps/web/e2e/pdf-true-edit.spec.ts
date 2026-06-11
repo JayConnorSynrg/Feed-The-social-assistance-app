@@ -252,14 +252,19 @@ test('PDF true-edit: fill → save → edit → re-save → view (full sidecar r
   ).toBeVisible({ timeout: 20_000 })
   console.log('[pdf-true-edit] STEP 1 PASSED: doc appears in Documents list (live DOM)')
 
-  // Verify DB has encrypted_annotations set (proves sidecar was stored)
+  // Verify DB has encrypted_annotations set (proves sidecar was stored).
+  // NOTE: the `name` column stores only the non-PII placeholder 'Encrypted Document'
+  // (see ENCRYPTED_DOCUMENT_NAME_PLACEHOLDER in document-encryption.ts); the real
+  // filename lives in encrypted_original_name / encrypted_name_iv. We therefore
+  // match the first row belonging to this user rather than by filename.
   const { data: dbRows, error: dbErr } = await admin
     .from('user_documents')
     .select('id, name, encrypted_annotations, annotations_iv')
     .eq('user_id', provision.userId)
     .limit(10)
   expect(dbErr).toBeNull()
-  const docRow = (dbRows ?? []).find((r: { name: string }) => r.name === 'minimal-acroform.pdf')
+  // Any document for this user — there should be exactly one after the first save
+  const docRow = (dbRows ?? [])[0]
   expect(docRow).toBeTruthy()
   expect(docRow?.encrypted_annotations).not.toBeNull()
   expect(docRow?.annotations_iv).not.toBeNull()
