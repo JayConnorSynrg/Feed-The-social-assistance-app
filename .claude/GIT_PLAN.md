@@ -1892,6 +1892,22 @@ completed_at: "2026-06-10T22:32:57.000Z"
 ```
 
 ```yaml
+id: verify-merge-pr76-gov-forms-presync
+status: complete
+type: merge
+description: "chore(storage): verify, merge, and prod-apply PR #76 — gov-forms-presync: government-forms storage bucket (public=false, authenticated SELECT only) + docsync checklist v1.4.7 Phase 9 row T5→T6. Verifications all PASS: (1) PR OPEN/MERGEABLE/base=develop PASS; (2) docsync v1.4.7: frontmatter 116/116, currentTask=P9-T4, Phase 9 completedTasks=[T5,T6,T2,T3,T7,T8] (6 of 9), pending=T1-partial+T4+T9, cumulative footnote ~L79 updated through P9-T8, JSON valid PASS; (3) migration idempotent: bucket INSERT ON CONFLICT DO NOTHING, DROP POLICY IF EXISTS before CREATE, policy CREATE restricted to authenticated + bucket_id='government-forms', no client INSERT/UPDATE/DELETE PASS; (4) security: keys from env only (process.env.*), client path uses createClient() anon client (forms-panel.tsx:696+780), SSOT all .gov domains (irs.gov/hud.gov/vba.va.gov/ssa.gov) PASS; (5) test-leak sweep: 0 e2e-test/* objects in government-forms bucket, 0 e2e+govforms* auth users PASS; (6) CI 12/12 SUCCESS (Analyze/Build/CI-Success/CodeQL/Deploy-Preview/Install/Lint/Security-Audit/Test/Type-Check/Vercel/Vercel-Preview). Migration was pre-applied to prod (bucket created 2026-06-10T23:50Z). Post-merge: ancestor-verify PASS (81b0384a is ancestor of origin/develop). Prod state: bucket=government-forms public=false, policy=gov_forms_select_authenticated roles={authenticated} SELECT, 5 PDFs present (federal/hud-52641.pdf 363kB, federal/irs-f1040s8.pdf 98kB, federal/ssa-16.pdf 170kB, federal/va-21-526ez.pdf 1882kB, federal/va-21p-527ez.pdf 2928kB)."
+branch: feature/gov-forms-presync
+base: develop
+remote: origin
+pr: 76
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/76
+merge_sha: 81b0384a81c813f51625cf857173f81368835d6e
+merged_into: develop
+created_at: "2026-06-10T23:30:00.000Z"
+completed_at: "2026-06-11T00:29:27.000Z"
+```
+
+```yaml
 id: verify-pr75-docs-forms-lifecycle
 status: blocked
 type: merge
