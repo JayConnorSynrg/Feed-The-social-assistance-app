@@ -16,7 +16,21 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave6a-client-pii-strip
+next_action_id: wave6a-edge-chat-hardening
+
+```yaml
+id: wave6a-edge-chat-hardening
+status: in_progress
+type: branch+commit+pr
+description: "security(chat): harden the LIVE chat edge function's LLM I/O. (i) OpenRouter zero-data-retention — add provider:{data_collection:'deny',zdr:true} to the request body so prompts route only to non-retaining endpoints (per-request zdr ORs with account-level; account-level ZDR is an owner dashboard step). (ii) Input clamps + model allowlist at the read site — temperature clamped to [0,1.5], maxTokens clamped to <=2048, client-supplied model restricted to MODEL_ALLOWLIST (the chain) else ignored→default chain; out-of-range/arbitrary values never reach OpenRouter. (iii) RAG prompt-injection sanitization — sanitizeUntrusted() neutralizes instruction-control tokens (system:/[INST]/ignore-all), the --- section delimiters and [[ ]] card markers, and collapses newlines on every DB-resource AND Firecrawl-web field before it enters the system prompt; untrusted block fenced with an explicit DATA-ONLY guard line. PRE-CHECK finding (probed live 2026-06-11): 2 of 4 chain models (mistralai/mistral-7b-instruct, anthropic/claude-3.5-sonnet) now 404 'No endpoints found' → replaced with mistralai/mistral-small-3.2-24b-instruct + anthropic/claude-sonnet-4.5 (both ZDR-verified 200), and widened the fallback to also catch 404/no-route (incl ZDR-no-endpoint 404) so the chain self-heals. Deployed live v16 with --no-verify-jwt (verify_jwt:false posture preserved). 3 smokes PASS (normal 200; clamp/allowlist evil-model→default; injection PWNED-neutralized); seeded test row + test user cleaned to 0; no rollback. type-check 0 errors; lint delta 0 on touched file. Touches ONLY supabase/functions/chat/index.ts. base=develop. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/wave6a-edge-chat-hardening
+base: develop
+remote: origin
+files:
+  - supabase/functions/chat/index.ts
+created_at: "2026-06-11T16:40:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: wave4a-doc-filename-encryption
