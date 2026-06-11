@@ -19,6 +19,24 @@ completed_at: <ISO timestamp or null>
 next_action_id: next-p9-task
 
 ```yaml
+id: merge-pr80-geo-searchpath-expand
+status: complete
+type: merge
+description: "fix(security): wave-1-A geo SECDEF search_path expand to include extensions schema (PR #80). Adds `extensions` to search_path of 9 geo SECURITY DEFINER functions (geocode_profile_location, nearby_resources, notify_seekers_near_resource, place_safety_alert, resources_in_bounds, safety_alerts_in_view, seekers_within_radius, set_resource_location, set_resource_location_by_id). Pre-step for future PostGIS public→extensions relocation via Supabase Support. Additive+idempotent: public stays first on path, extensions only becomes load-bearing after relocation. Live verified: all 9 proconfig rows show search_path=\"public, extensions\". CI 11/11 SUCCESS. Squash merged → f1b0718 on origin/develop."
+branch: feature/geo-searchpath-expand
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260610220000_geo_searchpath_expand.sql
+pr: 80
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/80
+merge_sha: f1b0718
+merged_into: develop
+created_at: "2026-06-10T00:00:00.000Z"
+completed_at: "2026-06-11T02:00:00Z"
+```
+
+```yaml
 id: verify-merge-pr78-grandma-pass
 status: complete
 type: merge
