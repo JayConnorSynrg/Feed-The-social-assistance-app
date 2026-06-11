@@ -23,6 +23,16 @@ export interface GuidedFlow {
   description: string
   icon: string
   steps: FlowStep[]
+  /**
+   * When true, the guided-flow component collects answers and hands them to
+   * onComplete WITHOUT building an aiPrompt or sending anything to the LLM.
+   * Use this for flows whose raw answers are sensitive PII (income, pregnancy,
+   * household composition): those answers must flow ONLY to the de-identified
+   * benefits-screening edge function, never into a message that reaches the
+   * third-party LLM. The owning panel rebuilds a derived, PII-free LLM message
+   * from the screening output.
+   */
+  skipDirectSend?: boolean
 }
 
 // Resource Finder Flow (P4-T5)
@@ -94,6 +104,11 @@ export const eligibilityCheckerFlow: GuidedFlow = {
   name: 'Check Eligibility',
   description: 'See what benefits programs you may qualify for',
   icon: '✓',
+  // Raw answers (income, pregnancy, household, employment, benefits) are PII.
+  // They flow ONLY to the de-identified benefits-screening edge function; the
+  // chat panel rebuilds a derived, PII-free LLM message from the screening
+  // result. The guided-flow component must NOT send these answers to the LLM.
+  skipDirectSend: true,
   steps: [
     {
       id: 'household-size',
@@ -201,23 +216,10 @@ export const eligibilityCheckerFlow: GuidedFlow = {
       type: 'text',
       placeholder: 'Enter state name or abbreviation',
       validation: { required: true },
-      aiPrompt: `Based on the following household information, assess potential eligibility for benefits programs:
-
-Household Information:
-- Household size: {{household-size}}
-- Children in household: {{children}}
-- Children ages: {{children-ages}}
-- Pregnant: {{pregnant}}
-- Monthly income: {{income}}
-- Employment status: {{employment}}
-- Current benefits: {{current-benefits}}
-- State: {{state}}
-
-Please:
-1. List programs they MAY be eligible for (SNAP, Medicaid, TANF, WIC, LIHEAP, etc.)
-2. Explain briefly why they might qualify
-3. Note that this is general guidance and they should apply to get an official determination
-4. Provide next steps for applying to the most relevant programs`,
+      // No aiPrompt: this flow is skipDirectSend. Raw household answers never
+      // reach the LLM. Eligibility is computed by the benefits-screening edge
+      // function from a de-identified payload, and the chat panel sends only the
+      // DERIVED result (qualifying program names + state) onward to the LLM.
     },
   ],
 }

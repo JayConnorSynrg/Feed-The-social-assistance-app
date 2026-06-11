@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave4a-doc-filename-encryption
+next_action_id: wave6a-client-pii-strip
 
 ```yaml
 id: wave4a-doc-filename-encryption
@@ -2051,4 +2051,25 @@ blocking_defects:
     root_cause: "Spec waits for [data-testid=forms-panel] or [data-testid=form-template-list] — neither testid exists in FormsPanel component. FormsPanel renders correctly but has no data-testid attribute on its container or template list. Fix: add data-testid='forms-panel' to FormsPanel root div, or change locator to [data-testid='form-wizard-container'] or heading selector."
     result: "element(s) not found timeout 10000ms"
 notes: "CI 11/11 SUCCESS (all required GitHub checks pass). Docsync fix committed (c3a406d) and pushed — currentTask P9-T1→P9-T8, total_tasks 114→115, Phase 9 dashboard 4→5. Test-leak sweep: 0 lifecycle user rows in auth.users / user_documents / form_submissions / storage.objects. documents-view.spec.ts: 5/5 PASS (shared component regression clean)."
+```
+
+```yaml
+id: wave6a-client-pii-strip
+status: in_progress
+type: branch+commit+pr
+description: "security(chat): stop sending raw user PII to the 3rd-party LLM (OpenRouter) from the client. CLIENT-SIDE ONLY. (1) Eligibility/guided flow — guided-flow.tsx no longer calls buildAIPrompt+sendMessage for the eligibility flow; eligibility flow marked skipDirectSend so raw household/income/pregnancy/employment/benefits answers flow ONLY to the de-identified benefits-screening edge fn. chat-panel sends the DERIVED screening output (qualifying program NAMES + state) to the LLM, never the raw block. Raw-PII aiPrompt template removed from guided-flows.ts (defense-in-depth). Screening-timeout/error recovery message uses only the de-identified state abbr. (2) Category wizard (chat-panel.tsx auto-send effect) — replaced raw-answer dump with an allowlist that carries only assistance-need keys + state; insurance status, exact household size, income range, tax filing status, dependents, pregnancy stage, free-text situation, work experience, contact preference are dropped. (3) Verified egress: use-chat.ts body + edge fn confirmed not to forward precise lat/lng to OpenRouter (location used edge-side only for searchResources). New egress-intercept e2e chat-pii-egress.spec.ts: intercepts /functions/v1/chat, asserts sentinel PII (pregnant, 2000-3000, household block, No insurance) ABSENT from the LLM-bound user message while screening result still renders + chat still returns a useful resource response. Both tests PASS; vitest 56 pass; type-check 0; touched-file lint clean. Edge RAG-sanitize/ZDR/clamp DEFERRED to a separate later PR (chat/index.ts untouched). DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/wave6a-client-pii-strip
+base: develop
+remote: origin
+files:
+  - apps/web/src/lib/ai/guided-flows.ts
+  - apps/web/src/components/chat/guided-flow.tsx
+  - apps/web/src/components/panels/chat-panel.tsx
+  - apps/web/e2e/chat-pii-egress.spec.ts
+pr: 85
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/85
+merge_sha: null
+merged_into: null
+created_at: "2026-06-11T16:20:00.000Z"
+completed_at: null
 ```

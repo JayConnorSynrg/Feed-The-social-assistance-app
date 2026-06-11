@@ -563,25 +563,27 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
         await sendMessage(lines.join('\n'))
         return
-      } catch (err: unknown) {
+      } catch {
         clearTimeout(timeoutId)
-        // Handle Next.js fetch abort as success-like (operation may have completed server-side)
-        if (
-          (err instanceof DOMException && err.name === 'AbortError') ||
-          (err instanceof Error && (err.message.includes('signal') || err.message.includes('aborted')))
-        ) {
-          // Timed out — fall through to AI response
-        } else {
-          // Service unavailable — show friendly message then fall through to AI response
-          await sendMessage(
-            'The eligibility screening service is temporarily unavailable. Based on your answers, I recommend checking the Programs panel to find benefits in your area.'
-          )
-          return
-        }
+        // Screening timed out (Next.js fetch abort) or the service errored.
+        // Either way the recovery message uses ONLY the de-identified state
+        // abbreviation from the screening request — never the raw
+        // household/income/pregnancy answers. The raw aiResponse path below is
+        // intentionally bypassed for this flow (skipDirectSend ⇒ aiResponse is
+        // empty), so no PII can reach the LLM.
+        const { state } = reqBody
+        await sendMessage(
+          `I'm checking benefits in ${state}, but the eligibility screening service is temporarily unavailable. ` +
+          `Please suggest common assistance programs in ${state} (SNAP, Medicaid, WIC, TANF, LIHEAP) and how to apply, ` +
+          `and recommend opening the Programs panel to search and apply.`
+        )
+        return
       }
     }
 
-    // Default: send the AI-generated response from the guided flow
+    // Default: send the AI-generated response from a NON-sensitive guided flow
+    // (resource-finder / form-help). PII-sensitive flows are skipDirectSend and
+    // pass an empty aiResponse, so this never forwards raw answers to the LLM.
     if (aiResponse) {
       await sendMessage(aiResponse)
     }
@@ -619,25 +621,35 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     wizardSentRef.current = true
 
     const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1)
-    const lines: string[] = [`I need help with ${categoryLabel} resources. Here's my situation:`]
+    const lines: string[] = [`I need help finding ${categoryLabel} resources.`]
 
-    const labelMap: Record<string, string> = {
-      'assistance-type': 'Looking for',
-      'household-size': 'Household size',
-      'situation': 'Current situation',
-      'experience': 'Work experience',
-      'frequency': 'Transportation frequency needed',
+    // PII MINIMIZATION: only generalized, resource-matching context reaches the
+    // third-party LLM. The allowlist carries the WHAT (assistance need) and the
+    // WHERE (state) — never sensitive personal specifics. Excluded by omission:
+    // insurance status, exact household size, income range, tax filing status,
+    // dependent counts, pregnancy stage, free-text situation, work experience,
+    // contact preference. Those answers stay out of the LLM message entirely;
+    // any eligibility math belongs to the de-identified screening path.
+    const LLM_SAFE_KEYS: Record<string, string> = {
+      'assistance-type': 'Type of help',
+      'care-type': 'Type of help',
+      'waste-type': 'Type of help',
+      'camping-type': 'Type of help',
+      'goods-type': 'Type of help',
+      'legal-issue': 'Type of help',
       'urgency': 'Urgency',
-      'insurance': 'Insurance status',
       'state': 'State',
-      'contact': 'Preferred contact method',
     }
 
     for (const [key, value] of Object.entries(answers)) {
-      const label = labelMap[key] ?? key
+      const label = LLM_SAFE_KEYS[key]
+      if (!label) continue // drop everything not on the allowlist
       const display = Array.isArray(value) ? value.join(', ') : value
+      if (!display) continue
       lines.push(`- ${label}: ${display}`)
     }
+
+    lines.push('Please suggest relevant local programs and resources for this need.')
 
     const prompt = lines.join('\n')
 
