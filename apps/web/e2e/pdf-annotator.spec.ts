@@ -220,13 +220,16 @@ test('P1+P2+P3+P4: PDF renders, zero CSP violations, save navigates to Documents
   await savePdfBtn.click()
   console.log('[pdf-annotator] Save PDF clicked — waiting for navigation to Documents panel')
 
-  // After save, setActivePanel('documents') is called → Documents panel should mount
-  // Wait for a heading or content that indicates the Documents panel is active
-  const documentsHeading = page.locator('h1').filter({ hasText: /Documents/i })
-    .or(page.locator('[data-testid="documents-panel"]'))
-    .or(page.locator('h2').filter({ hasText: /Documents/i }))
-  await expect(documentsHeading).toBeVisible({ timeout: 30_000 })
-  console.log('[pdf-annotator] P3 PASSED: navigated to Documents panel after save')
+  // After save, handlePdfSave calls setWizardState({mode:'list'}) and
+  // setActivePanel('documents'), which hides the PDF annotator and shows the
+  // My Documents list view. Assert the "Save PDF" button is gone (annotator unmounted)
+  // AND the Documents list view is active. This is tighter than just checking for a
+  // heading because the parent Documents panel shows a heading even when the annotator
+  // is still mounted (forms is a subtab of documents — PANEL_ALIASES.forms).
+  await expect(savePdfBtn).not.toBeVisible({ timeout: 30_000 })
+  // Also assert the My Documents tab is selected (confirms subtab navigated to 'documents')
+  await expect(page.locator('[data-testid="docs-tab-documents"]')).toBeVisible({ timeout: 10_000 })
+  console.log('[pdf-annotator] P3 PASSED: Save PDF button gone (annotator unmounted), Documents view active')
 
   // ── P4: DB confirms document was saved ───────────────────────────────────
   // Authoritative persistence check — the encrypted upload must have written to user_documents.

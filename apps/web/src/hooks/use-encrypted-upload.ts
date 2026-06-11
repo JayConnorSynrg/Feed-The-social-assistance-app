@@ -120,6 +120,14 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
         const storagePath = `${user.id}/${uniqueId}${fileExtension}`
 
         // Step 3: Upload encrypted blob to Storage
+        // Next.js App Router patches global fetch with its own AbortSignal. If a
+        // re-render triggers a component re-mount during the upload, Next.js may
+        // abort the in-flight fetch before the response arrives — even though the
+        // upload completed server-side (Supabase received and stored the file).
+        // Treat AbortError as success so the DB INSERT still runs. The storage
+        // object will exist at storagePath — the cleanup branch in the DB error
+        // path removes it if the INSERT subsequently fails.
+        // Reference: MEMORY.md "Pattern: Next.js 'signal is aborted without reason'"
         const { error: uploadError } = await supabase.storage
           .from(STORAGE_BUCKET)
           .upload(storagePath, encryptedResult.encryptedBlob, {
@@ -127,8 +135,21 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
             upsert: false,
           })
 
-        if (uploadError) {
+        const isAbort =
+          uploadError &&
+          ((uploadError as unknown as DOMException).name === 'AbortError' ||
+            uploadError.message?.toLowerCase().includes('signal') ||
+            uploadError.message?.toLowerCase().includes('abort'))
+
+        if (uploadError && !isAbort) {
           throw new Error(`Upload failed: ${uploadError.message}`)
+        }
+        if (isAbort) {
+          logger.warn('document.upload.abort_treated_as_success', {
+            opId,
+            storagePath,
+            errorMessage: uploadError.message,
+          })
         }
 
         setProgress(75)

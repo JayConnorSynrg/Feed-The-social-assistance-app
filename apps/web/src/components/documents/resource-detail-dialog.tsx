@@ -283,10 +283,12 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
 
             {/* Scrollable Body — user-authored fields (notes/task+event titles/file
                 names) are encrypted at rest, so this surface is vault-gated. The
-                header above shows only public listing fields and stays ungated. */}
+                header above shows only public listing fields and stays ungated.
+                Community Posts are public data (unencrypted) and live OUTSIDE
+                the VaultGuard so they are always visible regardless of vault state. */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-              <VaultGuard onDismiss={() => onOpenChange(false)}>
               {/* ── Community Posts Section (only when resource has a canonical ID) ── */}
+              {/* Public data — intentionally outside VaultGuard; no vault required. */}
               {resource.resource_id && (
                 <section data-testid="resource-posts-section">
                   <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -298,6 +300,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                 </section>
               )}
 
+              <VaultGuard onDismiss={() => onOpenChange(false)}>
               {/* ── Tasks Section ── */}
               <section>
                 <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-3 flex items-center gap-2">

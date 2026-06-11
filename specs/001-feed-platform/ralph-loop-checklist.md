@@ -1,6 +1,6 @@
 ---
 feature: "FEED Platform"
-version: "1.5.0"
+version: "1.5.1"
 created: "2026-01-19"
 last_updated: "2026-06-11"
 status: "IN_PROGRESS"
@@ -1816,6 +1816,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.9 | 2026-06-10 | P9-T9 COMPLETE (feature/usability-grandma-pass): grandma-grade usability pass — contrast (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar labels + w-16 aside, MOBILE_SHORT_LABELS map, humanized loading copy, forms error getFriendlyErrorMessage + Try Again, forms empty Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. Deferred: Find-Help-Now signup CTA. Phase 9 dashboard 7→8. 118/118. Pending: T1-partial only. |
 | 1.4.10 | 2026-06-11 | Chat provider cascade re-architected (feature/chat-fireworks-multilingual): Fireworks Qwen3.6 primary (ZDR/no-training, 200+ languages, disable-thinking via reasoning_effort:'none') + Fireworks gpt-oss-120b secondary + OpenRouter gemini-2.5-flash ZDR fallback + OpenRouter claude-haiku-4.5 ZDR fallback. Function key-ready: runs on OpenRouter alone until FIREWORKS_API_KEY set. Multilingual policy added to base system prompt: reply in user's language, card format [[...|...]] language-invariant, resource data untranslated. 5-language smoke PASS (ES/VI/AR/HT/EN, gemini-2.5-flash + zdr/deny). |
 | 1.5.0 | 2026-06-11 | P9-T10 COMPLETE: Find Help Now anonymous guest access (feature/guest-access-anon-auth). Supabase signInAnonymously() on login + signup pages. Migration 20260611173053: 15 INSERT-block + 7 UPDATE-block RESTRICTIVE RLS policies, storage bucket INSERT block, anon guard in 10 SECDEF write functions, pg_cron 30-day TTL cleanup. auth-provider isAnonymous; proxy guest-pass for onboarding + /signup; FeedShell guest banner; CreateAccountPrompt gates documents/messages/settings/forms; feed composer + suggest-resource button hidden for guests. E2E 12/12. 119/119 shipped. Phase 9 dashboard 8→9 completed. |
+| 1.5.1 | 2026-06-11 | Maintenance: e2e baseline repair (chore/docsync-phase8 → fix/e2e-baseline-repair). 6 pre-existing failures fixed: (1) eligibility-wiring provisionVaultUser positional→object args; (2) forms-flow phone autofill stale assertion (phone excluded from PROFILE_COLUMNS by PII hardening migration 20260603120000 — test updated to fill manually); (3) pdf-annotator docRow searched by name='minimal-acroform.pdf' but name column stores placeholder 'Encrypted Document' — fixed to use index [0]; (4) pdf-annotator P3 false-positive — tightened assertion to check savePdfBtn not visible + docs-tab-documents tab; (5) safety-pins marker click { force: true } to bypass SVG path pointer-event; (6) safety-pins vote buttons — nav-away+back forces viewport re-fetch after alert placement. App fixes: resource-detail-dialog resource-posts-section moved outside VaultGuard; use-encrypted-upload abort-as-success for Next.js AbortSignal pattern. 106 passed / 1 skipped / 0 failed. |
 
 ---
 

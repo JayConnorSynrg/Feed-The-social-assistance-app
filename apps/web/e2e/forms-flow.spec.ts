@@ -296,9 +296,15 @@ test('P1+P2+P0: food program deep-link → SNAP form renders with autofill → s
   // Email — autofilled from auth user email (also on contact step)
   await expect(page.locator('input[name="email"]')).toHaveValue(TEST_EMAIL)
 
-  // Phone — autofilled from public profile
-  await expect(page.locator('input[name="phone"]')).toHaveValue('5551234567')
-  console.log('[forms-flow] P2 PASSED: name/email/phone/address all verified')
+  // Phone — NOT autofilled: `phone` was removed from PROFILE_COLUMNS in PII
+  // hardening (migration 20260603120000). Users must enter phone manually.
+  // Assert the field is present and empty, then fill it so downstream steps work.
+  await expect(page.locator('input[name="phone"]')).toBeVisible({ timeout: 5_000 })
+  const phoneVal = await page.locator('input[name="phone"]').inputValue()
+  if (!phoneVal) {
+    await page.locator('input[name="phone"]').fill('5551234567')
+  }
+  console.log('[forms-flow] P2 PASSED: name/email/address autofill verified (phone filled manually per PII hardening)')
 
   // Fill required: preferred_contact
   const preferredContactSelect = page.locator('select[name="preferred_contact"]')
