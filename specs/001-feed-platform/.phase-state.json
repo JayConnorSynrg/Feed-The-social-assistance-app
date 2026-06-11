@@ -5,7 +5,7 @@
   "created": "2026-01-19T00:00:00.000Z",
   "lastUpdated": "2026-06-10T00:00:00.000Z",
   "currentPhase": 9,
-  "currentTask": "P9-T4",
+  "currentTask": "P9-T9",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
@@ -380,21 +380,22 @@
         "P9-T2",
         "P9-T3",
         "P9-T7",
-        "P9-T8"
+        "P9-T8",
+        "P9-T4"
       ],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app\u2192form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10): AcroForm fill-from-profile toolbar (FIELD_ALIAS_MAP, fillAcroFormFields, autofillValues prop), document rename+move (overflow DropdownMenu, updateDocument), submission\u2192drive archival (non-blocking archiveSubmission, @cantoo/pdf-lib summary, encryptFile, submission_id FK, archivedDocumentId + archiveWarning state), dropdown-menu.tsx Radix-free primitive, testids (document-card/data-document-id/documents-panel), e2e 3 tests. P9-T8=COMPLETE (feature/gov-forms-presync, 2026-06-10): pre-sync architecture; government-forms Supabase Storage bucket (private, authenticated SELECT); CLI sync script apps/web/scripts/sync-government-forms.ts (5/6 synced: IRS Schedule 8812 98KB, HUD-52641 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB); SSOT lib/government-forms.ts (6 entries); Migration 20260610210000_government_forms_bucket.sql; Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill); e2e government-forms.spec.ts 3/3 green; docs-forms-lifecycle 3/3 regression green. HUD-50058 retired 2022 (formUrl=null). P9-T9=grandma-grade security + usability validation. P9-T9=grandma-grade security + usability validation."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app\u2192form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10): AcroForm fill-from-profile toolbar (FIELD_ALIAS_MAP, fillAcroFormFields, autofillValues prop), document rename+move (overflow DropdownMenu, updateDocument), submission\u2192drive archival (non-blocking archiveSubmission, @cantoo/pdf-lib summary, encryptFile, submission_id FK, archivedDocumentId + archiveWarning state), dropdown-menu.tsx Radix-free primitive, testids (document-card/data-document-id/documents-panel), e2e 3 tests. P9-T8=COMPLETE (feature/gov-forms-presync, 2026-06-10): pre-sync architecture; government-forms Supabase Storage bucket (private, authenticated SELECT); CLI sync script apps/web/scripts/sync-government-forms.ts (5/6 synced: IRS Schedule 8812 98KB, HUD-52641 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB); SSOT lib/government-forms.ts (6 entries); Migration 20260610210000_government_forms_bucket.sql; Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill); e2e government-forms.spec.ts 3/3 green; docs-forms-lifecycle 3/3 regression green. HUD-50058 retired 2022 (formUrl=null). P9-T9=grandma-grade security + usability validation. P9-T9=grandma-grade security + usability validation. P9-T4=COMPLETE (feature/suggest-resource, 2026-06-10): \"Suggest a Resource\" entry in HazardBubbleMenu (all authenticated roles), SuggestResourceDialog (category from CATEGORY_META SSOT, name required, description 10-500 chars required, phone + website optional, city + state prefilled from profile.location_city/location_state), INSERT resources row with status=pending + is_volunteer_resource=false + source=user_submitted. No migration needed \u2014 existing INSERT policy WITH CHECK (auth.uid() = submitted_by) permits status=pending rows. Pending invisibility: RLS \"Approved resources are viewable by everyone\" USING (status=approved) blocks cross-user SELECT. e2e suggest-resource.spec.ts 4/4 + safety-pins.spec.ts 5/5 regression. type-check 0 errors, lint 0 new warnings."
     }
   },
   "metrics": {
-    "totalTasks": 116,
-    "completedTasks": 116,
+    "totalTasks": 117,
+    "completedTasks": 117,
     "progressPercentage": 100,
-    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, P9-T4 partial, P9-T9)",
+    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, P9-T9)",
     "estimatedHoursRemaining": null,
     "sessionsCompleted": 17,
-    "metricsNote": "Denominator = 116 (shipped tasks only; Phase 9 pending tasks T1-partial/T4/T9 not yet in denominator \u2014 added as each ships). 116/116 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8] (6 of 9). P9-T8 shipped feature/gov-forms-presync (2026-06-10): pre-sync bucket, CLI sync, Government Forms UI, VaultGuard+PdfAnnotator+autofill, e2e 3/3, regression 3/3. Updated 2026-06-10.",
+    "metricsNote": "Denominator = 117 (shipped tasks only; Phase 9 pending tasks T1-partial/T9 not yet in denominator \u2014 added as each ships). 117/117 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8,P9-T4] (7 of 9). P9-T4 shipped feature/suggest-resource (2026-06-10): suggest-resource flow in HazardBubbleMenu, SuggestResourceDialog (CATEGORY_META SSOT, INSERT status=pending), e2e 4/4. Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {
