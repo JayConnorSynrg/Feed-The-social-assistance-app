@@ -3,7 +3,44 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { useVault } from '@/contexts/vault-context'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+
+/**
+ * Placeholder written into NOT NULL plaintext columns (title / file_name) once
+ * the real value lives in the encrypted_* column. encrypted_* is the source of
+ * truth; the plaintext placeholder satisfies the NOT NULL constraint without
+ * leaking the user-authored value. notes is nullable so it is NULLed instead.
+ */
+const ENCRYPTED_PLACEHOLDER = '••••••'
+
+type Decryptor = (ciphertext: string, iv: string) => Promise<string>
+
+/**
+ * Resolve the user-facing value for an encryptable field.
+ * - prefer encrypted_* (decrypt) when present AND the vault is unlocked
+ * - fall back to the plaintext column for un-migrated rows
+ * - when encrypted data exists but the vault is locked, return null so the UI
+ *   surfaces a locked state instead of garbage/placeholder text
+ */
+async function resolveField(
+  encrypted: string | null | undefined,
+  iv: string | null | undefined,
+  plaintext: string | null | undefined,
+  isUnlocked: boolean,
+  decrypt: Decryptor,
+): Promise<{ value: string; locked: boolean }> {
+  if (encrypted && iv) {
+    if (!isUnlocked) return { value: '', locked: true }
+    try {
+      return { value: await decrypt(encrypted, iv), locked: false }
+    } catch {
+      // Decryption failed (wrong key / corrupt) — treat as locked, never throw.
+      return { value: '', locked: true }
+    }
+  }
+  return { value: plaintext ?? '', locked: false }
+}
 
 export interface SavedResourceTask {
   id: string
@@ -12,6 +49,8 @@ export interface SavedResourceTask {
   is_completed: boolean | null
   sort_order: number | null
   created_at: string | null
+  encrypted_title?: string | null
+  title_iv?: string | null
 }
 
 export interface SavedResourceEvent {
@@ -22,6 +61,8 @@ export interface SavedResourceEvent {
   event_time: string | null
   reminder: boolean | null
   created_at: string | null
+  encrypted_title?: string | null
+  title_iv?: string | null
 }
 
 export interface ResourceDocument {
@@ -32,6 +73,8 @@ export interface ResourceDocument {
   file_size: number | null
   mime_type: string | null
   created_at: string | null
+  encrypted_file_name?: string | null
+  file_name_iv?: string | null
 }
 
 interface SavedResource {
@@ -43,17 +86,24 @@ interface SavedResource {
   resource_phone: string | null
   resource_website: string | null
   notes: string | null
+  encrypted_notes?: string | null
+  notes_iv?: string | null
 }
 
 export function useResourceDetail(savedResourceId: string | null) {
   const supabase = createClient()
   const { user } = useAuth()
+  const { isUnlocked, encrypt, decrypt } = useVault()
 
   const [resource, setResource] = useState<SavedResource | null>(null)
   const [tasks, setTasks] = useState<SavedResourceTask[]>([])
   const [events, setEvents] = useState<SavedResourceEvent[]>([])
   const [documents, setDocuments] = useState<ResourceDocument[]>([])
   const [notes, setNotes] = useState('')
+  // True when at least one field holds ciphertext that cannot be decrypted
+  // because the vault is locked. The consuming UI uses this to render a locked
+  // state (unlock prompt) instead of empty/placeholder values.
+  const [vaultLocked, setVaultLocked] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,11 +128,41 @@ export function useResourceDetail(savedResourceId: string | null) {
       if (resourceRes.error) throw new Error(isQueryTimeout(resourceRes.error)
         ? 'Resource details timed out — please check your connection and retry.'
         : resourceRes.error.message)
-      setResource(resourceRes.data)
-      setNotes(resourceRes.data?.notes || '')
-      setTasks(tasksRes.data ?? [])
-      setEvents(eventsRes.data ?? [])
-      setDocuments(docsRes.data ?? [])
+
+      let anyLocked = false
+
+      // ── Notes (saved_resources) ──
+      const r = resourceRes.data
+      const notesResolved = await resolveField(r?.encrypted_notes, r?.notes_iv, r?.notes, isUnlocked, decrypt)
+      anyLocked = anyLocked || notesResolved.locked
+      setResource(r)
+      setNotes(notesResolved.value)
+
+      // ── Task titles ──
+      const tasksDecrypted = await Promise.all((tasksRes.data ?? []).map(async (t) => {
+        const resolved = await resolveField(t.encrypted_title, t.title_iv, t.title, isUnlocked, decrypt)
+        anyLocked = anyLocked || resolved.locked
+        return { ...t, title: resolved.value }
+      }))
+      setTasks(tasksDecrypted)
+
+      // ── Event titles ──
+      const eventsDecrypted = await Promise.all((eventsRes.data ?? []).map(async (e) => {
+        const resolved = await resolveField(e.encrypted_title, e.title_iv, e.title, isUnlocked, decrypt)
+        anyLocked = anyLocked || resolved.locked
+        return { ...e, title: resolved.value }
+      }))
+      setEvents(eventsDecrypted)
+
+      // ── Document file names ──
+      const docsDecrypted = await Promise.all((docsRes.data ?? []).map(async (d) => {
+        const resolved = await resolveField(d.encrypted_file_name, d.file_name_iv, d.file_name, isUnlocked, decrypt)
+        anyLocked = anyLocked || resolved.locked
+        return { ...d, file_name: resolved.value }
+      }))
+      setDocuments(docsDecrypted)
+
+      setVaultLocked(anyLocked)
     } catch (err) {
       const msg = isQueryTimeout(err)
         ? 'Resource details timed out — please check your connection and retry.'
@@ -91,7 +171,7 @@ export function useResourceDetail(savedResourceId: string | null) {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, savedResourceId, user?.id])
+  }, [supabase, savedResourceId, user?.id, isUnlocked, decrypt])
 
   useEffect(() => {
     fetchAll()
@@ -100,18 +180,28 @@ export function useResourceDetail(savedResourceId: string | null) {
   // ── Tasks ──
   const addTask = useCallback(async (title: string) => {
     if (!savedResourceId || !user?.id || !title.trim()) return
+    const clean = title.trim()
     try {
+      const { ciphertext, iv } = await encrypt(clean)
       const { data, error } = await supabase
         .from('saved_resource_tasks')
-        .insert({ saved_resource_id: savedResourceId, user_id: user.id, title: title.trim(), sort_order: tasks.length })
+        .insert({
+          saved_resource_id: savedResourceId,
+          user_id: user.id,
+          title: ENCRYPTED_PLACEHOLDER, // NOT NULL plaintext placeholder
+          encrypted_title: ciphertext,
+          title_iv: iv,
+          sort_order: tasks.length,
+        })
         .select()
         .single()
       if (error) throw new Error(error.message)
-      setTasks(prev => [...prev, data])
+      // Display the cleartext locally; the DB holds ciphertext + placeholder.
+      setTasks(prev => [...prev, { ...data, title: clean }])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add task')
     }
-  }, [supabase, savedResourceId, user?.id, tasks.length])
+  }, [supabase, savedResourceId, user?.id, tasks.length, encrypt])
 
   const toggleTask = useCallback(async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId)
@@ -145,18 +235,28 @@ export function useResourceDetail(savedResourceId: string | null) {
   // ── Events ──
   const addEvent = useCallback(async (title: string, eventDate: string, eventTime?: string) => {
     if (!savedResourceId || !user?.id || !title.trim() || !eventDate) return
+    const clean = title.trim()
     try {
+      const { ciphertext, iv } = await encrypt(clean)
       const { data, error } = await supabase
         .from('saved_resource_events')
-        .insert({ saved_resource_id: savedResourceId, user_id: user.id, title: title.trim(), event_date: eventDate, event_time: eventTime || null })
+        .insert({
+          saved_resource_id: savedResourceId,
+          user_id: user.id,
+          title: ENCRYPTED_PLACEHOLDER, // NOT NULL plaintext placeholder
+          encrypted_title: ciphertext,
+          title_iv: iv,
+          event_date: eventDate,
+          event_time: eventTime || null,
+        })
         .select()
         .single()
       if (error) throw new Error(error.message)
-      setEvents(prev => [...prev, data].sort((a, b) => a.event_date.localeCompare(b.event_date)))
+      setEvents(prev => [...prev, { ...data, title: clean }].sort((a, b) => a.event_date.localeCompare(b.event_date)))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add event')
     }
-  }, [supabase, savedResourceId, user?.id])
+  }, [supabase, savedResourceId, user?.id, encrypt])
 
   const deleteEvent = useCallback(async (eventId: string) => {
     const prev = events
@@ -178,12 +278,15 @@ export function useResourceDetail(savedResourceId: string | null) {
       const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file)
       if (uploadError) throw new Error(uploadError.message)
 
+      const { ciphertext, iv } = await encrypt(file.name)
       const { data, error: insertError } = await supabase
         .from('saved_resource_documents')
         .insert({
           saved_resource_id: savedResourceId,
           user_id: user.id,
-          file_name: file.name,
+          file_name: ENCRYPTED_PLACEHOLDER, // NOT NULL plaintext placeholder
+          encrypted_file_name: ciphertext,
+          file_name_iv: iv,
           file_path: filePath,
           file_size: file.size,
           mime_type: file.type || 'application/octet-stream',
@@ -191,11 +294,11 @@ export function useResourceDetail(savedResourceId: string | null) {
         .select()
         .single()
       if (insertError) throw new Error(insertError.message)
-      setDocuments(prev => [data, ...prev])
+      setDocuments(prev => [{ ...data, file_name: file.name }, ...prev])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload file')
     }
-  }, [supabase, savedResourceId, user?.id])
+  }, [supabase, savedResourceId, user?.id, encrypt])
 
   const deleteDocument = useCallback(async (docId: string) => {
     const doc = documents.find(d => d.id === docId)
@@ -221,16 +324,30 @@ export function useResourceDetail(savedResourceId: string | null) {
   const updateNotes = useCallback(async (newNotes: string) => {
     if (!savedResourceId) return
     try {
-      const { error } = await supabase
-        .from('saved_resources')
-        .update({ notes: newNotes })
-        .eq('id', savedResourceId)
-      if (error) throw new Error(error.message)
+      if (newNotes.trim() === '') {
+        // Clearing notes — wipe both ciphertext and plaintext.
+        const { error } = await supabase
+          .from('saved_resources')
+          .update({ notes: null, encrypted_notes: null, notes_iv: null })
+          .eq('id', savedResourceId)
+        if (error) throw new Error(error.message)
+      } else {
+        const { ciphertext, iv } = await encrypt(newNotes)
+        const { error } = await supabase
+          .from('saved_resources')
+          .update({
+            notes: null, // nullable plaintext NULLed — ciphertext is source of truth
+            encrypted_notes: ciphertext,
+            notes_iv: iv,
+          })
+          .eq('id', savedResourceId)
+        if (error) throw new Error(error.message)
+      }
       setNotes(newNotes)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save notes')
     }
-  }, [supabase, savedResourceId])
+  }, [supabase, savedResourceId, encrypt])
 
   const completedTasks = tasks.filter(t => t.is_completed === true).length
   const totalTasks = tasks.length
@@ -243,6 +360,6 @@ export function useResourceDetail(savedResourceId: string | null) {
     uploadDocument, deleteDocument, getDocumentUrl,
     updateNotes,
     completedTasks, totalTasks, progress,
-    isLoading, error,
+    isLoading, error, vaultLocked,
   }
 }

@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { useResourceDetail } from '@/hooks/use-resource-detail'
+import { VaultGuard } from '@/components/vault'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
@@ -280,8 +281,11 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
               )}
             </DialogHeader>
 
-            {/* Scrollable Body */}
+            {/* Scrollable Body — user-authored fields (notes/task+event titles/file
+                names) are encrypted at rest, so this surface is vault-gated. The
+                header above shows only public listing fields and stays ungated. */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+              <VaultGuard onDismiss={() => onOpenChange(false)}>
               {/* ── Community Posts Section (only when resource has a canonical ID) ── */}
               {resource.resource_id && (
                 <section data-testid="resource-posts-section">
@@ -482,6 +486,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                   </div>
                 </div>
               </section>
+              </VaultGuard>
             </div>
           </>
         ) : (
