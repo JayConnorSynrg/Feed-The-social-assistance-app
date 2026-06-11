@@ -26,7 +26,7 @@ FEED is designed as a **federated platform** where:
 - **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)
 - **Mobile**: Capacitor (iOS/Android)
 - **Maps**: Mapbox GL JS
-- **AI**: OpenRouter (multi-provider LLM proxy)
+- **AI**: Fireworks AI (privacy-first, multilingual primary) + OpenRouter ZDR fallback
 - **Deployment**: Vercel (web) + Docker (self-hosted)
 
 ## 🚀 Quick Start
@@ -37,7 +37,8 @@ FEED is designed as a **federated platform** where:
 - Docker Desktop (for local Supabase)
 - Supabase account (or run locally)
 - Mapbox account (free tier)
-- OpenRouter API key (optional, for AI features)
+- OpenRouter API key (required as fallback for AI features)
+- Fireworks API key (optional, enables privacy-first multilingual primary model)
 
 ### Local Development
 
@@ -79,8 +80,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 # Mapbox (required for maps)
 NEXT_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
 
-# OpenRouter (optional, for AI chat)
+# AI chat — provider cascade: Fireworks (primary, ZDR) → OpenRouter (ZDR fallback)
+# OpenRouter is required as the fallback; Fireworks is optional until key is set
 OPENROUTER_API_KEY=your-openrouter-key
+FIREWORKS_API_KEY=your-fireworks-key          # optional; enables Qwen3.6 multilingual primary
 
 # 211 API (optional, for resource sync)
 API_211_KEY=your-211-api-key

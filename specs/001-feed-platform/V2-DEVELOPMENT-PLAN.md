@@ -194,7 +194,7 @@ type MessageType =
 - `useChat()` hook with streaming
 - Message history in Supabase
 - Edge Function: `/functions/chat`
-- OpenRouter API for LLM
+- Fireworks AI (privacy-first, multilingual primary) + OpenRouter ZDR fallback for LLM
 
 **LLM Integration**:
 - System prompt with FEED context
@@ -508,7 +508,7 @@ supabase
 **Functions to Implement**:
 
 1. **`/functions/chat`** - AI chat endpoint
-   - OpenRouter proxy
+   - Fireworks (primary, ZDR/no-training) + OpenRouter ZDR fallback provider cascade
    - Context injection
    - Tool calling (eligibility, resources)
 
@@ -655,7 +655,8 @@ const tools = [
 - [ ] All RLS policies verified
 - [ ] Edge Functions deployed
 - [ ] Mapbox API key configured
-- [ ] OpenRouter API key in secrets
+- [ ] OPENROUTER_API_KEY in secrets (required fallback)
+- [ ] FIREWORKS_API_KEY in secrets (optional; enables privacy-first primary)
 - [ ] Domain DNS configured
 - [ ] SSL certificate active
 - [ ] Error tracking enabled

@@ -1,8 +1,8 @@
 ---
 feature: "FEED Platform"
-version: "1.4.9"
+version: "1.4.10"
 created: "2026-01-19"
-last_updated: "2026-06-10"
+last_updated: "2026-06-11"
 status: "IN_PROGRESS"
 current_phase: 9
 current_task: "P9-T1"
@@ -881,7 +881,7 @@ npx cap sync && npx cap run ios
 - **ID**: P4-T1
 - **Dependencies**: P3 Complete
 - **File**: `supabase/functions/chat/index.ts`
-- **Notes**: Secure proxy for OpenRouter API. Includes model fallback chain (mistral → llama → haiku → sonnet), rate limiting (20 req/min/user), streaming support, CORS handling.
+- **Notes**: Multi-provider privacy-first AI proxy. Cascade: Fireworks Qwen3.6 (primary, ZDR/no-training, 200+ langs) → Fireworks gpt-oss-120b (secondary) → OpenRouter gemini-2.5-flash (ZDR fallback) → OpenRouter claude-haiku-4.5 (ZDR fallback). Rate limiting (20 req/min/user), streaming, CORS handling. Multilingual: replies match user language; card format [[...|...]] machine-parsed in all languages; resource data untranslated.
 
 ### P4-T2: Create Chat Interface Component
 - [x] **Status**: COMPLETE
@@ -936,7 +936,7 @@ npx cap sync && npx cap run ios
 - [x] **Status**: COMPLETE
 - **ID**: P4-T9
 - **Dependencies**: P4-T1
-- **Notes**: Integrated into Edge Function. Chain: mistral-7b → llama-3.1-8b → claude-3-haiku → claude-3.5-sonnet. Auto-fallback on 429/503 errors.
+- **Notes**: Integrated into Edge Function. Cascade: Fireworks Qwen3.6 → Fireworks gpt-oss-120b → OpenRouter gemini-2.5-flash → OpenRouter claude-haiku-4.5. Auto-fallback on 400/404/429/503 + stream-start errors. FIREWORKS_API_KEY optional until set — function runs on OpenRouter alone.
 
 ### P4-T10: Create Rate Limiting
 - [x] **Status**: COMPLETE
@@ -1811,9 +1811,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.7 | 2026-06-10 | P9-T8 COMPLETE (feature/gov-forms-presync): pre-sync government forms bucket (IRS/HUD/VA/SSA, 5/6 synced), Government Forms UI section in forms-panel.tsx, VaultGuard + PdfAnnotator + autofill integration. Migration 20260610210000_government_forms_bucket.sql. e2e 3/3. Regression docs-forms-lifecycle 3/3. Phase 9 dashboard: 5→6. 116/116. Pending: T1-partial, T4, T9. |
 | 1.4.8 | 2026-06-10 | P9-T4 COMPLETE (feature/suggest-resource): suggest-resource flow — Suggest a Resource in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state/phone/website), INSERT status=pending, no migration needed (INSERT policy permits it). e2e 4/4 + safety-pins 5/5 regression. Phase 9 dashboard 6->7. 117/117 shipped. Pending: T1-partial, T9. |
 | 1.4.9 | 2026-06-10 | P9-T9 COMPLETE (feature/usability-grandma-pass): grandma-grade usability pass — contrast (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar labels + w-16 aside, MOBILE_SHORT_LABELS map, humanized loading copy, forms error getFriendlyErrorMessage + Try Again, forms empty Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. Deferred: Find-Help-Now signup CTA. Phase 9 dashboard 7→8. 118/118. Pending: T1-partial only. |
+| 1.4.10 | 2026-06-11 | Chat provider cascade re-architected (feature/chat-fireworks-multilingual): Fireworks Qwen3.6 primary (ZDR/no-training, 200+ languages, disable-thinking via reasoning_effort:'none') + Fireworks gpt-oss-120b secondary + OpenRouter gemini-2.5-flash ZDR fallback + OpenRouter claude-haiku-4.5 ZDR fallback. Function key-ready: runs on OpenRouter alone until FIREWORKS_API_KEY set. Multilingual policy added to base system prompt: reply in user's language, card format [[...|...]] language-invariant, resource data untranslated. 5-language smoke PASS (ES/VI/AR/HT/EN, gemini-2.5-flash + zdr/deny). |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/usability-grandma-pass (2026-06-10)
+**Last Agent Session**: feature/chat-fireworks-multilingual (2026-06-11)
 **Total Development Time**: 0 hours
