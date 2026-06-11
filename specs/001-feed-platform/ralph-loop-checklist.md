@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.4.7"
+version: "1.4.8"
 created: "2026-01-19"
 last_updated: "2026-06-10"
 status: "IN_PROGRESS"
 current_phase: 9
-current_task: "P9-T4"
+current_task: "P9-T9"
 total_phases: 9
-total_tasks: 116
-completed_tasks: 116
+total_tasks: 117
+completed_tasks: 117
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 6 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 7 | IN_PROGRESS |
 
-**Overall Progress**: 116 / 116 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T4, T9 are pending and not yet in denominator)
+**Overall Progress**: 117 / 117 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining tasks T1-partial, T9 are pending and not yet in denominator)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. Phase 9 remaining tasks (T1 partial, T4, T9) pending — denominator grows as each ships.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/phone/website/city/state), INSERT with status=pending + is_volunteer_resource=false + source=user_submitted; success state; e2e 4/4 (role-visibility, form submit, DB pending assert, RLS cross-user invisibility). No migration needed (existing INSERT policy WITH CHECK (auth.uid() = submitted_by) permits status=pending). 117/117 shipped. Phase 9 remaining tasks (T1 partial, T9) pending — denominator grows as each ships.
 
 ---
 
@@ -1750,7 +1750,15 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
   - **type-check**: 0 errors; **lint**: 0 new warnings
 
 ### P9-T4: Map Pin + Resource Buttons Complete
-- [ ] **Status**: PENDING — PARTIAL: Share button already shipped (apps/web/src/components/panels/feed-panel.tsx:472-476, Share2 icon + copied state); remaining scope = suggest-resource flow only
+- [x] **Status**: COMPLETE — Share button shipped earlier (feed-panel.tsx:472-476). Suggest-resource flow shipped 2026-06-10 (feature/suggest-resource, PR #TBD).
+  - "Suggest a Resource" entry added to HazardBubbleMenu Sheet — visible to ALL authenticated roles (below hazard entries, above provider-only "Add yourself").
+  - SuggestResourceDialog: category (select from CATEGORY_META SSOT), name (required), description (10-500 chars, required), phone + website (optional), city + state (prefilled from profile.location_city/location_state).
+  - Write path: INSERT into resources with status='pending', is_volunteer_resource=false, source='user_submitted', submitted_by=auth.uid(), is_verified=false. Success state "Thanks — your suggestion is pending review."
+  - RLS finding: existing INSERT policy WITH CHECK (auth.uid() = submitted_by) permits status='pending' + is_volunteer_resource=false — no migration needed.
+  - Pending invisibility: "Approved resources are viewable by everyone" USING (status = 'approved') blocks cross-user SELECT of pending rows via PostgREST.
+  - **Files**: apps/web/src/components/map/hazard-bubble-menu.tsx, apps/web/e2e/suggest-resource.spec.ts
+  - **e2e**: suggest-resource.spec.ts 4/4 (role-gate visible for seeker, form submit + success, DB status=pending assert, RLS cross-user invisibility). safety-pins.spec.ts 5/5 regression green.
+  - **type-check**: 0 errors; **lint**: 0 new warnings
 
 ### P9-T5: Community Trust Layer — Report + Threshold Takedown
 - [x] **Status**: COMPLETE — PR #63 (8ae6f63, 2026-06-09). content_reports table + report_reason enum; submit_content_report SECDEF RPC auto-hides a post at 3 distinct reporters; admin_resolve_report (dismiss restores / uphold keeps hidden); report dialog in feed-panel; admin Reports queue; e2e content-reports.spec.ts 4/4.
@@ -1799,6 +1807,7 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.3 | 2026-06-10 | P9-T2 COMPLETE: cursor pagination (25/page), resource category badges, safety alerts strip, map deep-link. e2e 4/4. 114/114 overall. |
 | 1.4.4 | 2026-06-10 | Accounting fix: Phase 9 dashboard row corrected 2→3 completed (T2 was missing from count; T5/T6/T2 all complete). Overall headline clarified: 114/114 shipped tasks (denominator = shipped only; Phase 9 pending tasks not yet included). |
 | 1.4.5 | 2026-06-10 | P9-T3 COMPLETE: per-post generateMetadata on /s/embed/[id] + metadataBase on root layout + /api/oembed endpoint + discovery link on both embed and post pages. e2e 4/4. Phase 9 dashboard: 3→4 completed. Pending list: T1-partial, T4, T7, T8, T9. |
+| 1.4.8 | 2026-06-10 | P9-T4 COMPLETE (feature/suggest-resource): suggest-resource flow — Suggest a Resource in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state/phone/website), INSERT status=pending, no migration needed (INSERT policy permits it). e2e 4/4 + safety-pins 5/5 regression. Phase 9 dashboard 6->7. 117/117 shipped. Pending: T1-partial, T9. |
 | 1.4.7 | 2026-06-10 | P9-T8 COMPLETE (feature/gov-forms-presync): pre-sync government forms bucket (IRS/HUD/VA/SSA, 5/6 synced), Government Forms UI section in forms-panel.tsx, VaultGuard + PdfAnnotator + autofill integration. Migration 20260610210000_government_forms_bucket.sql. e2e 3/3. Regression docs-forms-lifecycle 3/3. Phase 9 dashboard: 5→6. 116/116. Pending: T1-partial, T4, T9. |
 | 1.4.6 | 2026-06-10 | P9-T7 COMPLETE (feature/docs-forms-lifecycle): AcroForm fill-from-profile (FIELD_ALIAS_MAP + fillAcroFormFields), document rename+move (overflow menu + updateDocument), submission→drive archival (non-blocking encrypted PDF, submission_id FK, archivedDocumentId state), dropdown-menu.tsx (Radix-free). e2e docs-forms-lifecycle.spec.ts 3 tests. Phase 9 dashboard: 4→5 completed. Pending list: T1-partial, T4, T8, T9. 115/115 shipped. |
 
