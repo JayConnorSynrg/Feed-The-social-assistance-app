@@ -1,6 +1,7 @@
 // supabase/functions/chat/index.ts
-// OpenRouter Edge Function - Secure AI chat proxy
-// Keeps API key server-side, supports streaming responses
+// Multi-provider AI chat proxy with privacy-first cascade
+// Privacy order intentional: Fireworks = default-ZDR/no-training primary;
+// OpenRouter entries MUST keep zdr+deny; do not reorder or add non-ZDR routes.
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -10,28 +11,114 @@ function edgeLog(level: 'info' | 'warn' | 'error', event: string, data: Record<s
   console.log(JSON.stringify({ level, event, timestamp: new Date().toISOString(), ...data }))
 }
 
-const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY')
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-// Model fallback chain - cost-effective to premium.
-// All four are verified to have at least one OpenRouter endpoint compatible with
-// provider.zdr=true + data_collection='deny' (probed 2026-06-11): mistral-small→Parasail,
-// llama-3.1-8b→Novita, claude-3-haiku→Bedrock, claude-sonnet-4.5→Bedrock.
-// The two previous entries (mistralai/mistral-7b-instruct, anthropic/claude-3.5-sonnet)
-// were removed because OpenRouter now returns 404 "No endpoints found" for them.
-const MODEL_FALLBACK_CHAIN = [
-  'mistralai/mistral-small-3.2-24b-instruct',
-  'meta-llama/llama-3.1-8b-instruct',
-  'anthropic/claude-3-haiku',
-  'anthropic/claude-sonnet-4.5',
+// ---------------------------------------------------------------------------
+// Provider cascade — privacy-first order
+// ---------------------------------------------------------------------------
+// Each entry describes how to call a provider.  Entries whose apiKeyEnv is
+// unset are skipped at start-up (warn-logged) so the function still runs on
+// OpenRouter alone until FIREWORKS_API_KEY is set.
+//
+// Privacy order intentional:
+//   1+2. Fireworks — default-ZDR / no-training primary & secondary
+//   3+4. OpenRouter — ZDR-gated fallbacks; zdr+deny MUST stay on every OR entry
+//
+// Do NOT reorder or add non-ZDR routes.
+// ---------------------------------------------------------------------------
+
+interface ProviderEntry {
+  name: string
+  baseUrl: string
+  apiKeyEnv: string
+  model: string
+  /** Extra body fields merged into the request JSON (e.g. privacy opts, thinking ctrl) */
+  extraBody?: Record<string, unknown>
+}
+
+// Primary Fireworks model: Qwen3.6 — 200+ language hybrid-thinking model.
+// Disable thinking mode for chat latency via the `reasoning_effort` param that
+// Fireworks documents at https://docs.fireworks.ai/reasoning/overview.
+// If Fireworks returns an unknown-param error (400) for this field the entry
+// falls through gracefully to the next provider — see fallthrough logic below.
+const CHAT_PRIMARY_MODEL = Deno.env.get('CHAT_PRIMARY_MODEL') ?? 'accounts/fireworks/models/qwen3p6-plus'
+
+const PROVIDER_CHAIN: ProviderEntry[] = [
+  {
+    name: 'fireworks-primary',
+    baseUrl: 'https://api.fireworks.ai/inference/v1/chat/completions',
+    apiKeyEnv: 'FIREWORKS_API_KEY',
+    model: CHAT_PRIMARY_MODEL,
+    // Qwen3.6 is a hybrid-thinking model; disable thinking for chat latency.
+    // Fireworks param: reasoning_effort:'none' (documented at
+    // https://docs.fireworks.ai/reasoning/overview).
+    // If the model version does not support this field the API returns a 400;
+    // the fallthrough at the cascade loop treats 400 as retryable so it advances
+    // to the next entry rather than aborting — keeps the cascade safe.
+    // THINKING-PARAM STATUS: reasoning_effort:'none' is the documented Fireworks
+    // param for disabling thinking. Empirical verification against the live
+    // endpoint is pending until FIREWORKS_API_KEY is set — see MERGE-AGENT NOTES.
+    extraBody: { reasoning_effort: 'none' },
+  },
+  {
+    name: 'fireworks-secondary',
+    baseUrl: 'https://api.fireworks.ai/inference/v1/chat/completions',
+    apiKeyEnv: 'FIREWORKS_API_KEY',
+    model: 'accounts/fireworks/models/gpt-oss-120b',
+    // gpt-oss-120b is a non-thinking model; no reasoning_effort needed.
+  },
+  {
+    name: 'openrouter-gemini',
+    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    apiKeyEnv: 'OPENROUTER_API_KEY',
+    model: 'google/gemini-2.5-flash',
+    // OpenRouter ZDR + data-collection deny — MUST remain on all OR entries.
+    extraBody: {
+      provider: { data_collection: 'deny', zdr: true },
+    },
+  },
+  {
+    name: 'openrouter-haiku',
+    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    apiKeyEnv: 'OPENROUTER_API_KEY',
+    model: 'anthropic/claude-haiku-4.5',
+    // OpenRouter ZDR + data-collection deny — MUST remain on all OR entries.
+    extraBody: {
+      provider: { data_collection: 'deny', zdr: true },
+    },
+  },
 ]
 
-// This array is also the allowlist for the client-supplied `model` field.
-const MODEL_ALLOWLIST = new Set(MODEL_FALLBACK_CHAIN)
+// Resolve each entry to a live key at start-up; skip and warn for missing keys.
+interface ResolvedEntry {
+  name: string
+  baseUrl: string
+  apiKey: string
+  model: string
+  extraBody?: Record<string, unknown>
+}
 
-// Input clamps — applied at the read site so out-of-range values never reach OpenRouter.
+const RESOLVED_CHAIN: ResolvedEntry[] = PROVIDER_CHAIN.flatMap((entry) => {
+  const key = Deno.env.get(entry.apiKeyEnv)
+  if (!key) {
+    edgeLog('warn', 'chat.provider.skipped', {
+      provider: entry.name,
+      reason: `${entry.apiKeyEnv} not set`,
+    })
+    return []
+  }
+  return [{ name: entry.name, baseUrl: entry.baseUrl, apiKey: key, model: entry.model, extraBody: entry.extraBody }]
+})
+
+if (RESOLVED_CHAIN.length === 0) {
+  edgeLog('error', 'chat.provider.none', { reason: 'No provider API keys configured — all providers skipped.' })
+}
+
+// Model names from the resolved chain for the client allowlist
+const MODEL_ALLOWLIST = new Set(RESOLVED_CHAIN.map((e) => e.model))
+
+// Input clamps — applied at the read site so out-of-range values never reach any provider.
 const TEMPERATURE_MIN = 0
 const TEMPERATURE_MAX = 1.5
 const MAX_TOKENS_CAP = 2048
@@ -167,48 +254,46 @@ async function authenticateUser(authHeader: string | null): Promise<{ userId: st
   return { userId: user.id }
 }
 
-async function callOpenRouter(
+async function callProvider(
+  entry: ResolvedEntry,
   messages: ChatMessage[],
-  model: string,
   stream: boolean,
   temperature: number,
   maxTokens: number
 ): Promise<Response> {
-  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const body: Record<string, unknown> = {
+    model: entry.model,
+    messages,
+    stream,
+    temperature,
+    max_tokens: maxTokens,
+    ...entry.extraBody,
+  }
+
+  // Fireworks endpoints use the same OpenAI-compatible path but do NOT accept
+  // the OpenRouter-specific `provider` object — only merge it for OR entries.
+  // (extraBody already carries provider:{} only for openrouter-* entries.)
+
+  const response = await fetch(entry.baseUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${entry.apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://feed.app',
       'X-Title': 'FEED Mutual Aid Platform',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream,
-      temperature,
-      max_tokens: maxTokens,
-      // Zero-data-retention: only route to endpoints that don't collect/retain prompt data.
-      // Per-request zdr ORs with account-level ZDR (account-level must ALSO be enabled in the
-      // OpenRouter dashboard for full enforcement — owner step). data_collection:'deny' is the
-      // broader-compatibility filter; zdr:true is the strict one. All chain models are probed
-      // to have a compliant endpoint, so this filter does not 404 the chain.
-      provider: {
-        data_collection: 'deny',
-        zdr: true,
-      },
-    }),
+    body: JSON.stringify(body),
   })
 
   return response
 }
 
 async function handleStreamingResponse(
-  openRouterResponse: Response,
+  providerResponse: Response,
   modelUsed: string,
   corsHeaders: Record<string, string>
 ): Promise<Response> {
-  const reader = openRouterResponse.body?.getReader()
+  const reader = providerResponse.body?.getReader()
   if (!reader) {
     throw new Error('No response body')
   }
@@ -248,7 +333,7 @@ async function handleStreamingResponse(
             }
           }
         }
-      } catch (error) {
+      } catch (_error) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`))
       } finally {
         controller.close()
@@ -267,11 +352,11 @@ async function handleStreamingResponse(
 }
 
 async function handleNonStreamingResponse(
-  openRouterResponse: Response,
+  providerResponse: Response,
   modelUsed: string,
   corsHeaders: Record<string, string>
 ): Promise<Response> {
-  const data = await openRouterResponse.json()
+  const data = await providerResponse.json()
   const content = data.choices?.[0]?.message?.content || ''
   const usage = data.usage || {}
 
@@ -291,62 +376,141 @@ async function handleNonStreamingResponse(
   )
 }
 
-async function tryModelWithFallback(
+async function tryProviderCascade(
   messages: ChatMessage[],
   preferredModel: string | undefined,
   stream: boolean,
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
 ): Promise<{ response: Response; model: string }> {
-  // If preferred model specified, try it first
-  const modelsToTry = preferredModel
-    ? [preferredModel, ...MODEL_FALLBACK_CHAIN.filter(m => m !== preferredModel)]
-    : MODEL_FALLBACK_CHAIN
+  if (RESOLVED_CHAIN.length === 0) {
+    throw new Error('No provider API keys configured')
+  }
+
+  // If a client-supplied preferred model is in the chain, try that entry first,
+  // then fall through to the rest of the chain in order.
+  let orderedChain = RESOLVED_CHAIN
+  if (preferredModel) {
+    const preferredIdx = RESOLVED_CHAIN.findIndex((e) => e.model === preferredModel)
+    if (preferredIdx > 0) {
+      orderedChain = [
+        RESOLVED_CHAIN[preferredIdx],
+        ...RESOLVED_CHAIN.slice(0, preferredIdx),
+        ...RESOLVED_CHAIN.slice(preferredIdx + 1),
+      ]
+    }
+  }
 
   let lastError: Error | null = null
-  const primaryModel = modelsToTry[0]
+  const primaryEntry = orderedChain[0]
 
-  for (let attemptIndex = 0; attemptIndex < modelsToTry.length; attemptIndex++) {
-    const model = modelsToTry[attemptIndex]
-    edgeLog('info', 'chat.model.attempt', { model, attempt: attemptIndex + 1 })
+  for (let i = 0; i < orderedChain.length; i++) {
+    const entry = orderedChain[i]
+    edgeLog('info', 'chat.provider.attempt', { provider: entry.name, model: entry.model, attempt: i + 1 })
+
     try {
-      const response = await callOpenRouter(messages, model, stream, temperature, maxTokens)
+      const response = await callProvider(entry, messages, stream, temperature, maxTokens)
 
       if (response.ok) {
-        if (model !== primaryModel) {
-          edgeLog('warn', 'chat.model.fallback', { primaryModel, modelUsed: model, attempt: attemptIndex + 1 })
+        if (entry.name !== primaryEntry.name) {
+          edgeLog('warn', 'chat.provider.fallback', {
+            primaryProvider: primaryEntry.name,
+            providerUsed: entry.name,
+            modelUsed: entry.model,
+            attempt: i + 1,
+          })
         }
-        return { response, model }
+
+        // Stream-start failure check: for streaming responses, peek at the first
+        // SSE chunk to detect provider-level error payloads embedded in a 200 body.
+        // Both Fireworks and OpenRouter can wrap stream errors as data:{error:...}
+        // on the first SSE event. If detected, consume the body and fall through.
+        if (stream && response.body) {
+          const reader = response.body.getReader()
+          const { value: firstChunk } = await reader.read()
+          const firstText = firstChunk ? new TextDecoder().decode(firstChunk) : ''
+
+          const firstDataLine = firstText.split('\n').find((l) => l.startsWith('data: '))
+          if (firstDataLine) {
+            try {
+              const parsed = JSON.parse(firstDataLine.slice(6))
+              if (parsed.error) {
+                edgeLog('warn', 'chat.provider.streamError', {
+                  provider: entry.name,
+                  error: parsed.error,
+                })
+                const nextEntry = orderedChain[i + 1]
+                if (nextEntry) {
+                  edgeLog('warn', 'chat.provider.fallback', { failedProvider: entry.name, nextProvider: nextEntry.name })
+                }
+                continue
+              }
+            } catch {
+              // Not JSON — proceed normally
+            }
+          }
+
+          // Re-assemble the stream with the already-consumed first chunk prepended
+          const restStream = new ReadableStream({
+            async start(controller) {
+              if (firstChunk) controller.enqueue(firstChunk)
+              try {
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  controller.enqueue(value)
+                }
+              } finally {
+                controller.close()
+              }
+            },
+          })
+
+          const reassembled = new Response(restStream, {
+            status: response.status,
+            headers: response.headers,
+          })
+          return { response: reassembled, model: entry.model }
+        }
+
+        return { response, model: entry.model }
       }
 
-      // Retryable provider conditions — fall through to the next model in the chain:
-      //   429 = rate limited, 503 = model unavailable,
-      //   404 = no endpoints for this model OR no endpoint matching the ZDR/data_collection
-      //         policy ("No endpoints found matching your data policy"). Without catching 404
-      //         here a deprecated model or a model with no ZDR endpoint would abort the whole
-      //         request instead of failing over.
-      if (response.status === 429 || response.status === 503 || response.status === 404) {
-        const nextModel = modelsToTry[attemptIndex + 1]
-        if (nextModel) {
-          edgeLog('warn', 'chat.model.fallback', { failedModel: model, nextModel, errorCode: response.status })
+      // Retryable provider conditions — fall through to the next entry:
+      //   400 = unknown param (e.g. reasoning_effort on a model that doesn't support it)
+      //   404 = no endpoints found for this model / data policy
+      //   429 = rate limited
+      //   503 = model unavailable
+      if ([400, 404, 429, 503].includes(response.status)) {
+        const nextEntry = orderedChain[i + 1]
+        if (nextEntry) {
+          edgeLog('warn', 'chat.provider.fallback', {
+            failedProvider: entry.name,
+            nextProvider: nextEntry.name,
+            errorCode: response.status,
+          })
         }
         continue
       }
 
-      // Other errors - throw immediately
-      const errorData = await response.json()
-      throw new Error(errorData.error?.message || `API error: ${response.status}`)
+      // Other errors — throw immediately (non-retryable)
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error((errorData as { error?: { message?: string } }).error?.message || `API error: ${response.status}`)
     } catch (error) {
       lastError = error as Error
-      const nextModel = modelsToTry[attemptIndex + 1]
-      if (nextModel) {
-        edgeLog('warn', 'chat.model.fallback', { failedModel: model, nextModel, errorMessage: (error as Error).message })
+      const nextEntry = orderedChain[i + 1]
+      if (nextEntry) {
+        edgeLog('warn', 'chat.provider.fallback', {
+          failedProvider: entry.name,
+          nextProvider: nextEntry.name,
+          errorMessage: (error as Error).message,
+        })
       }
       continue
     }
   }
 
-  throw lastError || new Error('All models failed')
+  throw lastError || new Error('All providers failed')
 }
 
 async function searchResources(
@@ -476,9 +640,9 @@ serve(async (req: Request) => {
     })
   }
 
-  // Check API key is configured
-  if (!OPENROUTER_API_KEY) {
-    return new Response(JSON.stringify({ error: 'OpenRouter API key not configured' }), {
+  // Check that at least one provider is configured
+  if (RESOLVED_CHAIN.length === 0) {
+    return new Response(JSON.stringify({ error: 'No AI provider API keys configured' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
@@ -529,7 +693,7 @@ serve(async (req: Request) => {
     } = body
 
     // Clamp + allowlist client-controlled LLM inputs so out-of-range / arbitrary values
-    // can never reach OpenRouter. An unrecognized model is ignored (→ default chain).
+    // can never reach any provider. An unrecognized model is ignored (→ default chain).
     const model = resolveModel(body.model)
     const temperature = clampTemperature(body.temperature)
     const maxTokens = clampMaxTokens(body.maxTokens)
@@ -573,29 +737,29 @@ serve(async (req: Request) => {
       ? [{ role: 'system', content: enrichedSystemPrompt }, ...messages]
       : messages
 
-    // Call OpenRouter with fallback
+    // Call the provider cascade with fallback
     const tLLM = Date.now()
-    const primaryModel = MODEL_FALLBACK_CHAIN[0]
-    const { response: openRouterResponse, model: modelUsed } = await tryModelWithFallback(
+    const primaryProvider = RESOLVED_CHAIN[0]
+    const { response: providerResponse, model: modelUsed } = await tryProviderCascade(
       fullMessages,
       model,
       stream,
       temperature,
-      maxTokens
+      maxTokens,
     )
     edgeLog('info', 'chat.response.complete', {
       userId: auth.userId,
       model: modelUsed,
       durationMs: Math.round(performance.now() - requestStart),
       llmFirstTokenMs: Date.now() - tLLM,
-      didFallback: modelUsed !== (model ?? primaryModel),
+      didFallback: modelUsed !== (model ?? primaryProvider?.model),
     })
 
     // Return response (streaming or non-streaming)
     if (stream) {
-      return handleStreamingResponse(openRouterResponse, modelUsed, corsHeaders)
+      return handleStreamingResponse(providerResponse, modelUsed, corsHeaders)
     } else {
-      return handleNonStreamingResponse(openRouterResponse, modelUsed, corsHeaders)
+      return handleNonStreamingResponse(providerResponse, modelUsed, corsHeaders)
     }
   } catch (error) {
     edgeLog('error', 'chat.response.error', {
