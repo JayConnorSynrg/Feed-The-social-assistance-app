@@ -16,7 +16,29 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave3-saved-resources-encryption
+next_action_id: wave4a-doc-filename-encryption
+
+```yaml
+id: wave4a-doc-filename-encryption
+status: in_progress
+type: branch+commit+pr
+description: "fix(vault): stop persisting cleartext document filenames (#7) + delete dead unencrypted upload path (#8). #7: use-encrypted-upload insert now writes a non-PII placeholder ('Encrypted Document') to the NOT-NULL user_documents.name column instead of the real filename; encrypted_original_name/encrypted_name_iv remain the source of truth. documents-panel decrypts encrypted_original_name for display via a reactive displayNames resolver (decrypts when vault unlocked, falls back to placeholder/legacy name when locked — no crash, no plaintext leak in DOM). Encrypted renames routed through new useEncryptedUpload.renameEncrypted (encrypts new name into ciphertext, keeps placeholder) so a rename never re-leaks plaintext; legacy/category updates still use use-documents.updateDocument. mime_type kept cleartext (generic application/pdf, low-sensitivity, needed for icon/preview). Existing-row leak sweep via Management API: 2 encrypted rows had plaintext names → swept to placeholder (encrypted_original_name intact, source of truth); 0 unsweepable legacy rows. #8: deleted dead useDocuments.uploadDocument (0 live callers verified) + unused MAX_FILE_SIZE/ALLOWED_TYPES/withMetric import. type-check 0 errors; lint clean on touched files; new document-filename-encryption.spec.ts PASS (a) name=placeholder at rest + ciphertext no-leak, (b) decrypted real filename renders unlocked, (c) locked shows placeholder + no plaintext in DOM; 10/10 existing documents e2e regression PASS; test rows self-cleaned to 0. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/wave4a-doc-filename-encryption
+base: develop
+remote: origin
+files:
+  - apps/web/src/lib/document-encryption.ts
+  - apps/web/src/hooks/use-encrypted-upload.ts
+  - apps/web/src/hooks/use-documents.ts
+  - apps/web/src/components/panels/documents-panel.tsx
+  - apps/web/e2e/document-filename-encryption.spec.ts
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-06-11T19:50:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: wave3-saved-resources-encryption

@@ -47,6 +47,7 @@ import { PdfDocumentViewer } from '@/components/documents/pdf-document-viewer-dy
 import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
 import { useDocuments } from '@/hooks/use-documents'
+import { decryptString } from '@/lib/document-encryption'
 import { exportFlattened } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 import { VaultGuard } from '@/components/vault'
@@ -70,6 +71,12 @@ type DocumentCategory = 'all' | 'id' | 'income' | 'residence' | 'medical' | 'for
 
 interface Document {
   id: string
+  /**
+   * Display name. For encrypted rows this is the non-PII placeholder at rest
+   * (the real filename lives in the encrypted ciphertext fields below and is
+   * resolved into `displayNames` for rendering only when the vault is unlocked).
+   * For legacy unencrypted rows this is the real plaintext filename.
+   */
   name: string
   type: 'pdf' | 'image' | 'word'
   category: DocumentCategory
@@ -78,6 +85,10 @@ interface Document {
   thumbnailUrl?: string
   isEncrypted?: boolean
   hasAnnotations?: boolean // true if encrypted_annotations sidecar is present
+  /** Encrypted original filename ciphertext (Base64), if present. */
+  encryptedNameCipher?: string | null
+  /** IV for the encrypted filename (Base64), if present. */
+  encryptedNameIv?: string | null
 }
 
 interface DocumentsPanelProps {
@@ -102,6 +113,35 @@ const MOVE_CATEGORIES: Array<Exclude<DocumentCategory, 'all'>> = [
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
+/** Map a raw user_documents row into the panel's Document shape. */
+function mapDocumentRow(doc: {
+  id: string
+  name: string
+  mime_type?: string | null
+  category?: string | null
+  original_size?: number | null
+  file_size?: number | null
+  created_at?: string | null
+  is_encrypted?: boolean | null
+  encrypted_annotations?: string | null
+  annotations_iv?: string | null
+  encrypted_original_name?: string | null
+  encrypted_name_iv?: string | null
+}): Document {
+  return {
+    id: doc.id,
+    name: doc.name,
+    type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
+    category: (doc.category || 'other') as DocumentCategory,
+    size: doc.original_size || doc.file_size || 0,
+    uploadedAt: new Date(doc.created_at || Date.now()),
+    isEncrypted: doc.is_encrypted || false,
+    hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
+    encryptedNameCipher: doc.encrypted_original_name ?? null,
+    encryptedNameIv: doc.encrypted_name_iv ?? null,
+  }
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -510,13 +550,18 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // render propagates isUnlocked=true to the useCallback dependency.
   const isUnlockedRef = useRef(isUnlocked)
   useEffect(() => { isUnlockedRef.current = isUnlocked }, [isUnlocked])
-  const { downloadFile, downloadForEdit, updateAnnotations, deleteFile, isDownloading, error: downloadError, clearError: clearDownloadError } = useEncryptedUpload()
+  const { downloadFile, downloadForEdit, updateAnnotations, renameEncrypted, deleteFile, isDownloading, error: downloadError, clearError: clearDownloadError } = useEncryptedUpload()
   const { updateDocument } = useDocuments()
   // Vault secure profile — used to supply autofill values to the PDF annotator
   const { profile: vaultProfile } = useVaultSecureProfile()
   const { savedResources, isLoading: resourcesLoading, removeResource } = useSavedResources()
   const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
   const [documents, setDocuments] = useState<Document[]>([])
+  // Resolved display names keyed by document id. Encrypted rows are decrypted
+  // here (only when the vault is unlocked); locked rows fall back to the
+  // placeholder/legacy plaintext `name`. Kept separate from `documents` so the
+  // list re-resolves reactively when the vault unlocks without a re-fetch.
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({})
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -575,16 +620,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           return
         }
 
-        const mappedDocs: Document[] = (data || []).map((doc) => ({
-          id: doc.id,
-          name: doc.name,
-          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
-          category: (doc.category || 'other') as DocumentCategory,
-          size: doc.original_size || doc.file_size || 0,
-          uploadedAt: new Date(doc.created_at || Date.now()),
-          isEncrypted: doc.is_encrypted || false,
-          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
-        }))
+        const mappedDocs: Document[] = (data || []).map(mapDocumentRow)
 
         setDocuments(mappedDocs)
       } catch (err) {
@@ -599,6 +635,33 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // forms (same panel, no remount), the effect re-fires and shows newly-saved docs.
   }, [user?.id, viewMode])
 
+  // Resolve decrypted display names. Runs whenever the document list or vault
+  // unlock state changes. When the vault is unlocked and a row has the encrypted
+  // filename ciphertext, decrypt it for display; otherwise fall back to the
+  // stored `name` (placeholder when locked, legacy plaintext for old rows).
+  useEffect(() => {
+    let cancelled = false
+    const resolve = async () => {
+      const next: Record<string, string> = {}
+      for (const doc of documents) {
+        if (isUnlocked && doc.encryptedNameCipher && doc.encryptedNameIv) {
+          try {
+            next[doc.id] = await decryptString(doc.encryptedNameCipher, doc.encryptedNameIv)
+          } catch {
+            // Decrypt failed (e.g. vault locked mid-resolve) — graceful fallback,
+            // never surface garbage or crash.
+            next[doc.id] = doc.name
+          }
+        } else {
+          next[doc.id] = doc.name
+        }
+      }
+      if (!cancelled) setDisplayNames(next)
+    }
+    resolve()
+    return () => { cancelled = true }
+  }, [documents, isUnlocked])
+
   // Calculate document counts per category
   const documentCounts = documents.reduce<Record<DocumentCategory, number>>(
     (acc, doc) => {
@@ -609,8 +672,16 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     { all: 0, id: 0, income: 0, residence: 0, medical: 0, forms: 0, other: 0 }
   )
 
+  // Overlay the resolved display name (decrypted when unlocked, placeholder when
+  // locked) onto each document so the list, search, rename, and delete confirm
+  // all operate on the user-facing name.
+  const documentsForDisplay = documents.map((doc) => ({
+    ...doc,
+    name: displayNames[doc.id] ?? doc.name,
+  }))
+
   // Filter documents based on category and search
-  const filteredDocuments = documents.filter((doc) => {
+  const filteredDocuments = documentsForDisplay.filter((doc) => {
     const matchesCategory = activeCategory === 'all' || doc.category === activeCategory
     const matchesSearch = searchQuery === '' ||
       doc.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -639,17 +710,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        const mappedDocs: Document[] = data.map((doc) => ({
-          id: doc.id,
-          name: doc.name,
-          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
-          category: (doc.category || 'other') as DocumentCategory,
-          size: doc.original_size || doc.file_size || 0,
-          uploadedAt: new Date(doc.created_at || Date.now()),
-          isEncrypted: doc.is_encrypted || false,
-          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
-        }))
-        setDocuments(mappedDocs)
+        setDocuments(data.map(mapDocumentRow))
       }
     }
 
@@ -795,6 +856,30 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     }
     setRenameLoading(true)
     setRenameError(null)
+
+    // Encrypted docs: encrypt the new name into the ciphertext columns and keep
+    // the plaintext `name` column as the placeholder (no cleartext re-leak).
+    // Requires the vault to be unlocked.
+    if (renameDoc.isEncrypted) {
+      if (!isUnlocked) {
+        setRenameLoading(false)
+        setRenameError('Unlock your vault to rename this document.')
+        return
+      }
+      try {
+        await renameEncrypted(renameDoc.id, newName)
+        setRenameLoading(false)
+        // Plaintext `name` stays the placeholder; only the resolved display name changes.
+        setDisplayNames((prev) => ({ ...prev, [renameDoc.id]: newName }))
+        setRenameDoc(null)
+      } catch {
+        setRenameLoading(false)
+        setRenameError('Failed to rename. Please try again.')
+      }
+      return
+    }
+
+    // Legacy unencrypted docs: plaintext rename via the standard path.
     const ok = await updateDocument(renameDoc.id, { name: newName })
     setRenameLoading(false)
     if (ok) {
@@ -804,7 +889,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } else {
       setRenameError('Failed to rename. Please try again.')
     }
-  }, [renameDoc, renameDraft, updateDocument])
+  }, [renameDoc, renameDraft, updateDocument, renameEncrypted, isUnlocked])
 
   const handleMove = useCallback(async (doc: Document, newCategory: DocumentCategory) => {
     const ok = await updateDocument(doc.id, { category: newCategory })
@@ -849,16 +934,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
       if (!error && rows) {
-        setDocuments(rows.map((doc) => ({
-          id: doc.id,
-          name: doc.name,
-          type: doc.mime_type?.includes('pdf') ? 'pdf' : doc.mime_type?.includes('image') ? 'image' : 'word',
-          category: (doc.category || 'other') as DocumentCategory,
-          size: doc.original_size || doc.file_size || 0,
-          uploadedAt: new Date(doc.created_at || Date.now()),
-          isEncrypted: doc.is_encrypted || false,
-          hasAnnotations: !!(doc.encrypted_annotations && doc.annotations_iv),
-        })))
+        setDocuments(rows.map(mapDocumentRow))
       }
     }
   }, [editingDoc, updateAnnotations, user?.id])
