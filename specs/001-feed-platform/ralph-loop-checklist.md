@@ -70,7 +70,7 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 8 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 9 | IN_PROGRESS |
 
 **Overall Progress**: 119 / 119 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining task T1-partial is still pending and not yet in denominator)
 
