@@ -20,7 +20,7 @@ next_action_id: next-p9-task
 
 ```yaml
 id: verify-merge-pr77-suggest-resource
-status: in_progress
+status: complete
 type: merge
 description: "feat(map): verify + squash-merge PR #77 (feature/suggest-resource — P9-T4 suggest-resource flow). Verifications: (1) OPEN/MERGEABLE/base=develop PASS; (2) docsync v1.4.8 — frontmatter 117/117 P9-T9, Phase 9 dashboard 6->7, pending=T1-partial+T9, cumulative footnote ~L79, version history 1.4.6→1.4.7→1.4.8 PASS (fixed ordering defect on branch before merge); (3) security spot-check — status='pending' hardcoded L304, is_volunteer_resource=false hardcoded L305, source='user_submitted' hardcoded L306, submitted_by=user.id (auth-user, not user input) L307, no service_role in client code, no dangerouslySetInnerHTML PASS; (4) test-leak sweep — resources WHERE name LIKE e2e-suggest-resource-% = 0 rows, auth.users WHERE email LIKE e2e+suggest-%@feed.local today = 0 rows PASS; (5) CI 12/12 SUCCESS."
 branch: feature/suggest-resource
@@ -33,10 +33,10 @@ files:
   - specs/001-feed-platform/ralph-loop-checklist.md
 pr: 77
 pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/77
-merge_sha: null
+merge_sha: 568f3f2bd84c2eda3892ed4c5835fd4b4f87cf05
 merged_into: develop
 created_at: "2026-06-10T00:00:00.000Z"
-completed_at: null
+completed_at: "2026-06-11T00:49:47Z"
 ```
 
 ```yaml
