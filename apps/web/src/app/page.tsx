@@ -153,7 +153,7 @@ function LoadingSkeleton() {
 
 // Main Page Component
 export default function HomePage() {
-  const { user, profile, isAuthenticated, loading, signOut } = useAuth()
+  const { user, profile, isAuthenticated, isAnonymous, loading, signOut } = useAuth()
 
   if (loading) {
     return (
@@ -169,6 +169,7 @@ export default function HomePage() {
   return (
     <FeedShell
       isAuthenticated={isAuthenticated}
+      isAnonymous={isAnonymous}
       userName={profile?.full_name || user?.email?.split('@')[0]}
       onSignOut={signOut}
       backgroundImage="/images/wheat-field-bg.jpg"

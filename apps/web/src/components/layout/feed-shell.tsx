@@ -797,6 +797,8 @@ function MobileBottomNav() {
 interface FeedShellProps {
   children: React.ReactNode
   isAuthenticated?: boolean
+  /** True when the session is anonymous (guest) — shows a persistent browse-as-guest banner. */
+  isAnonymous?: boolean
   userName?: string
   userRole?: UserRole
   userFocus?: UserFocus[]
@@ -829,6 +831,7 @@ function getPanelFromHash(): PanelType {
 export function FeedShell({
   children,
   isAuthenticated = false,
+  isAnonymous = false,
   userName,
   userRole: initialRole = 'recipient',
   userFocus: initialFocus = ['food'],
@@ -933,6 +936,25 @@ export function FeedShell({
         <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col" style={{ height: 'max(400px, calc(100vh - 250px))' }}>
           {/* Top Navigation - Fixed */}
           <TopNav isAuthenticated={isAuthenticated} userName={userName} onSignOut={onSignOut} />
+
+          {/* Guest banner — persistent for anonymous sessions */}
+          {isAnonymous && (
+            <div
+              className="flex items-center justify-between gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm"
+              data-testid="guest-banner"
+            >
+              <span className="text-stone-700 font-medium">
+                Browsing as guest — your info isn&apos;t saved
+              </span>
+              <Link
+                href="/signup"
+                className="flex-shrink-0 text-lime-700 font-semibold underline hover:text-lime-900 text-xs"
+                data-testid="guest-banner-signup-link"
+              >
+                Create free account
+              </Link>
+            </div>
+          )}
 
           {/* Main Content Area */}
           <div className="flex flex-1 overflow-hidden">

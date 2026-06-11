@@ -42,6 +42,7 @@ import { mapProfileToAutofill, type AutofillValues } from '@/lib/form-field-mapp
 import { GOVERNMENT_FORMS, type GovernmentForm } from '@/lib/government-forms'
 import { logger } from '@/lib/logger'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 
 // ============================================
 // TYPES
@@ -737,7 +738,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   // Vault profile for autofill — mirrors documents-panel pattern
   const { profile: vaultProfile } = useVaultSecureProfile()
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
   const autofillValues: AutofillValues = useMemo(
     () => mapProfileToAutofill({ vaultProfile: vaultProfile ?? null, publicProfile: null, email: user?.email }),
     [vaultProfile, user?.email]
@@ -836,6 +837,20 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   }
 
   if (wizardState.mode === 'gov-pdf') {
+    // Anonymous guests may open gov PDFs but cannot fill/save them (vault requires account).
+    if (isAnonymous) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
+          <CreateAccountPrompt message="Create a free account to fill and save government forms to your encrypted vault" />
+          <button
+            onClick={() => setWizardState({ mode: 'list' })}
+            className="text-sm text-stone-500 underline hover:text-stone-700"
+          >
+            Back to forms
+          </button>
+        </div>
+      )
+    }
     return (
       <VaultGuard onDismiss={() => setWizardState({ mode: 'list' })}>
         {pdfSaveError && (
@@ -854,6 +869,14 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   }
 
   if (wizardState.mode === 'pdf') {
+    if (isAnonymous) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
+          <CreateAccountPrompt message="Create a free account to fill and save government forms to your encrypted vault" />
+          <button onClick={handlePdfCancel} className="text-sm text-stone-500 underline hover:text-stone-700">Back to forms</button>
+        </div>
+      )
+    }
     return (
       <VaultGuard onDismiss={handlePdfCancel}>
         {pdfSaveError && (
@@ -871,6 +894,14 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   }
 
   if (wizardState.mode === 'wizard') {
+    if (isAnonymous) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
+          <CreateAccountPrompt message="Create a free account to fill out and submit assistance applications" />
+          <button onClick={handleWizardCancel} className="text-sm text-stone-500 underline hover:text-stone-700">Back to forms</button>
+        </div>
+      )
+    }
     return (
       <VaultGuard onDismiss={handleWizardCancel}>
         <FormWizard

@@ -104,16 +104,23 @@ export async function proxy(request: NextRequest) {
   // Root SPA - if authenticated, check onboarding completion
   if (pathname === '/') {
     if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', user.id)
-        .maybeSingle()
+      // Anonymous (guest) users skip onboarding — they browse immediately.
+      // is_anonymous is a first-class field on the Supabase User object
+      // (supabase-js 2.105+); no extra DB query needed.
+      const isAnonymous = (user as unknown as { is_anonymous?: boolean }).is_anonymous === true
 
-      // Redirect to onboarding if no profile row or onboarding not completed
-      if (!profile || !profile.onboarding_completed) {
-        log('info', 'proxy.redirect', { reason: 'onboarding_incomplete', from: '/', to: '/onboarding', userId: user.id })
-        return NextResponse.redirect(new URL('/onboarding', request.url))
+      if (!isAnonymous) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        // Redirect to onboarding if no profile row or onboarding not completed
+        if (!profile || !profile.onboarding_completed) {
+          log('info', 'proxy.redirect', { reason: 'onboarding_incomplete', from: '/', to: '/onboarding', userId: user.id })
+          return NextResponse.redirect(new URL('/onboarding', request.url))
+        }
       }
     }
     return supabaseResponse
@@ -135,10 +142,14 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Redirect authenticated users away from auth pages to root
+  // Redirect authenticated users away from auth pages to root,
+  // EXCEPT anonymous (guest) users — they should be able to visit /signup to upgrade.
   if (user && (pathname === '/login' || pathname === '/signup')) {
-    log('info', 'proxy.redirect', { reason: 'already_authenticated', from: pathname, to: '/' })
-    return NextResponse.redirect(new URL('/', request.url))
+    const isAnonymous = (user as unknown as { is_anonymous?: boolean }).is_anonymous === true
+    if (!isAnonymous) {
+      log('info', 'proxy.redirect', { reason: 'already_authenticated', from: pathname, to: '/' })
+      return NextResponse.redirect(new URL('/', request.url))
+    }
   }
 
   // Protected routes require auth

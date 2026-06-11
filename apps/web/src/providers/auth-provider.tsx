@@ -15,6 +15,8 @@ interface AuthContextType {
   loading: boolean
   error: AuthError | null
   isAuthenticated: boolean
+  /** True when the active session is an anonymous (guest) session created via signInAnonymously(). */
+  isAnonymous: boolean
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
   updateProfile: (updates: ProfileUpdate) => Promise<void>
@@ -243,6 +245,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     error,
     isAuthenticated: !!user,
+    // is_anonymous is a first-class field on the Supabase User object (supabase-js 2.105+).
+    // Cast through unknown because the generated types may not include it yet.
+    isAnonymous: (user as unknown as { is_anonymous?: boolean })?.is_anonymous ?? false,
     signOut,
     refreshSession,
     updateProfile,

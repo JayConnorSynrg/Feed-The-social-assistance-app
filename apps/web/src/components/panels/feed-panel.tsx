@@ -45,6 +45,7 @@ import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
 import { getCategoryTailwind, getCategoryLabel } from '@/lib/resource-categories'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 
 // ============================================
 // TYPES
@@ -1168,7 +1169,7 @@ export function FeedPanel() {
   const [reviewModalRevieweeName, setReviewModalRevieweeName] = useState('')
   const [reviewModalRevieweeRole, setReviewModalRevieweeRole] = useState('')
 
-  const { user, isAuthenticated, loading: authLoading } = useAuth()
+  const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel } = usePanelContext()
   // Saved resources for the resource-link selector in the composer
@@ -1589,6 +1590,11 @@ export function FeedPanel() {
   }
 
   const handleOptIn = async (postId: string) => {
+    if (isAnonymous) {
+      // Server would reject this anyway (RESTRICTIVE policy). Surface friendly error.
+      setOptInErrors((prev) => ({ ...prev, [postId]: 'Create a free account to opt in.' }))
+      return
+    }
     setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
     try {
       await doOptIn(postId)
@@ -1877,13 +1883,18 @@ export function FeedPanel() {
           {/* Header with Filter Tabs */}
           <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
 
-          {/* Create Post Card */}
-          {isAuthenticated && (
+          {/* Create Post Card — full users only; guests see account prompt */}
+          {isAuthenticated && !isAnonymous && (
             <CreatePostCard
               onPost={handleCreatePost}
               resourceOptions={resourceOptions}
               onSafetyAlertClick={() => setActivePanel('map')}
             />
+          )}
+          {isAnonymous && (
+            <div className="mb-3">
+              <CreateAccountPrompt message="Create a free account to post and interact with the community" />
+            </div>
           )}
 
 
