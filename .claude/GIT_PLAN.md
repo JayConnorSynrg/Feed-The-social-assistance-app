@@ -2066,8 +2066,8 @@ files:
   - apps/web/src/components/chat/guided-flow.tsx
   - apps/web/src/components/panels/chat-panel.tsx
   - apps/web/e2e/chat-pii-egress.spec.ts
-pr: null
-pr_url: null
+pr: 85
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/85
 merge_sha: null
 merged_into: null
 created_at: "2026-06-11T16:20:00.000Z"
