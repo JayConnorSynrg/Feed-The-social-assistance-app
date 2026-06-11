@@ -157,7 +157,7 @@ function PetitionCard({
             Add your verified signature of support
           </button>
 
-          <p className="text-xs text-stone-400 text-center leading-snug">
+          <p className="text-xs text-stone-600 text-center leading-snug">
             Your name, the date, and a record of this petition version are kept as your verified signature of support.
           </p>
 
@@ -212,7 +212,7 @@ export function PetitionsPanel() {
       <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
         <ScrollText className="w-8 h-8 text-stone-300" aria-hidden="true" />
         <p className="text-sm text-stone-500 font-medium">No active petitions</p>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-600">
           Community petitions will appear here when published.
         </p>
       </div>

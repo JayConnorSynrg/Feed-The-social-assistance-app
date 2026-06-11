@@ -1081,7 +1081,7 @@ function PostCard({
               <div className="space-y-2">
                 <Label htmlFor={`report-details-${post.id}`}>
                   Additional details{' '}
-                  <span className="text-stone-400 font-normal">(optional)</span>
+                  <span className="text-stone-600 font-normal">(optional)</span>
                 </Label>
                 <Textarea
                   id={`report-details-${post.id}`}
@@ -1093,7 +1093,7 @@ function PostCard({
                   className="resize-none text-stone-900 placeholder:text-stone-400"
                   rows={3}
                 />
-                <p className="text-xs text-stone-400 text-right">
+                <p className="text-xs text-stone-600 text-right">
                   {reportDetails.length}/1000
                 </p>
               </div>

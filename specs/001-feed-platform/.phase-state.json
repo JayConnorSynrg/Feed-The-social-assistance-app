@@ -5,7 +5,7 @@
   "created": "2026-01-19T00:00:00.000Z",
   "lastUpdated": "2026-06-10T00:00:00.000Z",
   "currentPhase": 9,
-  "currentTask": "P9-T9",
+  "currentTask": "P9-T1",
   "status": "IN_PROGRESS",
   "phases": {
     "0": {
@@ -381,7 +381,8 @@
         "P9-T3",
         "P9-T7",
         "P9-T8",
-        "P9-T4"
+        "P9-T4",
+        "P9-T9"
       ],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
@@ -389,13 +390,13 @@
     }
   },
   "metrics": {
-    "totalTasks": 117,
-    "completedTasks": 117,
+    "totalTasks": 118,
+    "completedTasks": 118,
     "progressPercentage": 100,
-    "remainingLaunchGate": "Phase 9 remaining tasks (P9-T1 partial, P9-T9)",
+    "remainingLaunchGate": "Phase 9 remaining task P9-T1 partial (fulfillment view)",
     "estimatedHoursRemaining": null,
     "sessionsCompleted": 17,
-    "metricsNote": "Denominator = 117 (shipped tasks only; Phase 9 pending tasks T1-partial/T9 not yet in denominator \u2014 added as each ships). 117/117 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8,P9-T4] (7 of 9). P9-T4 shipped feature/suggest-resource (2026-06-10): suggest-resource flow in HazardBubbleMenu, SuggestResourceDialog (CATEGORY_META SSOT, INSERT status=pending), e2e 4/4. Updated 2026-06-10.",
+    "metricsNote": "Denominator = 118 (shipped tasks only; Phase 9 pending task T1-partial not yet in denominator \u2014 added as it ships). 118/118 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8,P9-T4,P9-T9] (8 of 9). P9-T9 shipped feature/usability-grandma-pass (2026-06-10): grandma-grade usability pass \u2014 contrast fixes, tap targets, sidebar labels, MOBILE_SHORT_LABELS map, humanized loading copy, forms error Try Again + getFriendlyErrorMessage, forms empty Ask the Assistant CTA, Resource Wizard label\u2192Get Help Finding Resources. Updated 2026-06-10.",
     "lastUpdated": "2026-06-10T00:00:00.000Z"
   },
   "ralphLoop": {

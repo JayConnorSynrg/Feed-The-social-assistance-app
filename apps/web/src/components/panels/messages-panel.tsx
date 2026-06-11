@@ -293,7 +293,7 @@ export function MessagesPanel() {
                     {selectedConv.status}
                   </Badge>
                   {selectedConv.resource?.category && (
-                    <span className="text-xs text-stone-400">
+                    <span className="text-xs text-stone-600">
                       {CATEGORY_LABELS[selectedConv.resource.category] ?? selectedConv.resource.category}
                     </span>
                   )}
@@ -439,7 +439,7 @@ export function MessagesPanel() {
           <div className="flex-1 flex items-center justify-center text-center p-8">
             <div>
               <MessageSquare className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-              <p className="text-sm text-stone-400">Select a conversation to view messages</p>
+              <p className="text-sm text-stone-600">Select a conversation to view messages</p>
             </div>
           </div>
         )}
@@ -544,12 +544,12 @@ function ConversationCard({ conversation, userId, isSelected, onClick }: Convers
     >
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-stone-800 truncate">{otherName ?? 'User'}</p>
-        <span className="text-[10px] text-stone-400">
+        <span className="text-[10px] text-stone-600">
           {conversation.updated_at ? new Date(conversation.updated_at).toLocaleDateString() : ''}
         </span>
       </div>
       {categoryLabel && (
-        <span className="text-xs text-stone-400">{categoryLabel}</span>
+        <span className="text-xs text-stone-600">{categoryLabel}</span>
       )}
     </button>
   )

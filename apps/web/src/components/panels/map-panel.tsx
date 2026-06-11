@@ -205,7 +205,7 @@ function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveR
         </div>
         <button
           onClick={onClose}
-          className="p-1 hover:bg-muted rounded-lg"
+          className="p-2.5 hover:bg-muted rounded-lg"
         >
           <X className="w-4 h-4" />
         </button>
