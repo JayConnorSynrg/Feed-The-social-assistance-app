@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,7 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [guestLoading, setGuestLoading] = useState(false)
   const [showMFA, setShowMFA] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
 
@@ -193,6 +195,30 @@ function LoginForm() {
     setPassword('')
   }
 
+  const handleGuestAccess = async () => {
+    setError(null)
+    setGuestLoading(true)
+    try {
+      const { error } = await supabase.auth.signInAnonymously()
+      if (error) throw error
+      router.push('/')
+      router.refresh()
+    } catch (err: unknown) {
+      // Next.js aborts fetch during re-renders — treat abort as success
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.message.includes('signal'))
+      ) {
+        router.push('/')
+        router.refresh()
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Unable to start guest session')
+    } finally {
+      setGuestLoading(false)
+    }
+  }
+
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 relative"
@@ -349,7 +375,32 @@ function LoginForm() {
               </div>
             </CardContent>
 
-            <CardFooter className="flex flex-col space-y-2 text-center text-sm pt-4">
+            <CardFooter className="flex flex-col space-y-3 text-center text-sm pt-4">
+              {/* Find Help Now — guest access, no account required */}
+              <div className="w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-lime-400 bg-lime-50 hover:bg-lime-100 text-lime-800 font-semibold py-2.5"
+                  onClick={handleGuestAccess}
+                  disabled={loading || guestLoading}
+                  data-testid="guest-access-btn"
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  {guestLoading ? 'Opening...' : 'Find Help Now — no account needed'}
+                </Button>
+                <p className="text-xs text-stone-500 mt-1">Browse map, programs, and community resources instantly</p>
+              </div>
+
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-stone-200" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-stone-50/95 px-2 text-stone-400">or sign in</span>
+                </div>
+              </div>
+
               <Link href="/forgot-password" className="text-stone-500 hover:text-lime-700">
                 Forgot your password?
               </Link>

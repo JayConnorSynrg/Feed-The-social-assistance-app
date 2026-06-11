@@ -52,6 +52,7 @@ import { exportFlattened } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
 import { VaultGuard } from '@/components/vault'
 import { useAuthContext } from '@/providers/auth-provider'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { useVault } from '@/contexts/vault-context'
 import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
 import { createClient } from '@/lib/supabase/client'
@@ -543,7 +544,7 @@ interface EditSource {
 }
 
 export function DocumentsPanel({ userId }: DocumentsPanelProps) {
-  const { user, profile: publicProfile } = useAuthContext()
+  const { user, profile: publicProfile, isAnonymous } = useAuthContext()
   const { isUnlocked } = useVault()
   // Ref so callbacks always read the CURRENT isUnlocked value, avoiding
   // a stale-closure race where onSuccess fires handleView before the next
@@ -1016,6 +1017,15 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           />
         </>
       </VaultGuard>
+    )
+  }
+
+  // Anonymous guests cannot use the vault or upload documents
+  if (isAnonymous) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6" data-testid="documents-panel">
+        <CreateAccountPrompt message="Create a free account to securely store and manage your documents" />
+      </div>
     )
   }
 

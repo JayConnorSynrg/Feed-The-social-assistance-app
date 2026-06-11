@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.4.10"
+version: "1.5.0"
 created: "2026-01-19"
 last_updated: "2026-06-11"
 status: "IN_PROGRESS"
 current_phase: 9
 current_task: "P9-T1"
 total_phases: 9
-total_tasks: 118
-completed_tasks: 118
+total_tasks: 119
+completed_tasks: 119
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 8 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 9 | 9 | IN_PROGRESS |
 
-**Overall Progress**: 118 / 118 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining task T1-partial is still pending and not yet in denominator)
+**Overall Progress**: 119 / 119 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining task T1-partial is still pending and not yet in denominator)
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/phone/website/city/state), INSERT with status=pending; e2e 4/4 = 117/117. P9-T9 complete 2026-06-10 (feature/usability-grandma-pass): grandma-grade usability pass — contrast fixes (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar text labels (2-line icon+label, w-14→w-16), mobile SHORT_LABELS map, loading copy humanized, forms error Try Again button + getFriendlyErrorMessage, forms empty state Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. deferred: Find-Help-Now signup CTA — flow change held for user decision. 118/118 shipped. Phase 9 remaining task T1-partial pending — denominator grows as it ships.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/phone/website/city/state), INSERT with status=pending; e2e 4/4 = 117/117. P9-T9 complete 2026-06-10 (feature/usability-grandma-pass): grandma-grade usability pass — contrast fixes (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar text labels (2-line icon+label, w-14→w-16), mobile SHORT_LABELS map, loading copy humanized, forms error Try Again button + getFriendlyErrorMessage, forms empty state Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. 118/118 shipped after P9-T9. P9-T10 complete 2026-06-11 (feature/guest-access-anon-auth): Find Help Now anonymous guest access — signInAnonymously() on login+signup, RESTRICTIVE RLS migration, 10 SECDEF guards, pg_cron cleanup, guest banner + CreateAccountPrompt gating = 119/119. Phase 9 remaining task T1-partial pending — denominator grows as it ships.
 
 ---
 
@@ -1789,7 +1789,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
   - Regression: docs-forms-lifecycle 3/3 green
 
 ### P9-T9: Grandma-Grade Security + Usability Validation
-- [x] **Status**: COMPLETE (feature/usability-grandma-pass, 2026-06-10) — contrast fixes (stone-400→stone-600 on all meaningful text across 7 panels + feed-shell MetricTile subtitle), tap-target enlargements (map detail close p-1→p-2.5; QuickTag icons w-3→w-4), persistent sidebar text labels under each icon (2-line icon+label layout, aside w-14→w-16), mobile bottom-nav SHORT_LABELS explicit map replacing label.split() truncation, humanized loading copy in forms + applications panels, forms error state getFriendlyErrorMessage + Try Again button, forms zero-templates empty state adds hint + Ask the Assistant CTA (setActivePanel('chat')), Resource Wizard display label→'Get Help Finding Resources' (panel id unchanged). Deferred: Find-Help-Now signup CTA (flow change held for user decision).
+- [x] **Status**: COMPLETE (feature/usability-grandma-pass, 2026-06-10) — contrast fixes (stone-400→stone-600 on all meaningful text across 7 panels + feed-shell MetricTile subtitle), tap-target enlargements (map detail close p-1→p-2.5; QuickTag icons w-3→w-4), persistent sidebar text labels under each icon (2-line icon+label layout, aside w-14→w-16), mobile bottom-nav SHORT_LABELS explicit map replacing label.split() truncation, humanized loading copy in forms + applications panels, forms error state getFriendlyErrorMessage + Try Again button, forms zero-templates empty state adds hint + Ask the Assistant CTA (setActivePanel('chat')), Resource Wizard display label→'Get Help Finding Resources' (panel id unchanged).
+
+### P9-T10: Find Help Now — Anonymous Guest Access
+- [x] **Status**: COMPLETE (feature/guest-access-anon-auth, 2026-06-11) — one-tap guest sign-in via Supabase `signInAnonymously()` on login + signup pages (AbortError-as-success pattern). Migration 20260611173053: 15 RESTRICTIVE INSERT-block + 7 RESTRICTIVE UPDATE-block RLS policies on all UGC tables (no-ops for permanent users), storage INSERT block for user-documents bucket, anonymous guard in 10 SECDEF write functions, pg_cron daily cleanup at 03:00 UTC (30-day TTL). Client: auth-provider exposes `isAnonymous` bool; proxy skips onboarding redirect for guests + allows `/signup` visit for upgrade; FeedShell amber guest banner; CreateAccountPrompt component gates documents, messages, settings, forms panels; feed composer hidden; hazard-menu Suggest button hidden; petitions sign CTA replaced. E2E: guest-access.spec.ts 12/12. Regression: suggest-resource + feed-per-type-pagination 8/8.
 
 ---
 
@@ -1812,9 +1815,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.8 | 2026-06-10 | P9-T4 COMPLETE (feature/suggest-resource): suggest-resource flow — Suggest a Resource in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state/phone/website), INSERT status=pending, no migration needed (INSERT policy permits it). e2e 4/4 + safety-pins 5/5 regression. Phase 9 dashboard 6->7. 117/117 shipped. Pending: T1-partial, T9. |
 | 1.4.9 | 2026-06-10 | P9-T9 COMPLETE (feature/usability-grandma-pass): grandma-grade usability pass — contrast (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar labels + w-16 aside, MOBILE_SHORT_LABELS map, humanized loading copy, forms error getFriendlyErrorMessage + Try Again, forms empty Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. Deferred: Find-Help-Now signup CTA. Phase 9 dashboard 7→8. 118/118. Pending: T1-partial only. |
 | 1.4.10 | 2026-06-11 | Chat provider cascade re-architected (feature/chat-fireworks-multilingual): Fireworks Qwen3.6 primary (ZDR/no-training, 200+ languages, disable-thinking via reasoning_effort:'none') + Fireworks gpt-oss-120b secondary + OpenRouter gemini-2.5-flash ZDR fallback + OpenRouter claude-haiku-4.5 ZDR fallback. Function key-ready: runs on OpenRouter alone until FIREWORKS_API_KEY set. Multilingual policy added to base system prompt: reply in user's language, card format [[...|...]] language-invariant, resource data untranslated. 5-language smoke PASS (ES/VI/AR/HT/EN, gemini-2.5-flash + zdr/deny). |
+| 1.5.0 | 2026-06-11 | P9-T10 COMPLETE: Find Help Now anonymous guest access (feature/guest-access-anon-auth). Supabase signInAnonymously() on login + signup pages. Migration 20260611173053: 15 INSERT-block + 7 UPDATE-block RESTRICTIVE RLS policies, storage bucket INSERT block, anon guard in 10 SECDEF write functions, pg_cron 30-day TTL cleanup. auth-provider isAnonymous; proxy guest-pass for onboarding + /signup; FeedShell guest banner; CreateAccountPrompt gates documents/messages/settings/forms; feed composer + suggest-resource button hidden for guests. E2E 12/12. 119/119 shipped. Phase 9 dashboard 8→9 completed. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/chat-fireworks-multilingual (2026-06-11)
+**Last Agent Session**: feature/guest-access-anon-auth (2026-06-11)
 **Total Development Time**: 0 hours

@@ -514,7 +514,7 @@ function SuggestResourceDialog({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function HazardBubbleMenu({ viewCenter, onPlaceAlert, onAddResource }: HazardBubbleMenuProps) {
-  const { profile } = useAuth()
+  const { profile, isAnonymous } = useAuth()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [activeEntry, setActiveEntry] = useState<HazardEntry | null>(null)
   const [suggestOpen, setSuggestOpen] = useState(false)
@@ -577,7 +577,8 @@ export function HazardBubbleMenu({ viewCenter, onPlaceAlert, onAddResource }: Ha
             {/* Divider */}
             <hr className="my-2 border-stone-200" />
 
-            {/* Suggest a Resource — ALL authenticated roles */}
+            {/* Suggest a Resource — authenticated non-guest roles only */}
+            {!isAnonymous && (
             <button
               className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-lime-300 hover:bg-lime-50 text-left transition-colors"
               onClick={handleSuggestClick}
@@ -591,6 +592,7 @@ export function HazardBubbleMenu({ viewCenter, onPlaceAlert, onAddResource }: Ha
                 <p className="text-xs text-stone-500">Know a resource that&apos;s missing? Let us know.</p>
               </div>
             </button>
+            )}
 
             {/* Add resource — providers/sourcers only */}
             {isProvider && (

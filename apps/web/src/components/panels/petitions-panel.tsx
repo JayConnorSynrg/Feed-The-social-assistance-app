@@ -16,6 +16,7 @@ import { ScrollText, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { PetitionWithMeta } from '@/hooks/use-petitions'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -178,7 +179,7 @@ function PetitionCard({
 // ─────────────────────────────────────────────────────────
 
 export function PetitionsPanel() {
-  const { profile, isAuthenticated } = useAuth()
+  const { profile, isAuthenticated, isAnonymous } = useAuth()
   const { petitions, loading, error, sign, signingId, signError, refresh } = usePetitions()
 
   const signerDisplayName = profile?.full_name || undefined
@@ -227,9 +228,15 @@ export function PetitionsPanel() {
         <h2 className="text-lg font-bold text-stone-900">Community Petitions</h2>
       </div>
 
-      {!isAuthenticated && (
-        <div className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-xl p-3">
-          Sign in to add your verified signature of support to any petition.
+      {(!isAuthenticated || isAnonymous) && (
+        <div className="mb-1">
+          {isAnonymous ? (
+            <CreateAccountPrompt message="Create a free account to add your verified signature of support to petitions" />
+          ) : (
+            <div className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-xl p-3">
+              Sign in to add your verified signature of support to any petition.
+            </div>
+          )}
         </div>
       )}
 

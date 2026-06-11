@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { useConversations } from '@/hooks/use-conversations'
 import { useReviews } from '@/hooks/use-reviews'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -47,7 +48,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export function MessagesPanel() {
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
   const { panelParams } = usePanelContext()
   const {
     conversations,
@@ -150,6 +151,15 @@ export function MessagesPanel() {
     if (selectedConv?.id) {
       await checkReviewStatus(selectedConv.id)
     }
+  }
+
+  // ── Guest gate — must come before empty-state (guests always have 0 conversations) ──
+  if (isAnonymous) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6">
+        <CreateAccountPrompt message="Create a free account to message volunteers and connect with your community" />
+      </div>
+    )
   }
 
   // ── Empty State ──

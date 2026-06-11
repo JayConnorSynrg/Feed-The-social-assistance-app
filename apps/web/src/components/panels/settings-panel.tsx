@@ -29,6 +29,7 @@ import { SecurityActivity } from '@/components/security/security-activity'
 import { AvatarUpload } from '@/components/profile/avatar-upload'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
 
 // ============================================
@@ -845,7 +846,7 @@ function saveLocalPrefs(prefs: Omit<SettingsData, 'profile'>) {
 // ============================================
 export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
-  const { user, profile, refreshSession } = useAuth()
+  const { user, profile, refreshSession, isAnonymous } = useAuth()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -930,6 +931,14 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
     const updated = { ...localPrefs, accessibility }
     setLocalPrefs(updated)
     saveLocalPrefs(updated)
+  }
+
+  if (isAnonymous) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6">
+        <CreateAccountPrompt message="Create a free account to manage your profile and preferences" />
+      </div>
+    )
   }
 
   return (
