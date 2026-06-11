@@ -102,10 +102,10 @@ serve(async (req: Request) => {
     })
   }
 
-  // Auth: validate agent key when AGENT_SYNC_SECRET is configured
+  // Auth: fail closed — reject when AGENT_SYNC_SECRET is unset or key is missing/mismatched.
   const agentKey = req.headers.get('x-agent-key')
   const expectedKey = Deno.env.get('AGENT_SYNC_SECRET')
-  if (expectedKey && agentKey !== expectedKey) {
+  if (!expectedKey || !agentKey || agentKey !== expectedKey) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
