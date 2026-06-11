@@ -1957,7 +1957,9 @@ export type Database = {
         Row: {
           created_at: string | null
           encrypted: boolean | null
+          encrypted_file_name: string | null
           file_name: string
+          file_name_iv: string | null
           file_path: string
           file_size: number | null
           id: string
@@ -1968,7 +1970,9 @@ export type Database = {
         Insert: {
           created_at?: string | null
           encrypted?: boolean | null
+          encrypted_file_name?: string | null
           file_name: string
+          file_name_iv?: string | null
           file_path: string
           file_size?: number | null
           id?: string
@@ -1979,7 +1983,9 @@ export type Database = {
         Update: {
           created_at?: string | null
           encrypted?: boolean | null
+          encrypted_file_name?: string | null
           file_name?: string
+          file_name_iv?: string | null
           file_path?: string
           file_size?: number | null
           id?: string
@@ -2000,32 +2006,38 @@ export type Database = {
       saved_resource_events: {
         Row: {
           created_at: string | null
+          encrypted_title: string | null
           event_date: string
           event_time: string | null
           id: string
           reminder: boolean | null
           saved_resource_id: string
           title: string
+          title_iv: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
+          encrypted_title?: string | null
           event_date: string
           event_time?: string | null
           id?: string
           reminder?: boolean | null
           saved_resource_id: string
           title: string
+          title_iv?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
+          encrypted_title?: string | null
           event_date?: string
           event_time?: string | null
           id?: string
           reminder?: boolean | null
           saved_resource_id?: string
           title?: string
+          title_iv?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2041,29 +2053,35 @@ export type Database = {
       saved_resource_tasks: {
         Row: {
           created_at: string | null
+          encrypted_title: string | null
           id: string
           is_completed: boolean | null
           saved_resource_id: string
           sort_order: number | null
           title: string
+          title_iv: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
+          encrypted_title?: string | null
           id?: string
           is_completed?: boolean | null
           saved_resource_id: string
           sort_order?: number | null
           title: string
+          title_iv?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
+          encrypted_title?: string | null
           id?: string
           is_completed?: boolean | null
           saved_resource_id?: string
           sort_order?: number | null
           title?: string
+          title_iv?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2079,8 +2097,12 @@ export type Database = {
       saved_resources: {
         Row: {
           created_at: string | null
+          encrypted_notes: string | null
+          encryption_migrated: boolean | null
+          encryption_migrated_at: string | null
           id: string
           notes: string | null
+          notes_iv: string | null
           resource_address: string | null
           resource_category: string | null
           resource_id: string | null
@@ -2091,8 +2113,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          encrypted_notes?: string | null
+          encryption_migrated?: boolean | null
+          encryption_migrated_at?: string | null
           id?: string
           notes?: string | null
+          notes_iv?: string | null
           resource_address?: string | null
           resource_category?: string | null
           resource_id?: string | null
@@ -2103,8 +2129,12 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          encrypted_notes?: string | null
+          encryption_migrated?: boolean | null
+          encryption_migrated_at?: string | null
           id?: string
           notes?: string | null
+          notes_iv?: string | null
           resource_address?: string | null
           resource_category?: string | null
           resource_id?: string | null

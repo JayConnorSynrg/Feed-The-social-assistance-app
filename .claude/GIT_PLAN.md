@@ -16,7 +16,48 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: next-p9-task
+next_action_id: wave3-saved-resources-encryption
+
+```yaml
+id: wave3-saved-resources-encryption
+status: in_progress
+type: branch+commit+pr
+description: "feat(vault): zero-knowledge encryption of user-authored saved-resources fields (saved_resources.notes, saved_resource_tasks.title, saved_resource_events.title, saved_resource_documents.file_name). Additive migration 20260611000000 adds 4 encrypted/IV nullable column pairs (RLS auto-covered, no policy change) + applied live via Management API and verified. use-resource-detail hook now encrypts-on-write (notes NULLed; NOT NULL title/file_name get a placeholder, encrypted_* is source of truth) and decrypts-on-read with migration-tolerant plaintext fallback; resource-detail-dialog body wrapped in VaultGuard with a dismissible locked-state. migrateSavedResources mirrors migrateUserSecureProfile and is wired into migrateUserDataToEncrypted (runs on vault unlock). Public listing fields (resource_name/address/phone/website/category) stay cleartext + searchable. Plaintext-column DROP deferred to Phase-3. type-check 0 errors; lint 0 errors; full e2e round-trip saved-resources-encryption.spec.ts PASS: (a) ciphertext-at-rest + plaintext NULL, (b) decrypt-in-UI after unlock, (c) locked-vault hides plaintext (no DOM leak), (d) public fields cleartext + searchable. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/wave3-saved-resources-encryption
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260611000000_encrypt_saved_resources.sql
+  - packages/database/types.ts
+  - apps/web/src/hooks/use-resource-detail.ts
+  - apps/web/src/lib/migrate-to-encrypted.ts
+  - apps/web/src/components/documents/resource-detail-dialog.tsx
+  - apps/web/e2e/saved-resources-encryption.spec.ts
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-06-11T19:25:00.000Z"
+completed_at: null
+```
+
+```yaml
+id: merge-pr81-geo-searchpath-unquoted-fix
+status: complete
+type: merge
+description: "fix(db): P0 hotfix — correct geo SECDEF search_path to unquoted list form (PR #81). 20260610220000 used SET search_path TO 'public, extensions' (single-quoted embedded comma) → Postgres stored one bogus schema name → empty effective search_path → 42P01 in all 9 geo SECDEF functions. Live fix applied via Management API immediately. Forward-fix migration 20260610230000_geo_searchpath_expand_fix.sql re-applies UNQUOTED form. BEFORE: resources_in_bounds → 42P01, proconfig=[\"search_path=\\\"public, extensions\\\"\"]. AFTER: count=1, all 9 proconfig=[\"search_path=public, extensions\"]. type-check 0 errors. CI 11/11 SUCCESS. Squash merged → 08a310b on origin/develop."
+branch: fix/geo-searchpath-unquoted
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260610230000_geo_searchpath_expand_fix.sql
+pr: 81
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/81
+merge_sha: 08a310b42f1b21228e013c12fd3b69861f249842
+merged_into: develop
+created_at: "2026-06-11T00:00:00.000Z"
+completed_at: "2026-06-11T00:30:00.000Z"
+```
 
 ```yaml
 id: merge-pr80-geo-searchpath-expand

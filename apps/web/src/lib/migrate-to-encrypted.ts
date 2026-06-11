@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   encryptSecureProfile,
   encryptFormSubmission,
+  encryptString,
   type SecureProfileInput,
   type EncryptedSecureProfile,
   type EncryptedFormSubmission,
@@ -26,6 +27,13 @@ import {
   type EmergencyContact,
   type Address,
 } from '@/lib/field-encryption'
+
+/**
+ * Placeholder written into NOT NULL plaintext columns (title / file_name) once
+ * the real value lives in the encrypted_* column. Mirrors ENCRYPTED_PLACEHOLDER
+ * in use-resource-detail.ts — the encrypted_* column is the source of truth.
+ */
+const ENCRYPTED_PLACEHOLDER = '••••••'
 
 // ============================================
 // Type Definitions
@@ -193,6 +201,152 @@ export async function migrateUserSecureProfile(
 
     // 7. Success!
     result.success = true
+    return result
+  } catch (error) {
+    result.errors.push(
+      `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    )
+    return result
+  }
+}
+
+// ============================================
+// Saved Resources Migration
+// ============================================
+
+/**
+ * Migrate a single user's saved-resources user-authored fields from plaintext
+ * to encrypted. Mirrors migrateUserSecureProfile.
+ *
+ * Encrypts (vault DEK):
+ *   saved_resources.notes              -> encrypted_notes / notes_iv
+ *   saved_resource_tasks.title         -> encrypted_title / title_iv
+ *   saved_resource_events.title        -> encrypted_title / title_iv
+ *   saved_resource_documents.file_name -> encrypted_file_name / file_name_iv
+ *
+ * Plaintext columns are kept (notes NULLed; NOT NULL title/file_name set to a
+ * generic placeholder). The plaintext DROP is a deferred Phase-3 PR.
+ *
+ * Idempotent: saved_resources rows are gated by encryption_migrated=false;
+ * child rows are gated by encrypted_* IS NULL so re-runs skip migrated data.
+ */
+export async function migrateSavedResources(
+  userId: string
+): Promise<MigrationResult> {
+  const supabase = createClient()
+  const result: MigrationResult = {
+    success: false,
+    migratedFields: [],
+    errors: [],
+    timestamp: new Date().toISOString(),
+  }
+
+  try {
+    // ── 1. saved_resources.notes ──
+    const { data: resources, error: resErr } = await supabase
+      .from('saved_resources')
+      .select('id, notes, encrypted_notes')
+      .eq('user_id', userId)
+      .eq('encryption_migrated', false)
+
+    if (resErr) {
+      result.errors.push(`Failed to fetch saved_resources: ${resErr.message}`)
+    } else {
+      for (const r of resources ?? []) {
+        const update: {
+          encryption_migrated: boolean
+          encryption_migrated_at: string
+          notes?: string | null
+          encrypted_notes?: string | null
+          notes_iv?: string | null
+        } = {
+          encryption_migrated: true,
+          encryption_migrated_at: new Date().toISOString(),
+        }
+        // Only encrypt if plaintext notes exist and aren't already encrypted.
+        if (r.notes && !r.encrypted_notes) {
+          const { ciphertext, iv } = await encryptString(r.notes)
+          update.notes = null
+          update.encrypted_notes = ciphertext
+          update.notes_iv = iv
+          result.migratedFields.push(`notes:${r.id}`)
+        }
+        const { error: upErr } = await supabase
+          .from('saved_resources')
+          .update(update)
+          .eq('id', r.id)
+        if (upErr) result.errors.push(`saved_resources ${r.id}: ${upErr.message}`)
+      }
+    }
+
+    // ── 2. saved_resource_tasks.title ──
+    const { data: tasks, error: taskErr } = await supabase
+      .from('saved_resource_tasks')
+      .select('id, title, encrypted_title')
+      .eq('user_id', userId)
+      .is('encrypted_title', null)
+
+    if (taskErr) {
+      result.errors.push(`Failed to fetch saved_resource_tasks: ${taskErr.message}`)
+    } else {
+      for (const t of tasks ?? []) {
+        if (!t.title || t.title === ENCRYPTED_PLACEHOLDER) continue
+        const { ciphertext, iv } = await encryptString(t.title)
+        const { error: upErr } = await supabase
+          .from('saved_resource_tasks')
+          .update({ title: ENCRYPTED_PLACEHOLDER, encrypted_title: ciphertext, title_iv: iv })
+          .eq('id', t.id)
+        if (upErr) result.errors.push(`saved_resource_tasks ${t.id}: ${upErr.message}`)
+        else result.migratedFields.push(`task_title:${t.id}`)
+      }
+    }
+
+    // ── 3. saved_resource_events.title ──
+    const { data: events, error: evErr } = await supabase
+      .from('saved_resource_events')
+      .select('id, title, encrypted_title')
+      .eq('user_id', userId)
+      .is('encrypted_title', null)
+
+    if (evErr) {
+      result.errors.push(`Failed to fetch saved_resource_events: ${evErr.message}`)
+    } else {
+      for (const e of events ?? []) {
+        if (!e.title || e.title === ENCRYPTED_PLACEHOLDER) continue
+        const { ciphertext, iv } = await encryptString(e.title)
+        const { error: upErr } = await supabase
+          .from('saved_resource_events')
+          .update({ title: ENCRYPTED_PLACEHOLDER, encrypted_title: ciphertext, title_iv: iv })
+          .eq('id', e.id)
+        if (upErr) result.errors.push(`saved_resource_events ${e.id}: ${upErr.message}`)
+        else result.migratedFields.push(`event_title:${e.id}`)
+      }
+    }
+
+    // ── 4. saved_resource_documents.file_name ──
+    const { data: docs, error: docErr } = await supabase
+      .from('saved_resource_documents')
+      .select('id, file_name, encrypted_file_name')
+      .eq('user_id', userId)
+      .is('encrypted_file_name', null)
+
+    if (docErr) {
+      result.errors.push(`Failed to fetch saved_resource_documents: ${docErr.message}`)
+    } else {
+      for (const d of docs ?? []) {
+        if (!d.file_name || d.file_name === ENCRYPTED_PLACEHOLDER) continue
+        const { ciphertext, iv } = await encryptString(d.file_name)
+        const { error: upErr } = await supabase
+          .from('saved_resource_documents')
+          .update({ file_name: ENCRYPTED_PLACEHOLDER, encrypted_file_name: ciphertext, file_name_iv: iv })
+          .eq('id', d.id)
+        if (upErr) result.errors.push(`saved_resource_documents ${d.id}: ${upErr.message}`)
+        else result.migratedFields.push(`file_name:${d.id}`)
+      }
+    }
+
+    result.success = result.errors.length === 0
+    if (result.migratedFields.length === 0) result.migratedFields.push('No data to migrate')
     return result
   } catch (error) {
     result.errors.push(
@@ -393,6 +547,12 @@ export async function migrateUserDataToEncrypted(userId: string): Promise<BatchM
     result.migratedSubmissions = submissionsResult.migratedSubmissions
     result.errors.push(...submissionsResult.errors)
 
+    // 3. Migrate saved-resources user-authored fields (notes/titles/file names)
+    const savedResourcesResult = await migrateSavedResources(userId)
+    if (!savedResourcesResult.success) {
+      result.errors.push(`Saved resources migration: ${savedResourcesResult.errors.join(', ')}`)
+    }
+
     result.endTime = new Date().toISOString()
     return result
   } catch (error) {
@@ -435,7 +595,17 @@ export async function needsMigration(userId: string): Promise<boolean> {
       .eq('encryption_migrated', false)
       .limit(1)
 
-    return (submissions?.length || 0) > 0
+    if ((submissions?.length || 0) > 0) return true
+
+    // Check saved-resources migration status
+    const { data: savedRes } = await supabase
+      .from('saved_resources')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('encryption_migrated', false)
+      .limit(1)
+
+    return (savedRes?.length || 0) > 0
   } catch {
     // If error, assume no migration needed to avoid blocking user
     return false
