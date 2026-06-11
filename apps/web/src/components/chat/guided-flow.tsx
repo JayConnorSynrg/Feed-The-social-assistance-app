@@ -146,8 +146,21 @@ export function GuidedFlowComponent({
       setAnswers(newAnswers)
 
       if (isLastStep) {
-        // Build and send AI prompt
         setIsProcessing(true)
+
+        // PII-sensitive flows (skipDirectSend) collect answers and hand them to
+        // the owning panel WITHOUT sending anything to the LLM. The raw answers
+        // must flow only to the de-identified screening path; the panel rebuilds
+        // a derived, PII-free message before any LLM call.
+        if (flow.skipDirectSend) {
+          onComplete?.(newAnswers, '')
+          setIsProcessing(false)
+          return
+        }
+
+        // Non-sensitive flows (resource-finder, form-help): build and send the
+        // AI prompt directly. These prompts contain only category/topic/location
+        // context, never income/pregnancy/household-composition PII.
         const prompt = buildAIPrompt(flow, newAnswers)
         if (prompt) {
           await sendMessage(prompt)
