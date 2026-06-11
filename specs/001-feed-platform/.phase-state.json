@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-06-10T00:00:00.000Z",
+  "lastUpdated": "2026-06-11T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": "P9-T1",
   "status": "IN_PROGRESS",
@@ -372,7 +372,8 @@
         "P9-T6",
         "P9-T7",
         "P9-T8",
-        "P9-T9"
+        "P9-T9",
+        "P9-T10"
       ],
       "completedTasks": [
         "P9-T5",
@@ -382,22 +383,23 @@
         "P9-T7",
         "P9-T8",
         "P9-T4",
-        "P9-T9"
+        "P9-T9",
+        "P9-T10"
       ],
       "startedAt": "2026-06-09T00:00:00.000Z",
       "completedAt": null,
-      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app\u2192form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73 (cursor pagination, category badges, safety strip, e2e 4/4). P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10): generateMetadata on /s/embed/[id] (og:title/desc/image/url + oEmbed discovery link), metadataBase on root layout, /api/oembed endpoint (oEmbed 1.0 JSON-only, type=rich, origin-validated, 400/404/501 errors, s-maxage=300), discovery link on /s/post/[id] too; e2e 4/4. P9-T4=map pin + resource buttons complete (Share button shipped). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10): AcroForm fill-from-profile toolbar (FIELD_ALIAS_MAP, fillAcroFormFields, autofillValues prop), document rename+move (overflow DropdownMenu, updateDocument), submission\u2192drive archival (non-blocking archiveSubmission, @cantoo/pdf-lib summary, encryptFile, submission_id FK, archivedDocumentId + archiveWarning state), dropdown-menu.tsx Radix-free primitive, testids (document-card/data-document-id/documents-panel), e2e 3 tests. P9-T8=COMPLETE (feature/gov-forms-presync, 2026-06-10): pre-sync architecture; government-forms Supabase Storage bucket (private, authenticated SELECT); CLI sync script apps/web/scripts/sync-government-forms.ts (5/6 synced: IRS Schedule 8812 98KB, HUD-52641 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB); SSOT lib/government-forms.ts (6 entries); Migration 20260610210000_government_forms_bucket.sql; Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill); e2e government-forms.spec.ts 3/3 green; docs-forms-lifecycle 3/3 regression green. HUD-50058 retired 2022 (formUrl=null). P9-T9=grandma-grade security + usability validation. P9-T9=grandma-grade security + usability validation. P9-T4=COMPLETE (feature/suggest-resource, 2026-06-10): \"Suggest a Resource\" entry in HazardBubbleMenu (all authenticated roles), SuggestResourceDialog (category from CATEGORY_META SSOT, name required, description 10-500 chars required, phone + website optional, city + state prefilled from profile.location_city/location_state), INSERT resources row with status=pending + is_volunteer_resource=false + source=user_submitted. No migration needed \u2014 existing INSERT policy WITH CHECK (auth.uid() = submitted_by) permits status=pending rows. Pending invisibility: RLS \"Approved resources are viewable by everyone\" USING (status=approved) blocks cross-user SELECT. e2e suggest-resource.spec.ts 4/4 + safety-pins.spec.ts 5/5 regression. type-check 0 errors, lint 0 new warnings."
+      "notes": "Pillars documented 2026-06-09; scope refined by gap probe before implementation. P9-T1=IN_PROGRESS (PRs #65/#66 + PR #72 2026-06-10): benefits-screening wired, saved-programs tab, VT application_url seed, category SSOT, 12-category FAB, advisor hardening; Share-to-Feed + app\u2192form back-link; REMAINING in T1: fulfillment view. P9-T2=COMPLETE PR #73. P9-T3=COMPLETE (feature/embed-meta-oembed, 2026-06-10). P9-T4=COMPLETE (feature/suggest-resource, 2026-06-10). P9-T5=COMPLETE PR #63. P9-T6=COMPLETE PR #64. P9-T7=COMPLETE (feature/docs-forms-lifecycle, 2026-06-10). P9-T8=COMPLETE (feature/gov-forms-presync, 2026-06-10). P9-T9=COMPLETE (feature/usability-grandma-pass, 2026-06-10). P9-T10=COMPLETE (feature/guest-access-anon-auth, 2026-06-11): Find Help Now anonymous guest access \u2014 signInAnonymously() on login+signup pages (AbortError-as-success pattern), migration 20260611173053 (15 RESTRICTIVE INSERT-block + 7 UPDATE-block policies on all UGC tables, storage INSERT block, anon guard in 10 SECDEF write functions, pg_cron daily cleanup 03:00 UTC 30-day TTL), auth-provider isAnonymous bool, proxy skips onboarding + allows /signup for guest upgrade, FeedShell amber guest banner + create-account link, CreateAccountPrompt component gates documents/messages/settings/forms panels, feed composer hidden for guests, hazard-menu Suggest button hidden, petitions sign CTA replaced. E2E guest-access.spec.ts 12/12 green. Regression suggest-resource + feed-per-type-pagination 8/8 green. type-check 0 errors."
     }
   },
   "metrics": {
-    "totalTasks": 118,
-    "completedTasks": 118,
+    "totalTasks": 119,
+    "completedTasks": 119,
     "progressPercentage": 100,
     "remainingLaunchGate": "Phase 9 remaining task P9-T1 partial (fulfillment view)",
     "estimatedHoursRemaining": null,
-    "sessionsCompleted": 17,
-    "metricsNote": "Denominator = 118 (shipped tasks only; Phase 9 pending task T1-partial not yet in denominator \u2014 added as it ships). 118/118 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8,P9-T4,P9-T9] (8 of 9). P9-T9 shipped feature/usability-grandma-pass (2026-06-10): grandma-grade usability pass \u2014 contrast fixes, tap targets, sidebar labels, MOBILE_SHORT_LABELS map, humanized loading copy, forms error Try Again + getFriendlyErrorMessage, forms empty Ask the Assistant CTA, Resource Wizard label\u2192Get Help Finding Resources. Updated 2026-06-10.",
-    "lastUpdated": "2026-06-10T00:00:00.000Z"
+    "sessionsCompleted": 18,
+    "metricsNote": "Denominator = 119 (shipped tasks only; Phase 9 pending task T1-partial not yet in denominator \u2014 added as it ships). 119/119 = all shipped tasks complete. Phase 9 completedTasks=[P9-T5,P9-T6,P9-T2,P9-T3,P9-T7,P9-T8,P9-T4,P9-T9,P9-T10] (9 of 10). P9-T10 shipped feature/guest-access-anon-auth (2026-06-11): Find Help Now anonymous guest access \u2014 signInAnonymously() on login+signup, RESTRICTIVE RLS migration 20260611173053 (15 INSERT-block + 7 UPDATE-block policies, storage bucket block, 10 SECDEF guards, pg_cron 30-day cleanup), auth-provider isAnonymous, proxy guest-pass + /signup upgrade flow, FeedShell guest banner, CreateAccountPrompt gates documents/messages/settings/forms, feed composer + suggest-resource button hidden for guests. E2E 12/12. Updated 2026-06-11.",
+    "lastUpdated": "2026-06-11T00:00:00.000Z"
   },
   "ralphLoop": {
     "enabled": true,
@@ -646,6 +648,16 @@
         "status": "complete",
         "phase": "Phase 9: Community Launch Readiness",
         "notes": "P9-T8 Web Form Retrieval shipped (feature/gov-forms-presync). Pre-sync architecture: government PDFs fetched once via CLI into Supabase Storage; client downloads from bucket. SSOT lib/government-forms.ts (6 forms). Migration 20260610210000_government_forms_bucket.sql (private bucket + authenticated SELECT). Sync: 5/6 OK (IRS 98KB, HUD 363KB, VA 21-526EZ 1.9MB, VA 21P-527EZ 2.9MB, SSA-16 170KB; SSA-8000 403). UI: Government Forms section in forms-panel.tsx (GovernmentFormCard, bucket probe, VaultGuard + PdfAnnotator + autofill). HUD-50058 retired (formUrl=null). e2e government-forms.spec.ts 3/3. Regression docs-forms-lifecycle 3/3."
+      },
+      {
+        "id": "session-016",
+        "startedAt": "2026-06-11T00:00:00.000Z",
+        "tasksCompleted": [
+          "P9-T10"
+        ],
+        "status": "complete",
+        "phase": "Phase 9: Community Launch Readiness",
+        "notes": "P9-T10 Find Help Now anonymous guest access shipped (feature/guest-access-anon-auth). signInAnonymously() on login + signup pages with AbortError-as-success pattern + data-testid=guest-access-btn. Migration 20260611173053: 15 RESTRICTIVE INSERT-block + 7 UPDATE-block RLS policies on all UGC tables, storage.objects INSERT block for user-documents bucket, anonymous guard in 10 SECDEF write functions, pg_cron daily cleanup at 03:00 UTC with 30-day TTL. Client: auth-provider isAnonymous; proxy skips onboarding for guests + allows /signup for upgrade; FeedShell amber guest banner; CreateAccountPrompt component; gates on documents/messages/settings/forms panels; feed composer + suggest button hidden; petitions sign CTA replaced. E2E 12/12. Regression 8/8. type-check 0 errors."
       }
     ]
   }
