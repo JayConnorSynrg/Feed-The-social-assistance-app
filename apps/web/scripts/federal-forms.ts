@@ -18,8 +18,11 @@ export const FEDERAL_FORMS: FederalFormMapping[] = [
   { programName: 'Child Tax Credit', category: 'financial', applicationUrl: 'https://www.irs.gov/credits-deductions/individuals/child-tax-credit', formUrl: 'https://www.irs.gov/pub/irs-pdf/f1040s8.pdf', formNumber: '1040 Schedule 8812' },
 
   // HUD / Housing
-  { programName: 'Section 8 Housing Choice Voucher', category: 'housing', applicationUrl: null, formUrl: 'https://www.hud.gov/sites/dfiles/PIH/documents/HUD-52641.pdf', formNumber: 'HUD-52641' },
-  { programName: 'Public Housing', category: 'housing', applicationUrl: null, formUrl: 'https://www.hud.gov/sites/dfiles/PIH/documents/HUD-50058.pdf', formNumber: 'HUD-50058' },
+  // HUD-52641 confirmed live at OCHCO path 2026-06-10
+  { programName: 'Section 8 Housing Choice Voucher', category: 'housing', applicationUrl: null, formUrl: 'https://www.hud.gov/sites/dfiles/OCHCO/documents/52641.pdf', formNumber: 'HUD-52641' },
+  // HUD-50058 (Tenant Eligibility Certification) — both PIH and OCHCO paths 404 as of 2026-06-10.
+  // Form retired 2022; formUrl null so sync skips it and UI shows agency-site fallback.
+  { programName: 'Public Housing', category: 'housing', applicationUrl: null, formUrl: null, formNumber: 'HUD-50058' },
 
   // USDA / Food
   { programName: 'SNAP (Food Stamps)', category: 'food', applicationUrl: 'https://www.fns.usda.gov/snap/state-directory', formUrl: null, formNumber: null },

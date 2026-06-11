@@ -15,6 +15,9 @@ import {
   Calendar,
   ClipboardList,
   FilePlus,
+  ExternalLink,
+  Download,
+  Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +36,10 @@ import { PdfAnnotator } from '@/components/forms/pdf-annotator-dynamic'
 import { VaultGuard } from '@/components/vault'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useEncryptedUpload } from '@/hooks/use-encrypted-upload'
+import { useVaultSecureProfile } from '@/hooks/use-vault-secure-profile'
+import { useAuth } from '@/hooks/use-auth'
+import { mapProfileToAutofill, type AutofillValues } from '@/lib/form-field-mapper'
+import { GOVERNMENT_FORMS, type GovernmentForm } from '@/lib/government-forms'
 import { logger } from '@/lib/logger'
 
 // ============================================
@@ -76,6 +83,8 @@ type WizardState =
   | { mode: 'wizard'; templateId: string; submissionId?: string }
   | { mode: 'view'; submissionId: string }
   | { mode: 'pdf'; file: File; fileName: string }
+  // gov-pdf: open a government form from the storage bucket
+  | { mode: 'gov-pdf'; file: File; fileName: string; govForm: GovernmentForm }
 
 interface FormsTarget {
   programId: string
@@ -504,6 +513,80 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
   )
 }
 
+
+// ============================================
+// GOVERNMENT FORM CARD
+// ============================================
+const GOV_CATEGORY_COLORS: Record<string, string> = {
+  eitc_tax_filing: 'bg-emerald-100 text-emerald-700',
+  housing: 'bg-orange-100 text-orange-700',
+  veteran: 'bg-blue-100 text-blue-700',
+  disability: 'bg-purple-100 text-purple-700',
+  food: 'bg-green-100 text-green-700',
+}
+
+interface GovernmentFormCardProps {
+  form: GovernmentForm
+  /** True when the PDF is available in the storage bucket */
+  inBucket: boolean
+  onOpen: (form: GovernmentForm) => void
+  isLoading: boolean
+}
+
+function GovernmentFormCard({ form, inBucket, onOpen, isLoading }: GovernmentFormCardProps) {
+  const categoryColor = GOV_CATEGORY_COLORS[form.category] ?? 'bg-stone-100 text-stone-700'
+  const label = form.category.replace(/_/g, ' ')
+
+  return (
+    <div
+      data-testid="gov-form-card"
+      data-gov-form-path={form.storagePath}
+      className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-[#4a5d23]/30 transition-all"
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-medium text-sm truncate">{form.programName}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${categoryColor}`}>
+              {label}
+            </span>
+          </div>
+          <p className="text-xs text-stone-500">Form {form.formNumber}</p>
+        </div>
+        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ml-3">
+          <Globe className="w-5 h-5 text-[#4a5d23]" />
+        </div>
+      </div>
+
+      {inBucket ? (
+        <Button
+          onClick={() => onOpen(form)}
+          disabled={isLoading}
+          className="w-full mt-3"
+          size="sm"
+        >
+          {isLoading ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+          )}
+          Fill &amp; Annotate
+        </Button>
+      ) : (
+        <a
+          href={form.applicationUrl ?? form.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open on Agency Site
+        </a>
+      )}
+    </div>
+  )
+}
+
 // ============================================
 // MAIN FORMS PANEL
 // ============================================
@@ -643,6 +726,82 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const [pdfSaveError, setPdfSaveError] = useState<string | null>(null)
 
+  // ── Government Forms state ──────────────────────────────────────────
+  // Track which storage paths exist in the bucket (keyed by storagePath)
+  const [bucketPaths, setBucketPaths] = useState<Set<string>>(new Set())
+  const [govFormsLoading, setGovFormsLoading] = useState(false)
+  const [govFormsError, setGovFormsError] = useState<string | null>(null)
+  // Which gov form is currently being downloaded (storagePath → loading)
+  const [govFormDownloading, setGovFormDownloading] = useState<string | null>(null)
+
+  // Vault profile for autofill — mirrors documents-panel pattern
+  const { profile: vaultProfile } = useVaultSecureProfile()
+  const { user } = useAuth()
+  const autofillValues: AutofillValues = useMemo(
+    () => mapProfileToAutofill({ vaultProfile: vaultProfile ?? null, publicProfile: null, email: user?.email }),
+    [vaultProfile, user?.email]
+  )
+
+  // Probe which gov forms are available in the bucket on mount
+  useEffect(() => {
+    const supabase = createClient()
+    setGovFormsLoading(true)
+    setGovFormsError(null)
+    const controller = new AbortController()
+
+    supabase.storage
+      .from('government-forms')
+      .list('federal', { limit: 100 })
+      .then(({ data, error }) => {
+        if (controller.signal.aborted) return
+        if (error) {
+          // Bucket might not exist yet (migration pending); show fallback links, not error
+          setGovFormsLoading(false)
+          return
+        }
+        const present = new Set<string>()
+        for (const obj of data ?? []) {
+          present.add(`federal/${obj.name}`)
+        }
+        setBucketPaths(present)
+        setGovFormsLoading(false)
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setGovFormsLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  // Download a gov form from the bucket and open it in the PdfAnnotator
+  const handleOpenGovForm = useCallback(async (form: GovernmentForm) => {
+    setGovFormDownloading(form.storagePath)
+    setGovFormsError(null)
+    const supabase = createClient()
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('government-forms')
+        .download(form.storagePath)
+
+      if (error || !data) {
+        setGovFormsError(`Could not load ${form.formNumber}: ${error?.message ?? 'unknown error'}`)
+        return
+      }
+
+      const fileBlob = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' })
+      const fileName = form.storagePath.split('/').pop() ?? `${form.formNumber}.pdf`
+      const file = new File([fileBlob], fileName, { type: 'application/pdf' })
+      setWizardState({ mode: 'gov-pdf', file, fileName, govForm: form })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Download failed'
+      setGovFormsError(`Could not load ${form.formNumber}: ${msg}`)
+      logger.error('gov_forms.download.error', err, { storagePath: form.storagePath })
+    } finally {
+      setGovFormDownloading(null)
+    }
+  }, [])
+
   const handlePdfSave = async (data: { sourceBytes: Uint8Array; annotations: import('@/hooks/use-pdf-annotation').TextAnnotation[] }) => {
     setPdfSaveError(null)
     const fileName = wizardState.mode === 'pdf' ? wizardState.fileName : 'annotated.pdf'
@@ -673,6 +832,24 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const handlePdfCancel = () => {
     setWizardState({ mode: 'list' })
+  }
+
+  if (wizardState.mode === 'gov-pdf') {
+    return (
+      <VaultGuard onDismiss={() => setWizardState({ mode: 'list' })}>
+        {pdfSaveError && (
+          <div className="px-4 py-2 bg-red-50 border-b border-red-200">
+            <p className="text-xs text-red-600">{pdfSaveError}</p>
+          </div>
+        )}
+        <PdfAnnotator
+          file={wizardState.file}
+          autofillValues={autofillValues}
+          onSave={handlePdfSave}
+          onCancel={() => setWizardState({ mode: 'list' })}
+        />
+      </VaultGuard>
+    )
   }
 
   if (wizardState.mode === 'pdf') {
@@ -849,6 +1026,38 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                   ))}
                 </div>
               )}
+
+              {/* Government Forms section */}
+              <div 
+                data-testid="government-forms-section"
+                data-gov-forms-loaded={!govFormsLoading ? "true" : "false"}
+                className="mt-8"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Globe className="w-4 h-4 text-[#4a5d23]" />
+                  <h2 className="text-base font-semibold text-stone-900">Government Forms</h2>
+                  {govFormsLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-400" />}
+                </div>
+                <p className="text-xs text-stone-500 mb-4">
+                  Official federal benefit forms — fill and annotate in-app, then save to your Documents.
+                </p>
+                {govFormsError && (
+                  <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-xs text-orange-700">{govFormsError}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {GOVERNMENT_FORMS.map((govForm) => (
+                    <GovernmentFormCard
+                      key={govForm.storagePath}
+                      form={govForm}
+                      inBucket={bucketPaths.has(govForm.storagePath)}
+                      onOpen={handleOpenGovForm}
+                      isLoading={govFormDownloading === govForm.storagePath}
+                    />
+                  ))}
+                </div>
+              </div>
             </>
           )}
 
