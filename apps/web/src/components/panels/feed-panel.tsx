@@ -957,12 +957,14 @@ function PostCard({
                 {oi.status === 'pending' && (
                   <>
                     <button
+                      data-testid={`accept-optin-${oi.id}`}
                       onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
                       className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
                     >
                       Accept
                     </button>
                     <button
+                      data-testid={`decline-optin-${oi.id}`}
                       onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
                       className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
                     >
