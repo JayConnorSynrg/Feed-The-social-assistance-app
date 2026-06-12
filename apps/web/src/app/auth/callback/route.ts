@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { safeRelativePath } from '@/lib/safe-redirect'
 import { logger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -15,11 +16,8 @@ export async function GET(request: Request) {
   const allSearchParamKeys = Array.from(sp.keys())
   const host = requestUrl.host
 
-  // ── Open-redirect guard: only allow same-origin relative paths ───────────
-  const redirectTo =
-    rawNext.startsWith('/') && !rawNext.startsWith('//')
-      ? rawNext
-      : '/'
+  // ── Open-redirect guard: only allow same-origin relative paths (CWE-601) ──
+  const redirectTo = safeRelativePath(rawNext, '/')
 
   // ── 1. Entry log — always emitted ────────────────────────────────────────
   logger.info('oauth.callback.enter', {
