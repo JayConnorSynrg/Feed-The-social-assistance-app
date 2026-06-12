@@ -1,0 +1,33 @@
+-- ============================================================================
+-- Profiles name-privacy lockdown — CONTRACT half (audit hole #9)
+-- ----------------------------------------------------------------------------
+-- Companion to 20260612000000_profiles_name_privacy_expand.sql (#9 EXPAND,
+-- merged 9b1d09e). The EXPAND half added first_name/last_name, granted
+-- first_name SELECT to anon + authenticated, repointed every cross-user / anon
+-- read to first_name, repointed self-reads to get_my_profile(), and gated
+-- surnames behind the SECDEF conversation accessor. It REVOKED nothing.
+--
+-- THIS migration is the CONTRACT: it closes the actual hole by revoking the
+-- pre-existing cross-user PII SELECT grant on full_name / location_city /
+-- location_state from anon + authenticated.
+--
+-- Post-revoke privacy model:
+--   * first_name  — remains the ONLY public name projection (SELECT still
+--     granted to anon + authenticated by the EXPAND migration).
+--   * full_name   — readable only via get_my_profile() (self) and the
+--     SECDEF conversation accessor get_my_conversation_counterparties() /
+--     get_conversation_counterparty() (asymmetric surname reveal). Both are
+--     SECURITY DEFINER owned by postgres, so they bypass this revoke.
+--   * location_city / location_state — self-only via get_my_profile().
+--
+-- Safety / idempotency:
+--   * REVOKE of an already-absent grant is a no-op, so this is safe to re-run
+--     and safe on a fresh `supabase db reset` (it runs AFTER the EXPAND grant).
+--   * The grants are column-scoped (no table-level SELECT grant exists for
+--     anon/authenticated), so these column REVOKEs are effective, not no-ops.
+--   * postgres + service_role retain SELECT — the SECDEF accessors and
+--     server-side / migration paths are unaffected.
+-- ============================================================================
+
+REVOKE SELECT (full_name, location_city, location_state) ON public.profiles FROM authenticated;
+REVOKE SELECT (full_name, location_city, location_state) ON public.profiles FROM anon;
