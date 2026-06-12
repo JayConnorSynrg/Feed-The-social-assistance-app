@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
 import { useCsrfToken } from '@/hooks/use-csrf-token'
 import { usePasswordStrength } from '@/hooks/use-password-strength'
+import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { sanitizeInput } from '@/lib/security'
 import { logger } from '@/lib/logger'
 
@@ -27,6 +28,9 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [guestLoading, setGuestLoading] = useState(false)
+  // Turnstile CAPTCHA token — undefined when no site key is set (no-op).
+  const [captchaToken, setCaptchaToken] = useState<string>()
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null)
 
   const supabase = createClient()
 
@@ -90,6 +94,7 @@ export default function SignupPage() {
           email,
           password,
           options: {
+            captchaToken,
             data: {
               first_name: sanitizedFirst,
               last_name: sanitizedLast,
@@ -130,6 +135,9 @@ export default function SignupPage() {
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
+        // Turnstile tokens are single-use — reset so any retry gets a fresh one.
+        turnstileRef.current?.reset()
+        setCaptchaToken(undefined)
       }
     })
 
@@ -148,6 +156,7 @@ export default function SignupPage() {
         type: 'signup',
         email,
         options: {
+          captchaToken,
           emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding`,
         },
       })
@@ -158,6 +167,9 @@ export default function SignupPage() {
       setError(err instanceof Error ? err.message : 'Failed to resend confirmation email')
     } finally {
       setLoading(false)
+      // Turnstile tokens are single-use — reset so any retry gets a fresh one.
+      turnstileRef.current?.reset()
+      setCaptchaToken(undefined)
     }
   }
 
@@ -240,6 +252,11 @@ export default function SignupPage() {
               <p>Didn&apos;t receive it? Check your spam/junk folder.</p>
               <p>Make sure <strong>{email}</strong> is correct.</p>
             </div>
+            <TurnstileWidget
+              ref={turnstileRef}
+              onVerify={setCaptchaToken}
+              onExpireOrError={() => setCaptchaToken(undefined)}
+            />
             <div className="flex gap-2 justify-center">
               <Button
                 variant="outline"
@@ -437,6 +454,12 @@ export default function SignupPage() {
                 </a>
               </label>
             </div>
+
+            <TurnstileWidget
+              ref={turnstileRef}
+              onVerify={setCaptchaToken}
+              onExpireOrError={() => setCaptchaToken(undefined)}
+            />
 
             <Button
               type="submit"

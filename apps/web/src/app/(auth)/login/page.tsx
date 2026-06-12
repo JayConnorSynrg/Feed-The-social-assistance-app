@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
 import { useCsrfToken } from '@/hooks/use-csrf-token'
 import { MFAVerify } from '@/components/auth/mfa-verify'
+import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
@@ -32,6 +33,9 @@ function LoginForm() {
   const [guestLoading, setGuestLoading] = useState(false)
   const [showMFA, setShowMFA] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  // Turnstile CAPTCHA token — undefined when no site key is set (no-op).
+  const [captchaToken, setCaptchaToken] = useState<string>()
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null)
 
   const supabase = createClient()
 
@@ -87,6 +91,7 @@ function LoginForm() {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
+          options: { captchaToken },
         })
 
         // 3. Record attempt result (success or failure) for audit and lockout tracking
@@ -153,6 +158,9 @@ function LoginForm() {
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
+        // Turnstile tokens are single-use — reset so any retry gets a fresh one.
+        turnstileRef.current?.reset()
+        setCaptchaToken(undefined)
       }
     })
 
@@ -313,6 +321,12 @@ function LoginForm() {
                     className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
                   />
                 </div>
+
+                <TurnstileWidget
+                  ref={turnstileRef}
+                  onVerify={setCaptchaToken}
+                  onExpireOrError={() => setCaptchaToken(undefined)}
+                />
 
                 <Button
                   type="submit"

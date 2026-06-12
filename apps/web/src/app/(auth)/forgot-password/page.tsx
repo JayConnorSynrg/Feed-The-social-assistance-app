@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { logger } from '@/lib/logger'
 
 export default function ForgotPasswordPage() {
@@ -13,6 +14,9 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  // Turnstile CAPTCHA token — undefined when no site key is set (no-op).
+  const [captchaToken, setCaptchaToken] = useState<string>()
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,6 +27,7 @@ export default function ForgotPasswordPage() {
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        captchaToken,
         redirectTo: `${window.location.origin}/auth/confirm?type=recovery&next=/reset-password`,
       })
 
@@ -44,6 +49,9 @@ export default function ForgotPasswordPage() {
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
     } finally {
       setLoading(false)
+      // Turnstile tokens are single-use — reset so any retry gets a fresh one.
+      turnstileRef.current?.reset()
+      setCaptchaToken(undefined)
     }
   }
 
@@ -104,6 +112,12 @@ export default function ForgotPasswordPage() {
                   className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
                 />
               </div>
+
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={setCaptchaToken}
+                onExpireOrError={() => setCaptchaToken(undefined)}
+              />
 
               <Button
                 type="submit"
