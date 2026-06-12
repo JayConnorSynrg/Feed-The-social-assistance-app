@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Plus, Save, Type, Wand2, X } from 'lucide-react'
 import { usePdfAnnotation } from '@/hooks/use-pdf-annotation'
 import type { TextAnnotation } from '@/hooks/use-pdf-annotation'
+import { useVault } from '@/contexts/vault-context'
 import { logger } from '@/lib/logger'
 import { PDFDocument } from '@cantoo/pdf-lib'
 import type { AutofillValues } from '@/lib/form-field-mapper'
@@ -191,6 +192,15 @@ export interface PdfAnnotatorProps {
   initialAnnotations?: TextAnnotation[]
   onSave: (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => Promise<void>
   onCancel: () => void
+  /**
+   * Persist current work WITHOUT navigating away — invoked just before the
+   * vault auto-locks (15-min idle) or is manually locked mid-edit, while the
+   * encryption key is still available. VaultGuard unmounts this annotator on
+   * lock, so this is what prevents in-progress annotations from being lost.
+   * Unlike onSave, it must NOT change the panel's view state. When omitted, the
+   * annotator does not register a pre-lock flush.
+   */
+  onFlushDraft?: (data: { sourceBytes: Uint8Array; annotations: TextAnnotation[] }) => Promise<void>
   /**
    * When provided, enables the "Fill from profile" toolbar button.
    * The caller passes a resolved AutofillValues bag from mapProfileToAutofill.
@@ -464,7 +474,7 @@ function PageOverlay({
   )
 }
 
-export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, autofillValues, onFillComplete }: PdfAnnotatorProps) {
+export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlushDraft, autofillValues, onFillComplete }: PdfAnnotatorProps) {
   const {
     pdfBytes,
     numPages,
@@ -478,6 +488,8 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, autof
     removeAnnotation,
     savePdf,
   } = usePdfAnnotation()
+
+  const { registerPreLockFlush } = useVault()
 
   const [isPlacementMode, setIsPlacementMode] = useState(false)
   const [fontSize, setFontSize] = useState<number>(14)
@@ -543,6 +555,33 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, autof
       setSaveError(err instanceof Error ? err.message : 'Save failed')
     }
   }, [annotations.length, savePdf, scale, onSave])
+
+  // Pre-lock flush: persist current annotations (encrypted sidecar) just before
+  // the vault auto-locks (15-min idle) or is manually locked mid-edit, while the
+  // DEK is still available. VaultGuard unmounts this annotator on lock, so this
+  // is what prevents in-progress annotations from being lost. Reuses savePdf
+  // (existing) to capture source bytes + annotations, then hands them to the
+  // parent's non-navigating persist (onFlushDraft → uploadFile). Refs keep the
+  // registered callback stable (registered once) while reading the latest scale,
+  // annotation count, and handler. Skips entirely when there is nothing to save.
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
+  const onFlushDraftRef = useRef(onFlushDraft)
+  onFlushDraftRef.current = onFlushDraft
+  const annotationCountRef = useRef(annotations.length)
+  annotationCountRef.current = annotations.length
+  useEffect(() => {
+    if (!onFlushDraft) return
+    const unregister = registerPreLockFlush(async () => {
+      const flush = onFlushDraftRef.current
+      if (!flush || annotationCountRef.current === 0) return
+      const result = await savePdf(scaleRef.current)
+      await flush(result)
+    })
+    return unregister
+    // savePdf is stable (empty deps); onFlushDraft presence gates registration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerPreLockFlush, savePdf, !!onFlushDraft])
 
   /**
    * Fill AcroForm TextFields from the caller-supplied autofill bag.

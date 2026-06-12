@@ -7,7 +7,7 @@
  * Manages the unlock/lock state and provides encryption/decryption helpers.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useAuthContext } from '@/providers/auth-provider'
 import {
   setupVault,
@@ -23,7 +23,7 @@ import {
   VaultTimeoutError,
 } from '@/lib/vault'
 import { clearKeys } from '@/lib/key-store'
-import { startIdleLock } from '@/lib/vault-idle-lock'
+import { startIdleLock, runPreLockFlushes } from '@/lib/vault-idle-lock'
 import { migrateUserDataToEncrypted, needsMigration } from '@/lib/migrate-to-encrypted'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger, withMetric } from '@/lib/logger'
@@ -50,6 +50,15 @@ interface VaultContextType {
   // Utilities
   clearError: () => void
   refresh: () => Promise<void>
+
+  /**
+   * Register a callback that persists in-flight work BEFORE the vault locks,
+   * while the encryption key is still available. Returns an unregister fn (call
+   * it on unmount). Every lock trigger (idle auto-lock and manual lock) awaits
+   * all registered callbacks first, so locking mid-flow never loses unsaved
+   * work even though VaultGuard unmounts the guarded flow on lock.
+   */
+  registerPreLockFlush: (fn: () => Promise<void>) => () => void
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined)
@@ -64,6 +73,34 @@ export function VaultProvider({ children }: VaultProviderProps) {
   const [isSetup, setIsSetup] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Pre-lock flush registry. Guarded flows (PDF annotator, form wizard) register
+  // a persist callback on mount and unregister on unmount. Held in a ref so the
+  // set's identity is stable — registering/unregistering never re-arms the idle
+  // effect or recreates the lock callback.
+  const preLockFlushesRef = useRef<Set<() => Promise<void>>>(new Set())
+
+  const registerPreLockFlush = useCallback((fn: () => Promise<void>): (() => void) => {
+    preLockFlushesRef.current.add(fn)
+    return () => {
+      preLockFlushesRef.current.delete(fn)
+    }
+  }, [])
+
+  // Run every registered flush callback to completion BEFORE the vault locks.
+  // The vault always locks afterward: a flush failure is logged and lock
+  // proceeds (security takes precedence over a single failed persist).
+  // Delegates to the shared runPreLockFlushes so the ordering/failure contract
+  // is unit-tested in vault-idle-lock.test.ts against the same code path.
+  const flushBeforeLock = useCallback(async () => {
+    await runPreLockFlushes(preLockFlushesRef.current, (err) =>
+      logger.error(
+        'vault.preLockFlush.failed',
+        err instanceof Error ? err : new Error(String(err)),
+        {}
+      )
+    )
+  }, [])
 
   // Check vault status on mount and when user changes
   useEffect(() => {
@@ -227,6 +264,10 @@ export function VaultProvider({ children }: VaultProviderProps) {
   const lock = useCallback(async () => {
     try {
       setError(null)
+      // Flush in-flight drafts while the DEK is still available, THEN lock.
+      // A failing flush is logged inside flushBeforeLock and never blocks the
+      // security lock — the vault always locks.
+      await flushBeforeLock()
       await lockVault()
       setIsUnlocked(false)
 
@@ -243,15 +284,16 @@ export function VaultProvider({ children }: VaultProviderProps) {
       setError(message)
       throw err
     }
-  }, [user?.id])
+  }, [user?.id, flushBeforeLock])
 
   // Idle auto-lock: while the vault is unlocked, lock it after 15 minutes of
-  // inactivity, and lock immediately when the tab is backgrounded. Arms only on
-  // isUnlocked===true and fully tears down (timer + listeners) on lock/logout —
-  // it never navigates or touches modal/guarded-flow state, so VaultGuard-wrapped
-  // flows (unlock modal, PDF annotator, form wizard) are unaffected beyond the
-  // normal locked-state re-render that any lock() triggers. Independent of the
-  // 24h key-store session TTL (key-store.ts MAX_SESSION_AGE).
+  // inactivity. Arms only on isUnlocked===true and fully tears down (timer +
+  // listeners) on lock/logout. The injected lock() runs every registered
+  // pre-lock flush (registerPreLockFlush) FIRST so any in-flight guarded flow
+  // (PDF annotator, form wizard) persists its draft while the DEK is still
+  // available, THEN locks — VaultGuard then unmounts the flow with zero data
+  // loss. Independent of the 24h key-store session TTL (key-store.ts
+  // MAX_SESSION_AGE).
   useEffect(() => {
     if (!isUnlocked) return
     const teardown = startIdleLock({
@@ -377,6 +419,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     decryptMultiple,
     clearError,
     refresh,
+    registerPreLockFlush,
   }
 
   return (

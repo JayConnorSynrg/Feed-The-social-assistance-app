@@ -1,13 +1,19 @@
 /**
  * Vault Idle Auto-Lock Tests
  *
- * Guards the 15-minute inactivity lock + lock-on-tab-hidden behaviour
- * (startIdleLock). Uses fake timers and a stubbed window/document so the timer,
- * activity-reset, and visibilitychange paths are verified without a DOM.
+ * Guards the 15-minute inactivity lock (startIdleLock) and the pre-lock flush
+ * ordering contract (runPreLockFlushes). Uses fake timers and a stubbed window
+ * so the timer + activity-reset paths are verified without a DOM.
+ *
+ * The vault locks ONLY on sustained inactivity — backgrounding the tab does not
+ * lock (the visibilitychange→hidden immediate lock was removed because it
+ * interrupted mobile/Capacitor backgrounding, native file pickers, and
+ * OAuth/print popups). The "tab hidden never locks" test below is a regression
+ * guard so that immediate-on-hidden behaviour stays gone.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { startIdleLock, IDLE_LOCK_TIMEOUT_MS } from '../vault-idle-lock'
+import { startIdleLock, runPreLockFlushes, IDLE_LOCK_TIMEOUT_MS } from '../vault-idle-lock'
 
 type Handler = (...args: unknown[]) => void
 
@@ -43,9 +49,8 @@ describe('startIdleLock', () => {
   it('locks after 15 minutes of inactivity', () => {
     const lock = vi.fn()
     const win = makeTarget()
-    const doc = { ...makeTarget(), visibilityState: 'visible' as DocumentVisibilityState }
 
-    startIdleLock({ lock, win, doc, now: () => Date.now() })
+    startIdleLock({ lock, win, now: () => Date.now() })
 
     // Not locked just before the window elapses.
     vi.advanceTimersByTime(IDLE_LOCK_TIMEOUT_MS - 1)
@@ -59,9 +64,8 @@ describe('startIdleLock', () => {
   it('resets the timer on user activity (no premature lock)', () => {
     const lock = vi.fn()
     const win = makeTarget()
-    const doc = { ...makeTarget(), visibilityState: 'visible' as DocumentVisibilityState }
 
-    startIdleLock({ lock, win, doc, now: () => Date.now() })
+    startIdleLock({ lock, win, now: () => Date.now() })
 
     // Activity near the end of the first window resets it.
     vi.advanceTimersByTime(IDLE_LOCK_TIMEOUT_MS - 1_000)
@@ -76,36 +80,105 @@ describe('startIdleLock', () => {
     expect(lock).toHaveBeenCalledTimes(1)
   })
 
-  it('locks immediately when the tab is hidden (visibilitychange)', () => {
+  it('keeps the vault unlocked while the tab is hidden (no visibility listener, no lock)', () => {
+    // Regression guard: the immediate lock-on-tab-hidden feature was removed.
+    // The controller must NOT subscribe to visibilitychange and must NOT lock
+    // when the tab is backgrounded — only the idle timer ever locks.
     const lock = vi.fn()
     const win = makeTarget()
-    const doc = { ...makeTarget(), visibilityState: 'hidden' as DocumentVisibilityState }
+    const doc = makeTarget()
 
-    startIdleLock({ lock, win, doc, now: () => Date.now() })
+    startIdleLock({ lock, win, now: () => Date.now() })
 
+    // No visibilitychange listener is registered on any document-like target.
+    expect(doc.countFor('visibilitychange')).toBe(0)
+
+    // Even if a visibilitychange were dispatched, nothing is wired to it → no lock.
     doc.dispatch('visibilitychange')
-    expect(lock).toHaveBeenCalledTimes(1)
+    expect(lock).not.toHaveBeenCalled()
+
+    // The vault stays unlocked right up until the full idle window elapses.
+    vi.advanceTimersByTime(IDLE_LOCK_TIMEOUT_MS - 1)
+    expect(lock).not.toHaveBeenCalled()
   })
 
   it('teardown removes every listener and cancels the pending timer (no leak)', () => {
     const lock = vi.fn()
     const win = makeTarget()
-    const doc = { ...makeTarget(), visibilityState: 'visible' as DocumentVisibilityState }
 
-    const teardown = startIdleLock({ lock, win, doc, now: () => Date.now() })
+    const teardown = startIdleLock({ lock, win, now: () => Date.now() })
 
-    // Listeners are attached.
+    // Activity listeners are attached.
     expect(win.countFor('keydown')).toBe(1)
     expect(win.countFor('scroll')).toBe(1)
-    expect(doc.countFor('visibilitychange')).toBe(1)
+    expect(win.countFor('pointerdown')).toBe(1)
+    expect(win.countFor('focus')).toBe(1)
 
     teardown()
 
     // All listeners removed and the timer cancelled — no lock fires afterward.
     expect(win.countFor('keydown')).toBe(0)
     expect(win.countFor('scroll')).toBe(0)
-    expect(doc.countFor('visibilitychange')).toBe(0)
+    expect(win.countFor('pointerdown')).toBe(0)
+    expect(win.countFor('focus')).toBe(0)
     vi.advanceTimersByTime(IDLE_LOCK_TIMEOUT_MS * 2)
     expect(lock).not.toHaveBeenCalled()
+  })
+})
+
+describe('runPreLockFlushes (pre-lock flush ordering)', () => {
+  it('awaits ALL registered flushes before the lock callback runs', async () => {
+    const order: string[] = []
+
+    // Two async flushes that resolve on later microtask/timer turns. If the lock
+    // ran before they settled, "lock" would appear before both flush markers.
+    const flushA = async () => {
+      await Promise.resolve()
+      order.push('flushA')
+    }
+    const flushB = async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      order.push('flushB')
+    }
+
+    const onError = vi.fn()
+
+    // This mirrors the vault-context wiring: flush-all, THEN lock.
+    await runPreLockFlushes([flushA, flushB], onError)
+    order.push('lock')
+
+    expect(order).toEqual(['flushA', 'flushB', 'lock'])
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('still locks (resolves) when a flush throws — error is reported, lock proceeds', async () => {
+    const order: string[] = []
+    const onError = vi.fn()
+
+    const goodFlush = async () => {
+      order.push('goodFlush')
+    }
+    const throwingFlush = async () => {
+      throw new Error('persist failed')
+    }
+
+    // A rejecting flush must NOT reject runPreLockFlushes — the lock must proceed.
+    await expect(
+      runPreLockFlushes([throwingFlush, goodFlush], onError)
+    ).resolves.toBeUndefined()
+    order.push('lock')
+
+    // The healthy flush still ran, the failure was routed to onError, lock proceeded.
+    expect(order).toContain('goodFlush')
+    expect(order[order.length - 1]).toBe('lock')
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error)
+  })
+
+  it('resolves immediately when there are no registered flushes', async () => {
+    const onError = vi.fn()
+    await expect(runPreLockFlushes([], onError)).resolves.toBeUndefined()
+    expect(onError).not.toHaveBeenCalled()
   })
 })

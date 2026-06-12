@@ -4,8 +4,15 @@
  * In-memory inactivity lock for the vault. While the vault is unlocked, a
  * 15-minute idle timer runs; if no user activity occurs before it elapses the
  * vault is locked. The timer resets on user activity (keydown / pointerdown /
- * scroll / focus) and the vault locks immediately when the tab is backgrounded
- * (visibilitychange → hidden).
+ * scroll / focus, throttled).
+ *
+ * Locking is driven ONLY by sustained inactivity — backgrounding the tab does
+ * not lock. The earlier visibilitychange→hidden immediate lock was removed: in
+ * mobile/Capacitor backgrounding, native file pickers, and OAuth/print popups
+ * the tab goes `hidden` routinely without the user walking away, so an
+ * immediate lock there interrupted in-progress work. The 15-minute idle window
+ * remains the single, lossless trigger; the caller flushes active drafts before
+ * the lock actually fires (see vault-context registerPreLockFlush).
  *
  * This is SEPARATE from — and shorter than — the 24h key-store session TTL
  * (key-store.ts MAX_SESSION_AGE). The key-store TTL bounds how long a stored
@@ -21,6 +28,30 @@
 /** 15 minutes of inactivity before the unlocked vault auto-locks. */
 export const IDLE_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
+/**
+ * Run every registered pre-lock flush to completion. Used by the vault context
+ * to persist in-flight guarded-flow drafts (PDF annotator, form wizard) while
+ * the DEK is still available, BEFORE the vault actually locks.
+ *
+ * Contract (relied on by the idle-lock + manual-lock paths):
+ *  - All flushes are awaited and settle before this resolves, so the caller can
+ *    safely lock immediately after awaiting it with zero data loss.
+ *  - A flush that REJECTS never blocks the lock: its error is routed to onError
+ *    and the remaining flushes still run. The vault always locks afterward.
+ */
+export async function runPreLockFlushes(
+  flushes: Iterable<() => Promise<void>>,
+  onError: (err: unknown) => void
+): Promise<void> {
+  const pending = Array.from(flushes).map((flush) =>
+    Promise.resolve()
+      .then(flush)
+      .catch((err: unknown) => onError(err))
+  )
+  if (pending.length === 0) return
+  await Promise.all(pending)
+}
+
 /** Min gap between activity-driven timer resets, so high-frequency events
  * (notably scroll) don't thrash the timer. */
 const ACTIVITY_THROTTLE_MS = 1_000
@@ -29,14 +60,10 @@ const ACTIVITY_THROTTLE_MS = 1_000
 const ACTIVITY_EVENTS = ['keydown', 'pointerdown', 'scroll', 'focus'] as const
 
 interface IdleLockDeps {
-  /** Called when the vault should lock (idle elapsed or tab hidden). */
+  /** Called when the vault should lock (idle window elapsed). */
   lock: () => void
   /** Window-like event target. Defaults to the global `window`. */
   win?: Pick<Window, 'addEventListener' | 'removeEventListener'>
-  /** Document-like target for visibilitychange. Defaults to `document`. */
-  doc?: Pick<Document, 'addEventListener' | 'removeEventListener'> & {
-    readonly visibilityState: DocumentVisibilityState
-  }
   /** Idle window in ms. Defaults to IDLE_LOCK_TIMEOUT_MS (override for tests). */
   timeoutMs?: number
   /** Monotonic clock in ms. Defaults to Date.now (override for tests). */
@@ -44,8 +71,8 @@ interface IdleLockDeps {
 }
 
 /**
- * Wire up the idle auto-lock against the given window/document. Returns a
- * teardown function that removes every listener and clears the pending timer.
+ * Wire up the idle auto-lock against the given window. Returns a teardown
+ * function that removes every listener and clears the pending timer.
  *
  * Caller contract: only start this while the vault is unlocked, and call the
  * returned teardown when it locks/unmounts.
@@ -54,7 +81,6 @@ export function startIdleLock(deps: IdleLockDeps): () => void {
   const {
     lock,
     win = window,
-    doc = document,
     timeoutMs = IDLE_LOCK_TIMEOUT_MS,
     now = Date.now,
   } = deps
@@ -83,18 +109,9 @@ export function startIdleLock(deps: IdleLockDeps): () => void {
     startTimer()
   }
 
-  // Tab backgrounded → lock immediately (don't wait out the idle window).
-  const onVisibilityChange = () => {
-    if (doc.visibilityState === 'hidden') {
-      clearTimer()
-      lock()
-    }
-  }
-
   for (const evt of ACTIVITY_EVENTS) {
     win.addEventListener(evt, onActivity, { passive: true })
   }
-  doc.addEventListener('visibilitychange', onVisibilityChange)
 
   // Arm the initial idle window.
   lastReset = now()
@@ -105,6 +122,5 @@ export function startIdleLock(deps: IdleLockDeps): () => void {
     for (const evt of ACTIVITY_EVENTS) {
       win.removeEventListener(evt, onActivity)
     }
-    doc.removeEventListener('visibilitychange', onVisibilityChange)
   }
 }
