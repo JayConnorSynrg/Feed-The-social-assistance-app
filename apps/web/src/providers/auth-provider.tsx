@@ -51,12 +51,23 @@ async function fetchCoords(
   }
 }
 
-// 12-column list — excludes latitude, longitude (coord lockdown), phone,
-// paypal_email, venmo_username, is_admin (PII hardening, 20260603120000).
-// user_role added: has column-level SELECT grant (safe to read); unblocks role-gated UI.
-const PROFILE_COLUMNS =
-  'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
-  'is_verified, created_at, is_staff, onboarding_completed, user_role'
+// Self-profile is read through the SECDEF accessor get_my_profile() (own-row
+// only, WHERE id = auth.uid()). The name-privacy lockdown (#9) revokes direct
+// column SELECT on full_name/location_city/location_state from authenticated,
+// so the OWNER can no longer read these via the table — the accessor restores
+// own-row access. Mirrors the get_my_coordinates pattern. The accessor also
+// returns first_name/last_name (new columns) for the owner's own use.
+async function fetchOwnProfile(
+  supabase: ReturnType<typeof createClient>
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase.rpc('get_my_profile')
+  if (error) {
+    console.error('Error fetching profile:', error.message, error.code)
+    return null
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  return (row as Record<string, unknown>) ?? null
+}
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
@@ -69,22 +80,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const supabase = getSupabase()
 
-    const fetchProfile = async (userId: string) => {
-      // Run profile select and coord RPC in parallel to avoid an extra round-trip.
-      const [profileResult, coords] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select(PROFILE_COLUMNS)
-          .eq('id', userId)
-          .maybeSingle(),
+    const fetchProfile = async () => {
+      // Own-row profile via SECDEF accessor + coords via SECDEF accessor, in parallel.
+      const [data, coords] = await Promise.all([
+        fetchOwnProfile(supabase),
         fetchCoords(supabase),
       ])
-
-      const { data, error } = profileResult
-      if (error) {
-        console.error('Error fetching profile:', error.message, error.code)
-        return null
-      }
       if (!data) return null
       // Merge coords sourced from SECDEF accessor into the profile object.
       return Object.assign({}, data, coords) as unknown as Profile
@@ -113,7 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           logger.info('auth.getSession.resolved', { duration_ms: Date.now() - getSessionStart, hasSession: !!session })
 
           if (session?.user) {
-            const userProfile = await fetchProfile(session.user.id)
+            const userProfile = await fetchProfile()
             setUser(session.user)
             setSession(session)
             setProfile(userProfile)
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // TOKEN_REFRESHED fires every ~hour and doesn't change the user —
           // re-fetching the profile on each refresh is unnecessary DB load.
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            const userProfile = await fetchProfile(newSession.user.id)
+            const userProfile = await fetchProfile()
             setProfile(userProfile)
           }
         } else {
@@ -195,18 +196,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (error) {
       setError(error)
     } else if (newSession) {
-      // Run profile select and coord RPC in parallel.
-      const [profileResult, coords] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select(PROFILE_COLUMNS)
-          .eq('id', newSession.user.id)
-          .maybeSingle(),
+      // Own-row profile + coords via SECDEF accessors, in parallel.
+      const [data, coords] = await Promise.all([
+        fetchOwnProfile(supabase),
         fetchCoords(supabase),
       ])
-      const profileData = profileResult.data
-        ? Object.assign({}, profileResult.data, coords)
-        : null
+      const profileData = data ? Object.assign({}, data, coords) : null
       setUser(newSession.user)
       setSession(newSession)
       setProfile(profileData as unknown as Profile)
@@ -218,24 +213,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!user) return
 
     const supabase = getSupabase()
-    // UPDATE...RETURNING cannot include revoked columns — run profile update
-    // and coord RPC in parallel, then merge.
-    const [updateResult, coords] = await Promise.all([
-      supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id)
-        .select(PROFILE_COLUMNS)
-        .single(),
-      fetchCoords(supabase),
-    ])
-
-    const { data, error } = updateResult
+    // UPDATE...RETURNING cannot include the privacy-revoked columns
+    // (full_name/location_city/location_state). Update without RETURNING those,
+    // then re-read the own-row profile through the SECDEF accessor.
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
     if (error) {
       throw error
     }
 
-    setProfile(Object.assign({}, data, coords) as unknown as Profile)
+    const [data, coords] = await Promise.all([
+      fetchOwnProfile(supabase),
+      fetchCoords(supabase),
+    ])
+    setProfile(Object.assign({}, data ?? {}, coords) as unknown as Profile)
   }, [user])
 
   const value: AuthContextType = {

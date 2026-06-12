@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(full_name, username)')
+    .select('*, user:profiles(first_name, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -25,8 +25,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Post Not Found - FEED' }
   }
 
-  const user = post.user as { full_name: string | null; username: string | null } | null
-  const authorName = user?.full_name || 'Community Member'
+  const user = post.user as { first_name: string | null; username: string | null } | null
+  const authorName = user?.first_name || 'Community Member'
   const description = post.content.length > 160
     ? post.content.slice(0, 157) + '...'
     : post.content
@@ -73,7 +73,7 @@ export default async function SharedPostPage({ params }: Props) {
   // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join)
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(id, full_name, username, avatar_url)')
+    .select('*, user:profiles(id, first_name, username, avatar_url)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -82,7 +82,7 @@ export default async function SharedPostPage({ params }: Props) {
 
   const user = post.user as {
     id: string
-    full_name: string | null
+    first_name: string | null
     username: string | null
     avatar_url: string | null
   } | null
@@ -104,7 +104,7 @@ export default async function SharedPostPage({ params }: Props) {
     ? handlesResult.data[0] as { paypal_email: string | null; venmo_username: string | null }
     : { paypal_email: null, venmo_username: null }
 
-  const displayName = user?.full_name || 'Community Member'
+  const displayName = user?.first_name || 'Community Member'
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const hasPayment = handles.venmo_username || handles.paypal_email
 

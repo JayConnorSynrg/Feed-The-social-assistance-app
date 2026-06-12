@@ -20,7 +20,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [fullName, setFullName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -75,15 +76,24 @@ export default function SignupPage() {
       setLoading(true)
       const timer = logger.time('auth.signup')
       try {
-        // Sanitize user input
-        const sanitizedName = sanitizeInput(fullName)
+        // Sanitize user input. First name is public + immutable; last name is
+        // private (reveals only inside a conversation, sourcer→seeker). full_name
+        // is composed for back-compat with existing surfaces.
+        const sanitizedFirst = sanitizeInput(firstName)
+        const sanitizedLast = sanitizeInput(lastName)
+        const sanitizedFull = [sanitizedFirst, sanitizedLast]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
 
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              full_name: sanitizedName,
+              first_name: sanitizedFirst,
+              last_name: sanitizedLast,
+              full_name: sanitizedFull,
             },
             emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding`,
           },
@@ -298,20 +308,38 @@ export default function SignupPage() {
           <form onSubmit={handleSignup} className="space-y-4">
             {/* CSRF Token */}
             <input type="hidden" name="csrf_token" value={csrfToken || ''} />
-            <div className="space-y-2">
-              <label htmlFor="fullName" className="text-sm font-medium text-stone-700">
-                Full Name
-              </label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="Your name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                disabled={loading}
-                className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label htmlFor="firstName" className="text-sm font-medium text-stone-700">
+                  First Name
+                </label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  placeholder="First name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                />
+                <p className="text-[11px] text-stone-500">Public — shown to the community</p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="lastName" className="text-sm font-medium text-stone-700">
+                  Last Name
+                </label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  placeholder="Last name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  disabled={loading}
+                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                />
+                <p className="text-[11px] text-stone-500">Private — shared only with a helper you message</p>
+              </div>
             </div>
 
             <div className="space-y-2">

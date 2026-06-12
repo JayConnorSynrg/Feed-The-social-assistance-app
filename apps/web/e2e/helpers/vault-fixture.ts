@@ -225,10 +225,12 @@ export async function provisionVaultUser(
     throw new Error(`Failed to upsert user_secure_profiles for ${userId}: ${upsertSecureError.message}`)
   }
 
-  // 8. Upsert public profiles — full_name, phone, onboarding_completed
+  // 8. Upsert public profiles — name parts, phone, onboarding_completed.
   // The profile row is created by trigger on user create; UPDATE it here.
+  // first_name/last_name are the privacy-lockdown columns (#9): the UI reads
+  // first_name on cross-user surfaces, so fixtures MUST populate them.
   const [firstName, ...rest] = fullName.trim().split(' ')
-  const lastName = rest.join(' ') || ''
+  const lastName = rest.join(' ') || null
 
   const { error: profileError } = await adminClient
     .from('profiles')
@@ -236,6 +238,8 @@ export async function provisionVaultUser(
       {
         id: userId,
         full_name: fullName,
+        first_name: firstName,
+        last_name: lastName,
         phone,
         onboarding_completed: true,
       },

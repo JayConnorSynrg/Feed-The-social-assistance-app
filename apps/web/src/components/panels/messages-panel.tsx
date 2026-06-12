@@ -101,8 +101,14 @@ export function MessagesPanel() {
 
   const selectedConv = conversations.find(c => c.id === selectedConversationId)
   const isVolunteer = selectedConv?.volunteer_id === user?.id
+  // counterpartyDisplayName is the privacy-rule-computed name from the SECDEF
+  // accessor: full name when the viewer is the SOURCER (volunteer) seeing the
+  // SEEKER, first-name-only when the viewer is the SEEKER. We never assemble a
+  // surname client-side. Fall back to the first-name base join, then 'User'.
   const otherUserName = selectedConv
-    ? (isVolunteer ? selectedConv.requester?.full_name : selectedConv.volunteer?.full_name) ?? 'User'
+    ? (selectedConv.counterpartyDisplayName
+        ?? (isVolunteer ? selectedConv.requester?.first_name : selectedConv.volunteer?.first_name)
+        ?? 'User')
     : ''
 
   // Fetch review status when a completed conversation is selected
@@ -527,11 +533,12 @@ interface ConversationCardProps {
     id: string
     volunteer_id: string
     requester_id: string
-    volunteer: { full_name: string | null } | null
-    requester: { full_name: string | null } | null
+    volunteer: { first_name: string | null } | null
+    requester: { first_name: string | null } | null
     resource: { name: string; category: string } | null
     status: string
     updated_at: string | null
+    counterpartyDisplayName: string | null
   }
   userId: string
   isSelected: boolean
@@ -540,7 +547,10 @@ interface ConversationCardProps {
 
 function ConversationCard({ conversation, userId, isSelected, onClick }: ConversationCardProps) {
   const isVolunteer = conversation.volunteer_id === userId
-  const otherName = isVolunteer ? conversation.requester?.full_name : conversation.volunteer?.full_name
+  // Privacy-rule-computed name (full for sourcer→seeker, first-only otherwise);
+  // fall back to the first-name base join, then 'User'.
+  const otherName = conversation.counterpartyDisplayName
+    ?? (isVolunteer ? conversation.requester?.first_name : conversation.volunteer?.first_name)
   const categoryLabel = conversation.resource?.category
     ? CATEGORY_LABELS[conversation.resource.category] ?? conversation.resource.category
     : null

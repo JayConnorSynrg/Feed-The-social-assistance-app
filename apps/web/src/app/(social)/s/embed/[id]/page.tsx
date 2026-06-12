@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { data: post } = await supabase
     .from('posts')
     // Use explicit FK hint to avoid PGRST201 ambiguity (posts has 2 FK paths to profiles)
-    .select('content, post_type, petition_id, user:profiles!posts_user_id_fkey(full_name, username)')
+    .select('content, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -38,8 +38,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const postType = (post.post_type as string | null) ?? 'feed'
   const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
-  const user = post.user as { full_name: string | null; username: string | null } | null
-  const authorName = user?.full_name || 'Community Member'
+  const user = post.user as { first_name: string | null; username: string | null } | null
+  const authorName = user?.first_name || 'Community Member'
 
   // For petitions, prefer the petition title as the og title if available
   let title = `${authorName} on FEED`

@@ -12,7 +12,7 @@ export async function GET(
 
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(full_name, avatar_url, username)')
+    .select('*, user:profiles(first_name, avatar_url, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -21,8 +21,8 @@ export async function GET(
     return new Response('Post not found', { status: 404 })
   }
 
-  const user = post.user as { full_name: string | null; avatar_url: string | null; username: string | null } | null
-  const displayName = user?.full_name || 'Community Member'
+  const user = post.user as { first_name: string | null; avatar_url: string | null; username: string | null } | null
+  const displayName = user?.first_name || 'Community Member'
   const handle = user?.username ? `@${user.username}` : ''
   const content = post.content.length > 200
     ? post.content.slice(0, 197) + '...'

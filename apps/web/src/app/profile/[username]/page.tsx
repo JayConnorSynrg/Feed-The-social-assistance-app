@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PostCard } from '@/components/feed/post-card'
-import { MapPin, Calendar, ExternalLink } from 'lucide-react'
+import { Calendar, ExternalLink } from 'lucide-react'
 import type { Profile } from '@feed/database'
 
 interface ProfilePageProps {
@@ -24,7 +24,7 @@ interface PostWithUser {
   user: {
     id: string
     username: string | null
-    full_name: string | null
+    first_name: string | null
     avatar_url: string | null
   }
 }
@@ -35,11 +35,11 @@ export async function generateMetadata({ params }: ProfilePageProps) {
 
   const { data } = await supabase
     .from('profiles')
-    .select('full_name, username')
+    .select('first_name, username')
     .eq('username', username)
     .single()
 
-  const profile = data as { full_name: string | null; username: string | null } | null
+  const profile = data as { first_name: string | null; username: string | null } | null
 
   if (!profile) {
     return {
@@ -48,8 +48,8 @@ export async function generateMetadata({ params }: ProfilePageProps) {
   }
 
   return {
-    title: `${profile.full_name || profile.username} | FEED`,
-    description: `View ${profile.full_name || profile.username}'s profile on FEED`,
+    title: `${profile.first_name || profile.username} | FEED`,
+    description: `View ${profile.first_name || profile.username}'s profile on FEED`,
   }
 }
 
@@ -60,11 +60,13 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // Get current user
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Get profile by username — safe columns only (PII hardening: no phone/paypal/venmo/is_admin)
+  // Get profile by username — public columns only. Name-privacy lockdown (#9):
+  // expose FIRST NAME only (surname private), and city/state are NOT read on a
+  // cross-user surface (self-only). (Also PII-hardened: no phone/paypal/venmo/is_admin.)
   const { data: profileData, error } = await supabase
     .from('profiles')
     .select(
-      'id, username, full_name, avatar_url, bio, location_city, location_state, ' +
+      'id, username, first_name, avatar_url, bio, ' +
       'is_verified, created_at, is_staff'
     )
     .eq('username', username)
@@ -75,9 +77,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const profile = profileData as unknown as Pick<Profile,
-    'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' |
-    'location_city' | 'location_state' | 'is_verified' | 'created_at'
-  > & { is_staff: boolean }
+    'id' | 'username' | 'avatar_url' | 'bio' |
+    'is_verified' | 'created_at'
+  > & { is_staff: boolean; first_name: string | null }
 
   // Fetch payment handles via SECURITY DEFINER RPC — isolated column access
   const { data: donationHandles } = await supabase
@@ -89,7 +91,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // Get user's posts
   const { data: postsData } = await supabase
     .from('posts')
-    .select('*, user:profiles(id, username, full_name, avatar_url)')
+    .select('*, user:profiles(id, username, first_name, avatar_url)')
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -123,16 +125,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             <Avatar className="h-24 w-24">
               <AvatarImage
                 src={profile.avatar_url || undefined}
-                alt={profile.full_name || profile.username || 'User'}
+                alt={profile.first_name || profile.username || 'User'}
               />
               <AvatarFallback className="text-2xl">
-                {getInitials(profile.full_name || profile.username)}
+                {getInitials(profile.first_name || profile.username)}
               </AvatarFallback>
             </Avatar>
 
             <div className="flex-1 text-center sm:text-left">
               <h1 className="text-2xl font-bold">
-                {profile.full_name || profile.username || 'Anonymous'}
+                {profile.first_name || profile.username || 'Anonymous'}
               </h1>
               {profile.username && (
                 <p className="text-muted-foreground">@{profile.username}</p>
@@ -142,13 +144,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 <p className="mt-2 text-sm">{profile.bio}</p>
               )}
 
+              {/* City/state are private (self-only) — not rendered on a cross-user profile. */}
               <div className="mt-3 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground sm:justify-start">
-                {(profile.location_city || profile.location_state) && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {[profile.location_city, profile.location_state].filter(Boolean).join(', ')}
-                  </span>
-                )}
                 {profile.created_at && (
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />

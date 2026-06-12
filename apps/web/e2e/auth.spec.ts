@@ -107,8 +107,9 @@ test.describe('Flow 1: email signup with mailer_autoconfirm', () => {
   test('signup form → auto-confirmed → lands at /onboarding, completes minimal onboarding, reaches /', async ({ page }) => {
     await page.goto('/signup')
 
-    // Fill full name
-    await page.fill('#fullName', 'E2E Test User')
+    // Fill first + last name (name-privacy lockdown #9 split the single name field)
+    await page.fill('#firstName', 'E2E')
+    await page.fill('#lastName', 'Test User')
     // Fill email
     await page.fill('#email', email)
     // Fill password (>= 12 chars, must satisfy strength check)

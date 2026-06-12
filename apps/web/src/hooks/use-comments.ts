@@ -19,7 +19,7 @@ import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 
 export interface CommentAuthor {
   id: string
-  full_name: string | null
+  first_name: string | null
   avatar_url: string | null
 }
 
@@ -101,7 +101,7 @@ export function useComments(postId: string) {
     try {
       const { data, error: fetchError } = await supabase
         .from('post_comments')
-        .select('*, user:profiles(id, full_name, avatar_url)')
+        .select('*, user:profiles(id, first_name, avatar_url)')
         .eq('post_id', postId)
         .eq('is_hidden', false)
         .order('created_at', { ascending: true })
