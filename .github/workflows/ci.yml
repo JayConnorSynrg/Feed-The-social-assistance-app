@@ -156,7 +156,7 @@ jobs:
           retention-days: 7
 
   # ============================================
-  # TEST (when tests are added)
+  # TEST
   # ============================================
   test:
     name: Test
@@ -185,7 +185,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm run test --if-present || echo "No tests configured yet"
+        run: npm run test
         working-directory: apps/web
 
   # ============================================

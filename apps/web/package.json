@@ -14,7 +14,7 @@
     "lint": "eslint",
     "seed": "npx ts-node --esm scripts/seed-test-data.ts",
     "test:e2e": "playwright test",
-    "test:unit": "node --test \"src/**/*.test.mjs\"",
+    "test:unit": "find src -name '*.test.mjs' -exec node --test {} +",
     "test:vitest": "vitest run",
     "test": "npm run test:unit && npm run test:vitest"
   },
