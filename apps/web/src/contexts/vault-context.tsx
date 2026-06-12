@@ -23,6 +23,7 @@ import {
   VaultTimeoutError,
 } from '@/lib/vault'
 import { clearKeys } from '@/lib/key-store'
+import { startIdleLock } from '@/lib/vault-idle-lock'
 import { migrateUserDataToEncrypted, needsMigration } from '@/lib/migrate-to-encrypted'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger, withMetric } from '@/lib/logger'
@@ -243,6 +244,25 @@ export function VaultProvider({ children }: VaultProviderProps) {
       throw err
     }
   }, [user?.id])
+
+  // Idle auto-lock: while the vault is unlocked, lock it after 15 minutes of
+  // inactivity, and lock immediately when the tab is backgrounded. Arms only on
+  // isUnlocked===true and fully tears down (timer + listeners) on lock/logout —
+  // it never navigates or touches modal/guarded-flow state, so VaultGuard-wrapped
+  // flows (unlock modal, PDF annotator, form wizard) are unaffected beyond the
+  // normal locked-state re-render that any lock() triggers. Independent of the
+  // 24h key-store session TTL (key-store.ts MAX_SESSION_AGE).
+  useEffect(() => {
+    if (!isUnlocked) return
+    const teardown = startIdleLock({
+      lock: () => {
+        void lock().catch((err: unknown) =>
+          logger.error('vault.idleLock.failed', err instanceof Error ? err : new Error(String(err)), {})
+        )
+      },
+    })
+    return teardown
+  }, [isUnlocked, lock])
 
   // Change master password
   const changePassword = useCallback(async (oldPassword: string, newPassword: string) => {
