@@ -155,12 +155,17 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com`,
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com https://challenges.cloudflare.com`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com https://challenges.cloudflare.com",
               "worker-src 'self' blob:",
               "font-src 'self'",
+              // Cloudflare Turnstile renders its challenge in an iframe served from
+              // challenges.cloudflare.com. There is no same-origin iframe on the main
+              // app's auth pages, so 'self' is intentionally omitted (least-privilege).
+              // Required before captcha is enabled; widget is a no-op until then.
+              "frame-src https://challenges.cloudflare.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
