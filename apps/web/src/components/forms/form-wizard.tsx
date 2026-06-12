@@ -355,7 +355,7 @@ export function FormWizard({
   const { template, loading: templateLoading, error: templateError } = useFormTemplate(templateId)
   const submissionHook = useVaultFormSubmission()
   const { profile: profileData } = useVaultSecureProfile()
-  const { isUnlocked } = useVault()
+  const { isUnlocked, registerPreLockFlush } = useVault()
   const { user, profile: publicProfile } = useAuth()
 
   const [currentStep, setCurrentStep] = useState(0)
@@ -379,6 +379,24 @@ export function FormWizard({
     defaultValues: {},
     mode: 'onChange',
   })
+
+  // Pre-lock flush: when the vault is about to auto-lock (15-min idle) or is
+  // locked manually mid-flow, persist the current form values as a draft while
+  // the DEK is still available. VaultGuard unmounts this wizard on lock, so this
+  // is what prevents the in-progress answers from being lost. Reuses the
+  // wizard's existing saveDraft path. Refs keep the registered callback stable
+  // (registered once) while always reading the latest values + saveDraft.
+  const saveDraftRef = useRef(submissionHook.saveDraft)
+  saveDraftRef.current = submissionHook.saveDraft
+  const getValuesRef = useRef(getValues)
+  getValuesRef.current = getValues
+  useEffect(() => {
+    const unregister = registerPreLockFlush(async () => {
+      // saveDraft no-ops safely if no draft row exists yet or the vault is locked.
+      await saveDraftRef.current(getValuesRef.current() as Record<string, unknown>)
+    })
+    return unregister
+  }, [registerPreLockFlush])
 
   // Draft init effect — waits for both the template and the vault to be unlocked
   // before creating the draft. createDraft calls encryptFormSubmission which

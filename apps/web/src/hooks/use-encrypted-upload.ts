@@ -119,7 +119,7 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
         const uniqueId = crypto.randomUUID()
         const storagePath = `${user.id}/${uniqueId}${fileExtension}`
 
-        // Step 3: Upload encrypted blob to Storage
+        // Step 3: Upload encrypted blob to Storage (timeout-bounded)
         // Next.js App Router patches global fetch with its own AbortSignal. If a
         // re-render triggers a component re-mount during the upload, Next.js may
         // abort the in-flight fetch before the response arrives — even though the
@@ -128,19 +128,43 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
         // object will exist at storagePath — the cleanup branch in the DB error
         // path removes it if the INSERT subsequently fails.
         // Reference: MEMORY.md "Pattern: Next.js 'signal is aborted without reason'"
-        const { error: uploadError } = await supabase.storage
+        //
+        // storage-js 2.106.2 `upload(path, body, FileOptions)` does NOT accept an
+        // AbortSignal (unlike `download(path, {}, { signal })`), so we cannot use
+        // the .abortSignal()/.retry(false) pattern here. PostgREST/Storage do not
+        // throw on a stalled connection, so an unguarded upload can hang forever
+        // (this is what wedges the pre-lock flush). Bound it with an explicit
+        // timeout race so a stalled upload fails fast instead of hanging — the
+        // synthetic timeout is funneled through the same isQueryTimeout path.
+        const uploadPromise = supabase.storage
           .from(STORAGE_BUCKET)
           .upload(storagePath, encryptedResult.encryptedBlob, {
             contentType: 'application/octet-stream',
             upsert: false,
           })
+        const { error: uploadError } = await Promise.race([
+          uploadPromise,
+          new Promise<{ error: { message: string } }>((resolve) =>
+            setTimeout(
+              () => resolve({ error: { message: 'Upload timed out' } }),
+              QUERY_TIMEOUT_MS
+            )
+          ),
+        ])
 
+        const isUploadTimeout =
+          uploadError && uploadError.message?.toLowerCase().includes('timed out')
         const isAbort =
           uploadError &&
           ((uploadError as unknown as DOMException).name === 'AbortError' ||
             uploadError.message?.toLowerCase().includes('signal') ||
             uploadError.message?.toLowerCase().includes('abort'))
 
+        if (uploadError && isUploadTimeout) {
+          const msg = 'Upload timed out — please check your connection and retry.'
+          setError(msg)
+          throw new Error(msg)
+        }
         if (uploadError && !isAbort) {
           throw new Error(`Upload failed: ${uploadError.message}`)
         }
@@ -188,9 +212,24 @@ export function useEncryptedUpload(): UseEncryptedUploadResult {
             annotations_iv: annotationsIv,
           })
           .select('id')
+          // Timeout-guard the metadata insert (PostgREST does not throw on a
+          // stalled connection). Mirrors the download paths in this file.
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          .retry(false)
           .single()
 
         if (dbError) {
+          if (isQueryTimeout(dbError)) {
+            // Best-effort cleanup of the uploaded object, then surface a fast
+            // timeout error rather than hanging the caller (e.g. the pre-lock flush).
+            await supabase.storage
+              .from(STORAGE_BUCKET)
+              .remove([storagePath])
+              .catch(() => {})
+            const msg = 'Upload timed out — please check your connection and retry.'
+            setError(msg)
+            throw new Error(msg)
+          }
           // Cleanup: delete uploaded file if database insert fails
           await supabase.storage.from(STORAGE_BUCKET).remove([storagePath])
           throw new Error(`Database error: ${dbError.message}`)

@@ -836,6 +836,28 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     setWizardState({ mode: 'list' })
   }
 
+  // Pre-lock flush persist for the PDF annotator: store the current source +
+  // encrypted annotations sidecar to Documents WITHOUT navigating away. Invoked
+  // by the annotator just before the vault auto-locks (15-min idle) so unsaved
+  // annotations survive the VaultGuard unmount. Reuses the same uploadFile path
+  // as handlePdfSave; the saved document is recoverable/re-editable in Documents.
+  // Errors propagate to runPreLockFlush, which logs and proceeds to lock anyway.
+  const persistPdfDraft = useCallback(
+    async (data: { sourceBytes: Uint8Array; annotations: import('@/hooks/use-pdf-annotation').TextAnnotation[] }) => {
+      const fileName = wizardState.mode === 'pdf' ? wizardState.fileName
+        : wizardState.mode === 'gov-pdf' ? wizardState.fileName
+        : 'annotated.pdf'
+      const sourceFile = new File(
+        [data.sourceBytes as Uint8Array<ArrayBuffer>],
+        fileName,
+        { type: 'application/pdf' }
+      )
+      await uploadFile(sourceFile, 'other', data.annotations)
+      logger.info('pdf.prelock_flush.saved', { fileName, annotation_count: data.annotations.length })
+    },
+    [wizardState, uploadFile]
+  )
+
   if (wizardState.mode === 'gov-pdf') {
     // Anonymous guests may open gov PDFs but cannot fill/save them (vault requires account).
     if (isAnonymous) {
@@ -862,6 +884,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
           file={wizardState.file}
           autofillValues={autofillValues}
           onSave={handlePdfSave}
+          onFlushDraft={persistPdfDraft}
           onCancel={() => setWizardState({ mode: 'list' })}
         />
       </VaultGuard>
@@ -887,6 +910,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         <PdfAnnotator
           file={wizardState.file}
           onSave={handlePdfSave}
+          onFlushDraft={persistPdfDraft}
           onCancel={handlePdfCancel}
         />
       </VaultGuard>
