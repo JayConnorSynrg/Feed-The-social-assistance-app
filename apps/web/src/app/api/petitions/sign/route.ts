@@ -86,15 +86,19 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Fetch signer profile ───────────────────────────────────
+    // Name-privacy lockdown (#9): a petition signature is a PUBLIC surface
+    // ("verified signature of support"), so the signer is shown FIRST NAME only
+    // — consistent with every other cross-user/anon surface. (Surname stays
+    // private; it reveals only inside a conversation per the asymmetric rule.)
     const { data: profile } = await serviceClient
       .from('profiles')
-      .select('full_name, username')
+      .select('first_name, username')
       .eq('id', user.id)
       .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       .single()
 
     const signerDisplayName =
-      profile?.full_name?.trim() ||
+      profile?.first_name?.trim() ||
       profile?.username?.trim() ||
       user.email?.split('@')[0] ||
       'Anonymous'

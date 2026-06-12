@@ -73,7 +73,7 @@ function ResourcePosts({ resourceId }: ResourcePostsProps) {
     try {
       const { data, error: fetchError } = await supabase
         .from('posts')
-        .select('id, content, created_at, user:profiles!posts_user_id_fkey(full_name, avatar_url)')
+        .select('id, content, created_at, user:profiles!posts_user_id_fkey(first_name, avatar_url)')
         .eq('resource_id', resourceId)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false })
@@ -86,14 +86,14 @@ function ResourcePosts({ resourceId }: ResourcePostsProps) {
         id: string
         content: string
         created_at: string | null
-        user: { full_name: string | null; avatar_url: string | null } | null
+        user: { first_name: string | null; avatar_url: string | null } | null
       }>
 
       setPosts(rows.map((row) => ({
         id: row.id,
         content: row.content,
         created_at: row.created_at,
-        author_name: row.user?.full_name ?? null,
+        author_name: row.user?.first_name ?? null,
         author_avatar: row.user?.avatar_url ?? null,
       })))
     } catch (err) {

@@ -43,7 +43,7 @@ export function PostCard({
   const handleShare = useCallback(async () => {
     const url = generateShareUrl('post', post.id)
     const shareData = {
-      title: `${post.user?.full_name || 'Someone'} on FEED`,
+      title: `${post.user?.first_name || 'Someone'} on FEED`,
       text: post.content.length > 100 ? post.content.slice(0, 97) + '...' : post.content,
       url,
     }
@@ -61,7 +61,7 @@ export function PostCard({
     }
 
     onShare?.(post.id)
-  }, [post.id, post.content, post.user?.full_name, onShare])
+  }, [post.id, post.content, post.user?.first_name, onShare])
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return '?'
@@ -83,8 +83,8 @@ export function PostCard({
       <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-2">
         <Link href={`/profile/${post.user?.username || post.user_id}`}>
           <Avatar className="h-10 w-10">
-            <AvatarImage src={post.user?.avatar_url || undefined} alt={post.user?.full_name || 'User'} />
-            <AvatarFallback>{getInitials(post.user?.full_name)}</AvatarFallback>
+            <AvatarImage src={post.user?.avatar_url || undefined} alt={post.user?.first_name || 'User'} />
+            <AvatarFallback>{getInitials(post.user?.first_name)}</AvatarFallback>
           </Avatar>
         </Link>
         <div className="flex-1">
@@ -92,7 +92,7 @@ export function PostCard({
             href={`/profile/${post.user?.username || post.user_id}`}
             className="font-semibold hover:underline"
           >
-            {post.user?.full_name || 'Anonymous'}
+            {post.user?.first_name || 'Anonymous'}
           </Link>
           {post.user?.username && (
             <Link

@@ -1256,7 +1256,7 @@ export function FeedPanel() {
       await Promise.race([timeoutPromise, (async () => {
       let query = supabase
         .from('posts')
-        .select('*, user:profiles!posts_user_id_fkey(id, full_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name, category)')
+        .select('*, user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name, category)')
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .limit(PAGE_SIZE)
@@ -1357,7 +1357,7 @@ export function FeedPanel() {
         id: row.id,
         author: {
           id: row.user?.id || '',
-          name: row.user?.full_name || 'Anonymous',
+          name: row.user?.first_name || 'Anonymous',
           avatar: row.user?.avatar_url || undefined,
           role: row.user?.is_staff ? 'Admin' : 'Community Member',
           harmonyScore: (row.user as { harmony_score?: number | null } | undefined)?.harmony_score ?? null,
@@ -1419,7 +1419,7 @@ export function FeedPanel() {
         // Fetch full seeker opt-in rows (for review prompts and author management)
         supabase
           .from('resource_opt_ins')
-          .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, full_name, harmony_score, harmony_reviews_count)')
+          .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, first_name, harmony_score, harmony_reviews_count)')
           .in('post_id', postIds)
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
           .then(({ data: oisData }) => {
@@ -1435,13 +1435,13 @@ export function FeedPanel() {
                 seekerIds[oi.post_id] = oi.id
               }
               // Build author management list (one entry per seeker per post)
-              const seeker = oi.seeker as { id: string; full_name: string | null; harmony_score: number | null; harmony_reviews_count: number } | null
+              const seeker = oi.seeker as { id: string; first_name: string | null; harmony_score: number | null; harmony_reviews_count: number } | null
               if (!authorMap[oi.post_id]) authorMap[oi.post_id] = []
               authorMap[oi.post_id].push({
                 id: oi.id,
                 postId: oi.post_id,
                 seekerId: oi.seeker_id,
-                seekerName: seeker?.full_name ?? 'Unknown',
+                seekerName: seeker?.first_name ?? 'Unknown',
                 seekerHarmonyScore: seeker?.harmony_score ?? null,
                 seekerHarmonyCount: seeker?.harmony_reviews_count ?? 0,
                 status: oi.status,

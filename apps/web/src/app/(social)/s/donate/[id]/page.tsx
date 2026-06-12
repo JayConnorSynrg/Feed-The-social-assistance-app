@@ -13,11 +13,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name')
+    .select('first_name')
     .eq('id', id)
     .single()
 
-  const name = profile?.full_name || 'a community member'
+  const name = profile?.first_name || 'a community member'
 
   return {
     title: `Support ${name} - FEED`,
@@ -45,7 +45,7 @@ export default async function DonatePage({ params }: Props) {
   const [profileResult, handlesResult] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, username, avatar_url, bio')
+      .select('id, first_name, username, avatar_url, bio')
       .eq('id', id)
       .single(),
     supabase.rpc('get_donation_handles', { target_id: id }),
@@ -61,7 +61,7 @@ export default async function DonatePage({ params }: Props) {
   const hasPayment = rawHandles.venmo_username || rawHandles.paypal_email
   if (!hasPayment) notFound()
 
-  const displayName = profile.full_name || 'Community Member'
+  const displayName = profile.first_name || 'Community Member'
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 
   return (

@@ -55,7 +55,7 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated, 
   const replyText = replyTexts.get(comment.id) ?? ''
   const [localSubmitting, setLocalSubmitting] = useState(false)
 
-  const authorName = comment.user?.full_name ?? 'Anonymous'
+  const authorName = comment.user?.first_name ?? 'Anonymous'
   const initials = authorName
     .split(' ')
     .map((w) => w[0])

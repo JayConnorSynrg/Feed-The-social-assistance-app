@@ -8,7 +8,11 @@ import { withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 interface ConversationProfile {
-  full_name: string | null
+  // Cross-user join exposes FIRST NAME only — surname is private (name-privacy
+  // lockdown #9). The asymmetric surname reveal is computed server-side by the
+  // SECDEF accessor get_my_conversation_counterparties() and merged in as
+  // counterpartyDisplayName below.
+  first_name: string | null
 }
 
 interface ConversationResource {
@@ -27,6 +31,21 @@ interface Conversation {
   volunteer: ConversationProfile | null
   requester: ConversationProfile | null
   resource: ConversationResource | null
+  /**
+   * Counterparty display name as permitted by the privacy rule for THIS caller:
+   * the SOURCER (volunteer) sees the SEEKER's full name; the SEEKER sees only
+   * the SOURCER's first name. Computed by get_my_conversation_counterparties()
+   * — never assembled client-side from a surname the rule forbids.
+   */
+  counterpartyDisplayName: string | null
+}
+
+interface CounterpartyRow {
+  conversation_id: string
+  counterparty_id: string
+  first_name: string | null
+  last_name: string | null
+  display_name: string | null
 }
 
 interface Message {
@@ -46,8 +65,8 @@ const CONVERSATION_SELECT = [
   'status',
   'created_at',
   'updated_at',
-  'volunteer:profiles!conversations_volunteer_id_profiles_fkey(full_name)',
-  'requester:profiles!conversations_requester_id_profiles_fkey(full_name)',
+  'volunteer:profiles!conversations_volunteer_id_profiles_fkey(first_name)',
+  'requester:profiles!conversations_requester_id_profiles_fkey(first_name)',
   'resource:resources!conversations_resource_id_fkey(name, category)',
 ].join(', ')
 
@@ -81,18 +100,36 @@ export function useConversations() {
     if (!user?.id) return
     setIsLoading(true)
     try {
-      const { data, error: fetchError } = await supabase
-        .from('conversations')
-        .select(CONVERSATION_SELECT)
-        .or(`volunteer_id.eq.${user.id},requester_id.eq.${user.id}`)
-        .order('updated_at', { ascending: false })
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      // Fetch the conversation list (first-name-only base join) and the
+      // privacy-rule-computed counterparty display names in parallel. The
+      // SECDEF accessor returns the permitted name per direction (full for
+      // sourcer→seeker, first-only for seeker→sourcer) and enforces the
+      // participant guard server-side.
+      const [convResult, cpResult] = await Promise.all([
+        supabase
+          .from('conversations')
+          .select(CONVERSATION_SELECT)
+          .or(`volunteer_id.eq.${user.id},requester_id.eq.${user.id}`)
+          .order('updated_at', { ascending: false })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS)),
+        supabase.rpc('get_my_conversation_counterparties'),
+      ])
 
+      const { data, error: fetchError } = convResult
       if (fetchError) throw new Error(isQueryTimeout(fetchError)
         ? 'Messages timed out — please check your connection and retry.'
         : fetchError.message)
 
-      const rows = (data ?? []) as unknown as Conversation[]
+      // Map conversation_id → permitted display name.
+      const cpRows = (cpResult.data ?? []) as unknown as CounterpartyRow[]
+      const displayByConv = new Map<string, string | null>(
+        cpRows.map((r) => [r.conversation_id, r.display_name])
+      )
+
+      const rows = ((data ?? []) as unknown as Conversation[]).map((c) => ({
+        ...c,
+        counterpartyDisplayName: displayByConv.get(c.id) ?? null,
+      }))
       setConversations(rows)
 
       // Recompute unread count across all active conversations

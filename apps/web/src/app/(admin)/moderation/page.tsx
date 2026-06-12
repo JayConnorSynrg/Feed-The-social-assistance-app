@@ -128,7 +128,7 @@ async function ReportsContent() {
 
   const { data: posts } = await supabase
     .from('posts')
-    .select('id, content, user:profiles!posts_user_id_fkey(full_name)')
+    .select('id, content, user:profiles!posts_user_id_fkey(first_name)')
     .in('id', postIds)
 
   const postMap = new Map(
@@ -136,7 +136,7 @@ async function ReportsContent() {
       p.id,
       {
         content: p.content as string,
-        author: (p.user as { full_name: string | null } | null)?.full_name ?? null,
+        author: (p.user as { first_name: string | null } | null)?.first_name ?? null,
       },
     ])
   )

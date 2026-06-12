@@ -182,10 +182,13 @@ test('provider expands Seekers accordion and sees seeker with pending badge', as
   await expect(manageBtn).toBeVisible({ timeout: 10_000 })
   await manageBtn.click()
 
-  // Seeker name should appear in the expanded list
-  const seekerRow = postCard.getByText('FV Seeker User')
+  // Seeker FIRST name appears in the expanded list. Name-privacy lockdown (#9):
+  // this opt-in management list is a cross-user surface, so the author sees the
+  // seeker's first name only — the surname ("Seeker User") must NOT appear.
+  const seekerRow = postCard.getByText('FV', { exact: false }).first()
   await expect(seekerRow).toBeVisible({ timeout: 10_000 })
-  console.log('[fulfillment-view] seeker name visible in accordion')
+  await expect(postCard.locator('text=Seeker User')).toHaveCount(0)
+  console.log('[fulfillment-view] seeker first name visible (surname hidden) in accordion')
 
   // Status badge should say "pending"
   const pendingBadge = postCard.locator('span', { hasText: 'pending' }).first()
