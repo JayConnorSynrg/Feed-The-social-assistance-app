@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { safeRelativePath } from '@/lib/safe-redirect'
 import { NextResponse } from 'next/server'
 
 // Handles email confirmation links from Supabase
@@ -7,7 +8,8 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type') as 'email' | 'recovery' | 'invite' | 'magiclink' | 'signup'
-  const next = requestUrl.searchParams.get('next') || '/onboarding'
+  // Open-redirect guard: only allow same-origin relative paths (CWE-601).
+  const next = safeRelativePath(requestUrl.searchParams.get('next'), '/onboarding')
 
   if (token_hash && type) {
     const supabase = await createClient()

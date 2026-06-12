@@ -14,11 +14,14 @@ import { MFAVerify } from '@/components/auth/mfa-verify'
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
+import { safeRelativePath } from '@/lib/safe-redirect'
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirectTo') || '/'
+  // Open-redirect guard: sanitize at read time so every router.push(redirectTo)
+  // and the propagated OAuth callback URL use a safe same-origin path (CWE-601).
+  const redirectTo = safeRelativePath(searchParams.get('redirectTo'), '/')
   const oauthError = searchParams.get('error')
   const oauthDetail = searchParams.get('detail')
 
