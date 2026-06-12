@@ -1,14 +1,14 @@
 ---
 feature: "FEED Platform"
-version: "1.5.1"
+version: "1.5.2"
 created: "2026-01-19"
 last_updated: "2026-06-11"
-status: "IN_PROGRESS"
+status: "COMPLETE"
 current_phase: 9
-current_task: "P9-T1"
+current_task: null
 total_phases: 9
-total_tasks: 119
-completed_tasks: 119
+total_tasks: 120
+completed_tasks: 120
 ---
 
 # FEED Platform - Ralph Loop Development Checklist
@@ -70,13 +70,13 @@ WHEN all tasks in a phase are [x]:
 | 6 | Polish & Launch | 8 | 7 | COMPLETE** |
 | 7 | Production Hardening | 11 | 11 | COMPLETE |
 | 8 | Social Resource-Matching + Pre-Launch Security Hardening | 20 | 20 | COMPLETE |
-| 9 | Community Launch Readiness | 9 | 9 | IN_PROGRESS |
+| 9 | Community Launch Readiness | 10 | 10 | COMPLETE |
 
-**Overall Progress**: 119 / 119 shipped tasks (denominator = tasks shipped to develop; Phase 9 remaining task T1-partial is still pending and not yet in denominator)
+**Overall Progress**: 120 / 120 shipped tasks — ALL PHASES COMPLETE
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
-***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/phone/website/city/state), INSERT with status=pending; e2e 4/4 = 117/117. P9-T9 complete 2026-06-10 (feature/usability-grandma-pass): grandma-grade usability pass — contrast fixes (stone-400→stone-600 on meaningful text across 7 panels + feed-shell), tap targets (map close p-1→p-2.5, QuickTag icon w-3→w-4), persistent sidebar text labels (2-line icon+label, w-14→w-16), mobile SHORT_LABELS map, loading copy humanized, forms error Try Again button + getFriendlyErrorMessage, forms empty state Ask the Assistant CTA, Resource Wizard label→Get Help Finding Resources. 118/118 shipped after P9-T9. P9-T10 complete 2026-06-11 (feature/guest-access-anon-auth): Find Help Now anonymous guest access — signInAnonymously() on login+signup, RESTRICTIVE RLS migration, 10 SECDEF guards, pg_cron cleanup, guest banner + CreateAccountPrompt gating = 119/119. Phase 9 remaining task T1-partial pending — denominator grows as it ships.
+***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state), INSERT status=pending; e2e 4/4 = 117/117. P9-T9 complete 2026-06-10 (feature/usability-grandma-pass): grandma-grade usability pass — contrast fixes, tap targets, sidebar labels, SHORT_LABELS, humanized copy, forms error/empty state, Resource Wizard label. 118/118. P9-T10 complete 2026-06-11 (feature/guest-access-anon-auth): Find Help Now anonymous guest access — signInAnonymously(), RESTRICTIVE RLS migration, 10 SECDEF guards, pg_cron cleanup, guest banner + CreateAccountPrompt gating = 119/119. P9-T1 fulfillment view COMPLETE 2026-06-11 (feature/fulfillment-view): provider Seekers accordion + Accept/Decline/Mark-Complete lifecycle already in feed-panel.tsx; data-testid accept-optin + decline-optin added; e2e fulfillment-view.spec.ts 4/4 green; full suite 110 passed/1 skipped/0 failed = 120/120. PHASE 9 COMPLETE. ALL PHASES COMPLETE.
 
 ---
 
@@ -1729,10 +1729,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 > empirical gap probe before implementation. None of these are started.
 
 ### P9-T1: Programs + Resource Allocation Pipeline Operational
-- [ ] **Status**: IN_PROGRESS — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
+- [x] **Status**: COMPLETE — end-to-end: program discovery → eligibility → application → opt-in allocation → fulfillment
   - COMPLETE 2026-06-09 (PRs #65/#66): benefits-screening wired into eligibility chat flow; Saved-programs tab; VT application_url seed; category SSOT (lib/resource-categories.ts) + 12-category volunteer FAB; advisor hardening (duplicate indexes + RLS policies dropped, 5 dead files removed).
-  - COMPLETE 2026-06-10 (PR #TBD, chore/docsync-phase8 branch): (a) "Share to Feed" button on all program cards — opens inline dialog with prefilled editable text, inserts post with `resource_id` link, navigates to feed on success. (b) Application → originating form back-link — `programName` on application cards is now a tappable link (`data-testid="app-form-link-<id>"`) that deep-links to documents/forms subtab via `formsTarget` param; `use-applications` extended to fetch `form_type` from `form_templates` join. e2e: programs-posts-bridge.spec.ts 2/2 green.
-  - REMAINING: fulfillment view (post-allocation outcome tracking).
+  - COMPLETE 2026-06-10 (PR #72): (a) "Share to Feed" button on all program cards — opens inline dialog with prefilled editable text, inserts post with `resource_id` link, navigates to feed on success. (b) Application → originating form back-link — `programName` on application cards is a tappable link that deep-links to documents/forms subtab via `formsTarget` param; `use-applications` extended to fetch `form_type` from `form_templates` join. e2e: programs-posts-bridge.spec.ts 2/2 green.
+  - COMPLETE 2026-06-11 (feature/fulfillment-view): Fulfillment view — provider Seekers accordion on own resource posts shows each opt-in with seeker name, harmony badge, and status badge (pending/accepted/declined/completed, stone/lime/red/lime palette, WCAG AA contrast). Accept + Decline buttons for pending rows; Mark Completed for accepted rows; Review Seeker for completed rows. Direct `.update({status})` under existing `opt_ins_update` RLS policy (post owner gate). data-testid accept-optin-{id} + decline-optin-{id} + complete-optin-{id} added. No migration. Opt-in lifecycle verified: opt_in_to_post inserts with status='pending'; provider path: pending → accepted → completed (or pending → declined). e2e fulfillment-view.spec.ts 4/4. Full suite 110 passed / 1 skipped / 0 failed.
 
 ### P9-T2: Social Feed Post UI for All Resource Types
 - [x] **Status**: COMPLETE — PR #69 (feature/feed-per-type-pagination, 2026-06-10). (1) Keyset cursor pagination on (created_at, id): PAGE_SIZE=25, "Load more posts" button, deduplication on append. (2) Resource-post category badge via CATEGORY_META SSOT. (3) Safety alerts feed strip above composer (authenticated SELECT on safety_alerts, cap 5, severity desc). (4) Composer "Report a safety hazard on the map" button deep-linking to map panel. e2e feed-per-type-pagination.spec.ts 4/4.
@@ -1817,9 +1817,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.4.10 | 2026-06-11 | Chat provider cascade re-architected (feature/chat-fireworks-multilingual): Fireworks Qwen3.6 primary (ZDR/no-training, 200+ languages, disable-thinking via reasoning_effort:'none') + Fireworks gpt-oss-120b secondary + OpenRouter gemini-2.5-flash ZDR fallback + OpenRouter claude-haiku-4.5 ZDR fallback. Function key-ready: runs on OpenRouter alone until FIREWORKS_API_KEY set. Multilingual policy added to base system prompt: reply in user's language, card format [[...|...]] language-invariant, resource data untranslated. 5-language smoke PASS (ES/VI/AR/HT/EN, gemini-2.5-flash + zdr/deny). |
 | 1.5.0 | 2026-06-11 | P9-T10 COMPLETE: Find Help Now anonymous guest access (feature/guest-access-anon-auth). Supabase signInAnonymously() on login + signup pages. Migration 20260611173053: 15 INSERT-block + 7 UPDATE-block RESTRICTIVE RLS policies, storage bucket INSERT block, anon guard in 10 SECDEF write functions, pg_cron 30-day TTL cleanup. auth-provider isAnonymous; proxy guest-pass for onboarding + /signup; FeedShell guest banner; CreateAccountPrompt gates documents/messages/settings/forms; feed composer + suggest-resource button hidden for guests. E2E 12/12. 119/119 shipped. Phase 9 dashboard 8→9 completed. |
 | 1.5.1 | 2026-06-11 | Maintenance: e2e baseline repair (chore/docsync-phase8 → fix/e2e-baseline-repair). 6 pre-existing failures fixed: (1) eligibility-wiring provisionVaultUser positional→object args; (2) forms-flow phone autofill stale assertion (phone excluded from PROFILE_COLUMNS by PII hardening migration 20260603120000 — test updated to fill manually); (3) pdf-annotator docRow searched by name='minimal-acroform.pdf' but name column stores placeholder 'Encrypted Document' — fixed to use index [0]; (4) pdf-annotator P3 false-positive — tightened assertion to check savePdfBtn not visible + docs-tab-documents tab; (5) safety-pins marker click { force: true } to bypass SVG path pointer-event; (6) safety-pins vote buttons — nav-away+back forces viewport re-fetch after alert placement. App fixes: resource-detail-dialog resource-posts-section moved outside VaultGuard; use-encrypted-upload abort-as-success for Next.js AbortSignal pattern. 106 passed / 1 skipped / 0 failed. |
+| 1.5.2 | 2026-06-11 | P9-T1 COMPLETE (feature/fulfillment-view): fulfillment view closes the LAST open Phase 9 item — PHASE 9 COMPLETE, ALL PHASES COMPLETE. Lifecycle verified: opt_in_to_post inserts status='pending'; provider path pending→accepted→completed (or declined). Feed-panel.tsx already had the full Seekers accordion + Accept/Decline/Mark-Complete/Review-Seeker UI; data-testid accept-optin-{id} + decline-optin-{id} added as the only code change. No migration. e2e fulfillment-view.spec.ts 4/4. Full suite 110 passed / 1 skipped / 0 failed (+4 vs 106 baseline). Phase 9 dashboard 9→10. 120/120 shipped. |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/guest-access-anon-auth (2026-06-11)
+**Last Agent Session**: feature/fulfillment-view (2026-06-11)
 **Total Development Time**: 0 hours
