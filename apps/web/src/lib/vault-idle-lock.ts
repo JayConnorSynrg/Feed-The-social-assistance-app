@@ -29,19 +29,39 @@
 export const IDLE_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
 /**
- * Run every registered pre-lock flush to completion. Used by the vault context
- * to persist in-flight guarded-flow drafts (PDF annotator, form wizard) while
- * the DEK is still available, BEFORE the vault actually locks.
+ * Upper bound on how long the pre-lock flush wait may take before the vault
+ * locks regardless. A normal encrypted persist (encrypt → one storage upload →
+ * one metadata insert on a healthy connection) settles well under this; 5s is
+ * long enough to let that complete yet short enough that an unattended,
+ * idle-locked vault is never held open by a stalled flush. This keeps idle
+ * auto-lock fail-CLOSED: the security lock always proceeds within
+ * FLUSH_TIMEOUT_MS even if a flush's network call hangs forever (PostgREST and
+ * Storage do not throw on a stalled connection — see project memory pattern
+ * "Vault-Unlock Timeout Resilience").
+ */
+export const FLUSH_TIMEOUT_MS = 5_000
+
+/**
+ * Run every registered pre-lock flush, bounded by FLUSH_TIMEOUT_MS. Used by the
+ * vault context to persist in-flight guarded-flow drafts (PDF annotator, form
+ * wizard) while the DEK is still available, BEFORE the vault actually locks.
  *
  * Contract (relied on by the idle-lock + manual-lock paths):
- *  - All flushes are awaited and settle before this resolves, so the caller can
- *    safely lock immediately after awaiting it with zero data loss.
+ *  - On the normal path, all flushes are awaited and settle before this
+ *    resolves, so the caller can safely lock immediately after awaiting it with
+ *    zero data loss.
  *  - A flush that REJECTS never blocks the lock: its error is routed to onError
- *    and the remaining flushes still run. The vault always locks afterward.
+ *    and the remaining flushes still run.
+ *  - A flush that HANGS never blocks the lock either: the whole wait is bounded
+ *    by FLUSH_TIMEOUT_MS. If the flushes do not all settle within that window
+ *    this resolves anyway (routing a timeout notice through onError) so the
+ *    caller still proceeds to lock. The vault always locks afterward —
+ *    fail-closed by construction.
  */
 export async function runPreLockFlushes(
   flushes: Iterable<() => Promise<void>>,
-  onError: (err: unknown) => void
+  onError: (err: unknown) => void,
+  flushTimeoutMs: number = FLUSH_TIMEOUT_MS
 ): Promise<void> {
   const pending = Array.from(flushes).map((flush) =>
     Promise.resolve()
@@ -49,7 +69,27 @@ export async function runPreLockFlushes(
       .catch((err: unknown) => onError(err))
   )
   if (pending.length === 0) return
-  await Promise.all(pending)
+
+  // Bound the whole flush wait. If a flush hangs (never settles), the timeout
+  // wins the race and the caller proceeds to lock anyway. The timer is always
+  // cleared so no handle dangles past resolution.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      onError(
+        new Error(
+          `pre-lock flush exceeded ${flushTimeoutMs}ms — locking anyway (fail-closed)`
+        )
+      )
+      resolve()
+    }, flushTimeoutMs)
+  })
+
+  try {
+    await Promise.race([Promise.all(pending), timeout])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
 }
 
 /** Min gap between activity-driven timer resets, so high-frequency events

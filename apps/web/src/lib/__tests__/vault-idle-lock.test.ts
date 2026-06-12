@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { startIdleLock, runPreLockFlushes, IDLE_LOCK_TIMEOUT_MS } from '../vault-idle-lock'
+import { startIdleLock, runPreLockFlushes, IDLE_LOCK_TIMEOUT_MS, FLUSH_TIMEOUT_MS } from '../vault-idle-lock'
 
 type Handler = (...args: unknown[]) => void
 
@@ -179,6 +179,50 @@ describe('runPreLockFlushes (pre-lock flush ordering)', () => {
   it('resolves immediately when there are no registered flushes', async () => {
     const onError = vi.fn()
     await expect(runPreLockFlushes([], onError)).resolves.toBeUndefined()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('STILL LOCKS when a flush hangs forever — bounded by FLUSH_TIMEOUT_MS (fail-closed)', async () => {
+    // Security regression guard: a pre-lock flush whose network call never
+    // settles (PostgREST/Storage do not throw on a stalled connection) must NOT
+    // wedge the lock. runPreLockFlushes must resolve at FLUSH_TIMEOUT_MS so the
+    // caller proceeds to lock — the unlocked vault never stays open on a hang.
+    vi.useFakeTimers()
+    try {
+      const onError = vi.fn()
+      // A flush that never resolves (simulates a hung upload).
+      const hangingFlush = () => new Promise<void>(() => {})
+      let locked = false
+
+      const run = runPreLockFlushes([hangingFlush], onError).then(() => {
+        // The caller locks immediately after the flush wait resolves.
+        locked = true
+      })
+
+      // Before the timeout window elapses, the lock has not yet proceeded.
+      await vi.advanceTimersByTimeAsync(FLUSH_TIMEOUT_MS - 1)
+      expect(locked).toBe(false)
+
+      // At FLUSH_TIMEOUT_MS the wait resolves anyway and the lock proceeds.
+      await vi.advanceTimersByTimeAsync(1)
+      await run
+      expect(locked).toBe(true)
+
+      // The timeout was surfaced through onError so it is observable.
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError.mock.calls[0][0]).toBeInstanceOf(Error)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not fire the timeout when flushes settle quickly (no spurious onError)', async () => {
+    const onError = vi.fn()
+    const fastFlush = async () => {
+      await Promise.resolve()
+    }
+    await expect(runPreLockFlushes([fastFlush], onError)).resolves.toBeUndefined()
+    // Fast path: timeout never wins the race, so onError stays untouched.
     expect(onError).not.toHaveBeenCalled()
   })
 })
