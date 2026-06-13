@@ -38,6 +38,7 @@ import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
 import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
+import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
 
 // ============================================
 // GEOCODE CACHE (localStorage + in-memory, keyed by "city, state")
@@ -311,7 +312,30 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const [volunteerFabOpen, setVolunteerFabOpen] = useState(false)
 
   // Shell panel navigation
-  const { setActivePanel } = usePanelContext()
+  const { setActivePanel, setPanelParams } = usePanelContext()
+
+  // Route a resource-load error to the AI chat as a safe explain-request.
+  // The user must click the affordance — we never auto-hijack to chat.
+  const handleAskAssistantAboutMapError = useCallback((err: Error) => {
+    // Classify the error kind so the mapper can pick the right friendly summary.
+    let kind: 'network' | 'timeout' | 'server' | 'unknown' = 'unknown'
+    if (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout')) {
+      kind = 'timeout'
+    } else if (
+      err.message.toLowerCase().includes('failed to fetch') ||
+      err.message.toLowerCase().includes('networkerror') ||
+      err.message.toLowerCase().includes('network')
+    ) {
+      kind = 'network'
+    } else if (err.message.toLowerCase().includes('server') || err.message.toLowerCase().includes('500')) {
+      kind = 'server'
+    }
+    // Build a SAFE error context — no raw err.message reaches the LLM.
+    const ctx = buildSafeErrorContext({ source: 'map', kind })
+    // Switch to chat and inject errorContext via panelParams (mirrors wizardContext pattern).
+    setActivePanel('chat')
+    setPanelParams((prev) => ({ ...prev, errorContext: ctx }))
+  }, [setActivePanel, setPanelParams])
 
   // Saved resources
   const { saveResource, isResourceSavedByName } = useSavedResources()
@@ -456,7 +480,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   }, [position, userHasMovedMap, hasGeocentered])
 
   // Real Supabase resources query
-  const { resources: realResources, loading: resourcesLoading } = useViewportResources({
+  const { resources: realResources, loading: resourcesLoading, error: resourcesError } = useViewportResources({
     bounds,
     enabled: !!bounds && !authLoading,
   })
@@ -688,7 +712,22 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                 <p className="text-xs">Loading resources...</p>
               </div>
             )}
-            {!resourcesLoading && sortedResources.length === 0 && (
+            {!resourcesLoading && resourcesError && (
+              <div data-testid="map-resource-error" className="text-center py-8 text-stone-600 px-2">
+                <MapPin className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm text-stone-700 mb-1">Couldn&apos;t load resources</p>
+                <p className="text-xs text-stone-500 mb-3">Check your connection and try again.</p>
+                <button
+                  data-testid="map-ask-assistant-btn"
+                  onClick={() => handleAskAssistantAboutMapError(resourcesError)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4a5d23] text-white text-xs font-medium hover:bg-[#3d4d1c] transition-colors"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Ask the assistant what happened
+                </button>
+              </div>
+            )}
+            {!resourcesLoading && !resourcesError && sortedResources.length === 0 && (
               <div className="text-center py-8 text-stone-600">
                 <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No resources found</p>
