@@ -202,7 +202,9 @@ test('(a) signer signs the test petition → count increments', async ({ page })
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
   await page.locator('[data-testid="sidebar-petitions"]').click()
 
-  const card = page.locator(`[data-testid="petition-card-${petitionId}"]`)
+  // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
+  const allPanel = page.locator('#petitions-panel-all')
+  const card = allPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
   await expect(card).toBeVisible({ timeout: 15_000 })
 
   // Wait for the SERVER round-trip to complete (the UI updates optimistically,
@@ -223,13 +225,38 @@ test('(a) signer signs the test petition → count increments', async ({ page })
   )) as Array<{ signer_full_name: string }>
   expect(rows.length).toBe(1)
   expect(rows[0].signer_full_name).toBe(SIGNER_FULL_NAME)
+
+  // --- Signed-state persistence + Signed subtab regression guard ---
+
+  // 1. Confirm "Signed" is visible in the all-panel before reload
+  await expect(allPanel.locator('text=Signed').first()).toBeVisible({ timeout: 5_000 })
+
+  // 2. Reload and re-navigate to verify the signed state survives a full page refresh
+  await page.reload()
+  await page.locator('[data-testid="sidebar-petitions"]').click()
+  const allPanelAfterReload = page.locator('#petitions-panel-all')
+  const cardAfterReload = allPanelAfterReload.locator(`[data-testid="petition-card-${petitionId}"]`)
+  await expect(cardAfterReload).toBeVisible({ timeout: 20_000 })
+  await expect(cardAfterReload.locator('text=Signed')).toBeVisible({ timeout: 10_000 })
+
+  // 3. Click the Signed subtab and confirm it is active + shows the petition
+  const signedTab = page.locator('#petitions-tab-signed')
+  await signedTab.click()
+  await expect(signedTab).toHaveAttribute('aria-selected', 'true')
+  const signedPanel = page.locator('#petitions-panel-signed')
+  const cardInSignedPanel = signedPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
+  await expect(cardInSignedPanel).toBeVisible({ timeout: 10_000 })
+  // Confirm the petition title is rendered inside the signed panel
+  await expect(signedPanel).toContainText(PETITION_TITLE)
 })
 
 test('(b) signer withdraws → count decrements, sign CTA returns', async ({ page }) => {
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
   await page.locator('[data-testid="sidebar-petitions"]').click()
 
-  const card = page.locator(`[data-testid="petition-card-${petitionId}"]`)
+  // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
+  const allPanel = page.locator('#petitions-panel-all')
+  const card = allPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
   await expect(card).toBeVisible({ timeout: 15_000 })
 
   const withdrawBtn = card.locator(`[data-testid="withdraw-${petitionId}"]`)
@@ -271,7 +298,9 @@ test('(c) admin re-signs as signer, then views FULL name + Export CSV sets expor
   // Re-sign as signer so there is a signature to export
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
   await page.locator('[data-testid="sidebar-petitions"]').click()
-  const petitionCard = page.locator(`[data-testid="petition-card-${petitionId}"]`)
+  // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
+  const allPanel = page.locator('#petitions-panel-all')
+  const petitionCard = allPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
   await expect(petitionCard).toBeVisible({ timeout: 15_000 })
   const reSignResp = page.waitForResponse(
     (r) => r.url().includes('/api/petitions/sign') && r.request().method() === 'POST',
@@ -327,11 +356,13 @@ test('(d) after export the withdraw control is gone + the RPC rejects locked wit
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
   await page.locator('[data-testid="sidebar-petitions"]').click()
 
-  const petitionCard = page.locator(`[data-testid="petition-card-${petitionId}"]`)
+  // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
+  const allPanel = page.locator('#petitions-panel-all')
+  const petitionCard = allPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
   await expect(petitionCard.locator('text=Signed')).toBeVisible({ timeout: 15_000 })
 
-  // Withdraw control is GONE; the "final" note is shown instead
-  await expect(page.locator(`[data-testid="withdraw-${petitionId}"]`)).toHaveCount(0)
+  // Withdraw control is GONE from the all-panel; the "final" note is shown instead
+  await expect(allPanel.locator(`[data-testid="withdraw-${petitionId}"]`)).toHaveCount(0)
   await expect(petitionCard).toContainText('Signatures are final')
 
   // The RPC itself rejects a locked withdrawal (defense in depth)

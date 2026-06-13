@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
+import { logger } from '@/lib/logger'
 import type { Database } from '@feed/database'
 
 // ---------------------------------------------------------------------------
@@ -163,11 +164,18 @@ export function usePetitions() {
   }, [fetchPetitions, supabase])
 
   /**
-   * sign(petitionId) — optimistic count++ + mark signed, rolls back on failure.
+   * sign(petitionId) — optimistic count++ + mark signed.
+   *
+   * Catch order:
+   *   1. AbortError / signal → reconcile from server truth (do NOT roll back —
+   *      the server insert likely completed before the abort fired).
+   *   2. Genuine error → roll back optimistic state, surface signError.
+   *
    * Single source of truth: signedMap + countMap. Derives PetitionWithMeta on render.
    */
   const sign = useCallback(
     async (petitionId: string) => {
+      const start = performance.now()
       setSigningId(petitionId)
       setSignError(null)
 
@@ -190,6 +198,8 @@ export function usePetitions() {
             : p
         )
       )
+
+      logger.info('petition.sign.attempt', { petitionId })
 
       try {
         const res = await fetch('/api/petitions/sign', {
@@ -219,8 +229,54 @@ export function usePetitions() {
             )
           )
         }
+
+        logger.info('petition.sign.success', {
+          petitionId,
+          latencyMs: Math.round(performance.now() - start),
+          count: json.count,
+        })
       } catch (err: unknown) {
-        // Rollback
+        const isAbort =
+          err instanceof DOMException ||
+          (err instanceof Error && err.message.includes('signal'))
+
+        if (isAbort) {
+          // Do NOT roll back — the server insert likely completed before the abort.
+          // Reconcile from server truth so the UI reflects actual state.
+          try {
+            const [{ data: signedTruth }, { data: countTruth }] = await Promise.all([
+              supabase.rpc('has_signed_petition', { p_petition_id: petitionId }),
+              supabase.rpc('get_petition_signature_count', { p_petition_id: petitionId }),
+            ])
+            if (typeof (signedTruth as boolean | null) === 'boolean') {
+              const sv = signedTruth as boolean
+              setSignedMap((prev) => new Map(prev).set(petitionId, sv))
+              setPetitions((prev) =>
+                prev.map((p) =>
+                  p.id === petitionId ? { ...p, hasSigned: sv } : p
+                )
+              )
+            }
+            if (typeof (countTruth as number | null) === 'number') {
+              const cv = countTruth as number
+              setCountMap((prev) => new Map(prev).set(petitionId, cv))
+              setPetitions((prev) =>
+                prev.map((p) =>
+                  p.id === petitionId ? { ...p, signatureCount: cv } : p
+                )
+              )
+            }
+          } catch {
+            // Reconcile threw — leave optimistic state intact (do not revert)
+          }
+          logger.info('petition.sign.aborted', {
+            petitionId,
+            latencyMs: Math.round(performance.now() - start),
+          })
+          return
+        }
+
+        // Genuine error — roll back to pre-optimistic state
         setSignedMap((prev) => new Map(prev).set(petitionId, prevSigned))
         setCountMap((prev) => new Map(prev).set(petitionId, prevCount))
         setPetitions((prev) =>
@@ -231,22 +287,17 @@ export function usePetitions() {
           )
         )
 
-        // Ignore abort/timeout silently (network flake)
-        if (
-          err instanceof DOMException ||
-          (err instanceof Error && err.message.includes('signal'))
-        ) {
-          setSigningId(null)
-          return
-        }
-
         setSignError('Unable to add your signature. Please try again.')
+        logger.error('petition.sign.failed', {
+          petitionId,
+          error: err instanceof Error ? err.message : String(err),
+        })
         console.error('use-petitions sign error:', err)
       } finally {
         setSigningId(null)
       }
     },
-    [signedMap, countMap]
+    [signedMap, countMap, supabase]
   )
 
   /**

@@ -30,6 +30,7 @@ function getServiceClient() {
 }
 
 export async function POST(req: NextRequest) {
+  const start = performance.now()
   try {
     // ── Parse + validate body ──────────────────────────────────
     let body: unknown
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      logger.warn('petition.sign.unauthorized', { latencyMs: Math.round(performance.now() - start) })
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
@@ -145,6 +147,7 @@ export async function POST(req: NextRequest) {
         signerId: user.id,
         error: insertError.message,
         code: insertError.code,
+        latencyMs: Math.round(performance.now() - start),
       })
       return NextResponse.json({ error: 'sign_failed' }, { status: 500 })
     }
@@ -153,7 +156,9 @@ export async function POST(req: NextRequest) {
     const { data: countData } = await serviceClient
       .rpc('get_petition_signature_count', { p_petition_id: petition.id })
 
+    const latencyMs = Math.round(performance.now() - start)
     logger.info('petition.sign', { petitionId: petition.id, signerId: user.id })
+    logger.info('petition.sign.route.ok', { petitionId: petition.id, latencyMs })
 
     return NextResponse.json({ ok: true, alreadySigned: false, count: countData ?? 1 })
   } catch (err: unknown) {
