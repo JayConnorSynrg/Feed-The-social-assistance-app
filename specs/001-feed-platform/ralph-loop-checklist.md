@@ -1,6 +1,6 @@
 ---
 feature: "FEED Platform"
-version: "1.5.3"
+version: "1.5.4"
 created: "2026-01-19"
 last_updated: "2026-06-13"
 status: "COMPLETE"
@@ -1822,6 +1822,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ---
 
+| 1.5.4 | 2026-06-13 | refactor: consolidate CORS into _shared/cors.ts (reflect-allowed-origin + Vary:Origin + omit-ACAO-on-no-match), tighten delete-account from wildcard *, extend cors regression test (refactor/shared-cors-hardening). Anti-pattern fixed: non-matching origin previously received ALLOWED_ORIGINS[0] as ACAO → wrong-but-valid header → browser accepted non-allowlisted cross-origin requests. Fix: omit ACAO entirely on no-match so browser denies. Also: Vary:Origin added to all responses (CDN cache correctness); delete-account tightened from * to scoped helper (security hardening). 5 functions refactored (chat, benefits-screening, validate-password, auth-guard, delete-account). Wave 2 tests added to cors.spec.ts: 15 new cases (www+apex+evil × 5 functions). |
+
+---
+
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: fix/cors-www-origin (2026-06-13)
+**Last Agent Session**: refactor/shared-cors-hardening (2026-06-13)
 **Total Development Time**: 0 hours

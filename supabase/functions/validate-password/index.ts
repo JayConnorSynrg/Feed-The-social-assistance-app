@@ -3,35 +3,7 @@
 // POST /validate-password with { password, email?, username? }
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-
-// CORS configuration - restrict to app domains
-const ALLOWED_ORIGINS = [
-  Deno.env.get('APP_URL') || 'http://localhost:3000',
-  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'capacitor://localhost',  // Mobile app (iOS)
-  'http://localhost',       // Mobile app (Android webview)
-  'ionic://localhost',      // Ionic dev
-]
-
-// Get CORS headers with validated origin
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
-    console.warn(JSON.stringify({ level: 'warn', event: 'cors.origin.rejected', origin, fn: 'validate-password', allowedCount: ALLOWED_ORIGINS.length, timestamp: new Date().toISOString() }))
-  }
-
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
-    ? origin
-    : ALLOWED_ORIGINS[0] // Default to APP_URL
-
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true',
-  }
-}
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // Top 100 most common passwords (subset for demo - production should use larger list)
 const COMMON_PASSWORDS = new Set([
@@ -64,7 +36,7 @@ interface ValidationResult {
 
 serve(async (req) => {
   const origin = req.headers.get('origin')
-  const corsHeaders = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin, 'validate-password')
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {

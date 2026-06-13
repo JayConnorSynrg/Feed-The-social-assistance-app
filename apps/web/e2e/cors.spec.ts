@@ -104,3 +104,84 @@ test('OPTIONS preflight: chat returns ACAO for apex origin', async ({ request })
     `chat: apex origin should still be echoed back after www addition, got "${acao}"`
   ).toBe(APEX_ORIGIN)
 })
+
+// ---------------------------------------------------------------------------
+// Wave 2 — shared _shared/cors.ts regression guard
+//
+// Three assertions per browser-facing function:
+//   (a) www → ACAO: www  + Vary: Origin   (reflect-allowed-origin)
+//   (b) apex → ACAO: apex + Vary: Origin  (apex explicitly in allowlist)
+//   (c) evil → NO Access-Control-Allow-Origin at all  (omit-on-no-match anti-pattern fix)
+//
+// Regression guard (anti-pattern fixed in Wave 2):
+//   BEFORE: getCorsHeaders returned ALLOWED_ORIGINS[0] for non-matching origins → a
+//           wrong-but-valid origin value → browser silently allowed the request.
+//   AFTER:  getCorsHeaders OMITS ACAO for non-matching origins → browser denies cleanly.
+// ---------------------------------------------------------------------------
+
+const ALL_BROWSER_FUNCTIONS = ['chat', 'benefits-screening', 'validate-password', 'auth-guard', 'delete-account']
+const APEX_ORIGIN = 'https://sourcetofeed.com'
+const EVIL_ORIGIN = 'https://evil.example.com'
+
+for (const fnName of ALL_BROWSER_FUNCTIONS) {
+  const fnUrl = `${FUNCTIONS_BASE}/${fnName}`
+
+  test(`[wave2] ${fnName}: www origin → ACAO www + Vary:Origin present`, async ({ request }) => {
+    const res = await request.fetch(fnUrl, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: WWW_ORIGIN,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization, content-type',
+      },
+    })
+    const headers = res.headers()
+    expect(
+      headers['access-control-allow-origin'],
+      `${fnName}: www origin must be echoed back`
+    ).toBe(WWW_ORIGIN)
+    expect(
+      headers['vary'],
+      `${fnName}: Vary header must include Origin (required for CDN/proxy cache correctness)`
+    ).toMatch(/origin/i)
+  })
+
+  test(`[wave2] ${fnName}: apex origin → ACAO apex + Vary:Origin present`, async ({ request }) => {
+    const res = await request.fetch(fnUrl, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: APEX_ORIGIN,
+        'Access-Control-Request-Method': 'POST',
+      },
+    })
+    const headers = res.headers()
+    expect(
+      headers['access-control-allow-origin'],
+      `${fnName}: apex origin must be echoed back (explicitly in allowlist)`
+    ).toBe(APEX_ORIGIN)
+    expect(
+      headers['vary'],
+      `${fnName}: Vary: Origin must be present on apex responses too`
+    ).toMatch(/origin/i)
+  })
+
+  test(`[wave2] ${fnName}: evil origin → NO Access-Control-Allow-Origin (omit-on-no-match)`, async ({ request }) => {
+    const res = await request.fetch(fnUrl, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: EVIL_ORIGIN,
+        'Access-Control-Request-Method': 'POST',
+      },
+    })
+    const acao = res.headers()['access-control-allow-origin']
+    // The anti-pattern (returning ALLOWED_ORIGINS[0] for non-matching origins) would set
+    // ACAO to https://www.sourcetofeed.com here, which browsers accept — a real leak.
+    // The correct behavior is to OMIT ACAO entirely so the browser denies the request.
+    expect(
+      acao,
+      `${fnName}: evil origin must NOT receive an Access-Control-Allow-Origin header. ` +
+      `Got "${acao}". If this header is present, the reflect-allowed-origin pattern is broken ` +
+      `and non-allowlisted origins are being silently accepted (the anti-pattern).`
+    ).toBeUndefined()
+  })
+}

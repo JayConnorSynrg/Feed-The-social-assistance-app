@@ -3,18 +3,13 @@
 // Resilient — skips tables that don't exist, logs each step.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function json(body: Record<string, unknown>, status = 200) {
+function json(body: Record<string, unknown>, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -22,17 +17,20 @@ function json(body: Record<string, unknown>, status = 200) {
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin, 'delete-account')
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405)
+    return json({ error: 'Method not allowed' }, 405, corsHeaders)
   }
 
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) {
-    return json({ error: 'Missing Authorization header' }, 401)
+    return json({ error: 'Missing Authorization header' }, 401, corsHeaders)
   }
 
   try {
@@ -45,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     if (authError || !user) {
       console.error('Auth error:', authError?.message)
-      return json({ error: 'Unauthorized' }, 401)
+      return json({ error: 'Unauthorized' }, 401, corsHeaders)
     }
 
     const userId = user.id
@@ -106,14 +104,14 @@ Deno.serve(async (req: Request) => {
     const { error: deleteUserError } = await admin.auth.admin.deleteUser(userId)
     if (deleteUserError) {
       console.error('auth.admin.deleteUser failed:', deleteUserError.message)
-      return json({ error: `Failed to delete auth user: ${deleteUserError.message}` }, 500)
+      return json({ error: `Failed to delete auth user: ${deleteUserError.message}` }, 500, corsHeaders)
     }
 
     console.log(`Account ${userId} fully deleted`)
-    return json({ success: true, log })
+    return json({ success: true, log }, 200, corsHeaders)
 
   } catch (err) {
     console.error('delete-account unexpected error:', err)
-    return json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500)
+    return json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500, corsHeaders)
   }
 })
