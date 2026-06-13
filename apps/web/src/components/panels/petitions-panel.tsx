@@ -11,12 +11,13 @@
  * Petitions are First-Amendment community advocacy only.
  */
 
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import { ScrollText, CheckCircle2, Loader2, AlertCircle, X, ChevronDown, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { PetitionWithMeta } from '@/hooks/use-petitions'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
+import { logger } from '@/lib/logger'
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -218,9 +219,33 @@ function PetitionCard({
 export function PetitionsPanel() {
   const { profile, isAuthenticated, isAnonymous } = useAuth()
   const { petitions, loading, error, sign, withdraw, signingId, signError, refresh } = usePetitions()
-  const [faqOpen, setFaqOpen] = React.useState(false)
+  const [faqOpen, setFaqOpen] = useState(false)
+  const [activeSubtab, setActiveSubtab] = useState<'all' | 'signed'>('all')
 
   const signerDisplayName = profile?.full_name || undefined
+
+  const handleSubtabSwitch = useCallback((subtab: 'all' | 'signed') => {
+    setActiveSubtab(subtab)
+    logger.info('nav.subtab.switch', { panel: 'petitions', subtab })
+  }, [])
+
+  // ARIA roving tabindex keyboard handler for petitions subtab list
+  const handleTabKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>, currentIdx: number) => {
+      const tabs: Array<'all' | 'signed'> = ['all', 'signed']
+      let next = currentIdx
+      if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
+      else if (e.key === 'Home') { e.preventDefault(); next = 0 }
+      else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
+      else return
+      const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      tabEls?.[next]?.focus()
+      handleSubtabSwitch(tabs[next])
+    },
+    [handleSubtabSwitch]
+  )
 
   if (loading) {
     return (
@@ -258,12 +283,56 @@ export function PetitionsPanel() {
     )
   }
 
+  const signedPetitions = petitions.filter((p) => p.hasSigned)
+
   return (
     <div className="flex flex-col gap-4">
       {/* Panel header */}
       <div className="flex items-center gap-2 pb-1">
         <ScrollText className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
         <h2 className="text-lg font-bold text-stone-900">Community Petitions</h2>
+      </div>
+
+      {/* Subtab list — ARIA tablist (W3C APG Tabs) */}
+      <div
+        role="tablist"
+        aria-label="Petitions view"
+        className="flex gap-2 border-b border-stone-200 pb-3"
+      >
+        <button
+          role="tab"
+          id="petitions-tab-all"
+          data-testid="petitions-tab-all"
+          aria-selected={activeSubtab === 'all'}
+          aria-controls="petitions-panel-all"
+          tabIndex={activeSubtab === 'all' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('all')}
+          onKeyDown={(e) => handleTabKeyDown(e, 0)}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeSubtab === 'all'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          All petitions
+        </button>
+        <button
+          role="tab"
+          id="petitions-tab-signed"
+          data-testid="petitions-tab-signed"
+          aria-selected={activeSubtab === 'signed'}
+          aria-controls="petitions-panel-signed"
+          tabIndex={activeSubtab === 'signed' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('signed')}
+          onKeyDown={(e) => handleTabKeyDown(e, 1)}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeSubtab === 'signed'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          Signed
+        </button>
       </div>
 
       {/* FAQ disclosure */}
@@ -313,8 +382,14 @@ export function PetitionsPanel() {
         </div>
       )}
 
-      {/* Petition cards */}
-      <div className="flex flex-col gap-4">
+      {/* Tabpanel: All petitions */}
+      <div
+        id="petitions-panel-all"
+        role="tabpanel"
+        aria-labelledby="petitions-tab-all"
+        hidden={activeSubtab !== 'all'}
+        className="flex flex-col gap-4"
+      >
         {petitions.map((petition) => (
           <PetitionCard
             key={petition.id}
@@ -326,6 +401,37 @@ export function PetitionsPanel() {
             signError={signingId === petition.id ? signError : null}
           />
         ))}
+      </div>
+
+      {/* Tabpanel: Signed petitions */}
+      <div
+        id="petitions-panel-signed"
+        role="tabpanel"
+        aria-labelledby="petitions-tab-signed"
+        hidden={activeSubtab !== 'signed'}
+        className="flex flex-col gap-4"
+      >
+        {signedPetitions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 gap-3 p-6 text-center">
+            <CheckCircle2 className="w-7 h-7 text-stone-300" aria-hidden="true" />
+            <p className="text-sm text-stone-500 font-medium">No signed petitions yet</p>
+            <p className="text-xs text-stone-600">
+              Petitions you sign will appear here.
+            </p>
+          </div>
+        ) : (
+          signedPetitions.map((petition) => (
+            <PetitionCard
+              key={petition.id}
+              petition={petition}
+              signerDisplayName={isAuthenticated ? signerDisplayName : undefined}
+              onSign={sign}
+              onWithdraw={withdraw}
+              isSigning={signingId === petition.id}
+              signError={signingId === petition.id ? signError : null}
+            />
+          ))
+        )}
       </div>
     </div>
   )
