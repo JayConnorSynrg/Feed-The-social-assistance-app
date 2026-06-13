@@ -29,12 +29,30 @@ const COLUMNS: ReadonlyArray<{ key: keyof PetitionSignatureRow; header: string }
 ]
 
 /**
- * escapeCsvField — quote-and-escape one field per RFC 4180.
- * null/undefined → empty string. Quotes only when required.
+ * Leading characters that a spreadsheet (Excel / Google Sheets / LibreOffice)
+ * interprets as the start of a formula. A user-controlled value beginning with
+ * one of these can execute on open — CSV formula injection (CWE-1236).
+ * Per the OWASP mitigation we prepend a single apostrophe so the cell is
+ * treated as literal text. TAB (\t) and CR (\r) are included because some
+ * spreadsheet importers strip them and re-evaluate the remaining payload.
+ */
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/
+
+/**
+ * escapeCsvField — neutralize formula injection, then quote-and-escape one
+ * field per RFC 4180. null/undefined → empty string.
+ *
+ * Order matters: the formula-defusing apostrophe is prepended to the raw value
+ * BEFORE RFC-4180 quoting, so a value like `=cmd(),x` becomes `'=cmd(),x` and
+ * is then correctly wrapped as `"'=cmd(),x"`.
  */
 export function escapeCsvField(value: unknown): string {
   if (value === null || value === undefined) return ''
-  const s = String(value)
+  let s = String(value)
+  // CWE-1236 — defuse leading formula triggers before RFC-4180 quoting.
+  if (FORMULA_TRIGGER.test(s)) {
+    s = `'${s}`
+  }
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`
   }

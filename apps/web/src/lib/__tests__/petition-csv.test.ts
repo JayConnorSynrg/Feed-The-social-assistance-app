@@ -32,6 +32,52 @@ describe('escapeCsvField', () => {
   it('stringifies non-string scalars', () => {
     expect(escapeCsvField(42)).toBe('42')
   })
+
+  // CWE-1236 — CSV formula injection. signer_full_name is user-controlled, so
+  // a leading =/+/-/@/TAB/CR must be defused with a prepended apostrophe.
+  describe('formula injection (CWE-1236)', () => {
+    it('prefixes a leading = with an apostrophe', () => {
+      expect(escapeCsvField('=cmd()')).toBe("'=cmd()")
+    })
+
+    it('prefixes a leading @ (and RFC-quotes embedded parens payload)', () => {
+      expect(escapeCsvField('@SUM(1+1)')).toBe("'@SUM(1+1)")
+    })
+
+    it('prefixes a leading +', () => {
+      expect(escapeCsvField('+1')).toBe("'+1")
+    })
+
+    it('prefixes a leading -', () => {
+      expect(escapeCsvField('-1')).toBe("'-1")
+    })
+
+    it('prefixes a leading TAB and RFC-quotes (TAB is harmless but \\r/\\n force quoting)', () => {
+      // A leading TAB triggers the apostrophe; TAB itself needs no RFC quoting.
+      expect(escapeCsvField('\tcmd')).toBe("'\tcmd")
+    })
+
+    it('prefixes a leading CR and RFC-quotes it (CR forces quoting)', () => {
+      // Apostrophe is prepended first, then RFC-4180 quoting wraps the CR.
+      expect(escapeCsvField('\r=cmd')).toBe('"\'\r=cmd"')
+    })
+
+    it('combines formula-prefix with comma quoting', () => {
+      expect(escapeCsvField('=cmd(),x')).toBe('"\'=cmd(),x"')
+    })
+
+    it('does NOT prefix a normal name', () => {
+      expect(escapeCsvField('Jane Doe')).toBe('Jane Doe')
+    })
+
+    it('does NOT prefix an INTERNAL hyphen (only leading chars are dangerous)', () => {
+      expect(escapeCsvField('Anne-Marie')).toBe('Anne-Marie')
+    })
+
+    it('does NOT prefix an INTERNAL plus', () => {
+      expect(escapeCsvField('A+B Corp')).toBe('A+B Corp')
+    })
+  })
 })
 
 describe('buildPetitionSignaturesCsv', () => {
