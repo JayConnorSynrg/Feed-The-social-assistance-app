@@ -10,6 +10,7 @@ import {
   Globe,
   Mail,
   MapPin,
+  MessageCircle,
   Search,
   Loader2,
   AlertCircle,
@@ -30,6 +31,7 @@ import { createClient } from '@/lib/supabase/client'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
 import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
 import { logger } from '@/lib/logger'
+import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
 
 function CategoryBadge({ category }: { category: string }) {
   const display = CATEGORY_DISPLAY[category] ?? CATEGORY_DISPLAY['other']
@@ -512,6 +514,25 @@ export function ProgramsPanel() {
     logger.info('programs.panel.opened', {})
   }, [])
 
+  // Route a programs-fetch error to the AI chat as a safe explain-request.
+  // The user must click the affordance — we never auto-hijack to chat.
+  const handleAskAssistantAboutProgramsError = useCallback(() => {
+    // The programs error surface is a friendly-error string (from getFriendlyErrorMessage),
+    // not a raw Error object. We classify it by inspecting the safe string only.
+    let kind: 'network' | 'timeout' | 'server' | 'unknown' = 'unknown'
+    if (error) {
+      const lower = error.toLowerCase()
+      if (lower.includes('connection') || lower.includes('network')) kind = 'network'
+      else if (lower.includes('too long') || lower.includes('slow')) kind = 'timeout'
+      else if (lower.includes('our end') || lower.includes('server')) kind = 'server'
+    }
+    // Build a SAFE error context — no raw internals reach the LLM.
+    const ctx = buildSafeErrorContext({ source: 'programs', kind })
+    // Switch to chat and inject errorContext via panelParams (mirrors wizardContext pattern).
+    setActivePanel('chat')
+    setPanelParams((prev) => ({ ...prev, errorContext: ctx }))
+  }, [error, setActivePanel, setPanelParams])
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
@@ -726,16 +747,26 @@ export function ProgramsPanel() {
                 <p className="text-sm text-stone-500">Loading programs...</p>
               </div>
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+              <div data-testid="programs-fetch-error" className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
                 <AlertCircle className="w-8 h-8 text-red-400" />
                 <p className="text-sm text-stone-700">{error}</p>
-                <button
-                  onClick={() => setFilters({ ...filters })}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Retry
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setFilters({ ...filters })}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-stone-200 text-stone-800 rounded-lg text-sm hover:bg-stone-300 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Retry
+                  </button>
+                  <button
+                    data-testid="programs-ask-assistant-btn"
+                    onClick={handleAskAssistantAboutProgramsError}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Ask the assistant what happened
+                  </button>
+                </div>
               </div>
             ) : !filters.state ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">

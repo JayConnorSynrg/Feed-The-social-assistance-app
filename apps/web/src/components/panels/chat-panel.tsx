@@ -17,6 +17,7 @@ import type { GuidedFlow } from '@/lib/ai/guided-flows'
 import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import type { SystemPromptKey } from '@/lib/ai/system-prompts'
+import { buildExplainRequest, type SafeErrorContext } from '@/lib/ai/error-explainer'
 
 // ============================================
 // FLOW SELECTION CARD
@@ -554,6 +555,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   // Guided flow state
   const [selectedFlow, setSelectedFlow] = useState<GuidedFlow | null>(null)
   const wizardSentRef = useRef(false)
+  // Guard flag for errorContext — prevents double-send on re-render
+  const errorExplainSentRef = useRef(false)
 
   const handleFlowSelect = (flow: GuidedFlow) => setSelectedFlow(flow)
 
@@ -699,6 +702,29 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParams?.wizardContext, isLoading])
+
+  // Auto-send error explain-request when arriving from a non-chat error surface.
+  // Mirrors the wizardContext handler exactly: guard ref prevents double-send.
+  useEffect(() => {
+    const rawCtx = panelParams?.errorContext
+    if (!rawCtx || typeof rawCtx !== 'object') return
+    if (isLoading) return
+    if (errorExplainSentRef.current) return
+
+    const ctx = rawCtx as SafeErrorContext
+    // Validate that safeSummary is present (type guard) and non-empty.
+    if (typeof ctx.safeSummary !== 'string' || !ctx.safeSummary) return
+
+    errorExplainSentRef.current = true
+    // Clear the errorContext from panelParams so it doesn't re-fire.
+    setPanelParams({ ...panelParams, errorContext: undefined })
+    // Build the explain-request from the SAFE summary — never from raw error.
+    const prompt = buildExplainRequest(ctx)
+    sendMessage(prompt).finally(() => {
+      errorExplainSentRef.current = false
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelParams?.errorContext, isLoading])
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return
