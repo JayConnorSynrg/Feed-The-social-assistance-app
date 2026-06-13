@@ -22,22 +22,19 @@ import {
   Menu,
   X,
   TrendingUp,
-  Users,
-  Target,
-  Award,
   Heart,
   Package,
   Building2,
   Leaf,
-  HandHeart,
-  Utensils,
   ExternalLink,
   Compass,
   Search,
   ScrollText,
+  ShieldAlert,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
+import { useIsAdmin } from '@/hooks/use-is-admin'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -92,14 +89,29 @@ export const usePanelContext = () => {
 // ============================================
 // NAVIGATION CONFIG
 // ============================================
-const TOP_NAV_ITEMS: { label: string; panel?: PanelType; href?: string }[] = [
+type TopNavItem = { label: string; panel?: PanelType; href?: string }
+
+const TOP_NAV_ITEMS: TopNavItem[] = [
   { label: 'Home', panel: 'overview' },
   { label: 'AI Assistant', panel: 'chat' },
   { label: 'Resources', panel: 'map' },
   { label: 'Community', panel: 'feed' },
 ]
 
-const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string; roles?: UserRole[] }[] = [
+// Admin nav entry — appended only for admins (is_current_user_admin RPC).
+// Uses href so the click navigates to the server-gated /moderation route
+// rather than switching an in-shell panel.
+const ADMIN_TOP_NAV_ITEM: TopNavItem = { label: 'Admin', href: '/moderation' }
+
+type SidebarIconItem = {
+  panel?: PanelType
+  href?: string
+  icon: React.ElementType
+  label: string
+  roles?: UserRole[]
+}
+
+const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'overview', icon: Home, label: 'Overview' },
   { panel: 'chat', icon: MessageSquare, label: 'AI Assistant' },
   { panel: 'map', icon: Map, label: 'Resource Map' },
@@ -111,6 +123,14 @@ const SIDEBAR_ICONS: { panel: PanelType; icon: React.ElementType; label: string;
   { panel: 'petitions', icon: ScrollText, label: 'Petitions' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
+
+// Admin sidebar entry — appended only for admins. href navigates to the
+// server-gated /moderation route (no in-shell panel for admin).
+const ADMIN_SIDEBAR_ICON: SidebarIconItem = {
+  href: '/moderation',
+  icon: ShieldAlert,
+  label: 'Admin',
+}
 
 // Panel aliases: 'forms' and 'messages' are deep-link inputs that resolve to
 // a parent panel + subtab. They remain valid PanelType inputs to setActivePanel
@@ -133,6 +153,10 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { activePanel, setActivePanel } = useShellContext()
   const router = useRouter()
+  const isAdmin = useIsAdmin()
+
+  // Admin entry is appended only when the verified admin signal is true.
+  const navItems = isAdmin ? [...TOP_NAV_ITEMS, ADMIN_TOP_NAV_ITEM] : TOP_NAV_ITEMS
 
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-white flex-shrink-0">
@@ -146,19 +170,30 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
 
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center gap-6">
-        {TOP_NAV_ITEMS.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => item.panel && setActivePanel(item.panel)}
-            className={`text-sm transition-colors flex items-center gap-1 ${
-              item.panel === activePanel
-                ? 'text-[#4a5d23] font-medium'
-                : 'text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+        {navItems.map((item) =>
+          item.href ? (
+            <Link
+              key={item.label}
+              href={item.href}
+              className="text-sm transition-colors flex items-center gap-1 text-[#4a5d23] hover:text-[#3d4d1c] font-medium"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              {item.label}
+            </Link>
+          ) : (
+            <button
+              key={item.label}
+              onClick={() => item.panel && setActivePanel(item.panel)}
+              className={`text-sm transition-colors flex items-center gap-1 ${
+                item.panel === activePanel
+                  ? 'text-[#4a5d23] font-medium'
+                  : 'text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              {item.label}
+            </button>
+          )
+        )}
       </nav>
 
       {/* Auth Buttons */}
@@ -217,20 +252,32 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
       {mobileMenuOpen && (
         <div className="absolute top-16 left-0 right-0 bg-white border-b shadow-lg md:hidden z-50">
           <nav className="flex flex-col p-4 gap-2">
-            {TOP_NAV_ITEMS.map((item) => (
-              <button
-                key={item.label}
-                className={`text-sm py-2 px-4 rounded-lg text-left ${
-                  item.panel === activePanel ? 'bg-[#4a5d23]/10 text-[#4a5d23] font-medium' : 'hover:bg-stone-100'
-                }`}
-                onClick={() => {
-                  if (item.panel) setActivePanel(item.panel)
-                  setMobileMenuOpen(false)
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+            {navItems.map((item) =>
+              item.href ? (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm py-2 px-4 rounded-lg text-left flex items-center gap-2 text-[#4a5d23] font-medium hover:bg-[#4a5d23]/10"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.label}
+                  className={`text-sm py-2 px-4 rounded-lg text-left ${
+                    item.panel === activePanel ? 'bg-[#4a5d23]/10 text-[#4a5d23] font-medium' : 'hover:bg-stone-100'
+                  }`}
+                  onClick={() => {
+                    if (item.panel) setActivePanel(item.panel)
+                    setMobileMenuOpen(false)
+                  }}
+                >
+                  {item.label}
+                </button>
+              )
+            )}
           </nav>
         </div>
       )}
@@ -243,15 +290,34 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
 // ============================================
 function IconSidebar() {
   const { activePanel, setActivePanel, userRole } = useShellContext()
+  const isAdmin = useIsAdmin()
 
-  // Filter icons based on user role
+  // Filter icons based on user role, then append the admin entry for admins.
   const visibleIcons = SIDEBAR_ICONS.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   )
+  const icons = isAdmin ? [...visibleIcons, ADMIN_SIDEBAR_ICON] : visibleIcons
 
   return (
     <aside className="w-24 flex flex-col items-center py-4 px-1.5 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
-      {visibleIcons.map(({ panel, icon: Icon, label }) => {
+      {icons.map(({ panel, href, icon: Icon, label }) => {
+        // href entries (Admin) navigate to a server-gated route via Link.
+        if (href) {
+          return (
+            <Link
+              key={label}
+              href={href}
+              data-testid="sidebar-admin"
+              className="flex flex-col items-center gap-1 px-1.5 py-2 rounded-xl transition-all duration-200 ease-out transform-gpu origin-center group relative w-full hover:scale-[1.08] text-[#4a5d23] hover:bg-[#4a5d23]/10 hover:shadow-sm"
+              title={label}
+            >
+              <Icon className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+              <span className="text-[11px] leading-tight text-center break-words w-full font-medium text-[#4a5d23]">
+                {label}
+              </span>
+            </Link>
+          )
+        }
         // A sidebar entry is active when the resolved activePanel matches its panel.
         // Since aliases ('forms', 'messages') resolve to parent panels, the parent
         // entry lights up correctly without special-casing here.
@@ -260,7 +326,7 @@ function IconSidebar() {
           <button
             key={panel}
             data-testid={`sidebar-${panel}`}
-            onClick={() => setActivePanel(panel)}
+            onClick={() => panel && setActivePanel(panel)}
             // Hover expansion uses a transform scale (not font-size/padding) so the
             // segment + title grow together without reflowing the justify-evenly stack —
             // a low-vision affordance that keeps the layout stable. transform-gpu +
@@ -286,92 +352,6 @@ function IconSidebar() {
 }
 
 // ============================================
-// METRIC TILE COMPONENT
-// ============================================
-interface MetricTileProps {
-  title: string
-  value: string | number
-  subtitle?: string
-  icon: React.ElementType
-  trend?: { value: number; positive: boolean }
-  chart?: 'line' | 'ring' | 'bar'
-  progress?: number
-  action?: { label: string; href: string }
-  roles?: UserRole[]
-  focus?: UserFocus[]
-}
-
-function MetricTile({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  trend,
-  chart,
-  progress,
-  action
-}: MetricTileProps) {
-  return (
-    <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
-          <h3 className="text-sm font-medium text-stone-600">{title}</h3>
-          {subtitle && <p className="text-xs text-stone-600">{subtitle}</p>}
-        </div>
-        <Icon className="w-4 h-4 text-stone-400" />
-      </div>
-
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-2xl font-bold text-stone-800">{value}</p>
-          {trend && (
-            <p className={`text-xs ${trend.positive ? 'text-green-600' : 'text-red-500'}`}>
-              {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}%
-            </p>
-          )}
-        </div>
-
-        {/* Mini Chart */}
-        {chart === 'ring' && progress !== undefined && (
-          <div className="w-12 h-12 relative">
-            <svg className="w-12 h-12 -rotate-90">
-              <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" className="text-stone-200" />
-              <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray={`${progress * 1.25} 125`} className="text-[#4a5d23]" />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-stone-700">
-              {progress}%
-            </span>
-          </div>
-        )}
-
-        {chart === 'line' && (
-          <div className="flex items-end gap-0.5 h-8">
-            {[40, 65, 45, 70, 55, 80, 60].map((h, i) => (
-              <div key={i} className="w-1 bg-[#4a5d23]/60 rounded-full" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-        )}
-
-        {chart === 'bar' && (
-          <div className="w-20 h-2 bg-stone-200 rounded-full overflow-hidden">
-            <div className="h-full bg-[#4a5d23] rounded-full" style={{ width: `${progress || 0}%` }} />
-          </div>
-        )}
-      </div>
-
-      {action && (
-        <Link
-          href={action.href}
-          className="mt-3 text-xs text-[#4a5d23] hover:underline inline-flex items-center gap-1"
-        >
-          {action.label} <ExternalLink className="w-3 h-3" />
-        </Link>
-      )}
-    </div>
-  )
-}
-
-// ============================================
 // WELCOME CARD (Large left card with gauge)
 // ============================================
 interface WelcomeCardProps {
@@ -382,51 +362,29 @@ interface WelcomeCardProps {
 function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
   const today = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
 
-  // Different messaging based on role
-  const roleLabels: Record<UserRole, { title: string; metric: string }> = {
-    recipient: { title: 'Our community impact', metric: '48%' },
-    donor: { title: 'Your giving impact', metric: '89%' },
-    volunteer: { title: 'Your volunteer impact', metric: '72%' },
-    agency: { title: 'Client outcomes', metric: '65%' },
-    program: { title: 'Program effectiveness', metric: '78%' },
-    admin: { title: 'Platform health', metric: '94%' },
+  // Honest, role-aware tagline — no fabricated stats. Real impact metrics
+  // arrive in a later wave; until then the card welcomes the user warmly.
+  const roleTaglines: Record<UserRole, string> = {
+    recipient: 'Find the support you need, all in one place.',
+    donor: 'Thank you for helping your community.',
+    volunteer: 'Thank you for giving your time.',
+    agency: 'Manage the people and programs you serve.',
+    program: 'Reach the people your program is built for.',
+    admin: 'Keep the community safe and supported.',
   }
 
-  const { title, metric } = roleLabels[userRole]
+  const tagline = roleTaglines[userRole]
 
   return (
     <div className="bg-[#f8f6f1] rounded-xl p-5 border border-stone-200/50 shadow-sm h-full flex flex-col">
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-lg font-semibold text-stone-800">Welcome back, {userName}!</h3>
-        <ExternalLink className="w-4 h-4 text-stone-400" />
+        <Leaf className="w-4 h-4 text-[#4a5d23]" />
       </div>
-      <p className="text-xs text-stone-400 mb-4">{today}</p>
+      <p className="text-xs text-stone-400 mb-6">{today}</p>
 
-      <p className="text-sm text-stone-600 mb-2">{title}</p>
-
-      {/* Large percentage with mini line chart */}
-      <div className="flex-1 flex items-end justify-between">
-        <div>
-          <p className="text-5xl font-bold text-stone-800">{metric}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="px-2 py-0.5 bg-[#4a5d23] text-white text-xs rounded font-medium">High</span>
-            <div className="flex items-center text-xs text-stone-500">
-              <span className="w-8 h-px bg-stone-300 mr-1"></span>
-              60
-            </div>
-          </div>
-        </div>
-
-        {/* Mini sparkline chart */}
-        <div className="flex items-end gap-1 h-16">
-          {[30, 45, 35, 55, 40, 65, 50, 70, 55, 75, 60, 80].map((h, i) => (
-            <div
-              key={i}
-              className="w-1.5 bg-[#4a5d23]/40 rounded-full"
-              style={{ height: `${h}%` }}
-            />
-          ))}
-        </div>
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="text-base text-stone-700 leading-relaxed">{tagline}</p>
       </div>
     </div>
   )
@@ -437,262 +395,11 @@ function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
 // ============================================
 interface MetricsSectionProps {
   userRole: UserRole
-  userFocus: UserFocus[]
   userName?: string
 }
 
-function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) {
-  // Top row metrics (Impact overview style)
-  const topRowMetrics: Record<UserRole, MetricTileProps[]> = {
-    recipient: [
-      {
-        title: 'Impact overview',
-        value: '',
-        icon: ExternalLink,
-        roles: ['recipient'],
-      },
-      {
-        title: 'Applications progress',
-        value: '33%',
-        icon: Target,
-        chart: 'ring',
-        progress: 33,
-        roles: ['recipient'],
-      },
-    ],
-    donor: [
-      {
-        title: 'Impact overview',
-        value: '',
-        icon: ExternalLink,
-        roles: ['donor'],
-      },
-      {
-        title: 'Tax deductions',
-        value: '$2,450',
-        icon: Award,
-        chart: 'ring',
-        progress: 75,
-        roles: ['donor'],
-      },
-    ],
-    volunteer: [
-      {
-        title: 'Impact overview',
-        value: '',
-        icon: ExternalLink,
-        roles: ['volunteer'],
-      },
-      {
-        title: 'Hours this month',
-        value: '48',
-        icon: Target,
-        chart: 'ring',
-        progress: 80,
-        roles: ['volunteer'],
-      },
-    ],
-    agency: [
-      {
-        title: 'Impact overview',
-        value: '',
-        icon: ExternalLink,
-        roles: ['agency'],
-      },
-      {
-        title: 'Processing rate',
-        value: '89%',
-        icon: Target,
-        chart: 'ring',
-        progress: 89,
-        roles: ['agency'],
-      },
-    ],
-    program: [
-      {
-        title: 'Impact overview',
-        value: '',
-        icon: ExternalLink,
-        roles: ['program'],
-      },
-      {
-        title: 'Approval rate',
-        value: '72%',
-        icon: Target,
-        chart: 'ring',
-        progress: 72,
-        roles: ['program'],
-      },
-    ],
-    admin: [
-      {
-        title: 'System health',
-        value: '',
-        icon: ExternalLink,
-        roles: ['admin'],
-      },
-      {
-        title: 'Uptime',
-        value: '99.9%',
-        icon: Target,
-        chart: 'ring',
-        progress: 99,
-        roles: ['admin'],
-      },
-    ],
-  }
-
-  // Bottom row metrics (Contribution style)
-  const bottomRowMetrics: Record<UserRole, MetricTileProps[]> = {
-    recipient: [
-      {
-        title: 'Resources accessed',
-        subtitle: 'this week',
-        value: '7%',
-        icon: TrendingUp,
-        chart: 'bar',
-        progress: 7,
-        roles: ['recipient'],
-      },
-      {
-        title: 'Your contribution',
-        value: '',
-        subtitle: 'Events joined: 12\nArticles read: 6\nActions completed: 83',
-        icon: Award,
-        roles: ['recipient'],
-      },
-    ],
-    donor: [
-      {
-        title: 'Meals provided',
-        subtitle: 'this month',
-        value: '156',
-        icon: Utensils,
-        chart: 'bar',
-        progress: 65,
-        roles: ['donor'],
-      },
-      {
-        title: 'Your contribution',
-        value: '',
-        subtitle: 'Donations: 23\nFood drives: 4\nVolunteer hours: 12',
-        icon: HandHeart,
-        roles: ['donor'],
-      },
-    ],
-    volunteer: [
-      {
-        title: 'People helped',
-        subtitle: 'this month',
-        value: '34',
-        icon: Users,
-        chart: 'bar',
-        progress: 55,
-        roles: ['volunteer'],
-      },
-      {
-        title: 'Your contribution',
-        value: '',
-        subtitle: 'Events: 7\nHours: 48\nImpact score: 89',
-        icon: Award,
-        roles: ['volunteer'],
-      },
-    ],
-    agency: [
-      {
-        title: 'Clients served',
-        subtitle: 'this week',
-        value: '89',
-        icon: Users,
-        chart: 'bar',
-        progress: 72,
-        roles: ['agency'],
-      },
-      {
-        title: 'Program metrics',
-        value: '',
-        subtitle: 'Applications: 156\nApproved: 89\nPending: 34',
-        icon: ClipboardList,
-        roles: ['agency'],
-      },
-    ],
-    program: [
-      {
-        title: 'Applications processed',
-        subtitle: 'this week',
-        value: '234',
-        icon: ClipboardList,
-        chart: 'bar',
-        progress: 82,
-        roles: ['program'],
-      },
-      {
-        title: 'Program metrics',
-        value: '',
-        subtitle: 'Approved: 189\nDenied: 23\nPending: 45',
-        icon: Target,
-        roles: ['program'],
-      },
-    ],
-    admin: [
-      {
-        title: 'Active users',
-        subtitle: 'today',
-        value: '1,234',
-        icon: Users,
-        chart: 'bar',
-        progress: 78,
-        roles: ['admin'],
-      },
-      {
-        title: 'Platform metrics',
-        value: '',
-        subtitle: 'Errors: 0\nLatency: 45ms\nLoad: 23%',
-        icon: TrendingUp,
-        roles: ['admin'],
-      },
-    ],
-  }
-
-  // Impact overview list items based on role
-  const impactItems: Record<UserRole, { label: string; value: string }[]> = {
-    recipient: [
-      { label: 'Trees planted', value: '12,480' },
-      { label: 'Waste reduced', value: '320 tons' },
-      { label: 'Active volunteers', value: '1,540' },
-      { label: 'Projects supported', value: '38' },
-    ],
-    donor: [
-      { label: 'Meals funded', value: '45,230' },
-      { label: 'Families helped', value: '2,340' },
-      { label: 'Food rescued (lbs)', value: '12,500' },
-      { label: 'Partner agencies', value: '47' },
-    ],
-    volunteer: [
-      { label: 'Total volunteer hours', value: '8,450' },
-      { label: 'Events completed', value: '156' },
-      { label: 'People served', value: '4,230' },
-      { label: 'Active volunteers', value: '1,540' },
-    ],
-    agency: [
-      { label: 'Clients served', value: '12,480' },
-      { label: 'Applications processed', value: '3,420' },
-      { label: 'Resources distributed', value: '8,900' },
-      { label: 'Partner programs', value: '23' },
-    ],
-    program: [
-      { label: 'Total applications', value: '15,670' },
-      { label: 'Benefits distributed', value: '$2.4M' },
-      { label: 'Active recipients', value: '8,920' },
-      { label: 'Partner agencies', value: '47' },
-    ],
-    admin: [
-      { label: 'Total users', value: '45,230' },
-      { label: 'Daily active', value: '12,480' },
-      { label: 'Resources listed', value: '324' },
-      { label: 'Transactions', value: '156K' },
-    ],
-  }
+function MetricsSection({ userRole, userName }: MetricsSectionProps) {
+  const { setActivePanel } = useShellContext()
 
   return (
     <div className="flex flex-col md:flex-row gap-4">
@@ -703,41 +410,35 @@ function MetricsSection({ userRole, userFocus, userName }: MetricsSectionProps) 
 
       {/* Right Column - 2x2 Grid of metric cards */}
       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
-        {/* Top Left - Impact Overview (list style) */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px]">
+        {/* Impact overview — real metrics arrive in a later wave. Until then,
+            show an honest neutral state rather than fabricated totals. */}
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-stone-600">Impact overview</h3>
             <ExternalLink className="w-4 h-4 text-stone-400" />
           </div>
-          <div className="space-y-2">
-            {impactItems[userRole].map((item, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-stone-500">• {item.label}</span>
-                <span className="font-medium text-stone-700">{item.value}</span>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-stone-500">
+            Community impact metrics are on the way. Explore resources and the
+            community to start making a difference.
+          </p>
         </div>
 
-        {/* Top Right - Ring chart metric */}
-        <MetricTile {...topRowMetrics[userRole][1]} />
-
-        {/* Bottom Left - Bar chart metric */}
-        <MetricTile {...bottomRowMetrics[userRole][0]} />
-
-        {/* Bottom Right - Contribution list */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px]">
-          <h3 className="text-sm font-medium text-stone-600 mb-3">Your contribution</h3>
-          <div className="space-y-2">
-            {bottomRowMetrics[userRole][1].subtitle?.split('\n').map((line, i) => {
-              const [label, value] = line.split(': ')
-              return (
-                <div key={i} className="flex justify-between text-sm">
-                  <span className="text-stone-500">{label}</span>
-                  <span className="font-medium text-stone-700">{value}</span>
-                </div>
-              )
-            })}
+        {/* Quick actions — honest navigation affordance, no fabricated stats. */}
+        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
+          <h3 className="text-sm font-medium text-stone-600 mb-3">Quick links</h3>
+          <div className="space-y-2 text-sm">
+            <button
+              onClick={() => setActivePanel('map')}
+              className="text-[#4a5d23] hover:text-[#3d4d1c] font-medium"
+            >
+              Find resources near you →
+            </button>
+            <button
+              onClick={() => setActivePanel('feed')}
+              className="block text-[#4a5d23] hover:text-[#3d4d1c] font-medium"
+            >
+              Visit the community →
+            </button>
           </div>
         </div>
       </div>
@@ -768,7 +469,7 @@ function MobileBottomNav() {
   const { activePanel, setActivePanel, userRole } = useShellContext()
 
   const visibleIcons = SIDEBAR_ICONS.filter(
-    (item) => !item.roles || item.roles.includes(userRole)
+    (item) => (!item.roles || item.roles.includes(userRole)) && item.panel
   ).slice(0, 5)
 
   return (
@@ -780,7 +481,7 @@ function MobileBottomNav() {
           return (
             <button
               key={panel}
-              onClick={() => setActivePanel(panel)}
+              onClick={() => panel && setActivePanel(panel)}
               className={`flex flex-col items-center p-2 min-w-[60px] ${
                 isActive ? 'text-[#4a5d23]' : 'text-stone-400'
               }`}
@@ -988,7 +689,7 @@ export function FeedShell({
 
             {/* Metrics Section */}
             <div className="flex-1 p-6">
-              <MetricsSection userRole={userRole} userFocus={userFocus} userName={userName} />
+              <MetricsSection userRole={userRole} userName={userName} />
             </div>
           </div>
         </div>
