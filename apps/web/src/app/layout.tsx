@@ -47,7 +47,17 @@ export default async function RootLayout({
   // request (the Next 16 replacement for `export const dynamic = 'force-dynamic'`).
   // ACCEPTED COST: disables static optimization / ISR / PPR (inherent to
   // nonce-based CSP). See src/lib/csp.ts and src/proxy.ts.
-  await connection();
+  //
+  // Capacitor builds export static HTML (output:'export' in next.config.ts,
+  // gated on CAPACITOR_BUILD==='true'). connection() is incompatible with
+  // output:'export' (there is no request at build time). Mobile is served as
+  // static files inside a native webview — no Next server / proxy runs there,
+  // so the per-request nonce CSP does not apply (mobile CSP is a separate
+  // native concern). Skip force-dynamic for the Capacitor build so the static
+  // export still compiles.
+  if (process.env.CAPACITOR_BUILD !== 'true') {
+    await connection();
+  }
 
   return (
     <html lang="en" className="light">
