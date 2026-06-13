@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
@@ -34,11 +35,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Wave 6b: force dynamic rendering of the entire app so Next injects the
+  // per-request CSP nonce (from the proxy's request CSP header) into every
+  // hydration/framework <script>. Static pages are built without a request, so
+  // no nonce can be applied — connection() ties rendering to the incoming
+  // request (the Next 16 replacement for `export const dynamic = 'force-dynamic'`).
+  // ACCEPTED COST: disables static optimization / ISR / PPR (inherent to
+  // nonce-based CSP). See src/lib/csp.ts and src/proxy.ts.
+  await connection();
+
   return (
     <html lang="en" className="light">
       <body
