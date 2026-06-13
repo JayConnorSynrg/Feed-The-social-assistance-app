@@ -12,7 +12,7 @@
  */
 
 import React from 'react'
-import { ScrollText, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import { ScrollText, CheckCircle2, Loader2, AlertCircle, X, ChevronDown, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { PetitionWithMeta } from '@/hooks/use-petitions'
@@ -65,6 +65,7 @@ interface PetitionCardProps {
   petition: PetitionWithMeta
   signerDisplayName: string | undefined
   onSign: (id: string) => void
+  onWithdraw: (id: string) => void
   isSigning: boolean
   signError: string | null
 }
@@ -73,6 +74,7 @@ function PetitionCard({
   petition,
   signerDisplayName,
   onSign,
+  onWithdraw,
   isSigning,
   signError,
 }: PetitionCardProps) {
@@ -80,7 +82,10 @@ function PetitionCard({
   const hasTarget = petition.target_signatures > 0
 
   return (
-    <div className="bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+    <div
+      data-testid={`petition-card-${petition.id}`}
+      className="bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-3"
+    >
 
       {/* Header: category badge + title */}
       <div className="flex items-start gap-3">
@@ -131,9 +136,40 @@ function PetitionCard({
 
       {/* Sign CTA */}
       {petition.hasSigned ? (
-        <div className="flex items-center gap-2 mt-1">
-          <CheckCircle2 className="w-4 h-4 text-lime-700 flex-shrink-0" aria-hidden="true" />
-          <span className="text-sm font-medium text-lime-800">Signed</span>
+        <div className="flex flex-col gap-2 mt-1">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-lime-700 flex-shrink-0" aria-hidden="true" />
+            <span className="text-sm font-medium text-lime-800">Signed</span>
+          </div>
+
+          {petition.isLocked ? (
+            <p className="flex items-center gap-1.5 text-xs text-stone-500">
+              <Lock className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+              Signatures are final (the list has been exported).
+            </p>
+          ) : (
+            <button
+              onClick={() => onWithdraw(petition.id)}
+              disabled={isSigning}
+              aria-label={`Withdraw your signature from: ${petition.title}`}
+              data-testid={`withdraw-${petition.id}`}
+              className="self-start flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-red-700 disabled:opacity-60 transition-colors"
+            >
+              {isSigning ? (
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+              ) : (
+                <X className="w-3 h-3" aria-hidden="true" />
+              )}
+              Withdraw my signature
+            </button>
+          )}
+
+          {signError && (
+            <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <span>{signError}</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2 mt-1">
@@ -148,6 +184,7 @@ function PetitionCard({
             onClick={() => onSign(petition.id)}
             disabled={isSigning}
             aria-label={`Add your verified signature of support to: ${petition.title}`}
+            data-testid={`sign-${petition.id}`}
             className="w-full flex items-center justify-center gap-2 bg-lime-700 hover:bg-lime-800 disabled:opacity-60 text-white font-semibold text-sm rounded-xl py-2.5 px-4 transition-colors"
           >
             {isSigning ? (
@@ -180,7 +217,8 @@ function PetitionCard({
 
 export function PetitionsPanel() {
   const { profile, isAuthenticated, isAnonymous } = useAuth()
-  const { petitions, loading, error, sign, signingId, signError, refresh } = usePetitions()
+  const { petitions, loading, error, sign, withdraw, signingId, signError, refresh } = usePetitions()
+  const [faqOpen, setFaqOpen] = React.useState(false)
 
   const signerDisplayName = profile?.full_name || undefined
 
@@ -228,6 +266,41 @@ export function PetitionsPanel() {
         <h2 className="text-lg font-bold text-stone-900">Community Petitions</h2>
       </div>
 
+      {/* FAQ disclosure */}
+      <div className="bg-stone-50 border border-stone-200 rounded-xl">
+        <button
+          onClick={() => setFaqOpen((v) => !v)}
+          aria-expanded={faqOpen}
+          data-testid="petition-faq-toggle"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium text-stone-700"
+        >
+          About petition signatures
+          <ChevronDown
+            className={`w-4 h-4 flex-shrink-0 transition-transform ${faqOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+        {faqOpen && (
+          <div
+            data-testid="petition-faq-content"
+            className="px-3 pb-3 text-xs text-stone-600 leading-relaxed space-y-2"
+          >
+            <p>
+              Only administrators can see signers&rsquo; names; the public count
+              never reveals who signed.
+            </p>
+            <p>
+              You can withdraw your signature anytime — until the organizer exports
+              the signed list, after which signatures become final.
+            </p>
+            <p>
+              &ldquo;Verified signature of support&rdquo; means your signature is
+              recorded with a secure timestamp.
+            </p>
+          </div>
+        )}
+      </div>
+
       {(!isAuthenticated || isAnonymous) && (
         <div className="mb-1">
           {isAnonymous ? (
@@ -248,8 +321,9 @@ export function PetitionsPanel() {
             petition={petition}
             signerDisplayName={isAuthenticated ? signerDisplayName : undefined}
             onSign={sign}
+            onWithdraw={withdraw}
             isSigning={signingId === petition.id}
-            signError={signingId === petition.id || signError ? signError : null}
+            signError={signingId === petition.id ? signError : null}
           />
         ))}
       </div>
