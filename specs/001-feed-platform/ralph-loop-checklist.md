@@ -1,8 +1,8 @@
 ---
 feature: "FEED Platform"
-version: "1.5.2"
+version: "1.5.3"
 created: "2026-01-19"
-last_updated: "2026-06-11"
+last_updated: "2026-06-13"
 status: "COMPLETE"
 current_phase: 9
 current_task: null
@@ -1818,9 +1818,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 | 1.5.0 | 2026-06-11 | P9-T10 COMPLETE: Find Help Now anonymous guest access (feature/guest-access-anon-auth). Supabase signInAnonymously() on login + signup pages. Migration 20260611173053: 15 INSERT-block + 7 UPDATE-block RESTRICTIVE RLS policies, storage bucket INSERT block, anon guard in 10 SECDEF write functions, pg_cron 30-day TTL cleanup. auth-provider isAnonymous; proxy guest-pass for onboarding + /signup; FeedShell guest banner; CreateAccountPrompt gates documents/messages/settings/forms; feed composer + suggest-resource button hidden for guests. E2E 12/12. 119/119 shipped. Phase 9 dashboard 8→9 completed. |
 | 1.5.1 | 2026-06-11 | Maintenance: e2e baseline repair (chore/docsync-phase8 → fix/e2e-baseline-repair). 6 pre-existing failures fixed: (1) eligibility-wiring provisionVaultUser positional→object args; (2) forms-flow phone autofill stale assertion (phone excluded from PROFILE_COLUMNS by PII hardening migration 20260603120000 — test updated to fill manually); (3) pdf-annotator docRow searched by name='minimal-acroform.pdf' but name column stores placeholder 'Encrypted Document' — fixed to use index [0]; (4) pdf-annotator P3 false-positive — tightened assertion to check savePdfBtn not visible + docs-tab-documents tab; (5) safety-pins marker click { force: true } to bypass SVG path pointer-event; (6) safety-pins vote buttons — nav-away+back forces viewport re-fetch after alert placement. App fixes: resource-detail-dialog resource-posts-section moved outside VaultGuard; use-encrypted-upload abort-as-success for Next.js AbortSignal pattern. 106 passed / 1 skipped / 0 failed. |
 | 1.5.2 | 2026-06-11 | P9-T1 COMPLETE (feature/fulfillment-view): fulfillment view closes the LAST open Phase 9 item — PHASE 9 COMPLETE, ALL PHASES COMPLETE. Lifecycle verified: opt_in_to_post inserts status='pending'; provider path pending→accepted→completed (or declined). Feed-panel.tsx already had the full Seekers accordion + Accept/Decline/Mark-Complete/Review-Seeker UI; data-testid accept-optin-{id} + decline-optin-{id} added as the only code change. No migration. e2e fulfillment-view.spec.ts 4/4. Full suite 110 passed / 1 skipped / 0 failed (+4 vs 106 baseline). Phase 9 dashboard 9→10. 120/120 shipped. |
+| 1.5.3 | 2026-06-13 | fix: www-origin CORS on 4 browser-facing edge functions + cors.origin.rejected logging + browser-origin regression test (fix/cors-www-origin). Root cause: browser sends Origin: https://www.sourcetofeed.com (apex 307→www) but only https://sourcetofeed.com (via APP_URL) was in ALLOWED_ORIGINS → CORS-blocked chat, benefits-screening, validate-password, auth-guard. APP_URL intentionally unchanged (doubles as ActivityPub federation keyId in federation-sync/federation-inbox; changing it corrupts federation signatures). Fix: additive 'https://www.sourcetofeed.com' entry in all 4 functions' ALLOWED_ORIGINS + 'http://localhost:3001' in validate-password (consistency). Rejection logging: cors.origin.rejected structured warn log on each function. Regression guard: apps/web/e2e/cors.spec.ts (5/5 OPTIONS preflight tests). Browser e2e: cors-browser-e2e.spec.ts (2/2 www-origin real-browser tests, EN + ES). Deploy: 4 functions deployed with verify_jwt flags preserved (chat/benefits-screening=false, validate-password/auth-guard=true). |
 
 ---
 
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feature/fulfillment-view (2026-06-11)
+**Last Agent Session**: fix/cors-www-origin (2026-06-13)
 **Total Development Time**: 0 hours

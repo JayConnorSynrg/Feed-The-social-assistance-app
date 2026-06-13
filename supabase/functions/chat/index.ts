@@ -172,6 +172,7 @@ const RATE_LIMIT = {
 // CORS configuration - restrict to app domains
 const ALLOWED_ORIGINS = [
   Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
   'http://localhost:3000',
   'http://localhost:3001',
   'capacitor://localhost',  // Mobile app (iOS)
@@ -181,6 +182,10 @@ const ALLOWED_ORIGINS = [
 
 // Get CORS headers with validated origin
 function getCorsHeaders(origin: string | null): Record<string, string> {
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    edgeLog('warn', 'cors.origin.rejected', { origin, fn: 'chat', allowedCount: ALLOWED_ORIGINS.length })
+  }
+
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
     ? origin
     : ALLOWED_ORIGINS[0] // Default to APP_URL
