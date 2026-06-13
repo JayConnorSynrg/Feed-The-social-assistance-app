@@ -1489,6 +1489,7 @@ export type Database = {
           onboarding_completed: boolean | null
           paypal_email: string | null
           phone: string | null
+          preferred_language: string | null
           updated_at: string | null
           user_role: string | null
           username: string | null
@@ -1517,6 +1518,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           paypal_email?: string | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string | null
           user_role?: string | null
           username?: string | null
@@ -1545,6 +1547,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           paypal_email?: string | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string | null
           user_role?: string | null
           username?: string | null
@@ -3066,6 +3069,7 @@ export type Database = {
           location_city: string
           location_state: string
           onboarding_completed: boolean
+          preferred_language: string
           user_role: string
           username: string
         }[]

@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useGeolocation } from '@/hooks/use-geolocation'
-import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2 } from 'lucide-react'
+import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2, Globe } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { normalizeState } from '@/lib/us-states'
+import { LANGUAGES, detectBrowserLanguage } from '@/lib/languages'
 import type { Database } from '@feed/database'
 
 function getErrorMessage(err: unknown): string {
@@ -104,7 +105,7 @@ const NEEDS_OPTIONS = [
 ] as const
 
 type UserRole = 'seeking' | 'providing' | 'facilitator' | 'both'
-type Step = 1 | 2 | 3 | 4
+type Step = 1 | 2 | 3 | 4 | 5
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -123,6 +124,8 @@ export default function OnboardingPage() {
 
   // Local submitting flag — decoupled from authLoading so the button is never
   // permanently disabled waiting for auth context to resolve.
+  const [preferredLanguage, setPreferredLanguage] = useState<string>(() => detectBrowserLanguage())
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // showContinueAnyway becomes true when a write error/timeout occurs so the
@@ -312,6 +315,7 @@ export default function OnboardingPage() {
         longitude: longitude,
         needs: selectedNeeds,
         phone: phone || null,
+        preferred_language: preferredLanguage || 'en',
         onboarding_completed: true,
         updated_at: new Date().toISOString(),
       }
@@ -456,7 +460,7 @@ export default function OnboardingPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, router, supabase])
+  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, preferredLanguage, router, supabase])
 
   const handleSkip = useCallback(async () => {
     const userId = userIdRef.current ?? authUser?.id ?? null
@@ -478,6 +482,7 @@ export default function OnboardingPage() {
   const canProceedStep1 = userRole !== null
   const canProceedStep2 = zipCode.length >= 5 || (latitude !== null && longitude !== null)
   const canProceedStep3 = selectedNeeds.length > 0
+  const canProceedStep5 = preferredLanguage.length > 0
 
   return (
     <div
@@ -497,19 +502,21 @@ export default function OnboardingPage() {
             {step === 2 && 'Where are you located?'}
             {step === 3 && (userRole === 'providing' || userRole === 'facilitator' ? 'What can you help with?' : 'What do you need help with?')}
             {step === 4 && 'How can we reach you?'}
+            {step === 5 && 'What language do you prefer?'}
           </CardTitle>
           <CardDescription className="text-stone-600">
             {step === 1 && 'Tell us how you want to use FEED'}
             {step === 2 && 'This helps us find resources near you'}
             {step === 3 && 'Select all that apply - you can change this later'}
             {step === 4 && 'Optional - for appointment reminders and updates'}
+            {step === 5 && 'The AI assistant will greet you in your language'}
           </CardDescription>
           {/* Step indicator */}
           <div className="flex justify-center gap-2 mt-4">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div
                 key={s}
-                className={`w-8 h-1.5 rounded-full transition-colors ${
+                className={`w-7 h-1.5 rounded-full transition-colors ${
                   s <= step ? 'bg-lime-600' : 'bg-stone-200'
                 }`}
               />
@@ -754,8 +761,56 @@ export default function OnboardingPage() {
                 </Button>
                 <Button
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setStep(5)}
+                >
+                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+
+              <button
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
+              >
+                Skip for now
+              </button>
+            </div>
+          )}
+
+          {/* Step 5: Language Preference */}
+          {step === 5 && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+                <select
+                  data-testid="language-select"
+                  value={preferredLanguage}
+                  onChange={(e) => setPreferredLanguage(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-lime-300 bg-white/90 text-stone-900 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-lime-400"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.nativeName} — {lang.englishName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-stone-400">
+                You can change this at any time in Settings.
+              </p>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setStep(4)}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                   onClick={handleComplete}
-                  disabled={submitting}
+                  disabled={submitting || !canProceedStep5}
                 >
                   {submitting ? 'Saving...' : 'Get Started'}
                 </Button>
