@@ -1,11 +1,12 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ModerationQueue } from './moderation-queue'
 import { SafetyAlertsReview } from './safety-alerts-review'
 import { ReportsQueue } from './reports-queue'
 import { PetitionSignaturesExport } from '@/components/admin/petition-signatures-export'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ArrowLeft } from 'lucide-react'
 
 export const metadata = {
   title: 'Resource Moderation | FEED Admin',
@@ -53,25 +54,14 @@ interface ContentGroup {
 async function ModerationContent() {
   const supabase = await createClient()
 
-  // Check if user is authenticated and is admin
+  // Auth + admin gating is enforced upstream by (admin)/layout.tsx, which
+  // redirects non-admins via the is_current_user_admin() RPC before this
+  // server component runs. We re-confirm a user exists for type-safety only.
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     redirect('/login?redirect=/moderation')
   }
-
-  // Check admin role (you'd need to implement this based on your auth setup)
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  // For now, allow any authenticated user - in production, check for admin role
-  // if (profile?.role !== 'admin') {
-  //   redirect('/')
-  // }
-  void profile
 
   // Get pending resources
   const { data: pendingResources } = await supabase
@@ -167,51 +157,67 @@ async function ReportsContent() {
 
 export default function ModerationPage() {
   return (
-    <div className="container py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Resource Moderation</h1>
-        <p className="text-muted-foreground mt-2">
-          Review and approve or reject community-submitted resources.
-        </p>
-      </div>
-
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        }
-      >
-        <ModerationContent />
-      </Suspense>
-
-      {/* Content reports — community flags awaiting staff review */}
-      <div className="mt-10">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold">Content Reports</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Posts flagged by community members. Dismiss to restore visibility; uphold to keep hidden.
-          </p>
-        </div>
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          }
+    // FEED visual language: warm wheat backdrop + centered white card.
+    // The functional sections below are unchanged — only the page chrome,
+    // containers, and accent colors carry the FEED look.
+    <div className="min-h-screen bg-[#f8f6f1] py-6 px-4 sm:py-10">
+      <div className="mx-auto max-w-5xl">
+        {/* Back to app */}
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-[#4a5d23] hover:text-[#3d4d1c] font-medium mb-6"
         >
-          <ReportsContent />
-        </Suspense>
-      </div>
+          <ArrowLeft className="h-4 w-4" />
+          Back to app
+        </Link>
 
-      {/* Safety alerts post-hoc review — pins go live instantly, admins review here */}
-      <div className="mt-10">
-        <SafetyAlertsReview />
-      </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-stone-200/50 p-6 sm:p-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-[#4a5d23]">Resource Moderation</h1>
+            <p className="text-stone-600 mt-2">
+              Review and approve or reject community-submitted resources.
+            </p>
+          </div>
 
-      {/* Petition signatures — admin-only roster + full legal-record CSV export */}
-      <div className="mt-10">
-        <PetitionSignaturesExport />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-[#4a5d23]" />
+              </div>
+            }
+          >
+            <ModerationContent />
+          </Suspense>
+
+          {/* Content reports — community flags awaiting staff review */}
+          <div className="mt-10 pt-8 border-t border-stone-200/50">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-[#4a5d23]">Content Reports</h2>
+              <p className="text-stone-600 mt-1 text-sm">
+                Posts flagged by community members. Dismiss to restore visibility; uphold to keep hidden.
+              </p>
+            </div>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#4a5d23]" />
+                </div>
+              }
+            >
+              <ReportsContent />
+            </Suspense>
+          </div>
+
+          {/* Safety alerts post-hoc review — pins go live instantly, admins review here */}
+          <div className="mt-10 pt-8 border-t border-stone-200/50">
+            <SafetyAlertsReview />
+          </div>
+
+          {/* Petition signatures — admin-only roster + full legal-record CSV export */}
+          <div className="mt-10 pt-8 border-t border-stone-200/50">
+            <PetitionSignaturesExport />
+          </div>
+        </div>
       </div>
     </div>
   )

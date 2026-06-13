@@ -10,6 +10,7 @@ import {
   User,
   Bell,
   Shield,
+  ShieldAlert,
   Settings,
   Eye,
   ChevronRight,
@@ -22,6 +23,7 @@ import {
   Loader2,
   Globe,
 } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Image from 'next/image'
@@ -29,6 +31,7 @@ import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
 import { SecurityActivity } from '@/components/security/security-activity'
 import { AvatarUpload } from '@/components/profile/avatar-upload'
 import { useAuth } from '@/hooks/use-auth'
+import { useIsAdmin } from '@/hooks/use-is-admin'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
@@ -37,7 +40,7 @@ import { LANGUAGES, languageLabel, GUEST_LANGUAGE_KEY, detectBrowserLanguage } f
 // ============================================
 // TYPES
 // ============================================
-type SettingsSection = 'profile' | 'notifications' | 'privacy' | 'account' | 'accessibility' | 'language'
+type SettingsSection = 'profile' | 'notifications' | 'privacy' | 'account' | 'accessibility' | 'language' | 'admin'
 
 interface SettingsPanelProps {
   userRole?: string
@@ -100,14 +103,21 @@ const DEFAULT_SETTINGS: SettingsData = {
   }
 }
 
-const SETTINGS_NAV = [
+const SETTINGS_NAV: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'privacy', label: 'Privacy', icon: Shield },
   { id: 'language', label: 'Language', icon: Globe },
   { id: 'account', label: 'Account', icon: Settings },
   { id: 'accessibility', label: 'Accessibility', icon: Eye },
-] as const
+]
+
+// Administration nav entry — appended only for admins (is_current_user_admin RPC).
+const ADMIN_SETTINGS_NAV: { id: SettingsSection; label: string; icon: React.ElementType } = {
+  id: 'admin',
+  label: 'Administration',
+  icon: ShieldAlert,
+}
 
 // ============================================
 // SETTINGS NAV ITEM
@@ -625,6 +635,40 @@ function getRelativeTime(date: Date): string {
 // ============================================
 // ACCOUNT SECTION
 // ============================================
+// ============================================
+// ADMIN SECTION (visible only to admins)
+// ============================================
+function AdminSection() {
+  return (
+    <SettingsSection
+      title="Administration"
+      description="Tools for reviewing community submissions, reports, and safety alerts."
+    >
+      <div className="p-5 bg-[#faf9f6] rounded-xl border border-stone-200">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0">
+            <ShieldAlert className="w-5 h-5 text-[#4a5d23]" />
+          </div>
+          <div>
+            <p className="font-medium text-sm text-stone-800">Moderation dashboard</p>
+            <p className="text-xs text-stone-600 mt-0.5">
+              Review pending resources, content reports, safety alerts, and petition
+              signatures.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/moderation"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4d1c] transition-colors"
+        >
+          <ShieldAlert className="w-4 h-4" />
+          Open Moderation Dashboard
+        </Link>
+      </div>
+    </SettingsSection>
+  )
+}
+
 function AccountSection() {
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false)
@@ -1009,6 +1053,7 @@ function saveLocalPrefs(prefs: Omit<SettingsData, 'profile'>) {
 export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
   const { user, profile, refreshSession, isAnonymous } = useAuth()
+  const isAdmin = useIsAdmin()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1126,7 +1171,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
       {/* Left Navigation */}
       <div className="w-12 sm:w-48 flex-shrink-0">
         <div className="space-y-1">
-          {SETTINGS_NAV.map((nav) => (
+          {(isAdmin ? [...SETTINGS_NAV, ADMIN_SETTINGS_NAV] : SETTINGS_NAV).map((nav) => (
             <SettingsNavItem
               key={nav.id}
               {...nav}
@@ -1168,6 +1213,9 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
           )}
           {activeSection === 'accessibility' && (
             <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
+          )}
+          {activeSection === 'admin' && isAdmin && (
+            <AdminSection />
           )}
         </div>
       </div>
