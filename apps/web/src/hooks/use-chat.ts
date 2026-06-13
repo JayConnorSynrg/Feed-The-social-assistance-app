@@ -106,6 +106,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
   const { profile } = useAuth()
 
+  // Effective preferred language: DB value > localStorage > browser > 'en'
+  // Profile is stored in a ref so attemptSend (a useCallback) can read the
+  // latest value without being in the dep array. localStorage is read at
+  // send-time (inside attemptSend) so it reflects changes that happen between
+  // renders without requiring a re-render to propagate them.
+  const profileRef = useRef(profile)
+  profileRef.current = profile
+
   const abortControllerRef = useRef<AbortController | null>(null)
   // Track the last user content so retrySend can re-dispatch without
   // the caller having to pass it again.
@@ -182,6 +190,23 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             lat: profile.latitude,
             lng: profile.longitude,
           } : null,
+          preferredLanguage: (() => {
+            // Read at call time (not render time) so localStorage changes
+            // between renders are picked up without requiring a re-render.
+            const dbCode = (profileRef.current as Record<string, unknown> | null)?.['preferred_language'] as string | null
+            if (dbCode) return dbCode
+            if (typeof window !== 'undefined') {
+              const stored = localStorage.getItem('feed_preferred_language')
+              if (stored) return stored
+            }
+            if (typeof navigator !== 'undefined') {
+              const raw = navigator.language || ''
+              const prefix = raw.split('-')[0].toLowerCase()
+              const supported = ['en','es','ht','vi','ar','zh','so','fr','pt','ru','ko','tl','am','hmn','other']
+              if (supported.includes(prefix)) return prefix
+            }
+            return 'en'
+          })(),
         }),
         signal: abortControllerRef.current.signal,
       })

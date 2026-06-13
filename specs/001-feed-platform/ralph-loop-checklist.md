@@ -1831,6 +1831,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ---
 
+| 1.5.6 | 2026-06-13 | feat: preferred language — BCP-47 language selection across onboarding, settings, and AI chat (feat/preferred-language). lib/languages.ts SSOT (15 languages + Other, BCP-47 codes, detectBrowserLanguage). Migration 20260613120000: preferred_language TEXT column on profiles + SELECT/INSERT/UPDATE grants + DROP/CREATE get_my_profile() with preferred_language in RETURNS TABLE. Onboarding step 5 language picker card (step 4 Continue → step 5 Globe select → Get Started). Settings Language nav section (Globe nav item, LanguageSection component, auto-save with "Language saved" toast, guest localStorage path). use-chat.ts: call-time IIFE inside attemptSend reads profileRef.current→localStorage→browser→'en' (avoids stale closure for localStorage-only changes). chat/index.ts: preferredLanguage field in ChatRequest, one-line system prompt injection for non-English users. e2e preferred-language.spec.ts: 5/5 — A1 onboarding DB persist, B1 settings DB persist, C1 localStorage set, C2 guest chat body carries ht from localStorage (call-time read fix), D1 auth profile es→chat body. Prod migration applied via Mgmt API. Types regenerated. |
+
+---
+
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feat/chat-resilience-telemetry (2026-06-13)
+**Last Agent Session**: feat/preferred-language (2026-06-13)
 **Total Development Time**: 0 hours
