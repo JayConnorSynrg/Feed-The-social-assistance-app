@@ -13,6 +13,7 @@ const POLICYENGINE_CLIENT_SECRET = Deno.env.get('POLICYENGINE_CLIENT_SECRET') ||
 // CORS configuration - matches existing Edge Function pattern
 const ALLOWED_ORIGINS = [
   Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
   'http://localhost:3000',
   'http://localhost:3001',
   'capacitor://localhost',
@@ -21,6 +22,10 @@ const ALLOWED_ORIGINS = [
 ]
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    console.warn(JSON.stringify({ level: 'warn', event: 'cors.origin.rejected', origin, fn: 'benefits-screening', allowedCount: ALLOWED_ORIGINS.length, timestamp: new Date().toISOString() }))
+  }
+
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
     ? origin
     : ALLOWED_ORIGINS[0]

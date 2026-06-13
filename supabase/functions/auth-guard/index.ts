@@ -11,6 +11,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // CORS configuration - restrict to app domains
 const ALLOWED_ORIGINS = [
   Deno.env.get('APP_URL') || 'http://localhost:3000',
+  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
+  'http://localhost:3000',
+  'http://localhost:3001',
   'capacitor://localhost',  // Mobile app (iOS)
   'http://localhost',       // Mobile app (Android webview)
   'ionic://localhost',      // Ionic dev
@@ -18,6 +21,10 @@ const ALLOWED_ORIGINS = [
 
 // Get CORS headers with validated origin
 function getCorsHeaders(origin: string | null): Record<string, string> {
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    console.warn(JSON.stringify({ level: 'warn', event: 'cors.origin.rejected', origin, fn: 'auth-guard', allowedCount: ALLOWED_ORIGINS.length, timestamp: new Date().toISOString() }))
+  }
+
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
     ? origin
     : ALLOWED_ORIGINS[0] // Default to APP_URL
