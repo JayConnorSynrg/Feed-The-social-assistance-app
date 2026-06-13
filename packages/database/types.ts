@@ -1149,6 +1149,7 @@ export type Database = {
           petition_version_hash: string
           signed_at: string
           signer_display_name: string
+          signer_full_name: string | null
           signer_id: string
           user_agent: string | null
         }
@@ -1160,6 +1161,7 @@ export type Database = {
           petition_version_hash: string
           signed_at?: string
           signer_display_name: string
+          signer_full_name?: string | null
           signer_id: string
           user_agent?: string | null
         }
@@ -1171,6 +1173,7 @@ export type Database = {
           petition_version_hash?: string
           signed_at?: string
           signer_display_name?: string
+          signer_full_name?: string | null
           signer_id?: string
           user_agent?: string | null
         }
@@ -1205,6 +1208,8 @@ export type Database = {
           cause_category: string | null
           created_at: string
           created_by: string | null
+          exported_at: string | null
+          exported_by: string | null
           external_ref: string | null
           id: string
           status: string
@@ -1219,6 +1224,8 @@ export type Database = {
           cause_category?: string | null
           created_at?: string
           created_by?: string | null
+          exported_at?: string | null
+          exported_by?: string | null
           external_ref?: string | null
           id?: string
           status?: string
@@ -1233,6 +1240,8 @@ export type Database = {
           cause_category?: string | null
           created_at?: string
           created_by?: string | null
+          exported_at?: string | null
+          exported_by?: string | null
           external_ref?: string | null
           id?: string
           status?: string
@@ -1252,6 +1261,20 @@ export type Database = {
           {
             foreignKeyName: "petitions_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petitions_exported_by_fkey"
+            columns: ["exported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petitions_exported_by_fkey"
+            columns: ["exported_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
@@ -2839,6 +2862,18 @@ export type Database = {
       earth: { Args: never; Returns: number }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      export_petition_signatures: {
+        Args: { p_petition_id: string }
+        Returns: {
+          affirmation_text: string
+          ip_address: string
+          petition_version_hash: string
+          signed_at: string
+          signer_display_name: string
+          signer_full_name: string
+          user_agent: string
+        }[]
+      }
       find_duplicate_resource: {
         Args: {
           p_address?: string
@@ -3038,6 +3073,18 @@ export type Database = {
       get_petition_signature_count: {
         Args: { p_petition_id: string }
         Returns: number
+      }
+      get_petition_signatures: {
+        Args: { p_petition_id: string }
+        Returns: {
+          affirmation_text: string
+          ip_address: string
+          petition_version_hash: string
+          signed_at: string
+          signer_display_name: string
+          signer_full_name: string
+          user_agent: string
+        }[]
       }
       get_recent_webhook_failures: {
         Args: { p_limit?: number }
@@ -3981,6 +4028,10 @@ export type Database = {
         }
       }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
+      withdraw_petition_signature: {
+        Args: { p_petition_id: string }
+        Returns: number
+      }
     }
     Enums: {
       conversation_status:

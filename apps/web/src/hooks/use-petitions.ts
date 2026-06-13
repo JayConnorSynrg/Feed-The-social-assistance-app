@@ -27,6 +27,8 @@ export type Petition = Database['public']['Tables']['petitions']['Row']
 export interface PetitionWithMeta extends Petition {
   signatureCount: number
   hasSigned: boolean
+  /** True once the organizer has exported the signer list — withdrawal is then locked. */
+  isLocked: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +58,7 @@ export function usePetitions() {
       const { data, error: fetchError } = await supabase
         .from('petitions')
         .select(
-          'id, title, summary, body, cause_category, external_ref, target_signatures, body_version_hash, status, created_by, created_at, updated_at'
+          'id, title, summary, body, cause_category, external_ref, target_signatures, body_version_hash, status, created_by, created_at, updated_at, exported_at, exported_by'
         )
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
@@ -103,6 +105,7 @@ export function usePetitions() {
           ...r,
           signatureCount: newCountMap.get(r.id) ?? 0,
           hasSigned: newSignedMap.get(r.id) ?? false,
+          isLocked: r.exported_at != null,
         }))
       )
     } catch (err: unknown) {
@@ -243,6 +246,70 @@ export function usePetitions() {
         setSigningId(null)
       }
     },
+    [signedMap, countMap]
+  )
+
+  /**
+   * withdraw(petitionId) — removes the current user's signature via the
+   * withdraw_petition_signature SECDEF RPC. The RPC enforces ownership
+   * (auth.uid()) AND the per-petition export lock (raises if exported).
+   * On success: decrement count + mark not-signed. Surfaces the "locked"
+   * error gracefully if the organizer has already exported the list.
+   */
+  const withdraw = useCallback(
+    async (petitionId: string) => {
+      setSigningId(petitionId)
+      setSignError(null)
+
+      const prevSigned = signedMap.get(petitionId) ?? false
+      const prevCount = countMap.get(petitionId) ?? 0
+
+      if (!prevSigned) {
+        setSigningId(null)
+        return
+      }
+
+      try {
+        const { data, error: rpcError } = await supabase.rpc(
+          'withdraw_petition_signature',
+          { p_petition_id: petitionId }
+        )
+
+        if (rpcError) throw rpcError
+
+        const newCount = typeof data === 'number' ? data : Math.max(0, prevCount - 1)
+
+        setSignedMap((prev) => new Map(prev).set(petitionId, false))
+        setCountMap((prev) => new Map(prev).set(petitionId, newCount))
+        setPetitions((prev) =>
+          prev.map((p) =>
+            p.id === petitionId
+              ? { ...p, hasSigned: false, signatureCount: newCount }
+              : p
+          )
+        )
+      } catch (err: unknown) {
+        if (
+          err instanceof DOMException ||
+          (err instanceof Error && err.message.includes('signal'))
+        ) {
+          setSigningId(null)
+          return
+        }
+
+        const msg = err instanceof Error ? err.message : ''
+        if (msg.includes('locked') || msg.includes('exported')) {
+          setSignError(
+            'Signatures are final — the organizer has exported this list.'
+          )
+        } else {
+          setSignError('Unable to withdraw your signature. Please try again.')
+        }
+        console.error('use-petitions withdraw error:', err)
+      } finally {
+        setSigningId(null)
+      }
+    },
     [signedMap, countMap, supabase]
   )
 
@@ -258,6 +325,7 @@ export function usePetitions() {
     loading,
     error,
     sign,
+    withdraw,
     signingId,
     signError,
     refresh: fetchPetitions,

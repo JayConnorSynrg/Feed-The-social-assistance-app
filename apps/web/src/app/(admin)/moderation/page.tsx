@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ModerationQueue } from './moderation-queue'
 import { SafetyAlertsReview } from './safety-alerts-review'
 import { ReportsQueue } from './reports-queue'
+import { PetitionSignaturesExport } from '@/components/admin/petition-signatures-export'
 import { Loader2 } from 'lucide-react'
 
 export const metadata = {
@@ -206,6 +207,11 @@ export default function ModerationPage() {
       {/* Safety alerts post-hoc review — pins go live instantly, admins review here */}
       <div className="mt-10">
         <SafetyAlertsReview />
+      </div>
+
+      {/* Petition signatures — admin-only roster + full legal-record CSV export */}
+      <div className="mt-10">
+        <PetitionSignaturesExport />
       </div>
     </div>
   )

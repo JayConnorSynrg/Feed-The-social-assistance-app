@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     // private; it reveals only inside a conversation per the asymmetric rule.)
     const { data: profile } = await serviceClient
       .from('profiles')
-      .select('first_name, username')
+      .select('first_name, username, full_name')
       .eq('id', user.id)
       .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       .single()
@@ -102,6 +102,12 @@ export async function POST(req: NextRequest) {
       profile?.username?.trim() ||
       user.email?.split('@')[0] ||
       'Anonymous'
+
+    // Full legal name SNAPSHOT at signing time. The service-role read bypasses
+    // the full_name SELECT-revoke on the authenticated role; the snapshot is the
+    // legal-record name surfaced only inside the admin signer export. Nullable —
+    // pre-snapshot rows fall back to signer_display_name in the admin view.
+    const signerFullName = profile?.full_name?.trim() || null
 
     // ── Capture server-stamped metadata ───────────────────────
     const forwarded = req.headers.get('x-forwarded-for')
@@ -117,6 +123,7 @@ export async function POST(req: NextRequest) {
         petition_id: petition.id,
         signer_id: user.id,
         signer_display_name: signerDisplayName,
+        signer_full_name: signerFullName,
         affirmation_text: AFFIRMATION_TEXT,
         petition_version_hash: petition.body_version_hash,
         ip_address: ipRaw as string | null,
