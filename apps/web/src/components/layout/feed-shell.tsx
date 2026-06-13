@@ -250,7 +250,7 @@ function IconSidebar() {
   )
 
   return (
-    <aside className="w-16 flex flex-col items-center py-4 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
+    <aside className="w-24 flex flex-col items-center py-4 px-1.5 justify-evenly border-r border-stone-200/50 bg-white flex-shrink-0">
       {visibleIcons.map(({ panel, icon: Icon, label }) => {
         // A sidebar entry is active when the resolved activePanel matches its panel.
         // Since aliases ('forms', 'messages') resolve to parent panels, the parent
@@ -261,18 +261,22 @@ function IconSidebar() {
             key={panel}
             data-testid={`sidebar-${panel}`}
             onClick={() => setActivePanel(panel)}
-            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl transition-all group relative w-full ${
+            // Hover expansion uses a transform scale (not font-size/padding) so the
+            // segment + title grow together without reflowing the justify-evenly stack —
+            // a low-vision affordance that keeps the layout stable. transform-gpu +
+            // origin-center keep the growth centered and smooth.
+            className={`flex flex-col items-center gap-1 px-1.5 py-2 rounded-xl transition-all duration-200 ease-out transform-gpu origin-center group relative w-full hover:scale-[1.08] ${
               isActive
-                ? 'bg-[#4a5d23] text-white shadow-lg'
-                : 'hover:bg-stone-100 text-stone-500 hover:text-stone-800'
+                ? 'bg-[#4a5d23] text-white shadow-lg scale-[1.04]'
+                : 'hover:bg-stone-100 hover:shadow-sm text-stone-500 hover:text-stone-800'
             }`}
             title={label}
           >
-            <Icon className="w-5 h-5" />
-            <span className={`text-[10px] leading-tight text-center break-words w-full ${
-              isActive ? 'text-white' : 'text-stone-700'
+            <Icon className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+            <span className={`text-[11px] leading-tight text-center break-words w-full ${
+              isActive ? 'text-white font-medium' : 'text-stone-700'
             }`}>
-              {label.split(' ').slice(0, 2).join('\n')}
+              {label}
             </span>
           </button>
         )
@@ -976,7 +980,7 @@ export function FeedShell({
         <div className="w-full max-w-7xl mx-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden">
           <div className="flex">
             {/* Left Icon Sidebar continuation - Desktop Only (visual continuity) */}
-            <div className="hidden md:flex w-14 flex-shrink-0 border-r border-stone-200/50 bg-white items-center justify-center py-4">
+            <div className="hidden md:flex w-24 flex-shrink-0 border-r border-stone-200/50 bg-white items-center justify-center py-4">
               <div className="w-8 h-8 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-[#4a5d23]" />
               </div>
