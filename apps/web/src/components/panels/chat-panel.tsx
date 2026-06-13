@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { Send, Sparkles, Search, Apple, Building2, Heart, FileText, Square, CheckCircle, Bookmark, BookmarkCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useChat, type ChatMessage } from '@/hooks/use-chat'
+import { useChat, type ChatMessage, type ChatErrorKind } from '@/hooks/use-chat'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
 import { GuidedFlowComponent } from '@/components/chat/guided-flow'
@@ -471,6 +471,44 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
 }
 
 // ============================================
+// CHAT ERROR BANNER — translated, actionable
+// ============================================
+const CHAT_ERROR_MESSAGES: Record<ChatErrorKind, string> = {
+  network: "We're having trouble connecting. Please check your connection and try again.",
+  server: 'The assistant is briefly unavailable — please try again in a moment.',
+  auth: 'Your session has expired. Please sign in again to continue.',
+  unknown: 'Something went wrong. Please try again.',
+}
+
+interface ChatErrorBannerProps {
+  kind: ChatErrorKind | null
+  onRetry: () => void
+  isRetrying: boolean
+}
+
+function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
+  if (!kind) return null
+  const message = CHAT_ERROR_MESSAGES[kind]
+  return (
+    <div
+      role="alert"
+      data-testid="chat-error-banner"
+      className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700"
+    >
+      <span className="flex-1">{message}</span>
+      <button
+        onClick={onRetry}
+        disabled={isRetrying}
+        data-testid="chat-retry-btn"
+        className="flex-shrink-0 px-3 py-1 rounded-md bg-red-700 text-white text-xs font-medium hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {isRetrying ? 'Retrying…' : 'Try again'}
+      </button>
+    </div>
+  )
+}
+
+// ============================================
 // SIGN IN PROMPT
 // ============================================
 function SignInPrompt() {
@@ -503,12 +541,14 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const {
     messages,
     isLoading,
+    isRetrying,
     error,
+    errorKind,
     sendMessage,
+    retrySend,
     stopStreaming,
   } = useChat({
     flow: (panelParams?.flow as SystemPromptKey) || 'general',
-    onError: (err) => console.error('Chat error:', err),
   })
 
   // Guided flow state
@@ -750,10 +790,13 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
 
           {/* Chat Input */}
           <div className="w-full space-y-3 mt-4">
-            {error && (
-              <div className="p-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-                {error.message}
+            {isRetrying && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                Reconnecting…
               </div>
+            )}
+            {error && !isRetrying && (
+              <ChatErrorBanner kind={errorKind} onRetry={retrySend} isRetrying={isRetrying} />
             )}
             <div className="relative">
               <Input
@@ -806,12 +849,19 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Error display */}
-          {error && (
-            <div className="px-4 pb-2">
-              <div className="p-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-                {error.message}
+          {/* Reconnecting indicator */}
+          {isRetrying && (
+            <div className="px-4 pb-1">
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                Reconnecting…
               </div>
+            </div>
+          )}
+
+          {/* Error display — translated message + Try again */}
+          {error && !isRetrying && (
+            <div className="px-4 pb-2">
+              <ChatErrorBanner kind={errorKind} onRetry={retrySend} isRetrying={isRetrying} />
             </div>
           )}
 

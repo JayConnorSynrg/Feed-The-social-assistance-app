@@ -1,6 +1,6 @@
 ---
 feature: "FEED Platform"
-version: "1.5.4"
+version: "1.5.5"
 created: "2026-01-19"
 last_updated: "2026-06-13"
 status: "COMPLETE"
@@ -76,6 +76,7 @@ WHEN all tasks in a phase are [x]:
 
 *P3-T16, P4-T11, P5-T12 (Mobile Testing) deferred - requires device testing
 **P6-T8 superseded by Phase 7 — production verification moved to comprehensive hardening phase
+****feat: chat client resilience (auto-retry on transient + specific error + Try-again) + structured chat.request.failed/completed telemetry — feat/chat-resilience-telemetry (2026-06-13): auto-retry once on transient failures (network TypeError/5xx/429); isRetrying state shows "Reconnecting…"; persistent failures show kind-translated message (network/server/auth/unknown) + "Try again" button calling retrySend(); chat.request.failed structured log with errorName/errorMessage/httpStatus/durationMs/isAbort/retried/origin; chat.request.completed optimization log with durationMs/model/didStream/contentLength; e2e chat-resilience.spec.ts 4 tests (A1 happy-path, B1 transient-recover, C1 persistent-banner, C2 retry-refires); type-check 0 new errors; lint 1 fewer warning.
 ***Phase 8 folded into headline metric per 2026-06-06 docsync. Baseline was 96/98 (Phases 0-7); +11 Phase 8 PRs (#47-57) all complete. PRs #59-61 added P8-T18..T20 per 2026-06-09 docsync = 110/112. P9-T5 + P9-T6 complete (PRs #63-64) = 112/114. P7-T11 complete 2026-06-10 (harness 5/5 + manual prod confirmation) = 113/114. P9-T2 complete 2026-06-10 = 114/114. P9-T3 complete 2026-06-10 (feature/embed-meta-oembed) = 114/114. P9-T7 complete 2026-06-10 (feature/docs-forms-lifecycle): AcroForm autofill (fill-from-profile toolbar, FIELD_ALIAS_MAP), document rename+move (overflow menu), submission→drive archival (non-blocking encrypted PDF archive, submission_id FK) = 115/115. P9-T8 complete 2026-06-10 (feature/gov-forms-presync): pre-sync architecture + gov-forms bucket + 5 government PDFs synced (IRS/HUD/VA/SSA) + Government Forms UI section + e2e 3/3 = 116/116. P9-T4 complete 2026-06-10 (feature/suggest-resource): suggest-resource flow — Suggest a Resource entry in HazardBubbleMenu (all roles), SuggestResourceDialog (category SSOT, name/desc/city/state), INSERT status=pending; e2e 4/4 = 117/117. P9-T9 complete 2026-06-10 (feature/usability-grandma-pass): grandma-grade usability pass — contrast fixes, tap targets, sidebar labels, SHORT_LABELS, humanized copy, forms error/empty state, Resource Wizard label. 118/118. P9-T10 complete 2026-06-11 (feature/guest-access-anon-auth): Find Help Now anonymous guest access — signInAnonymously(), RESTRICTIVE RLS migration, 10 SECDEF guards, pg_cron cleanup, guest banner + CreateAccountPrompt gating = 119/119. P9-T1 fulfillment view COMPLETE 2026-06-11 (feature/fulfillment-view): provider Seekers accordion + Accept/Decline/Mark-Complete lifecycle already in feed-panel.tsx; data-testid accept-optin + decline-optin added; e2e fulfillment-view.spec.ts 4/4 green; full suite 110 passed/1 skipped/0 failed = 120/120. PHASE 9 COMPLETE. ALL PHASES COMPLETE.
 
 ---
@@ -1826,6 +1827,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ---
 
+| 1.5.5 | 2026-06-13 | feat: chat client resilience — auto-retry transient failures + structured telemetry + translated error UI (feat/chat-resilience-telemetry). Auto-retry once on transient errors (network TypeError, 5xx, 429) after 800ms backoff; deterministic 4xx and AbortErrors do not retry. isRetrying state surfaces "Reconnecting…" banner during retry window. Persistent failures show kind-translated user message (network/server/auth/unknown) via ChatErrorBanner + "Try again" button calling retrySend() — replaces dead-end generic "Sorry, I encountered an error". chat.request.failed structured log: errorName, errorMessage (truncated 120 chars, no PII), httpStatus, durationMs, isAbort, retried, origin. chat.request.completed optimization log: durationMs, model, didStream, contentLength. retrySend() callback on UseChatReturn. Reuses existing lib/logger.ts; AbortError-as-success path unchanged. e2e chat-resilience.spec.ts: 4 tests — A1 happy-path, B1 transient-recover (503-once→pass, no banner), C1 persistent-503 banner (specific message not old generic), C2 retry-refires; all use route interception (zero prod calls). type-check: 0 new errors; lint: 1 fewer warning than baseline. |
+
+---
+
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: refactor/shared-cors-hardening (2026-06-13)
+**Last Agent Session**: feat/chat-resilience-telemetry (2026-06-13)
 **Total Development Time**: 0 hours
