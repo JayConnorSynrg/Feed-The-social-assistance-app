@@ -4,39 +4,12 @@
 // POST /benefits-screening with { household_size, annual_income, state, age, has_children, is_disabled }
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const POLICYENGINE_API_URL = 'https://household.api.policyengine.org/us/calculate'
 const POLICYENGINE_TOKEN_URL = Deno.env.get('POLICYENGINE_TOKEN_URL') || ''
 const POLICYENGINE_CLIENT_ID = Deno.env.get('POLICYENGINE_CLIENT_ID') || ''
 const POLICYENGINE_CLIENT_SECRET = Deno.env.get('POLICYENGINE_CLIENT_SECRET') || ''
-
-// CORS configuration - matches existing Edge Function pattern
-const ALLOWED_ORIGINS = [
-  Deno.env.get('APP_URL') || 'http://localhost:3000',
-  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'capacitor://localhost',
-  'http://localhost',
-  'ionic://localhost',
-]
-
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
-    console.warn(JSON.stringify({ level: 'warn', event: 'cors.origin.rejected', origin, fn: 'benefits-screening', allowedCount: ALLOWED_ORIGINS.length, timestamp: new Date().toISOString() }))
-  }
-
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
-    ? origin
-    : ALLOWED_ORIGINS[0]
-
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true',
-  }
-}
 
 // --- Types ---
 
@@ -347,7 +320,7 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: Record<st
 
 serve(async (req) => {
   const origin = req.headers.get('origin')
-  const corsHeaders = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin, 'benefits-screening')
 
   // CORS preflight
   if (req.method === 'OPTIONS') {

@@ -5,6 +5,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // Structured edge logging — outputs JSON lines readable by Supabase log drains
 function edgeLog(level: 'info' | 'warn' | 'error', event: string, data: Record<string, unknown>) {
@@ -167,35 +168,6 @@ function sanitizeUntrusted(value: unknown): string {
 const RATE_LIMIT = {
   windowMs: 60000, // 1 minute
   maxRequests: 20, // 20 requests per minute per user
-}
-
-// CORS configuration - restrict to app domains
-const ALLOWED_ORIGINS = [
-  Deno.env.get('APP_URL') || 'http://localhost:3000',
-  'https://www.sourcetofeed.com', // Canonical prod origin (apex 307→www)
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'capacitor://localhost',  // Mobile app (iOS)
-  'http://localhost',       // Mobile app (Android webview)
-  'ionic://localhost',      // Ionic dev
-]
-
-// Get CORS headers with validated origin
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
-    edgeLog('warn', 'cors.origin.rejected', { origin, fn: 'chat', allowedCount: ALLOWED_ORIGINS.length })
-  }
-
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
-    ? origin
-    : ALLOWED_ORIGINS[0] // Default to APP_URL
-
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true',
-  }
 }
 
 interface ChatMessage {
@@ -630,7 +602,7 @@ async function searchResources(
 serve(async (req: Request) => {
   const requestStart = performance.now()
   const origin = req.headers.get('origin')
-  const corsHeaders = getCorsHeaders(origin)
+  const corsHeaders = getCorsHeaders(origin, 'chat')
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
