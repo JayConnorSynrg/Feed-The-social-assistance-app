@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey } from '@/lib/ai/system-prompts'
+import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey, type PersonalizationContext } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
 import { track } from '@vercel/analytics'
@@ -171,6 +171,49 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       // Call Edge Function
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`
       logger.debug('chat.fetch.start', { opId, messageCount: apiMessages.length })
+
+      // -------------------------------------------------------------------------
+      // PART 1 — lat/lng privacy strip
+      // -------------------------------------------------------------------------
+      // The chat edge function only uses city/state for resource DB queries
+      // (searchResources() in supabase/functions/chat/index.ts never reads
+      // location.lat / location.lng). Precise coordinates are omitted here so
+      // they never leave the device for chat purposes. The resource map handles
+      // proximity separately via its own viewport RPC.
+      const locationForChat = profile ? {
+        city: profile.location_city,
+        state: profile.location_state,
+        // lat + lng intentionally omitted — coarse city/state is sufficient
+        // for the chat's resource DB query and Firecrawl search; precise
+        // coordinates must not reach any third-party LLM provider.
+      } : null
+
+      // -------------------------------------------------------------------------
+      // PART 2 — personalization line
+      // -------------------------------------------------------------------------
+      // Read the opt-out flag at send-time (not render-time) so a toggle change
+      // between renders is respected immediately on the next send.
+      const personalizationEnabled = (() => {
+        if (typeof window === 'undefined') return false
+        const stored = localStorage.getItem('feed_chat_personalization')
+        // Default ON: absent key → enabled; explicit 'false' → disabled
+        return stored !== 'false'
+      })()
+
+      const personalizationCtx: PersonalizationContext | undefined = (() => {
+        if (!personalizationEnabled) return undefined
+        const p = profileRef.current
+        if (!p) return undefined // guests and unauthenticated users: skip
+        return {
+          name: (p as Record<string, unknown>)['first_name'] as string | null
+            ?? p.full_name?.split(' ')[0]
+            ?? null,
+          city: p.location_city ?? null,
+          state: p.location_state ?? null,
+          role: (p as Record<string, unknown>)['role'] as string | null ?? null,
+        }
+      })()
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -180,16 +223,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         },
         body: JSON.stringify({
           messages: apiMessages,
-          systemPrompt: getSystemPrompt(currentFlow),
+          systemPrompt: getSystemPrompt(currentFlow, personalizationCtx),
           stream: true,
           temperature: 0.7,
           maxTokens: 1024,
-          location: profile ? {
-            city: profile.location_city,
-            state: profile.location_state,
-            lat: profile.latitude,
-            lng: profile.longitude,
-          } : null,
+          location: locationForChat,
           preferredLanguage: (() => {
             // Read at call time (not render time) so localStorage changes
             // between renders are picked up without requiring a re-render.

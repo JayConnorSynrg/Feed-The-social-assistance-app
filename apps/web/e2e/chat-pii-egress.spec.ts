@@ -1,5 +1,5 @@
 /**
- * chat-pii-egress.spec.ts — Client-side PII egress guard E2E (Wave 6a)
+ * chat-pii-egress.spec.ts — Client-side PII egress guard E2E (Wave 6a + PR-2)
  *
  * THREAT: raw user PII (income, pregnancy status, household composition,
  * insurance status, free-text situation) must NEVER reach the third-party LLM
@@ -18,6 +18,11 @@
  *  2. Category wizard (healthcare) — select sentinel "No insurance". Assert the
  *     chat egress body contains neither "insurance" specifics nor the exact
  *     household answer, while category + state survive for resource matching.
+ *  3. systemPrompt PII guard (PR-2) — Asserts:
+ *     POSITIVE: when personalization ON, systemPrompt contains name + city/state.
+ *     NEGATIVE-AS-ABSENCE: systemPrompt and full body never contain precise
+ *       lat/lng, income, household size, health, insurance, pregnancy, SSN, phone.
+ *     OFF: when personalization disabled, systemPrompt does NOT contain the name.
  *
  * Sentinel values are SYNTHETIC test data, not real PII — intentionally not
  * redacted so the asserted body excerpt is legible in CI output.
@@ -204,6 +209,32 @@ function assertNoPii(userText: string, sentinels: string[]): void {
   }
 }
 
+/**
+ * Extract the systemPrompt field from the first captured chat body that has one.
+ * Returns empty string when absent so the caller can assert on it safely.
+ */
+function extractSystemPrompt(capturedChatBodies: string[]): string {
+  for (const raw of capturedChatBodies) {
+    try {
+      const parsed: { systemPrompt?: string } = JSON.parse(raw)
+      if (typeof parsed.systemPrompt === 'string') return parsed.systemPrompt
+    } catch { /* skip */ }
+  }
+  return ''
+}
+
+/**
+ * Assert that the full serialized body string does not contain ANY of the
+ * given sentinel values. Used for the whole-body lat/lng + PII absence check.
+ */
+function assertBodyAbsent(bodies: string[], sentinels: string[]): void {
+  const combined = bodies.join('\n')
+  for (const s of sentinels) {
+    expect(combined, `chat request body must NOT contain sentinel "${s}"`)
+      .not.toContain(s)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Test 1 — Eligibility flow: raw PII never reaches /functions/v1/chat
 // ---------------------------------------------------------------------------
@@ -316,4 +347,103 @@ test('category wizard: insurance status absent from chat egress; category + stat
   // ASSERT (positive): category + state survive for resource matching.
   expect(userText.toLowerCase()).toContain('healthcare')
   expect(userText).toContain('Vermont')
+})
+
+// ---------------------------------------------------------------------------
+// Test 3 — systemPrompt PII guard (PR-2 — chat-personalization)
+// ---------------------------------------------------------------------------
+
+/**
+ * 3a. Personalization ON (default): systemPrompt contains name + city/state;
+ *     no precise lat/lng JSON keys in the body; no sensitive PII in systemPrompt.
+ *
+ * Note: the test user (PiiEgress Test / Burlington / VT) has no lat/lng
+ * stored in their profile, so the structural `"lat":` / `"lng":` JSON keys must
+ * be absent from the request body — they were previously sent unconditionally
+ * from use-chat.ts even when the values were null/undefined.
+ */
+test('systemPrompt personalization ON: name+city present; no lat/lng keys; no sensitive PII in prompt', async ({ page }) => {
+  test.setTimeout(TEST_TIMEOUT_MS)
+  await signIn(page)
+
+  // Ensure personalization is ON (default — remove any prior opt-out key)
+  await page.evaluate(() => {
+    localStorage.removeItem('feed_chat_personalization')
+  })
+
+  const capturedChatBodies = await installChatEgressCapture(page)
+
+  await page.locator('[data-testid="sidebar-chat"]').click()
+  // Send a plain chat message to trigger a non-wizard request
+  await page.fill('[placeholder*="anything" i]', 'Hello, I need help finding food assistance.')
+  await page.keyboard.press('Enter')
+
+  await expect(page.getByText(/resources I found/i)).toBeVisible({ timeout: 20_000 })
+  expect(capturedChatBodies.length).toBeGreaterThan(0)
+
+  const systemPrompt = extractSystemPrompt(capturedChatBodies)
+  console.log('[chat-pii-egress] systemPrompt (personalization ON) excerpt:\n',
+    systemPrompt.slice(0, 300))
+
+  // POSITIVE: personalization line present — name + city/state from profile.
+  // Test user profile: fullName='PiiEgress Test', city='Burlington', state='VT'.
+  expect(systemPrompt, 'systemPrompt should contain user name when personalization ON')
+    .toContain('PiiEgress')
+  expect(systemPrompt, 'systemPrompt should contain user city when personalization ON')
+    .toContain('Burlington')
+
+  // NEGATIVE-AS-ABSENCE: precise lat/lng JSON keys must not appear in the body.
+  // Prior code sent `"lat":null,"lng":null` — even null-valued coord keys are stripped.
+  assertBodyAbsent(capturedChatBodies, ['"lat":', '"lng":'])
+
+  // NEGATIVE-AS-ABSENCE: user-specific PII and flow-specific sentinel strings absent
+  // from the systemPrompt. The base template may legitimately reference field NAMES
+  // like "SSN" as negative instructions ("never ask for SSN") — those are first-party
+  // template text, not PII egress. Only assert user-specific values and strings that
+  // have no valid reason to appear in the general flow prompt.
+  const sensitiveAbsentFromPrompt = [
+    '5550007777',   // provisioned phone number (regression guard from PR-2)
+    'monthly income',   // only in eligibility flow, not general
+    'household size',   // only in food/eligibility flows, not general
+    'insurance status', // only in healthcare flow, not general
+    'pregnancy',        // never in any runtime prompt string
+  ]
+  for (const s of sensitiveAbsentFromPrompt) {
+    expect(systemPrompt, `systemPrompt must NOT contain sensitive sentinel "${s}"`)
+      .not.toContain(s)
+  }
+  assertBodyAbsent(capturedChatBodies, ['5550007777'])
+})
+
+/**
+ * 3b. Personalization OFF: systemPrompt does NOT contain the user's name.
+ */
+test('systemPrompt personalization OFF: user name absent from systemPrompt', async ({ page }) => {
+  test.setTimeout(TEST_TIMEOUT_MS)
+  await signIn(page)
+
+  // Disable personalization via the dedicated localStorage key
+  await page.evaluate(() => {
+    localStorage.setItem('feed_chat_personalization', 'false')
+  })
+
+  const capturedChatBodies = await installChatEgressCapture(page)
+
+  await page.locator('[data-testid="sidebar-chat"]').click()
+  await page.fill('[placeholder*="anything" i]', 'What resources are available near me?')
+  await page.keyboard.press('Enter')
+
+  await expect(page.getByText(/resources I found/i)).toBeVisible({ timeout: 20_000 })
+  expect(capturedChatBodies.length).toBeGreaterThan(0)
+
+  const systemPrompt = extractSystemPrompt(capturedChatBodies)
+  console.log('[chat-pii-egress] systemPrompt (personalization OFF) excerpt:\n',
+    systemPrompt.slice(0, 200))
+
+  // NEGATIVE: user's name must NOT appear in systemPrompt when opt-out active
+  expect(systemPrompt, 'systemPrompt must NOT contain user name when personalization OFF')
+    .not.toContain('PiiEgress')
+
+  // Lat/lng still absent regardless of personalization toggle
+  assertBodyAbsent(capturedChatBodies, ['"lat":', '"lng":'])
 })
