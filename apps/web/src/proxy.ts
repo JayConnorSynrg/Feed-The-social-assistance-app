@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
+import { buildCsp, generateNonce } from '@/lib/csp'
 
 // Lightweight server-side logger — wraps console.* so Vercel Log Drain
 // receives structured JSON. NOT @vercel/analytics track(): that client-only
@@ -12,8 +13,37 @@ function log(level: 'info' | 'warn' | 'error', event: string, fields: Record<str
 }
 
 export async function proxy(request: NextRequest) {
+  // --- Wave 6b: per-request CSP nonce ---------------------------------------
+  // Generate one fresh nonce per request and own the CSP here (it was removed
+  // from next.config.ts). Next.js 16 reads the nonce out of the forwarded
+  // REQUEST `Content-Security-Policy` header (getScriptNonceFromHeader) and
+  // auto-applies it to every hydration/framework script; the browser enforces
+  // the RESPONSE header. `x-nonce` is forwarded too so Server Components can
+  // read it via headers() if they ever need to nonce a hand-written <Script>.
+  //
+  // ACCEPTED COST: a unique per-request nonce forces dynamic rendering on every
+  // matched route — no static optimization / ISR / PPR. This is inherent to
+  // nonce-based CSP and intentional.
+  const nonce = generateNonce()
+  const csp = buildCsp(nonce, { embed: request.nextUrl.pathname.startsWith('/s/embed/') })
+
+  // Forward the nonce + CSP to the app via request headers. Both the initial
+  // and the supabase-cookie-callback responses are built from these headers so
+  // Next sees the nonce regardless of which response object is returned.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', csp)
+
+  // Stamp the enforced CSP on the RESPONSE for the browser. Applied to EVERY
+  // return path (the pass-through responses AND the inline redirects) so no
+  // exit escapes the policy.
+  const withCsp = <T extends NextResponse>(response: T): T => {
+    response.headers.set('Content-Security-Policy', csp)
+    return response
+  }
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: requestHeaders },
   })
 
   const supabase = createServerClient(
@@ -28,8 +58,14 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
+          // Re-derive headers from the freshly-mutated request so the updated
+          // `cookie` header forwards (preserving supabase's SSR cookie sync),
+          // then re-attach the per-request nonce + CSP.
+          const refreshedHeaders = new Headers(request.headers)
+          refreshedHeaders.set('x-nonce', nonce)
+          refreshedHeaders.set('Content-Security-Policy', csp)
           supabaseResponse = NextResponse.next({
-            request,
+            request: { headers: refreshedHeaders },
           })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -70,7 +106,7 @@ export async function proxy(request: NextRequest) {
           redirectUrl.searchParams.set('redirectTo', pathname)
           redirectUrl.searchParams.set('step', 'mfa')
           log('info', 'proxy.redirect', { reason: 'mfa_required', from: pathname, to: '/login?step=mfa' })
-          return NextResponse.redirect(redirectUrl)
+          return withCsp(NextResponse.redirect(redirectUrl))
         }
       }
     } catch (error) {
@@ -119,11 +155,11 @@ export async function proxy(request: NextRequest) {
         // Redirect to onboarding if no profile row or onboarding not completed
         if (!profile || !profile.onboarding_completed) {
           log('info', 'proxy.redirect', { reason: 'onboarding_incomplete', from: '/', to: '/onboarding', userId: user.id })
-          return NextResponse.redirect(new URL('/onboarding', request.url))
+          return withCsp(NextResponse.redirect(new URL('/onboarding', request.url)))
         }
       }
     }
-    return supabaseResponse
+    return withCsp(supabaseResponse)
   }
 
   // Check if the current path is a public route.
@@ -137,9 +173,9 @@ export async function proxy(request: NextRequest) {
   if (pathname === '/onboarding') {
     if (!user) {
       log('info', 'proxy.redirect', { reason: 'unauthenticated', from: pathname, to: '/login' })
-      return NextResponse.redirect(new URL('/login', request.url))
+      return withCsp(NextResponse.redirect(new URL('/login', request.url)))
     }
-    return supabaseResponse
+    return withCsp(supabaseResponse)
   }
 
   // Redirect authenticated users away from auth pages to root,
@@ -148,7 +184,7 @@ export async function proxy(request: NextRequest) {
     const isAnonymous = (user as unknown as { is_anonymous?: boolean }).is_anonymous === true
     if (!isAnonymous) {
       log('info', 'proxy.redirect', { reason: 'already_authenticated', from: pathname, to: '/' })
-      return NextResponse.redirect(new URL('/', request.url))
+      return withCsp(NextResponse.redirect(new URL('/', request.url)))
     }
   }
 
@@ -157,10 +193,10 @@ export async function proxy(request: NextRequest) {
     const redirectUrl = new URL('/login', request.url)
     redirectUrl.searchParams.set('redirectTo', pathname)
     log('info', 'proxy.redirect', { reason: 'unauthenticated', from: pathname, to: '/login' })
-    return NextResponse.redirect(redirectUrl)
+    return withCsp(NextResponse.redirect(redirectUrl))
   }
 
-  return supabaseResponse
+  return withCsp(supabaseResponse)
 }
 
 export const config = {

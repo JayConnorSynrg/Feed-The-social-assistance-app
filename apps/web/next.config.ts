@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
 
-const isDev = process.env.NODE_ENV === 'development';
-
 const nextConfig: NextConfig = {
   // Enable static export for Capacitor builds
   // Note: Dynamic routes will need to be handled differently
@@ -92,85 +90,11 @@ const nextConfig: NextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          {
-            // SECURITY FIX #3 — Applied 2026-02-20
-            //
-            // CHANGED: script-src
-            //   BEFORE: "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-            //   AFTER:  "script-src 'self' 'unsafe-inline'"
-            //
-            //   REMOVED 'unsafe-eval' (production):
-            //     Eliminates eval(), new Function(), setTimeout(string), and
-            //     WebAssembly.instantiate() from untrusted strings. This blocks
-            //     the primary path by which an XSS payload could dynamically
-            //     execute stolen encryption key material (DEK exfiltration).
-            //     FTC "reasonable security" and SOC 2 require eval() to be
-            //     disabled when handling PII/encrypted data.
-            //
-            //   RE-ENABLED 'unsafe-eval' (development only):
-            //     React 19 + Next.js 16 dev mode requires eval() for Fast
-            //     Refresh, error overlays, and React DevTools integration.
-            //     Conditioned on NODE_ENV === 'development'; production builds
-            //     never include it.
-            //
-            //   RETAINED 'unsafe-inline':
-            //     Next.js 14/15 injects inline <script> tags during SSR hydration
-            //     (__NEXT_DATA__, chunk manifests). Removing unsafe-inline without
-            //     a nonce pipeline (middleware → generateBuildId → _document) breaks
-            //     the application. Full nonce-based CSP requires dedicated
-            //     implementation work.
-            //     TODO: Migrate to nonce-based CSP. See docs/csp-nonce-migration.md
-            //     Track as: SECURITY-TODO-CSP-NONCE
-            //
-            // UNCHANGED: style-src 'unsafe-inline'
-            //   Required by Tailwind CSS utility classes injected at runtime and
-            //   any CSS-in-JS. This is an accepted trade-off; style injection
-            //   cannot execute JavaScript in modern browsers (no script-via-style
-            //   attacks in compliant browsers).
-            //
-            // REMOVED: X-XSS-Protection header (see comment above)
-            //   Replaced entirely by CSP, which is the correct modern mechanism.
-            //
-            // CSP FIX 2026-06-01 (caught by Playwright e2e pdf-annotator.spec.ts P2):
-            //
-            //   1. worker-src: added 'self'
-            //      BEFORE: "worker-src blob:"
-            //      AFTER:  "worker-src 'self' blob:"
-            //      Reason: pdfjs-dist loads pdf.worker.min.mjs from /_next/static/
-            //      as a same-origin Worker. The browser needs worker-src 'self' to
-            //      allow same-origin worker scripts; blob: alone is insufficient.
-            //      Without 'self', pdfjs falls back to main-thread parsing (perf
-            //      regression) and emits a CSP violation. Additive — does not
-            //      narrow any existing permission.
-            //
-            //   2. script-src + connect-src: added https://va.vercel-scripts.com
-            //      BEFORE: no va.vercel-scripts.com entry
-            //      AFTER:  https://va.vercel-scripts.com in both script-src and connect-src
-            //      Reason: @vercel/analytics v2.x and @vercel/speed-insights v2.x both
-            //      inject `<script src="https://va.vercel-scripts.com/v1/script.debug.js">`
-            //      in development mode (NODE_ENV=development). In production they use
-            //      first-party intake at /_vercel/insights/script.js (no CSP change needed).
-            //      Vercel's official domain — documented at vercel.com/docs/analytics.
-            //      Additive — no existing directive narrowed.
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com https://challenges.cloudflare.com`,
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com https://challenges.cloudflare.com",
-              "worker-src 'self' blob:",
-              "font-src 'self'",
-              // Cloudflare Turnstile renders its challenge in an iframe served from
-              // challenges.cloudflare.com. There is no same-origin iframe on the main
-              // app's auth pages, so 'self' is intentionally omitted (least-privilege).
-              // Required before captcha is enabled; widget is a no-op until then.
-              "frame-src https://challenges.cloudflare.com",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
-          },
+          // Content-Security-Policy is owned per-request by the proxy
+          // (apps/web/src/proxy.ts → buildCsp in src/lib/csp.ts) so each
+          // response carries a fresh nonce + 'strict-dynamic' (Wave 6b). It is
+          // intentionally NOT declared here — a static CSP here would conflict
+          // with / override the per-request one.
         ],
       },
       {
@@ -203,21 +127,9 @@ const nextConfig: NextConfig = {
             key: 'X-DNS-Prefetch-Control',
             value: 'off',
           },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://*.supabase.co",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-              "font-src 'self'",
-              // Allow any origin to embed this widget in an iframe
-              "frame-ancestors *",
-              "base-uri 'self'",
-              "form-action 'none'",
-            ].join('; '),
-          },
+          // Content-Security-Policy for the embed route is owned per-request by
+          // the proxy (buildCsp({ embed: true })) — preserves frame-ancestors *
+          // + form-action 'none' with a per-request nonce (Wave 6b).
         ],
       },
       {

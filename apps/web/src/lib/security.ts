@@ -155,20 +155,6 @@ export const csrfToken = {
 }
 
 /**
- * Content Security Policy helpers
- */
-export const csp = {
-  // Nonce for inline scripts (should be generated server-side)
-  getNonce(): string | null {
-    if (typeof document !== 'undefined') {
-      const meta = document.querySelector('meta[name="csp-nonce"]')
-      return meta?.getAttribute('content') || null
-    }
-    return null
-  },
-}
-
-/**
  * Secure cookie helpers
  */
 export const secureCookie = {
