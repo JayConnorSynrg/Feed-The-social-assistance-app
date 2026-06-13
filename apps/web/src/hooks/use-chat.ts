@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getSystemPrompt, buildPersonalizationLine, detectCrisisKeywords, type SystemPromptKey, type PersonalizationContext } from '@/lib/ai/system-prompts'
+import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey, type PersonalizationContext } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
 import { track } from '@vercel/analytics'

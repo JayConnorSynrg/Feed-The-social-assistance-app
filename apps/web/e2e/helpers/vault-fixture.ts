@@ -242,6 +242,8 @@ export async function provisionVaultUser(
         last_name: lastName,
         phone,
         onboarding_completed: true,
+        location_city: residentialAddress.city,
+        location_state: residentialAddress.state,
       },
       { onConflict: 'id' }
     )
