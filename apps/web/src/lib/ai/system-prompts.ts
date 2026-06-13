@@ -291,12 +291,65 @@ Remember: You're not a therapist, but you can provide information and connection
 
 export type SystemPromptKey = keyof typeof SYSTEM_PROMPTS
 
-// Combine prompts for specific flows
-export function getSystemPrompt(flow: SystemPromptKey): string {
-  if (flow === 'crisis') {
-    return `${SYSTEM_PROMPTS.base}\n\n${SYSTEM_PROMPTS.crisis}`
+// ---------------------------------------------------------------------------
+// Personalization helpers — chat-personalization PR
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the one-line personalization block injected at the TOP of the system
+ * prompt when the user has personalization enabled.
+ *
+ * ONLY non-sensitive fields: first name (or display name), city, state, role.
+ * NEVER: income, household size, health, insurance, pregnancy, phone, or SSN.
+ *
+ * Returns an empty string when no useful field is present so the caller can
+ * safely prepend without adding a dangling newline.
+ */
+export interface PersonalizationContext {
+  /** Display name — first name preferred, full name acceptable. */
+  name?: string | null
+  city?: string | null
+  state?: string | null
+  /** User role from profiles: 'seeker' | 'providing' | 'facilitator' | 'both' */
+  role?: string | null
+}
+
+function rolePhrase(role: string | null | undefined): string {
+  switch (role) {
+    case 'providing':   return 'here to share resources and support their community'
+    case 'facilitator': return 'here as a community facilitator'
+    case 'both':        return 'both seeking help and sharing resources'
+    case 'seeker':
+    default:            return 'looking for help and community resources'
   }
-  return `${SYSTEM_PROMPTS.base}\n\n${SYSTEM_PROMPTS[flow]}`
+}
+
+export function buildPersonalizationLine(ctx: PersonalizationContext): string {
+  const name = ctx.name?.trim() || null
+  const city = ctx.city?.trim() || null
+  const state = ctx.state?.trim() || null
+  if (!name && !city && !state) return ''
+
+  const location = city && state ? `${city}, ${state}` : city || state || ''
+  const phrase = rolePhrase(ctx.role)
+
+  const who = name ? `You're speaking with ${name}` : 'The user'
+  const where = location ? ` in ${location}` : ''
+  const greet = name ? ' Greet them warmly by name and tailor suggestions to their area.' : ' Tailor suggestions to their area.'
+
+  return `[Personalization: ${who}${where}. They are ${phrase}.${greet}]`
+}
+
+// Combine prompts for specific flows.
+// The optional `personalization` param injects a one-line greeting block at
+// the top of the prompt when the user has personalization enabled.
+export function getSystemPrompt(flow: SystemPromptKey, personalization?: PersonalizationContext): string {
+  const personalizationLine = personalization ? buildPersonalizationLine(personalization) : ''
+  const prefix = personalizationLine ? `${personalizationLine}\n\n` : ''
+  if (flow === 'crisis') {
+    return `${prefix}${SYSTEM_PROMPTS.base}\n\n${SYSTEM_PROMPTS.crisis}`
+  }
+  return `${prefix}${SYSTEM_PROMPTS.base}\n\n${SYSTEM_PROMPTS[flow]}`
 }
 
 // Detect if message might indicate crisis

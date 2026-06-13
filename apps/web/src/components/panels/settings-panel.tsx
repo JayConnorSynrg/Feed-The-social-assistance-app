@@ -62,6 +62,8 @@ interface SettingsData {
     shareLocation: boolean
     shareActivity: boolean
     allowMessages: boolean
+    /** When true (default), the AI assistant greets the user by name and tailors suggestions to their city/state. */
+    chatPersonalization: boolean
   }
   accessibility: {
     highContrast: boolean
@@ -88,7 +90,8 @@ const DEFAULT_SETTINGS: SettingsData = {
     profileVisible: true,
     shareLocation: false,
     shareActivity: true,
-    allowMessages: true
+    allowMessages: true,
+    chatPersonalization: true,
   },
   accessibility: {
     highContrast: false,
@@ -416,9 +419,25 @@ interface PrivacySectionProps {
   onUpdate: (privacy: SettingsData['privacy']) => void
 }
 
+// localStorage key consumed by use-chat.ts to gate the personalization line.
+// Absent key → enabled (default ON); explicit 'false' → disabled.
+const CHAT_PERSONALIZATION_KEY = 'feed_chat_personalization'
+
 function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
   const handleToggle = (key: keyof SettingsData['privacy']) => {
-    onUpdate({ ...privacy, [key]: !privacy[key] })
+    const next = !privacy[key]
+    onUpdate({ ...privacy, [key]: next })
+    // Sync chatPersonalization to its dedicated localStorage key so use-chat.ts
+    // reads the correct value at send-time without an extra prop-drill.
+    if (key === 'chatPersonalization') {
+      try {
+        if (next) {
+          localStorage.removeItem(CHAT_PERSONALIZATION_KEY) // absent = enabled (default)
+        } else {
+          localStorage.setItem(CHAT_PERSONALIZATION_KEY, 'false')
+        }
+      } catch { /* ignore private browsing write errors */ }
+    }
   }
 
   return (
@@ -426,6 +445,12 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
       title="Privacy & Data"
       description="Control your privacy settings and data sharing"
     >
+      <ToggleRow
+        label="Personalized assistant"
+        description="Let the assistant greet you by name and tailor suggestions to your area"
+        value={privacy.chatPersonalization}
+        onChange={() => handleToggle('chatPersonalization')}
+      />
       <ToggleRow
         label="Profile Visible"
         description="Allow others to view your profile"
@@ -949,13 +974,25 @@ function loadLocalPrefs(): Omit<SettingsData, 'profile'> {
       accessibility: DEFAULT_SETTINGS.accessibility,
     }
   }
+  // chatPersonalization is authoritative in its own key (use-chat.ts reads it
+  // directly); PREFS_KEY is the secondary store for the toggle UI state.
+  // Absent dedicated key → enabled (default ON); 'false' → disabled.
+  const chatPersonalization = localStorage.getItem(CHAT_PERSONALIZATION_KEY) !== 'false'
   try {
     const stored = localStorage.getItem(PREFS_KEY)
-    if (stored) return JSON.parse(stored)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      // Overlay the authoritative chatPersonalization value so the UI
+      // always reflects the dedicated key, even if PREFS_KEY is stale.
+      return {
+        ...parsed,
+        privacy: { ...DEFAULT_SETTINGS.privacy, ...parsed.privacy, chatPersonalization },
+      }
+    }
   } catch {}
   return {
     notifications: DEFAULT_SETTINGS.notifications,
-    privacy: DEFAULT_SETTINGS.privacy,
+    privacy: { ...DEFAULT_SETTINGS.privacy, chatPersonalization },
     accessibility: DEFAULT_SETTINGS.accessibility,
   }
 }
