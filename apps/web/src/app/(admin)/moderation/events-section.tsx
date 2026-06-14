@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,6 +60,18 @@ export function EventsSection() {
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([])
   const [loadingOccurrences, setLoadingOccurrences] = useState(false)
 
+  // Roster state
+  type Checkin = {
+    id: string
+    household_size: number
+    checked_in_at: string
+    user_id: string | null
+    notes: string | null
+  }
+  const [expandedRosterId, setExpandedRosterId] = useState<string | null>(null)
+  const [rosterMap, setRosterMap] = useState<Record<string, Checkin[]>>({})
+  const [loadingRoster, setLoadingRoster] = useState<string | null>(null)
+
   // Create event form
   const [createTitle, setCreateTitle] = useState('')
   const [createOrgId, setCreateOrgId] = useState('')
@@ -98,6 +111,28 @@ export function EventsSection() {
     setOccurrences((data as EventOccurrence[]) ?? [])
     setLoadingOccurrences(false)
   }, [supabase])
+
+  const fetchRoster = useCallback(async (occurrenceId: string) => {
+    setLoadingRoster(occurrenceId)
+    const { data } = await supabase
+      .from('event_checkins')
+      .select('id, household_size, checked_in_at, user_id, notes')
+      .eq('occurrence_id', occurrenceId)
+      .order('checked_in_at')
+    setRosterMap((prev) => ({ ...prev, [occurrenceId]: (data as Checkin[]) ?? [] }))
+    setLoadingRoster(null)
+  }, [supabase])
+
+  const handleToggleRoster = useCallback(async (occurrenceId: string) => {
+    if (expandedRosterId === occurrenceId) {
+      setExpandedRosterId(null)
+    } else {
+      setExpandedRosterId(occurrenceId)
+      if (!rosterMap[occurrenceId]) {
+        await fetchRoster(occurrenceId)
+      }
+    }
+  }, [expandedRosterId, rosterMap, fetchRoster])
 
   useEffect(() => {
     fetchEvents()
@@ -392,30 +427,77 @@ export function EventsSection() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-stone-100">
-                            {occurrences.map((occ) => (
-                              <tr key={occ.id} className="hover:bg-stone-50">
-                                <td className="px-3 py-2 text-stone-700 text-xs">
-                                  {new Date(occ.starts_at).toLocaleString()}
-                                </td>
-                                <td className="px-3 py-2 text-stone-700 text-xs">
-                                  {new Date(occ.ends_at).toLocaleString()}
-                                </td>
-                                <td className="px-3 py-2 text-stone-500 text-xs">
-                                  {occ.capacity ?? '—'}
-                                </td>
-                                <td className="px-3 py-2 text-stone-500 text-xs max-w-[160px] truncate">
-                                  {occ.notes ?? '—'}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    onClick={() => handleCancelOccurrence(occ.id)}
-                                    className="text-red-500 hover:text-red-700 text-xs font-medium"
-                                  >
-                                    Cancel
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {occurrences.map((occ) => {
+                              const checkins = rosterMap[occ.id] ?? []
+                              const total = checkins.reduce((s, c) => s + c.household_size, 0)
+                              return (
+                                <>
+                                  <tr key={occ.id} className="hover:bg-stone-50">
+                                    <td className="px-3 py-2 text-stone-700 text-xs">
+                                      {new Date(occ.starts_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-3 py-2 text-stone-700 text-xs">
+                                      {new Date(occ.ends_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-3 py-2 text-stone-500 text-xs">
+                                      {occ.capacity ?? '—'}
+                                    </td>
+                                    <td className="px-3 py-2 text-stone-500 text-xs max-w-[160px] truncate">
+                                      {occ.notes ?? '—'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                      <div className="flex items-center justify-end gap-3">
+                                        <button
+                                          onClick={() => handleToggleRoster(occ.id)}
+                                          className="text-[#4a5d23] hover:underline text-xs font-medium"
+                                        >
+                                          {expandedRosterId === occ.id ? 'Hide Roster' : 'View Roster'}
+                                        </button>
+                                        <button
+                                          onClick={() => handleCancelOccurrence(occ.id)}
+                                          className="text-red-500 hover:text-red-700 text-xs font-medium"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {expandedRosterId === occ.id && (
+                                    <tr>
+                                      <td colSpan={5} className="px-3 py-3 bg-stone-50 border-t border-stone-100">
+                                        {loadingRoster === occ.id ? (
+                                          <div className="flex items-center gap-2 text-stone-500 text-xs">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            Loading roster…
+                                          </div>
+                                        ) : checkins.length === 0 ? (
+                                          <p className="text-xs text-stone-400">No check-ins yet.</p>
+                                        ) : (
+                                          <div className="space-y-2">
+                                            <p className="text-xs font-semibold text-stone-600">
+                                              {checkins.length} {checkins.length === 1 ? 'visit' : 'visits'} · {total} {total === 1 ? 'person' : 'people'} fed
+                                            </p>
+                                            <div className="divide-y divide-stone-100 rounded-lg border border-stone-100 overflow-hidden bg-white">
+                                              {checkins.map((c) => (
+                                                <div key={c.id} className="flex items-center justify-between px-3 py-2 text-xs text-stone-700">
+                                                  <span className="text-stone-400">
+                                                    {new Date(c.checked_in_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                  </span>
+                                                  <span>Household: {c.household_size}</span>
+                                                  <span className={c.user_id ? 'text-sky-600' : 'text-stone-400'}>
+                                                    {c.user_id ? 'Identified' : 'Anonymous'}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
