@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- JS feature gate — must be first script so .js class is set before CSS paint -->
+  <script>document.documentElement.classList.add('js')</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FEED — Free help, found fast</title>
   <meta name="description" content="FEED brings benefits, local resources, and neighbors near you into one place — free, private, and built to stay that way." />
-  <meta name="theme-color" content="#65a30d" />
+  <meta name="theme-color" content="#1c2b16" />
   <link rel="icon" href="/favicon.ico" />
 
   <!-- Open Graph -->
@@ -25,24 +27,20 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --green:      #16a34a;
-      --green-deep: #65a30d;
-      --orange:     #f97316;
-      --teal:       #1cb0a3;
-      --stone-900:  #1c1917;
-      --stone-700:  #44403c;
-      --stone-500:  #78716c;
-      --stone-200:  #e7e5e4;
-      --stone-100:  #f5f5f4;
-      --white:      #ffffff;
-
-      --card-bg:     rgba(255,255,255,0.72);
-      --card-border: rgba(255,255,255,0.5);
-      --card-shadow: 0 8px 40px rgba(28,25,23,0.18);
-
-      --radius-card: 1rem;
-      --radius-pill: 9999px;
-
+      --bg: #f2f2f2;
+      --surface: #ffffff;
+      --ink: #1c2b16;
+      --body: #3b413c;
+      --muted: #7e8d85;
+      --line: #e6e6e6;
+      --green: #16a34a;
+      --green-deep: #3f6212;
+      --eyebrow: #4d7c0f;
+      --shadow: rgba(0,0,0,0.17) 0 0.6px 1.57px -1.5px, rgba(0,0,0,0.14) 0 2.29px 5.95px -3px, rgba(0,0,0,0.02) 0 10px 26px -4.5px;
+      --shadow-lift: rgba(0,0,0,0.20) 0 4px 10px -4px, rgba(0,0,0,0.12) 0 12px 30px -8px;
+      --r-pill: 100px;
+      --r-card: 24px;
+      --r-tile: 20px;
       --font: 'Inter', system-ui, sans-serif;
     }
 
@@ -50,29 +48,30 @@
 
     body {
       font-family: var(--font);
-      color: var(--stone-900);
-      background: var(--white);
+      color: var(--ink);
+      background: var(--bg);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Skip link */
+    /* ===================== SKIP LINK ===================== */
     .skip-link {
       position: absolute;
       top: -100%;
       left: 1rem;
-      background: var(--stone-900);
-      color: var(--white);
+      background: var(--ink);
+      color: #fff;
       padding: 0.5rem 1rem;
-      border-radius: var(--radius-pill);
+      border-radius: var(--r-pill);
       font-size: 0.875rem;
       font-weight: 600;
       z-index: 9999;
+      text-decoration: none;
       transition: top 0.2s;
     }
     .skip-link:focus { top: 1rem; }
 
-    /* Focus styles */
+    /* ===================== FOCUS STYLES ===================== */
     :focus-visible {
       outline: 2px solid var(--green);
       outline-offset: 3px;
@@ -80,66 +79,68 @@
     }
 
     /* ===================== TYPOGRAPHY ===================== */
-    h1, h2, h3 { font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; color: var(--stone-900); }
-    h1 { font-size: clamp(2.2rem, 5vw, 3.5rem); }
-    h2 { font-size: clamp(1.7rem, 3.5vw, 2.5rem); }
-    h3 { font-size: 1.125rem; font-weight: 700; }
-
-    p { color: var(--stone-700); line-height: 1.75; }
+    h1 {
+      font-size: clamp(2.5rem, 5.5vw, 4.75rem);
+      font-weight: 500;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    h2 {
+      font-size: clamp(1.9rem, 3.6vw, 2.85rem);
+      font-weight: 500;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    h3 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    p {
+      font-size: 1.0625rem;
+      font-weight: 500;
+      line-height: 1.6;
+      color: var(--body);
+    }
 
     .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.375rem;
-      font-size: 0.6875rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
       text-transform: uppercase;
-      color: var(--stone-500);
-      border: 1px solid var(--stone-200);
-      border-radius: var(--radius-pill);
-      padding: 0.25rem 0.75rem;
+      letter-spacing: 0.12em;
+      color: var(--eyebrow);
       margin-bottom: 1rem;
     }
     .eyebrow--light {
       color: rgba(255,255,255,0.85);
-      border-color: rgba(255,255,255,0.35);
     }
 
     /* ===================== BUTTONS ===================== */
     .btn {
+      border-radius: var(--r-pill);
+      padding: 0.9rem 1.7rem;
+      font-weight: 600;
+      font-family: var(--font);
+      font-size: 0.9375rem;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 0.4rem;
-      border-radius: var(--radius-pill);
-      padding: 0.75rem 1.75rem;
-      font-family: var(--font);
-      font-size: 0.9375rem;
-      font-weight: 600;
-      cursor: pointer;
       text-decoration: none;
-      transition: opacity 0.2s, transform 0.15s;
+      cursor: pointer;
       border: none;
       white-space: nowrap;
+      transition: transform 0.15s cubic-bezier(0.2,0,0,1), box-shadow 0.2s, opacity 0.15s;
     }
-    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
-
-    .btn-primary {
-      background: var(--stone-900);
-      color: var(--white);
-    }
-    .btn-outline {
-      background: transparent;
-      color: var(--stone-900);
-      border: 1.5px solid var(--stone-900);
-    }
-    .btn-outline-light {
-      background: transparent;
-      color: var(--white);
-      border: 1.5px solid rgba(255,255,255,0.75);
-    }
+    .btn:hover { transform: scale(1.03); }
+    .btn-primary { background: var(--ink); color: #fff; }
+    .btn-secondary { background: transparent; border: 1.5px solid var(--ink); color: var(--ink); }
+    .btn-white { background: #fff; color: var(--ink); }
+    .btn-outline-white { background: transparent; border: 1.5px solid rgba(255,255,255,0.75); color: #fff; }
 
     .btn-group {
       display: flex;
@@ -151,98 +152,56 @@
     /* ===================== LAYOUT ===================== */
     .container {
       width: 100%;
-      max-width: 1120px;
+      max-width: 1140px;
       margin: 0 auto;
       padding: 0 1.25rem;
     }
 
-    .section { padding: 5rem 0; }
-    .section--tight { padding: 3.5rem 0; }
-    .section--white { background: var(--white); }
-    .section--stone { background: var(--stone-100); }
-
-    /* ===================== PHOTO BANDS ===================== */
-    .photo-band {
-      position: relative;
-      background-image: url('/images/wheat-field-bg.jpg');
-      background-size: cover;
-      background-attachment: scroll;
-      min-height: 520px;
-      display: flex;
-      align-items: center;
-      padding: 5rem 0;
+    .section {
+      padding: clamp(4.5rem, 9vw, 7.5rem) 0;
     }
-    .photo-band::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
-    .photo-band--hero {
-      min-height: 100vh;
-      background-position: center top;
-    }
-    .photo-band--hero::before {
-      background: linear-gradient(160deg, rgba(28,25,23,0.62) 0%, rgba(28,25,23,0.30) 100%);
-    }
-    .photo-band--mid {
-      background-position: center center;
-    }
-    .photo-band--mid::before {
-      background: linear-gradient(135deg, rgba(22,163,74,0.45) 0%, rgba(28,25,23,0.55) 100%);
-    }
-    .photo-band--cta {
-      background-position: center bottom;
-      min-height: 420px;
-    }
-    .photo-band--cta::before {
-      background: linear-gradient(180deg, rgba(28,25,23,0.55) 0%, rgba(28,25,23,0.45) 100%);
-    }
-
-    /* ===================== FROSTED GLASS CARD ===================== */
-    .glass-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--card-border);
-      box-shadow: var(--card-shadow);
-      border-radius: var(--radius-card);
-      padding: 2.5rem;
-      position: relative;
-      z-index: 1;
-    }
-    .glass-card--wide { max-width: 680px; }
-    .glass-card--center { margin: 0 auto; text-align: center; }
-    .glass-card--center .btn-group { justify-content: center; }
+    .section--bg { background: var(--bg); }
+    .section--surface { background: var(--surface); }
 
     /* ===================== NAV ===================== */
+    @keyframes navDrop {
+      from { transform: translateX(-50%) translateY(-80px); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+    }
+
     .site-nav {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      background: rgba(255,255,255,0.85);
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.72);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(28,25,23,0.08);
-      transition: background 0.3s;
-    }
-    .nav-inner {
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: var(--r-pill);
+      box-shadow: var(--shadow);
+      padding: 0.5rem 0.75rem 0.5rem 1.25rem;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      height: 60px;
+      gap: 1.5rem;
+      z-index: 100;
+      white-space: nowrap;
+      transition: box-shadow 0.3s, background 0.3s;
+      animation: navDrop 0.5s ease-out forwards;
     }
+    .site-nav.scrolled {
+      background: rgba(255,255,255,0.92);
+      box-shadow: var(--shadow-lift);
+    }
+
     .nav-wordmark {
-      font-size: 1.375rem;
+      font-size: 1.25rem;
       font-weight: 800;
-      color: var(--stone-900);
+      color: var(--ink);
       text-decoration: none;
       letter-spacing: -0.04em;
+      flex-shrink: 0;
     }
-    .nav-wordmark span { color: var(--green); }
 
     .nav-links {
       display: flex;
@@ -253,53 +212,234 @@
     .nav-links a {
       font-size: 0.875rem;
       font-weight: 500;
-      color: var(--stone-700);
+      color: var(--body);
       text-decoration: none;
-      padding: 0.4rem 0.75rem;
-      border-radius: var(--radius-pill);
+      padding: 0.4rem 0.7rem;
+      border-radius: var(--r-pill);
       transition: background 0.15s, color 0.15s;
     }
-    .nav-links a:hover { background: var(--stone-100); color: var(--stone-900); }
+    .nav-links a:hover {
+      background: var(--bg);
+      color: var(--ink);
+    }
 
     .nav-cta { flex-shrink: 0; }
-    .nav-cta .btn { padding: 0.5rem 1.25rem; font-size: 0.875rem; }
 
-    .nav-mobile-toggle {
+    .nav-hamburger {
       display: none;
       background: none;
       border: none;
       cursor: pointer;
-      padding: 0.5rem;
-      color: var(--stone-900);
+      padding: 0.4rem;
+      color: var(--ink);
+      flex-shrink: 0;
     }
 
     @media (max-width: 767px) {
-      .nav-links { display: none; }
-      .nav-links.is-open {
-        display: flex;
-        flex-direction: column;
+      .site-nav {
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem 0.5rem 1rem;
+      }
+      .nav-links {
+        display: none;
         position: absolute;
-        top: 60px;
+        top: calc(100% + 0.5rem);
         left: 0;
         right: 0;
-        background: rgba(255,255,255,0.97);
-        border-bottom: 1px solid var(--stone-200);
-        padding: 1rem;
-        gap: 0.25rem;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: var(--shadow-lift);
+        padding: 0.75rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.125rem;
+      }
+      .nav-links.is-open { display: flex; }
+      .nav-links a { display: block; width: 100%; padding: 0.6rem 0.75rem; }
+      .nav-hamburger { display: flex; align-items: center; justify-content: center; }
+    }
+
+    /* ===================== PHOTO BANDS ===================== */
+    .photo-band {
+      position: relative;
+      background-image: url('/images/wheat-field-bg.jpg');
+      background-size: cover;
+      background-attachment: scroll;
+      display: flex;
+      align-items: center;
+    }
+    .photo-band::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .photo-band--hero {
+      min-height: clamp(520px, 80vh, 760px);
+      background-position: center top;
+      padding: clamp(4.5rem, 9vw, 7.5rem) 0;
+    }
+    .photo-band--hero::before {
+      background: linear-gradient(160deg, rgba(28,43,22,0.72) 0%, rgba(28,43,22,0.35) 100%);
+    }
+
+    .photo-band--mid {
+      background-position: center center;
+      padding: clamp(4.5rem, 9vw, 7.5rem) 0;
+    }
+    .photo-band--mid::before {
+      background: linear-gradient(135deg, rgba(22,163,74,0.45) 0%, rgba(28,43,22,0.6) 100%);
+    }
+
+    .photo-band--cta {
+      background-position: center bottom;
+      padding: clamp(4.5rem, 9vw, 7.5rem) 0;
+    }
+    .photo-band--cta::before {
+      background: linear-gradient(180deg, rgba(28,43,22,0.6) 0%, rgba(28,43,22,0.5) 100%);
+    }
+
+    @media (max-width: 768px) {
+      .photo-band--hero {
+        min-height: 0 !important;
+        height: auto !important;
+        padding: 5.5rem 1.25rem;
         align-items: flex-start;
       }
-      .nav-links.is-open a { display: block; width: 100%; padding: 0.6rem 0.75rem; }
-      .nav-mobile-toggle { display: block; }
+      .photo-band--mid,
+      .photo-band--cta {
+        min-height: 0 !important;
+        height: auto !important;
+        padding: 5.5rem 1.25rem;
+      }
+    }
+
+    /* ===================== FROSTED GLASS CARD ===================== */
+    .glass-card {
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: var(--shadow);
+      border-radius: var(--r-card);
+      padding: 2.5rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ===================== SCROLL REVEAL ===================== */
+    .js .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2,0,0,1);
+    }
+    .js .reveal.in-view {
+      opacity: 1;
+      transform: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .js .reveal {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+      }
+    }
+    .js .reveal[style*="--i"] {
+      transition-delay: calc(var(--i) * 0.08s);
     }
 
     /* ===================== HERO ===================== */
-    .hero-content { padding-top: 60px; }
-    .hero-content .glass-card h1 { margin-bottom: 1rem; }
-    .hero-content .glass-card p { font-size: 1.0625rem; margin-bottom: 1.75rem; max-width: 520px; }
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      align-items: center;
+      padding-top: 4rem;
+    }
+    @media (min-width: 900px) {
+      .hero-inner {
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        padding-top: 0;
+      }
+    }
 
-    /* ===================== SECTION 2 — THE MOMENT ===================== */
-    .moment-body { max-width: 680px; }
-    .moment-body p { font-size: 1.0625rem; margin-bottom: 1rem; }
+    .hero-glass { max-width: 560px; }
+    .hero-glass h1 { margin-bottom: 1rem; }
+    .hero-glass p  { margin-bottom: 1.75rem; }
+
+    /* ===================== CAROUSEL ===================== */
+    .carousel-wrap {
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.6);
+      box-shadow: var(--shadow);
+      border-radius: var(--r-card);
+      padding: 1.5rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .carousel-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      list-style: none;
+      margin-bottom: 1rem;
+      padding: 0;
+      border: none;
+    }
+
+    .carousel-tab {
+      border-radius: var(--r-pill);
+      padding: 0.4rem 0.9rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      border: none;
+      background: var(--bg);
+      color: var(--body);
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .carousel-tab.active,
+    .carousel-tab[aria-selected="true"] {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .carousel-panel { transition: opacity 0.3s; }
+
+    .carousel-img-wrap {
+      aspect-ratio: 16/10;
+      overflow: hidden;
+      border-radius: var(--r-tile);
+      background: var(--line);
+      width: 100%;
+    }
+    .carousel-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+      display: block;
+    }
+
+    .carousel-caption {
+      font-size: 0.9375rem;
+      color: var(--body);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    /* ===================== MOMENT ===================== */
+    .moment-body { max-width: 700px; }
+    .moment-body h2 { margin-bottom: 1rem; }
+    .moment-body p { margin-bottom: 1rem; }
     .turn-line {
       font-size: 1.25rem;
       font-weight: 700;
@@ -318,33 +458,39 @@
     @media (min-width: 768px) {
       .pillar-grid { grid-template-columns: repeat(3, 1fr); }
     }
+
     .pillar-card {
-      background: var(--stone-100);
-      border: 1px solid var(--stone-200);
-      border-radius: var(--radius-card);
+      background: var(--bg);
+      border-radius: var(--r-tile);
       padding: 1.75rem;
+      transition: transform 0.25s, box-shadow 0.25s;
     }
+    .pillar-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lift);
+    }
+
     .pillar-icon {
       width: 44px;
       height: 44px;
-      border-radius: 0.625rem;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 1rem;
       font-size: 1.25rem;
+      background: rgba(22,163,74,0.12);
     }
-    .pillar-icon--green { background: rgba(22,163,74,0.12); }
-    .pillar-icon--teal  { background: rgba(28,176,163,0.12); }
-    .pillar-icon--orange{ background: rgba(249,115,22,0.12); }
-    .pillar-card p { font-size: 0.9375rem; margin-top: 0.5rem; }
 
-    /* ===================== ECOSYSTEM BAND ===================== */
-    .ecosystem-card { max-width: 620px; }
-    .ecosystem-card h2 { margin-bottom: 1rem; }
-    .ecosystem-card p { font-size: 1.0625rem; }
+    .pillar-card h3 { font-size: 1.125rem; margin-bottom: 0.5rem; }
+    .pillar-card p  { font-size: 0.9375rem; }
 
-    /* ===================== INSTALL SECTION ===================== */
+    /* ===================== ECOSYSTEM ===================== */
+    .ecosystem-glass { max-width: 620px; }
+    .ecosystem-glass h2 { margin-bottom: 1rem; }
+    .ecosystem-glass p + p { margin-top: 0.75rem; }
+
+    /* ===================== INSTALL ===================== */
     .install-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -354,29 +500,38 @@
     @media (min-width: 768px) {
       .install-grid { grid-template-columns: repeat(3, 1fr); }
     }
+
     .install-card {
-      background: var(--stone-100);
-      border: 1px solid var(--stone-200);
-      border-radius: var(--radius-card);
+      background: var(--bg);
+      border-radius: var(--r-tile);
       padding: 1.75rem;
+      transition: transform 0.25s, box-shadow 0.25s;
     }
+    .install-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lift);
+    }
+
     .install-card-title {
       font-size: 0.9375rem;
       font-weight: 700;
+      color: var(--ink);
       margin-bottom: 1rem;
-      color: var(--stone-900);
     }
+
     .install-steps {
       list-style: none;
       counter-reset: step-counter;
+      padding: 0;
     }
     .install-steps li {
       counter-increment: step-counter;
       position: relative;
       padding-left: 2rem;
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.625rem;
       font-size: 0.9rem;
-      color: var(--stone-700);
+      font-weight: 500;
+      color: var(--body);
     }
     .install-steps li::before {
       content: counter(step-counter);
@@ -386,7 +541,7 @@
       width: 1.35rem;
       height: 1.35rem;
       background: var(--green);
-      color: var(--white);
+      color: #fff;
       border-radius: 50%;
       font-size: 0.75rem;
       font-weight: 700;
@@ -397,7 +552,13 @@
     }
 
     /* ===================== GETTING STARTED ===================== */
-    .steps-list { margin-top: 2.5rem; display: flex; flex-direction: column; gap: 3.5rem; }
+    .steps-list {
+      margin-top: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3.5rem;
+    }
+
     .step-row {
       display: grid;
       grid-template-columns: 1fr;
@@ -409,6 +570,7 @@
       .step-row.reverse { direction: rtl; }
       .step-row.reverse > * { direction: ltr; }
     }
+
     .step-number {
       font-size: 0.75rem;
       font-weight: 700;
@@ -417,14 +579,24 @@
       color: var(--green);
       margin-bottom: 0.4rem;
     }
-    .step-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .step-body { font-size: 0.9375rem; color: var(--stone-700); }
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: 0.5rem;
+    }
+    .step-body {
+      font-size: 0.9375rem;
+      font-weight: 500;
+      color: var(--body);
+    }
 
     .screenshot-frame {
-      border-radius: 0.875rem;
+      border-radius: var(--r-tile);
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(28,25,23,0.15);
-      background: var(--stone-200);
+      box-shadow: var(--shadow);
+      background: var(--line);
       aspect-ratio: 16/10;
     }
     .screenshot-frame img {
@@ -437,6 +609,7 @@
     /* ===================== FEATURES ===================== */
     .feature-block { margin-bottom: 5rem; }
     .feature-block:last-child { margin-bottom: 0; }
+
     .feature-block-inner {
       display: grid;
       grid-template-columns: 1fr;
@@ -448,14 +621,23 @@
       .feature-block-inner.flip { direction: rtl; }
       .feature-block-inner.flip > * { direction: ltr; }
     }
-    .feature-text h3 { font-size: 1.4rem; margin-bottom: 0.75rem; }
-    .feature-text p { margin-bottom: 0.75rem; font-size: 0.9375rem; }
-    .feature-bullets { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+
+    .feature-text h3 { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .feature-text p  { font-size: 0.9375rem; margin-bottom: 0.75rem; }
+
+    .feature-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      padding: 0;
+    }
     .feature-bullets li {
       display: flex;
       gap: 0.6rem;
       font-size: 0.9375rem;
-      color: var(--stone-700);
+      font-weight: 500;
+      color: var(--body);
       align-items: flex-start;
     }
     .feature-bullets li::before {
@@ -466,7 +648,14 @@
       flex-shrink: 0;
     }
 
-    /* ===================== TRUST BADGES ===================== */
+    /* ===================== SECURITY ===================== */
+    .security-intro {
+      max-width: 640px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .security-intro h2 { margin-bottom: 0.75rem; }
+
     .trust-row {
       display: flex;
       flex-wrap: wrap;
@@ -474,14 +663,16 @@
       justify-content: center;
       margin-top: 2rem;
     }
+
     .trust-badge {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       font-size: 0.875rem;
       font-weight: 600;
-      color: var(--stone-700);
+      color: var(--body);
     }
+
     .trust-badge-icon {
       width: 32px;
       height: 32px;
@@ -494,7 +685,7 @@
       flex-shrink: 0;
     }
 
-    /* ===================== CATEGORY GRID ===================== */
+    /* ===================== CATEGORY CHIPS ===================== */
     .cat-section-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -504,31 +695,35 @@
     @media (min-width: 768px) {
       .cat-section-grid { grid-template-columns: 1fr 1fr; }
     }
+
     .cat-group-title {
       font-size: 0.8125rem;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--stone-500);
+      color: var(--muted);
       margin-bottom: 1rem;
     }
+
     .cat-chips {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
     }
+
     .cat-chip {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      background: var(--stone-100);
-      border: 1px solid var(--stone-200);
-      border-radius: var(--radius-pill);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-pill);
       padding: 0.35rem 0.75rem;
       font-size: 0.875rem;
       font-weight: 500;
-      color: var(--stone-700);
+      color: var(--body);
     }
+
     .cat-dot {
       width: 8px;
       height: 8px;
@@ -536,10 +731,21 @@
       flex-shrink: 0;
     }
 
+    /* ===================== CTA ===================== */
+    .cta-glass {
+      max-width: 580px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .cta-glass h2 { margin-bottom: 0.75rem; }
+
+    /* ===================== SECTION INTRO ===================== */
+    .section-intro { max-width: 600px; }
+    .section-intro h2 { margin-bottom: 0.75rem; }
+
     /* ===================== FOOTER ===================== */
     .site-footer {
-      background: var(--stone-900);
-      color: rgba(255,255,255,0.7);
+      background: var(--ink);
       padding: 2.5rem 0;
     }
     .footer-inner {
@@ -553,16 +759,16 @@
       .footer-inner {
         flex-direction: row;
         justify-content: space-between;
-        text-align: left;
         align-items: center;
+        text-align: left;
       }
     }
     .footer-wordmark {
       font-size: 1.125rem;
       font-weight: 800;
-      color: var(--white);
+      color: #fff;
       text-decoration: none;
-      letter-spacing: -0.03em;
+      letter-spacing: -0.04em;
     }
     .footer-links {
       display: flex;
@@ -570,47 +776,32 @@
       gap: 0.25rem 1.25rem;
       list-style: none;
       justify-content: center;
+      padding: 0;
     }
     .footer-links a {
       font-size: 0.875rem;
+      font-weight: 500;
       color: rgba(255,255,255,0.65);
       text-decoration: none;
       transition: color 0.15s;
     }
-    .footer-links a:hover { color: var(--white); }
+    .footer-links a:hover { color: #fff; }
     .footer-tagline {
       font-size: 0.8125rem;
+      font-weight: 500;
       color: rgba(255,255,255,0.4);
-    }
-
-    /* ===================== SECTION INTRO TEXT ===================== */
-    .section-intro { max-width: 600px; }
-    .section-intro--center { margin: 0 auto; text-align: center; }
-    .section-intro h2 { margin-bottom: 0.75rem; }
-    .section-intro p { font-size: 1.0625rem; }
-
-    /* ===================== SCROLL REVEAL ===================== */
-    .reveal {
-      opacity: 0;
-      transform: translateY(28px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
-    }
-    .reveal.visible {
-      opacity: 1;
-      transform: none;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .reveal { opacity: 1; transform: none; transition: none; }
+      line-height: 1.6;
     }
 
     /* ===================== UTILITY ===================== */
-    .text-green { color: var(--green); }
-    .mt-1  { margin-top: 0.5rem; }
-    .mt-2  { margin-top: 1rem; }
-    .mt-3  { margin-top: 1.5rem; }
-    .mt-4  { margin-top: 2rem; }
-    .mb-2  { margin-bottom: 1rem; }
-    .gap-section { margin-bottom: 4rem; }
+    .mt-2 { margin-top: 1rem; }
+    kbd {
+      font-family: monospace;
+      font-size: 0.8125rem;
+      background: rgba(0,0,0,0.08);
+      border-radius: 4px;
+      padding: 0.125rem 0.375rem;
+    }
   </style>
 </head>
 <body>
@@ -618,56 +809,92 @@
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <!-- ===================== NAV ===================== -->
-  <header>
-    <nav class="site-nav" aria-label="Main navigation">
-      <div class="container">
-        <div class="nav-inner">
-          <a href="/" class="nav-wordmark" aria-label="FEED home">FEED</a>
+  <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+      <a href="https://www.sourcetofeed.com" class="nav-wordmark" aria-label="FEED home">FEED</a>
 
-          <button class="nav-mobile-toggle" id="nav-toggle" aria-controls="nav-links" aria-expanded="false" aria-label="Toggle navigation menu">
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-              <rect y="4"  width="22" height="2.5" rx="1.25" fill="currentColor"/>
-              <rect y="10" width="22" height="2.5" rx="1.25" fill="currentColor"/>
-              <rect y="16" width="22" height="2.5" rx="1.25" fill="currentColor"/>
-            </svg>
-          </button>
+      <button class="nav-hamburger" id="nav-toggle" aria-controls="nav-links" aria-expanded="false" aria-label="Toggle navigation">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect y="3"  width="20" height="2.2" rx="1.1" fill="currentColor"/>
+          <rect y="9"  width="20" height="2.2" rx="1.1" fill="currentColor"/>
+          <rect y="15" width="20" height="2.2" rx="1.1" fill="currentColor"/>
+        </svg>
+      </button>
 
-          <ul class="nav-links" id="nav-links" role="list">
-            <li><a href="#start">How it works</a></li>
-            <li><a href="#features">Features</a></li>
-            <li><a href="#install">Get it</a></li>
-          </ul>
+      <ul class="nav-links" id="nav-links" role="list">
+        <li><a href="#start">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="/resources.html">Resources</a></li>
+        <li><a href="#install">Get it</a></li>
+      </ul>
 
-          <div class="nav-cta">
-            <a href="/" class="btn btn-primary">Get FEED</a>
-          </div>
-        </div>
-      </div>
+      <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Get FEED</a>
     </nav>
-  </header>
 
   <main id="main-content">
 
     <!-- ===================== SECTION 1 — HERO ===================== -->
     <section class="photo-band photo-band--hero" aria-labelledby="hero-heading">
-      <div class="container hero-content">
-        <div class="glass-card glass-card--wide reveal">
-          <span class="eyebrow">Free · Community-Powered</span>
-          <h1 id="hero-heading">When everything costs more, help should be easy to find.</h1>
-          <p>FEED brings the benefits, local resources, and neighbors near you into one place — free, private, and built to stay that way.</p>
-          <div class="btn-group">
-            <a href="/" class="btn btn-primary">Get FEED</a>
-            <a href="#start" class="btn btn-outline">See how it works</a>
+      <div class="container">
+        <div class="hero-inner">
+
+          <!-- Left: frosted glass text -->
+          <div class="glass-card hero-glass reveal">
+            <p class="eyebrow">FREE · PRIVATE · COMMUNITY-POWERED</p>
+            <h1 id="hero-heading">One free app that finds your benefits, fills out the paperwork, and connects your whole community.</h1>
+            <p>FEED shows you the help you qualify for, auto-fills and e-signs your applications from your private vault, and connects you with neighbors offering and asking for help — free, and built to stay that way.</p>
+            <div class="btn-group">
+              <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED</a>
+              <a href="#start" class="btn btn-outline-white">See how it works</a>
+            </div>
           </div>
+
+          <!-- Right: carousel -->
+          <div class="carousel-wrap reveal" id="hero-carousel" style="--i:1;">
+            <div role="tablist" aria-label="FEED features" class="carousel-tabs">
+              <button class="carousel-tab active" role="tab" aria-selected="true"  aria-controls="carousel-panel-0" id="carousel-tab-0">Find what you qualify for</button>
+              <button class="carousel-tab"        role="tab" aria-selected="false" aria-controls="carousel-panel-1" id="carousel-tab-1">Apply in minutes</button>
+              <button class="carousel-tab"        role="tab" aria-selected="false" aria-controls="carousel-panel-2" id="carousel-tab-2">Your private vault</button>
+              <button class="carousel-tab"        role="tab" aria-selected="false" aria-controls="carousel-panel-3" id="carousel-tab-3">Your community</button>
+            </div>
+
+            <div class="carousel-panel" role="tabpanel" id="carousel-panel-0" aria-labelledby="carousel-tab-0">
+              <div class="carousel-img-wrap">
+                <img src="/screenshots/feed-programs.png" alt="FEED Browse Programs screen listing benefit categories available to search" loading="lazy" width="640" height="360" />
+              </div>
+              <p class="carousel-caption">Search every benefit and local resource, and see what fits your life.</p>
+            </div>
+
+            <div class="carousel-panel" role="tabpanel" id="carousel-panel-1" aria-labelledby="carousel-tab-1" hidden>
+              <div class="carousel-img-wrap">
+                <img src="/screenshots/feed-forms.png" alt="FEED forms panel with auto-filled application fields ready for e-signature" loading="lazy" width="640" height="360" />
+              </div>
+              <p class="carousel-caption">FEED fills the forms from your saved info — you just sign, right on your phone.</p>
+            </div>
+
+            <div class="carousel-panel" role="tabpanel" id="carousel-panel-2" aria-labelledby="carousel-tab-2" hidden>
+              <div class="carousel-img-wrap">
+                <img src="/screenshots/feed-vault.png" alt="FEED secure vault showing encrypted documents organized by category" loading="lazy" width="640" height="360" />
+              </div>
+              <p class="carousel-caption">Your IDs and documents, locked with a key only you hold.</p>
+            </div>
+
+            <div class="carousel-panel" role="tabpanel" id="carousel-panel-3" aria-labelledby="carousel-tab-3" hidden>
+              <div class="carousel-img-wrap">
+                <img src="/screenshots/feed-map.png" alt="FEED community map with neighbor pins, safety alerts, and local resource markers" loading="lazy" width="640" height="360" />
+              </div>
+              <p class="carousel-caption">Find neighbors, offer help, flag safety hazards, and back local petitions.</p>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
 
     <!-- ===================== SECTION 2 — THE MOMENT ===================== -->
-    <section class="section section--white" aria-labelledby="moment-heading">
+    <section class="section section--bg" aria-labelledby="moment-heading">
       <div class="container">
         <div class="moment-body reveal">
-          <span class="eyebrow">2026</span>
+          <p class="eyebrow">2026</p>
           <h2 id="moment-heading">It's a hard year. You're not imagining it.</h2>
           <p>Rent went up. Groceries went up. And the help that's supposed to be there is buried under forms, phone trees, and websites that don't talk to each other.</p>
           <p>You might qualify for more than you're getting — and never know it. Figuring it all out alone is exhausting. It shouldn't be this hard to ask for a hand.</p>
@@ -677,27 +904,27 @@
     </section>
 
     <!-- ===================== SECTION 3 — WHAT FEED IS ===================== -->
-    <section class="section section--white" aria-labelledby="what-heading">
+    <section class="section section--surface" aria-labelledby="what-heading">
       <div class="container">
         <div class="reveal">
-          <span class="eyebrow">What is FEED</span>
+          <p class="eyebrow">What is FEED</p>
           <h2 id="what-heading">One place to find help — and to help.</h2>
-          <p style="max-width:640px; font-size:1.0625rem; margin-top:0.75rem;">FEED is a free app for your phone. It shows you the benefits and local resources you actually qualify for, keeps your personal documents locked and private, and connects you with neighbors offering and asking for help. No cost. No ads. No catch.</p>
+          <p style="max-width:640px; margin-top:0.75rem;">FEED is a free app for your phone. It shows you the benefits and local resources you actually qualify for, keeps your personal documents locked and private, and connects you with neighbors offering and asking for help. No cost. No ads. No catch.</p>
         </div>
 
         <div class="pillar-grid">
-          <article class="pillar-card reveal">
-            <div class="pillar-icon pillar-icon--green" aria-hidden="true">🔍</div>
+          <article class="pillar-card reveal" style="--i:0;">
+            <div class="pillar-icon" aria-hidden="true">🔍</div>
             <h3>Find what you qualify for</h3>
             <p>Search programs and see what fits your situation.</p>
           </article>
-          <article class="pillar-card reveal">
-            <div class="pillar-icon pillar-icon--teal" aria-hidden="true">🔒</div>
+          <article class="pillar-card reveal" style="--i:1;">
+            <div class="pillar-icon" aria-hidden="true">🔒</div>
             <h3>Keep your info safe</h3>
             <p>Your documents are locked with a key only you hold.</p>
           </article>
-          <article class="pillar-card reveal">
-            <div class="pillar-icon pillar-icon--orange" aria-hidden="true">🤝</div>
+          <article class="pillar-card reveal" style="--i:2;">
+            <div class="pillar-icon" aria-hidden="true">🤝</div>
             <h3>Help each other</h3>
             <p>Offer a hand, ask for one, and look out for your community.</p>
           </article>
@@ -708,27 +935,27 @@
     <!-- ===================== SECTION 4 — ECOSYSTEM (photo band) ===================== -->
     <section class="photo-band photo-band--mid" aria-labelledby="ecosystem-heading">
       <div class="container">
-        <div class="glass-card ecosystem-card reveal">
-          <span class="eyebrow">More than an app</span>
+        <div class="glass-card ecosystem-glass reveal">
+          <p class="eyebrow">More than an app</p>
           <h2 id="ecosystem-heading">This works because of you.</h2>
           <p>FEED isn't a company trying to sell you something. It's a tool meant to be owned and run by the communities that use it — free forever, and never for sale.</p>
-          <p style="margin-top:0.75rem;">The map fills in when neighbors add what they know. Resources stay current when people share them. The more of us who show up, the stronger it gets. FEED is the system; the community is what makes it work.</p>
+          <p>The map fills in when neighbors add what they know. Resources stay current when people share them. The more of us who show up, the stronger it gets. FEED is the system; the community is what makes it work.</p>
         </div>
       </div>
     </section>
 
     <!-- ===================== SECTION 5 — INSTALL ===================== -->
-    <section class="section section--white" id="install" aria-labelledby="install-heading">
+    <section class="section section--surface" id="install" aria-labelledby="install-heading">
       <div class="container">
         <div class="reveal">
-          <span class="eyebrow">Get FEED on your phone</span>
+          <p class="eyebrow">Get FEED on your phone</p>
           <h2 id="install-heading">Add it to your home screen in a few taps.</h2>
-          <p style="max-width:600px; margin-top:0.75rem; font-size:1.0625rem;">FEED lives in your web browser, so there's nothing to download from an app store. Add it to your home screen once and it opens just like any other app.</p>
+          <p style="max-width:600px; margin-top:0.75rem;">FEED lives in your web browser, so there's nothing to download from an app store. Add it to your home screen once and it opens just like any other app.</p>
         </div>
 
         <div class="install-grid">
-          <div class="install-card reveal">
-            <div class="pillar-icon pillar-icon--teal" style="margin-bottom:0.75rem;" aria-hidden="true">📱</div>
+          <div class="install-card reveal" style="--i:0;">
+            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">📱</div>
             <p class="install-card-title">iPhone (Safari)</p>
             <ol class="install-steps">
               <li>Open <strong>sourcetofeed.com</strong> in Safari.</li>
@@ -737,8 +964,8 @@
               <li>Tap "Add." The FEED icon is now on your home screen.</li>
             </ol>
           </div>
-          <div class="install-card reveal">
-            <div class="pillar-icon pillar-icon--green" style="margin-bottom:0.75rem;" aria-hidden="true">🤖</div>
+          <div class="install-card reveal" style="--i:1;">
+            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">🤖</div>
             <p class="install-card-title">Android (Chrome)</p>
             <ol class="install-steps">
               <li>Open <strong>sourcetofeed.com</strong> in Chrome.</li>
@@ -747,24 +974,25 @@
               <li>Tap "Add." Done.</li>
             </ol>
           </div>
-          <div class="install-card reveal">
-            <div class="pillar-icon pillar-icon--orange" style="margin-bottom:0.75rem;" aria-hidden="true">💻</div>
+          <div class="install-card reveal" style="--i:2;">
+            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">💻</div>
             <p class="install-card-title">Computer</p>
-            <p style="font-size:0.9rem; color:var(--stone-700);">Open <strong>sourcetofeed.com</strong> and bookmark it (press <kbd>Ctrl+D</kbd> on Windows, or <kbd>Cmd+D</kbd> on a Mac) so it's always one click away.</p>
+            <p style="font-size:0.9rem; color:var(--body); font-weight:500;">Open <strong>sourcetofeed.com</strong> and bookmark it (press <kbd>Ctrl+D</kbd> on Windows, or <kbd>Cmd+D</kbd> on a Mac) so it's always one click away.</p>
           </div>
         </div>
       </div>
     </section>
 
     <!-- ===================== SECTION 6 — GETTING STARTED ===================== -->
-    <section class="section section--stone" id="start" aria-labelledby="start-heading">
+    <section class="section section--bg" id="start" aria-labelledby="start-heading">
       <div class="container">
         <div class="reveal">
-          <span class="eyebrow">Getting Started</span>
+          <p class="eyebrow">Getting Started</p>
           <h2 id="start-heading">Setting up takes about a minute.</h2>
         </div>
 
         <div class="steps-list">
+
           <div class="step-row reveal">
             <div>
               <p class="step-number">Step 1</p>
@@ -772,7 +1000,7 @@
               <p class="step-body">Tap the icon you just added, or go to <strong>sourcetofeed.com</strong>. Just looking? You can explore without an account.</p>
             </div>
             <div class="screenshot-frame">
-              <img src="/screenshots/feed-overview.png" alt="FEED app overview screen showing the main dashboard" loading="lazy" />
+              <img src="/screenshots/feed-overview.png" alt="FEED app overview screen showing the main dashboard with navigation panels" loading="lazy" />
             </div>
           </div>
 
@@ -794,7 +1022,7 @@
               <p class="step-body">Choose a master password. This locks your documents so only you can open them — not even we can see inside.</p>
             </div>
             <div class="screenshot-frame">
-              <img src="/screenshots/feed-login.png" alt="FEED vault setup screen with master password entry" loading="lazy" />
+              <img src="/screenshots/feed-login.png" alt="FEED vault setup screen with master password entry field" loading="lazy" />
             </div>
           </div>
 
@@ -805,18 +1033,19 @@
               <p class="step-body">Start finding help right away.</p>
             </div>
             <div class="screenshot-frame">
-              <img src="/screenshots/feed-programs.png" alt="FEED Browse Programs screen showing benefit categories you can search" loading="lazy" />
+              <img src="/screenshots/feed-programs.png" alt="FEED Browse Programs screen showing benefit categories available to search and filter" loading="lazy" />
             </div>
           </div>
+
         </div>
       </div>
     </section>
 
     <!-- ===================== SECTION 7 — FEATURES ===================== -->
-    <section class="section section--white" id="features" aria-labelledby="features-heading">
+    <section class="section section--surface" id="features" aria-labelledby="features-heading">
       <div class="container">
         <div class="reveal">
-          <span class="eyebrow">What you can do</span>
+          <p class="eyebrow">What you can do</p>
           <h2 id="features-heading">Everything you need, in one app.</h2>
         </div>
 
@@ -834,12 +1063,12 @@
                 </ul>
               </div>
               <div class="screenshot-frame">
-                <img src="/screenshots/feed-chat.png" alt="FEED AI assistant answering a question about local food programs" loading="lazy" />
+                <img src="/screenshots/feed-chat.png" alt="FEED AI assistant answering a question about local food programs and benefits near you" loading="lazy" />
               </div>
             </div>
             <div style="margin-top:1.5rem;" class="reveal">
               <div class="screenshot-frame" style="aspect-ratio:16/7; max-width:720px;">
-                <img src="/screenshots/feed-map.png" alt="FEED map view showing nearby food pantries, shelters, and clinics" loading="lazy" />
+                <img src="/screenshots/feed-map.png" alt="FEED map view showing nearby food pantries, shelters, and clinics with colored map markers" loading="lazy" />
               </div>
             </div>
           </div>
@@ -853,7 +1082,7 @@
                 <p>Then track where every application stands — submitted, under review, approved — so nothing falls through the cracks.</p>
               </div>
               <div class="screenshot-frame">
-                <img src="/screenshots/feed-forms.png" alt="FEED forms panel with auto-filled application fields and e-signature" loading="lazy" />
+                <img src="/screenshots/feed-forms.png" alt="FEED forms panel with auto-filled application fields and e-signature area ready to submit" loading="lazy" />
               </div>
             </div>
           </div>
@@ -867,7 +1096,7 @@
                 <p>That same vault fills in your forms for you and lets you sign documents electronically, so you never re-type the same information twice.</p>
               </div>
               <div class="screenshot-frame">
-                <img src="/screenshots/feed-vault.png" alt="FEED secure vault showing encrypted documents and quick-fill" loading="lazy" />
+                <img src="/screenshots/feed-vault.png" alt="FEED secure vault screen showing encrypted documents and quick-fill capability for forms" loading="lazy" />
               </div>
             </div>
           </div>
@@ -885,7 +1114,7 @@
                 </ul>
               </div>
               <div class="screenshot-frame">
-                <img src="/screenshots/feed-community.png" alt="FEED community screen with neighbor posts and mutual aid offers" loading="lazy" />
+                <img src="/screenshots/feed-community.png" alt="FEED community screen showing neighbor posts, mutual aid offers, and safety alert pins" loading="lazy" />
               </div>
             </div>
           </div>
@@ -895,13 +1124,13 @@
     </section>
 
     <!-- ===================== SECTION 8 — SECURITY ===================== -->
-    <section class="section section--stone" aria-labelledby="security-heading">
+    <section class="section section--bg" aria-labelledby="security-heading">
       <div class="container">
-        <div class="section-intro section-intro--center reveal">
-          <span class="eyebrow">Your information stays yours</span>
+        <div class="security-intro reveal">
+          <p class="eyebrow">Your information stays yours</p>
           <h2 id="security-heading">Private by design.</h2>
           <p style="margin-top:0.75rem;">FEED uses end-to-end encryption — your sensitive information is scrambled on your device before it's ever stored. You hold the only key. No one, not even us, can open your vault without your master password.</p>
-          <p style="margin-top:0.75rem; font-size:0.9rem; color:var(--stone-500);">(Keep it somewhere safe: if you lose it, even we can't recover it.)</p>
+          <p style="margin-top:0.75rem; font-size:0.9rem; color:var(--muted);">(Keep it somewhere safe: if you lose it, even we can't recover it.)</p>
         </div>
 
         <div class="trust-row reveal">
@@ -930,10 +1159,10 @@
     </section>
 
     <!-- ===================== SECTION 9 — WHAT YOU CAN FIND ===================== -->
-    <section class="section section--white" aria-labelledby="find-heading">
+    <section class="section section--surface" aria-labelledby="find-heading">
       <div class="container">
         <div class="section-intro reveal">
-          <span class="eyebrow">What you can find</span>
+          <p class="eyebrow">What you can find</p>
           <h2 id="find-heading">Benefits and resources, all in one search.</h2>
         </div>
 
@@ -964,18 +1193,22 @@
             </div>
           </div>
         </div>
+
+        <div style="text-align:center; margin-top:2rem;" class="reveal">
+          <a href="/resources.html" class="btn btn-secondary">See the full breakdown →</a>
+        </div>
       </div>
     </section>
 
     <!-- ===================== SECTION 10 — CLOSING CTA (photo band) ===================== -->
     <section class="photo-band photo-band--cta" aria-labelledby="cta-heading">
       <div class="container">
-        <div class="glass-card glass-card--center reveal" style="max-width:580px; margin:0 auto;">
+        <div class="glass-card cta-glass reveal">
           <h2 id="cta-heading">Help is here. And so are your neighbors.</h2>
-          <p style="margin-top:0.75rem; font-size:1.0625rem;">Free, private, and built to stay that way. Add FEED to your phone and find what you need today.</p>
-          <div class="btn-group mt-4" style="justify-content:center;">
-            <a href="/" class="btn btn-primary">Get FEED</a>
-            <a href="#install" class="btn btn-outline">Add to Home Screen</a>
+          <p>Free, private, and built to stay that way. Add FEED to your phone and find what you need today.</p>
+          <div class="btn-group" style="justify-content:center; margin-top:2rem;">
+            <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED</a>
+            <a href="#install" class="btn btn-outline-white">Add to Home Screen</a>
           </div>
         </div>
       </div>
@@ -987,12 +1220,13 @@
   <footer class="site-footer">
     <div class="container">
       <div class="footer-inner">
-        <a href="/" class="footer-wordmark">FEED</a>
+        <a href="https://www.sourcetofeed.com" class="footer-wordmark">FEED</a>
 
         <ul class="footer-links" role="list">
-          <li><a href="/">Open the app</a></li>
+          <li><a href="https://www.sourcetofeed.com">Open the app</a></li>
           <li><a href="#start">How it works</a></li>
           <li><a href="#install">Get FEED</a></li>
+          <li><a href="/resources.html">Resources</a></li>
         </ul>
 
         <p class="footer-tagline">FEED — free, community-powered, made in Vermont.<br>Owned by the community. Never for sale.</p>
@@ -1001,59 +1235,159 @@
   </footer>
 
   <script>
-    // ===================== MOBILE NAV TOGGLE =====================
-    (function () {
+    // ===================== 1. NAV SCROLL =====================
+    window.addEventListener('scroll', function(){
+      document.getElementById('site-nav').classList.toggle('scrolled', window.scrollY > 40);
+    }, {passive: true});
+
+    // ===================== 2. MOBILE NAV HAMBURGER =====================
+    (function(){
       var toggle = document.getElementById('nav-toggle');
       var links  = document.getElementById('nav-links');
-      if (!toggle || !links) return;
-
-      toggle.addEventListener('click', function () {
+      if(!toggle || !links) return;
+      toggle.addEventListener('click', function(){
         var open = links.classList.toggle('is-open');
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
-
-      // Close on link click
-      links.querySelectorAll('a').forEach(function (a) {
-        a.addEventListener('click', function () {
+      links.querySelectorAll('a').forEach(function(a){
+        a.addEventListener('click', function(){
           links.classList.remove('is-open');
           toggle.setAttribute('aria-expanded', 'false');
         });
       });
     })();
 
-    // ===================== SCROLL REVEAL =====================
-    (function () {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
+    // ===================== 3. SCROLL REVEAL =====================
+    (function(){
+      var reduced = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
       var els = document.querySelectorAll('.reveal');
-      if (!('IntersectionObserver' in window)) {
-        els.forEach(function (el) { el.classList.add('visible'); });
+      if(reduced){
+        els.forEach(function(el){ el.classList.add('in-view'); });
+        return;
+      }
+      if(!('IntersectionObserver' in window)){
+        els.forEach(function(el){ el.classList.add('in-view'); });
         return;
       }
 
-      var observer = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
+      function revealEl(el){
+        if(!el.classList.contains('in-view')) el.classList.add('in-view');
+      }
+
+      // Safety net: reveal elements visible within 120% of viewport height
+      function safetyReveal(){
+        var vh = window.innerHeight;
+        document.querySelectorAll('.reveal:not(.in-view)').forEach(function(el){
+          var rect = el.getBoundingClientRect();
+          if(rect.top < vh * 1.2) revealEl(el);
+        });
+      }
+
+      var obs = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if(e.isIntersecting){
+            revealEl(e.target);
+            obs.unobserve(e.target);
           }
         });
-      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      }, {rootMargin: '0px 0px -8% 0px', threshold: 0});
+      els.forEach(function(el){ obs.observe(el); });
 
-      els.forEach(function (el) { observer.observe(el); });
+      // Safety nets
+      window.addEventListener('load', safetyReveal);
+      setTimeout(safetyReveal, 1200);
+      window.addEventListener('scroll', safetyReveal, {passive: true});
+      window.addEventListener('resize', safetyReveal, {passive: true});
     })();
 
-    // ===================== NAV SCROLL OPACITY =====================
-    (function () {
-      var nav = document.querySelector('.site-nav');
-      if (!nav) return;
-      window.addEventListener('scroll', function () {
-        if (window.scrollY > 20) {
-          nav.style.background = 'rgba(255,255,255,0.95)';
-        } else {
-          nav.style.background = 'rgba(255,255,255,0.85)';
-        }
-      }, { passive: true });
+    // ===================== 4. HERO PARALLAX =====================
+    (function(){
+      var reduced = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+      var fine    = window.matchMedia('(pointer:fine)').matches;
+      if(reduced || !fine) return;
+      var band = document.querySelector('.photo-band--hero');
+      if(!band) return;
+      window.addEventListener('scroll', function(){
+        band.style.backgroundPositionY = (window.scrollY * 0.18) + 'px';
+      }, {passive: true});
+    })();
+
+    // ===================== 5. CAROUSEL =====================
+    (function(){
+      var carousel = document.getElementById('hero-carousel');
+      if(!carousel) return;
+      var tabs   = Array.from(carousel.querySelectorAll('[role="tab"]'));
+      var panels = Array.from(carousel.querySelectorAll('[role="tabpanel"]'));
+      var reduced = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+      var current = 0;
+      var timer   = null;
+
+      function showSlide(n, instant){
+        tabs.forEach(function(t, i){
+          t.setAttribute('aria-selected', i === n ? 'true' : 'false');
+          t.classList.toggle('active', i === n);
+        });
+        panels.forEach(function(p, i){
+          if(i === n){
+            p.removeAttribute('hidden');
+            if(!instant && !reduced){
+              p.style.opacity = '0';
+              requestAnimationFrame(function(){
+                p.style.transition = 'opacity .3s';
+                p.style.opacity = '1';
+              });
+            } else {
+              p.style.opacity = '1';
+              p.style.transition = 'none';
+            }
+          } else {
+            p.setAttribute('hidden', '');
+            p.style.opacity = '0';
+          }
+        });
+        current = n;
+      }
+
+      function startAuto(){
+        if(reduced) return;
+        clearInterval(timer);
+        timer = setInterval(function(){
+          showSlide((current + 1) % tabs.length);
+        }, 5000);
+      }
+
+      function stopAuto(){ clearInterval(timer); }
+
+      tabs.forEach(function(tab, i){
+        tab.addEventListener('click', function(){
+          showSlide(i);
+          startAuto();
+        });
+        tab.addEventListener('keydown', function(e){
+          if(e.key === 'ArrowRight'){
+            var next = (current + 1) % tabs.length;
+            showSlide(next);
+            tabs[next].focus();
+            startAuto();
+          }
+          if(e.key === 'ArrowLeft'){
+            var prev = (current - 1 + tabs.length) % tabs.length;
+            showSlide(prev);
+            tabs[prev].focus();
+            startAuto();
+          }
+        });
+      });
+
+      carousel.addEventListener('mouseenter', stopAuto);
+      carousel.addEventListener('focusin',    stopAuto);
+      carousel.addEventListener('mouseleave', startAuto);
+      carousel.addEventListener('focusout', function(e){
+        if(!carousel.contains(e.relatedTarget)) startAuto();
+      });
+
+      showSlide(0, true);
+      startAuto();
     })();
   </script>
 
