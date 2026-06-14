@@ -1119,6 +1119,98 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_members: {
+        Row: {
+          id: string
+          invited_by: string | null
+          joined_at: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          location: unknown
+          name: string
+          org_type: string
+          phone: string | null
+          service_radius_miles: number | null
+          state: string | null
+          updated_at: string
+          website: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          location?: unknown
+          name: string
+          org_type?: string
+          phone?: string | null
+          service_radius_miles?: number | null
+          state?: string | null
+          updated_at?: string
+          website?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          location?: unknown
+          name?: string
+          org_type?: string
+          phone?: string | null
+          service_radius_miles?: number | null
+          state?: string | null
+          updated_at?: string
+          website?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       password_history: {
         Row: {
           created_at: string | null
@@ -3131,6 +3223,8 @@ export type Database = {
         }[]
       }
       is_current_user_admin: { Args: never; Returns: boolean }
+      is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
+      is_org_member: { Args: { p_org_id: string }; Returns: boolean }
       log_audit_event: {
         Args: {
           p_action: string
