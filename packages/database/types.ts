@@ -93,6 +93,77 @@ export type Database = {
         }
         Relationships: []
       }
+      assistance_events: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          default_capacity: number | null
+          description: string | null
+          event_type: string
+          id: string
+          is_active: boolean
+          location: unknown
+          location_name: string | null
+          org_id: string
+          requires_registration: boolean
+          rrule: string | null
+          state: string | null
+          title: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_capacity?: number | null
+          description?: string | null
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          location?: unknown
+          location_name?: string | null
+          org_id: string
+          requires_registration?: boolean
+          rrule?: string | null
+          state?: string | null
+          title: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_capacity?: number | null
+          description?: string | null
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          location?: unknown
+          location_name?: string | null
+          org_id?: string
+          requires_registration?: boolean
+          rrule?: string | null
+          state?: string | null
+          title?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistance_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -341,6 +412,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      event_occurrences: {
+        Row: {
+          capacity: number | null
+          created_at: string
+          ends_at: string
+          event_id: string
+          id: string
+          notes: string | null
+          rrule_dtstart: string | null
+          starts_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          capacity?: number | null
+          created_at?: string
+          ends_at: string
+          event_id: string
+          id?: string
+          notes?: string | null
+          rrule_dtstart?: string | null
+          starts_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          capacity?: number | null
+          created_at?: string
+          ends_at?: string
+          event_id?: string
+          id?: string
+          notes?: string | null
+          rrule_dtstart?: string | null
+          starts_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_occurrences_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "assistance_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       favorites: {
         Row: {

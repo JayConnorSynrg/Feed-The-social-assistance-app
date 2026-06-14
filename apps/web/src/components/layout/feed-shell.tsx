@@ -30,6 +30,7 @@ import {
   Compass,
   Search,
   ScrollText,
+  Calendar,
   ShieldAlert,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -55,7 +56,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions'
+type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -121,6 +122,7 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
   { panel: 'petitions', icon: ScrollText, label: 'Petitions' },
+  { panel: 'events', icon: Calendar, label: 'Events' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -512,7 +514,7 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing (aliases included for deep-link init)
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
 
 // Resolve a hash value to a panel + optional subtab.
 // Alias hashes (#forms, #messages) map to their parent panel + subtab.

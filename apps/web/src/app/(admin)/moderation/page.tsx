@@ -7,6 +7,7 @@ import { SafetyAlertsReview } from './safety-alerts-review'
 import { ReportsQueue } from './reports-queue'
 import { PetitionSignaturesExport } from '@/components/admin/petition-signatures-export'
 import { OrgsSection } from './orgs-section'
+import { EventsSection } from './events-section'
 import { Loader2, ArrowLeft } from 'lucide-react'
 
 export const metadata = {
@@ -222,6 +223,10 @@ export default function ModerationPage() {
           {/* Organizations — partner org registry + member management */}
           <div className="mt-10 pt-8 border-t border-stone-200/50">
             <OrgsSection />
+          </div>
+          {/* Events — assistance event series + scheduled occurrences */}
+          <div className="mt-10 pt-8 border-t border-stone-200/50">
+            <EventsSection />
           </div>
         </div>
       </div>
