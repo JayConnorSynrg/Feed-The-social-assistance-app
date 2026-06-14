@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Calendar, Loader2, AlertCircle, MapPin, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { CheckinSheet, type CheckinOccurrence } from './checkin-sheet'
 
 interface OccurrenceWithEvent {
   id: string
@@ -67,6 +68,8 @@ export function EventsPanel() {
   const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
+  const [checkinOpen, setCheckinOpen] = useState(false)
 
   const fetchOccurrences = useCallback(async () => {
     setLoading(true)
@@ -232,11 +235,43 @@ export function EventsPanel() {
                     Walk-in welcome
                   </span>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckinOccurrence({
+                      id: occ.id,
+                      starts_at: occ.starts_at,
+                      ends_at: occ.ends_at,
+                      event: ev
+                        ? {
+                            title: ev.title,
+                            location_name: ev.location_name ?? null,
+                            organization: ev.organization ?? null,
+                          }
+                        : null,
+                    })
+                    setCheckinOpen(true)
+                  }}
+                  className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
+                >
+                  Check In
+                </button>
               </div>
             )
           })}
         </div>
       ))}
+      {checkinOccurrence && (
+        <CheckinSheet
+          occurrence={checkinOccurrence}
+          open={checkinOpen}
+          onOpenChange={(open) => {
+            setCheckinOpen(open)
+            if (!open) setCheckinOccurrence(null)
+          }}
+        />
+      )}
     </div>
   )
 }

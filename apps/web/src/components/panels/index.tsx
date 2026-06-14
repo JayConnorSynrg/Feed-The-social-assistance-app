@@ -19,3 +19,6 @@ export { MessagesPanel } from './messages-panel'
 export { WizardPanel } from './wizard-panel'
 export { PetitionsPanel } from './petitions-panel'
 export { EventsPanel } from './events-panel'
+
+export { CheckinSheet } from './checkin-sheet'
+export type { CheckinOccurrence } from './checkin-sheet'
