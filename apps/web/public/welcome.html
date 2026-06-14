@@ -691,52 +691,6 @@
       flex-shrink: 0;
     }
 
-    /* ===================== CATEGORY CHIPS ===================== */
-    .cat-section-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2rem;
-      margin-top: 2.5rem;
-    }
-    @media (min-width: 768px) {
-      .cat-section-grid { grid-template-columns: 1fr 1fr; }
-    }
-
-    .cat-group-title {
-      font-size: 0.8125rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 1rem;
-    }
-
-    .cat-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .cat-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: var(--r-pill);
-      padding: 0.35rem 0.75rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--body);
-    }
-
-    .cat-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
     /* ===================== CTA ===================== */
     .cta-glass {
       max-width: 580px;
@@ -826,6 +780,11 @@
       border-radius: var(--r-card);
     }
 
+    /* Benefit tiles need extra height for more content */
+    .flip-tile--benefit {
+      min-height: 380px;
+    }
+
     .flip-tile-inner {
       position: relative;
       width: 100%;
@@ -833,6 +792,9 @@
       min-height: 320px;
       transform-style: preserve-3d;
       transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1);
+    }
+    .flip-tile--benefit .flip-tile-inner {
+      min-height: 380px;
     }
     .flip-tile:hover .flip-tile-inner,
     .flip-tile.flipped .flip-tile-inner {
@@ -885,6 +847,13 @@
       gap: 0.75rem;
       padding: 1.4rem;
       overflow-y: auto;
+    }
+
+    /* Benefit tile back face: allow scroll for more content */
+    .flip-tile--benefit .flip-tile-face--back {
+      justify-content: flex-start;
+      gap: 0.5rem;
+      padding: 1.25rem;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -942,6 +911,145 @@
       flex: 1;
     }
 
+    /* Benefit tile back — compact label rows */
+    .benefit-back-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      margin-bottom: 0.2rem;
+    }
+    .benefit-back-text {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--body);
+      line-height: 1.5;
+    }
+    .benefit-back-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+    }
+    .benefit-back-chip {
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--r-pill);
+      border: 1px solid var(--line);
+      color: var(--body);
+      background: var(--bg);
+    }
+
+    /* ===================== BIGGER PICTURE / UPLIFT ===================== */
+    .uplift-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      margin-top: 2.5rem;
+    }
+    @media (min-width: 640px) {
+      .uplift-list { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .uplift-list { grid-template-columns: repeat(4, 1fr); }
+    }
+    .uplift-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .uplift-item .uplift-num {
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 800;
+      color: var(--green);
+    }
+    .uplift-item h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .uplift-item p {
+      font-size: 0.9rem;
+      color: var(--body);
+    }
+
+    /* ===================== SPROUT SECTION ===================== */
+    .sprout-section { }
+
+    .sprout-card {
+      background: var(--surface);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 2.5rem;
+      margin-top: 2.5rem;
+    }
+
+    .sprout-intro {
+      max-width: 720px;
+    }
+    .sprout-intro h3 {
+      font-size: 1.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .sprout-intro p {
+      font-size: 1.0625rem;
+      line-height: 1.7;
+      margin-bottom: 0;
+    }
+
+    .sprout-sub-block {
+      background: var(--bg);
+      border-radius: var(--r-tile);
+      padding: 1.5rem;
+      margin-top: 1.75rem;
+    }
+    .sprout-sub-block h4 {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 0.85rem;
+    }
+    .sprout-check-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      padding: 0;
+    }
+    .sprout-check-list li {
+      display: flex;
+      gap: 0.6rem;
+      font-size: 0.9375rem;
+      font-weight: 500;
+      color: var(--body);
+      align-items: flex-start;
+      line-height: 1.55;
+    }
+    .sprout-check-list li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      font-size: 0.875rem;
+      margin-top: 0.15rem;
+      flex-shrink: 0;
+    }
+
+    .sprout-disclaimer {
+      margin-top: 1rem;
+      padding: 0.875rem 1rem;
+      background: rgba(22,163,74,0.06);
+      border-left: 3px solid var(--green);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
     /* ===================== UTILITY ===================== */
     .mt-2 { margin-top: 1rem; }
     kbd {
@@ -972,11 +1080,11 @@
       <ul class="nav-links" id="nav-links" role="list">
         <li><a href="#start">How it works</a></li>
         <li><a href="#features">Features</a></li>
-        <li><a href="/resources.html">Resources</a></li>
+        <li><a href="#benefits">Resources</a></li>
         <li><a href="#install">Get it</a></li>
       </ul>
 
-      <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Get FEED</a>
+      <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Sign-Up Free</a>
     </nav>
 
   <main id="main-content">
@@ -1047,130 +1155,6 @@
           <h2 id="moment-heading">It's a hard year. You're not imagining it.</h2>
           <p>Rent went up. Groceries went up. And the help that's supposed to be there is buried under forms, phone trees, and websites that don't talk to each other.</p>
           <p>You might qualify for more than you're getting — and never know it. Figuring it all out alone is exhausting. It shouldn't be this hard to ask for a hand.</p>
-
-          <!-- FLIP TILE GRID -->
-          <div class="flip-tile-section">
-            <p class="eyebrow">What we help with</p>
-            <div class="flip-tile-grid" id="flip-tile-grid">
-
-              <!-- 1 Food -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Food Pantries &amp; Meals" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(22,163,74,0.12);" aria-hidden="true">🥫</div>
-                    <p class="flip-tile-title">Food Pantries &amp; Meals</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#f0fdf4;">
-                    <div class="flip-tile-back-accent" style="background:#16a34a;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#16a34a;">Food Pantries &amp; Meals</p>
-                    <p class="flip-tile-back-body">Community food shelves, free meal programs, BROC and county food shelf networks, VeggieVanGo stops, and community gardens.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 2 Housing -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Shelters &amp; Housing" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(59,130,246,0.12);" aria-hidden="true">🏠</div>
-                    <p class="flip-tile-title">Shelters &amp; Housing</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#eff6ff;">
-                    <div class="flip-tile-back-accent" style="background:#3b82f6;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#3b82f6;">Shelters &amp; Housing</p>
-                    <p class="flip-tile-back-body">Emergency shelters, transitional housing, Open Door Mission, and domestic-violence shelter locations (with privacy protections).</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3 Health -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Clinics &amp; Mental Health" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(239,68,68,0.12);" aria-hidden="true">🩺</div>
-                    <p class="flip-tile-title">Clinics &amp; Mental Health</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#fef2f2;">
-                    <div class="flip-tile-back-accent" style="background:#ef4444;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#ef4444;">Clinics &amp; Mental Health</p>
-                    <p class="flip-tile-back-body">Free and sliding-scale clinics, CHCRR community health, Turning Point recovery centers, and CCN mental health and substance-use counseling.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 4 Family -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Childcare &amp; Family" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(236,72,153,0.12);" aria-hidden="true">👶</div>
-                    <p class="flip-tile-title">Childcare &amp; Family</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#fdf2f8;">
-                    <div class="flip-tile-back-accent" style="background:#ec4899;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#ec4899;">Childcare &amp; Family</p>
-                    <p class="flip-tile-back-body">Licensed childcare centers, Head Start sites, family resource networks, after-school programs, and lactation support.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 5 Crisis -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Crisis &amp; Safety" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(249,115,22,0.12);" aria-hidden="true">🆘</div>
-                    <p class="flip-tile-title">Crisis &amp; Safety</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#fff7ed;">
-                    <div class="flip-tile-back-accent" style="background:#f97316;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#f97316;">Crisis &amp; Safety</p>
-                    <p class="flip-tile-back-body">211 Vermont, Salvation Army, United Way, crisis hotlines, and community-pinned safety alerts on the live map.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 6 Community -->
-              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Community Programs" aria-expanded="false">
-                <div class="flip-tile-inner">
-                  <div class="flip-tile-face--front">
-                    <div class="flip-tile-icon-chip" style="background:rgba(20,184,166,0.12);" aria-hidden="true">🤝</div>
-                    <p class="flip-tile-title">Community Programs</p>
-                    <p class="flip-tile-hint">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Tap to learn more
-                    </p>
-                  </div>
-                  <div class="flip-tile-face--back" style="background:#f0fdfa;">
-                    <div class="flip-tile-back-accent" style="background:#14b8a6;" aria-hidden="true"></div>
-                    <p class="flip-tile-back-title" style="color:#14b8a6;">Community Programs</p>
-                    <p class="flip-tile-back-body">United Way, VT Catholic Charities, immigrant &amp; refugee support (USCRI, VT Asylum Assistance), the American Association of Latinos in VT, and neighbor-to-neighbor resource offers.</p>
-                  </div>
-                </div>
-              </div>
-
-            </div><!-- /.flip-tile-grid -->
-          </div><!-- /.flip-tile-section -->
-
-          <p class="turn-line">So we built something different.</p>
         </div>
       </div>
     </section>
@@ -1201,10 +1185,524 @@
             <p>Offer a hand, ask for one, and look out for your community.</p>
           </article>
         </div>
+
+        <!-- LOCAL-RESOURCE FLIP TILE GRID -->
+        <div class="flip-tile-section" style="margin-top:3.5rem;">
+          <p class="eyebrow">What we help with</p>
+          <div class="flip-tile-grid" id="flip-tile-grid">
+
+            <!-- 1 Food -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Food Pantries &amp; Meals" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(22,163,74,0.12);" aria-hidden="true">🥫</div>
+                  <p class="flip-tile-title">Food Pantries &amp; Meals</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f0fdf4;">
+                  <div class="flip-tile-back-accent" style="background:#16a34a;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#16a34a;">Food Pantries &amp; Meals</p>
+                  <p class="flip-tile-back-body">Community food shelves, free meal programs, BROC and county food shelf networks, VeggieVanGo stops, and community gardens.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2 Housing -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Shelters &amp; Housing" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(59,130,246,0.12);" aria-hidden="true">🏠</div>
+                  <p class="flip-tile-title">Shelters &amp; Housing</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#eff6ff;">
+                  <div class="flip-tile-back-accent" style="background:#3b82f6;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#3b82f6;">Shelters &amp; Housing</p>
+                  <p class="flip-tile-back-body">Emergency shelters, transitional housing, Open Door Mission, and domestic-violence shelter locations (with privacy protections).</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3 Health -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Clinics &amp; Mental Health" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(239,68,68,0.12);" aria-hidden="true">🩺</div>
+                  <p class="flip-tile-title">Clinics &amp; Mental Health</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fef2f2;">
+                  <div class="flip-tile-back-accent" style="background:#ef4444;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#ef4444;">Clinics &amp; Mental Health</p>
+                  <p class="flip-tile-back-body">Free and sliding-scale clinics, CHCRR community health, Turning Point recovery centers, and CCN mental health and substance-use counseling.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4 Family -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Childcare &amp; Family" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(236,72,153,0.12);" aria-hidden="true">👶</div>
+                  <p class="flip-tile-title">Childcare &amp; Family</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fdf2f8;">
+                  <div class="flip-tile-back-accent" style="background:#ec4899;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#ec4899;">Childcare &amp; Family</p>
+                  <p class="flip-tile-back-body">Licensed childcare centers, Head Start sites, family resource networks, after-school programs, and lactation support.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5 Crisis -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Crisis &amp; Safety" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(249,115,22,0.12);" aria-hidden="true">🆘</div>
+                  <p class="flip-tile-title">Crisis &amp; Safety</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fff7ed;">
+                  <div class="flip-tile-back-accent" style="background:#f97316;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#f97316;">Crisis &amp; Safety</p>
+                  <p class="flip-tile-back-body">211 Vermont, Salvation Army, United Way, crisis hotlines, and community-pinned safety alerts on the live map.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 6 Community -->
+            <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Community Programs" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(20,184,166,0.12);" aria-hidden="true">🤝</div>
+                  <p class="flip-tile-title">Community Programs</p>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f0fdfa;">
+                  <div class="flip-tile-back-accent" style="background:#14b8a6;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#14b8a6;">Community Programs</p>
+                  <p class="flip-tile-back-body">United Way, VT Catholic Charities, immigrant &amp; refugee support (USCRI, VT Asylum Assistance), the American Association of Latinos in VT, and neighbor-to-neighbor resource offers.</p>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /.flip-tile-grid -->
+        </div><!-- /.flip-tile-section -->
+
+        <p class="turn-line" style="margin-top:2.5rem;">So we built something different.</p>
       </div>
     </section>
 
-    <!-- ===================== SECTION 4 — ECOSYSTEM (photo band) ===================== -->
+    <!-- ===================== SECTION 4 — BENEFITS FLIP TILES ===================== -->
+    <section class="section section--bg" id="benefits" aria-labelledby="benefits-heading">
+      <div class="container">
+        <div class="reveal">
+          <p class="eyebrow">The Benefits</p>
+          <h2 id="benefits-heading">Everything FEED helps you find and apply for.</h2>
+          <p style="max-width:680px; margin-top:0.75rem;">These aren't only for people in crisis. A working family, a student, a new parent, a senior on a fixed income — each one has something for you.</p>
+        </div>
+
+        <div class="flip-tile-section">
+          <div class="flip-tile-grid" id="benefit-tile-grid">
+
+            <!-- Food & Nutrition -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Food &amp; Nutrition" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(22,163,74,0.12);" aria-hidden="true">🥦</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Food &amp; Nutrition</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f0fdf4;">
+                  <div class="flip-tile-back-accent" style="background:#16a34a;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#16a34a;">Food &amp; Nutrition</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Grocery assistance, supplemental food for infants &amp; mothers, free meals, and fresh produce programs.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Families, pregnant women, seniors, anyone between jobs or whose grocery bill has outrun their paycheck.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">3SquaresVT / SNAP</span>
+                    <span class="benefit-back-chip">WIC</span>
+                    <span class="benefit-back-chip">CSFP</span>
+                    <span class="benefit-back-chip">Meals on Wheels</span>
+                    <span class="benefit-back-chip">VeggieVanGo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Housing & Rent -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Housing &amp; Rent Assistance" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(59,130,246,0.12);" aria-hidden="true">🏘️</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#3b82f6;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Housing &amp; Rent</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#eff6ff;">
+                  <div class="flip-tile-back-accent" style="background:#3b82f6;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#3b82f6;">Housing &amp; Rent Assistance</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Emergency shelter, rent &amp; mortgage assistance, transitional housing, home repair grants, HUD Section 8 vouchers.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Renters one bad month away from eviction, people experiencing homelessness, veterans, and anyone searching for affordable housing.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">Emergency Assistance</span>
+                    <span class="benefit-back-chip">HUD / Section 8</span>
+                    <span class="benefit-back-chip">VHFA</span>
+                    <span class="benefit-back-chip">Renter Rebate</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Utilities & Home Energy -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Utilities &amp; Home Energy" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(249,115,22,0.12);" aria-hidden="true">💡</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#f97316;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Utilities &amp; Home Energy</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fff7ed;">
+                  <div class="flip-tile-back-accent" style="background:#f97316;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#f97316;">Utilities &amp; Home Energy</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Heating fuel assistance, electric bill relief, weatherization upgrades, heat pump rebates, phone and internet lifeline programs.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Anyone whose heating or electric bill spikes in winter. LIHEAP income limits are higher than most people assume — many working families qualify.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">LIHEAP</span>
+                    <span class="benefit-back-chip">Efficiency VT</span>
+                    <span class="benefit-back-chip">GMP Assistance</span>
+                    <span class="benefit-back-chip">Lifeline</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Healthcare & Mental Health -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Healthcare &amp; Mental Health" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(239,68,68,0.12);" aria-hidden="true">🩺</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Healthcare &amp; Mental Health</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fef2f2;">
+                  <div class="flip-tile-back-accent" style="background:#ef4444;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#ef4444;">Healthcare &amp; Mental Health</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Medicaid enrollment, free clinics, prescription assistance, dental care, mental health services, and Medicare savings for seniors.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Uninsured adults, children on Dr. Dynasaur, seniors managing medication costs, anyone seeking mental health support.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">Vermont Medicaid</span>
+                    <span class="benefit-back-chip">Dr. Dynasaur</span>
+                    <span class="benefit-back-chip">VPharm</span>
+                    <span class="benefit-back-chip">Medicare Savings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jobs & Income -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Jobs &amp; Income" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(234,179,8,0.12);" aria-hidden="true">💼</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#eab308;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Jobs &amp; Income</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fefce8;">
+                  <div class="flip-tile-back-accent" style="background:#eab308;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#a16207;">Jobs &amp; Income</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Job search support, paid skills training, unemployment insurance, career counseling, and youth employment programs.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">People between jobs, career-changers, people with disabilities seeking supported employment, and young adults entering the workforce.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">Reach-Up / TANF</span>
+                    <span class="benefit-back-chip">DVR</span>
+                    <span class="benefit-back-chip">WIOA Training</span>
+                    <span class="benefit-back-chip">VT Adult Learning</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Financial Help & Tax Credits -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Financial Help &amp; Tax Credits" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(34,197,94,0.12);" aria-hidden="true">💵</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Financial Help &amp; Tax Credits</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f0fdf4;">
+                  <div class="flip-tile-back-accent" style="background:#22c55e;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#15803d;">Financial Help &amp; Tax Credits</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Free tax filing, Earned Income Tax Credit (EITC), TANF cash assistance, renter rebate, and financial counseling.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Workers earning under ~$65,000 who may qualify for EITC refunds, families needing emergency cash, and anyone who hasn't filed taxes because they couldn't afford tax prep.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">EITC</span>
+                    <span class="benefit-back-chip">VITA (Free Tax Help)</span>
+                    <span class="benefit-back-chip">TANF</span>
+                    <span class="benefit-back-chip">Renter Rebate</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Childcare & Family -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Childcare &amp; Family" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(236,72,153,0.12);" aria-hidden="true">👶</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#ec4899;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Childcare &amp; Family</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#fdf2f8;">
+                  <div class="flip-tile-back-accent" style="background:#ec4899;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#ec4899;">Childcare &amp; Family</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Subsidized childcare, Head Start / Early Head Start, Universal Pre-K, after-school programs, prenatal care, WIC for new mothers.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Parents of newborns, expectant mothers, families with kids 0–12 who need care, and anyone navigating early childhood programs for the first time.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">Head Start</span>
+                    <span class="benefit-back-chip">Early Head Start</span>
+                    <span class="benefit-back-chip">Universal Pre-K</span>
+                    <span class="benefit-back-chip">WIC</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Legal Aid -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Legal Aid" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(99,102,241,0.12);" aria-hidden="true">⚖️</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#6366f1;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Legal Aid</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#eef2ff;">
+                  <div class="flip-tile-back-accent" style="background:#6366f1;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#6366f1;">Legal Aid</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Free civil legal help for eviction defense, family law, immigration, record expungement, benefits appeals, and protective orders.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Tenants facing eviction, parents in custody situations, immigrants navigating status questions, anyone denied benefits who wants to appeal.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">VT Legal Aid</span>
+                    <span class="benefit-back-chip">Legal Services VT</span>
+                    <span class="benefit-back-chip">Disability Rights VT</span>
+                    <span class="benefit-back-chip">USCRI</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transportation -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Transportation" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(6,182,212,0.12);" aria-hidden="true">🚌</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#06b6d4;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Transportation</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#ecfeff;">
+                  <div class="flip-tile-back-accent" style="background:#06b6d4;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#0e7490;">Transportation</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Bus passes, Medicaid-covered medical rides, volunteer driver programs, donated vehicles, gas vouchers, and accessible transportation.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Anyone without a car, seniors who no longer drive, people with disabilities needing accessible rides, workers commuting without transit access.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">Marble Valley Transit</span>
+                    <span class="benefit-back-chip">Medicaid Transport</span>
+                    <span class="benefit-back-chip">Good News Garage</span>
+                    <span class="benefit-back-chip">SVCOA Drivers</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Disability Services -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Disability Services" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(139,92,246,0.12);" aria-hidden="true">♿</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#8b5cf6;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Disability Services</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f5f3ff;">
+                  <div class="flip-tile-back-accent" style="background:#8b5cf6;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#7c3aed;">Disability Services</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Independent living support, vocational rehabilitation, assistive technology, Choices for Care long-term supports, and disability rights advocacy.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Adults with physical, intellectual, or mental health disabilities navigating benefits and anyone whose disability has been used to deny them assistance.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">VCIL</span>
+                    <span class="benefit-back-chip">DVR</span>
+                    <span class="benefit-back-chip">Choices for Care</span>
+                    <span class="benefit-back-chip">Disability Rights VT</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Senior Services -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Senior Services" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(20,184,166,0.12);" aria-hidden="true">👴</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#14b8a6;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Senior Services</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f0fdfa;">
+                  <div class="flip-tile-back-accent" style="background:#14b8a6;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#0f766e;">Senior Services</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">Meals on Wheels, senior companion programs, DAIL support services, Area Agency on Aging programs, in-home care coordination, and Medicare counseling.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Adults 60+, caregivers supporting aging parents, anyone managing the Medicare maze, and seniors looking for connection as much as services.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">SVCOA</span>
+                    <span class="benefit-back-chip">DAIL</span>
+                    <span class="benefit-back-chip">Meals on Wheels</span>
+                    <span class="benefit-back-chip">Medicare Savings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Veterans Services -->
+            <div class="flip-tile flip-tile--benefit reveal" tabindex="0" role="button" aria-label="Veterans Services" aria-expanded="false">
+              <div class="flip-tile-inner">
+                <div class="flip-tile-face--front">
+                  <div class="flip-tile-icon-chip" style="background:rgba(120,113,108,0.12);" aria-hidden="true">🎖️</div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#78716c;flex-shrink:0;" aria-hidden="true"></span>
+                    <p class="flip-tile-title">Veterans Services</p>
+                  </div>
+                  <p class="flip-tile-hint">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Tap to learn more
+                  </p>
+                </div>
+                <div class="flip-tile-face--back" style="background:#f5f5f4;">
+                  <div class="flip-tile-back-accent" style="background:#78716c;" aria-hidden="true"></div>
+                  <p class="flip-tile-back-title" style="color:#44403c;">Veterans Services</p>
+                  <p class="benefit-back-label">What it covers</p>
+                  <p class="benefit-back-text">VA healthcare access, housing vouchers for veterans (HUD-VASH), state veterans benefits, peer support, and community-based outpatient care.</p>
+                  <p class="benefit-back-label">Who it's for</p>
+                  <p class="benefit-back-text">Veterans of any era — from Vietnam to recent service — who need healthcare, housing support, or simply want to find other veterans in their community.</p>
+                  <div class="benefit-back-chips">
+                    <span class="benefit-back-chip">VA CBOC</span>
+                    <span class="benefit-back-chip">HUD-VASH</span>
+                    <span class="benefit-back-chip">VT Veterans Services</span>
+                    <span class="benefit-back-chip">VT Veterans Fund</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /.flip-tile-grid (benefits) -->
+        </div><!-- /.flip-tile-section -->
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 5 — ECOSYSTEM (photo band) ===================== -->
     <section class="photo-band photo-band--mid" aria-labelledby="ecosystem-heading">
       <div class="container">
         <div class="glass-card ecosystem-glass reveal">
@@ -1216,8 +1714,51 @@
       </div>
     </section>
 
-    <!-- ===================== SECTION 5 — INSTALL ===================== -->
-    <section class="section section--surface" id="install" aria-labelledby="install-heading">
+    <!-- ===================== SECTION 6 — THE BIGGER PICTURE ===================== -->
+    <section class="section section--surface" aria-labelledby="bigger-picture-heading">
+      <div class="container">
+        <div class="reveal">
+          <p class="eyebrow">The Bigger Picture</p>
+          <h2 id="bigger-picture-heading">A stronger safety net lifts everyone.</h2>
+          <p style="max-width:680px; margin-top:0.75rem;">When more people use FEED — to find help AND to offer it — the whole community wins. Less duplicated effort. Resources found faster. Neighbors looking out for neighbors. This is what cost-effective community support actually looks like.</p>
+        </div>
+
+        <div class="uplift-list">
+
+          <div class="uplift-item reveal">
+            <span class="uplift-num" aria-hidden="true">01</span>
+            <h3>Put yourself on the map</h3>
+            <p>Offer a skill, a ride, extra food from your garden, or just say you're available to help — and let neighbors know what you need too. Giving and asking are equally welcome here.</p>
+          </div>
+
+          <div class="uplift-item reveal">
+            <span class="uplift-num" aria-hidden="true">02</span>
+            <h3>Flag safety hazards</h3>
+            <p>See a broken streetlight, a road hazard, or a public health concern? Pin it on the map so the people who can fix it — and the neighbors who need to know — find out fast.</p>
+          </div>
+
+          <div class="uplift-item reveal">
+            <span class="uplift-num" aria-hidden="true">03</span>
+            <h3>Start or sign a petition</h3>
+            <p>When an issue affects your community — bus service cuts, housing policy, local clinic closures — FEED lets you organize a verified petition and gather real digital signatures.</p>
+          </div>
+
+          <div class="uplift-item reveal">
+            <span class="uplift-num" aria-hidden="true">04</span>
+            <h3>Share in the feed</h3>
+            <p>Post offers, requests, local news, and resource tips with the people around you. The community feed is how neighbors stay connected and keep each other informed.</p>
+          </div>
+
+        </div>
+
+        <div style="margin-top:2.5rem;" class="reveal">
+          <p style="max-width:640px; font-size:1.0625rem; color:var(--body);">Getting help should be normal, easy, private, and free — and helping your neighbor should be just as easy. FEED is built so both are true.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 7 — INSTALL ===================== -->
+    <section class="section section--bg" id="install" aria-labelledby="install-heading">
       <div class="container">
         <div class="reveal">
           <p class="eyebrow">Get FEED on your phone</p>
@@ -1255,8 +1796,8 @@
       </div>
     </section>
 
-    <!-- ===================== SECTION 6 — GETTING STARTED ===================== -->
-    <section class="section section--bg" id="start" aria-labelledby="start-heading">
+    <!-- ===================== SECTION 8 — GETTING STARTED ===================== -->
+    <section class="section section--surface" id="start" aria-labelledby="start-heading">
       <div class="container">
         <div class="reveal">
           <p class="eyebrow">Getting Started</p>
@@ -1313,8 +1854,8 @@
       </div>
     </section>
 
-    <!-- ===================== SECTION 7 — FEATURES ===================== -->
-    <section class="section section--surface" id="features" aria-labelledby="features-heading">
+    <!-- ===================== SECTION 9 — FEATURES ===================== -->
+    <section class="section section--bg" id="features" aria-labelledby="features-heading">
       <div class="container">
         <div class="reveal">
           <p class="eyebrow">What you can do</p>
@@ -1323,13 +1864,13 @@
 
         <div style="margin-top:3.5rem;">
 
-          <!-- 7a -->
+          <!-- 9a -->
           <div class="feature-block">
             <div class="feature-block-inner reveal">
               <div class="feature-text">
                 <h3>Find the help that fits you.</h3>
                 <ul class="feature-bullets mt-2">
-                  <li><strong>Ask in plain words</strong> — tell the assistant what's going on and get pointed to real programs.</li>
+                  <li><strong>Ask Sprout in plain words</strong> — tell FEED's assistant what's going on and get pointed to real programs, resources, and care.</li>
                   <li><strong>See what's near you</strong> — a live map of food, shelter, healthcare and more around you.</li>
                   <li><strong>Browse programs</strong> — search every benefit program and see the ones you may qualify for.</li>
                 </ul>
@@ -1345,7 +1886,7 @@
             </div>
           </div>
 
-          <!-- 7b -->
+          <!-- 9b -->
           <div class="feature-block">
             <div class="feature-block-inner flip reveal">
               <div class="feature-text">
@@ -1359,7 +1900,7 @@
             </div>
           </div>
 
-          <!-- 7c -->
+          <!-- 9c -->
           <div class="feature-block">
             <div class="feature-block-inner reveal">
               <div class="feature-text">
@@ -1373,7 +1914,7 @@
             </div>
           </div>
 
-          <!-- 7d -->
+          <!-- 9d -->
           <div class="feature-block">
             <div class="feature-block-inner flip reveal">
               <div class="feature-text">
@@ -1395,7 +1936,45 @@
       </div>
     </section>
 
-    <!-- ===================== SECTION 8 — SECURITY ===================== -->
+    <!-- ===================== SECTION 10 — MEET SPROUT ===================== -->
+    <section class="section section--surface sprout-section" aria-labelledby="sprout-heading">
+      <div class="container">
+        <div class="reveal">
+          <p class="eyebrow">Meet Sprout</p>
+          <h2 id="sprout-heading">Say hi to Sprout 🌱</h2>
+        </div>
+
+        <div class="sprout-card reveal">
+          <div class="sprout-intro">
+            <p>Sprout started as a single seed in a community garden — and like anything that grows where neighbors look after it, Sprout just kept… sprouting. Part helpful sidekick, part very enthusiastic intern who actually read all the fine print, Sprout exists for one reason: nobody should have to face the maze of benefits and forms alone.</p>
+            <br>
+            <p>Sprout read the confusing government PDFs so you don't have to. Tell it what's going on — "I lost my job and rent's due," "my kid needs a checkup," "where can I get groceries this week" — and Sprout helps you find the right program, resource, or clinic, and even helps fill out the paperwork. A little nerdy about deadlines, weirdly excited about food pantries, and never, ever judges.</p>
+          </div>
+
+          <div class="sprout-sub-block" style="margin-top:2rem;">
+            <h4>🔒 Private and secure by design</h4>
+            <ul class="sprout-check-list">
+              <li>Sprout runs on enterprise AI infrastructure that's independently SOC 2 Type II–audited and HIPAA-eligible (Fireworks AI, audited since 2023), with privacy-gated fallbacks — and it never stores, keeps, or trains on your conversations (zero data retention).</li>
+              <li>Everything is encrypted in transit and at rest (TLS + AES-256).</li>
+              <li>Sprout only ever sees what you type and your city/state — never your vault, your documents, your income, or your exact location. Your files stay locked with a key only you hold.</li>
+              <li>FEED applies HIPAA-aligned safeguards to your information and never sells it.</li>
+            </ul>
+          </div>
+
+          <div class="sprout-sub-block">
+            <h4>🩺 Talk to Sprout about your health, too</h4>
+            <ul class="sprout-check-list">
+              <li>You can tell Sprout about a medical problem. It'll help you find the right clinic, mental-health support, or assistance program and point you toward care.</li>
+            </ul>
+            <div class="sprout-disclaimer">
+              Sprout helps you find care — it does not diagnose, give medical advice, or replace a doctor. In a crisis it points you to 988 (Suicide &amp; Crisis Lifeline); in an emergency, call 911.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SECTION 11 — SECURITY ===================== -->
     <section class="section section--bg" aria-labelledby="security-heading">
       <div class="container">
         <div class="security-intro reveal">
@@ -1426,53 +2005,15 @@
             <div class="trust-badge-icon" aria-hidden="true">♾️</div>
             <span>Free forever</span>
           </div>
+          <div class="trust-badge">
+            <div class="trust-badge-icon" aria-hidden="true">🗑️</div>
+            <span>Zero data retention</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ===================== SECTION 9 — WHAT YOU CAN FIND ===================== -->
-    <section class="section section--surface" aria-labelledby="find-heading">
-      <div class="container">
-        <div class="section-intro reveal">
-          <p class="eyebrow">What you can find</p>
-          <h2 id="find-heading">Benefits and resources, all in one search.</h2>
-        </div>
-
-        <div class="cat-section-grid">
-          <div class="reveal">
-            <p class="cat-group-title">Benefits</p>
-            <div class="cat-chips">
-              <span class="cat-chip"><span class="cat-dot" style="background:#16a34a;" aria-hidden="true"></span>Food &amp; SNAP / 3SquaresVT</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#3b82f6;" aria-hidden="true"></span>Housing &amp; rent help</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#ef4444;" aria-hidden="true"></span>Healthcare &amp; Medicaid</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#eab308;" aria-hidden="true"></span>Jobs &amp; employment</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#7c3aed;" aria-hidden="true"></span>Education &amp; training</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#6366f1;" aria-hidden="true"></span>Legal aid</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#06b6d4;" aria-hidden="true"></span>Transportation</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#f97316;" aria-hidden="true"></span>Utilities &amp; heating</span>
-            </div>
-          </div>
-
-          <div class="reveal">
-            <p class="cat-group-title">Local resources</p>
-            <div class="cat-chips">
-              <span class="cat-chip"><span class="cat-dot" style="background:#16a34a;" aria-hidden="true"></span>Food pantries &amp; meals</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#3b82f6;" aria-hidden="true"></span>Shelters &amp; housing</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#ef4444;" aria-hidden="true"></span>Clinics &amp; mental health</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#eab308;" aria-hidden="true"></span>Childcare &amp; family support</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#6366f1;" aria-hidden="true"></span>Crisis &amp; safety</span>
-              <span class="cat-chip"><span class="cat-dot" style="background:#1cb0a3;" aria-hidden="true"></span>Community programs</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="text-align:center; margin-top:2rem;" class="reveal">
-          <a href="/resources.html" class="btn btn-secondary">See the full breakdown →</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===================== SECTION 10 — CLOSING CTA (photo band) ===================== -->
+    <!-- ===================== SECTION 12 — CLOSING CTA (photo band) ===================== -->
     <section class="photo-band photo-band--cta" aria-labelledby="cta-heading">
       <div class="container">
         <div class="glass-card cta-glass reveal">
@@ -1498,7 +2039,7 @@
           <li><a href="https://www.sourcetofeed.com">Open the app</a></li>
           <li><a href="#start">How it works</a></li>
           <li><a href="#install">Get FEED</a></li>
-          <li><a href="/resources.html">Resources</a></li>
+          <li><a href="#benefits">Resources</a></li>
         </ul>
 
         <p class="footer-tagline">FEED — free, community-powered, made in Vermont.<br>Owned by the community. Never for sale.</p>
@@ -1602,7 +2143,7 @@
       });
     })();
 
-    // ===================== 5. CAROUSEL =====================
+    // ===================== 6. CAROUSEL =====================
     (function(){
       var carousel = document.getElementById('hero-carousel');
       if(!carousel) return;
