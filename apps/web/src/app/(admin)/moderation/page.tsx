@@ -9,6 +9,7 @@ import { PetitionSignaturesExport } from '@/components/admin/petition-signatures
 import { OrgsSection } from './orgs-section'
 import { EventsSection } from './events-section'
 import { Loader2, ArrowLeft } from 'lucide-react'
+import { DashboardSection } from './dashboard-section'
 
 export const metadata = {
   title: 'Resource Moderation | FEED Admin',
@@ -174,6 +175,10 @@ export default function ModerationPage() {
         </Link>
 
         <div className="bg-white rounded-2xl shadow-sm border border-stone-200/50 p-6 sm:p-8">
+          {/* W5 Community Dashboard */}
+          <div className="mb-8 pb-8 border-b border-stone-200/50">
+            <DashboardSection />
+          </div>
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-[#4a5d23]">Resource Moderation</h1>
             <p className="text-stone-600 mt-2">
