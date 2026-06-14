@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -30,9 +30,20 @@ export const metadata: Metadata = {
     title: "FEED - Mutual Aid Resource Sharing",
     description: "Community-powered mutual aid. Share resources, find help, support your neighbors.",
   },
-  other: {
-    "theme-color": "#65a30d",
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
+  appleWebApp: {
+    capable: true,
+    title: 'FEED',
+    statusBarStyle: 'default',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#65a30d',
 };
 
 export default async function RootLayout({
