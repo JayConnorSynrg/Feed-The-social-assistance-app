@@ -793,6 +793,149 @@
       line-height: 1.6;
     }
 
+    /* ===================== FLIP TILES ===================== */
+    .flip-tile-section { margin-top: 2.5rem; }
+
+    .flip-tile-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    @media (max-width: 959px) and (min-width: 641px) {
+      .flip-tile-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .flip-tile-grid { grid-template-columns: 1fr; }
+    }
+
+    .flip-tile {
+      perspective: 1000px;
+      min-height: 320px;
+      cursor: pointer;
+    }
+    .flip-tile:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+      border-radius: var(--r-card);
+    }
+
+    .flip-tile-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 320px;
+      transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1);
+    }
+    .flip-tile:hover .flip-tile-inner,
+    .flip-tile.flipped .flip-tile-inner {
+      transform: rotateY(180deg);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flip-tile-inner {
+        transition: none;
+      }
+      .flip-tile:hover .flip-tile-face--front,
+      .flip-tile.flipped .flip-tile-face--front {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .flip-tile:hover .flip-tile-face--back,
+      .flip-tile.flipped .flip-tile-face--back {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .flip-tile:hover .flip-tile-inner,
+      .flip-tile.flipped .flip-tile-inner {
+        transform: none;
+      }
+    }
+
+    .flip-tile-face--front,
+    .flip-tile-face--back {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .flip-tile-face--front {
+      background: var(--surface);
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .flip-tile-face--back {
+      transform: rotateY(180deg);
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 1.4rem;
+      overflow-y: auto;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flip-tile-face--front { opacity: 1; pointer-events: auto; }
+      .flip-tile-face--back  { transform: none; opacity: 0; pointer-events: none; }
+    }
+
+    .flip-tile-icon-chip {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.375rem;
+      flex-shrink: 0;
+    }
+
+    .flip-tile-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+
+    .flip-tile-hint {
+      margin-top: auto;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .flip-tile-back-accent {
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .flip-tile-back-title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .flip-tile-back-body {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--body);
+      line-height: 1.45;
+      flex: 1;
+    }
+
     /* ===================== UTILITY ===================== */
     .mt-2 { margin-top: 1rem; }
     kbd {
@@ -898,6 +1041,129 @@
           <h2 id="moment-heading">It's a hard year. You're not imagining it.</h2>
           <p>Rent went up. Groceries went up. And the help that's supposed to be there is buried under forms, phone trees, and websites that don't talk to each other.</p>
           <p>You might qualify for more than you're getting — and never know it. Figuring it all out alone is exhausting. It shouldn't be this hard to ask for a hand.</p>
+
+          <!-- FLIP TILE GRID -->
+          <div class="flip-tile-section">
+            <p class="eyebrow">What we help with</p>
+            <div class="flip-tile-grid" id="flip-tile-grid">
+
+              <!-- 1 Food -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Food Pantries &amp; Meals" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(22,163,74,0.12);" aria-hidden="true">🥫</div>
+                    <p class="flip-tile-title">Food Pantries &amp; Meals</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#f0fdf4;">
+                    <div class="flip-tile-back-accent" style="background:#16a34a;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#16a34a;">Food Pantries &amp; Meals</p>
+                    <p class="flip-tile-back-body">Community food shelves, free meal programs, BROC and county food shelf networks, VeggieVanGo stops, and community gardens.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2 Housing -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Shelters &amp; Housing" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(59,130,246,0.12);" aria-hidden="true">🏠</div>
+                    <p class="flip-tile-title">Shelters &amp; Housing</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#eff6ff;">
+                    <div class="flip-tile-back-accent" style="background:#3b82f6;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#3b82f6;">Shelters &amp; Housing</p>
+                    <p class="flip-tile-back-body">Emergency shelters, transitional housing, Open Door Mission, and domestic-violence shelter locations (with privacy protections).</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3 Health -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Clinics &amp; Mental Health" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(239,68,68,0.12);" aria-hidden="true">🩺</div>
+                    <p class="flip-tile-title">Clinics &amp; Mental Health</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#fef2f2;">
+                    <div class="flip-tile-back-accent" style="background:#ef4444;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#ef4444;">Clinics &amp; Mental Health</p>
+                    <p class="flip-tile-back-body">Free and sliding-scale clinics, CHCRR community health, Turning Point recovery centers, and CCN mental health and substance-use counseling.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4 Family -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Childcare &amp; Family" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(236,72,153,0.12);" aria-hidden="true">👶</div>
+                    <p class="flip-tile-title">Childcare &amp; Family</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#fdf2f8;">
+                    <div class="flip-tile-back-accent" style="background:#ec4899;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#ec4899;">Childcare &amp; Family</p>
+                    <p class="flip-tile-back-body">Licensed childcare centers, Head Start sites, family resource networks, after-school programs, and lactation support.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5 Crisis -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Crisis &amp; Safety" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(249,115,22,0.12);" aria-hidden="true">🆘</div>
+                    <p class="flip-tile-title">Crisis &amp; Safety</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#fff7ed;">
+                    <div class="flip-tile-back-accent" style="background:#f97316;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#f97316;">Crisis &amp; Safety</p>
+                    <p class="flip-tile-back-body">211 Vermont, Salvation Army, United Way, crisis hotlines, and community-pinned safety alerts on the live map.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 6 Community -->
+              <div class="flip-tile reveal" tabindex="0" role="button" aria-label="Community Programs" aria-expanded="false">
+                <div class="flip-tile-inner">
+                  <div class="flip-tile-face--front">
+                    <div class="flip-tile-icon-chip" style="background:rgba(20,184,166,0.12);" aria-hidden="true">🤝</div>
+                    <p class="flip-tile-title">Community Programs</p>
+                    <p class="flip-tile-hint">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Tap to learn more
+                    </p>
+                  </div>
+                  <div class="flip-tile-face--back" style="background:#f0fdfa;">
+                    <div class="flip-tile-back-accent" style="background:#14b8a6;" aria-hidden="true"></div>
+                    <p class="flip-tile-back-title" style="color:#14b8a6;">Community Programs</p>
+                    <p class="flip-tile-back-body">United Way, VT Catholic Charities, immigrant &amp; refugee support (USCRI, VT Asylum Assistance), the American Association of Latinos in VT, and neighbor-to-neighbor resource offers.</p>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /.flip-tile-grid -->
+          </div><!-- /.flip-tile-section -->
+
           <p class="turn-line">So we built something different.</p>
         </div>
       </div>
@@ -1310,6 +1576,24 @@
       window.addEventListener('scroll', function(){
         band.style.backgroundPositionY = (window.scrollY * 0.18) + 'px';
       }, {passive: true});
+    })();
+
+    // ===================== 5. FLIP TILES =====================
+    (function(){
+      var tiles = document.querySelectorAll('.flip-tile');
+      tiles.forEach(function(tile){
+        function toggleTile(){
+          var flipped = tile.classList.toggle('flipped');
+          tile.setAttribute('aria-expanded', flipped ? 'true' : 'false');
+        }
+        tile.addEventListener('click', toggleTile);
+        tile.addEventListener('keydown', function(e){
+          if(e.key === 'Enter' || e.key === ' '){
+            e.preventDefault();
+            toggleTile();
+          }
+        });
+      });
     })();
 
     // ===================== 5. CAROUSEL =====================
