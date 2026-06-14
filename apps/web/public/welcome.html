@@ -277,6 +277,7 @@
 
     .photo-band--hero {
       min-height: clamp(520px, 80vh, 760px);
+      height: auto;
       background-position: center top;
       padding: clamp(4.5rem, 9vw, 7.5rem) 0;
     }
@@ -359,14 +360,19 @@
     }
     @media (min-width: 900px) {
       .hero-inner {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1.3fr 0.9fr;
         gap: 3rem;
         padding-top: 0;
       }
     }
 
     .hero-glass { max-width: 560px; }
-    .hero-glass h1 { margin-bottom: 1rem; }
+    .hero-glass h1 {
+      margin-bottom: 1rem;
+      font-size: clamp(1.6rem, 3.4vw, 3.0rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
     .hero-glass p  { margin-bottom: 1.75rem; }
 
     /* ===================== CAROUSEL ===================== */
