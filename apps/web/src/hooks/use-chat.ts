@@ -113,7 +113,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   // send-time (inside attemptSend) so it reflects changes that happen between
   // renders without requiring a re-render to propagate them.
   const profileRef = useRef(profile)
-  profileRef.current = profile
+  useEffect(() => {
+    profileRef.current = profile
+  })
 
   const abortControllerRef = useRef<AbortController | null>(null)
   // Track the last user content so retrySend can re-dispatch without

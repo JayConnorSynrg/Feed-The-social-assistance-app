@@ -432,7 +432,10 @@ function LoginForm() {
                 {t(locale, 'forgotPassword')}
               </Link>
               <div className="text-stone-500">
-                {t(locale, 'noAccount')}
+                {t(locale, 'noAccountText')}{' '}
+                <Link href="/signup" className="text-lime-700 hover:underline font-medium">
+                  {t(locale, 'signUpLabel')}
+                </Link>
               </div>
             </CardFooter>
           </>

@@ -365,14 +365,6 @@ function buildScreeningRequest(answers: Record<string, string>) {
 }
 
 
-function postProcessResourceMarkers(
-  content: string,
-  injectedResources?: string[]
-): string {
-  if (!injectedResources || injectedResources.length === 0) return content
-  if (content.includes('[[RESOURCE:') || content.includes('[[WEBRESULT:')) return content
-  return content
-}
 
 // ============================================
 // CHAT MESSAGE COMPONENT

@@ -144,7 +144,7 @@ describe('completeness matrix', () => {
   const ALL_KEYS: (keyof Messages)[] = [
     'heading', 'body', 'tryAgain', 'goHome', 'welcome', 'signInSubtitle',
     'emailLabel', 'passwordLabel', 'signIn', 'findHelpNow', 'forgotPassword',
-    'noAccount', 'oauthError', 'rateLimitError', 'lockoutError',
+    'noAccountText', 'signUpLabel', 'oauthError', 'rateLimitError', 'lockoutError',
     'chatErrorGeneric', 'chatErrorTimeout', 'chatErrorOffline',
   ]
 
@@ -154,7 +154,7 @@ describe('completeness matrix', () => {
     }
   })
 
-  it('has all 18 keys defined for every locale with non-empty string values', () => {
+  it('has all 19 keys defined for every locale with non-empty string values', () => {
     for (const locale of ALL_LOCALES) {
       for (const key of ALL_KEYS) {
         const val = messages[locale][key]
@@ -166,13 +166,13 @@ describe('completeness matrix', () => {
     }
   })
 
-  it('has exactly 18 keys per locale', () => {
+  it('has exactly 19 keys per locale', () => {
     for (const locale of ALL_LOCALES) {
       const keys = Object.keys(messages[locale])
       expect(
         keys.length,
-        `messages['${locale}'] has ${keys.length} keys, expected 18`
-      ).toBe(18)
+        `messages['${locale}'] has ${keys.length} keys, expected 19`
+      ).toBe(19)
     }
   })
 })
