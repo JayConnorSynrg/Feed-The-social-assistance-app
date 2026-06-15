@@ -18,6 +18,8 @@ import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-res
 import { usePanelContext } from '@/components/layout/feed-shell'
 import type { SystemPromptKey } from '@/lib/ai/system-prompts'
 import { buildExplainRequest, type SafeErrorContext } from '@/lib/ai/error-explainer'
+import { t, resolveLocale, dir } from '@/lib/i18n'
+import { logger } from '@/lib/logger'
 
 // ============================================
 // FLOW SELECTION CARD
@@ -363,14 +365,6 @@ function buildScreeningRequest(answers: Record<string, string>) {
 }
 
 
-function postProcessResourceMarkers(
-  content: string,
-  injectedResources?: string[]
-): string {
-  if (!injectedResources || injectedResources.length === 0) return content
-  if (content.includes('[[RESOURCE:') || content.includes('[[WEBRESULT:')) return content
-  return content
-}
 
 // ============================================
 // CHAT MESSAGE COMPONENT
@@ -474,12 +468,6 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
 // ============================================
 // CHAT ERROR BANNER — translated, actionable
 // ============================================
-const CHAT_ERROR_MESSAGES: Record<ChatErrorKind, string> = {
-  network: "We're having trouble connecting. Please check your connection and try again.",
-  server: 'The assistant is briefly unavailable — please try again in a moment.',
-  auth: 'Your session has expired. Please sign in again to continue.',
-  unknown: 'Something went wrong. Please try again.',
-}
 
 interface ChatErrorBannerProps {
   kind: ChatErrorKind | null
@@ -489,10 +477,34 @@ interface ChatErrorBannerProps {
 
 function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
   if (!kind) return null
-  const message = CHAT_ERROR_MESSAGES[kind]
+
+  // Resolve locale inside the component — stays client-side safe
+  let locale = 'en' as ReturnType<typeof resolveLocale>
+  try {
+    locale = resolveLocale()
+  } catch {
+    // SSR or restricted context — fall back to en
+  }
+
+  const messageKey = kind === 'network'
+    ? 'chatErrorOffline'
+    : kind === 'server'
+    ? 'chatErrorTimeout'
+    : 'chatErrorGeneric'
+
+  const message = t(locale, messageKey)
+
+  // Emit optimization log
+  try {
+    logger.info('error_surface.shown', { surface: 'chat-error', kind, locale })
+  } catch {
+    // guard
+  }
+
   return (
     <div
       role="alert"
+      dir={dir(locale)}
       data-testid="chat-error-banner"
       className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700"
     >
@@ -503,7 +515,7 @@ function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
         data-testid="chat-retry-btn"
         className="flex-shrink-0 px-3 py-1 rounded-md bg-red-700 text-white text-xs font-medium hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {isRetrying ? 'Retrying…' : 'Try again'}
+        {isRetrying ? 'Retrying…' : t(locale, 'tryAgain')}
       </button>
     </div>
   )
