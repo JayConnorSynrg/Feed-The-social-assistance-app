@@ -354,6 +354,129 @@
       transition-delay: calc(var(--i) * 0.08s);
     }
 
+    /* ===================== CPI BAR CHART ===================== */
+    .cpi-chart {
+      margin-top: 2.25rem;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 1.75rem 1.5rem 1.5rem;
+      max-width: 640px;
+    }
+    .cpi-chart-title {
+      font-size: 1rem;
+      font-weight: 650;
+      color: var(--ink);
+      margin: 0 0 0.25rem;
+    }
+    .cpi-chart-sub {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+    }
+    .cpi-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 1.05rem;
+    }
+    .cpi-row { display: grid; gap: 0.35rem; }
+    .cpi-row-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .cpi-row-label {
+      font-size: 0.9rem;
+      font-weight: 550;
+      color: var(--ink);
+    }
+    .cpi-row-note {
+      font-weight: 400;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .cpi-row-value {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .cpi-track {
+      position: relative;
+      height: 16px;
+      border-radius: 999px;
+      background: #eef1ec;
+      overflow: hidden;
+    }
+    .cpi-bar-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #86b34a, var(--green));
+      transition: width 1.1s cubic-bezier(0.2,0,0,1);
+      transition-delay: calc(var(--bi, 0) * 0.09s);
+    }
+    .js .reveal.in-view .cpi-bar-fill {
+      width: var(--w);
+    }
+    /* Headline reference marker — dashed, visually distinct from the bars */
+    .cpi-headline {
+      position: relative;
+      margin-top: 1.5rem;
+      padding-top: 1.1rem;
+      border-top: 1px dashed #c8d2c0;
+    }
+    .cpi-headline-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .cpi-headline-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--body);
+    }
+    .cpi-headline-dash {
+      width: 22px;
+      height: 0;
+      border-top: 2px dashed var(--green-deep);
+      flex-shrink: 0;
+    }
+    .cpi-headline-value {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      font-variant-numeric: tabular-nums;
+    }
+    .cpi-foot {
+      margin-top: 1.25rem;
+      font-size: 0.74rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .cpi-foot-note { margin: 0 0 0.4rem; }
+    .cpi-foot-source { margin: 0; }
+    .cpi-mission {
+      margin-top: 1.5rem;
+      max-width: 640px;
+      color: var(--body);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cpi-bar-fill {
+        width: var(--w) !important;
+        transition: none !important;
+      }
+    }
+    @media (max-width: 540px) {
+      .cpi-chart { padding: 1.5rem 1.15rem 1.25rem; }
+    }
+
     /* ===================== HERO ===================== */
     .hero-inner {
       display: grid;
@@ -1176,6 +1299,75 @@
           <p>Rent went up. Groceries went up. And the help that's supposed to be there is buried under forms, phone trees, and websites that don't talk to each other.</p>
           <p>You might qualify for more than you're getting — and never know it. Figuring it all out alone is exhausting. It shouldn't be this hard to ask for a hand.</p>
         </div>
+
+        <div class="cpi-chart reveal" role="img" aria-label="Bar chart of year-over-year price increases, May 2026. Home energy (electricity) up 5.9 percent. Transportation up 4.1 percent, with gasoline alone up 40.5 percent. Healthcare medical services up 3.6 percent. Housing and rent up 2.9 percent. Food and groceries up 2.7 percent. Childcare up 2.3 percent, preliminary. For reference, all-items headline inflation was 4.2 percent. Source: U.S. Bureau of Labor Statistics, Consumer Price Index, May 2026.">
+          <p class="cpi-chart-title">What's costing more this year</p>
+          <p class="cpi-chart-sub">Year-over-year price change, by category</p>
+
+          <div class="cpi-rows" aria-hidden="true">
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Home energy <span class="cpi-row-note">(electricity)</span></span>
+                <span class="cpi-row-value">+5.9%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:100%; --bi:0;"></div></div>
+            </div>
+
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Transportation <span class="cpi-row-note">(gas +40.5%*)</span></span>
+                <span class="cpi-row-value">+4.1%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:69.5%; --bi:1;"></div></div>
+            </div>
+
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Healthcare <span class="cpi-row-note">(medical services)</span></span>
+                <span class="cpi-row-value">+3.6%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:61%; --bi:2;"></div></div>
+            </div>
+
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Housing &amp; rent</span>
+                <span class="cpi-row-value">+2.9%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:49%; --bi:3;"></div></div>
+            </div>
+
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Food &amp; groceries</span>
+                <span class="cpi-row-value">+2.7%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:45.5%; --bi:4;"></div></div>
+            </div>
+
+            <div class="cpi-row">
+              <div class="cpi-row-head">
+                <span class="cpi-row-label">Childcare <span class="cpi-row-note">(preliminary)</span></span>
+                <span class="cpi-row-value">+2.3%</span>
+              </div>
+              <div class="cpi-track"><div class="cpi-bar-fill" style="--w:39%; --bi:5;"></div></div>
+            </div>
+          </div>
+
+          <div class="cpi-headline" aria-hidden="true">
+            <div class="cpi-headline-row">
+              <span class="cpi-headline-label"><span class="cpi-headline-dash"></span> All items (headline)</span>
+              <span class="cpi-headline-value">+4.2%</span>
+            </div>
+          </div>
+
+          <div class="cpi-foot">
+            <p class="cpi-foot-note">*Gasoline alone rose +40.5% — an especially volatile month.</p>
+            <p class="cpi-foot-source">Source: U.S. Bureau of Labor Statistics, Consumer Price Index — May 2026 (latest available, released June 10, 2026). Year-over-year change.</p>
+          </div>
+        </div>
+
+        <p class="cpi-mission reveal">FEED. can't lower these prices — but it can help you find, track, and stay on top of every bit of help you're entitled to, so a hard year stretches a little further.</p>
       </div>
     </section>
 
