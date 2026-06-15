@@ -1202,6 +1202,90 @@
       border-radius: 4px;
       padding: 0.125rem 0.375rem;
     }
+
+    /* ===================== ADD-TO-HOME-SCREEN MODAL ===================== */
+    .a2hs-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      background: rgba(28,43,22,0.5);
+      animation: a2hs-fade 0.18s ease;
+    }
+    .a2hs-overlay[hidden] { display: none; }
+    @keyframes a2hs-fade { from { opacity: 0; } to { opacity: 1; } }
+    .a2hs-sheet {
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      max-height: 85vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 2rem;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--body);
+      animation: a2hs-rise 0.2s ease;
+    }
+    @keyframes a2hs-rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .a2hs-sheet h2 {
+      color: var(--ink);
+      font-size: 1.5rem;
+      line-height: 1.2;
+      margin: 0 1.75rem 0.75rem 0;
+    }
+    .a2hs-sheet p { margin: 0 0 1rem; line-height: 1.6; }
+    .a2hs-sheet .a2hs-note {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    .a2hs-sheet .a2hs-tip {
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      padding-top: 1rem;
+      margin-top: 1.25rem;
+    }
+    .a2hs-sheet h3 {
+      color: var(--green-deep);
+      font-size: 1rem;
+      margin: 1.5rem 0 0.5rem;
+    }
+    .a2hs-sheet ol,
+    .a2hs-sheet ul {
+      margin: 0 0 0.5rem;
+      padding-left: 1.4rem;
+      line-height: 1.6;
+    }
+    .a2hs-sheet li { margin-bottom: 0.4rem; }
+    .a2hs-sheet .a2hs-open-btn { margin: 0.5rem 0 0.25rem; }
+    .a2hs-close {
+      position: absolute;
+      top: 0.85rem;
+      right: 0.85rem;
+      width: 2.25rem;
+      height: 2.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      line-height: 1;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .a2hs-close:hover { color: var(--ink); border-color: var(--ink); }
+    @media (prefers-reduced-motion: reduce) {
+      .a2hs-overlay,
+      .a2hs-sheet { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -1224,7 +1308,7 @@
         <li><a href="#start">How it works</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#benefits">Resources</a></li>
-        <li><a href="#install">Get it</a></li>
+        <li><a href="/plan">The Plan</a></li>
       </ul>
 
       <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Sign-Up Free</a>
@@ -1244,6 +1328,7 @@
             <p>FEED. shows you the help you qualify for, auto-fills and e-signs your applications from your private vault, and connects you with neighbors offering and asking for help — free, and built to stay that way.</p>
             <div class="btn-group">
               <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED.</a>
+              <a href="/plan" class="btn btn-outline-white">The Plan</a>
               <a href="#start" class="btn btn-outline-white">See how it works</a>
             </div>
           </div>
@@ -1866,31 +1951,10 @@
           <p style="max-width:600px; margin-top:0.75rem;">FEED. lives in your web browser, so there's nothing to download from an app store. Add it to your home screen once and it opens just like any other app.</p>
         </div>
 
-        <div class="install-grid">
-          <div class="install-card reveal" style="--i:0;">
-            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">📱</div>
-            <p class="install-card-title">iPhone (Safari)</p>
-            <ol class="install-steps">
-              <li>Open <strong>sourcetofeed.com</strong> in Safari.</li>
-              <li>Tap the Share button (square with an arrow pointing up).</li>
-              <li>Scroll down and tap "Add to Home Screen."</li>
-              <li>Tap "Add." The FEED. icon is now on your home screen.</li>
-            </ol>
-          </div>
-          <div class="install-card reveal" style="--i:1;">
-            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">🤖</div>
-            <p class="install-card-title">Android (Chrome)</p>
-            <ol class="install-steps">
-              <li>Open <strong>sourcetofeed.com</strong> in Chrome.</li>
-              <li>Tap the menu (three dots, top-right).</li>
-              <li>Tap "Add to Home screen."</li>
-              <li>Tap "Add." Done.</li>
-            </ol>
-          </div>
-          <div class="install-card reveal" style="--i:2;">
-            <div class="pillar-icon" style="margin-bottom:0.75rem;" aria-hidden="true">💻</div>
-            <p class="install-card-title">Computer</p>
-            <p style="font-size:0.9rem; color:var(--body); font-weight:500;">Open <strong>sourcetofeed.com</strong> and bookmark it (press <kbd>Ctrl+D</kbd> on Windows, or <kbd>Cmd+D</kbd> on a Mac) so it's always one click away.</p>
+        <div class="reveal" style="margin-top:1.5rem;">
+          <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-a2hs-open>Add to Home Screen</button>
+            <a href="https://www.sourcetofeed.com" class="btn btn-secondary">Open FEED. &rarr;</a>
           </div>
         </div>
       </div>
@@ -2121,7 +2185,7 @@
           <p>Free, private, and built to stay that way. Add FEED. to your phone and find what you need today.</p>
           <div class="btn-group" style="justify-content:center; margin-top:2rem;">
             <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED.</a>
-            <a href="#install" class="btn btn-outline-white">Add to Home Screen</a>
+            <a href="#install" class="btn btn-outline-white" data-a2hs-open>Add to Home Screen</a>
           </div>
         </div>
       </div>
@@ -2320,7 +2384,77 @@
       showSlide(0, true);
       startAuto();
     })();
+
+    /* ===================== 6. ADD-TO-HOME-SCREEN MODAL ===================== */
+    function initA2HS() {
+      var modal = document.getElementById('a2hs-modal');
+      if (!modal) return;
+      var sheet = modal.querySelector('.a2hs-sheet');
+      var closeBtn = modal.querySelector('.a2hs-close');
+      var triggers = document.querySelectorAll('[data-a2hs-open]');
+      var lastTrigger = null;
+
+      function openModal(e) {
+        if (e) e.preventDefault();
+        lastTrigger = (e && e.currentTarget) || null;
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        (closeBtn || sheet).focus();
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+        document.body.style.overflow = '';
+        if (lastTrigger && typeof lastTrigger.focus === 'function') lastTrigger.focus();
+      }
+
+      Array.prototype.forEach.call(triggers, function (t) {
+        t.addEventListener('click', openModal);
+      });
+
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (!modal.hidden && (e.key === 'Escape' || e.key === 'Esc')) closeModal();
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initA2HS);
+    } else {
+      initA2HS();
+    }
   </script>
+
+  <!-- ===================== ADD-TO-HOME-SCREEN MODAL ===================== -->
+  <div id="a2hs-modal" class="a2hs-overlay" hidden>
+    <div class="a2hs-sheet" role="dialog" aria-modal="true" aria-labelledby="a2hs-title" tabindex="-1">
+      <button type="button" class="a2hs-close" aria-label="Close">&times;</button>
+      <h2 id="a2hs-title">Add FEED. to your home screen</h2>
+      <p>FEED. runs in your web browser — there's nothing to download from an app store. Add it to your home screen once and it opens like any other app. This works on any phone and any browser.</p>
+
+      <a href="https://www.sourcetofeed.com" class="btn btn-primary a2hs-open-btn">Open FEED. &rarr;</a>
+      <p class="a2hs-note">Open FEED., then follow the steps below in whatever browser you're using.</p>
+
+      <h3>On your phone (any phone, any browser):</h3>
+      <ol>
+        <li>Open FEED. in your browser using the button above.</li>
+        <li>Open your browser's menu. Depending on your browser it's the <strong>Share</strong> icon (a box with an arrow pointing up ⬆️), or <strong>three dots</strong> (⋮), or <strong>three lines</strong> (☰) — usually at the top or bottom of the screen.</li>
+        <li>Choose <strong>"Add to Home Screen"</strong> (some browsers label it "Install app", "Add to Home", or "Install").</li>
+        <li>Confirm — the FEED. icon appears on your home screen.</li>
+      </ol>
+
+      <h3>On a computer:</h3>
+      <ul>
+        <li>Look for an <strong>install icon in the address bar</strong> (often a small ⊕ or a monitor/download icon), or open your browser's menu and choose <strong>"Install"</strong> or <strong>"Create shortcut"</strong>. No install option? Just <strong>bookmark it</strong> (Ctrl+D on Windows, Cmd+D on a Mac) so it's always one click away.</li>
+      </ul>
+
+      <p class="a2hs-tip">Don't see the option? Make sure you've opened FEED. directly in your phone's web browser (not inside another app), then try again.</p>
+    </div>
+  </div>
 
 </body>
 </html>
