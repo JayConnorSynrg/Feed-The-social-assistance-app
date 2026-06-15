@@ -855,27 +855,19 @@
       line-height: 1.6;
       margin-bottom: 1.25rem;
     }
-    .wheat {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 1rem;
+    /* Wheat icons placed ON the selected state (inside the SVG) */
+    #wheat-layer { pointer-events: none; }
+    .wheat-icon {
+      transform-box: fill-box;
+      transform-origin: bottom center;
+      animation: wheat-pop .55s cubic-bezier(.34,1.56,.64,1) both;
     }
-    .wheat .stalk {
-      font-size: 1.75rem;
-      display: inline-block;
+    @keyframes wheat-pop {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
     }
-
-    @keyframes wheat-grow {
-      0%   { transform: scaleY(0); opacity: 0; }
-      60%  { transform: scaleY(1.05); opacity: 1; }
-      100% { transform: scaleY(1); opacity: 1; }
-    }
-    .wheat .stalk { transform-origin: bottom center; }
-    .wheat.grow .stalk { animation: wheat-grow .9s ease-out both; }
-    .wheat.grow .stalk:nth-child(2) { animation-delay: .15s; }
-    .wheat.grow .stalk:nth-child(3) { animation-delay: .3s; }
     @media (prefers-reduced-motion: reduce) {
-      .wheat.grow .stalk { animation: none; transform: scaleY(1); opacity: 1; }
+      .wheat-icon { animation: none; transform: scale(1); opacity: 1; }
     }
 
     /* ===================== STAT CALLOUTS ===================== */
@@ -1077,7 +1069,7 @@
 
         <div class="map-section-inner">
           <div role="group" aria-label="United States — choose your state">
-            <svg id="usmap" xmlns="http://www.w3.org/2000/svg" width="959" height="593">
+            <svg id="usmap" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 959 593" preserveAspectRatio="xMidYMid meet">
   <title>Blank map of the United States, territories not included</title>
 <defs>
 <style type="text/css">
@@ -1371,17 +1363,13 @@ Place this code in the empty space below. */
 
 <path class="separator1" fill="none" d="m 215,493 v 55 l 36,45 m -251,-168 h 147 l 68,68 h 85 l 54,54 v 46"/>
 
+<g id="wheat-layer" aria-hidden="true"></g>
 </svg>
           </div>
 
           <div id="map-panel" class="map-panel">
             <div id="state-name" class="map-panel__title">Vermont</div>
             <div id="state-msg" class="map-panel__msg">This is where FEED. is growing first — Vermont, your founding community.</div>
-            <div class="wheat" id="wheat">
-              <div class="stalk">🌾</div>
-              <div class="stalk">🌾</div>
-              <div class="stalk">🌾</div>
-            </div>
           </div>
         </div>
       </div>
@@ -1516,7 +1504,36 @@ Place this code in the empty space below. */
 
       var stateNameEl = document.getElementById('state-name');
       var stateMsgEl  = document.getElementById('state-msg');
-      var wheatEl     = document.getElementById('wheat');
+      var wheatLayer  = document.getElementById('wheat-layer');
+      var SVG_NS      = 'http://www.w3.org/2000/svg';
+
+      function renderWheat(el) {
+        if(!wheatLayer) return;
+        // Clear previous wheat (re-appending naturally restarts the animation)
+        while(wheatLayer.firstChild) wheatLayer.removeChild(wheatLayer.firstChild);
+
+        var bbox = el.getBBox();
+        var cx = bbox.x + bbox.width / 2;
+        var cy = bbox.y + bbox.height / 2;
+
+        // Smaller wheat for tiny states; clamp to a sensible range
+        var minDim = Math.min(bbox.width, bbox.height);
+        var size = Math.max(9, Math.min(16, minDim * 0.55));
+        var spread = size * 0.75;
+        var offsets = [-spread, 0, spread];
+
+        offsets.forEach(function(dx, i) {
+          var t = document.createElementNS(SVG_NS, 'text');
+          t.setAttribute('class', 'wheat-icon');
+          t.setAttribute('x', (cx + dx).toFixed(1));
+          t.setAttribute('y', (cy + size * 0.35).toFixed(1));
+          t.setAttribute('text-anchor', 'middle');
+          t.setAttribute('font-size', size.toFixed(1));
+          t.style.animationDelay = (i * 0.12) + 's';
+          t.textContent = '🌾'; // 🌾
+          wheatLayer.appendChild(t);
+        });
+      }
 
       function selectState(el) {
         document.querySelectorAll('#usmap [aria-pressed="true"]').forEach(function(e){
@@ -1536,10 +1553,8 @@ Place this code in the empty space below. */
           stateMsgEl.textContent = 'FEED. hasn\u2019t grown here yet. Help plant it — bring FEED. to ' + name + '.';
         }
 
-        // Restart wheat animation
-        wheatEl.classList.remove('grow');
-        void wheatEl.offsetWidth;
-        wheatEl.classList.add('grow');
+        // Place wheat on the selected state
+        renderWheat(el);
       }
 
       // Wire up state elements
