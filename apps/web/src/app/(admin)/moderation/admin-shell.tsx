@@ -5,13 +5,13 @@ import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings } from 'lucide-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { logger } from '@/lib/logger'
+import { OverviewTab } from './overview-tab'
 
-// Lazy imports of tab content (will be created in W8-W10)
-// For W7, render placeholders
+// Placeholder for tabs not yet implemented (W9/W10)
 function PlaceholderTab({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center h-48 text-stone-400">
-      <span className="text-sm">{label} — coming in W8/W9/W10</span>
+      <span className="text-sm">{label} — coming in W9/W10</span>
     </div>
   )
 }
@@ -88,7 +88,7 @@ export function AdminShell() {
           </div>
 
           <TabsContent value="overview" className="mt-4">
-            <PlaceholderTab label="Overview KPI Bento Grid" />
+            <OverviewTab selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="events" className="mt-4">
             <PlaceholderTab label="Event Scheduler" />
