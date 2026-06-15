@@ -16,6 +16,7 @@ import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
 import { safeRelativePath } from '@/lib/safe-redirect'
+import { t, resolveLocale, dir } from '@/lib/i18n'
 
 function LoginForm() {
   const router = useRouter()
@@ -25,6 +26,14 @@ function LoginForm() {
   const redirectTo = safeRelativePath(searchParams.get('redirectTo'), '/')
   const oauthError = searchParams.get('error')
   const oauthDetail = searchParams.get('detail')
+
+  // i18n — resolve once at the top, try/catch for SSR safety
+  let locale = 'en' as ReturnType<typeof resolveLocale>
+  try {
+    locale = resolveLocale()
+  } catch {
+    // SSR or restricted context — fall back to en
+  }
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -232,6 +241,7 @@ function LoginForm() {
 
   return (
     <div
+      dir={dir(locale)}
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
         backgroundImage: 'url(/images/wheat-field-bg.jpg)',
@@ -247,9 +257,9 @@ function LoginForm() {
         {!showMFA ? (
           <>
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-lime-800">Welcome to FEED</CardTitle>
+              <CardTitle className="text-2xl font-bold text-lime-800">{t(locale, 'welcome')}</CardTitle>
               <CardDescription className="text-stone-600">
-                Sign in to access resources and connect with your community
+                {t(locale, 'signInSubtitle')}
               </CardDescription>
             </CardHeader>
 
@@ -292,7 +302,7 @@ function LoginForm() {
                 <input type="hidden" name="csrf_token" value={csrfToken || ''} />
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium text-stone-700">
-                    Email
+                    {t(locale, 'emailLabel')}
                   </label>
                   <Input
                     id="email"
@@ -308,7 +318,7 @@ function LoginForm() {
 
                 <div className="space-y-2">
                   <label htmlFor="password" className="text-sm font-medium text-stone-700">
-                    Password
+                    {t(locale, 'passwordLabel')}
                   </label>
                   <Input
                     id="password"
@@ -333,7 +343,7 @@ function LoginForm() {
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
                   disabled={loading || isLimited}
                 >
-                  {loading ? 'Signing in...' : isLimited ? 'Locked - Wait 15 minutes' : 'Sign In'}
+                  {loading ? 'Signing in...' : isLimited ? 'Locked - Wait 15 minutes' : t(locale, 'signIn')}
                 </Button>
               </form>
 
@@ -404,7 +414,7 @@ function LoginForm() {
                   data-testid="guest-access-btn"
                 >
                   <Eye className="mr-2 h-4 w-4" />
-                  {guestLoading ? 'Opening...' : 'Find Help Now — no account needed'}
+                  {guestLoading ? 'Opening...' : t(locale, 'findHelpNow')}
                 </Button>
                 <p className="text-xs text-stone-500 mt-1">Browse map, programs, and community resources instantly</p>
               </div>
@@ -419,13 +429,10 @@ function LoginForm() {
               </div>
 
               <Link href="/forgot-password" className="text-stone-500 hover:text-lime-700">
-                Forgot your password?
+                {t(locale, 'forgotPassword')}
               </Link>
               <div className="text-stone-500">
-                Don&apos;t have an account?{' '}
-                <Link href="/signup" className="text-lime-700 font-semibold underline hover:text-lime-900">
-                  Sign up
-                </Link>
+                {t(locale, 'noAccount')}
               </div>
             </CardFooter>
           </>

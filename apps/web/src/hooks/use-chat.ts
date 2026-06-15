@@ -7,6 +7,7 @@ import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey, type Perso
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
 import { track } from '@vercel/analytics'
+import { GUEST_LANGUAGE_KEY } from '@/lib/languages'
 
 export interface ChatMessage {
   id: string
@@ -234,7 +235,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             const dbCode = (profileRef.current as Record<string, unknown> | null)?.['preferred_language'] as string | null
             if (dbCode) return dbCode
             if (typeof window !== 'undefined') {
-              const stored = localStorage.getItem('feed_preferred_language')
+              const stored = localStorage.getItem(GUEST_LANGUAGE_KEY)
               if (stored) return stored
             }
             if (typeof navigator !== 'undefined') {
