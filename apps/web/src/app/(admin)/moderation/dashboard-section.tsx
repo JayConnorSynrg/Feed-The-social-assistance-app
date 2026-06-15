@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Lock } from 'lucide-react'
+import { Lock, TrendingUp } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -43,6 +43,21 @@ type EventStats = {
   people_fed_30d: number
 }
 
+type OrgId = {
+  id: string
+  name: string
+}
+
+type ForecastRow = {
+  forecast_date: string
+  projected_visits: number | null
+  projected_people_fed: number | null
+  confidence: string
+  suppressed: boolean
+  reason: string
+  history_count: number
+}
+
 type PeopleFed = {
   period_start: string
   period_end: string
@@ -71,6 +86,62 @@ function StatTile({ label, value }: { label: string; value: string | number | nu
   )
 }
 
+// Compute next Saturday from today
+function nextSaturday(): string {
+  const d = new Date()
+  const day = d.getDay()
+  const daysUntilSat = (6 - day + 7) % 7 || 7
+  d.setDate(d.getDate() + daysUntilSat)
+  return d.toISOString().slice(0, 10)
+}
+
+const CONFIDENCE_STYLES: Record<string, string> = {
+  high: 'text-green-700 bg-green-100',
+  medium: 'text-yellow-700 bg-yellow-100',
+  low: 'text-stone-600 bg-stone-100',
+  insufficient: 'text-stone-500 bg-stone-100',
+}
+
+function ForecastTile({ orgName, forecast }: { orgName: string; forecast: ForecastRow | null }) {
+  if (!forecast) return null
+  const confStyle = CONFIDENCE_STYLES[forecast.confidence] ?? CONFIDENCE_STYLES.low
+  return (
+    <div className="bg-stone-50/95 rounded-xl border border-stone-200 p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 text-[#4a5d23]" />
+        <span className="text-xs font-semibold text-stone-700 truncate">{orgName}</span>
+      </div>
+      {forecast.suppressed ? (
+        <p className="text-xs text-stone-500 italic">{forecast.reason}</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-xs text-stone-500">Projected Visits</p>
+              <p className="text-lg font-bold text-stone-800">
+                {forecast.projected_visits !== null ? forecast.projected_visits : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-stone-500">People Fed</p>
+              <p className="text-lg font-bold text-[#4a5d23]">
+                {forecast.projected_people_fed !== null ? forecast.projected_people_fed : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${confStyle}`}>
+              {forecast.confidence} confidence
+            </span>
+            <span className="text-xs text-stone-400">{forecast.reason}</span>
+          </div>
+        </>
+      )}
+      <p className="text-xs text-stone-400">Forecast for: {forecast.forecast_date}</p>
+    </div>
+  )
+}
+
 export function DashboardSection() {
   const [adoption, setAdoption] = useState<AdoptionStats | null>(null)
   const [resources, setResources] = useState<ResourceStat[]>([])
@@ -79,6 +150,8 @@ export function DashboardSection() {
   const [peopleFed, setPeopleFed] = useState<PeopleFed | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [orgs, setOrgs] = useState<OrgId[]>([])
+  const [forecasts, setForecasts] = useState<Record<string, ForecastRow | null>>({})
 
   useEffect(() => {
     const supabase = createClient()
@@ -95,12 +168,14 @@ export function DashboardSection() {
           petitionRes,
           eventsRes,
           peopleFedRes,
+          orgsRes,
         ] = await Promise.all([
           rpc('dashboard_adoption_stats'),
           rpc('dashboard_resource_stats'),
           rpc('dashboard_petition_momentum'),
           rpc('dashboard_event_stats'),
           rpc('community_people_fed'),
+          supabase.from('organizations').select('id, name').eq('is_active', true).limit(10),
         ])
 
         if (adoptionRes.error) throw new Error(adoptionRes.error.message)
@@ -114,6 +189,26 @@ export function DashboardSection() {
         setPetition((petitionRes.data as PetitionMomentum[])?.[0] ?? null)
         setEvents((eventsRes.data as EventStats[])?.[0] ?? null)
         setPeopleFed((peopleFedRes.data as PeopleFed[])?.[0] ?? null)
+
+        const orgList = (orgsRes.data ?? []) as OrgId[]
+        setOrgs(orgList)
+
+        // Fetch projected_turnout for each org (next Saturday)
+        if (orgList.length > 0) {
+          const satDate = nextSaturday()
+          const forecastResults = await Promise.all(
+            orgList.map((org) =>
+              supabase.rpc('projected_turnout', { p_org_id: org.id, p_date: satDate })
+            )
+          )
+          const forecastMap: Record<string, ForecastRow | null> = {}
+          orgList.forEach((org, i) => {
+            const res = forecastResults[i]
+            const rows = res.data as ForecastRow[] | null
+            forecastMap[org.id] = rows?.[0] ?? null
+          })
+          setForecasts(forecastMap)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard')
       } finally {
@@ -189,6 +284,21 @@ export function DashboardSection() {
           </ChartContainer>
         </div>
       </div>
+
+      {/* Projected Turnout Forecast */}
+      {orgs.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-stone-700 mb-3 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-[#4a5d23]" />
+            Projected Turnout — Next Saturday
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {orgs.map((org) => (
+              <ForecastTile key={org.id} orgName={org.name} forecast={forecasts[org.id] ?? null} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Lower tiles row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
