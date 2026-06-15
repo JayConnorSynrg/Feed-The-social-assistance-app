@@ -226,6 +226,9 @@
       background: var(--bg);
       color: var(--ink);
     }
+    /* Nudge the install link a touch more prominent than sibling nav links */
+    .nav-links a.nav-a2hs { font-weight: 600; color: var(--green); }
+    .nav-links a.nav-a2hs:hover { color: var(--green-deep); }
 
     .nav-cta { flex-shrink: 0; }
 
@@ -543,12 +546,22 @@
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.5rem 1.1rem;
+      gap: 0.6rem 1.1rem;
     }
-    /* Secondary outline action sits next to the primary "get it on your phone" pair */
-    .hero-secondary .btn-outline-white {
-      padding: 0.6rem 1.1rem;
-      font-size: 0.875rem;
+    /* Co-primary "Add to Home Screen" — Von Restorff: solid green isolates it
+       against the warm hero so the install action is unmissable. */
+    .btn-a2hs {
+      background: var(--green);
+      color: #fff;
+      padding: 0.95rem 1.9rem;
+      font-size: 1rem;
+      box-shadow: var(--shadow-lift);
+    }
+    .btn-a2hs:hover { background: var(--green-deep); }
+    .btn-a2hs .btn-a2hs-icon {
+      width: 1.15em;
+      height: 1.15em;
+      flex-shrink: 0;
     }
     /* Ghost / text-link variant — lightest tier, lowest emphasis */
     .btn-ghost-white {
@@ -1385,7 +1398,7 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#benefits">Resources</a></li>
         <li><a href="/plan">The Plan</a></li>
-        <li><a href="#" data-a2hs-open>Add to Home Screen</a></li>
+        <li><a href="#" class="nav-a2hs" data-a2hs-open>Add to Home Screen</a></li>
       </ul>
 
       <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Sign-Up Free</a>
@@ -1407,7 +1420,10 @@
             <div class="hero-actions">
               <div class="hero-secondary" role="group" aria-label="Get FEED on your device">
                 <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED.</a>
-                <button type="button" class="btn btn-outline-white" data-a2hs-open>Add to Home Screen</button>
+                <button type="button" class="btn btn-a2hs" data-a2hs-open>
+                  <svg class="btn-a2hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><line x1="11" y1="18" x2="13" y2="18"></line></svg>
+                  Add to Home Screen
+                </button>
               </div>
               <div class="hero-secondary">
                 <a href="/plan" class="btn btn-ghost-white">The Plan</a>

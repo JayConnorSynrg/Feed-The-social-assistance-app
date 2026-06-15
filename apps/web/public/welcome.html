@@ -226,6 +226,9 @@
       background: var(--bg);
       color: var(--ink);
     }
+    /* Nudge the install link a touch more prominent than sibling nav links */
+    .nav-links a.nav-a2hs { font-weight: 600; color: var(--green); }
+    .nav-links a.nav-a2hs:hover { color: var(--green-deep); }
 
     .nav-cta { flex-shrink: 0; }
 
@@ -286,7 +289,12 @@
       padding: clamp(4.5rem, 9vw, 7.5rem) 0;
     }
     .photo-band--hero::before {
-      background: linear-gradient(160deg, rgba(28,43,22,0.72) 0%, rgba(28,43,22,0.35) 100%);
+      /* Affect heuristic / contextual priming: a soft warm golden-green wash
+         makes the field read calm and safe (the "clouds" principle) while the
+         deeper bottom anchor keeps any over-photo text at WCAG-AA contrast. */
+      background:
+        radial-gradient(120% 90% at 18% 28%, rgba(214,178,94,0.20) 0%, rgba(214,178,94,0) 55%),
+        linear-gradient(160deg, rgba(34,52,26,0.74) 0%, rgba(28,43,22,0.42) 55%, rgba(22,33,17,0.62) 100%);
     }
 
     .photo-band--mid {
@@ -501,6 +509,87 @@
       letter-spacing: -0.02em;
     }
     .hero-glass p  { margin-bottom: 1.75rem; }
+
+    /* Affect / comfort priming — warm reassurance line above the headline */
+    .hero-reassure {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--green);
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.005em;
+    }
+    .hero-reassure .hero-reassure-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    /* Choice architecture: ONE standout primary, the rest clearly secondary */
+    .hero-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1.25rem;
+      margin-top: 0.5rem;
+    }
+    .hero-actions .btn-white {
+      padding: 0.95rem 1.9rem;
+      font-size: 1rem;
+      box-shadow: var(--shadow-lift);
+    }
+    .hero-secondary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem 1.1rem;
+    }
+    /* Co-primary "Add to Home Screen" — Von Restorff: solid green isolates it
+       against the warm hero so the install action is unmissable. */
+    .btn-a2hs {
+      background: var(--green);
+      color: #fff;
+      padding: 0.95rem 1.9rem;
+      font-size: 1rem;
+      box-shadow: var(--shadow-lift);
+    }
+    .btn-a2hs:hover { background: var(--green-deep); }
+    .btn-a2hs .btn-a2hs-icon {
+      width: 1.15em;
+      height: 1.15em;
+      flex-shrink: 0;
+    }
+    /* Ghost / text-link variant — lightest tier, lowest emphasis */
+    .btn-ghost-white {
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.92);
+      padding: 0.6rem 0.4rem;
+      font-size: 0.875rem;
+      text-decoration: none;
+      position: relative;
+    }
+    .btn-ghost-white::after {
+      content: '';
+      position: absolute;
+      left: 0.4rem;
+      right: 0.4rem;
+      bottom: 0.45rem;
+      height: 1px;
+      background: rgba(255,255,255,0.45);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.2s cubic-bezier(0.2,0,0,1);
+    }
+    .btn-ghost-white:hover::after { transform: scaleX(1); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn-ghost-white::after { transition: none; }
+    }
 
     /* ===================== CAROUSEL ===================== */
     .carousel-wrap {
@@ -1309,6 +1398,7 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#benefits">Resources</a></li>
         <li><a href="/plan">The Plan</a></li>
+        <li><a href="#" class="nav-a2hs" data-a2hs-open>Add to Home Screen</a></li>
       </ul>
 
       <a href="https://www.sourcetofeed.com" class="btn btn-primary nav-cta">Sign-Up Free</a>
@@ -1324,12 +1414,21 @@
           <!-- Left: frosted glass text -->
           <div class="glass-card hero-glass reveal">
             <p class="eyebrow">FREE · PRIVATE · COMMUNITY-POWERED</p>
+            <p class="hero-reassure"><span class="hero-reassure-dot" aria-hidden="true"></span>You're in the right place — help, made simple.</p>
             <h1 id="hero-heading">One free app that finds your benefits, fills out the paperwork, and connects your whole community.</h1>
             <p>FEED. shows you the help you qualify for, auto-fills and e-signs your applications from your private vault, and connects you with neighbors offering and asking for help — free, and built to stay that way.</p>
-            <div class="btn-group">
-              <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED.</a>
-              <a href="/plan" class="btn btn-outline-white">The Plan</a>
-              <a href="#start" class="btn btn-outline-white">See how it works</a>
+            <div class="hero-actions">
+              <div class="hero-secondary" role="group" aria-label="Get FEED on your device">
+                <a href="https://www.sourcetofeed.com" class="btn btn-white">Get FEED.</a>
+                <button type="button" class="btn btn-a2hs" data-a2hs-open>
+                  <svg class="btn-a2hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><line x1="11" y1="18" x2="13" y2="18"></line></svg>
+                  Add to Home Screen
+                </button>
+              </div>
+              <div class="hero-secondary">
+                <a href="/plan" class="btn btn-ghost-white">The Plan</a>
+                <a href="#start" class="btn btn-ghost-white">See how it works</a>
+              </div>
             </div>
           </div>
 
