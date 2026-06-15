@@ -3057,6 +3057,55 @@ export type Database = {
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       cleanup_old_login_attempts: { Args: never; Returns: undefined }
       cleanup_old_webhook_logs: { Args: never; Returns: number }
+      community_people_fed: {
+        Args: { p_end_date?: string; p_start_date?: string }
+        Returns: {
+          people_fed: number
+          period_end: string
+          period_start: string
+          suppressed: boolean
+          total_visits: number
+        }[]
+      }
+      dashboard_adoption_stats: {
+        Args: never
+        Returns: {
+          facilitators: number
+          new_users_30d: number
+          new_users_7d: number
+          providers: number
+          seekers: number
+          total_users: number
+        }[]
+      }
+      dashboard_event_stats: {
+        Args: never
+        Returns: {
+          active_events: number
+          people_fed_30d: number
+          total_checkins_30d: number
+          total_orgs: number
+          upcoming_30d: number
+        }[]
+      }
+      dashboard_petition_momentum: {
+        Args: never
+        Returns: {
+          active_petitions: number
+          top_petition_id: string
+          top_petition_sigs: number
+          total_petitions: number
+          total_signatures: number
+        }[]
+      }
+      dashboard_resource_stats: {
+        Args: never
+        Returns: {
+          active_count: number
+          category: string
+          resource_count: number
+        }[]
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
@@ -3555,6 +3604,19 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      projected_turnout: {
+        Args: { p_date?: string; p_org_id: string }
+        Returns: {
+          confidence: string
+          forecast_date: string
+          history_count: number
+          projected_people_fed: number
+          projected_visits: number
+          reason: string
+          suppressed: boolean
+        }[]
+      }
+      refresh_community_stats: { Args: never; Returns: undefined }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
       resources_in_bounds: {
         Args: {
