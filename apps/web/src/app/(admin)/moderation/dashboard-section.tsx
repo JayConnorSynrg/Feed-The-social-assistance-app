@@ -85,6 +85,10 @@ export function DashboardSection() {
 
     async function load() {
       try {
+        // RPCs added in migration 20260614150000_w5_dashboard_rpcs.sql;
+        // types.ts predates this migration — cast until next regen.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rpc = supabase.rpc.bind(supabase) as (fn: string) => ReturnType<typeof supabase.rpc>
         const [
           adoptionRes,
           resourcesRes,
@@ -92,11 +96,11 @@ export function DashboardSection() {
           eventsRes,
           peopleFedRes,
         ] = await Promise.all([
-          supabase.rpc('dashboard_adoption_stats'),
-          supabase.rpc('dashboard_resource_stats'),
-          supabase.rpc('dashboard_petition_momentum'),
-          supabase.rpc('dashboard_event_stats'),
-          supabase.rpc('community_people_fed'),
+          rpc('dashboard_adoption_stats'),
+          rpc('dashboard_resource_stats'),
+          rpc('dashboard_petition_momentum'),
+          rpc('dashboard_event_stats'),
+          rpc('community_people_fed'),
         ])
 
         if (adoptionRes.error) throw new Error(adoptionRes.error.message)
