@@ -10,6 +10,14 @@ import { EventScheduler } from './event-scheduler'
 import { ModerationTab } from './moderation-tab'
 import { CommunityTab } from './community-tab'
 
+function PlaceholderTab({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center h-48 text-stone-400">
+      <span className="text-sm">{label} — coming soon</span>
+    </div>
+  )
+}
+
 export function AdminShell() {
   const { orgs, loading: orgsLoading } = useAdminOrgs()
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
