@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Check, X, Edit, MapPin, Phone, Globe, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -59,18 +59,37 @@ interface PendingResource {
   submitted_by: string | null
 }
 
-interface ModerationQueueProps {
-  initialResources: PendingResource[]
-}
-
-export function ModerationQueue({ initialResources }: ModerationQueueProps) {
-  const [resources, setResources] = useState<PendingResource[]>(initialResources)
+export function ModerationQueue() {
+  const [resources, setResources] = useState<PendingResource[]>([])
+  const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editData, setEditData] = useState<Partial<PendingResource>>({})
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('resources')
+          .select('id, name, description, category, address_line1, city, state, phone, website, created_at, submitted_by')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
+          .limit(50)
+        if (error) throw error
+        setResources((data ?? []) as PendingResource[])
+      } catch (err) {
+        console.error('Error loading pending resources:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    void load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const formatCategory = (category: string) => {
     const cat = RESOURCE_CATEGORIES.find((c) => c.value === category)
@@ -158,6 +177,14 @@ export function ModerationQueue({ initialResources }: ModerationQueueProps) {
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
   }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (resources.length === 0) {
     return (

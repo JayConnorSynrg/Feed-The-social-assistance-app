@@ -7,15 +7,8 @@ import { useAdminOrgs } from './use-admin-orgs'
 import { logger } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
-
-// Placeholder for tabs not yet implemented (W9/W10)
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center h-48 text-stone-400">
-      <span className="text-sm">{label} — coming in W9/W10</span>
-    </div>
-  )
-}
+import { ModerationTab } from './moderation-tab'
+import { CommunityTab } from './community-tab'
 
 export function AdminShell() {
   const { orgs, loading: orgsLoading } = useAdminOrgs()
@@ -95,10 +88,10 @@ export function AdminShell() {
             <EventScheduler selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="moderation" className="mt-4">
-            <PlaceholderTab label="Moderation Queue" />
+            <ModerationTab selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="community" className="mt-4">
-            <PlaceholderTab label="Community Summary" />
+            <CommunityTab selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
             <PlaceholderTab label="Settings" />
