@@ -49,8 +49,10 @@ export function RecurrencePicker({ value, onChange }: Props) {
 
   useEffect(() => {
     const p = parseFreq(value)
-    setFreq(p.freq)
-    setSelectedDays(p.days)
+    Promise.resolve().then(() => {
+      setFreq(p.freq)
+      setSelectedDays(p.days)
+    })
   }, [value])
 
   function handleFreqChange(f: Frequency) {

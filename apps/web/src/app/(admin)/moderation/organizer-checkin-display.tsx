@@ -51,17 +51,20 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange }: Prop
 
   useEffect(() => {
     if (!open) return
-    fetchCount()
-    const interval = setInterval(fetchCount, 10_000)
+    const run = () => fetchCount()
+    void run()
+    const interval = setInterval(run, 10_000)
     return () => clearInterval(interval)
   }, [open, fetchCount])
 
-  // Reset form when dialog opens/closes
+  // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
-      setHouseholdSize(1)
-      setIsAnonymous(true)
-      setCheckinState('idle')
+      Promise.resolve().then(() => {
+        setHouseholdSize(1)
+        setIsAnonymous(true)
+        setCheckinState('idle')
+      })
     }
   }, [open])
 
