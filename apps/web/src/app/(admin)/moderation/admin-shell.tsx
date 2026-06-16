@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { logger } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
+import { EventScheduler } from './event-scheduler'
 
 // Placeholder for tabs not yet implemented (W9/W10)
 function PlaceholderTab({ label }: { label: string }) {
@@ -91,7 +92,7 @@ export function AdminShell() {
             <OverviewTab selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="events" className="mt-4">
-            <PlaceholderTab label="Event Scheduler" />
+            <EventScheduler selectedOrgId={selectedOrgId} />
           </TabsContent>
           <TabsContent value="moderation" className="mt-4">
             <PlaceholderTab label="Moderation Queue" />
