@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Flag, ChevronDown, ChevronUp, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -34,17 +34,71 @@ interface ContentGroup {
   reports: ReportRow[]
 }
 
-interface ReportsQueueProps {
-  initialGroups: ContentGroup[]
-}
-
-export function ReportsQueue({ initialGroups }: ReportsQueueProps) {
-  const [groups, setGroups] = useState<ContentGroup[]>(initialGroups)
+export function ReportsQueue() {
+  const [groups, setGroups] = useState<ContentGroup[]>([])
+  const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const { data: reports, error: reportsError } = await supabase
+          .from('content_reports')
+          .select('id, reporter_id, content_type, content_id, reason, details, status, created_at')
+          .eq('status', 'open')
+          .order('created_at', { ascending: true })
+          .limit(100)
+
+        if (reportsError) throw reportsError
+
+        // Group by content_id
+        const groupMap = new Map<string, ContentGroup>()
+        for (const report of (reports ?? []) as ReportRow[]) {
+          if (!groupMap.has(report.content_id)) {
+            groupMap.set(report.content_id, {
+              content_id: report.content_id,
+              post_content: null,
+              post_author: null,
+              reports: [],
+            })
+          }
+          groupMap.get(report.content_id)!.reports.push(report)
+        }
+
+        // Enrich with post content where available
+        const contentIds = Array.from(groupMap.keys())
+        if (contentIds.length > 0) {
+          const { data: posts } = await supabase
+            .from('posts')
+            .select('id, content, user_id')
+            .in('id', contentIds)
+
+          if (posts) {
+            for (const post of posts) {
+              const group = groupMap.get(post.id)
+              if (group) {
+                group.post_content = (post.content as string | null)?.slice(0, 200) ?? null
+              }
+            }
+          }
+        }
+
+        setGroups(Array.from(groupMap.values()))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load reports')
+      } finally {
+        setLoading(false)
+      }
+    }
+    void load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -81,8 +135,17 @@ export function ReportsQueue({ initialGroups }: ReportsQueueProps) {
         setProcessingId(null)
       }
     },
-    [supabase]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (groups.length === 0) {
     return (
@@ -149,6 +212,7 @@ export function ReportsQueue({ initialGroups }: ReportsQueueProps) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="min-h-[44px]"
                   onClick={() =>
                     setExpandedId((prev) =>
                       prev === group.content_id ? null : group.content_id
@@ -184,7 +248,7 @@ export function ReportsQueue({ initialGroups }: ReportsQueueProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs"
+                          className="h-9 min-h-[44px] text-xs"
                           disabled={processingId === report.id}
                           onClick={() => handleResolve(report.id, 'dismiss')}
                           data-testid={`dismiss-report-${report.id}`}
@@ -199,7 +263,7 @@ export function ReportsQueue({ initialGroups }: ReportsQueueProps) {
                         <Button
                           size="sm"
                           variant="destructive"
-                          className="h-7 text-xs"
+                          className="h-9 min-h-[44px] text-xs"
                           disabled={processingId === report.id}
                           onClick={() => handleResolve(report.id, 'uphold')}
                           data-testid={`uphold-report-${report.id}`}
