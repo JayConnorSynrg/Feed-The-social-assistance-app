@@ -228,7 +228,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           rpc('dashboard_resource_stats'),
           rpc('dashboard_petition_momentum'),
           rpc('dashboard_event_stats'),
-          rpc('community_people_fed', { p_start: thirtyDaysAgo(), p_end: todayIso() }),
+          rpc('community_people_fed', { p_start_date: thirtyDaysAgo(), p_end_date: todayIso() }),
           supabase.from('organizations').select('id, name').eq('is_active', true).limit(10),
           supabase.from('resources').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
           supabase.from('safety_alerts').select('id', { count: 'exact', head: true }).eq('status', 'live'),
