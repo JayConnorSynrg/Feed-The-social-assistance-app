@@ -231,7 +231,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           rpc('community_people_fed', { p_start: thirtyDaysAgo(), p_end: todayIso() }),
           supabase.from('organizations').select('id, name').eq('is_active', true).limit(10),
           supabase.from('resources').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-          supabase.from('safety_alerts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+          supabase.from('safety_alerts').select('id', { count: 'exact', head: true }).eq('status', 'live'),
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
           supabase
             .from('profiles')
@@ -432,7 +432,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           icon={ClipboardList}
         />
         <StatTile
-          label="Active Safety Alerts"
+          label="Live Safety Alerts"
           value={activeSafetyAlerts ?? '—'}
           icon={AlertTriangle}
         />
