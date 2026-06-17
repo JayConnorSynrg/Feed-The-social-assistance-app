@@ -1174,7 +1174,7 @@ export function FeedPanel() {
 
   const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
-  const { panelParams, setActivePanel } = usePanelContext()
+  const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
   // Saved resources for the resource-link selector in the composer
   const { savedResources } = useSavedResources()
   const resourceOptions: ResourceOption[] = savedResources
