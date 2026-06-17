@@ -34,6 +34,7 @@ import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
 import { useFollows } from '@/hooks/use-follows'
 import { MessagesPanel } from './messages-panel'
+import { EventsPanel } from './events-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
@@ -1173,7 +1174,7 @@ export function FeedPanel() {
 
   const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
-  const { panelParams, setActivePanel } = usePanelContext()
+  const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
   // Saved resources for the resource-link selector in the composer
   const { savedResources } = useSavedResources()
   const resourceOptions: ResourceOption[] = savedResources
@@ -1185,30 +1186,39 @@ export function FeedPanel() {
   const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
   // Resolve active subtab from panelParams (set by alias routing in feed-shell)
-  const activeSubtab: 'feed' | 'messages' =
-    panelParams?.subtab === 'messages' ? 'messages' : 'feed'
+  const activeSubtab: 'feed' | 'messages' | 'events' =
+    panelParams?.subtab === 'messages' ? 'messages'
+    : panelParams?.subtab === 'events' ? 'events'
+    : 'feed'
 
   // Sync subtab when panelParams.subtab changes (e.g. back-button hash navigation)
   // No local state needed — activeSubtab is derived directly from panelParams.
 
   // Tab switch handler: drives via setActivePanel alias path so hash + state
   // stay in sync through one code path. replaceState — no back-button spam.
-  const handleSubtabSwitch = useCallback((tab: 'feed' | 'messages') => {
+  const handleSubtabSwitch = useCallback((tab: 'feed' | 'messages' | 'events') => {
     logger.info('nav.subtab.switch', { panel: 'feed', subtab: tab })
     track('nav_subtab', { panel: 'feed', subtab: tab })
     if (tab === 'messages') {
       setActivePanel('messages')
+    } else if (tab === 'events') {
+      // events is not a PANEL_ALIAS — render inline within feed panel.
+      // Set panelParams.subtab directly and update the hash.
+      setPanelParams((prev) => ({ ...prev, subtab: 'events' }))
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '#feed')
+      }
     } else {
       setActivePanel('feed')
     }
-  }, [setActivePanel])
+  }, [setActivePanel, setPanelParams])
 
   // ARIA roving tabindex keyboard handler for the Feed tablist
   const handleFeedTabKeyDown = useCallback((
     e: React.KeyboardEvent<HTMLButtonElement>,
     currentIdx: number
   ) => {
-    const tabs: Array<'feed' | 'messages'> = ['feed', 'messages']
+    const tabs: Array<'feed' | 'messages' | 'events'> = ['feed', 'messages', 'events']
     let next = currentIdx
     if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
@@ -1826,8 +1836,8 @@ export function FeedPanel() {
           py-2.5 font-semibold border-b — per NN/g 2-level tab differentiation */}
       <div
         role="tablist"
-        aria-label="Community & Messages sections"
-        className="flex border-b border-stone-200 mb-0"
+        aria-label="Community, Messages & Events sections"
+        className="flex border-b border-stone-200 mb-0 overflow-x-auto"
       >
         <button
           role="tab"
@@ -1837,7 +1847,7 @@ export function FeedPanel() {
           tabIndex={activeSubtab === 'feed' ? 0 : -1}
           onClick={() => handleSubtabSwitch('feed')}
           onKeyDown={(e) => handleFeedTabKeyDown(e, 0)}
-          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
             activeSubtab === 'feed'
               ? 'border-[#4a5d23] text-[#4a5d23]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -1853,13 +1863,29 @@ export function FeedPanel() {
           tabIndex={activeSubtab === 'messages' ? 0 : -1}
           onClick={() => handleSubtabSwitch('messages')}
           onKeyDown={(e) => handleFeedTabKeyDown(e, 1)}
-          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
             activeSubtab === 'messages'
               ? 'border-[#4a5d23] text-[#4a5d23]'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
           Messages
+        </button>
+        <button
+          role="tab"
+          id="feed-tab-events"
+          aria-selected={activeSubtab === 'events'}
+          aria-controls="feed-panel-events"
+          tabIndex={activeSubtab === 'events' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('events')}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 2)}
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
+            activeSubtab === 'events'
+              ? 'border-[#4a5d23] text-[#4a5d23]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          Events
         </button>
       </div>
 
@@ -1873,6 +1899,16 @@ export function FeedPanel() {
           className="flex-1 min-h-0"
         >
           <MessagesPanel />
+        </div>
+      ) : activeSubtab === 'events' ? (
+        <div
+          role="tabpanel"
+          id="feed-panel-events"
+          aria-labelledby="feed-tab-events"
+          tabIndex={0}
+          className="flex-1 overflow-y-auto p-1"
+        >
+          <EventsPanel />
         </div>
       ) : (
         <div
