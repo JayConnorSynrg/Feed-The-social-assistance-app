@@ -11,6 +11,12 @@
  *
  * Design: tallies are derived client-side from poll_votes rows fetched per poll.
  * Realtime INSERT/DELETE events on poll_votes recompute tallies without a full refetch.
+ *
+ * TODO: The `polls` and `poll_votes` tables are not yet present in the generated database
+ * types (packages/database/types.ts). Once the migration for post_type='poll' is applied
+ * and `supabase gen types typescript` is re-run, replace the `(supabase as any)` casts
+ * below with properly-typed calls using Database['public']['Tables']['polls']['Row'] and
+ * Database['public']['Tables']['poll_votes']['Row'].
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -62,7 +68,8 @@ export async function createPoll(
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
 
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from('polls')
     .insert({
       post_id: postId,
@@ -91,7 +98,8 @@ export async function castVote(
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
 
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from('poll_votes')
     .insert({ poll_id: pollId, choice_index: choiceIndex })
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
@@ -123,7 +131,8 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
     return { error: 'Not authenticated' }
   }
 
-  const { error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from('poll_votes')
     .delete()
     .eq('poll_id', pollId)
@@ -196,7 +205,8 @@ export function usePollData(postId: string | null): {
 
     try {
       // Fetch poll row for this post
-      const { data: pollRow, error: pollError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: pollRow, error: pollError } = await (supabase as any)
         .from('polls')
         .select('id, post_id, question, options, closes_at, created_at')
         .eq('post_id', postId)
@@ -215,7 +225,8 @@ export function usePollData(postId: string | null): {
       const typedPollRow = pollRow as PollRow
 
       // Fetch all votes for this poll
-      const { data: votes, error: votesError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: votes, error: votesError } = await (supabase as any)
         .from('poll_votes')
         .select('id, poll_id, voter_id, choice_index, created_at')
         .eq('poll_id', typedPollRow.id)
