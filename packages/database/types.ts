@@ -1507,6 +1507,76 @@ export type Database = {
           },
         ]
       }
+      poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_index: number
+          poll_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_index: number
+          poll_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_index?: number
+          poll_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      polls: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          id: string
+          multiple_choice: boolean
+          options: Json
+          post_id: string
+          question: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          multiple_choice?: boolean
+          options?: Json
+          post_id: string
+          question: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          multiple_choice?: boolean
+          options?: Json
+          post_id?: string
+          question?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "polls_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           content: string
@@ -1620,6 +1690,7 @@ export type Database = {
           is_hidden: boolean | null
           is_pinned: boolean | null
           max_seekers: number | null
+          metadata: Json | null
           petition_id: string | null
           post_type: Database["public"]["Enums"]["post_type"]
           resource_id: string | null
@@ -1637,6 +1708,7 @@ export type Database = {
           is_hidden?: boolean | null
           is_pinned?: boolean | null
           max_seekers?: number | null
+          metadata?: Json | null
           petition_id?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
@@ -1654,6 +1726,7 @@ export type Database = {
           is_hidden?: boolean | null
           is_pinned?: boolean | null
           max_seekers?: number | null
+          metadata?: Json | null
           petition_id?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
@@ -3266,6 +3339,14 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_admin_org_list: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          org_type: string
+        }[]
+      }
       get_conversation_counterparty: {
         Args: { p_conversation_id: string }
         Returns: {
@@ -4364,7 +4445,14 @@ export type Database = {
         | "approval"
         | "denial"
         | "general"
-      post_type: "feed" | "resource_post" | "petition"
+      post_type:
+        | "feed"
+        | "resource_post"
+        | "petition"
+        | "seeker_request"
+        | "source_offer"
+        | "event_post"
+        | "poll"
       report_reason:
         | "spam"
         | "abusive"
@@ -4589,7 +4677,15 @@ export const Constants = {
         "denial",
         "general",
       ],
-      post_type: ["feed", "resource_post", "petition"],
+      post_type: [
+        "feed",
+        "resource_post",
+        "petition",
+        "seeker_request",
+        "source_offer",
+        "event_post",
+        "poll",
+      ],
       report_reason: [
         "spam",
         "abusive",
