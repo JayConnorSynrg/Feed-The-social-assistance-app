@@ -21,9 +21,11 @@ import {
   Loader2,
   MessageCircle,
 } from 'lucide-react'
+import { track } from '@vercel/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { MapView, ResourceMarker, ClusterMarker, type ViewState, type Resource } from '@/components/map'
+import { MapView, type MapViewHandle } from '@/components/map/map-view'
+import { ResourceMarker, ClusterMarker, type ViewState, type Resource } from '@/components/map'
 import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
@@ -308,8 +310,15 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // never pre-empts the profile center.
   const [userHasMovedMap, setUserHasMovedMap] = useState(false)
   const [hasGeocentered, setHasGeocentered] = useState(false)
+  // hasProfileCentered: set true after Priority 1a/1b applies a profile-based center.
+  // Allows the GPS effect (Priority 2) to override the profile center on first GPS fix,
+  // while still blocking a second GPS application once geolocation has been applied.
+  const [hasProfileCentered, setHasProfileCentered] = useState(false)
   // Controls the VolunteerResourceFAB category-picker externally from the HazardBubbleMenu
   const [volunteerFabOpen, setVolunteerFabOpen] = useState(false)
+
+  // Imperative handle to the live Mapbox instance for programmatic flyTo calls.
+  const mapViewRef = useRef<MapViewHandle>(null)
 
   // Shell panel navigation
   const { setActivePanel, setPanelParams } = usePanelContext()
@@ -376,9 +385,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       latitude: profile.latitude!,
       zoom: 11,
     }))
-    // Profile center applied — block further auto-centering by marking map as "moved"
-    // so browser-geo and the geocode fallback don't override it.
-    setUserHasMovedMap(true)
+    // Profile center applied — mark so GPS effect knows a profile center was set,
+    // but do NOT set userHasMovedMap so the GPS effect (Priority 2) can still
+    // override this center with an accurate GPS fix.
+    setHasProfileCentered(true)
   }, [profile?.latitude, profile?.longitude, userHasMovedMap])
 
   // Priority 1b: Geocode profile city/state via Mapbox — async, non-blocking, cached.
@@ -400,7 +410,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     if (memHit) {
       logger.info('map.geocode', { city, ms: 0, cached: 'memory' })
       setViewState((prev) => ({ ...prev, longitude: memHit.lng, latitude: memHit.lat, zoom: 11 }))
-      setUserHasMovedMap(true)
+      setHasProfileCentered(true)
       return
     }
 
@@ -411,7 +421,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       memGeocodeCache.set(city, diskHit)
       logger.info('map.geocode', { city, ms: 0, cached: 'localStorage' })
       setViewState((prev) => ({ ...prev, longitude: diskHit.lng, latitude: diskHit.lat, zoom: 11 }))
-      setUserHasMovedMap(true)
+      setHasProfileCentered(true)
       return
     }
 
@@ -438,7 +448,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           writeGeocodeCache(city, entry)
           logger.info('map.geocode', { city, ms, cached: false })
           setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat, zoom: 11 }))
-          setUserHasMovedMap(true)
+          setHasProfileCentered(true)
         }
       })
       .catch((err: unknown) => {
@@ -460,24 +470,38 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     getCurrentPosition()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply browser-geo position only when profile provided no center (userHasMovedMap
-  // is still false) and we haven't already applied it.
-  // setState in effect is correct here: syncing Mapbox viewState from the Geolocation
-  // API, an external platform API that delivers position asynchronously via a callback.
+  // Apply browser-geo position via flyTo once GPS resolves.
+  // Allows GPS to override a profile-based center (hasProfileCentered) so the
+  // map navigates to the user's actual device location on first load.
+  // Bails only when the user has manually panned AND a profile center is also set,
+  // or when GPS has already been applied (hasGeocentered).
+  // flyTo is used instead of setViewState so the Mapbox instance animates to the
+  // position — setViewState only updates MapPanel's local state, not the live map.
   useEffect(() => {
-    if (userHasMovedMap) return
-    if (hasGeocentered) return
+    if (userHasMovedMap && hasProfileCentered) {
+      logger.info('map.geolocation.blocked', { reason: 'user_panned' })
+      return
+    }
+    if (hasGeocentered) {
+      logger.info('map.geolocation.skipped', { reason: 'already_centered' })
+      return
+    }
     if (!position) return
 
-    setViewState({
-      longitude: position.coords.longitude,
-      latitude: position.coords.latitude,
+    mapViewRef.current?.flyTo({
+      center: [position.coords.longitude, position.coords.latitude],
       zoom: 12,
+      duration: 1000,
+    })
+    track('map_geolocated', { source: 'browser_gps' })
+    logger.info('map.geolocation.acquired', {
+      lng: position.coords.longitude,
+      lat: position.coords.latitude,
+      source: 'browser_gps',
     })
     setHasGeocentered(true)
-    // Do NOT set userHasMovedMap here — profile center (Priority 1a/1b) may still
-    // arrive after GPS and should override browser-geo for the initial center.
-  }, [position, userHasMovedMap, hasGeocentered])
+    // Do NOT set userHasMovedMap here — user hasn't touched the map.
+  }, [position, userHasMovedMap, hasGeocentered, hasProfileCentered])
 
   // Real Supabase resources query
   const { resources: realResources, loading: resourcesLoading, error: resourcesError } = useViewportResources({
@@ -742,6 +766,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       {/* Center: Interactive Map */}
       <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
         <MapView
+          ref={mapViewRef}
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
           onBoundsChange={handleBoundsChange}

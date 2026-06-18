@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react'
 import Map, { NavigationControl, GeolocateControl, MapRef, ViewStateChangeEvent } from 'react-map-gl/mapbox'
 import { Loader2 } from 'lucide-react'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -20,6 +20,11 @@ interface Bounds {
   north: number
 }
 
+/** Imperative handle exposed via ref for programmatic map control. */
+export interface MapViewHandle {
+  flyTo(opts: { center: [number, number]; zoom: number; duration?: number }): void
+}
+
 interface MapViewProps {
   initialViewState?: ViewState
   onViewStateChange?: (viewState: ViewState) => void
@@ -37,18 +42,31 @@ const DEFAULT_VIEW_STATE: ViewState = {
   zoom: 4,
 }
 
-export function MapView({
-  initialViewState = DEFAULT_VIEW_STATE,
-  onViewStateChange,
-  onBoundsChange,
-  onMapLoad,
-  onUserInteraction,
-  children,
-  className = '',
-}: MapViewProps) {
+export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
+  {
+    initialViewState = DEFAULT_VIEW_STATE,
+    onViewStateChange,
+    onBoundsChange,
+    onMapLoad,
+    onUserInteraction,
+    children,
+    className = '',
+  },
+  ref
+) {
   const mapRef = useRef<MapRef>(null)
   const [viewState, setViewState] = useState<ViewState>(initialViewState)
   const [isLoading, setIsLoading] = useState(true)
+
+  useImperativeHandle(ref, () => ({
+    flyTo(opts) {
+      mapRef.current?.flyTo({
+        center: opts.center,
+        zoom: opts.zoom,
+        duration: opts.duration ?? 1000,
+      })
+    },
+  }))
 
   const getBounds = useCallback((): Bounds | null => {
     const map = mapRef.current?.getMap()
@@ -153,6 +171,6 @@ export function MapView({
       </Map>
     </div>
   )
-}
+})
 
 export type { ViewState }

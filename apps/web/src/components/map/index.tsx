@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
-import type { ViewState } from './map-view'
+import type { ViewState, MapViewHandle } from './map-view'
 import type { Resource } from './resource-marker'
 
 // Loading fallback component
@@ -34,7 +34,7 @@ export const ClusterMarker = dynamic(
 )
 
 // Re-export types
-export type { ViewState, Resource }
+export type { ViewState, MapViewHandle, Resource }
 
 // Re-export ResourceSearch (doesn't use mapbox)
 export { ResourceSearch } from './resource-search'

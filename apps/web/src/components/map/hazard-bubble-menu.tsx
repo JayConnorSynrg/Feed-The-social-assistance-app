@@ -52,6 +52,8 @@ import { createClient } from '@/lib/supabase/client'
 import { CATEGORY_META } from '@/lib/resource-categories'
 import type { PlaceAlertInput } from '@/hooks/use-safety-alerts'
 import type { Database } from '@feed/database'
+import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -142,6 +144,45 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
   const [placing, setPlacing] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [address, setAddress] = useState('')
+  const [geocoding, setGeocoding] = useState(false)
+  const [geocodedCoords, setGeocodedCoords] = useState<{ lng: number; lat: number } | null>(null)
+  const [geocodeError, setGeocodeError] = useState<string | null>(null)
+
+  const resetLocationState = () => {
+    setAddress('')
+    setGeocodedCoords(null)
+    setGeocodeError(null)
+  }
+
+  async function geocodeAddress(query: string) {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+    if (!token || !query.trim()) return
+    setGeocoding(true)
+    setGeocodeError(null)
+    const t0 = Date.now()
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&limit=1`
+      )
+      const json = await res.json()
+      const feature = json.features?.[0]
+      if (feature) {
+        const [lng, lat] = feature.center
+        setGeocodedCoords({ lng, lat })
+        logger.info('hazard.geocode', { address: query, ms: Date.now() - t0, success: true })
+        track('safety_alert_geocode', { success: 'true', ms: String(Date.now() - t0) })
+      } else {
+        setGeocodeError('Address not found — pin will use map center')
+        logger.info('hazard.geocode', { address: query, ms: Date.now() - t0, success: false })
+        track('safety_alert_geocode', { success: 'false' })
+      }
+    } catch {
+      setGeocodeError('Could not geocode address — pin will use map center')
+    } finally {
+      setGeocoding(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -149,12 +190,24 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
     setPlacing(true)
     setError(null)
     try {
+      const coords = geocodedCoords ?? viewCenter
       await onPlace({
         type: entry.type,
         severity: parseInt(severity, 10),
         description,
-        lng: viewCenter.lng,
-        lat: viewCenter.lat,
+        lng: coords.lng,
+        lat: coords.lat,
+      })
+      logger.info('hazard.pin.placed', {
+        type: entry.type,
+        severity: parseInt(severity, 10),
+        geocoded: !!geocodedCoords,
+        fallback_to_map_center: !geocodedCoords,
+      })
+      track('safety_alert_placed', {
+        type: entry.type,
+        severity: String(parseInt(severity, 10)),
+        geocoded: String(!!geocodedCoords),
       })
       setSuccess(true)
       setTimeout(() => {
@@ -162,6 +215,7 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
         setSuccess(false)
         setDescription('')
         setSeverity('2')
+        resetLocationState()
       }, 1200)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to place alert')
@@ -171,7 +225,7 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
   }
 
   return (
-    <Dialog open={!!entry} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog open={!!entry} onOpenChange={(open) => { if (!open) { resetLocationState(); onClose() } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -182,15 +236,44 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
         {success ? (
           <div className="py-6 text-center text-sm text-stone-700">
             <ShieldAlert className="w-8 h-8 mx-auto mb-2 text-amber-500" />
-            <p className="font-medium">Alert placed at map center.</p>
+            <p className="font-medium">{geocodedCoords ? 'Alert placed at specified location.' : 'Alert placed at map center.'}</p>
             <p className="text-stone-500 text-xs mt-1">Visible to neighbors immediately.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-xs text-stone-500">{entry?.description}</p>
-            <p className="text-xs text-stone-400">
-              Pin will be placed at the current map center.
-            </p>
+
+            {/* Address search */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-stone-700">Location</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={address}
+                  onChange={e => { setAddress(e.target.value); setGeocodedCoords(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); geocodeAddress(address) } }}
+                  placeholder="Enter address or leave blank for map center"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => geocodeAddress(address)}
+                  disabled={geocoding || !address.trim()}
+                  className="px-3 py-2 text-sm bg-[#4a5d23] text-white rounded-lg hover:bg-[#3d4d1e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {geocoding ? '…' : 'Find'}
+                </button>
+              </div>
+              {geocodedCoords && (
+                <p className="text-xs text-[#4a5d23]">✓ Location found</p>
+              )}
+              {geocodeError && (
+                <p className="text-xs text-amber-600">{geocodeError}</p>
+              )}
+              {!geocodedCoords && !geocodeError && (
+                <p className="text-xs text-stone-400">Leave blank to use current map center</p>
+              )}
+            </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="hazard-severity" className="text-sm text-stone-800">
@@ -229,7 +312,7 @@ function PlaceHazardDialog({ entry, viewCenter, onPlace, onClose }: PlaceDialogP
             )}
 
             <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { resetLocationState(); onClose() }}>
                 Cancel
               </Button>
               <Button
@@ -525,6 +608,8 @@ export function HazardBubbleMenu({ viewCenter, onPlaceAlert, onAddResource }: Ha
   const handleHazardEntryClick = (entry: HazardEntry) => {
     setSheetOpen(false)
     setActiveEntry(entry)
+    track('safety_alert_menu_open', { type: entry.type })
+    logger.info('hazard.menu.open', { type: entry.type })
   }
 
   const handlePlaceAndClose = async (input: PlaceAlertInput) => {
