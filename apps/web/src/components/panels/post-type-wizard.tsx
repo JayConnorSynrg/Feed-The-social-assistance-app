@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { sanitizeInput } from '@/lib/security'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 import { createPoll } from '@/hooks/use-poll'
 import {
   Dialog,
@@ -849,22 +850,27 @@ export function PostTypeWizard({ open, onClose, onPost, resourceOptions, onSafet
       return
     }
     dispatch({ type: 'SELECT_TYPE', payload: card.key })
+    track('wizard_type_selected', { type: card.key })
   }, [onClose, onSafetyAlertClick])
 
   const handleOpenChange = useCallback((o: boolean) => {
     if (!o) {
+      if (state.step !== 'type-selection') {
+        track('wizard_abandoned', { step: state.step, type: state.selectedType ?? 'none' })
+      }
       dispatch({ type: 'RESET' })
       onClose()
     }
-  }, [onClose])
+  }, [onClose, state.step, state.selectedType])
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-[92vh] rounded-t-2xl rounded-b-none flex flex-col p-0 gap-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:h-auto sm:max-h-[85vh] overflow-hidden"
+        hideDefaultClose
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-[92vh] rounded-t-2xl rounded-b-none flex flex-col p-0 gap-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:h-auto sm:max-h-[88vh] overflow-hidden"
       >
         {/* Header */}
-        <DialogHeader className="flex-row items-center gap-3 p-4 border-b border-stone-100 space-y-0">
+        <DialogHeader className="flex-row items-center gap-3 p-5 border-b border-stone-100 space-y-0">
           {state.step === 'compose' && (
             <button
               onClick={() => dispatch({ type: 'BACK' })}
@@ -885,9 +891,9 @@ export function PostTypeWizard({ open, onClose, onPost, resourceOptions, onSafet
         </DialogHeader>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-6">
           {state.step === 'type-selection' ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               {TYPE_CARDS.map(card => {
                 const Icon = card.icon
                 const isAmber = card.variant === 'amber'
@@ -896,15 +902,15 @@ export function PostTypeWizard({ open, onClose, onPost, resourceOptions, onSafet
                     key={card.key}
                     type="button"
                     onClick={() => handleCardClick(card)}
-                    className={`rounded-xl border border-stone-200 bg-white p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] ${
+                    className={`rounded-xl border border-stone-200 bg-white p-5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] ${
                       isAmber
                         ? 'hover:border-amber-400 hover:bg-stone-50'
                         : 'hover:border-[#4a5d23] hover:bg-stone-50'
                     }`}
                   >
-                    <Icon className={`w-6 h-6 mb-2 ${isAmber ? 'text-amber-500' : 'text-[#4a5d23]'}`} />
-                    <div className="text-sm font-medium text-stone-900">{card.label}</div>
-                    <div className="text-xs text-stone-500 mt-0.5">{card.description}</div>
+                    <Icon className={`w-7 h-7 mb-3 ${isAmber ? 'text-amber-500' : 'text-[#4a5d23]'}`} />
+                    <div className="text-sm font-semibold text-stone-900">{card.label}</div>
+                    <div className="text-xs text-stone-500 mt-1 leading-relaxed">{card.description}</div>
                   </button>
                 )
               })}

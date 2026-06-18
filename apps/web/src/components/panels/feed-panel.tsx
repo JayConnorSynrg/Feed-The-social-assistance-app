@@ -5,7 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, AlertTriangle, Cloud, Construction, Gauge, ShieldAlert, Plus, HandHelping, Gift, BookMarked, BarChart3, CalendarDays, Megaphone, ArrowRight } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, AlertTriangle, Cloud, Construction, Gauge, ShieldAlert, Plus, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -408,46 +408,18 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
         {/* Input, Resource Selector, and Send */}
         <div className="flex-1 flex flex-col gap-2">
-          {/* Post creation trigger — D3 Option A + C */}
-          <div className="flex flex-col gap-2">
-            {/* Option A: Large "+" button */}
-            <button
-              type="button"
-              data-testid="post-wizard-trigger"
-              onClick={() => setWizardOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-400 text-sm hover:border-[#4a5d23] hover:text-stone-600 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1"
-            >
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
-                <Plus className="w-4 h-4 text-white" />
-              </span>
-              <span>Share an update, offer, request, or more…</span>
-            </button>
-
-            {/* Option C: Icon bar — quick-pick type shortcuts */}
-            <div className="flex items-center justify-around px-1 py-1" role="group" aria-label="Post type shortcuts">
-              {[
-                { icon: HandHelping, label: 'Seeking Help', testId: 'shortcut-seeker' },
-                { icon: Gift, label: 'Offering Help', testId: 'shortcut-offer' },
-                { icon: BookMarked, label: 'Resource', testId: 'shortcut-resource' },
-                { icon: BarChart3, label: 'Poll', testId: 'shortcut-poll' },
-                { icon: CalendarDays, label: 'Event', testId: 'shortcut-event' },
-                { icon: ScrollText, label: 'Petition', testId: 'shortcut-petition' },
-              ].map(({ icon: Icon, label, testId }) => (
-                <button
-                  key={label}
-                  type="button"
-                  data-testid={testId}
-                  title={label}
-                  aria-label={label}
-                  onClick={() => setWizardOpen(true)}
-                  className="flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg text-stone-500 hover:text-[#4a5d23] hover:bg-stone-100 transition-colors focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
-                >
-                  <Icon className="w-4 h-4" aria-hidden="true" />
-                  <span className="text-[10px] leading-none">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Post creation trigger */}
+          <button
+            type="button"
+            data-testid="post-wizard-trigger"
+            onClick={() => { setWizardOpen(true); track('wizard_open') }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-400 text-sm hover:border-[#4a5d23] hover:text-stone-600 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1"
+          >
+            <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
+              <Plus className="w-4 h-4 text-white" />
+            </span>
+            <span>Share an update, offer, request, or more…</span>
+          </button>
 
           {/* Optional resource link selector */}
           {resourceOptions.length > 0 && (
