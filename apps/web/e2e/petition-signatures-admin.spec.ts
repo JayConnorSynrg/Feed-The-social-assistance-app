@@ -187,7 +187,9 @@ test.describe.configure({ mode: 'serial' })
 
 test('(e) FAQ block renders with the privacy + withdraw + verified-signature copy', async ({ page }) => {
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
   await expect(page.locator('text=Community Petitions')).toBeVisible({ timeout: 15_000 })
 
   await page.locator('[data-testid="petition-faq-toggle"]').click()
@@ -200,7 +202,9 @@ test('(e) FAQ block renders with the privacy + withdraw + verified-signature cop
 
 test('(a) signer signs the test petition → count increments', async ({ page }) => {
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
 
   // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
   const allPanel = page.locator('#petitions-panel-all')
@@ -233,7 +237,9 @@ test('(a) signer signs the test petition → count increments', async ({ page })
 
   // 2. Reload and re-navigate to verify the signed state survives a full page refresh
   await page.reload()
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
   const allPanelAfterReload = page.locator('#petitions-panel-all')
   const cardAfterReload = allPanelAfterReload.locator(`[data-testid="petition-card-${petitionId}"]`)
   await expect(cardAfterReload).toBeVisible({ timeout: 20_000 })
@@ -252,7 +258,9 @@ test('(a) signer signs the test petition → count increments', async ({ page })
 
 test('(b) signer withdraws → count decrements, sign CTA returns', async ({ page }) => {
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
 
   // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
   const allPanel = page.locator('#petitions-panel-all')
@@ -297,7 +305,9 @@ test('admin-gate: non-admin (signer) calling the RPCs is rejected', async () => 
 test('(c) admin re-signs as signer, then views FULL name + Export CSV sets exported_at', async ({ page, context }) => {
   // Re-sign as signer so there is a signature to export
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
   // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
   const allPanel = page.locator('#petitions-panel-all')
   const petitionCard = allPanel.locator(`[data-testid="petition-card-${petitionId}"]`)
@@ -354,7 +364,9 @@ test('(c) admin re-signs as signer, then views FULL name + Export CSV sets expor
 
 test('(d) after export the withdraw control is gone + the RPC rejects locked withdrawal', async ({ page }) => {
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
-  await page.locator('[data-testid="sidebar-petitions"]').click()
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 15_000 })
 
   // Scope to #petitions-panel-all to avoid strict-mode double-match with #petitions-panel-signed
   const allPanel = page.locator('#petitions-panel-all')

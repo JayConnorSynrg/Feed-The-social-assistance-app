@@ -118,11 +118,9 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'map', icon: Map, label: 'Resource Map' },
   { panel: 'programs', icon: Search, label: 'Browse Programs' },
   { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
-  { panel: 'applications', icon: ClipboardList, label: 'Applications', roles: ['recipient', 'agency', 'program'] },
+  // applications, events, petitions are now subtabs of documents/feed respectively
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
-  { panel: 'petitions', icon: ScrollText, label: 'Petitions' },
-  { panel: 'events', icon: Calendar, label: 'Events' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -134,12 +132,15 @@ const ADMIN_SIDEBAR_ICON: SidebarIconItem = {
   label: 'Admin',
 }
 
-// Panel aliases: 'forms' and 'messages' are deep-link inputs that resolve to
-// a parent panel + subtab. They remain valid PanelType inputs to setActivePanel
-// but never become the resolved activePanel value.
+// Panel aliases: these are deep-link inputs that resolve to a parent panel + subtab.
+// They remain valid PanelType inputs to setActivePanel but never become the resolved
+// activePanel value (the parent panel carries the resolved state).
 const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string }> = {
   forms: { panel: 'documents', subtab: 'forms' },
   messages: { panel: 'feed', subtab: 'messages' },
+  applications: { panel: 'documents', subtab: 'applications' },
+  petitions: { panel: 'feed', subtab: 'petitions' },
+  events: { panel: 'feed', subtab: 'events' },
 }
 
 // ============================================
@@ -460,10 +461,8 @@ const MOBILE_SHORT_LABELS: Record<string, string> = {
   'Resource Map': 'Map',
   'Browse Programs': 'Programs',
   'Community & Messages': 'Community',
-  'Applications': 'Applications',
   'Documents & Forms': 'Documents',
   'Get Help Finding Resources': 'Get Help',
-  'Petitions': 'Petitions',
   'Settings': 'Settings',
 }
 

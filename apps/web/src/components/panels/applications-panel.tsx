@@ -696,6 +696,9 @@ export function ApplicationsPanel({ userId }: ApplicationsPanelProps) {
   }
 
   const handleUploadDocument = (_applicationId: string, _actionId: string) => {
+    // Set subtab='documents' explicitly so navigating back to documents
+    // lands on My Documents, not the Applications subtab we came from.
+    setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
     setActivePanel('documents')
   }
 

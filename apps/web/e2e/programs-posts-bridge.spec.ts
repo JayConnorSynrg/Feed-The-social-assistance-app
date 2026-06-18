@@ -221,8 +221,10 @@ test('(a) Share to Feed: program card → dialog → post appears in feed with r
 test('(b) Application form back-link: clicking program name navigates to documents/forms', async ({ page }) => {
   await loginAndGoToRoot(page)
 
-  // Navigate to applications panel
-  await page.locator('[data-testid="sidebar-applications"]').click()
+  // Navigate to applications: Documents&Forms sidebar → Applications subtab
+  await page.locator('[data-testid="sidebar-documents"]').click()
+  await page.locator('#docs-tab-applications').click()
+  await page.locator('#docs-panel-applications').waitFor({ state: 'visible', timeout: 15_000 })
 
   // The SNAP application we seeded has form_type='snap' from the form_templates join.
   // Its card shows the program-name as a tappable link with data-testid="app-form-link-<submissionId>"
