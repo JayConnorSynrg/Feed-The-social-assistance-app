@@ -4,54 +4,42 @@
  * use-poll.ts
  *
  * Data layer for community poll posts.
- * - createPoll(postId, question, options, closesAt?) → INSERT into polls
- * - castVote(pollId, choiceIndex) → INSERT into poll_votes (UNIQUE enforces single-choice)
+ * - createPoll(postId, question, options, endsAt?) → INSERT into polls
+ * - castVote(pollId, optionIndex) → INSERT into poll_votes (UNIQUE enforces single-choice)
  * - revokeVote(pollId) → DELETE from poll_votes for current user
  * - usePollData(postId) → fetches poll + live vote tallies via Realtime subscription
  *
  * Design: tallies are derived client-side from poll_votes rows fetched per poll.
  * Realtime INSERT/DELETE events on poll_votes recompute tallies without a full refetch.
  *
- * TODO: The `polls` and `poll_votes` tables are not yet present in the generated database
- * types (packages/database/types.ts). Once the migration for post_type='poll' is applied
- * and `supabase gen types typescript` is re-run, replace the `(supabase as any)` casts
- * below with properly-typed calls using Database['public']['Tables']['polls']['Row'] and
- * Database['public']['Tables']['poll_votes']['Row'].
+ * Schema (live DB):
+ *   polls:      id, post_id, question, options (Json), ends_at, multiple_choice, created_at
+ *   poll_votes: id, poll_id, user_id, option_index, created_at
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
+import type { Database } from '@feed/database'
 
 // ---------------------------------------------------------------------------
-// Types
+// Types derived from generated schema
 // ---------------------------------------------------------------------------
 
-/** Shape of a row in the polls table. */
-export interface PollRow {
-  id: string
-  post_id: string
-  question: string
-  options: string[]
-  closes_at: string | null
-  created_at: string
-}
-
-/** Shape of a row in the poll_votes table. */
-export interface PollVoteRow {
-  id: string
-  poll_id: string
-  voter_id: string
-  choice_index: number
-  created_at: string
-}
+type PollRow = Database['public']['Tables']['polls']['Row']
+type PollVoteRow = Database['public']['Tables']['poll_votes']['Row']
+type PollInsert = Database['public']['Tables']['polls']['Insert']
+type PollVoteInsert = Database['public']['Tables']['poll_votes']['Insert']
 
 /** Poll row extended with per-option vote counts and total. */
 export interface PollWithTallies extends PollRow {
   tallies: number[]
   totalVotes: number
 }
+
+// Re-export for consumers
+export type { PollRow, PollVoteRow }
 
 // ---------------------------------------------------------------------------
 // Mutation helpers
@@ -64,19 +52,22 @@ export async function createPoll(
   postId: string,
   question: string,
   options: string[],
-  closesAt?: Date
+  endsAt?: Date,
+  multipleChoice = false
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const payload: PollInsert = {
+    post_id: postId,
+    question,
+    options,
+    ends_at: endsAt ? endsAt.toISOString() : null,
+    multiple_choice: multipleChoice,
+  }
+
+  const { error } = await supabase
     .from('polls')
-    .insert({
-      post_id: postId,
-      question,
-      options,
-      closes_at: closesAt ? closesAt.toISOString() : null,
-    })
+    .insert(payload)
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
   if (error) {
@@ -90,18 +81,31 @@ export async function createPoll(
 
 /**
  * castVote — INSERT a vote for a poll option.
- * The UNIQUE(poll_id, voter_id) constraint prevents double-voting.
+ * The UNIQUE(poll_id, user_id) constraint prevents double-voting.
  */
 export async function castVote(
   pollId: string,
-  choiceIndex: number
+  optionIndex: number
 ): Promise<{ error: string | null }> {
   const supabase = createClient()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Not authenticated' }
+  }
+
+  const payload: PollVoteInsert = {
+    poll_id: pollId,
+    option_index: optionIndex,
+    user_id: user.id,
+  }
+
+  const { error } = await supabase
     .from('poll_votes')
-    .insert({ poll_id: pollId, choice_index: choiceIndex })
+    .insert(payload)
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
   if (error) {
@@ -109,11 +113,11 @@ export async function castVote(
     if (error.code === '23505') {
       return { error: 'Already voted' }
     }
-    logger.error('poll.castVote.error', { pollId, choiceIndex, error: error.message })
+    logger.error('poll.castVote.error', { pollId, optionIndex, error: error.message })
     return { error: error.message }
   }
 
-  logger.info('poll.castVote.success', { pollId, choiceIndex })
+  logger.info('poll.castVote.success', { pollId, optionIndex })
   return { error: null }
 }
 
@@ -131,12 +135,11 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
     return { error: 'Not authenticated' }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from('poll_votes')
     .delete()
     .eq('poll_id', pollId)
-    .eq('voter_id', user.id)
+    .eq('user_id', user.id)
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
   if (error) {
@@ -157,7 +160,7 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
  *
  * Returns:
  *   poll       — PollWithTallies or null (null while loading or when post has no poll)
- *   userVote   — choice_index the current user voted for, or null if not voted
+ *   userVote   — option_index the current user voted for, or null if not voted
  *   loading    — true during the initial fetch
  *   error      — error string or null
  *
@@ -178,13 +181,14 @@ export function usePollData(postId: string | null): {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Derive tallies from a flat list of vote rows
+  // Derive tallies from a flat list of vote rows.
+  // options is Json so we derive option count separately.
   const computeTallies = useCallback(
     (optionCount: number, votes: PollVoteRow[]): number[] => {
       const tallies = Array<number>(optionCount).fill(0)
       for (const v of votes) {
-        if (v.choice_index >= 0 && v.choice_index < optionCount) {
-          tallies[v.choice_index]++
+        if (v.option_index >= 0 && v.option_index < optionCount) {
+          tallies[v.option_index]++
         }
       }
       return tallies
@@ -205,13 +209,12 @@ export function usePollData(postId: string | null): {
 
     try {
       // Fetch poll row for this post
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: pollRow, error: pollError } = await (supabase as any)
+      const { data: pollRow, error: pollError } = await supabase
         .from('polls')
-        .select('id, post_id, question, options, closes_at, created_at')
+        .select('id, post_id, question, options, ends_at, multiple_choice, created_at')
         .eq('post_id', postId)
-        .maybeSingle()
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        .maybeSingle()
 
       if (pollError) throw pollError
 
@@ -222,23 +225,23 @@ export function usePollData(postId: string | null): {
         return
       }
 
-      const typedPollRow = pollRow as PollRow
+      // Derive option count from the Json options field (expected to be a string array)
+      const optionCount = Array.isArray(pollRow.options) ? (pollRow.options as unknown[]).length : 0
 
       // Fetch all votes for this poll
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: votes, error: votesError } = await (supabase as any)
+      const { data: votes, error: votesError } = await supabase
         .from('poll_votes')
-        .select('id, poll_id, voter_id, choice_index, created_at')
-        .eq('poll_id', typedPollRow.id)
+        .select('id, poll_id, user_id, option_index, created_at')
+        .eq('poll_id', pollRow.id)
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (votesError) throw votesError
 
-      const voteRows = (votes ?? []) as PollVoteRow[]
-      const tallies = computeTallies(typedPollRow.options.length, voteRows)
+      const voteRows: PollVoteRow[] = votes ?? []
+      const tallies = computeTallies(optionCount, voteRows)
 
       setPoll({
-        ...typedPollRow,
+        ...pollRow,
         tallies,
         totalVotes: voteRows.length,
       })
@@ -249,8 +252,8 @@ export function usePollData(postId: string | null): {
       } = await supabase.auth.getUser()
 
       if (user) {
-        const myVote = voteRows.find((v) => v.voter_id === user.id)
-        setUserVote(myVote ? myVote.choice_index : null)
+        const myVote = voteRows.find((v) => v.user_id === user.id)
+        setUserVote(myVote ? myVote.option_index : null)
       } else {
         setUserVote(null)
       }
@@ -262,22 +265,22 @@ export function usePollData(postId: string | null): {
       }
 
       const channel = supabase
-        .channel(`poll_votes_${typedPollRow.id}`)
+        .channel(`poll_votes_${pollRow.id}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
             table: 'poll_votes',
-            filter: `poll_id=eq.${typedPollRow.id}`,
+            filter: `poll_id=eq.${pollRow.id}`,
           },
           (payload) => {
             const newVote = payload.new as PollVoteRow
             setPoll((prev) => {
               if (!prev) return prev
               const tallies = [...prev.tallies]
-              if (newVote.choice_index >= 0 && newVote.choice_index < tallies.length) {
-                tallies[newVote.choice_index]++
+              if (newVote.option_index >= 0 && newVote.option_index < tallies.length) {
+                tallies[newVote.option_index]++
               }
               return { ...prev, tallies, totalVotes: prev.totalVotes + 1 }
             })
@@ -289,12 +292,12 @@ export function usePollData(postId: string | null): {
             event: 'DELETE',
             schema: 'public',
             table: 'poll_votes',
-            filter: `poll_id=eq.${typedPollRow.id}`,
+            filter: `poll_id=eq.${pollRow.id}`,
           },
           (payload) => {
             const oldVote = payload.old as Partial<PollVoteRow>
-            if (typeof oldVote.choice_index !== 'number') return
-            const idx = oldVote.choice_index
+            if (typeof oldVote.option_index !== 'number') return
+            const idx = oldVote.option_index
             setPoll((prev) => {
               if (!prev) return prev
               const tallies = [...prev.tallies]
