@@ -39,6 +39,9 @@ export interface PetitionWithMeta extends Petition {
 export function usePetitions() {
   const supabase = createClient()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  // Unique channel name per hook instance — prevents multiple mounted PetitionsPanel
+  // instances from stomping on each other's realtime subscriptions.
+  const channelIdRef = useRef(`petition_signatures_changes_${Math.random().toString(36).slice(2)}`)
 
   const [petitions, setPetitions] = useState<PetitionWithMeta[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,7 +133,7 @@ export function usePetitions() {
     fetchPetitions()
 
     const channel = supabase
-      .channel('petition_signatures_changes')
+      .channel(channelIdRef.current)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'petition_signatures' },

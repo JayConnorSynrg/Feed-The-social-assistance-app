@@ -60,6 +60,7 @@ import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resourc
 import { mapProfileToAutofill } from '@/lib/form-field-mapper'
 import type { AutofillValues } from '@/lib/form-field-mapper'
 import { FormsPanel } from './forms-panel'
+import { ApplicationsPanel } from './applications-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { VaultUnlockModal } from '@/components/vault'
 import { logger, withMetric } from '@/lib/logger'
@@ -572,10 +573,11 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   // viewMode is driven by panelParams.subtab when set (deep-link / alias routing)
-  const [viewMode, setViewMode] = useState<'documents' | 'resources' | 'forms'>(() => {
+  const [viewMode, setViewMode] = useState<'documents' | 'applications' | 'resources' | 'forms'>(() => {
     const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
     if (sub === 'forms') return 'forms'
     if (sub === 'resources') return 'resources'
+    if (sub === 'applications') return 'applications'
     return 'documents'
   })
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
@@ -597,6 +599,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
     if (sub === 'forms' && viewMode !== 'forms') setViewMode('forms')
     else if (sub === 'resources' && viewMode !== 'resources') setViewMode('resources')
+    else if (sub === 'applications' && viewMode !== 'applications') setViewMode('applications')
     else if (sub === 'documents' && viewMode !== 'documents') setViewMode('documents')
   }, [panelParams?.subtab])
 
@@ -964,13 +967,19 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // never desync. The sync effect at L477-482 remains the entry point for
   // sidebar/deep-link alias switching (setActivePanel → effect → viewMode); its
   // viewMode !== tab guard makes it a no-op when we already set viewMode here.
-  const handleTabSwitch = useCallback((tab: 'documents' | 'resources' | 'forms') => {
+  const handleTabSwitch = useCallback((tab: 'documents' | 'applications' | 'resources' | 'forms') => {
     logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
     track('nav_subtab', { panel: 'documents', subtab: tab })
     setViewMode(tab)
     setPanelParams((prev) => ({ ...prev, subtab: tab }))
     if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', tab === 'forms' ? '#forms' : '#documents')
+      const hashMap: Record<typeof tab, string> = {
+        documents: '#documents',
+        applications: '#applications',
+        resources: '#documents',
+        forms: '#forms',
+      }
+      window.history.replaceState(null, '', hashMap[tab])
     }
   }, [setPanelParams])
 
@@ -979,7 +988,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     e: React.KeyboardEvent<HTMLButtonElement>,
     currentIdx: number
   ) => {
-    const tabs: Array<'documents' | 'resources' | 'forms'> = ['documents', 'resources', 'forms']
+    const tabs: Array<'documents' | 'applications' | 'resources' | 'forms'> = ['documents', 'applications', 'resources', 'forms']
     let next = currentIdx
     if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
@@ -1059,13 +1068,33 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         </button>
         <button
           role="tab"
+          id="docs-tab-applications"
+          data-testid="docs-tab-applications"
+          aria-selected={viewMode === 'applications'}
+          aria-controls="docs-panel-applications"
+          tabIndex={viewMode === 'applications' ? 0 : -1}
+          onClick={() => handleTabSwitch('applications')}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 1)}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            viewMode === 'applications'
+              ? 'bg-lime-100 text-lime-800'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            Applications
+          </span>
+        </button>
+        <button
+          role="tab"
           id="docs-tab-resources"
           data-testid="docs-tab-resources"
           aria-selected={viewMode === 'resources'}
           aria-controls="docs-panel-resources"
           tabIndex={viewMode === 'resources' ? 0 : -1}
           onClick={() => handleTabSwitch('resources')}
-          onKeyDown={(e) => handleDocsTabKeyDown(e, 1)}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 2)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
             viewMode === 'resources'
               ? 'bg-lime-100 text-lime-800'
@@ -1090,7 +1119,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           aria-controls="docs-panel-forms"
           tabIndex={viewMode === 'forms' ? 0 : -1}
           onClick={() => handleTabSwitch('forms')}
-          onKeyDown={(e) => handleDocsTabKeyDown(e, 2)}
+          onKeyDown={(e) => handleDocsTabKeyDown(e, 3)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
             viewMode === 'forms'
               ? 'bg-lime-100 text-lime-800'
@@ -1115,6 +1144,18 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           className="flex-1 min-h-0"
         >
           <FormsPanel />
+        </div>
+      ) : viewMode === 'applications' ? (
+        /* Applications sub-tab — ApplicationsPanel root is h-full; min-h-0 prevents
+           flex-child collapse in a flex column parent */
+        <div
+          role="tabpanel"
+          id="docs-panel-applications"
+          aria-labelledby="docs-tab-applications"
+          tabIndex={0}
+          className="flex-1 min-h-0"
+        >
+          <ApplicationsPanel />
         </div>
       ) : viewMode === 'documents' ? (
         <div
