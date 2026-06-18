@@ -16,7 +16,7 @@
  *
  * Auth pattern: go directly to /login, fill credentials, waitForURL('/').
  * Sidebar buttons emit data-testid="sidebar-{panel}" (no aria-label).
- * Petitions sidebar button: data-testid="sidebar-petitions"
+ * Petitions nav: click [data-testid="sidebar-feed"] then #feed-tab-petitions, wait for #feed-panel-petitions
  * Chat sidebar button: data-testid="sidebar-chat"
  *
  * Run:
@@ -122,10 +122,10 @@ test.afterAll(async () => {
 test('petitions panel navigates from sidebar', async ({ page }) => {
   await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  // Navigate to petitions via sidebar
-  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
-  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
-  await petitionsBtn.click()
+  // Navigate to petitions: Community&Messages sidebar → Petitions subtab
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 10_000 })
 
   // Panel should show header
   await expect(page.locator('text=Community Petitions')).toBeVisible({ timeout: 10_000 })
@@ -134,9 +134,10 @@ test('petitions panel navigates from sidebar', async ({ page }) => {
 test('petitions panel shows sign button and signed-as microcopy', async ({ page }) => {
   await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
-  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
-  await petitionsBtn.click()
+  // Navigate to petitions: Community&Messages sidebar → Petitions subtab
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 10_000 })
 
   // Sign button visible
   const signBtn = page.locator('button:has-text("Add your verified signature of support")').first()
@@ -163,9 +164,10 @@ test('sign action calls /api/petitions/sign and marks petition signed', async ({
 
   await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
-  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
-  await petitionsBtn.click()
+  // Navigate to petitions: Community&Messages sidebar → Petitions subtab
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 10_000 })
 
   const signBtn = page.locator('button:has-text("Add your verified signature of support")').first()
   await expect(signBtn).toBeVisible({ timeout: 10_000 })
@@ -191,9 +193,10 @@ test('get_petition_signature_count displayed on petition card', async ({ page })
 
   await loginAs(page, TEST_EMAIL, USER_PASSWORD)
 
-  const petitionsBtn = page.locator('[data-testid="sidebar-petitions"]')
-  await expect(petitionsBtn).toBeVisible({ timeout: 10_000 })
-  await petitionsBtn.click()
+  // Navigate to petitions: Community&Messages sidebar → Petitions subtab
+  await page.locator('[data-testid="sidebar-feed"]').click()
+  await page.locator('#feed-tab-petitions').click()
+  await page.locator('#feed-panel-petitions').waitFor({ state: 'visible', timeout: 10_000 })
 
   // Wait for panel to load
   await expect(page.locator('text=Community Petitions')).toBeVisible({ timeout: 10_000 })
