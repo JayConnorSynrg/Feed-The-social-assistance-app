@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react'
+import { useRef, useCallback, useState, useEffect, useImperativeHandle, forwardRef } from 'react'
 import Map, { NavigationControl, GeolocateControl, MapRef, ViewStateChangeEvent } from 'react-map-gl/mapbox'
 import { Loader2 } from 'lucide-react'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -55,6 +55,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   ref
 ) {
   const mapRef = useRef<MapRef>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [viewState, setViewState] = useState<ViewState>(initialViewState)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -67,6 +68,23 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       })
     },
   }))
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        mapRef.current?.resize()
+      })
+    })
+    observer.observe(container)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [])
 
   const getBounds = useCallback((): Bounds | null => {
     const map = mapRef.current?.getMap()
@@ -139,6 +157,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   return (
     <div
+      ref={containerRef}
       className={`relative ${className}`}
       data-map-center={`${viewState.latitude.toFixed(4)},${viewState.longitude.toFixed(4)}`}
     >
