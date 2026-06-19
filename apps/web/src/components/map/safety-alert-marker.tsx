@@ -2,7 +2,16 @@
 
 import { useState, useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
-import { AlertTriangle, Cloud, Construction, Gauge, Info, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { AlertTriangle, Cloud, Construction, Gauge, Info, Pencil, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import type { UpdateAlertInput } from '@/hooks/use-safety-alerts'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
@@ -53,6 +62,9 @@ const SEVERITY_LABELS: Record<number, string> = {
 interface SafetyAlertMarkerProps {
   alert: SafetyAlert
   onVote: (alertId: string, vote: 'confirm' | 'clear') => Promise<unknown>
+  currentUserId?: string | null
+  onUpdate?: (alertId: string, input: UpdateAlertInput) => Promise<void>
+  onDelete?: (alertId: string) => Promise<void>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,10 +72,54 @@ interface SafetyAlertMarkerProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SafetyAlertMarkerInner contains all hooks; called only when coords are valid.
-function SafetyAlertMarkerInner({ alert, onVote }: SafetyAlertMarkerProps) {
+function SafetyAlertMarkerInner({ alert, onVote, currentUserId, onUpdate, onDelete }: SafetyAlertMarkerProps) {
   const [showPopup, setShowPopup] = useState(false)
   const [voting, setVoting] = useState<'confirm' | 'clear' | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
+
+  // Owner edit/delete state
+  const isOwner = !!(currentUserId && alert.created_by && currentUserId === alert.created_by)
+  const [editMode, setEditMode] = useState(false)
+  const [editSeverity, setEditSeverity] = useState(String(alert.severity))
+  const [editDescription, setEditDescription] = useState(alert.description ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const handleSave = async () => {
+    if (!onUpdate) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onUpdate(alert.id, {
+        type: alert.alert_type,
+        severity: parseInt(editSeverity, 10),
+        description: editDescription || undefined,
+        lng: alert.lng,
+        lat: alert.lat,
+      })
+      setEditMode(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!onDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await onDelete(alert.id)
+      setShowPopup(false)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete')
+      setDeleting(false)
+    }
+  }
 
   const IconComp = ALERT_ICONS[alert.alert_type] ?? AlertTriangle
   const color = markerBg(alert.severity)
@@ -183,6 +239,105 @@ function SafetyAlertMarkerInner({ alert, onVote }: SafetyAlertMarkerProps) {
                 {voting === 'clear' ? '...' : 'Gone now'}
               </Button>
             </div>
+
+            {/* Owner controls */}
+            {isOwner && !editMode && !confirmDelete && (
+              <div className="flex gap-2 mt-2 pt-2 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 text-xs h-7 border-stone-200 text-stone-600 hover:bg-stone-50"
+                  onClick={() => { setEditMode(true); setSaveError(null) }}
+                  data-testid={`edit-alert-${alert.id}`}
+                >
+                  <Pencil className="w-3 h-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 text-xs h-7 border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={() => setConfirmDelete(true)}
+                  data-testid={`delete-alert-${alert.id}`}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            )}
+
+            {/* Inline edit form */}
+            {isOwner && editMode && (
+              <div className="mt-2 pt-2 border-t border-stone-100 space-y-2">
+                <p className="text-xs font-medium text-stone-700">Edit alert</p>
+                <Select value={editSeverity} onValueChange={setEditSeverity}>
+                  <SelectTrigger className="h-7 text-xs text-stone-900">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Low — heads-up</SelectItem>
+                    <SelectItem value="2">Moderate — use caution</SelectItem>
+                    <SelectItem value="3">High — significant risk</SelectItem>
+                    <SelectItem value="4">Critical — avoid area</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="text-xs text-stone-900 placeholder:text-stone-400 resize-none h-16"
+                  rows={2}
+                />
+                {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => { setEditMode(false); setSaveError(null) }}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs h-7 bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Delete confirmation */}
+            {isOwner && confirmDelete && (
+              <div className="mt-2 pt-2 border-t border-stone-100 space-y-2">
+                <p className="text-xs text-stone-700">Remove this alert from the map?</p>
+                {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
+                    disabled={deleting}
+                  >
+                    Keep it
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs h-7 bg-red-500 hover:bg-red-600 text-white"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    data-testid={`confirm-delete-${alert.id}`}
+                  >
+                    {deleting ? 'Removing…' : 'Remove'}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Expiry note */}
             <p className="text-xs text-stone-400 mt-2">

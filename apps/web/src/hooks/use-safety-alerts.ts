@@ -58,6 +58,14 @@ export interface PlaceAlertInput {
   lat: number
 }
 
+export interface UpdateAlertInput {
+  type?: 'weather' | 'road_closure' | 'speeding' | 'general'
+  severity?: number
+  description?: string
+  lng?: number
+  lat?: number
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,5 +288,57 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
     []
   )
 
-  return { alerts, loading, error, placeAlert, voteAlert }
+  // ── Update alert ───────────────────────────────────────────────────────────
+
+  const updateAlert = useCallback(
+    async (alertId: string, input: UpdateAlertInput): Promise<void> => {
+      try {
+        const { error: rpcError } = await supabase
+          .rpc('update_safety_alert', {
+            p_alert_id: alertId,
+            p_type: input.type!,
+            p_severity: input.severity!,
+            p_description: input.description ?? '',
+            p_lng: input.lng!,
+            p_lat: input.lat!,
+          })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcError) throw rpcError
+        logger.info('safety-alerts.update.success', { alertId })
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err))
+        logger.error('safety-alerts.update.error', { message: e.message })
+        throw e
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  // ── Delete alert ───────────────────────────────────────────────────────────
+
+  const deleteAlert = useCallback(
+    async (alertId: string): Promise<void> => {
+      try {
+        const { error: rpcError } = await supabase
+          .rpc('delete_safety_alert', {
+            p_alert_id: alertId,
+          })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcError) throw rpcError
+        // Optimistically remove from local state
+        alertMapRef.current.delete(alertId)
+        setAlerts(Array.from(alertMapRef.current.values()))
+        logger.info('safety-alerts.delete.success', { alertId })
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err))
+        logger.error('safety-alerts.delete.error', { message: e.message })
+        throw e
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  return { alerts, loading, error, placeAlert, voteAlert, updateAlert, deleteAlert }
 }

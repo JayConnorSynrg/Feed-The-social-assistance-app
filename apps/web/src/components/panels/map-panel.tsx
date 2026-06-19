@@ -36,6 +36,7 @@ import { usePanelContext } from '@/components/layout/feed-shell'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { VolunteerResourceFAB } from '@/components/volunteer/volunteer-resource-fab'
 import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
+import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
@@ -513,10 +514,34 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const viewportBoundsForAlerts = bounds
     ? { west: bounds.west, south: bounds.south, east: bounds.east, north: bounds.north }
     : null
-  const { alerts: safetyAlerts, placeAlert, voteAlert } = useSafetyAlerts(viewportBoundsForAlerts)
+  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(viewportBoundsForAlerts)
 
   // Current map center — used as default pin location for hazard reports
   const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
+
+  // ── Staging pin for safety alert wizard ───────────────────────────────────
+  // Owned here so StagingAlertPin renders inside MapView as a map child.
+  const [stagingPin, setStagingPin] = useState<{
+    lng: number
+    lat: number
+    type: 'weather' | 'road_closure' | 'speeding' | 'general'
+  } | null>(null)
+
+  const handleWizardOpen = (
+    type: 'weather' | 'road_closure' | 'speeding' | 'general',
+    coords: { lng: number; lat: number }
+  ) => setStagingPin({ ...coords, type })
+
+  const handleWizardClose = () => setStagingPin(null)
+
+  const handleAddressGeocoded = (coords: { lng: number; lat: number }) =>
+    setStagingPin((prev) => (prev ? { ...prev, ...coords } : null))
+
+  const handleStagingPinDragEnd = (coords: { lng: number; lat: number }) =>
+    setStagingPin((prev) => (prev ? { ...prev, ...coords } : null))
+
+  // currentUserId for owner-gated actions on safety alert markers
+  const currentUserId = profile?.id ?? null
 
   // Map real resources to MapResource interface
   const mapResources: MapResource[] = useMemo(() => {
@@ -808,8 +833,20 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               key={alert.id}
               alert={alert}
               onVote={voteAlert}
+              currentUserId={currentUserId}
+              onUpdate={updateAlert}
+              onDelete={deleteAlert}
             />
           ))}
+          {/* Staging pin — shown while safety alert wizard is open */}
+          {stagingPin && (
+            <StagingAlertPin
+              lng={stagingPin.lng}
+              lat={stagingPin.lat}
+              type={stagingPin.type}
+              onDragEnd={handleStagingPinDragEnd}
+            />
+          )}
         </MapView>
         {/* Bubble menu — all roles report hazards; providers also add resources */}
         <HazardBubbleMenu
@@ -822,6 +859,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             // dialog via a shared open-state ref exposed below.
             setVolunteerFabOpen(true)
           }}
+          onWizardOpen={handleWizardOpen}
+          onWizardClose={handleWizardClose}
+          onAddressGeocoded={handleAddressGeocoded}
+          stagingCoords={stagingPin ? { lng: stagingPin.lng, lat: stagingPin.lat } : null}
         />
         {/* VolunteerResourceFAB kept for providers — controlled via volunteerFabOpen */}
         <VolunteerResourceFAB externalOpen={volunteerFabOpen} onExternalOpenChange={setVolunteerFabOpen} />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Lock, TrendingUp, Users, Zap, AlertTriangle, ClipboardList, type LucideIcon } from 'lucide-react'
+import { Lock, TrendingUp, Users, Zap, AlertTriangle, ClipboardList, Eye, type LucideIcon } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger'
 
 type AdoptionStats = {
   total_users: number
+  guest_sessions: number
   seekers: number
   providers: number
   facilitators: number
@@ -346,13 +347,19 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Row 1 — 4 stat tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Row 1 — 5 stat tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile
-          label="Total Users"
+          label="Registered Users"
           value={adoption ? Number(adoption.total_users) : '—'}
           sub={adoption ? `+${Number(adoption.new_users_30d)} this month` : undefined}
           icon={Users}
+        />
+        <StatTile
+          label="Guest Sessions"
+          value={adoption ? Number(adoption.guest_sessions) : '—'}
+          sub="anonymous visitors"
+          icon={Eye}
         />
         <StatTile
           label="New This Week"
