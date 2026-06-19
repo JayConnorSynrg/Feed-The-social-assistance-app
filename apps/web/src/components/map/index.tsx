@@ -38,3 +38,5 @@ export type { ViewState, MapViewHandle, Resource }
 
 // Re-export ResourceSearch (doesn't use mapbox)
 export { ResourceSearch } from './resource-search'
+
+export { StagingAlertPin } from './staging-alert-pin'
