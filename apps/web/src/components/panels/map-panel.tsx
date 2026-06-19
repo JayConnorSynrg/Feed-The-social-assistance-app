@@ -317,12 +317,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const [hasProfileCentered, setHasProfileCentered] = useState(false)
   // Controls the VolunteerResourceFAB category-picker externally from the HazardBubbleMenu
   const [volunteerFabOpen, setVolunteerFabOpen] = useState(false)
+  // Controls the HazardBubbleMenu externally (e.g. cross-panel Safety Warning nav)
+  const [hazardMenuOpen, setHazardMenuOpen] = useState(false)
 
   // Imperative handle to the live Mapbox instance for programmatic flyTo calls.
   const mapViewRef = useRef<MapViewHandle>(null)
 
   // Shell panel navigation
-  const { setActivePanel, setPanelParams } = usePanelContext()
+  const { setActivePanel, setPanelParams, panelParams } = usePanelContext()
 
   // Route a resource-load error to the AI chat as a safe explain-request.
   // The user must click the affordance — we never auto-hijack to chat.
@@ -346,6 +348,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     setActivePanel('chat')
     setPanelParams((prev) => ({ ...prev, errorContext: ctx }))
   }, [setActivePanel, setPanelParams])
+
+  // One-shot: open hazard menu when panelParams.openSafetyReport is set (cross-panel nav)
+  useEffect(() => {
+    if (!panelParams?.openSafetyReport) return
+    setHazardMenuOpen(true)
+    setPanelParams((prev) => ({ ...prev, openSafetyReport: undefined }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelParams?.openSafetyReport])
 
   // Saved resources
   const { saveResource, isResourceSavedByName } = useSavedResources()
@@ -863,6 +873,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           onWizardClose={handleWizardClose}
           onAddressGeocoded={handleAddressGeocoded}
           stagingCoords={stagingPin ? { lng: stagingPin.lng, lat: stagingPin.lat } : null}
+          externalOpen={hazardMenuOpen}
+          onExternalOpenChange={setHazardMenuOpen}
         />
         {/* VolunteerResourceFAB kept for providers — controlled via volunteerFabOpen */}
         <VolunteerResourceFAB externalOpen={volunteerFabOpen} onExternalOpenChange={setVolunteerFabOpen} />
