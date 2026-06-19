@@ -15,10 +15,11 @@ interface StagingAlertPinProps {
   lng: number
   lat: number
   type: 'weather' | 'road_closure' | 'speeding' | 'general'
+  onDrag: (coords: { lng: number; lat: number }) => void
   onDragEnd: (coords: { lng: number; lat: number }) => void
 }
 
-export function StagingAlertPin({ lng, lat, type, onDragEnd }: StagingAlertPinProps) {
+export function StagingAlertPin({ lng, lat, type, onDrag, onDragEnd }: StagingAlertPinProps) {
   const IconComp = STAGING_ICONS[type] ?? AlertTriangle
   return (
     <Marker
@@ -26,6 +27,7 @@ export function StagingAlertPin({ lng, lat, type, onDragEnd }: StagingAlertPinPr
       latitude={lat}
       anchor="bottom"
       draggable
+      onDrag={(e) => onDrag({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
       onDragEnd={(e) => onDragEnd({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
     >
       <div className="relative flex flex-col items-center" style={{ width: 44, height: 56 }}>
