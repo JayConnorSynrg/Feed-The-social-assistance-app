@@ -854,6 +854,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               lng={stagingPin.lng}
               lat={stagingPin.lat}
               type={stagingPin.type}
+              onDrag={handleStagingPinDragEnd}
               onDragEnd={handleStagingPinDragEnd}
             />
           )}
