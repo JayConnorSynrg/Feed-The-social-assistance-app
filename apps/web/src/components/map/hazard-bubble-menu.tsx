@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   AlertTriangle,
   Cloud,
@@ -113,6 +113,10 @@ interface HazardBubbleMenuProps {
   onAddressGeocoded: (coords: { lng: number; lat: number }) => void
   /** Current staging pin coords — updated by parent when pin is dragged or geocoded */
   stagingCoords: { lng: number; lat: number } | null
+  /** When true, opens the panel from outside (e.g. cross-panel navigation) */
+  externalOpen?: boolean
+  /** Called when open state changes so parent can clear the external trigger */
+  onExternalOpenChange?: (open: boolean) => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -361,10 +365,23 @@ export function HazardBubbleMenu({
   onWizardClose,
   onAddressGeocoded,
   stagingCoords,
+  externalOpen,
+  onExternalOpenChange,
 }: HazardBubbleMenuProps) {
   const { profile, isAnonymous } = useAuth()
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelOpenInternal, setPanelOpenInternal] = useState(false)
+  const panelOpen = externalOpen ?? panelOpenInternal
+  const setPanelOpen = (v: boolean) => {
+    setPanelOpenInternal(v)
+    onExternalOpenChange?.(v)
+  }
   const [view, setView] = useState<'menu' | 'wizard'>('menu')
+
+  // Reset to menu view when the panel opens (including external open)
+  useEffect(() => {
+    if (panelOpen) setView('menu')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelOpen])
   const [activeEntry, setActiveEntry] = useState<HazardEntry | null>(null)
   const [suggestOpen, setSuggestOpen] = useState(false)
 

@@ -1960,7 +1960,10 @@ export function FeedPanel() {
             <CreatePostCard
               onPost={handleCreatePost}
               resourceOptions={resourceOptions}
-              onSafetyAlertClick={() => setActivePanel('map')}
+              onSafetyAlertClick={() => {
+                setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
+                setActivePanel('map')
+              }}
             />
           )}
           {isAnonymous && (
