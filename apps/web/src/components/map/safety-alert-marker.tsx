@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
-import { AlertTriangle, Cloud, Construction, Gauge, Info, Pencil, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Cloud, Construction, Gauge, Info, Pencil, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -176,10 +176,17 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId, onUpdate, onDele
         >
           <div className="p-2 text-stone-900">
             {/* Trust label */}
-            <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mb-2">
-              <Info className="w-3 h-3" />
-              Unverified — neighbor report
-            </div>
+            {alert.verified ? (
+              <div className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-0.5 mb-2">
+                <CheckCircle2 className="w-3 h-3" />
+                Verified
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mb-2">
+                <Info className="w-3 h-3" />
+                Unverified — neighbor report
+              </div>
+            )}
 
             {/* Title + severity */}
             <div className="flex items-center gap-2 mb-1">

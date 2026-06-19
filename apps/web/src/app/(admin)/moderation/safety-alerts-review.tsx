@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { AlertTriangle, Cloud, Construction, Gauge, Trash2, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Cloud, Construction, Gauge, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +30,7 @@ interface LiveAlert {
   clear_count: number
   created_at: string
   expires_at: string
+  verified: boolean
 }
 
 const ALERT_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -57,6 +58,7 @@ export function SafetyAlertsReview() {
   const [alerts, setAlerts] = useState<LiveAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Fetch live alerts for admin review
@@ -66,7 +68,7 @@ export function SafetyAlertsReview() {
       try {
         const { data, error: fetchErr } = await supabase
           .from('safety_alerts')
-          .select('id, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at')
+          .select('id, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified')
           .eq('status', 'live')
           .order('created_at', { ascending: false })
           .limit(50)
@@ -82,6 +84,27 @@ export function SafetyAlertsReview() {
     void load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleApprove = useCallback(
+    async (alertId: string) => {
+      setApprovingId(alertId)
+      setError(null)
+      try {
+        const { error: rpcErr } = await supabase.rpc('admin_verify_safety_alert', {
+          p_alert_id: alertId,
+        })
+        if (rpcErr) throw rpcErr
+        setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, verified: true } : a))
+        logger.info('pin.verified', { alertId })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Approve failed')
+      } finally {
+        setApprovingId(null)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
 
   const handleRemove = useCallback(
     async (alertId: string) => {
@@ -169,20 +192,44 @@ export function SafetyAlertsReview() {
                   <span>·</span>
                   <span>{alert.clear_count} gone-now votes</span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={removingId === alert.id}
-                  onClick={() => handleRemove(alert.id)}
-                  data-testid={`admin-remove-alert-${alert.id}`}
-                >
-                  {removingId === alert.id ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                <div className="flex items-center gap-2">
+                  {alert.verified ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1 font-medium">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Verified
+                    </span>
                   ) : (
-                    <Trash2 className="w-3 h-3 mr-1" />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-green-300 text-green-700 hover:bg-green-50"
+                      disabled={approvingId === alert.id}
+                      onClick={() => handleApprove(alert.id)}
+                      data-testid={`admin-approve-alert-${alert.id}`}
+                    >
+                      {approvingId === alert.id ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                      )}
+                      Approve
+                    </Button>
                   )}
-                  Remove alert
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={removingId === alert.id}
+                    onClick={() => handleRemove(alert.id)}
+                    data-testid={`admin-remove-alert-${alert.id}`}
+                  >
+                    {removingId === alert.id ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3 h-3 mr-1" />
+                    )}
+                    Remove alert
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )

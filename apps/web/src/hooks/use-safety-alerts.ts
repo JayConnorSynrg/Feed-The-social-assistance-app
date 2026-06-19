@@ -41,6 +41,7 @@ export interface SafetyAlert {
   created_by: string | null
   created_at: string
   expires_at: string
+  verified: boolean
 }
 
 export interface ViewportBounds {
@@ -161,6 +162,7 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
             created_by: raw.created_by as string | null,
             created_at: raw.created_at as string,
             expires_at: raw.expires_at as string,
+            verified: (raw.verified as boolean) ?? false,
           }
           alertMapRef.current.set(row.id, row)
           setAlerts(Array.from(alertMapRef.current.values()))
@@ -193,6 +195,7 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
               created_by: raw.created_by as string | null,
               created_at: raw.created_at as string,
               expires_at: raw.expires_at as string,
+              verified: (raw.verified as boolean) ?? false,
             }
             alertMapRef.current.set(row.id, row)
           }
