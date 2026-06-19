@@ -2290,6 +2290,9 @@ export type Database = {
           location: unknown
           severity: number
           status: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           alert_type: string
@@ -2303,6 +2306,9 @@ export type Database = {
           location: unknown
           severity: number
           status?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           alert_type?: string
@@ -2316,6 +2322,9 @@ export type Database = {
           location?: unknown
           severity?: number
           status?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -2328,6 +2337,20 @@ export type Database = {
           {
             foreignKeyName: "safety_alerts_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alerts_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alerts_verified_by_fkey"
+            columns: ["verified_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
@@ -3129,6 +3152,9 @@ export type Database = {
           location: unknown
           severity: number
           status: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3140,6 +3166,31 @@ export type Database = {
       admin_resolve_report: {
         Args: { p_action: string; p_report_id: string }
         Returns: Json
+      }
+      admin_verify_safety_alert: {
+        Args: { p_alert_id: string }
+        Returns: {
+          alert_type: string
+          clear_count: number
+          confirm_count: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string
+          id: string
+          location: unknown
+          severity: number
+          status: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_alerts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       calculate_trust_score: {
         Args: {
@@ -3664,6 +3715,9 @@ export type Database = {
           location: unknown
           severity: number
           status: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3768,6 +3822,7 @@ export type Database = {
           lng: number
           severity: number
           status: string
+          verified: boolean
         }[]
       }
       seekers_within_radius: {
@@ -4443,6 +4498,9 @@ export type Database = {
           location: unknown
           severity: number
           status: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
         }
         SetofOptions: {
           from: "*"
