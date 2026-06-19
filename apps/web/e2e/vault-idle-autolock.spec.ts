@@ -124,11 +124,11 @@ test(
     await page.click('button[type=submit]')
     await page.waitForURL(`${BASE_URL}/`, { timeout: 30_000 })
 
-    // ── Navigate to Forms sub-tab → open the PDF annotator ─────────────────
+    // ── Navigate to Applications sub-tab (forms & applications hub) → open the PDF annotator ──
     const docsSidebarBtn = page.locator('[data-testid="sidebar-documents"]')
     await docsSidebarBtn.click()
-    const formsTab = page.locator('#docs-tab-forms')
-      .or(page.locator('[role="tab"]').filter({ hasText: /^Forms$/i }))
+    const formsTab = page.locator('#docs-tab-applications')
+      .or(page.locator('[role="tab"]').filter({ hasText: /^Applications$/i }))
     await expect(formsTab).toBeVisible({ timeout: 10_000 })
     await formsTab.click()
     await page.waitForTimeout(500)

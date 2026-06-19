@@ -104,12 +104,12 @@ test(
     await page.click('button[type=submit]')
     await page.waitForURL('http://localhost:3000/', { timeout: 30_000 })
 
-    // ── Navigate to Forms sub-tab (proven path from pdf-annotator.spec.ts L177-196) ──
-    // sidebar-documents click → Documents panel → Forms tab → vault modal
+    // ── Navigate to Applications sub-tab (proven path from pdf-annotator.spec.ts) ──
+    // sidebar-documents click → Documents panel → Applications tab (forms hub) → vault modal
     const docsSidebarBtn = page.locator('[data-testid="sidebar-documents"]')
     await docsSidebarBtn.click()
-    const formsTab = page.locator('#docs-tab-forms')
-      .or(page.locator('[role="tab"]').filter({ hasText: /^Forms$/i }))
+    const formsTab = page.locator('#docs-tab-applications')
+      .or(page.locator('[role="tab"]').filter({ hasText: /^Applications$/i }))
     await expect(formsTab).toBeVisible({ timeout: 10_000 })
     await formsTab.click()
     await page.waitForTimeout(500)

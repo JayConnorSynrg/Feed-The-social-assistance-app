@@ -189,7 +189,7 @@ test('(a) Fill from Profile fills AcroForm fields with vault profile values', as
 
   // Switch to the "My Documents" tab (default)
   const myDocsTab = page.locator('#docs-tab-documents, [data-testid="docs-tab-documents"]').first()
-  const formsTab = page.locator('#docs-tab-forms, [data-testid="docs-tab-forms"]').first()
+  const formsTab = page.locator('#docs-tab-applications, [data-testid="docs-tab-applications"]').first()
   await myDocsTab.click().catch(() => {})
 
   // Unlock vault if prompted
@@ -358,14 +358,14 @@ test('(b) Rename renames the document in the DOM list; Move changes its category
 test('(c) Form submission creates an archived user_documents row with submission_id', async ({ page }) => {
   await loginAsTestUser(page)
 
-  // Navigate to Forms subtab (Documents panel → Forms tab)
+  // Navigate to Applications subtab (Documents panel → Applications tab = Forms & Applications hub)
   const docsSidebar = page.locator('[data-testid="sidebar-documents"]')
   await docsSidebar.click()
 
   await unlockVault(page)
 
-  // Switch to Forms tab
-  const formsTab = page.locator('#docs-tab-forms, [data-testid="docs-tab-forms"]').first()
+  // Switch to Applications tab (renders FormsPanel)
+  const formsTab = page.locator('#docs-tab-applications, [data-testid="docs-tab-applications"]').first()
   await formsTab.click()
 
   // Wait for the forms panel to show available form templates

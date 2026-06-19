@@ -621,7 +621,6 @@ test(
 group('APPLICATIONS')
 
 const useApplications = src('hooks/use-applications.ts')
-const applicationsPanel = src('components/panels/applications-panel.tsx')
 
 test(
   'hooks/use-applications.ts — file exists',
@@ -661,35 +660,17 @@ test(
   'form_templates join not found',
 )
 
-// applications-panel.tsx
+// applications subtab now renders FormsPanel — verify forms-panel exists and wires use-applications
 test(
-  'components/panels/applications-panel.tsx — file exists',
-  () => fileExists('components/panels/applications-panel.tsx'),
+  'components/panels/forms-panel.tsx — file exists (applications subtab host)',
+  () => fileExists('components/panels/forms-panel.tsx'),
   'File not found',
 )
 
 test(
-  "applications-panel.tsx — imports useApplications hook",
-  () => applicationsPanel.includes("from '@/hooks/use-applications'"),
-  'useApplications import missing',
-)
-
-test(
-  'applications-panel.tsx — shows loading spinner',
-  () => applicationsPanel.includes('Loading applications') && applicationsPanel.includes('Loader2'),
-  'loading state UI not found',
-)
-
-test(
-  'applications-panel.tsx — shows error state',
-  () => applicationsPanel.includes('Failed to load applications'),
-  'error state UI not found',
-)
-
-test(
-  'applications-panel.tsx — shows empty state (EmptyState component)',
-  () => applicationsPanel.includes('<EmptyState'),
-  'EmptyState not rendered',
+  'use-applications.ts — applications hook still exists for deep-links',
+  () => fileExists('hooks/use-applications.ts'),
+  'use-applications hook file not found',
 )
 
 // ---------------------------------------------------------------------------

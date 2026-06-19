@@ -138,13 +138,13 @@ async function loginAsTestUser(page: Page): Promise<void> {
 }
 
 async function navigateToFormsSubtab(page: Page): Promise<void> {
-  // Documents panel contains the FormsPanel as a subtab
+  // Documents panel contains the FormsPanel as the Applications subtab
   const docsSidebar = page.locator('[data-testid="sidebar-documents"]')
   await docsSidebar.click()
   await expect(page.locator('[data-testid="documents-panel"]')).toBeVisible({ timeout: 10_000 })
 
-  // Click the "Forms" subtab
-  const formsTab = page.locator('[data-testid="docs-tab-forms"]')
+  // Click the "Applications" subtab (which now renders FormsPanel)
+  const formsTab = page.locator('[data-testid="docs-tab-applications"]')
   await expect(formsTab).toBeVisible({ timeout: 5_000 })
   await formsTab.click()
 

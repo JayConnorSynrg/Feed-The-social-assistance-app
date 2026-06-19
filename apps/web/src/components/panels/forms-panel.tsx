@@ -818,9 +818,9 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       // Store source + encrypted annotations sidecar — document is re-editable
       await uploadFile(sourceFile, 'other', data.annotations)
       setWizardState({ mode: 'list' })
-      // Clear the 'forms' subtab so DocumentsPanel mounts in 'documents' (My Documents)
-      // view, not back in the forms subtab. Without this, the stale subtab='forms' from
-      // the current navigation causes the Documents panel to re-enter FormsPanel,
+      // Clear the 'applications' subtab so DocumentsPanel mounts in 'documents' (My Documents)
+      // view, not back in the applications subtab. Without this, the stale subtab='applications'
+      // from the current navigation causes the Documents panel to re-enter FormsPanel,
       // preventing the P3 assertion (Documents heading visible) from passing.
       setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
       setActivePanel('documents')
