@@ -4,7 +4,7 @@
  * Verifies the full cycle:
  *   1. Navigate to Documents — My Documents tab active by default.
  *   2. Click My Resources → resources view active.
- *   3. Click My Documents → documents view active. (FAILS pre-fix: setActivePanel('documents') never sets viewMode)
+ *   3. Click My Documents → documents view active.
  *   4. Click Forms → forms view active.
  *   5. Click My Documents → documents view active again. (FAILS pre-fix)
  *
@@ -115,7 +115,7 @@ async function loginAndOpenDocuments(page: Page): Promise<void> {
 
 // Assert a tab is the active tab (aria-selected="true") and the others are not.
 // Also asserts the correct tab-panel content is visible.
-type TabKey = 'documents' | 'resources' | 'forms'
+type TabKey = 'documents' | 'resources' | 'applications'
 
 async function assertTabActive(page: Page, active: TabKey): Promise<void> {
   // aria-selected assertions
@@ -125,8 +125,8 @@ async function assertTabActive(page: Page, active: TabKey): Promise<void> {
   await expect(page.getByTestId('docs-tab-resources')).toHaveAttribute(
     'aria-selected', active === 'resources' ? 'true' : 'false'
   )
-  await expect(page.getByTestId('docs-tab-forms')).toHaveAttribute(
-    'aria-selected', active === 'forms' ? 'true' : 'false'
+  await expect(page.getByTestId('docs-tab-applications')).toHaveAttribute(
+    'aria-selected', active === 'applications' ? 'true' : 'false'
   )
 
   // Content assertions: each panel has a role="tabpanel" with the matching id
@@ -139,7 +139,7 @@ async function assertTabActive(page: Page, active: TabKey): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Documents subtab navigation', () => {
-  test('full cycle: default → resources → documents → forms → documents', async ({ page }) => {
+  test('full cycle: default → resources → documents → applications → documents', async ({ page }) => {
     await loginAndOpenDocuments(page)
 
     // Step 1: My Documents is active by default
@@ -149,15 +149,15 @@ test.describe('Documents subtab navigation', () => {
     await page.getByTestId('docs-tab-resources').click()
     await assertTabActive(page, 'resources')
 
-    // Step 3: Click My Documents → documents view  [FAILS pre-fix]
+    // Step 3: Click My Documents → documents view
     await page.getByTestId('docs-tab-documents').click()
     await assertTabActive(page, 'documents')
 
-    // Step 4: Click Forms → forms view
-    await page.getByTestId('docs-tab-forms').click()
-    await assertTabActive(page, 'forms')
+    // Step 4: Click Applications → applications view (renders FormsPanel hub)
+    await page.getByTestId('docs-tab-applications').click()
+    await assertTabActive(page, 'applications')
 
-    // Step 5: Click My Documents → documents view again  [FAILS pre-fix]
+    // Step 5: Click My Documents → documents view again
     await page.getByTestId('docs-tab-documents').click()
     await assertTabActive(page, 'documents')
   })

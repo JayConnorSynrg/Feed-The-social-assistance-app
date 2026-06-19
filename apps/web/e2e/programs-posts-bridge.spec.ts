@@ -5,8 +5,8 @@
  *  (a) Share to Feed: clicking "Share to Feed" on a program card opens the share
  *      dialog, editing the text and submitting creates a post that appears in the
  *      feed with the resource chip (data-testid resource-chip-<postId>).
- *  (b) Application back-link: clicking the tappable program-name on an application
- *      card navigates to the documents panel on the forms subtab.
+ *  (b) Applications subtab: navigating to the Applications subtab renders FormsPanel
+ *      (the merged Forms & Applications hub).
  *
  * Strategy:
  *  - Provision one test user with confirmed email via admin API.
@@ -218,27 +218,21 @@ test('(a) Share to Feed: program card → dialog → post appears in feed with r
 // Test (b): Application program-name link → documents panel forms subtab
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('(b) Application form back-link: clicking program name navigates to documents/forms', async ({ page }) => {
+test('(b) Applications subtab shows FormsPanel hub (forms & applications merged)', async ({ page }) => {
   await loginAndGoToRoot(page)
 
   // Navigate to applications: Documents&Forms sidebar → Applications subtab
+  // The Applications subtab now renders FormsPanel (the Forms & Applications hub)
   await page.locator('[data-testid="sidebar-documents"]').click()
   await page.locator('#docs-tab-applications').click()
   await page.locator('#docs-panel-applications').waitFor({ state: 'visible', timeout: 15_000 })
 
-  // The SNAP application we seeded has form_type='snap' from the form_templates join.
-  // Its card shows the program-name as a tappable link with data-testid="app-form-link-<submissionId>"
-  const ourAppLink = page.locator(`[data-testid="app-form-link-${submissionId}"]`)
-  await expect(ourAppLink).toBeVisible({ timeout: 15_000 })
+  // FormsPanel hub renders with data-testid="forms-panel" and heading "Forms & Applications"
+  await expect(page.locator('[data-testid="forms-panel"]')).toBeVisible({ timeout: 15_000 })
 
-  // Click the back-link
-  await ourAppLink.click()
-
-  // Should land on documents panel with the forms subtab active.
-  // documents-panel renders data-testid="docs-tab-forms" with aria-selected="true" when forms is active.
-  const formsTab = page.locator('[data-testid="docs-tab-forms"]')
-  await expect(formsTab).toBeVisible({ timeout: 15_000 })
-  await expect(formsTab).toHaveAttribute('aria-selected', 'true')
+  // The applications tab must be selected
+  const applicationsTab = page.locator('[data-testid="docs-tab-applications"]')
+  await expect(applicationsTab).toHaveAttribute('aria-selected', 'true')
 
   // Confirm we are NOT on the feed panel
   await expect(page.locator('[role="tabpanel"]#feed-panel-feed')).not.toBeVisible()

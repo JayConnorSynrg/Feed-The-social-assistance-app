@@ -170,15 +170,15 @@ test('P1+P2+P3+P4: PDF renders, zero CSP violations, save navigates to Documents
   // ── Login ─────────────────────────────────────────────────────────────────
   await loginAsTestUser(page)
 
-  // ── Navigate to the Forms panel ───────────────────────────────────────────
-  // "Forms" is an alias panel — it maps to the Documents panel with subtab=forms.
+  // ── Navigate to the Applications sub-tab (Forms & Applications hub) ────────
+  // "Forms" alias now maps to Documents panel with subtab=applications.
   // The sidebar button has data-testid="sidebar-documents" (label: "Documents & Forms").
-  // After the sidebar click we must also click the "Forms" sub-tab inside the panel.
+  // After the sidebar click we must also click the "Applications" sub-tab inside the panel.
   const docsSidebarBtn = page.locator('[data-testid="sidebar-documents"]')
   await docsSidebarBtn.click()
-  // Click the "Forms" sub-tab (id="docs-tab-forms") to activate FormsPanel
-  const formsTab = page.locator('#docs-tab-forms')
-    .or(page.locator('[role="tab"]').filter({ hasText: /^Forms$/i }))
+  // Click the "Applications" sub-tab (id="docs-tab-applications") to activate FormsPanel
+  const formsTab = page.locator('#docs-tab-applications')
+    .or(page.locator('[role="tab"]').filter({ hasText: /^Applications$/i }))
   await expect(formsTab).toBeVisible({ timeout: 10_000 })
   await formsTab.click()
   await page.waitForTimeout(1_000)

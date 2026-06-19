@@ -121,12 +121,12 @@ async function unlockVault(page: Page): Promise<void> {
   }
 }
 
-/** Navigate to the Forms sub-tab inside the Documents panel */
+/** Navigate to the Applications sub-tab (Forms & Applications hub) inside the Documents panel */
 async function openFormsTab(page: Page): Promise<void> {
   const docsSidebarBtn = page.locator('[data-testid="sidebar-documents"]')
   await docsSidebarBtn.click()
-  const formsTab = page.locator('#docs-tab-forms')
-    .or(page.locator('[role="tab"]').filter({ hasText: /^Forms$/i }))
+  const formsTab = page.locator('#docs-tab-applications')
+    .or(page.locator('[role="tab"]').filter({ hasText: /^Applications$/i }))
   await expect(formsTab).toBeVisible({ timeout: 10_000 })
   await formsTab.click()
   await page.waitForTimeout(500)

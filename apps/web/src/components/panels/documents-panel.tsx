@@ -60,7 +60,6 @@ import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resourc
 import { mapProfileToAutofill } from '@/lib/form-field-mapper'
 import type { AutofillValues } from '@/lib/form-field-mapper'
 import { FormsPanel } from './forms-panel'
-import { ApplicationsPanel } from './applications-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { VaultUnlockModal } from '@/components/vault'
 import { logger, withMetric } from '@/lib/logger'
@@ -573,9 +572,8 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   // viewMode is driven by panelParams.subtab when set (deep-link / alias routing)
-  const [viewMode, setViewMode] = useState<'documents' | 'applications' | 'resources' | 'forms'>(() => {
+  const [viewMode, setViewMode] = useState<'documents' | 'applications' | 'resources'>(() => {
     const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
-    if (sub === 'forms') return 'forms'
     if (sub === 'resources') return 'resources'
     if (sub === 'applications') return 'applications'
     return 'documents'
@@ -597,8 +595,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // Sync viewMode when panelParams.subtab changes (e.g. back-button resolves alias)
   useEffect(() => {
     const sub = typeof panelParams?.subtab === 'string' ? panelParams.subtab : ''
-    if (sub === 'forms' && viewMode !== 'forms') setViewMode('forms')
-    else if (sub === 'resources' && viewMode !== 'resources') setViewMode('resources')
+    if (sub === 'resources' && viewMode !== 'resources') setViewMode('resources')
     else if (sub === 'applications' && viewMode !== 'applications') setViewMode('applications')
     else if (sub === 'documents' && viewMode !== 'documents') setViewMode('documents')
   }, [panelParams?.subtab])
@@ -967,7 +964,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // never desync. The sync effect at L477-482 remains the entry point for
   // sidebar/deep-link alias switching (setActivePanel → effect → viewMode); its
   // viewMode !== tab guard makes it a no-op when we already set viewMode here.
-  const handleTabSwitch = useCallback((tab: 'documents' | 'applications' | 'resources' | 'forms') => {
+  const handleTabSwitch = useCallback((tab: 'documents' | 'applications' | 'resources') => {
     logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
     track('nav_subtab', { panel: 'documents', subtab: tab })
     setViewMode(tab)
@@ -977,7 +974,6 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         documents: '#documents',
         applications: '#applications',
         resources: '#documents',
-        forms: '#forms',
       }
       window.history.replaceState(null, '', hashMap[tab])
     }
@@ -988,7 +984,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     e: React.KeyboardEvent<HTMLButtonElement>,
     currentIdx: number
   ) => {
-    const tabs: Array<'documents' | 'applications' | 'resources' | 'forms'> = ['documents', 'applications', 'resources', 'forms']
+    const tabs: Array<'documents' | 'applications' | 'resources'> = ['documents', 'applications', 'resources']
     let next = currentIdx
     if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
@@ -1111,43 +1107,12 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
             )}
           </span>
         </button>
-        <button
-          role="tab"
-          id="docs-tab-forms"
-          data-testid="docs-tab-forms"
-          aria-selected={viewMode === 'forms'}
-          aria-controls="docs-panel-forms"
-          tabIndex={viewMode === 'forms' ? 0 : -1}
-          onClick={() => handleTabSwitch('forms')}
-          onKeyDown={(e) => handleDocsTabKeyDown(e, 3)}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            viewMode === 'forms'
-              ? 'bg-lime-100 text-lime-800'
-              : 'text-stone-600 hover:bg-stone-100'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Forms
-          </span>
-        </button>
+
       </div>
 
-      {viewMode === 'forms' ? (
-        /* Forms sub-tab — FormsPanel owns its own scroll; min-h-0 is required
-           so the flex child can scroll without double-scroll / zero-height collapse */
-        <div
-          role="tabpanel"
-          id="docs-panel-forms"
-          aria-labelledby="docs-tab-forms"
-          tabIndex={0}
-          className="flex-1 min-h-0"
-        >
-          <FormsPanel />
-        </div>
-      ) : viewMode === 'applications' ? (
-        /* Applications sub-tab — ApplicationsPanel root is h-full; min-h-0 prevents
-           flex-child collapse in a flex column parent */
+      {viewMode === 'applications' ? (
+        /* Applications sub-tab — FormsPanel is the Forms & Applications hub;
+           min-h-0 prevents flex-child collapse in a flex column parent */
         <div
           role="tabpanel"
           id="docs-panel-applications"
@@ -1155,7 +1120,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           tabIndex={0}
           className="flex-1 min-h-0"
         >
-          <ApplicationsPanel />
+          <FormsPanel />
         </div>
       ) : viewMode === 'documents' ? (
         <div

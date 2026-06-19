@@ -136,7 +136,7 @@ const ADMIN_SIDEBAR_ICON: SidebarIconItem = {
 // They remain valid PanelType inputs to setActivePanel but never become the resolved
 // activePanel value (the parent panel carries the resolved state).
 const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string }> = {
-  forms: { panel: 'documents', subtab: 'forms' },
+  forms: { panel: 'documents', subtab: 'applications' },
   messages: { panel: 'feed', subtab: 'messages' },
   applications: { panel: 'documents', subtab: 'applications' },
   petitions: { panel: 'feed', subtab: 'petitions' },
