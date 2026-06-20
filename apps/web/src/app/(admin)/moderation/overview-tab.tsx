@@ -354,11 +354,9 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           supabase.from('resources').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
           supabase.from('safety_alerts').select('id', { count: 'exact', head: true }).eq('status', 'live'),
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
-          supabase
-            .from('profiles')
-            .select('id', { count: 'exact', head: true })
-            .not('full_name', 'is', null)
-            .not('phone', 'is', null),
+          // SECDEF RPC: avoids 42501 on phone (no SELECT grant) + uses onboarding_completed
+          // (the authoritative signal — full_name+phone proxy always returned 0 on prod)
+          rpc('dashboard_completed_profiles'),
           rpc('admin_list_users'),
         ])
 
@@ -380,8 +378,11 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         setPendingModeration(pendingRes.count ?? null)
         setActiveSafetyAlerts(alertsRes.count ?? null)
 
+        if (completedProfilesRes.error) {
+          logger.error('[admin:overview] dashboard_completed_profiles error', { error: completedProfilesRes.error.message })
+        }
         const total = totalProfilesRes.count ?? 0
-        const completed = completedProfilesRes.count ?? 0
+        const completed = typeof completedProfilesRes.data === 'number' ? completedProfilesRes.data : 0
         setProfileCompletion(total > 0 ? Math.round((completed / total) * 100) : null)
 
         const userList = (usersRes.data as UserRow[]) ?? []
@@ -571,7 +572,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         <StatTile
           label="Profile Completion"
           value={profileCompletion !== null ? `${profileCompletion}%` : '—'}
-          sub="full_name + phone"
+          sub="onboarding completed"
         />
       </div>
 
