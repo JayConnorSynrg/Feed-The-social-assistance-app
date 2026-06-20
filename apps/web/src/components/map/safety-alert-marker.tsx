@@ -72,13 +72,13 @@ interface SafetyAlertMarkerProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SafetyAlertMarkerInner contains all hooks; called only when coords are valid.
-function SafetyAlertMarkerInner({ alert, onVote, currentUserId, onUpdate, onDelete }: SafetyAlertMarkerProps) {
+function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete }: SafetyAlertMarkerProps) {
   const [showPopup, setShowPopup] = useState(false)
   const [voting, setVoting] = useState<'confirm' | 'clear' | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
 
   // Owner edit/delete state
-  const isOwner = !!(currentUserId && alert.created_by && currentUserId === alert.created_by)
+  const isOwner = !!alert.is_mine
   const [editMode, setEditMode] = useState(false)
   const [editSeverity, setEditSeverity] = useState(String(alert.severity))
   const [editDescription, setEditDescription] = useState(alert.description ?? '')

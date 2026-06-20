@@ -1554,7 +1554,7 @@ export function FeedPanel() {
       try {
         const { data } = await supabase
           .from('safety_alerts')
-          .select('id, alert_type, severity, description, created_at, expires_at, status, confirm_count, clear_count, created_by')
+          .select('id, alert_type, severity, description, created_at, expires_at, status, confirm_count, clear_count, verified')
           .gt('expires_at', new Date().toISOString())
           .order('severity', { ascending: false })
           .order('created_at', { ascending: false })
@@ -1564,8 +1564,26 @@ export function FeedPanel() {
         // Safety alerts from the table do not have lng/lat pre-decomposed —
         // the location column is PostGIS geography. For the feed strip we only
         // need metadata (type, severity, description, times), not coordinates.
-        // Cast to partial type; map-navigation does not need coords here.
-        setSafetyAlerts((data ?? []) as SafetyAlert[])
+        // Map each row explicitly so is_mine (not available without the RPC) defaults
+        // to false — the strip never uses ownership; map panel handles that.
+        type StripRow = NonNullable<typeof data>[number]
+        setSafetyAlerts(
+          (data ?? []).map((r: StripRow): SafetyAlert => ({
+            id: r.id,
+            alert_type: r.alert_type as SafetyAlert['alert_type'],
+            severity: r.severity,
+            description: r.description,
+            lng: 0,
+            lat: 0,
+            status: r.status,
+            confirm_count: r.confirm_count,
+            clear_count: r.clear_count,
+            created_at: r.created_at,
+            expires_at: r.expires_at,
+            verified: r.verified ?? false,
+            is_mine: false,
+          }))
+        )
       } catch {
         /* non-critical; strip hides gracefully on error */
       }

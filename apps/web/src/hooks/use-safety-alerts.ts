@@ -6,25 +6,6 @@ import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EWKB parser — mirrors use-viewport-resources.ts
-// Realtime payloads return location as EWKB hex; decompose to [lng, lat].
-// ─────────────────────────────────────────────────────────────────────────────
-function parseEWKBPoint(hex: string): [number, number] | null {
-  if (!hex || typeof hex !== 'string' || hex.length < 50) return null
-  try {
-    const bytes = new Uint8Array(hex.match(/.{2}/g)!.map((b) => parseInt(b, 16)))
-    const view = new DataView(bytes.buffer)
-    const littleEndian = bytes[0] === 1
-    const lng = view.getFloat64(9, littleEndian)
-    const lat = view.getFloat64(17, littleEndian)
-    if (isNaN(lng) || isNaN(lat)) return null
-    return [lng, lat]
-  } catch {
-    return null
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,7 +19,11 @@ export interface SafetyAlert {
   status: string
   confirm_count: number
   clear_count: number
-  created_by: string | null
+  /** True when this alert was placed by the current authenticated user.
+   *  Computed server-side by safety_alerts_in_view (auth.uid() = created_by) so
+   *  created_by never reaches the client. The in-view fetch (viewport change +
+   *  60s poll) is the sole source of this flag. */
+  is_mine: boolean
   created_at: string
   expires_at: string
   verified: boolean
@@ -100,11 +85,26 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
 
         if (rpcError) throw rpcError
 
-        const rows = (data ?? []) as SafetyAlert[]
+        const rows = data ?? []
+        const alerts = rows.map((r): SafetyAlert => ({
+          id: r.id,
+          alert_type: r.alert_type as SafetyAlert['alert_type'],
+          severity: r.severity,
+          description: r.description,
+          lng: r.lng,
+          lat: r.lat,
+          status: r.status,
+          confirm_count: r.confirm_count,
+          clear_count: r.clear_count,
+          created_at: r.created_at,
+          expires_at: r.expires_at,
+          verified: r.verified,
+          is_mine: r.is_mine ?? false,
+        }))
         const newMap = new Map<string, SafetyAlert>()
-        rows.forEach((r) => newMap.set(r.id, r))
+        alerts.forEach((r) => newMap.set(r.id, r))
         alertMapRef.current = newMap
-        setAlerts(rows)
+        setAlerts(alerts)
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err))
         logger.error('safety-alerts.fetch.error', { message: e.message })
@@ -130,85 +130,31 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
     }
   }, [viewportBounds, fetchAlerts])
 
-  // ── Realtime subscription ──────────────────────────────────────────────────
+  // ── Polling refetch (replaces realtime) ────────────────────────────────────
+  //
+  // safety_alerts is intentionally NOT in the supabase_realtime publication
+  // (migration 20260619000400) so created_by never transits the WAL payload —
+  // this preserves reporter anonymity. Without realtime, a stationary map viewer
+  // would not see new hazard pins until they pan/zoom. A conservative 60s poll
+  // re-invokes the existing in-view fetch to keep pins and vote counts fresh.
+  //
+  // The poll only fires when there is an active viewport AND the tab is visible
+  // (no background polling). The interval is cleared on unmount and re-created on
+  // bounds change so intervals never stack. The viewport-change refetch above is
+  // untouched and remains the primary freshness path for pan/zoom.
 
   useEffect(() => {
-    const channel = supabase
-      .channel('safety_alerts_live')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'safety_alerts' },
-        (payload) => {
-          // Realtime payload has raw DB row: location is EWKB hex, NOT decomposed lng/lat.
-          // Decompose it before adding to local state so SafetyAlertMarker gets numeric coords.
-          const raw = payload.new as Record<string, unknown>
-          const locationHex = typeof raw.location === 'string' ? raw.location : ''
-          const coords = parseEWKBPoint(locationHex)
-          if (!coords) {
-            // Cannot decompose coordinates — skip adding to local map; next viewport
-            // fetch will pick it up with correct lng/lat from the in-view RPC.
-            return
-          }
-          const row: SafetyAlert = {
-            id: raw.id as string,
-            alert_type: raw.alert_type as SafetyAlert['alert_type'],
-            severity: raw.severity as number,
-            description: raw.description as string | null,
-            lng: coords[0],
-            lat: coords[1],
-            status: raw.status as string,
-            confirm_count: raw.confirm_count as number,
-            clear_count: raw.clear_count as number,
-            created_by: raw.created_by as string | null,
-            created_at: raw.created_at as string,
-            expires_at: raw.expires_at as string,
-            verified: (raw.verified as boolean) ?? false,
-          }
-          alertMapRef.current.set(row.id, row)
-          setAlerts(Array.from(alertMapRef.current.values()))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'safety_alerts' },
-        (payload) => {
-          // UPDATE payload also has EWKB location; same parse strategy.
-          const raw = payload.new as Record<string, unknown>
-          const locationHex = typeof raw.location === 'string' ? raw.location : ''
-          const coords = parseEWKBPoint(locationHex)
-          const status = raw.status as string
-          if (status !== 'live' || !coords) {
-            alertMapRef.current.delete(raw.id as string)
-          } else {
-            const existing = alertMapRef.current.get(raw.id as string)
-            const row: SafetyAlert = {
-              ...(existing ?? {}),
-              id: raw.id as string,
-              alert_type: raw.alert_type as SafetyAlert['alert_type'],
-              severity: raw.severity as number,
-              description: raw.description as string | null,
-              lng: coords[0],
-              lat: coords[1],
-              status,
-              confirm_count: raw.confirm_count as number,
-              clear_count: raw.clear_count as number,
-              created_by: raw.created_by as string | null,
-              created_at: raw.created_at as string,
-              expires_at: raw.expires_at as string,
-              verified: (raw.verified as boolean) ?? false,
-            }
-            alertMapRef.current.set(row.id, row)
-          }
-          setAlerts(Array.from(alertMapRef.current.values()))
-        }
-      )
-      .subscribe()
-
+    if (!viewportBounds) return
+    const bounds = viewportBounds
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAlerts(bounds)
+      }
+    }, 60000)
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(intervalId)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [viewportBounds, fetchAlerts])
 
   // ── Place alert ────────────────────────────────────────────────────────────
 
@@ -265,7 +211,8 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
           // vote_safety_alert returns the raw safety_alerts row (geography location,
           // NOT decomposed lng/lat).  Merge with the existing entry to preserve the
           // numeric lng/lat values so SafetyAlertMarker never receives NaN coords
-          // and unmounts the popup mid-interaction.
+          // and unmounts the popup mid-interaction. Also preserve is_mine from the
+          // existing entry — the raw row doesn't expose it.
           if (row.status !== 'live') {
             alertMapRef.current.delete(row.id)
           } else {
@@ -275,6 +222,7 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
               ...row,
               lng: existing?.lng ?? row.lng,
               lat: existing?.lat ?? row.lat,
+              is_mine: existing?.is_mine ?? false,
             })
           }
           setAlerts(Array.from(alertMapRef.current.values()))
