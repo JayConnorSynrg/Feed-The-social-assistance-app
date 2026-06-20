@@ -3140,6 +3140,17 @@ export type Database = {
           }
       admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
       admin_hold_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_list_users: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+          is_staff: boolean
+          joined_at: string
+          user_role: string
+        }[]
+      }
       admin_remove_post: {
         Args: { p_post_id: string; p_reason?: string }
         Returns: Json
@@ -3824,6 +3835,7 @@ export type Database = {
           description: string
           expires_at: string
           id: string
+          is_mine: boolean
           lat: number
           lng: number
           severity: number
