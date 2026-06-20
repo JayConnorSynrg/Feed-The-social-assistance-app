@@ -66,6 +66,59 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_user_notes: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          note: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          note: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          note?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_user_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_user_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_user_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_user_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_logs: {
         Row: {
           context: Json | null
@@ -3138,16 +3191,37 @@ export type Database = {
             }
             Returns: string
           }
+      admin_add_user_note: {
+        Args: { p_note: string; p_user_id: string }
+        Returns: string
+      }
       admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_delete_user_note: {
+        Args: { p_note_id: string }
+        Returns: undefined
+      }
+      admin_get_user_notes: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: string
+          note: string
+        }[]
+      }
       admin_hold_post: { Args: { p_post_id: string }; Returns: Json }
       admin_list_users: {
         Args: never
         Returns: {
+          banned_until: string
           email: string
+          email_confirmed: boolean
           full_name: string
           id: string
           is_staff: boolean
           joined_at: string
+          last_sign_in_at: string
+          provider: string
           user_role: string
         }[]
       }
@@ -3245,6 +3319,7 @@ export type Database = {
           total_users: number
         }[]
       }
+      dashboard_completed_profiles: { Args: never; Returns: number }
       dashboard_event_stats: {
         Args: never
         Returns: {
