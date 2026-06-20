@@ -40,6 +40,7 @@ import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
+import { getErrorMessage } from '@/lib/errors'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeWizard } from './post-type-wizard'
@@ -1479,10 +1480,23 @@ export function FeedPanel() {
       }
       })()])
     } catch (err: unknown) {
-      const msg = (isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError'))
+      const isTimeout = isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError')
+      const serializedMsg = getErrorMessage(err)
+      const isPermission =
+        (err as { code?: string })?.code === '42501' ||
+        serializedMsg.toLowerCase().includes('permission denied')
+
+      const msg = isTimeout
         ? 'Feed timed out — please check your connection and retry.'
-        : err instanceof Error ? err.message : String(err)
-      console.error('Error fetching posts:', msg, err)
+        : isPermission
+          ? "Couldn\'t load the feed right now — please retry."
+          : serializedMsg
+
+      logger.error('feed.posts.fetch_failed', {
+        code: (err as { code?: string })?.code,
+        message: serializedMsg,
+        kind: isTimeout ? 'timeout' : isPermission ? 'permission' : 'unknown',
+      })
       setError(msg)
     } finally {
       if (timeoutHandle !== null) clearTimeout(timeoutHandle)
