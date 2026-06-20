@@ -15,7 +15,7 @@ function getAdminClient() {
 // Permanently deletes a user account (auth + cascades to profiles via trigger)
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +35,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const targetId = params.id
+  const { id: targetId } = await params
 
   if (targetId === user.id) {
     return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })

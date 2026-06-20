@@ -16,7 +16,7 @@ function getAdminClient() {
 // 'none' = unban; '876000h' = effectively permanent
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +36,7 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const targetId = params.id
+  const { id: targetId } = await params
 
   if (targetId === user.id) {
     return NextResponse.json({ error: 'Cannot modify your own account status' }, { status: 400 })
