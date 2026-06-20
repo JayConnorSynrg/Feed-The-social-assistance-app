@@ -3138,6 +3138,12 @@ export type Database = {
             }
             Returns: string
           }
+      admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_hold_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_remove_post: {
+        Args: { p_post_id: string; p_reason?: string }
+        Returns: Json
+      }
       admin_remove_safety_alert: {
         Args: { p_alert_id: string }
         Returns: {

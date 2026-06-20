@@ -44,7 +44,13 @@ export function useRealtimeFeed({
           break
         case 'UPDATE':
           if (payload.new) {
-            onUpdate?.(payload.new as Post)
+            // When is_hidden flips true (admin remove/hold), treat as a DELETE
+            // so all connected clients instantly remove the post from their feed.
+            if (payload.new.is_hidden === true) {
+              onDelete?.(payload.new.id)
+            } else {
+              onUpdate?.(payload.new as Post)
+            }
           }
           break
         case 'DELETE':
