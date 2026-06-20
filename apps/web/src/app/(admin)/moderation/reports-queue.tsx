@@ -34,8 +34,18 @@ interface ContentGroup {
   reports: ReportRow[]
 }
 
+interface HeldPost {
+  id: string
+  content: string | null
+  created_at: string
+  hidden_at: string | null
+  hidden_reason: string | null
+  user_id: string
+}
+
 export function ReportsQueue() {
   const [groups, setGroups] = useState<ContentGroup[]>([])
+  const [heldPosts, setHeldPosts] = useState<HeldPost[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -90,6 +100,15 @@ export function ReportsQueue() {
         }
 
         setGroups(Array.from(groupMap.values()))
+
+        // Load removed & held posts
+        const { data: hiddenPostsData } = await supabase
+          .from('posts')
+          .select('id, content, created_at, hidden_at, hidden_reason, user_id')
+          .eq('is_hidden', true)
+          .in('hidden_reason', ['admin_removal', 'hold_for_review'])
+          .order('hidden_at', { ascending: false })
+        if (hiddenPostsData) setHeldPosts(hiddenPostsData as unknown as HeldPost[]) // TODO: regen types after migration is applied
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load reports')
       } finally {
@@ -139,6 +158,66 @@ export function ReportsQueue() {
     []
   )
 
+  const handleRemove = useCallback(
+    async (postId: string) => {
+      setProcessingId(postId)
+      setError(null)
+      try {
+        const { error: rpcError } = await supabase.rpc('admin_remove_post', {
+          p_post_id: postId,
+        })
+        if (rpcError) throw rpcError
+        setGroups((prev) => prev.filter((g) => g.content_id !== postId))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } finally {
+        setProcessingId(null)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  const handleHold = useCallback(
+    async (postId: string) => {
+      setProcessingId(postId)
+      setError(null)
+      try {
+        const { error: rpcError } = await supabase.rpc('admin_hold_post', {
+          p_post_id: postId,
+        })
+        if (rpcError) throw rpcError
+        setGroups((prev) => prev.filter((g) => g.content_id !== postId))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } finally {
+        setProcessingId(null)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  const handleAuthorize = useCallback(
+    async (postId: string) => {
+      setProcessingId(postId)
+      setError(null)
+      try {
+        const { error: rpcError } = await supabase.rpc('admin_authorize_post', {
+          p_post_id: postId,
+        })
+        if (rpcError) throw rpcError
+        setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } finally {
+        setProcessingId(null)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -147,7 +226,7 @@ export function ReportsQueue() {
     )
   }
 
-  if (groups.length === 0) {
+  if (groups.length === 0 && heldPosts.length === 0) {
     return (
       <Card>
         <CardContent className="py-12">
@@ -170,9 +249,11 @@ export function ReportsQueue() {
           {error}
         </div>
       )}
-      <p className="text-sm text-muted-foreground">
-        {groups.length} post{groups.length !== 1 ? 's' : ''} with open reports
-      </p>
+      {groups.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {groups.length} post{groups.length !== 1 ? 's' : ''} with open reports
+        </p>
+      )}
 
       {groups.map((group) => {
         const isExpanded = expandedId === group.content_id
@@ -230,6 +311,39 @@ export function ReportsQueue() {
 
             {isExpanded && (
               <CardContent className="space-y-3">
+                {/* Post-level actions */}
+                <div className="flex items-center gap-2 flex-wrap pb-2 border-b border-stone-100">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-9 min-h-[44px] text-xs"
+                    disabled={processingId === group.content_id}
+                    onClick={() => handleRemove(group.content_id)}
+                    data-testid={`remove-post-${group.content_id}`}
+                  >
+                    {processingId === group.content_id ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <XCircle className="h-3 w-3 mr-1" />
+                    )}
+                    Remove Post
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 min-h-[44px] text-xs"
+                    disabled={processingId === group.content_id}
+                    onClick={() => handleHold(group.content_id)}
+                    data-testid={`hold-post-${group.content_id}`}
+                  >
+                    {processingId === group.content_id ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : null}
+                    Hold for Review
+                  </Button>
+                </div>
+
+                {/* Per-report rows */}
                 {group.reports.map((report) => (
                   <div
                     key={report.id}
@@ -260,21 +374,6 @@ export function ReportsQueue() {
                           )}
                           Dismiss
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-9 min-h-[44px] text-xs"
-                          disabled={processingId === report.id}
-                          onClick={() => handleResolve(report.id, 'uphold')}
-                          data-testid={`uphold-report-${report.id}`}
-                        >
-                          {processingId === report.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                          )}
-                          Uphold
-                        </Button>
                       </div>
                     </div>
                     {report.details && (
@@ -289,6 +388,48 @@ export function ReportsQueue() {
           </Card>
         )
       })}
+
+      {/* Removed & Held Posts */}
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold mb-4">Removed &amp; Held Posts</h3>
+        {heldPosts.length === 0 ? (
+          <p className="text-stone-500 text-sm">No removed or held posts.</p>
+        ) : (
+          <div className="space-y-3">
+            {heldPosts.map((post) => (
+              <div key={post.id} className="border rounded-lg p-4">
+                <p className="text-sm text-stone-700 line-clamp-2">
+                  {(post.content ?? '').slice(0, 120)}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex gap-2 text-xs text-stone-500">
+                    <span className="font-medium">
+                      {post.hidden_reason === 'admin_removal' ? 'Removed' : 'Held for Review'}
+                    </span>
+                    <span>
+                      {post.hidden_at ? new Date(post.hidden_at).toLocaleDateString() : ''}
+                    </span>
+                  </div>
+                  {post.hidden_reason === 'hold_for_review' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid={`authorize-post-${post.id}`}
+                      onClick={() => handleAuthorize(post.id)}
+                      disabled={processingId === post.id}
+                    >
+                      {processingId === post.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : null}
+                      Authorize Post
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
