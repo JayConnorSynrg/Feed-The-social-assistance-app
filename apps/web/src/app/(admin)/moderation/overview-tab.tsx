@@ -12,6 +12,8 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import type { ChartConfig } from '@/components/ui/chart'
 import { logger } from '@/lib/logger'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +76,15 @@ type AiTheme = {
   theme: string
   summary: string
   sentiment: string
+}
+
+type UserRow = {
+  id: string
+  full_name: string | null
+  email: string | null
+  user_role: string | null
+  is_staff: boolean
+  joined_at: string | null
 }
 
 // ─── Chart config ─────────────────────────────────────────────────────────────
@@ -199,6 +210,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
   const [activeSafetyAlerts, setActiveSafetyAlerts] = useState<number | null>(null)
   const [profileCompletion, setProfileCompletion] = useState<number | null>(null)
   const [aiThemes, setAiThemes] = useState<AiTheme[]>([])
+  const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -224,6 +236,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           alertsRes,
           totalProfilesRes,
           completedProfilesRes,
+          usersRes,
         ] = await Promise.all([
           rpc('dashboard_adoption_stats'),
           rpc('dashboard_resource_stats'),
@@ -239,6 +252,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
             .select('id', { count: 'exact', head: true })
             .not('full_name', 'is', null)
             .not('phone', 'is', null),
+          rpc('admin_list_users'),
         ])
 
         if (adoptionRes.error) throw new Error(adoptionRes.error.message)
@@ -262,6 +276,10 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         const total = totalProfilesRes.count ?? 0
         const completed = completedProfilesRes.count ?? 0
         setProfileCompletion(total > 0 ? Math.round((completed / total) * 100) : null)
+
+        const userList = (usersRes.data as UserRow[]) ?? []
+        setUsers(userList)
+        logger.info('[admin:overview] admin_list_users', { count: userList.length })
 
         // projected_turnout — handle gracefully if RPC absent
         if (orgList.length > 0) {
@@ -484,6 +502,68 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
                 <p className="text-xs text-stone-500 line-clamp-3">{theme.summary}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {users.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-stone-700 mb-3 flex items-center gap-2">
+            <Users className="h-4 w-4 text-[#4a5d23]" />
+            Registered Users
+            <span className="ml-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">
+              {users.length}
+            </span>
+          </h3>
+          <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-stone-100 bg-stone-50/60">
+                  <TableHead className="h-9 px-4 text-xs font-medium text-stone-500">User</TableHead>
+                  <TableHead className="h-9 px-4 text-xs font-medium text-stone-500">Role</TableHead>
+                  <TableHead className="h-9 px-4 text-xs font-medium text-stone-500 hidden sm:table-cell">Joined</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50/50 transition-colors">
+                    <TableCell className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-lime-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-semibold text-[#4a5d23]">
+                            {(user.full_name ?? user.email ?? '?').slice(0, 1).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-stone-900 truncate">
+                            {user.full_name ?? <span className="text-stone-400 italic">No name</span>}
+                          </p>
+                          <p className="text-xs text-stone-500 truncate">{user.email ?? '—'}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {user.is_staff ? (
+                        <Badge className="bg-lime-100 text-lime-800 border-0 text-xs rounded-full px-2.5">Staff</Badge>
+                      ) : user.user_role ? (
+                        <Badge variant="outline" className="text-xs rounded-full border-stone-200 text-stone-600 px-2.5">
+                          {user.user_role}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-stone-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 hidden sm:table-cell">
+                      <span className="text-xs text-stone-500">
+                        {user.joined_at
+                          ? new Date(user.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
