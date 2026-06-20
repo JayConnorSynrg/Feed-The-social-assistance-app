@@ -59,6 +59,7 @@ Respond as JSON: { "themes": [{ "type": string, "label": string, "summary": stri
         response_format: { type: 'json_object' },
         max_tokens: 500,
       }),
+      signal: AbortSignal.timeout(8000),
     })
 
     if (!res.ok) {

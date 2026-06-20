@@ -232,6 +232,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
   const [isActioning, setIsActioning] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleBanToggle = async (user: UserRow) => {
@@ -388,6 +389,8 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         setUsers(userList)
         logger.info('[admin:overview] admin_list_users', { count: userList.length })
 
+        setLoading(false)
+
         // projected_turnout — handle gracefully if RPC absent
         if (orgList.length > 0) {
           const satDate = nextSaturday()
@@ -409,25 +412,6 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
           }
         }
 
-        // AI community themes — show section only if API responds with data
-        try {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 10_000)
-          const themesRes = await fetch('/api/community-summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ org_id: selectedOrgId }),
-            signal: controller.signal,
-          })
-          clearTimeout(timeoutId)
-          if (themesRes.ok) {
-            const json = (await themesRes.json()) as { themes?: AiTheme[] }
-            setAiThemes(json.themes ?? [])
-          }
-        } catch {
-          // AI themes unavailable — section stays hidden
-        }
-
         const suppressed = (peopleFedRes.data as PeopleFed[])?.[0]?.suppressed ?? false
         logger.info('admin.overview.loaded', {
           duration_ms: Date.now() - startTime,
@@ -436,12 +420,42 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load overview')
-      } finally {
         setLoading(false)
       }
     }
 
     load()
+  }, [])
+
+  useEffect(() => {
+    if (!selectedOrgId) return
+    let cancelled = false
+
+    const fetchAiSummary = async () => {
+      setAiLoading(true)
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10_000)
+        const res = await fetch('/api/community-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ org_id: selectedOrgId }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { themes?: AiTheme[] }
+          setAiThemes(data.themes ?? [])
+        }
+      } catch (err) {
+        if (!cancelled) console.error('AI summary fetch error:', err)
+      } finally {
+        if (!cancelled) setAiLoading(false)
+      }
+    }
+
+    fetchAiSummary()
+    return () => { cancelled = true }
   }, [selectedOrgId])
 
   if (loading) {
