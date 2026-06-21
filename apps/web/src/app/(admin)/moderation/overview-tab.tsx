@@ -226,6 +226,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
   const [profileCompletion, setProfileCompletion] = useState<number | null>(null)
   const [aiThemes, setAiThemes] = useState<AiTheme[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
+  const [usersError, setUsersError] = useState<string | null>(null)
   const [notesUser, setNotesUser] = useState<UserRow | null>(null)
   const [userNotes, setUserNotes] = useState<NoteRow[]>([])
   const [newNote, setNewNote] = useState('')
@@ -385,9 +386,15 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         const completed = typeof completedProfilesRes.data === 'number' ? completedProfilesRes.data : 0
         setProfileCompletion(total > 0 ? Math.round((completed / total) * 100) : null)
 
-        const userList = (usersRes.data as UserRow[]) ?? []
-        setUsers(userList)
-        logger.info('[admin:overview] admin_list_users', { count: userList.length })
+        if (usersRes.error) {
+          const msg = usersRes.error.message ?? 'unknown error'
+          logger.error('admin.overview.list_users_failed', { message: msg })
+          setUsersError("Couldn't load the user list — please retry.")
+        } else {
+          const userList = (usersRes.data as UserRow[]) ?? []
+          setUsers(userList)
+          logger.info('[admin:overview] admin_list_users', { count: userList.length })
+        }
 
         // projected_turnout — handle gracefully if RPC absent
         if (orgList.length > 0) {
@@ -614,7 +621,13 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         </div>
       )}
 
-      {users.length > 0 && (
+      {usersError && (
+        <div className="py-3 px-4 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200">
+          {usersError}
+        </div>
+      )}
+
+      {!usersError && users.length > 0 && (
         <>
           <div>
             <h3 className="text-sm font-semibold text-stone-700 mb-3 flex items-center gap-2">
