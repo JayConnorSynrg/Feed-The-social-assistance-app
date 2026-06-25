@@ -485,12 +485,14 @@ test(
 )
 
 test(
-  'supabase/functions/chat/index.ts — reads FIREWORKS_API_KEY from env',
+  'supabase/functions/chat/index.ts — references FIREWORKS_API_KEY via apiKeyEnv indirection',
   () => {
     const f = rootFile('supabase/functions/chat/index.ts')
-    return f.includes("Deno.env.get('FIREWORKS_API_KEY')")
+    // The edge function reads the key indirectly: apiKeyEnv is set to 'FIREWORKS_API_KEY'
+    // and consumed via Deno.env.get(entry.apiKeyEnv) — not a direct Deno.env.get('FIREWORKS_API_KEY') call.
+    return f.includes("apiKeyEnv: 'FIREWORKS_API_KEY'")
   },
-  'FIREWORKS_API_KEY env read not found',
+  "apiKeyEnv: 'FIREWORKS_API_KEY' not found — Fireworks key reference missing",
 )
 
 test(
