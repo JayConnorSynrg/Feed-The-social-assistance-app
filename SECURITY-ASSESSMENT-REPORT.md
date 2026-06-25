@@ -421,7 +421,7 @@ for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
 **Status:** ✅ **No Issues Found**
 
 **Search Results:**
-- ✅ No OPENROUTER_API_KEY in client code
+- ✅ No LLM API keys in client code (FIREWORKS_API_KEY server-side only)
 - ✅ No API_211_KEY in client code
 - ✅ SUPABASE_SERVICE_ROLE_KEY only in server-side API routes
 - ✅ Hardcoded passwords only in test files (acceptable)

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ themes: [], suppressed: true })
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY
+  const apiKey = process.env.FIREWORKS_API_KEY
   if (!apiKey) {
     return NextResponse.json({ themes: [], error: 'No AI key configured' })
   }
@@ -47,14 +47,14 @@ ${validGroups.map((g) => `${g.type} (${g.count} posts): ${g.excerpts.join(' | ')
 Respond as JSON: { "themes": [{ "type": string, "label": string, "summary": string, "count": number }] }`
 
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const res = await fetch('https://api.fireworks.ai/inference/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'qwen/qwen3-8b',
+        model: 'accounts/fireworks/models/gpt-oss-120b',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         max_tokens: 500,

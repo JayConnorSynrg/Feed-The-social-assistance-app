@@ -1,7 +1,8 @@
 // supabase/functions/chat/index.ts
-// Multi-provider AI chat proxy with privacy-first cascade
-// Privacy order intentional: Fireworks = default-ZDR/no-training primary;
-// OpenRouter entries MUST keep zdr+deny; do not reorder or add non-ZDR routes.
+// Fireworks-only AI chat proxy with privacy-first cascade
+// Both entries use Fireworks' published no-training/zero-retention policy for
+// open models — no data collection, no training on prompts. FIREWORKS_API_KEY
+// is required; there is no fallback provider.
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -16,17 +17,19 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
 // ---------------------------------------------------------------------------
-// Provider cascade — privacy-first order
+// Provider cascade — Fireworks-only, privacy-first
 // ---------------------------------------------------------------------------
 // Each entry describes how to call a provider.  Entries whose apiKeyEnv is
-// unset are skipped at start-up (warn-logged) so the function still runs on
-// OpenRouter alone until FIREWORKS_API_KEY is set.
+// unset are skipped at start-up (warn-logged).  FIREWORKS_API_KEY is required;
+// if it is not set neither entry resolves and the function returns a 500.
 //
 // Privacy order intentional:
-//   1+2. Fireworks — default-ZDR / no-training primary & secondary
-//   3+4. OpenRouter — ZDR-gated fallbacks; zdr+deny MUST stay on every OR entry
+//   1. Fireworks primary  — qwen3p7-plus (hybrid-thinking, multilingual)
+//   2. Fireworks secondary — gpt-oss-120b (non-thinking, high-capacity)
 //
-// Do NOT reorder or add non-ZDR routes.
+// Both models run under Fireworks' published no-training / zero-retention
+// policy for open models.  Do NOT add non-Fireworks routes without a verified
+// equivalent privacy guarantee.
 // ---------------------------------------------------------------------------
 
 interface ProviderEntry {
@@ -38,12 +41,12 @@ interface ProviderEntry {
   extraBody?: Record<string, unknown>
 }
 
-// Primary Fireworks model: Qwen3.6 — 200+ language hybrid-thinking model.
+// Primary Fireworks model: Qwen3.7 — 200+ language hybrid-thinking model.
 // Disable thinking mode for chat latency via the `reasoning_effort` param that
 // Fireworks documents at https://docs.fireworks.ai/reasoning/overview.
 // If Fireworks returns an unknown-param error (400) for this field the entry
 // falls through gracefully to the next provider — see fallthrough logic below.
-const CHAT_PRIMARY_MODEL = Deno.env.get('CHAT_PRIMARY_MODEL') ?? 'accounts/fireworks/models/qwen3p6-plus'
+const CHAT_PRIMARY_MODEL = Deno.env.get('CHAT_PRIMARY_MODEL') ?? 'accounts/fireworks/models/qwen3p7-plus'
 
 const PROVIDER_CHAIN: ProviderEntry[] = [
   {
@@ -68,26 +71,6 @@ const PROVIDER_CHAIN: ProviderEntry[] = [
     apiKeyEnv: 'FIREWORKS_API_KEY',
     model: 'accounts/fireworks/models/gpt-oss-120b',
     // gpt-oss-120b is a non-thinking model; no reasoning_effort needed.
-  },
-  {
-    name: 'openrouter-gemini',
-    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    apiKeyEnv: 'OPENROUTER_API_KEY',
-    model: 'google/gemini-2.5-flash',
-    // OpenRouter ZDR + data-collection deny — MUST remain on all OR entries.
-    extraBody: {
-      provider: { data_collection: 'deny', zdr: true },
-    },
-  },
-  {
-    name: 'openrouter-haiku',
-    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    apiKeyEnv: 'OPENROUTER_API_KEY',
-    model: 'anthropic/claude-haiku-4.5',
-    // OpenRouter ZDR + data-collection deny — MUST remain on all OR entries.
-    extraBody: {
-      provider: { data_collection: 'deny', zdr: true },
-    },
   },
 ]
 
@@ -248,9 +231,8 @@ async function callProvider(
     ...entry.extraBody,
   }
 
-  // Fireworks endpoints use the same OpenAI-compatible path but do NOT accept
-  // the OpenRouter-specific `provider` object — only merge it for OR entries.
-  // (extraBody already carries provider:{} only for openrouter-* entries.)
+  // Fireworks uses the OpenAI-compatible inference path.
+  // extraBody carries provider-specific params (e.g. reasoning_effort) per entry.
 
   const response = await fetch(entry.baseUrl, {
     method: 'POST',
@@ -401,7 +383,7 @@ async function tryProviderCascade(
 
         // Stream-start failure check: for streaming responses, peek at the first
         // SSE chunk to detect provider-level error payloads embedded in a 200 body.
-        // Both Fireworks and OpenRouter can wrap stream errors as data:{error:...}
+        // Fireworks can wrap stream errors as data:{error:...}
         // on the first SSE event. If detected, consume the body and fall through.
         if (stream && response.body) {
           const reader = response.body.getReader()
