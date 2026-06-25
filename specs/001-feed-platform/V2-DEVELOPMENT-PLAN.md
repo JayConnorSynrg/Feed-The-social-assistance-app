@@ -194,7 +194,7 @@ type MessageType =
 - `useChat()` hook with streaming
 - Message history in Supabase
 - Edge Function: `/functions/chat`
-- Fireworks AI (privacy-first, multilingual primary) + OpenRouter ZDR fallback for LLM
+- Fireworks AI only (privacy-first, multilingual, HIPAA/SOC2/ISO)
 
 **LLM Integration**:
 - System prompt with FEED context
@@ -508,7 +508,7 @@ supabase
 **Functions to Implement**:
 
 1. **`/functions/chat`** - AI chat endpoint
-   - Fireworks (primary, ZDR/no-training) + OpenRouter ZDR fallback provider cascade
+   - Fireworks-only (ZDR/no-training, privacy-first) provider cascade
    - Context injection
    - Tool calling (eligibility, resources)
 
@@ -655,8 +655,7 @@ const tools = [
 - [ ] All RLS policies verified
 - [ ] Edge Functions deployed
 - [ ] Mapbox API key configured
-- [ ] OPENROUTER_API_KEY in secrets (required fallback)
-- [ ] FIREWORKS_API_KEY in secrets (optional; enables privacy-first primary)
+- [ ] FIREWORKS_API_KEY in secrets (required)
 - [ ] Domain DNS configured
 - [ ] SSL certificate active
 - [ ] Error tracking enabled

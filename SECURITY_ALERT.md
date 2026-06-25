@@ -132,9 +132,9 @@ for (const envVar of requiredEnvVars) {
 For Edge Functions, use Supabase Vault:
 
 ```typescript
-// Instead of process.env.OPENROUTER_API_KEY
+// Instead of process.env.FIREWORKS_API_KEY
 const { data: secret } = await supabase.rpc('vault.get_secret', {
-  secret_name: 'openrouter_api_key'
+  secret_name: 'fireworks_api_key'
 })
 ```
 

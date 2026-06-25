@@ -3,7 +3,7 @@
  *
  * THREAT: raw user PII (income, pregnancy status, household composition,
  * insurance status, free-text situation) must NEVER reach the third-party LLM
- * (OpenRouter) via the client. The only LLM egress is the request to
+ * (Fireworks) via the client. The only LLM egress is the request to
  * /functions/v1/chat (use-chat.ts). This spec drives the two guided client
  * paths that historically interpolated raw PII into that request and asserts
  * the intercepted chat request body is free of the sentinel PII values, while
@@ -74,7 +74,7 @@ const MOCK_SCREENING_RESPONSE = {
 }
 
 // A minimal SSE body the chat hook can consume so the chat returns a "response"
-// without calling the real OpenRouter endpoint.
+// without calling the real Fireworks endpoint.
 const MOCK_CHAT_SSE =
   'data: {"type":"meta","model":"test/model"}\n\n' +
   'data: {"type":"content","content":"Here are some resources I found for you."}\n\n' +

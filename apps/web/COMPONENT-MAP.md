@@ -3,7 +3,7 @@
 **Project**: FEED - Mutual Aid Resource Sharing Platform
 **Version**: 1.0.0
 **Date**: 2026-01-30
-**Tech Stack**: Next.js + Capacitor + Supabase + shadcn/ui + OpenRouter
+**Tech Stack**: Next.js + Capacitor + Supabase + shadcn/ui + Fireworks
 
 ---
 

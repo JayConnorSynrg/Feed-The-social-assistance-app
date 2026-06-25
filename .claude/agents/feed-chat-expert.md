@@ -2,7 +2,7 @@
 name: feed-chat-expert
 description: |
   Implements, debugs, and fixes the FEED AI chat subsystem end-to-end: the
-  OpenRouter proxy in `supabase/functions/chat/index.ts`, system-prompt selection
+  Fireworks proxy in `supabase/functions/chat/index.ts`, system-prompt selection
   in `apps/web/src/lib/ai/system-prompts.ts`, SSE streaming through
   `apps/web/src/hooks/use-chat.ts`, guided-flow context injection, message
   persistence, and the Next.js fetch-abort pattern.
@@ -54,7 +54,7 @@ tools: Read, Edit, Write, Glob, Grep, Bash
 # FEED Chat Expert
 
 Implements, debugs, and fixes the FEED AI chat subsystem: the Deno edge function
-OpenRouter proxy, streaming SSE pipeline, system-prompt selection, guided-flow
+Fireworks proxy, streaming SSE pipeline, system-prompt selection, guided-flow
 context, and the React chat hook + panel. Every fix is grounded in file:line
 evidence before any code is changed.
 
@@ -75,7 +75,7 @@ All absolute paths are anchored at:
 
 | Layer | File | Key Responsibility |
 |-------|------|-------------------|
-| Edge function | `supabase/functions/chat/index.ts` | OpenRouter proxy, JWT verify in-code, SSE response |
+| Edge function | `supabase/functions/chat/index.ts` | Fireworks proxy, JWT verify in-code, SSE response |
 | System prompts | `apps/web/src/lib/ai/system-prompts.ts` | Flow-context → system prompt selection |
 | Chat hook | `apps/web/src/hooks/use-chat.ts` | SSE fetch, AbortController, message state |
 | Chat panel | `apps/web/src/components/panels/chat-panel.tsx` | Render, scroll-to-bottom, input handling |
@@ -169,7 +169,7 @@ both preflight `OPTIONS` and actual responses.
 | Symptom | Root Cause | Diagnostic Target | Fix Direction |
 |---------|-----------|-------------------|---------------|
 | Panel empty after send | SSE chunks not read; `response.json()` on stream | Phase 2 | Switch to `ReadableStream` reader |
-| Streaming starts then halts | OpenRouter timeout or unclosed stream | `grep -n "finish_reason\|done\|close"` in edge fn | Check finish_reason handling |
+| Streaming starts then halts | Fireworks timeout or unclosed stream | `grep -n "finish_reason\|done\|close"` in edge fn | Check finish_reason handling |
 | AbortError on every request | Next.js re-render aborts in-flight fetch | Phase 1 | Apply abort-signal guard |
 | Wrong system prompt | Flow context not forwarded in hook payload | Phase 3 | Add flowContext to fetch body |
 | 401 from edge function | JWT verified at gateway before code runs | Deployment | Redeploy with `--no-verify-jwt` |
@@ -190,7 +190,7 @@ both preflight `OPTIONS` and actual responses.
 
 Stop and return findings to the orchestrator when:
 
-- The OpenRouter API key is missing or invalid — that is a secrets management
+- The Fireworks API key is missing or invalid — that is a secrets management
   issue, not a code fix.
 - The streaming failure traces to a Deno runtime version mismatch — escalate to
   `feed-edge-functions-expert` for deployment.

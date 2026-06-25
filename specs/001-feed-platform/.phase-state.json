@@ -519,7 +519,7 @@
         ],
         "status": "complete",
         "phase": "Phase 4: AI Assistant",
-        "notes": "Implemented complete AI chat system: OpenRouter Edge Function with streaming, model fallback chain (mistral\u2192llama\u2192haiku\u2192sonnet), rate limiting (20 req/min/user), chat interface with guided flows (resource finder, eligibility checker, form help), crisis detection and support."
+        "notes": "Fireworks Edge Function (qwen3p7-plus \u2192 gpt-oss-120b cascade)"
       },
       {
         "id": "session-007",

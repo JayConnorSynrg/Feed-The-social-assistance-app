@@ -163,7 +163,7 @@ function delay(ms: number): Promise<void> {
 
 // ─── Fireworks LLM call ───────────────────────────────────────────────────────
 
-async function callOpenRouter(
+async function callFireworks(
   messages: FireworksMessage[],
   model: string,
   timeoutMs = 60_000
@@ -261,7 +261,7 @@ Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON 
   let rawContent: string = ''
   for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
     try {
-      rawContent = await callOpenRouter(
+      rawContent = await callFireworks(
         [{ role: 'user', content: prompt }],
         model,
         90_000 // 90s — cloud inference is fast (5-15s typically)
@@ -556,7 +556,7 @@ Rules:
 Return ONLY the JSON object, no other text.`
 
   try {
-    const rawContent = await callOpenRouter(
+    const rawContent = await callFireworks(
       [{ role: 'user', content: prompt }],
       model,
       60_000 // 60s per program — cloud inference is fast
@@ -606,13 +606,13 @@ async function normalizePrograms(
     return normalized
   }
 
-  let openRouterSuccesses = 0
-  let openRouterFallbacks = 0
+  let fireworksSuccesses = 0
+  let fireworksFallbacks = 0
 
   for (const program of programs) {
     const result = await normalizeProgram(program, state, model)
     if (result) {
-      openRouterSuccesses++
+      fireworksSuccesses++
       normalized.push({
         ...result,
         source_url: program.sourceUrl,
@@ -621,7 +621,7 @@ async function normalizePrograms(
       })
     } else {
       // Fireworks failed — fall back to raw extracted data. Program is not dropped.
-      openRouterFallbacks++
+      fireworksFallbacks++
       normalized.push(programToRawPayload(program, state))
     }
   }
@@ -630,8 +630,8 @@ async function normalizePrograms(
     step: 'normalize',
     state,
     normalized: normalized.length,
-    openRouterSuccesses,
-    openRouterFallbacks,
+    fireworksSuccesses,
+    fireworksFallbacks,
     durationMs: Date.now() - start,
   })
   return normalized

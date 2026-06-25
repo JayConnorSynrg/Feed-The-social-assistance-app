@@ -14,7 +14,7 @@ description: |
   messages panel fails to render new messages in real time.
 
   Distinct from existing agents:
-  - feed-chat-expert owns the AI chat flow (OpenRouter, SSE, system prompts).
+  - feed-chat-expert owns the AI chat flow (Fireworks, SSE, system prompts).
     This agent owns the P2P human-to-human messaging feature only.
   - feed-realtime-monitor owns Supabase Realtime subscription health. This agent
     owns the messaging-layer business logic and component behavior.

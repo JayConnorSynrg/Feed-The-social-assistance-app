@@ -11,7 +11,7 @@ description: |
   benefits screening produces an eligibility result that contradicts the user's
   profile; the resource wizard does not advance steps correctly; the benefits
   screening edge function times out; the program discovery script (qwen3-8b via
-  OpenRouter) fails to parse or store results; or federal forms / state portal
+  Fireworks) fails to parse or store results; or federal forms / state portal
   links are missing or stale.
 
   Distinct from existing agents:
@@ -46,7 +46,7 @@ description: |
   Context: The program discovery script exits without storing new programs — no
   error in the console, just 0 rows written.
   user: 'program-discovery.ts script runs but inserts 0 new programs.'
-  assistant: 'Dispatching feed-programs-expert to trace the qwen3-8b OpenRouter
+  assistant: 'Dispatching feed-programs-expert to trace the qwen3-8b Fireworks
   response parsing in program-discovery.ts and verify the insert payload matches
   the programs table schema.'
   <commentary>Correct — the AI-powered program discovery pipeline is this agent's
@@ -96,17 +96,16 @@ All absolute paths are anchored at:
 ## Critical Patterns
 
 ### Program Discovery Pipeline (qwen3-8b)
-`program-discovery.ts` uses OpenRouter with the `qwen/qwen3-8b` model to discover
+`program-discovery.ts` uses Fireworks with the `qwen/qwen3-8b` model to discover
 and structure program data. The model output must be parsed as structured JSON.
 Any non-JSON response must be caught and logged, not thrown.
 
 ```typescript
-const response = await openrouter.chat.completions.create({
-  model: 'qwen/qwen3-8b',
-  messages: [{ role: 'user', content: discoveryPrompt }],
-  response_format: { type: 'json_object' }
-})
-const parsed = JSON.parse(response.choices[0].message.content)
+const rawContent = await callFireworks(
+  [{ role: 'user', content: discoveryPrompt }],
+  'accounts/fireworks/models/qwen3p7b-instruct'
+)
+const parsed = JSON.parse(rawContent)
 ```
 
 ### Eligibility Fail-Open Rule
@@ -157,7 +156,7 @@ triggers a form submission, not a dead end.
 ### Phase 4 — Audit Program Discovery Script
 
 ```bash
-grep -n "qwen\|openrouter\|json_object\|parse\|catch\|insert\|upsert" \
+grep -n "qwen\|fireworks\|json_object\|parse\|catch\|insert\|upsert" \
   /Users/jelalconnor/CODING/CURSOR/FEED./apps/web/scripts/program-discovery.ts
 ```
 
@@ -200,7 +199,7 @@ Stop and return findings to the orchestrator when:
 
 - The benefits screening function needs a new eligibility rule that requires
   a DB config table for thresholds — escalate to `feed-db-migrations-expert`.
-- The discovery script's OpenRouter API key is missing or rate-limited — surface
+- The discovery script's Fireworks API key is missing or rate-limited — surface
   to user; do not hardcode.
 - The resource wizard submission fails an RLS check on the resources table —
   escalate to `feed-resources-expert` to trace the insert path.

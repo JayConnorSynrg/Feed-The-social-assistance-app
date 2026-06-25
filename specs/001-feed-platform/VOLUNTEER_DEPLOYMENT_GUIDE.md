@@ -228,19 +228,19 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 # Mapbox (for maps)
 NEXT_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
 
-# OpenRouter (for AI features)
-OPENROUTER_API_KEY=your-openrouter-key
+# Fireworks (for AI features)
+FIREWORKS_API_KEY=your-fireworks-key
 ```
 
 **What these do**:
 - **Google Sign-In**: Let users log in with their Google account (easier than remembering another password)
 - **Mapbox**: Show resources on a map
-- **OpenRouter**: Enable AI chat assistant (helps users find resources)
+- **Fireworks**: Enable AI chat assistant (helps users find resources)
 
 **How to get these**:
 - Google: https://console.cloud.google.com (see "Getting Google OAuth Credentials" below)
 - Mapbox: https://www.mapbox.com (free tier available)
-- OpenRouter: https://openrouter.ai (pay-as-you-go, ~$0.10 per 1000 messages)
+- Fireworks: https://app.fireworks.ai (pay-as-you-go)
 
 ### Getting Google OAuth Credentials
 
@@ -1052,7 +1052,7 @@ Use this to estimate your costs:
 | SSL certificate (Let's Encrypt) | $0 |
 | Google OAuth | $0 |
 | Mapbox (free tier) | $0 |
-| OpenRouter AI (~1000 messages/month) | $1.20 |
+| Fireworks AI (~1000 messages/month) | $1.20 |
 | **TOTAL** | **$85.20/year** |
 
 **Per user per year** (100 users): **$0.85**
