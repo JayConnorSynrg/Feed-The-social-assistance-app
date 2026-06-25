@@ -42,7 +42,7 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001',
       NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '',
-      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
+      FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY ?? '',
     },
   },
 })

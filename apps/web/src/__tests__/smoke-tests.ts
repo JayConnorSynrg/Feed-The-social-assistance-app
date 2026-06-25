@@ -485,21 +485,23 @@ test(
 )
 
 test(
-  'supabase/functions/chat/index.ts — reads OPENROUTER_API_KEY from env',
+  'supabase/functions/chat/index.ts — references FIREWORKS_API_KEY via apiKeyEnv indirection',
   () => {
     const f = rootFile('supabase/functions/chat/index.ts')
-    return f.includes("Deno.env.get('OPENROUTER_API_KEY')")
+    // The edge function reads the key indirectly: apiKeyEnv is set to 'FIREWORKS_API_KEY'
+    // and consumed via Deno.env.get(entry.apiKeyEnv) — not a direct Deno.env.get('FIREWORKS_API_KEY') call.
+    return f.includes("apiKeyEnv: 'FIREWORKS_API_KEY'")
   },
-  'OPENROUTER_API_KEY env read not found',
+  "apiKeyEnv: 'FIREWORKS_API_KEY' not found — Fireworks key reference missing",
 )
 
 test(
-  'supabase/functions/chat/index.ts — makes API call to openrouter.ai',
+  'supabase/functions/chat/index.ts — makes API call to fireworks.ai',
   () => {
     const f = rootFile('supabase/functions/chat/index.ts')
-    return f.includes('openrouter.ai')
+    return f.includes('fireworks.ai')
   },
-  'openrouter.ai URL not found',
+  'fireworks.ai URL not found',
 )
 
 test(
@@ -1025,15 +1027,15 @@ test(
 )
 
 test(
-  '.env.local — OPENROUTER_API_KEY is set',
+  '.env.local — FIREWORKS_API_KEY is set',
   () => {
     const env = fs.existsSync(path.join(WEB, '.env.local'))
       ? fs.readFileSync(path.join(WEB, '.env.local'), 'utf-8')
       : ''
-    const match = env.match(/^OPENROUTER_API_KEY=(.+)$/m)
+    const match = env.match(/^FIREWORKS_API_KEY=(.+)$/m)
     return !!(match && match[1] && match[1].trim().length > 0)
   },
-  'OPENROUTER_API_KEY not set in .env.local',
+  'FIREWORKS_API_KEY not set in .env.local',
 )
 
 test(

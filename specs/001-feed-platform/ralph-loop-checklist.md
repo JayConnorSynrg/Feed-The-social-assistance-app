@@ -875,7 +875,7 @@ npx cap sync && npx cap run ios
 
 ## PHASE 4: AI Assistant (Weeks 13-16)
 
-[Tasks P4-T1 through P4-T11 - OpenRouter setup, chat interface, guided flows]
+[Tasks P4-T1 through P4-T11 - Fireworks AI setup, chat interface, guided flows]
 
 ### P4-T1: Create OpenRouter Edge Function
 - [x] **Status**: COMPLETE

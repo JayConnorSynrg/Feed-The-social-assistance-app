@@ -32,7 +32,7 @@ FEED takes security seriously. If you discover a security vulnerability, please 
 
 Required secrets (configure in deployment environment):
 - `SUPABASE_SERVICE_ROLE_KEY` - Server-side only
-- `OPENROUTER_API_KEY` - AI features
+- `FIREWORKS_API_KEY` - AI features
 - `API_211_KEY` - Resource discovery
 - `NEXT_PUBLIC_MAPBOX_TOKEN` - Maps (public but rate-limited)
 

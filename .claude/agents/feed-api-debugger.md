@@ -1,7 +1,7 @@
 ---
 name: feed-api-debugger
 description: |
-  Debugs API-related issues in the FEED platform including Next.js API routes, Supabase Edge Functions, OpenRouter/Mapbox integrations, request/response handling, rate limiting, and error propagation. Use this agent when an API endpoint returns unexpected status codes (401, 403, 429, 500, 502), when chat streaming fails, when external integrations misbehave, or when tracing request flow from client through edge function to external API. Does NOT handle Deno edge function deployment/CORS (use feed-edge-functions-expert), AI chat business logic and SSE streaming (use feed-chat-expert), or auth/session debugging (use feed-auth-debugger). Examples: <example>Context: Chat endpoint is returning 500 errors. user: 'The chat API is failing with model_not_found' assistant: 'I'll use the feed-api-debugger agent to trace the OpenRouter model cascade and identify which model is failing.' <commentary>API error involving Edge Function and external integration — exact scope of this agent.</commentary></example> <example>Context: Rate limit issues. user: 'Users are getting 429 errors on the chat endpoint' assistant: 'I'll invoke the feed-api-debugger agent to analyze the rate limiting logic and request volume.' <commentary>Rate limit debugging falls under API request/response handling.</commentary></example>
+  Debugs API-related issues in the FEED platform including Next.js API routes, Supabase Edge Functions, Fireworks/Mapbox integrations, request/response handling, rate limiting, and error propagation. Use this agent when an API endpoint returns unexpected status codes (401, 403, 429, 500, 502), when chat streaming fails, when external integrations misbehave, or when tracing request flow from client through edge function to external API. Does NOT handle Deno edge function deployment/CORS (use feed-edge-functions-expert), AI chat business logic and SSE streaming (use feed-chat-expert), or auth/session debugging (use feed-auth-debugger). Examples: <example>Context: Chat endpoint is returning 500 errors. user: 'The chat API is failing with model_not_found' assistant: 'I'll use the feed-api-debugger agent to trace the Fireworks model cascade and identify which model is failing.' <commentary>API error involving Edge Function and external integration — exact scope of this agent.</commentary></example> <example>Context: Rate limit issues. user: 'Users are getting 429 errors on the chat endpoint' assistant: 'I'll invoke the feed-api-debugger agent to analyze the rate limiting logic and request volume.' <commentary>Rate limit debugging falls under API request/response handling.</commentary></example>
 model: opus
 tools: Read, Glob, Grep, Bash
 ---
@@ -17,7 +17,7 @@ tools: Read, Glob, Grep, Bash
 Debug API-related issues in the FEED platform including:
 - Next.js API routes
 - Supabase Edge Functions
-- External API integrations (OpenRouter, Mapbox)
+- External API integrations (Fireworks, Mapbox)
 - Request/response handling
 - Error propagation
 - Rate limiting
@@ -32,7 +32,7 @@ interface APIDebugInput {
   requestBody?: object;
   responseBody?: object;
   headers?: object;
-  integration?: 'supabase' | 'openrouter' | 'mapbox' | 'internal';
+  integration?: 'supabase' | 'fireworks' | 'mapbox' | 'internal';
 }
 ```
 
@@ -72,7 +72,7 @@ interface APIDebugOutput {
 | Route | Method | Purpose | External Calls |
 |-------|--------|---------|----------------|
 | `/auth/callback` | GET | OAuth callback handler | Supabase Auth |
-| `/functions/v1/chat` | POST | AI chat (Edge Function) | OpenRouter |
+| `/functions/v1/chat` | POST | AI chat (Edge Function) | Fireworks |
 
 ### Edge Functions
 
@@ -81,22 +81,20 @@ interface APIDebugOutput {
 ├─ Receives: { messages, flow?, context? }
 ├─ Rate Limiting: 20 req/min per user
 ├─ System Prompt: Based on flow type
-├─ Calls: OpenRouter Chat Completion API
+├─ Calls: Fireworks Chat Completion API
 ├─ Model Cascade:
-│   1. mistralai/mistral-7b-instruct
-│   2. meta-llama/llama-3.1-8b-instruct
-│   3. anthropic/claude-3-haiku
-│   4. anthropic/claude-3.5-sonnet
+│   1. accounts/fireworks/models/qwen3p7b-instruct (primary)
+│   2. accounts/fireworks/models/gpt-oss-120b (secondary)
 └─ Returns: SSE stream of JSON chunks
 ```
 
 ### External Integrations
 
-#### OpenRouter (AI Chat)
+#### Fireworks (AI Chat)
 ```typescript
 // Configuration
-const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const FIREWORKS_API_KEY = Deno.env.get('FIREWORKS_API_KEY');
+const FIREWORKS_URL = 'https://api.fireworks.ai/inference/v1/chat/completions';
 
 // Request format
 {
@@ -162,10 +160,10 @@ Edge Function (/functions/v1/chat)
     ├─ Validate request
     ├─ Check rate limit (20/min)
     ├─ Select system prompt based on flow
-    ├─ Build OpenRouter request
+    ├─ Build Fireworks request
     │
     ▼
-OpenRouter API
+Fireworks API
     │
     ├─ Try primary model
     ├─ Fallback to next model on failure
@@ -250,7 +248,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 
 # Edge Functions (in Supabase dashboard)
-OPENROUTER_API_KEY=sk-or-...
+FIREWORKS_API_KEY=sk-fw-...
 
 # Client-side
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ...
@@ -262,7 +260,7 @@ NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ...
 |---------|-------|--------|------------------|
 | Chat API | 20 requests | 1 minute | 429, retry-after header |
 | Supabase Auth | 100 requests | 1 hour | 429 |
-| OpenRouter | Varies by tier | - | 429 |
+| Fireworks | Varies by tier | - | 429 |
 | Mapbox | 50,000 loads | Month | 402 |
 
 ## Preventive Checks

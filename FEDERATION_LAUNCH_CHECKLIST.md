@@ -359,7 +359,7 @@
 | `FEDERATION_RATE_LIMIT_ENABLED` | Enable rate limiting on federation endpoints | `true` | No (default: true) | No |
 | `FEDERATION_CACHE_TTL` | Cache TTL in seconds | `300` (5 minutes) | No (default: 300) | No |
 | `FEDERATION_WEBHOOK_SECRET` | Secret for validating outbound webhooks | `random-secret-string` | Yes | **YES** |
-| `OPENROUTER_API_KEY` | OpenRouter API key for AI chat (if using federation) | `sk-or-v1-...` | No | **YES** |
+| `FIREWORKS_API_KEY` | Fireworks API key for AI chat | `fw_...` | Yes | **YES** |
 | `SENTRY_DSN` | Sentry error tracking DSN | `https://...@sentry.io/...` | No | No |
 | `SENTRY_AUTH_TOKEN` | Sentry auth token for uploading source maps | `sntrys_...` | No | **YES** |
 | `VERCEL_URL` | Auto-populated by Vercel (deployment URL) | `feed-xyz.vercel.app` | Auto | No |

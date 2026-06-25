@@ -3,7 +3,7 @@
 ## Project Overview
 **FEED** is a Mutual Aid Resource Sharing Platform helping people access benefits, community resources, and support services.
 
-- **Tech Stack**: Next.js + Capacitor + Supabase + OpenRouter
+- **Tech Stack**: Next.js + Capacitor + Supabase + Fireworks
 - **Development Duration**: 24 weeks (6 phases)
 - **Primary Docs**: `/specs/001-feed-platform/`
 

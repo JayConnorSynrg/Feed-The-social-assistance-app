@@ -90,7 +90,7 @@ This document contains visual diagrams for the FEED Federation Protocol, includi
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                   External APIs                            │ │
 │  │  ┌──────────────┐      ┌──────────────┐      ┌─────────┐ │ │
-│  │  │  211 API     │      │  OpenRouter  │      │  Mapbox │ │ │
+│  │  │  211 API     │      │  Fireworks   │      │  Mapbox │ │ │
 │  │  │  (resources) │      │  (AI chat)   │      │  (maps) │ │ │
 │  │  └──────────────┘      └──────────────┘      └─────────┘ │ │
 │  └────────────────────────────────────────────────────────────┘ │

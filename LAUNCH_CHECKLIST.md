@@ -38,10 +38,10 @@
 - [ ] Edge Functions deployed
 - [ ] RLS policies verified
 
-### OpenRouter/AI Setup
-- [ ] OPENROUTER_API_KEY configured in Edge Function
+### Fireworks/AI Setup
+- [ ] FIREWORKS_API_KEY configured in Edge Function
 - [ ] Rate limiting verified (20 req/min/user)
-- [ ] Model fallback chain tested
+- [ ] Model cascade tested (qwen3p7-plus primary → gpt-oss-120b secondary)
 
 ### Feature Verification
 

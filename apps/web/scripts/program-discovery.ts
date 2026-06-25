@@ -2,7 +2,7 @@
 /**
  * program-discovery.ts
  *
- * Discovers benefit programs for a US state using OpenRouter + duck-duck-scrape,
+ * Discovers benefit programs for a US state using Fireworks AI + duck-duck-scrape,
  * then pushes verified results to the resource-ingest webhook.
  *
  * No local infrastructure required — zero Docker, zero Ollama, zero SearXNG.
@@ -11,7 +11,7 @@
  *   npx tsx apps/web/scripts/program-discovery.ts --state VT [--dry-run] [--skip-verify] [--skip-normalize] [--model MODEL] [--webhook-url URL]
  *
  * Environment:
- *   OPENROUTER_API_KEY  (required) — get one at https://openrouter.ai/keys
+ *   FIREWORKS_API_KEY  (required) — get one at https://app.fireworks.ai
  */
 
 import { search, SafeSearchType } from 'duck-duck-scrape'
@@ -57,12 +57,12 @@ interface IngestPayload {
   external_id?: string
 }
 
-interface OpenRouterMessage {
+interface FireworksMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
 }
 
-interface OpenRouterResponse {
+interface FireworksResponse {
   choices: Array<{
     message: {
       content: string
@@ -96,7 +96,7 @@ function parseArgs(): {
     process.env.SUPABASE_URL
       ? `${process.env.SUPABASE_URL}/functions/v1/resource-ingest`
       : 'https://ndtpovonpadugthmcntl.supabase.co/functions/v1/resource-ingest'
-  let model = 'qwen/qwen3-8b'
+  let model = 'accounts/fireworks/models/gpt-oss-120b'
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--state' && args[i + 1]) {
@@ -125,8 +125,8 @@ function parseArgs(): {
   }
 
   // Validate API key presence early
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.error('Error: Set OPENROUTER_API_KEY environment variable. Get one at https://openrouter.ai/keys')
+  if (!process.env.FIREWORKS_API_KEY) {
+    console.error('Error: Set FIREWORKS_API_KEY environment variable. Get one at https://app.fireworks.ai')
     process.exit(1)
   }
 
@@ -161,18 +161,18 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// ─── OpenRouter LLM call ──────────────────────────────────────────────────────
+// ─── Fireworks LLM call ───────────────────────────────────────────────────────
 
-async function callOpenRouter(
-  messages: OpenRouterMessage[],
+async function callFireworks(
+  messages: FireworksMessage[],
   model: string,
   timeoutMs = 60_000
 ): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY!
+  const apiKey = process.env.FIREWORKS_API_KEY!
 
   let response: Response
   try {
-    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    response = await fetch('https://api.fireworks.ai/inference/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -191,33 +191,33 @@ async function callOpenRouter(
     const msg = err instanceof Error ? err.message : String(err)
     const isTimeout = name === 'TimeoutError' || name === 'AbortError' || msg.toLowerCase().includes('timeout')
     if (isTimeout) {
-      throw new Error(`OpenRouter request timed out after ${timeoutMs / 1000}s`)
+      throw new Error(`Fireworks request timed out after ${timeoutMs / 1000}s`)
     }
-    throw new Error(`Network error calling OpenRouter: ${msg}`)
+    throw new Error(`Network error calling Fireworks: ${msg}`)
   }
 
   if (response.status === 401) {
-    console.error('Error: Invalid OPENROUTER_API_KEY. Verify your key at https://openrouter.ai/keys')
+    console.error('Error: Invalid FIREWORKS_API_KEY. Verify your key at https://app.fireworks.ai')
     process.exit(1)
   }
 
   if (response.status === 429) {
-    throw new Error('Rate limited by OpenRouter. Wait a moment and retry.')
+    throw new Error('Rate limited by Fireworks. Wait a moment and retry.')
   }
 
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(`OpenRouter returned HTTP ${response.status}: ${body}`)
+    throw new Error(`Fireworks returned HTTP ${response.status}: ${body}`)
   }
 
-  const data = (await response.json()) as OpenRouterResponse
+  const data = (await response.json()) as FireworksResponse
   const content = data.choices?.[0]?.message?.content ?? ''
 
   // qwen3 is a reasoning model — strip <think>…</think> blocks before returning
   return content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 }
 
-// ─── Step 1: Generate Candidates via OpenRouter ───────────────────────────────
+// ─── Step 1: Generate Candidates via Fireworks ────────────────────────────────
 
 async function generateCandidates(state: string, model: string): Promise<ProgramCandidate[]> {
   const start = Date.now()
@@ -261,7 +261,7 @@ Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON 
   let rawContent: string = ''
   for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
     try {
-      rawContent = await callOpenRouter(
+      rawContent = await callFireworks(
         [{ role: 'user', content: prompt }],
         model,
         90_000 // 90s — cloud inference is fast (5-15s typically)
@@ -271,10 +271,10 @@ Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON 
       const msg = err instanceof Error ? err.message : String(err)
       if (attempt < MAX_GENERATE_ATTEMPTS) {
         const delay = RETRY_DELAY_MS[attempt - 1] ?? 2_000
-        console.warn(`OpenRouter generate attempt ${attempt}/${MAX_GENERATE_ATTEMPTS} failed (${msg}). Retrying in ${delay}ms…`)
+        console.warn(`Fireworks generate attempt ${attempt}/${MAX_GENERATE_ATTEMPTS} failed (${msg}). Retrying in ${delay}ms…`)
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {
-        throw new Error(`OpenRouter generate step failed: ${msg}`)
+        throw new Error(`Fireworks generate step failed: ${msg}`)
       }
     }
   }
@@ -284,9 +284,9 @@ Cover all 12 categories. Return 6-8 programs per category. Return ONLY the JSON 
     const parsed = JSON.parse(rawContent)
     candidates = Array.isArray(parsed) ? parsed : (parsed.programs ?? parsed.results ?? [])
   } catch {
-    console.error('Failed to parse OpenRouter JSON response')
+    console.error('Failed to parse Fireworks JSON response')
     console.error('Raw content:', rawContent.slice(0, 500))
-    throw new Error('Failed to parse OpenRouter JSON response')
+    throw new Error('Failed to parse Fireworks JSON response')
   }
 
   // Filter to objects with at least a name field
@@ -520,7 +520,7 @@ async function extractProgramDetails(
   return enriched
 }
 
-// ─── Step 4: Normalize via OpenRouter ────────────────────────────────────────
+// ─── Step 4: Normalize via Fireworks ─────────────────────────────────────────
 
 async function normalizeProgram(
   program: VerifiedProgram,
@@ -556,7 +556,7 @@ Rules:
 Return ONLY the JSON object, no other text.`
 
   try {
-    const rawContent = await callOpenRouter(
+    const rawContent = await callFireworks(
       [{ role: 'user', content: prompt }],
       model,
       60_000 // 60s per program — cloud inference is fast
@@ -606,13 +606,13 @@ async function normalizePrograms(
     return normalized
   }
 
-  let openRouterSuccesses = 0
-  let openRouterFallbacks = 0
+  let fireworksSuccesses = 0
+  let fireworksFallbacks = 0
 
   for (const program of programs) {
     const result = await normalizeProgram(program, state, model)
     if (result) {
-      openRouterSuccesses++
+      fireworksSuccesses++
       normalized.push({
         ...result,
         source_url: program.sourceUrl,
@@ -620,8 +620,8 @@ async function normalizePrograms(
         application_form_url: result.application_form_url ?? program.applicationFormUrl,
       })
     } else {
-      // OpenRouter failed — fall back to raw extracted data. Program is not dropped.
-      openRouterFallbacks++
+      // Fireworks failed — fall back to raw extracted data. Program is not dropped.
+      fireworksFallbacks++
       normalized.push(programToRawPayload(program, state))
     }
   }
@@ -630,8 +630,8 @@ async function normalizePrograms(
     step: 'normalize',
     state,
     normalized: normalized.length,
-    openRouterSuccesses,
-    openRouterFallbacks,
+    fireworksSuccesses,
+    fireworksFallbacks,
     durationMs: Date.now() - start,
   })
   return normalized
@@ -769,7 +769,7 @@ async function main(): Promise<void> {
   // Step 1: Generate
   const candidates = await generateCandidates(state, model)
   if (candidates.length === 0) {
-    console.error('No candidates generated — check OpenRouter API key and model name')
+    console.error('No candidates generated — check FIREWORKS_API_KEY and model name')
     process.exit(1)
   }
 

@@ -91,7 +91,7 @@ interface DataFlowAnalysisOutput {
 │                                                                  │
 │  CHAT FLOW                                                       │
 │  User Message → useChat → Crisis Detection → System Prompt       │
-│      → Edge Function → OpenRouter (model cascade)                │
+│      → Edge Function → Fireworks (model cascade)                │
 │      → Stream Response → Parse JSON → Update UI                  │
 │                                                                  │
 │  DOCUMENT FLOW                                                   │
@@ -109,7 +109,7 @@ interface DataFlowAnalysisOutput {
 | Supabase Auth | Service | auth.users → profiles |
 | Supabase DB | Service | All tables |
 | Supabase Storage | Service | documents, posts, avatars |
-| OpenRouter API | External | Chat responses |
+| Fireworks API | External | Chat responses |
 | Mapbox | External | Map rendering |
 | Capacitor | Native | Geolocation |
 
@@ -123,7 +123,7 @@ interface DataFlowAnalysisOutput {
 | Form → Encryption | Critical | Key generation failure |
 | Encryption → Storage | Critical | Data corruption |
 | useChat → Edge Function | Medium | Rate limiting, timeout |
-| Edge Function → OpenRouter | Medium | API failure, model unavailable |
+| Edge Function → Fireworks | Medium | API failure, model unavailable |
 | Map → Supabase | Medium | Query timeout, no results |
 
 ### Data Transformation Checkpoints
@@ -140,7 +140,7 @@ interface DataFlowAnalysisOutput {
    - Location: use-form-submission.ts, secure-profile.ts
    - Validation: Sensitive fields encrypted, key stored
 
-4. **OpenRouter Response → Parsed Content**
+4. **Fireworks Response → Parsed Content**
    - Location: use-chat.ts
    - Validation: JSON parsed, streaming handled
 
@@ -203,6 +203,6 @@ Task({
 ## Integration Points to Monitor
 
 1. **Supabase Health**: Check project status, quotas
-2. **OpenRouter Status**: Check API availability, rate limits
+2. **Fireworks Status**: Check API availability, rate limits
 3. **Mapbox Quota**: Check tile usage, API calls
 4. **Edge Function Performance**: Check cold start times, memory usage

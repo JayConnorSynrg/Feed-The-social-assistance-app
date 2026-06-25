@@ -191,14 +191,14 @@ Verify:
 
 Output: `PASS: URL pattern at line N, streaming at line M` or `FAIL: [broken step]`.
 
-**Phase 2.4 — Edge function OPENROUTER_API_KEY**
+**Phase 2.4 — Edge function FIREWORKS_API_KEY**
 
 Read `$ROOT/supabase/functions/chat/index.ts`.
 
-Verify `Deno.env.get('OPENROUTER_API_KEY')` is present and the result is used in
-the Authorization header of the OpenRouter request.
+Verify `Deno.env.get('FIREWORKS_API_KEY')` is present and the result is used in
+the Authorization header of the Fireworks request.
 
-Output: `PASS: OPENROUTER_API_KEY read at line N, used at line M` or `FAIL`.
+Output: `PASS: FIREWORKS_API_KEY read at line N, used at line M` or `FAIL`.
 
 **Phase 2.5 — Error state renders in UI**
 
@@ -214,7 +214,7 @@ guided-flows.ts:   [PASS|FAIL] N flows found: [names]
 chat-panel import: [PASS|FAIL] file:line
 useChat edge URL:  [PASS|FAIL] file:line
 streaming parser:  [PASS|FAIL] file:line
-OPENROUTER_KEY:    [PASS|FAIL] file:line
+FIREWORKS_KEY:     [PASS|FAIL] file:line
 error UI:          [PASS|FAIL] file:line
 CHAIN: [COMPLETE_CHAIN | BROKEN_AT: description of first fail]
 ```
@@ -381,7 +381,7 @@ MISSION 5 — ENVIRONMENT INTEGRITY
 Key                           | In .env.local | In .env.example | Source
 NEXT_PUBLIC_SUPABASE_URL      | PRESENT       | PRESENT         | Next.js src
 NEXT_PUBLIC_SUPABASE_ANON_KEY | PRESENT       | PRESENT         | Next.js src
-OPENROUTER_API_KEY            | PRESENT       | PRESENT         | Edge function
+FIREWORKS_API_KEY             | PRESENT       | PRESENT         | Edge function
 NEXT_PUBLIC_MAPBOX_TOKEN      | ...
 ...
 SUMMARY: N keys total, N MISSING, N UNDOCUMENTED

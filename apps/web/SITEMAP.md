@@ -332,7 +332,7 @@ Each panel manages its own local state:
 - Form Templates
 
 ### External APIs
-- **OpenRouter** - AI chat completions
+- **Fireworks** - AI chat completions
 - **211 API** - Resource data sync
 - **Mapbox** - Map tiles and geocoding
 

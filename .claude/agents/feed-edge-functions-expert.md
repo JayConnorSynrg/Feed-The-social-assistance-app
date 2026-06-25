@@ -229,5 +229,5 @@ Stop and return findings to the orchestrator when:
   `feed-api-debugger`.
 - The fix requires a schema change to support a new function — escalate to
   `feed-db-migrations-expert` first.
-- An environment secret (`OPENROUTER_API_KEY`, `HUD_API_KEY`, etc.) is missing
+- An environment secret (`FIREWORKS_API_KEY`, `HUD_API_KEY`, etc.) is missing
   from the Supabase project secrets — surface to user; do not hardcode.
