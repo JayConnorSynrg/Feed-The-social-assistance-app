@@ -110,13 +110,21 @@ export function ModerationQueue() {
     async (resourceId: string) => {
       setProcessingId(resourceId)
       try {
-        // Apply any pending edits
-        const updates = editingId === resourceId ? editData : {}
+        // Apply any pending field edits first (admin corrections to name, address, etc.)
+        if (editingId === resourceId && Object.keys(editData).length > 0) {
+          const { error: editError } = await supabase
+            .from('resources')
+            .update(editData as Database['public']['Tables']['resources']['Update'])
+            .eq('id', resourceId)
+          if (editError) throw editError
+        }
 
-        const { error } = await supabase
-          .from('resources')
-          .update({ ...updates as Database['public']['Tables']['resources']['Update'], status: 'approved' })
-          .eq('id', resourceId)
+        // Status + audit transition via SECDEF RPC (writes moderated_by, moderated_at, updated_at)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any).rpc('approve_resource', {
+          p_resource_id: resourceId,
+          p_reason: null,
+        })
 
         if (error) throw error
 
@@ -137,10 +145,12 @@ export function ModerationQueue() {
     async (resourceId: string) => {
       setProcessingId(resourceId)
       try {
-        const { error } = await supabase
-          .from('resources')
-          .update({ status: 'rejected' })
-          .eq('id', resourceId)
+        // Status + audit transition via SECDEF RPC (writes rejection_reason, moderated_by, moderated_at, updated_at)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any).rpc('reject_resource', {
+          p_resource_id: resourceId,
+          p_reason: 'Rejected by admin',
+        })
 
         if (error) throw error
 
