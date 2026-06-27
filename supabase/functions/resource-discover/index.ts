@@ -3,8 +3,11 @@
 // Admin resource-sourcing — Phase B.
 //
 // Takes an admin natural-language query, sources candidate resources / forms via
-// Firecrawl /v2/agent (Spark models; the 2026 successor to the deprecated
-// /extract), verifies provenance, geocodes, and STAGES accepted candidates as
+// Firecrawl /v2/agent (Spark models), chosen here as the engine for autonomous
+// multi-source discovery across many pages. (Firecrawl /extract remains available
+// for single-page structured extraction; both coexist — /agent is the better fit
+// for this open-ended discovery workload.) It verifies provenance, geocodes, and
+// STAGES accepted candidates as
 // status='pending' for human review in the Resources tab (Phase C). The admin
 // later approves a pending tile via the existing approve_resource() SECDEF RPC.
 //
@@ -39,6 +42,10 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY')
+// Server-side Mapbox token for address-first geocoding. Set this as a Supabase
+// edge-function secret named MAPBOX_TOKEN to activate precise street-level
+// geocoding. When absent, geocoding degrades to ZIP-centroid lookup.
+const MAPBOX_TOKEN = Deno.env.get('MAPBOX_TOKEN')
 
 // ═══════════════════════════════════════════════════════════
 // Constants — cost caps & valid enum sets
@@ -47,7 +54,7 @@ const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY')
 const MAX_QUERY_LEN = 300
 const DEFAULT_MAX_CANDIDATES = 25
 const HARD_CAP_CANDIDATES = 25
-const AGENT_POLL_BUDGET_MS = 50_000 // bounded async poll budget for /v2/agent
+const AGENT_POLL_BUDGET_MS = 30_000 // bounded async poll budget for /v2/agent (proxy-timeout hygiene)
 const AGENT_POLL_INTERVAL_MS = 3_000
 
 // resource_category enum (live values, fetched 2026-06-26). Used to constrain /
@@ -393,6 +400,59 @@ async function geocodeByZip(service: SupabaseClient, zip: string): Promise<{ lat
 }
 
 /**
+ * Precise street-level geocode via the Mapbox Geocoding API (server-side). Returns
+ * null when no MAPBOX_TOKEN is configured, the address is unusable, or Mapbox
+ * returns no result. Never throws — failures degrade to the ZIP-centroid path.
+ */
+async function geocodeByAddressMapbox(
+  parts: { address_line1?: string | null; city?: string | null; state?: string | null; zip_code?: string | null },
+): Promise<{ lat: number; lng: number } | null> {
+  if (!MAPBOX_TOKEN) return null
+  const segments = [parts.address_line1, parts.city, parts.state, parts.zip_code]
+    .map((s) => (s ?? '').trim())
+    .filter((s) => s.length > 0)
+  // Require at least a street line plus one locality component for a meaningful
+  // forward geocode; otherwise let the ZIP-centroid fallback handle it.
+  if (!parts.address_line1?.trim() || segments.length < 2) return null
+  const queryStr = segments.join(', ')
+  try {
+    const url =
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(queryStr)}.json` +
+      `?access_token=${MAPBOX_TOKEN}&country=US&types=address&limit=1`
+    const resp = await fetch(url)
+    if (!resp.ok) {
+      edgeLog('warn', 'discover.geocode.mapbox_failed', { status: resp.status })
+      return null
+    }
+    const json = await resp.json()
+    const center = json?.features?.[0]?.center
+    if (Array.isArray(center) && typeof center[0] === 'number' && typeof center[1] === 'number') {
+      // Mapbox returns [lng, lat].
+      return { lat: center[1], lng: center[0] }
+    }
+    return null
+  } catch (e) {
+    edgeLog('warn', 'discover.geocode.mapbox_error', { error: e instanceof Error ? e.message : String(e) })
+    return null
+  }
+}
+
+/**
+ * Address-first geocoding: precise Mapbox street geocode when an address +
+ * MAPBOX_TOKEN are available, falling back to the ZIP centroid otherwise.
+ * Returns null when neither path resolves (location legitimately stays null).
+ */
+async function geocodeCandidate(
+  service: SupabaseClient,
+  parts: { address_line1?: string | null; city?: string | null; state?: string | null; zip_code?: string | null },
+): Promise<{ lat: number; lng: number } | null> {
+  const byAddress = await geocodeByAddressMapbox(parts)
+  if (byAddress) return byAddress
+  if (parts.zip_code) return await geocodeByZip(service, parts.zip_code)
+  return null
+}
+
+/**
  * Dedup check: approved-resource fuzzy match via find_duplicate_resource PLUS a
  * direct pending-name match (find_duplicate_resource scans approved only).
  */
@@ -535,6 +595,19 @@ serve(async (req: Request) => {
       const address = cand.address_line1?.trim() || null
       if (await isDuplicateResource(ctx.service, name, phone, address)) { deduped++; continue }
 
+      // Address-first geocode (Mapbox precise → ZIP-centroid fallback). Resolve
+      // BEFORE insert so the resolved location classifies content_type.
+      const geo = await geocodeCandidate(ctx.service, {
+        address_line1: address,
+        city: cand.city?.trim() || null,
+        state: cand.state?.trim() || null,
+        zip_code: cand.zip_code?.trim() || null,
+      })
+      // A physical resource resolves to a location; a candidate with a URL but no
+      // resolvable location is an informational site-link.
+      const contentTypeStamp: 'resource' | 'link' =
+        geo ? 'resource' : 'link'
+
       const row = {
         external_id: buildExternalId(name),
         source: 'admin_added',
@@ -553,7 +626,7 @@ serve(async (req: Request) => {
         submitted_by: ctx.adminId,
         moderated_by: null,
         is_verified: false,
-        discovery_metadata: prov,
+        discovery_metadata: { ...prov, content_type: contentTypeStamp },
       }
 
       const { data: inserted, error: insErr } = await ctx.service
@@ -567,14 +640,11 @@ serve(async (req: Request) => {
         continue
       }
 
-      // Geocode by zip (insert first, then set PostGIS location via RPC).
-      if (cand.zip_code) {
-        const geo = await geocodeByZip(ctx.service, cand.zip_code)
-        if (geo) {
-          await ctx.service.rpc('set_resource_location_by_id', {
-            p_id: inserted.id, p_lat: geo.lat, p_lng: geo.lng,
-          })
-        }
+      // Set PostGIS location via RPC when geocoding resolved a point.
+      if (geo) {
+        await ctx.service.rpc('set_resource_location_by_id', {
+          p_id: inserted.id, p_lat: geo.lat, p_lng: geo.lng,
+        })
       }
 
       stagedResources++
@@ -607,7 +677,7 @@ serve(async (req: Request) => {
         agency_name: cand.agency_name?.trim() || null,
         agency_website: cleanUrl(cand.agency_website),
         is_active: false,
-        discovery_metadata: { ...prov, application_url: cleanUrl(cand.application_url) },
+        discovery_metadata: { ...prov, content_type: 'form', application_url: cleanUrl(cand.application_url) },
       }
 
       const { error: formErr } = await ctx.service.from('form_templates').insert(formRow)
