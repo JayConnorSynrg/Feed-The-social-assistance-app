@@ -1,3 +1,4 @@
+WARN: config section [inbucket] is deprecated. Please use [local_smtp] instead.
 export type Json =
   | string
   | number
@@ -1158,11 +1159,14 @@ export type Database = {
           agency_website: string | null
           created_at: string | null
           description: string | null
+          discovery_metadata: Json | null
           estimated_time_minutes: number | null
           field_mappings: Json | null
           form_type: Database["public"]["Enums"]["form_type"]
           id: string
           is_active: boolean | null
+          moderated_at: string | null
+          moderated_by: string | null
           name: string
           required_documents: string[] | null
           schema: Json
@@ -1174,11 +1178,14 @@ export type Database = {
           agency_website?: string | null
           created_at?: string | null
           description?: string | null
+          discovery_metadata?: Json | null
           estimated_time_minutes?: number | null
           field_mappings?: Json | null
           form_type: Database["public"]["Enums"]["form_type"]
           id: string
           is_active?: boolean | null
+          moderated_at?: string | null
+          moderated_by?: string | null
           name: string
           required_documents?: string[] | null
           schema: Json
@@ -1190,11 +1197,14 @@ export type Database = {
           agency_website?: string | null
           created_at?: string | null
           description?: string | null
+          discovery_metadata?: Json | null
           estimated_time_minutes?: number | null
           field_mappings?: Json | null
           form_type?: Database["public"]["Enums"]["form_type"]
           id?: string
           is_active?: boolean | null
+          moderated_at?: string | null
+          moderated_by?: string | null
           name?: string
           required_documents?: string[] | null
           schema?: Json
@@ -2079,6 +2089,7 @@ export type Database = {
           country: string | null
           created_at: string | null
           description: string | null
+          discovery_metadata: Json | null
           eligibility_requirements: string | null
           email: string | null
           external_id: string | null
@@ -2113,6 +2124,7 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           description?: string | null
+          discovery_metadata?: Json | null
           eligibility_requirements?: string | null
           email?: string | null
           external_id?: string | null
@@ -2147,6 +2159,7 @@ export type Database = {
           country?: string | null
           created_at?: string | null
           description?: string | null
+          discovery_metadata?: Json | null
           eligibility_requirements?: string | null
           email?: string | null
           external_id?: string | null
@@ -3210,6 +3223,25 @@ export type Database = {
         }[]
       }
       admin_hold_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_list_pending_resources: {
+        Args: never
+        Returns: {
+          address: string
+          category: string
+          city: string
+          description: string
+          discovery_metadata: Json
+          id: string
+          lat: number
+          lng: number
+          name: string
+          phone: string
+          state: string
+          status: string
+          website: string
+          zip_code: string
+        }[]
+      }
       admin_list_users: {
         Args: never
         Returns: {
@@ -3282,6 +3314,11 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      approve_form_template: { Args: { p_id: string }; Returns: undefined }
+      approve_resource: {
+        Args: { p_reason?: string; p_resource_id: string }
+        Returns: undefined
       }
       calculate_trust_score: {
         Args: {
@@ -3725,6 +3762,7 @@ export type Database = {
           country: string | null
           created_at: string | null
           description: string | null
+          discovery_metadata: Json | null
           eligibility_requirements: string | null
           email: string | null
           external_id: string | null
@@ -3872,6 +3910,10 @@ export type Database = {
       }
       refresh_community_stats: { Args: never; Returns: undefined }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
+      reject_resource: {
+        Args: { p_reason: string; p_resource_id: string }
+        Returns: undefined
+      }
       resources_in_bounds: {
         Args: {
           east: number
