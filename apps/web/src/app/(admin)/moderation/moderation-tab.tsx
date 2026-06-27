@@ -1,20 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { ModerationQueue } from './moderation-queue'
 import { ReportsQueue } from './reports-queue'
 import { SafetyAlertsReview } from './safety-alerts-review'
 
-type SubTab = 'resources' | 'reports' | 'safety'
+type SubTab = 'reports' | 'safety'
 
 const SUBTAB_LABELS: Record<SubTab, string> = {
-  resources: 'Resources',
   reports: 'Reports',
   safety: 'Safety Alerts',
 }
 
 export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
-  const [activeSubtab, setActiveSubtab] = useState<SubTab>('resources')
+  const [activeSubtab, setActiveSubtab] = useState<SubTab>('reports')
+
+  // selectedOrgId is available for future subtab filtering
+  void selectedOrgId
 
   return (
     <div>
@@ -37,7 +38,6 @@ export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
 
       {/* Tab content — scrollable within the tab */}
       <div className="overflow-y-auto max-h-[calc(100vh-220px)]">
-        {activeSubtab === 'resources' && <ModerationQueue />}
         {activeSubtab === 'reports' && <ReportsQueue />}
         {activeSubtab === 'safety' && <SafetyAlertsReview />}
       </div>
