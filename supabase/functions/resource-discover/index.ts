@@ -25,14 +25,7 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
-
-// ═══════════════════════════════════════════════════════════
-// Structured logging
-// ═══════════════════════════════════════════════════════════
-
-function edgeLog(level: 'info' | 'warn' | 'error', event: string, data: Record<string, unknown> = {}) {
-  console.log(JSON.stringify({ level, event, timestamp: new Date().toISOString(), ...data }))
-}
+import { edgeLog, getCorrelationId } from '../_shared/log.ts'
 
 // ═══════════════════════════════════════════════════════════
 // Env
@@ -489,6 +482,8 @@ async function isDuplicateResource(
 // ═══════════════════════════════════════════════════════════
 
 serve(async (req: Request) => {
+  const t0 = performance.now()
+  const correlationId = getCorrelationId(req)
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin, 'resource-discover')
 
@@ -525,7 +520,7 @@ serve(async (req: Request) => {
 
     const { data: isAdmin, error: adminErr } = await callerClient.rpc('is_current_user_admin')
     if (adminErr || isAdmin !== true) {
-      edgeLog('warn', 'discover.forbidden', { userId: user.id })
+      edgeLog('warn', 'discover.forbidden', { userId: user.id, correlationId })
       return new Response(JSON.stringify({ error: 'Forbidden — admin only' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -560,7 +555,7 @@ serve(async (req: Request) => {
       })
     }
 
-    edgeLog('info', 'discover.start', { userId: user.id, contentType, maxCandidates, queryLen: query.length })
+    edgeLog('info', 'discover.start', { userId: user.id, contentType, maxCandidates, queryLen: query.length, correlationId })
 
     // ── SOURCING (one /agent call per request; degrade to /search on miss) ──
     let sourced = await sourceViaAgent(query, contentType, maxCandidates)
@@ -697,14 +692,15 @@ serve(async (req: Request) => {
       via: sourced.via,
       candidates: summaries,
     }
-    edgeLog('info', 'discover.complete', { userId: user.id, ...result.staged, deduped, rejected, via: sourced.via })
+    edgeLog('info', 'discover.complete', { userId: user.id, ...result.staged, deduped, rejected, via: sourced.via, correlationId })
+    edgeLog('info', 'discover.request.complete', { durationMs: Math.round(performance.now() - t0), correlationId })
 
     return new Response(JSON.stringify(result), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    edgeLog('error', 'discover.error', { error: message })
+    edgeLog('error', 'discover.error', { error: message, correlationId, durationMs: Math.round(performance.now() - t0) })
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

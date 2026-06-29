@@ -223,6 +223,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
           'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          'x-request-id': opId,
         },
         body: JSON.stringify({
           messages: apiMessages,

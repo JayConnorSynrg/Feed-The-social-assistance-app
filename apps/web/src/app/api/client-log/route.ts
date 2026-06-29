@@ -14,8 +14,15 @@ const ALLOWED_LEVELS = new Set(['warn', 'error'])
  * service-role client (server-only). No auth required — this is a write-only
  * append sink. Client input is sanitized and size-capped before insertion.
  *
- * Body: { level: 'warn'|'error', event: string, context?: object }
+ * Body: { level: 'warn'|'error', event: string, context?: object, opId?: string }
+ *
+ * The optional `opId` field (also accepted as `request_id`) is a client-supplied
+ * correlation id (alphanumeric + hyphens, max 64 chars) that threads a single
+ * user operation across client logs and edge function logs. Sanitized with a
+ * regex before insertion into app_logs.request_id.
  */
+/** Regex for a safe correlation id: alphanumeric characters and hyphens only. */
+const REQUEST_ID_RE = /^[a-zA-Z0-9-]+$/
 export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse> => {
   try {
     // Size-cap: reject anything over MAX_BODY_BYTES
@@ -39,7 +46,12 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
       return NextResponse.json({ ok: false, error: 'invalid_body' }, { status: 400 })
     }
 
-    const { level, event, context } = body as Record<string, unknown>
+    const { level, event, context, opId, request_id } = body as Record<string, unknown>
+
+    // Sanitize the optional correlation id — accept alphanumeric + hyphens, max 64 chars.
+    const rawId = typeof opId === 'string' ? opId : typeof request_id === 'string' ? request_id : undefined
+    const sanitizedRequestId: string | undefined =
+      rawId && rawId.length <= 64 && REQUEST_ID_RE.test(rawId) ? rawId : undefined
 
     // Validate level
     if (typeof level !== 'string' || !ALLOWED_LEVELS.has(level)) {
@@ -90,6 +102,7 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
         level: level as 'warn' | 'error',
         event: event.trim(),
         context: sanitizedContext,
+        ...(sanitizedRequestId ? { request_id: sanitizedRequestId } : {}),
       })
 
     if (insertError) {
