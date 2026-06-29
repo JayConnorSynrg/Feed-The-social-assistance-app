@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 interface Post {
@@ -69,6 +69,8 @@ export function useRealtimeFeed({
     // producing a console error on every unauthenticated page load.
     if (!enabled || !session) return
 
+    let reconnectCount = 0
+
     const channel = supabase
       .channel('posts-realtime')
       .on<Post>(
@@ -81,7 +83,23 @@ export function useRealtimeFeed({
         handleChange
       )
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (status === 'SUBSCRIBED') {
+          // Wrap the subscribe-to-ready latency signal — called once on successful subscribe.
+          // withMetric is async; fire-and-forget here (no await needed — we just need the
+          // Vercel track() side-effect and the structured log).
+          withMetric('feed.realtime.subscribe', { channel: 'posts-realtime' }, () =>
+            Promise.resolve()
+          ).catch(() => {
+            // Swallow — metric emission must never affect subscription state.
+          })
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          reconnectCount++
+          logger.info('feed.realtime.reconnect', { count: reconnectCount, status, channel: 'posts-realtime' })
+          logger.error('realtime-feed.subscribe.status', undefined, {
+            channel: 'posts-realtime',
+            status,
+          })
+        } else if (status === 'CLOSED') {
           logger.error('realtime-feed.subscribe.status', undefined, {
             channel: 'posts-realtime',
             status,

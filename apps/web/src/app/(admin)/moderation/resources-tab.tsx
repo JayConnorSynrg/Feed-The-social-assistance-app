@@ -155,6 +155,7 @@ export function ResourcesTab() {
       const token = sessionData?.session?.access_token
       if (!token) throw new Error('Not authenticated')
 
+      const opId = crypto.randomUUID().slice(0, 8)
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/resource-discover`
       const response = await fetch(url, {
         method: 'POST',
@@ -162,6 +163,7 @@ export function ResourcesTab() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
           'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+          'x-request-id': opId,
         },
         body: JSON.stringify({ query: q }),
         signal: controller.signal,

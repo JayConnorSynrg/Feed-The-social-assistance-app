@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -50,8 +51,9 @@ export default function ResetPasswordPage() {
         result = await Promise.race([updatePromise, timeoutPromise])
       } catch (raceErr) {
         // Abort/timeout — server likely processed the update before the abort.
-        // Supabase processes in ~400ms; abort fires after React re-render.
-        timer.end({ step: 'password_update', aborted: true })
+        // Supabase processes in ~400ms; abort fires after React pre-render.
+        const duration_ms = timer.end({ step: 'password_update', aborted: true })
+        track('auth.reset_password', { duration_ms, ok: true })
         setSuccess(true)
         setTimeout(() => router.push('/login'), 3000)
         return
@@ -59,7 +61,8 @@ export default function ResetPasswordPage() {
 
       if (result?.error) throw result.error
 
-      timer.end({ step: 'password_update' })
+      const duration_ms = timer.end({ step: 'password_update' })
+      track('auth.reset_password', { duration_ms, ok: true })
       setSuccess(true)
       setTimeout(() => router.push('/login'), 2000)
     } catch (err: unknown) {
@@ -67,12 +70,14 @@ export default function ResetPasswordPage() {
         (err instanceof DOMException && err.name === 'AbortError') ||
         (err instanceof Error && (err.message.includes('signal') || err.message.includes('abort') || err.message === 'update_timeout'))
       if (isAbort) {
-        timer.end({ step: 'password_update', aborted: true })
+        const duration_ms = timer.end({ step: 'password_update', aborted: true })
+        track('auth.reset_password', { duration_ms, ok: true })
         setSuccess(true)
         setTimeout(() => router.push('/login'), 3000)
         return
       }
-      timer.error(err, { step: 'password_update' })
+      const duration_ms = timer.error(err, { step: 'password_update' })
+      track('auth.reset_password', { duration_ms, ok: false })
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
     } finally {
       setLoading(false)

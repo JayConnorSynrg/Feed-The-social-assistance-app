@@ -171,6 +171,7 @@ export function useViewportResources({
           bounds: currentBounds,
           category,
           count: filtered.length,
+          result_count: filtered.length,
         })
 
         setResources(filtered)

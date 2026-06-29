@@ -14,6 +14,7 @@ import { usePasswordStrength } from '@/hooks/use-password-strength'
 import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { sanitizeInput } from '@/lib/security'
 import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -112,7 +113,8 @@ export default function SignupPage() {
           return
         }
 
-        timer.end({ step: 'email_signup' })
+        const duration_ms = timer.end({ step: 'email_signup' })
+        track('auth.signup', { duration_ms, ok: true })
 
         // Check if Supabase auto-confirmed the user (mailer_autoconfirm is on)
         // When auto-confirmed, email_confirmed_at is set immediately and no email is sent
@@ -127,11 +129,13 @@ export default function SignupPage() {
           (err instanceof DOMException && err.name === 'AbortError') ||
           (err instanceof Error && err.message.includes('signal'))
         ) {
-          timer.end({ step: 'email_signup', aborted: true })
+          const duration_ms = timer.end({ step: 'email_signup', aborted: true })
+          track('auth.signup', { duration_ms, ok: true })
           setSuccess(true)
           return
         }
-        timer.error(err, { step: 'email_signup' })
+        const duration_ms = timer.error(err, { step: 'email_signup' })
+        track('auth.signup', { duration_ms, ok: false })
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)

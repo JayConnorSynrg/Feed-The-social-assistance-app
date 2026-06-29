@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -33,7 +34,8 @@ export default function ForgotPasswordPage() {
 
       if (error) throw error
 
-      timer.end({ step: 'reset_request' })
+      const duration_ms = timer.end({ step: 'reset_request' })
+      track('auth.forgot_password', { duration_ms, ok: true })
       setSubmitted(true)
     } catch (err: unknown) {
       // Next.js App Router aborts fetch during re-renders — treat abort as success
@@ -41,11 +43,13 @@ export default function ForgotPasswordPage() {
         (err instanceof DOMException && err.name === 'AbortError') ||
         (err instanceof Error && err.message.includes('signal'))
       ) {
-        timer.end({ step: 'reset_request', aborted: true })
+        const duration_ms = timer.end({ step: 'reset_request', aborted: true })
+        track('auth.forgot_password', { duration_ms, ok: true })
         setSubmitted(true)
         return
       }
-      timer.error(err, { step: 'reset_request' })
+      const duration_ms = timer.error(err, { step: 'reset_request' })
+      track('auth.forgot_password', { duration_ms, ok: false })
       setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
     } finally {
       setLoading(false)

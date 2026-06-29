@@ -15,6 +15,7 @@ import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/t
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
+import { track } from '@vercel/analytics'
 import { safeRelativePath } from '@/lib/safe-redirect'
 import { t, resolveLocale, dir } from '@/lib/i18n'
 
@@ -150,7 +151,8 @@ function LoginForm() {
         }
 
         // No MFA required or already verified
-        timer.end({ step: 'email_login', email })
+        const duration_ms = timer.end({ step: 'email_login', email })
+        track('auth.login', { duration_ms, ok: true })
         router.push(redirectTo)
         router.refresh()
       } catch (err) {
@@ -163,7 +165,8 @@ function LoginForm() {
           router.refresh()
           return
         }
-        timer.error(err, { step: 'email_login' })
+        const duration_ms = timer.error(err, { step: 'email_login' })
+        track('auth.login', { duration_ms, ok: false })
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
