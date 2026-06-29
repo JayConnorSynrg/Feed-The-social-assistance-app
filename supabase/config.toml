@@ -74,3 +74,31 @@ verify_jwt = false
 
 [functions.federation-health-check]
 verify_jwt = false
+
+# -------------------------------------------------------------------
+# In-code-auth edge functions — verify_jwt = false because these
+# functions perform their own JWT verification inside the Deno handler
+# (via Authorization: Bearer header parsing + Supabase admin client).
+# The Supabase gateway must not pre-reject requests before the code runs.
+# -------------------------------------------------------------------
+
+[functions.delete-account]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.hud-sync]
+verify_jwt = false
+
+[functions.resource-ingest]
+verify_jwt = false
+
+[functions.imls-sync]
+verify_jwt = false
+
+[functions.benefits-screening]
+verify_jwt = false
+
+[functions.resource-discover]
+verify_jwt = false
