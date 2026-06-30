@@ -11,24 +11,20 @@ const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
 maybeDescribe('16 — Notifications (PROD read-only)', () => {
-  it.todo(
-    // REAL GAP: notifications absent from supabase_realtime publication; live bell broken
-    // (use-notifications.ts:244); fix = migration ALTER PUBLICATION supabase_realtime ADD TABLE
-    // public.notifications, pending column-privacy/WAL review. Tracked.
-    //
-    // Live DB confirmed 2026-06-30: SELECT tablename FROM pg_publication_tables WHERE
-    // pubname='supabase_realtime' AND tablename='notifications' returned zero rows.
-    //
-    // notifications schema (all columns safe for WAL — no plaintext PII beyond user_id
-    // which is already auth.uid()-gated by RLS):
-    //   id uuid, user_id uuid, type user-defined, title text, message text,
-    //   link text, application_id uuid, is_read boolean, created_at timestamptz.
-    //
-    // RLS policies in place: notifications_select_own (SELECT), notifications_update_own (UPDATE),
-    // notifications_delete_own (DELETE). No INSERT policy (forge-proof).
-    // No column-level REVOKE conflicts found. Migration unblocked pending WAL review sign-off.
-    'notifications is in supabase_realtime publication (BLOCKED: absent from publication — add migration ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications)',
-  )
+  it('notifications is in supabase_realtime publication (live bell)', async () => {
+    // Backend: supabase/migrations/20260630000100_realtime_publication_notifications_likes_comments.sql
+    // Surface: use-notifications.ts:244 — postgres_changes subscription for live bell updates
+    // WAL-safety confirmed 2026-06-30: all columns safe (id uuid, user_id uuid, type, title text,
+    // message text, link text, application_id uuid, is_read boolean, created_at timestamptz).
+    // RLS gates rows to auth.uid() — select/update/delete own only; no INSERT policy (forge-proof).
+    const rows = await queryProd(`
+      SELECT tablename
+      FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+    `)
+    expect(rows.length).toBe(1)
+    expect(rows[0].tablename).toBe('notifications')
+  })
 
   it('notifications table has NO INSERT policy (forge-proof)', async () => {
     // Backend: notifications_insert_system policy DROPPED — no replacement
