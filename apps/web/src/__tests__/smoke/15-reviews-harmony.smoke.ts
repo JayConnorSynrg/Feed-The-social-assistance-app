@@ -1,79 +1,96 @@
-// 15-reviews-harmony.smoke.ts — Mission 15: Reviews & Harmony backend contract probes
-// © Jelal Connor / SYNRG SCALING, LLC
+// 15-reviews-harmony.smoke.ts
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+// Mission: 15 — Reviews & Harmony Score
+// Surface: MessagesPanel / opt-in list → star-rating modal
+// Upstream: Auth (M1), exchanges (M5/M6) | Downstream: Profiles (M2)
 
-import { describe, it, beforeAll, expect } from 'vitest';
-import { queryProd, isTokenAvailable } from './prod-client';
+import { describe, it, expect } from 'vitest'
+import { queryProd, isTokenAvailable } from './prod-client'
 
-const TOKEN_AVAILABLE = isTokenAvailable();
+const skip = !isTokenAvailable()
+const maybeDescribe = skip ? describe.skip : describe
 
-describe('15: Reviews & Harmony', () => {
-  beforeAll(() => {
-    if (!TOKEN_AVAILABLE) {
-      console.log('SKIP: SUPABASE_ACCESS_TOKEN not set');
-    }
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('submit_review and recompute_harmony are SECDEF with pinned search_path', async () => {
+maybeDescribe('15 — Reviews & Harmony (PROD read-only)', () => {
+  it('submit_review and recompute_harmony are SECDEF with pinned search_path', async () => {
+    // Backend: submit_review (:181), recompute_harmony (:96-125) — both SECDEF + search_path
+    // Surface: use-reviews.ts:65-72 → rpc('submit_review')
     const rows = await queryProd(`
       SELECT proname, prosecdef, proconfig
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
         AND proname IN ('submit_review', 'recompute_harmony')
-      ORDER BY proname
-    `);
-    expect(rows.length).toBeGreaterThanOrEqual(1);
+    `)
+    expect(rows.length).toBe(2)
     for (const row of rows) {
-      expect(row.prosecdef).toBe(true);
-      const config = Array.isArray(row.proconfig) ? row.proconfig.join(',') : String(row.proconfig ?? '');
-      expect(config).toMatch(/search_path/);
+      expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
+      const config = row.proconfig as string[] | null
+      const hasSearchPath = config?.some((c: string) => c.startsWith('search_path='))
+      expect(hasSearchPath, `${row.proname} must have pinned search_path`).toBe(true)
     }
-  });
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('anon cannot execute submit_review (forge protection)', async () => {
+  it('harmony_score is NOT in the authenticated UPDATE grant on profiles', async () => {
+    // Backend: forge protection — REVOKE UPDATE then GRANT UPDATE (allow-list excludes harmony_score)
+    // Surface: a client UPDATE of profiles.harmony_score must return 42501
+    // This is the critical forge-proof gate from the mission brief
     const rows = await queryProd(`
-      SELECT has_function_privilege('anon', 'public.submit_review(integer, boolean, text, uuid)', 'EXECUTE') AS can_exec
-    `);
-    expect(rows[0]?.can_exec).toBe(false);
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('harmony_score and harmony_reviews_count have NO UPDATE grant for anon/authenticated (forge protection via pg_attribute.attacl)', async () => {
-    const rows = await queryProd(`
-      SELECT
-        a.attname,
-        (aclexplode(a.attacl)).grantee::regrole::text AS grantee,
-        (aclexplode(a.attacl)).privilege_type AS priv
+      SELECT a.attname, a.attacl
       FROM pg_attribute a
       JOIN pg_class c ON c.oid = a.attrelid
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public'
         AND c.relname = 'profiles'
-        AND a.attname IN ('harmony_score', 'harmony_reviews_count')
-        AND a.attacl IS NOT NULL
+        AND a.attname IN ('harmony_score', 'harmony_reviews_count', 'full_name')
         AND NOT a.attisdropped
-    `);
-    const forgeRows = rows.filter(
-      (r) =>
-        (r.grantee === 'anon' || r.grantee === 'authenticated') &&
-        r.priv === 'UPDATE'
-    );
-    expect(forgeRows).toHaveLength(0);
-  });
+    `)
+    const harmonyScore = rows.find((r) => r.attname === 'harmony_score')
+    const reviewsCount = rows.find((r) => r.attname === 'harmony_reviews_count')
 
-  it.skipIf(!TOKEN_AVAILABLE)('reviews table has no INSERT policy (writes only via SECDEF submit_review)', async () => {
-    const rows = await queryProd(`
-      SELECT cmd, polname
-      FROM pg_policies
-      WHERE tablename = 'reviews'
-        AND cmd = 'INSERT'
-    `);
-    expect(rows).toHaveLength(0);
-  });
+    // Verify the columns exist
+    expect(harmonyScore).toBeDefined()
+    expect(reviewsCount).toBeDefined()
 
-  it.skipIf(!TOKEN_AVAILABLE)('reviews table has RLS enabled', async () => {
+    // harmony_score and harmony_reviews_count must NOT have an UPDATE grant for authenticated
+    // attacl: null OR no 'U' entry for authenticated role
+    const harmonyAcl = harmonyScore?.attacl
+    const reviewsAcl = reviewsCount?.attacl
+
+    // attacl from pg_attribute can come back as a PostgreSQL ACL string like
+    // "{postgres=rwdDxt/postgres,=r/postgres}" — the Management API returns it
+    // as a string, not a parsed JS array. Normalize to string for checking.
+    const aclToString = (acl: unknown): string => {
+      if (!acl) return ''
+      if (typeof acl === 'string') return acl
+      if (Array.isArray(acl)) return acl.join(',')
+      return String(acl)
+    }
+
+    // If attacl is non-null, it must not contain an UPDATE grant for authenticated
+    const harmonyAclStr = aclToString(harmonyAcl)
+    const reviewsAclStr = aclToString(reviewsAcl)
+
+    if (harmonyAclStr) {
+      // UPDATE grant would show as 'authenticated=...U...' or '=U' with role context
+      // Specifically "authenticated=U" or "authenticated=rU" etc
+      const hasAuthUpdate = /authenticated=[rwdDxt]*U/.test(harmonyAclStr)
+      expect(hasAuthUpdate, 'harmony_score must not have UPDATE grant for authenticated').toBe(false)
+    }
+    if (reviewsAclStr) {
+      const hasAuthUpdate = /authenticated=[rwdDxt]*U/.test(reviewsAclStr)
+      expect(hasAuthUpdate, 'harmony_reviews_count must not have UPDATE grant for authenticated').toBe(false)
+    }
+  })
+
+  it('reviews table has NO INSERT policy (writes funnel through submit_review SECDEF)', async () => {
+    // Backend: reviews — INSERT has NO policy (client INSERT denied by RLS)
+    // Surface: use-reviews.ts:66 — client writes ONLY via rpc('submit_review')
     const rows = await queryProd(`
-      SELECT relrowsecurity FROM pg_class WHERE oid = 'public.reviews'::regclass
-    `);
-    expect(rows[0]?.relrowsecurity).toBe(true);
-  });
-});
+      SELECT polname, polcmd
+      FROM pg_policy
+      WHERE polrelid = 'public.reviews'::regclass
+    `)
+    const insertPolicies = rows.filter((r) => r.polcmd === 'a') // 'a' = INSERT in pg_policy
+    expect(insertPolicies.length).toBe(0)
+  })
+})

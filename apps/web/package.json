@@ -17,7 +17,7 @@
     "test:unit": "find src -name '*.test.mjs' -exec node --test {} +",
     "test:vitest": "vitest run",
     "test": "npm run test:unit && npm run test:vitest",
-    "smoke:prod": "vitest run src/__tests__/smoke/"
+    "smoke:prod": "vitest run --config vitest.smoke.config.ts"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.7.1",

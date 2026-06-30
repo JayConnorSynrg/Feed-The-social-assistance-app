@@ -1,19 +1,19 @@
-// 18-dashboard-analytics.smoke.ts — Mission 18: Dashboard / Analytics backend contract probes
-// © Jelal Connor / SYNRG SCALING, LLC
+// 18-dashboard-analytics.smoke.ts
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+// Mission: 18 — Dashboard / Analytics
+// Surface: apps/web/src/app/(admin)/moderation/overview-tab.tsx
+// Upstream: Auth (M1), admin gate (M17) | Downstream: operator decisions
 
-import { describe, it, beforeAll, expect } from 'vitest';
-import { queryProd, isTokenAvailable } from './prod-client';
+import { describe, it, expect } from 'vitest'
+import { queryProd, isTokenAvailable } from './prod-client'
 
-const TOKEN_AVAILABLE = isTokenAvailable();
+const skip = !isTokenAvailable()
+const maybeDescribe = skip ? describe.skip : describe
 
-describe('18: Dashboard & Analytics', () => {
-  beforeAll(() => {
-    if (!TOKEN_AVAILABLE) {
-      console.log('SKIP: SUPABASE_ACCESS_TOKEN not set');
-    }
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('all six dashboard metric RPCs are SECDEF with pinned search_path', async () => {
+maybeDescribe('18 — Dashboard & Analytics (PROD read-only)', () => {
+  it('all six dashboard RPCs are SECDEF with pinned search_path', async () => {
+    // Backend: 6 RPCs fetched in Promise.all by overview-tab.tsx:349-362
+    // Surface: overview-tab.tsx metric cards (adoption, resources, petitions, events, fed, profiles)
     const rows = await queryProd(`
       SELECT proname, prosecdef, proconfig
       FROM pg_proc p
@@ -27,58 +27,53 @@ describe('18: Dashboard & Analytics', () => {
           'community_people_fed',
           'dashboard_completed_profiles'
         )
-      ORDER BY proname
-    `);
-    expect(rows.length).toBeGreaterThanOrEqual(4);
+    `)
+    expect(rows.length).toBe(6)
     for (const row of rows) {
-      expect(row.prosecdef).toBe(true);
-      const config = Array.isArray(row.proconfig) ? row.proconfig.join(',') : String(row.proconfig ?? '');
-      expect(config).toMatch(/search_path/);
+      expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
+      const config = row.proconfig as string[] | null
+      const hasSearchPath = config?.some((c: string) => c.startsWith('search_path='))
+      expect(hasSearchPath, `${row.proname} must have pinned search_path`).toBe(true)
     }
-  });
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('anon cannot execute dashboard_adoption_stats', async () => {
+  it('anon cannot execute dashboard_adoption_stats', async () => {
+    // Backend: dashboard RPCs — admin-gated (anon-exec=false)
+    // Surface: overview-tab.tsx — admin-only metrics
     const rows = await queryProd(`
-      SELECT has_function_privilege('anon', 'public.dashboard_adoption_stats()', 'EXECUTE') AS can_exec
-    `);
-    expect(rows[0]?.can_exec).toBe(false);
-  });
+      SELECT has_function_privilege('anon', 'dashboard_adoption_stats()', 'EXECUTE') AS can_exec
+    `)
+    expect(rows.length).toBe(1)
+    expect(rows[0].can_exec).toBe(false)
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('dashboard_resource_stats returns expected typed shape (W5 contract smoke)', async () => {
-    // This proves the RPC body is callable and returns category/resource_count/active_count
-    // We use the management API SQL endpoint which runs as the service role — admin-level access
+  it('dashboard_resource_stats returns correct typed shape', async () => {
+    // Backend: dashboard_resource_stats() → category, resource_count, active_count
+    // Surface: overview-tab.tsx ResourceStat type — guards W5 RPC contract gap (PRs #121-126)
     const rows = await queryProd(`
-      SELECT * FROM public.dashboard_resource_stats() LIMIT 1
-    `);
-    // May return 0 rows in a fresh env — but must NOT error
-    expect(Array.isArray(rows)).toBe(true);
-    if (rows.length > 0) {
-      expect(rows[0]).toHaveProperty('category');
-    }
-  });
+      SELECT pg_get_function_result(p.oid) AS result_type
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = 'dashboard_resource_stats'
+    `)
+    expect(rows.length).toBeGreaterThan(0)
+    const resultType = rows[0].result_type as string
+    // Must return a TABLE with category, resource_count, active_count
+    expect(resultType.toLowerCase()).toContain('category')
+    expect(resultType.toLowerCase()).toContain('resource_count')
+    expect(resultType.toLowerCase()).toContain('active_count')
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('admin_list_users RPC is SECDEF', async () => {
+  it('admin_list_users RPC is SECDEF', async () => {
+    // Backend: admin_list_users — paginated user list with metadata
+    // Surface: overview-tab.tsx:362 → user table with ban/delete actions
     const rows = await queryProd(`
       SELECT proname, prosecdef
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public'
-        AND proname = 'admin_list_users'
-    `);
-    if (rows.length > 0) {
-      expect(rows[0].prosecdef).toBe(true);
-    } else {
-      console.log('NOTE: admin_list_users not found');
-    }
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('admin_user_notes table exists for user management notes', async () => {
-    const rows = await queryProd(`
-      SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = 'admin_user_notes'
-    `);
-    if (rows.length === 0) {
-      console.log('NOTE: admin_user_notes table not found — user management notes may not be available');
-    }
-    expect(Array.isArray(rows)).toBe(true);
-  });
-});
+      WHERE n.nspname = 'public' AND proname = 'admin_list_users'
+    `)
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows[0].prosecdef).toBe(true)
+  })
+})

@@ -1,70 +1,75 @@
-// 16-notifications.smoke.ts — Mission 16: Notifications backend contract probes
-// © Jelal Connor / SYNRG SCALING, LLC
+// 16-notifications.smoke.ts
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+// Mission: 16 — Notifications
+// Surface: Notification bell in FeedShell header
+// Upstream: Auth (M1), SECDEF inserters | Downstream: Map (M4), Applications (M10)
 
-import { describe, it, beforeAll, expect } from 'vitest';
-import { queryProd, isTokenAvailable } from './prod-client';
+import { describe, it, expect } from 'vitest'
+import { queryProd, isTokenAvailable } from './prod-client'
 
-const TOKEN_AVAILABLE = isTokenAvailable();
+const skip = !isTokenAvailable()
+const maybeDescribe = skip ? describe.skip : describe
 
-describe('16: Notifications', () => {
-  beforeAll(() => {
-    if (!TOKEN_AVAILABLE) {
-      console.log('SKIP: SUPABASE_ACCESS_TOKEN not set');
-    }
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('notifications table has RLS enabled', async () => {
-    const rows = await queryProd(`
-      SELECT relrowsecurity FROM pg_class WHERE oid = 'public.notifications'::regclass
-    `);
-    expect(rows[0]?.relrowsecurity).toBe(true);
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('no INSERT policy on notifications (forge protection — client cannot self-insert)', async () => {
-    const rows = await queryProd(`
-      SELECT cmd, polname
-      FROM pg_policies
-      WHERE tablename = 'notifications'
-        AND cmd = 'INSERT'
-    `);
-    // The forgeable INSERT policy was dropped with no replacement
-    expect(rows).toHaveLength(0);
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('notifications is in supabase_realtime publication (live bell updates)', async () => {
+maybeDescribe('16 — Notifications (PROD read-only)', () => {
+  it('notifications is in supabase_realtime publication', async () => {
+    // Backend: notifications — live bell requires realtime publication membership
+    // Surface: use-notifications.ts:245-254 → channel('notifications') subscriber
+    // Note: no migration found adding this — verify at runtime (per mission residuals)
     const rows = await queryProd(`
       SELECT tablename
       FROM pg_publication_tables
-      WHERE pubname = 'supabase_realtime'
-        AND tablename = 'notifications'
-    `);
+      WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+    `)
+    // If absent, live bell silently degrades to refresh-only — flag as real gap
     if (rows.length === 0) {
-      // This is a known residual per the mission — flag but do not hard-fail
-      console.warn('WARN: notifications not in supabase_realtime — live bell updates will degrade to refresh-only');
+      console.warn('REAL GAP: notifications is NOT in supabase_realtime — live bell will not work')
     }
-    // We assert the query executes without error; publication status is surfaced in logs
-    expect(Array.isArray(rows)).toBe(true);
-  });
+    expect(rows.length).toBe(1)
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('notify_seekers_near_resource is SECDEF', async () => {
+  it('notifications table has NO INSERT policy (forge-proof)', async () => {
+    // Backend: notifications_insert_system policy DROPPED — no replacement
+    // Surface: security_advisor_remediation.sql:45-49 — client INSERT denied
+    // Critical: client must not forge notifications into another user's feed
+    const rows = await queryProd(`
+      SELECT polname, polcmd
+      FROM pg_policy
+      WHERE polrelid = 'public.notifications'::regclass
+    `)
+    const insertPolicies = rows.filter((r) => r.polcmd === 'a') // 'a' = INSERT
+    expect(insertPolicies.length).toBe(0)
+  })
+
+  it('notifications table has RLS enabled', async () => {
+    // Backend: notifications — RLS yes (select/update/delete own policies)
+    // Surface: use-notifications.ts:94-100 → own notifications only
+    const rows = await queryProd(`
+      SELECT relrowsecurity FROM pg_class WHERE oid = 'public.notifications'::regclass
+    `)
+    expect(rows.length).toBe(1)
+    expect(rows[0].relrowsecurity).toBe(true)
+  })
+
+  it('notify_seekers_near_resource RPC is SECDEF', async () => {
+    // Backend: notify_seekers_near_resource — SECDEF INSERT into notifications
+    // Surface: feed-panel.tsx:369 → fires after new resource post
     const rows = await queryProd(`
       SELECT proname, prosecdef
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public'
-        AND proname = 'notify_seekers_near_resource'
-    `);
-    if (rows.length > 0) {
-      expect(rows[0].prosecdef).toBe(true);
-    } else {
-      console.log('NOTE: notify_seekers_near_resource not found — geo_outreach_rpcs migration may not be applied');
-    }
-  });
+      WHERE n.nspname = 'public' AND proname = 'notify_seekers_near_resource'
+    `)
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows[0].prosecdef).toBe(true)
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('reminders table has RLS enabled', async () => {
+  it('reminders table has RLS enabled', async () => {
+    // Backend: reminders — row-scoped (per mission brief)
+    // Surface: use-notifications.ts:185-233 reminder CRUD
     const rows = await queryProd(`
       SELECT relrowsecurity FROM pg_class WHERE oid = 'public.reminders'::regclass
-    `);
-    expect(rows[0]?.relrowsecurity).toBe(true);
-  });
-});
+    `)
+    expect(rows.length).toBe(1)
+    expect(rows[0].relrowsecurity).toBe(true)
+  })
+})

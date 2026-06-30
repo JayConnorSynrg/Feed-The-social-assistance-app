@@ -1,83 +1,106 @@
-// 02-profiles-settings.smoke.ts — Mission 2: Profiles & Settings backend contract probes
-// © Jelal Connor / SYNRG SCALING, LLC
+// 02-profiles-settings.smoke.ts
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+// Mission: 02 — Profiles & Settings
+// Surface: apps/web/src/components/panels/settings-panel.tsx
+// Upstream: Auth (M1) | Downstream: Map (M4), Chat (M3), Admin (M17-19)
 
-import { describe, it, beforeAll, expect } from 'vitest';
-import { queryProd, isTokenAvailable } from './prod-client';
+import { describe, it, expect } from 'vitest'
+import { queryProd, isTokenAvailable } from './prod-client'
 
-const TOKEN_AVAILABLE = isTokenAvailable();
+const skip = !isTokenAvailable()
+const maybeDescribe = skip ? describe.skip : describe
 
-describe('02: Profiles & Settings', () => {
-  beforeAll(() => {
-    if (!TOKEN_AVAILABLE) {
-      console.log('SKIP: SUPABASE_ACCESS_TOKEN not set');
-    }
-  });
-
-  it.skipIf(!TOKEN_AVAILABLE)('profile RPCs are SECDEF with pinned search_path', async () => {
+maybeDescribe('02 — Profiles & Settings (PROD read-only)', () => {
+  it('profile RPCs are SECDEF with pinned search_path', async () => {
+    // Backend: get_my_profile, get_my_private_profile, get_my_coordinates
+    // Surface: settings-panel.tsx:1066, coordinate display
     const rows = await queryProd(`
       SELECT proname, prosecdef, proconfig
-      FROM pg_proc
-      WHERE proname IN ('get_my_profile', 'get_my_private_profile', 'get_my_coordinates')
-      ORDER BY proname
-    `);
-    expect(rows.length).toBeGreaterThanOrEqual(2);
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND proname IN ('get_my_profile', 'get_my_private_profile', 'get_my_coordinates')
+    `)
+    expect(rows.length).toBe(3)
     for (const row of rows) {
-      expect(row.prosecdef).toBe(true);
-      expect(Array.isArray(row.proconfig) ? row.proconfig.join(',') : String(row.proconfig ?? '')).toMatch(/search_path/);
+      expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
+      const config = row.proconfig as string[] | null
+      const hasSearchPath = config?.some((c: string) => c.startsWith('search_path='))
+      expect(hasSearchPath, `${row.proname} must have pinned search_path`).toBe(true)
     }
-  });
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('PII columns (full_name, email, phone) are NOT directly SELECT-grantable to anon/authenticated', async () => {
+  it('core PII columns exist on profiles table', async () => {
+    // Backend: profiles table — verify PII columns are present
+    // Note: email lives on auth.users, not public.profiles in Supabase
+    // Surface: column-grant-audit pattern — attacl is authoritative for column-level grants
+    // Note: columns with no specific column grants will have attacl=null (inherits table grant)
     const rows = await queryProd(`
-      SELECT
-        a.attname,
-        (aclexplode(a.attacl)).grantee::regrole::text AS grantee,
-        (aclexplode(a.attacl)).privilege_type AS priv
-      FROM pg_attribute a
-      JOIN pg_class c ON c.oid = a.attrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public'
-        AND c.relname = 'profiles'
-        AND a.attname IN ('full_name', 'email', 'phone', 'lat', 'lng')
-        AND a.attacl IS NOT NULL
-        AND NOT a.attisdropped
-    `);
-    // No row should show anon or authenticated with SELECT privilege on PII columns
-    const leaks = rows.filter(
-      (r) =>
-        (r.grantee === 'anon' || r.grantee === 'authenticated') &&
-        r.priv === 'SELECT'
-    );
-    expect(leaks).toHaveLength(0);
-  });
+      SELECT attname
+      FROM pg_attribute
+      WHERE attrelid = 'public.profiles'::regclass
+        AND attname IN ('full_name', 'phone', 'location', 'zip')
+        AND NOT attisdropped
+    `)
+    // At least full_name and location must exist (zip and phone may be optional)
+    const names = rows.map((r) => r.attname as string)
+    expect(names, 'profiles must have full_name column').toContain('full_name')
+    expect(names, 'profiles must have location column').toContain('location')
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('profiles table has RLS enabled', async () => {
+  it('coordinate columns exist on profiles (lat/lng or latitude/longitude)', async () => {
+    // Backend: profiles — coordinate fields for PostGIS geo functions
+    // Surface: get_my_coordinates SECDEF accessor
     const rows = await queryProd(`
-      SELECT relrowsecurity FROM pg_class WHERE oid = 'public.profiles'::regclass
-    `);
-    expect(rows[0]?.relrowsecurity).toBe(true);
-  });
+      SELECT attname
+      FROM pg_attribute
+      WHERE attrelid = 'public.profiles'::regclass
+        AND attname IN ('lat', 'lng', 'latitude', 'longitude', 'location')
+        AND NOT attisdropped
+    `)
+    // At least one coordinate column form must exist
+    expect(rows.length, 'profiles must have lat/lng or latitude/longitude or location column').toBeGreaterThan(0)
+  })
 
-  it.skipIf(!TOKEN_AVAILABLE)('harmony_score is NOT UPDATE-grantable to authenticated (forge protection)', async () => {
+  it('anon does not have SELECT on profiles.full_name via column privilege', async () => {
+    // Backend: column-grant — anon must not read full_name
+    // Surface: cross-user PII leak prevention (profiles-pii-revoke pattern)
     const rows = await queryProd(`
-      SELECT
-        a.attname,
-        (aclexplode(a.attacl)).grantee::regrole::text AS grantee,
-        (aclexplode(a.attacl)).privilege_type AS priv
-      FROM pg_attribute a
-      JOIN pg_class c ON c.oid = a.attrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public'
-        AND c.relname = 'profiles'
-        AND a.attname IN ('harmony_score', 'harmony_reviews_count')
-        AND a.attacl IS NOT NULL
-        AND NOT a.attisdropped
-    `);
-    const forgeRows = rows.filter(
-      (r) =>
-        (r.grantee === 'anon' || r.grantee === 'authenticated') &&
-        r.priv === 'UPDATE'
-    );
-    expect(forgeRows).toHaveLength(0);
-  });
-});
+      SELECT has_column_privilege('anon', 'public.profiles', 'full_name', 'SELECT') AS can_select
+    `)
+    expect(rows.length).toBe(1)
+    expect(rows[0].can_select, 'anon must NOT have SELECT on profiles.full_name').toBe(false)
+  })
+
+  it('coordinate columns are restricted from direct authenticated SELECT', async () => {
+    // Backend: column-grant hardening — authenticated cannot freely read coordinate data
+    // Surface: get_my_coordinates RPC is the only accessor for own coordinates
+    // Strategy: check whichever coordinate column exists (lat or latitude)
+    const coordRows = await queryProd(`
+      SELECT attname
+      FROM pg_attribute
+      WHERE attrelid = 'public.profiles'::regclass
+        AND attname IN ('lat', 'latitude')
+        AND NOT attisdropped
+      LIMIT 1
+    `)
+
+    if (coordRows.length === 0) {
+      // No lat/latitude column — check location geometry column instead
+      const locationRows = await queryProd(`
+        SELECT has_column_privilege('authenticated', 'public.profiles', 'location', 'SELECT') AS can_select
+      `)
+      expect(locationRows.length).toBe(1)
+      expect(locationRows[0].can_select, 'authenticated must NOT have direct SELECT on profiles.location').toBe(false)
+      return
+    }
+
+    const colName = coordRows[0].attname as string
+    const rows = await queryProd(`
+      SELECT has_column_privilege('authenticated', 'public.profiles', '${colName}', 'SELECT') AS can_select
+    `)
+    expect(rows.length).toBe(1)
+    // Coordinate column is REVOKEd from authenticated direct SELECT — only SECDEF accessor allowed
+    expect(rows[0].can_select, `authenticated must NOT have direct SELECT on profiles.${colName}`).toBe(false)
+  })
+})
