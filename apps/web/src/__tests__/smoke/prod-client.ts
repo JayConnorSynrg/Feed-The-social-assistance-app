@@ -27,7 +27,7 @@ function getEnvLocalPath(): string {
   ]
   for (const p of candidates) {
     try {
-      if (require('fs').existsSync(p)) return p
+      if (fs.existsSync(p)) return p
     } catch {
       // continue
     }

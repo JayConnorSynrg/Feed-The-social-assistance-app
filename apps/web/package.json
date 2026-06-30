@@ -16,8 +16,8 @@
     "test:e2e": "playwright test",
     "test:unit": "find src -name '*.test.mjs' -exec node --test {} +",
     "test:vitest": "vitest run",
-    "test": "npm run test:unit && npm run test:vitest",
-    "smoke:prod": "vitest run --config vitest.smoke.config.ts"
+    "smoke:prod": "vitest run --config vitest.smoke.config.ts",
+    "test": "npm run test:unit && npm run test:vitest"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.7.1",

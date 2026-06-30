@@ -31,43 +31,54 @@ maybeDescribe('10 — Forms & Applications (PROD read-only)', () => {
     expect(rows[0].relrowsecurity).toBe(true)
   })
 
-  it('encrypted_data column exists on form_submissions (vault encryption contract)', async () => {
-    // Backend: form_submissions — encrypted_data column for vault-protected submissions
-    // Surface: use-vault-form-submission.ts:276-277 — encryptField before insert
-    // REAL GAP if this fails: encrypted_data column not deployed → vault form submission broken
+  it('vault encryption columns exist on form_submissions (M06 — live-confirmed contract)', async () => {
+    // Backend: form_submissions — four-column envelope encryption pattern
+    //   encrypted_form_data (text), form_data_iv (text),
+    //   encrypted_signature_data (text), signature_data_iv (text)
+    // Surface: use-vault-form-submission.ts:136-144 SELECT + :258-268 insert/update
+    // Live DB confirmed 2026-06-30: all four columns present; no encrypted_data column exists.
+    // NOTE: the column is NOT named 'encrypted_data' — that was a false assertion (corrected here).
     const rows = await queryProd(`
       SELECT attname
       FROM pg_attribute
       WHERE attrelid = 'public.form_submissions'::regclass
-        AND attname = 'encrypted_data'
+        AND attname IN (
+          'encrypted_form_data',
+          'form_data_iv',
+          'encrypted_signature_data',
+          'signature_data_iv'
+        )
         AND NOT attisdropped
+      ORDER BY attname
     `)
-    expect(
-      rows.length,
-      'REAL GAP: encrypted_data column missing from form_submissions — vault form encryption is broken'
-    ).toBe(1)
+    const cols = rows.map((r) => r.attname as string)
+    expect(cols, 'encrypted_form_data must exist').toContain('encrypted_form_data')
+    expect(cols, 'form_data_iv must exist').toContain('form_data_iv')
+    expect(cols, 'encrypted_signature_data must exist').toContain('encrypted_signature_data')
+    expect(cols, 'signature_data_iv must exist').toContain('signature_data_iv')
   })
 
-  it('form_signatures table exists with RLS (e-signature contract)', async () => {
-    // Backend: form_signatures — linked to submission — own-row RLS
-    // Surface: forms-panel.tsx e-sign capture → form_signatures insert
-    // REAL GAP if this fails: form_signatures table not deployed → e-signature flow broken
+  it('petition_signatures table exists with RLS (M07 — e-signature via petition path)', async () => {
+    // Backend: petition_signatures — live-confirmed 2026-06-30 (form_signatures does NOT exist;
+    // signatures are stored via the four encrypted columns on form_submissions itself).
+    // Surface: use-vault-form-submission.ts:542 signatureData submitted alongside formData.
+    // The petition_signatures table is the independent petition flow table.
     const existRows = await queryProd(`
       SELECT oid
       FROM pg_class
-      WHERE relname = 'form_signatures'
+      WHERE relname = 'petition_signatures'
         AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
     `)
     expect(
       existRows.length,
-      'REAL GAP: form_signatures table does not exist — e-signature flow is broken'
+      'petition_signatures table does not exist — petition e-signature flow is broken'
     ).toBe(1)
 
     if (existRows.length === 1) {
       const rls = await queryProd(`
-        SELECT relrowsecurity FROM pg_class WHERE oid = 'public.form_signatures'::regclass
+        SELECT relrowsecurity FROM pg_class WHERE oid = 'public.petition_signatures'::regclass
       `)
-      expect(rls[0].relrowsecurity, 'form_signatures must have RLS enabled').toBe(true)
+      expect(rls[0].relrowsecurity, 'petition_signatures must have RLS enabled').toBe(true)
     }
   })
 
