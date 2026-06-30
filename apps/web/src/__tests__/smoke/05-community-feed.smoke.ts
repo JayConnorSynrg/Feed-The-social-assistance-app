@@ -23,16 +23,25 @@ maybeDescribe('05 — Community Feed (PROD read-only)', () => {
     expect(rows[0].tablename).toBe('posts')
   })
 
-  it.todo(
-    // REAL GAP: post_likes and post_comments absent from supabase_realtime publication; live
-    // like counts and comment counts will not update in real-time — feed-panel shows stale counts.
-    // (use-realtime-feed.ts:152-166 likes, :207-221 comments)
-    // fix = migration: ALTER PUBLICATION supabase_realtime ADD TABLE public.post_likes, public.post_comments
-    // Live DB confirmed 2026-06-30: both tables absent from supabase_realtime.
-    // No PII in WAL payloads (post_likes: id, post_id, user_id; post_comments: id, post_id, user_id, content, created_at).
-    // RLS gating confirmed on both tables. Migration unblocked — track in backlog with M19 notifications gap.
-    'post_likes and post_comments are in realtime publication (BLOCKED: absent — add migration ALTER PUBLICATION supabase_realtime ADD TABLE public.post_likes, public.post_comments)',
-  )
+  it('post_likes and post_comments are in supabase_realtime publication (live counts)', async () => {
+    // Backend: supabase/migrations/20260630000100_realtime_publication_notifications_likes_comments.sql
+    // Surface: use-realtime-feed.ts:171 (likes) / :225 (comments) — postgres_changes subscriptions
+    // for live like/comment count updates in feed-panel.tsx.
+    // WAL-safety confirmed 2026-06-30: post_likes (user_id, post_id, created_at — no PII),
+    // post_comments (id, post_id, user_id, content, parent_id, is_hidden, created_at, updated_at —
+    // content is public-facing comment text already displayed in the feed). RLS gating confirmed.
+    const rows = await queryProd(`
+      SELECT tablename
+      FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime'
+        AND tablename IN ('post_likes', 'post_comments')
+      ORDER BY tablename
+    `)
+    const names = rows.map((r: { tablename: string }) => r.tablename)
+    expect(names).toContain('post_comments')
+    expect(names).toContain('post_likes')
+    expect(rows.length).toBe(2)
+  })
 
   it('opt_in_to_post and withdraw_opt_in RPCs are SECDEF', async () => {
     // Backend: atomic slot decrement with SELECT FOR UPDATE + SECDEF
