@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "test:unit": "find src -name '*.test.mjs' -exec node --test {} +",
     "test:vitest": "vitest run",
+    "smoke:prod": "vitest run --config vitest.smoke.config.ts",
     "test": "npm run test:unit && npm run test:vitest"
   },
   "dependencies": {
