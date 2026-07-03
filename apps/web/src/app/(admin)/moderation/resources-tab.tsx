@@ -80,6 +80,42 @@ function toMarkerResource(item: PendingItem): ResourceMarkerResource {
   }
 }
 
+// Shared reverse-geocode helper — resolves browser position to a { label, lat, lng }
+// triple.  Returns null silently if geolocation is unavailable or denied.
+async function resolveGeoLabel(): Promise<{ label: string; lat: number; lng: number } | null> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return null
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+        if (!token) {
+          resolve({ label: '', lat, lng })
+          return
+        }
+        try {
+          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,region&access_token=${token}`
+          const resp = await fetch(url)
+          if (!resp.ok) { resolve({ label: '', lat, lng }); return }
+          const json = await resp.json() as {
+            features?: Array<{ text?: string; place_name?: string; context?: Array<{ id?: string; short_code?: string }> }>
+          }
+          const place = json.features?.[0]
+          if (!place) { resolve({ label: '', lat, lng }); return }
+          const placeName = place.text ?? ''
+          const regionShort = place.context?.find((c) => c.id?.startsWith('region'))?.short_code?.replace('US-', '') ?? ''
+          const label = regionShort ? `${placeName}, ${regionShort}` : placeName
+          resolve({ label, lat, lng })
+        } catch {
+          resolve({ label: '', lat, lng })
+        }
+      },
+      () => { resolve(null) },
+      { timeout: 8000 },
+    )
+  })
+}
+
 // ─────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────
@@ -128,48 +164,13 @@ export function ResourcesTab() {
     void loadPending()
   }, [loadPending])
 
-  // Prefill location from browser geolocation on mount
+  // Prefill location from browser geolocation on mount.
+  // Does NOT clobber a manual label edit — the prev.label guard is intentional.
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        // Only prefill if still empty
-        setNearLocation((prev) => {
-          if (prev.label) return prev
-          return { label: '', lat: pos.coords.latitude, lng: pos.coords.longitude }
-        })
-        // Reverse-geocode to get a human label
-        const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-        if (!token) return
-        try {
-          const { coords } = pos
-          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${coords.longitude},${coords.latitude}.json?types=place,region&access_token=${token}`
-          const resp = await fetch(url)
-          if (!resp.ok) return
-          const json = await resp.json() as {
-            features?: Array<{ place_name?: string; text?: string; context?: Array<{ id?: string; short_code?: string }> }>
-          }
-          const place = json.features?.[0]
-          if (!place) return
-          const placeName = place.text ?? ''
-          const regionShort = place.context?.find((c) => c.id?.startsWith('region'))?.short_code?.replace('US-', '') ?? ''
-          const label = regionShort ? `${placeName}, ${regionShort}` : placeName
-          if (label) {
-            setNearLocation((prev) => ({
-              label: prev.label || label,
-              lat: prev.lat ?? pos.coords.latitude,
-              lng: prev.lng ?? pos.coords.longitude,
-            }))
-          }
-        } catch {
-          // Reverse-geocode failed — keep lat/lng without a label
-        }
-      },
-      () => {
-        // Denied or unavailable — leave empty, no error surfaced
-      },
-      { timeout: 8000 }
-    )
+    void resolveGeoLabel().then((geo) => {
+      if (!geo) return
+      setNearLocation((prev) => prev.label ? prev : { label: geo.label, lat: geo.lat, lng: geo.lng })
+    })
   }, [])
 
   // Fly to first resource with coords whenever pending loads or filter changes
@@ -257,22 +258,32 @@ export function ResourcesTab() {
     }
   }, [query, nearLocation, supabase, loadPending])
 
-  // Auto-switch to map view after discovery if mappable results exist
+  // Auto-switch to map view after discovery if mappable results exist.
+  // Double-flyTo prevention: when view is 'list' → setView('map') alone is enough
+  // because the existing [pending, filter, view] effect fires on the view change and
+  // does the flyTo.  Only call flyTo directly here when view is already 'map' (the
+  // view dependency in that effect won't fire again).
   useEffect(() => {
     if (!discoveryJustCompleted) return
     setDiscoveryJustCompleted(false)
     const mappable = pending.filter((p) => p.lat != null && p.lng != null)
     if (mappable.length === 0) return
-    setView('map')
-    setTimeout(() => {
-      if (nearLocation.lat != null && nearLocation.lng != null) {
-        mapRef.current?.flyTo({ center: [nearLocation.lng, nearLocation.lat], zoom: 9, duration: 800 })
-      } else {
-        const first = mappable[0]
-        mapRef.current?.flyTo({ center: [first.lng!, first.lat!], zoom: 10, duration: 800 })
-      }
-    }, 200)
-  }, [discoveryJustCompleted, pending, nearLocation, mapRef])
+    if (view === 'map') {
+      // Already on map — existing flyTo effect won't re-fire; do it directly.
+      setTimeout(() => {
+        if (nearLocation.lat != null && nearLocation.lng != null) {
+          mapRef.current?.flyTo({ center: [nearLocation.lng, nearLocation.lat], zoom: 9, duration: 800 })
+        } else {
+          const first = mappable[0]
+          mapRef.current?.flyTo({ center: [first.lng!, first.lat!], zoom: 10, duration: 800 })
+        }
+      }, 200)
+    } else {
+      // Switching list→map: the [pending, filter, view] effect will fire on the view
+      // change and handle the flyTo — no second flyTo needed here.
+      setView('map')
+    }
+  }, [discoveryJustCompleted, pending, nearLocation, view, mapRef])
 
   // ── Approve / Reject ────────────────────────────────────────
 
@@ -369,32 +380,11 @@ export function ResourcesTab() {
             <button
               type="button"
               onClick={() => {
-                setNearLocation({ label: '', lat: null, lng: null })
-                if (typeof navigator !== 'undefined' && navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(
-                    async (pos) => {
-                      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-                      setNearLocation({ label: '', lat: pos.coords.latitude, lng: pos.coords.longitude })
-                      if (!token) return
-                      try {
-                        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${pos.coords.longitude},${pos.coords.latitude}.json?types=place,region&access_token=${token}`
-                        const resp = await fetch(url)
-                        if (!resp.ok) return
-                        const json = await resp.json() as {
-                          features?: Array<{ text?: string; context?: Array<{ id?: string; short_code?: string }> }>
-                        }
-                        const place = json.features?.[0]
-                        if (!place) return
-                        const placeName = place.text ?? ''
-                        const regionShort = place.context?.find((c) => c.id?.startsWith('region'))?.short_code?.replace('US-', '') ?? ''
-                        const label = regionShort ? `${placeName}, ${regionShort}` : placeName
-                        if (label) setNearLocation({ label, lat: pos.coords.latitude, lng: pos.coords.longitude })
-                      } catch { /* ignore */ }
-                    },
-                    () => { /* denied — ignore */ },
-                    { timeout: 8000 }
-                  )
-                }
+                // Explicitly overwrites — no prev.label guard (unlike the mount effect)
+                void resolveGeoLabel().then((geo) => {
+                  if (!geo) return
+                  setNearLocation({ label: geo.label, lat: geo.lat, lng: geo.lng })
+                })
               }}
               disabled={discovering}
               className="text-xs text-lime-700 hover:text-lime-800 hover:underline shrink-0 whitespace-nowrap disabled:opacity-40"

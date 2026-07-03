@@ -559,12 +559,16 @@ serve(async (req: Request) => {
       Math.max(1, Number.isFinite(body.maxCandidates) ? Number(body.maxCandidates) : DEFAULT_MAX_CANDIDATES),
     )
 
-    // Safe parse of optional nearLocation — all fields optional; ignore if malformed
+    // Safe parse of optional nearLocation — all fields optional; ignore if malformed.
+    // Array.isArray guard prevents an array slipping past the typeof 'object' check.
+    // label is capped at 120 chars and newlines collapsed to prevent prompt injection.
     const rawNear = body.nearLocation
     const nearLocation: { label: string; lat: number | null; lng: number | null } | null =
-      rawNear && typeof rawNear === 'object'
+      rawNear && typeof rawNear === 'object' && !Array.isArray(rawNear)
         ? {
-            label: typeof rawNear.label === 'string' ? rawNear.label.trim() : '',
+            label: typeof rawNear.label === 'string'
+              ? String(rawNear.label).trim().slice(0, 120).replace(/[\r\n]+/g, ' ')
+              : '',
             lat: typeof rawNear.lat === 'number' && Number.isFinite(rawNear.lat) ? rawNear.lat : null,
             lng: typeof rawNear.lng === 'number' && Number.isFinite(rawNear.lng) ? rawNear.lng : null,
           }
