@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useIsAdmin } from '@/hooks/use-is-admin'
 import { createClient } from '@supabase/supabase-js'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -48,16 +50,35 @@ interface FederatedInstance {
 }
 
 export default function FederationDirectoryPage() {
+  const router = useRouter()
+  const isAdmin = useIsAdmin()
   const [instances, setInstances] = useState<FederatedInstance[]>([])
   const [filteredInstances, setFilteredInstances] = useState<FederatedInstance[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [adminChecked, setAdminChecked] = useState(false)
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   useEffect(() => {
-    loadInstances()
+    // Allow a tick for useIsAdmin to resolve; if still false after settle, redirect
+    const timer = setTimeout(() => {
+      setAdminChecked(true)
+    }, 500)
+    return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    if (adminChecked && !isAdmin) {
+      router.replace('/')
+    }
+  }, [adminChecked, isAdmin, router])
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadInstances()
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     filterInstances()
@@ -157,6 +178,14 @@ export default function FederationDirectoryPage() {
     )
 
     window.location.href = `mailto:${adminEmail}?subject=${subject}&body=${body}`
+  }
+
+  if (!adminChecked || !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white p-6 flex items-center justify-center">
+        <div className="text-stone-500 text-sm">Loading...</div>
+      </div>
+    )
   }
 
   return (
