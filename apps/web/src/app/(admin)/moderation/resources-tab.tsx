@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
+import { DiscoverProgress } from '@/components/ui/discover-progress'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -103,6 +104,8 @@ export function ResourcesTab() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [nearLocation, setNearLocation] = useState<{ label: string; lat: number | null; lng: number | null }>({ label: '', lat: null, lng: null })
+  const [discoveryJustCompleted, setDiscoveryJustCompleted] = useState(false)
 
   // ── Load pending queue ──────────────────────────────────────
 
@@ -124,6 +127,50 @@ export function ResourcesTab() {
   useEffect(() => {
     void loadPending()
   }, [loadPending])
+
+  // Prefill location from browser geolocation on mount
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        // Only prefill if still empty
+        setNearLocation((prev) => {
+          if (prev.label) return prev
+          return { label: '', lat: pos.coords.latitude, lng: pos.coords.longitude }
+        })
+        // Reverse-geocode to get a human label
+        const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+        if (!token) return
+        try {
+          const { coords } = pos
+          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${coords.longitude},${coords.latitude}.json?types=place,region&access_token=${token}`
+          const resp = await fetch(url)
+          if (!resp.ok) return
+          const json = await resp.json() as {
+            features?: Array<{ place_name?: string; text?: string; context?: Array<{ id?: string; short_code?: string }> }>
+          }
+          const place = json.features?.[0]
+          if (!place) return
+          const placeName = place.text ?? ''
+          const regionShort = place.context?.find((c) => c.id?.startsWith('region'))?.short_code?.replace('US-', '') ?? ''
+          const label = regionShort ? `${placeName}, ${regionShort}` : placeName
+          if (label) {
+            setNearLocation((prev) => ({
+              label: prev.label || label,
+              lat: prev.lat ?? pos.coords.latitude,
+              lng: prev.lng ?? pos.coords.longitude,
+            }))
+          }
+        } catch {
+          // Reverse-geocode failed — keep lat/lng without a label
+        }
+      },
+      () => {
+        // Denied or unavailable — leave empty, no error surfaced
+      },
+      { timeout: 8000 }
+    )
+  }, [])
 
   // Fly to first resource with coords whenever pending loads or filter changes
   useEffect(() => {
@@ -165,7 +212,12 @@ export function ResourcesTab() {
           'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
           'x-request-id': opId,
         },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({
+          query: q,
+          nearLocation: nearLocation.label.trim()
+            ? { label: nearLocation.label.trim(), lat: nearLocation.lat, lng: nearLocation.lng }
+            : undefined,
+        }),
         signal: controller.signal,
       })
 
@@ -189,6 +241,7 @@ export function ResourcesTab() {
 
       // Reload the pending queue to include newly staged items
       await loadPending()
+      setDiscoveryJustCompleted(true)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         // Treat abort as a soft outcome — the edge function may still be running
@@ -202,7 +255,24 @@ export function ResourcesTab() {
       clearTimeout(timeout)
       setDiscovering(false)
     }
-  }, [query, supabase, loadPending])
+  }, [query, nearLocation, supabase, loadPending])
+
+  // Auto-switch to map view after discovery if mappable results exist
+  useEffect(() => {
+    if (!discoveryJustCompleted) return
+    setDiscoveryJustCompleted(false)
+    const mappable = pending.filter((p) => p.lat != null && p.lng != null)
+    if (mappable.length === 0) return
+    setView('map')
+    setTimeout(() => {
+      if (nearLocation.lat != null && nearLocation.lng != null) {
+        mapRef.current?.flyTo({ center: [nearLocation.lng, nearLocation.lat], zoom: 9, duration: 800 })
+      } else {
+        const first = mappable[0]
+        mapRef.current?.flyTo({ center: [first.lng!, first.lat!], zoom: 10, duration: 800 })
+      }
+    }, 200)
+  }, [discoveryJustCompleted, pending, nearLocation, mapRef])
 
   // ── Approve / Reject ────────────────────────────────────────
 
@@ -286,6 +356,52 @@ export function ResourcesTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Location bias input */}
+          <div className="flex gap-2 items-center">
+            <label className="text-xs text-stone-500 shrink-0 w-24">Searching near</label>
+            <Input
+              placeholder="e.g. Burlington, VT (defaults to your location)"
+              value={nearLocation.label}
+              onChange={(e) => setNearLocation({ label: e.target.value, lat: null, lng: null })}
+              disabled={discovering}
+              className="flex-1 text-stone-900 placeholder:text-stone-400 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setNearLocation({ label: '', lat: null, lng: null })
+                if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+                      setNearLocation({ label: '', lat: pos.coords.latitude, lng: pos.coords.longitude })
+                      if (!token) return
+                      try {
+                        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${pos.coords.longitude},${pos.coords.latitude}.json?types=place,region&access_token=${token}`
+                        const resp = await fetch(url)
+                        if (!resp.ok) return
+                        const json = await resp.json() as {
+                          features?: Array<{ text?: string; context?: Array<{ id?: string; short_code?: string }> }>
+                        }
+                        const place = json.features?.[0]
+                        if (!place) return
+                        const placeName = place.text ?? ''
+                        const regionShort = place.context?.find((c) => c.id?.startsWith('region'))?.short_code?.replace('US-', '') ?? ''
+                        const label = regionShort ? `${placeName}, ${regionShort}` : placeName
+                        if (label) setNearLocation({ label, lat: pos.coords.latitude, lng: pos.coords.longitude })
+                      } catch { /* ignore */ }
+                    },
+                    () => { /* denied — ignore */ },
+                    { timeout: 8000 }
+                  )
+                }
+              }}
+              disabled={discovering}
+              className="text-xs text-lime-700 hover:text-lime-800 hover:underline shrink-0 whitespace-nowrap disabled:opacity-40"
+            >
+              Use my location
+            </button>
+          </div>
           <div className="flex gap-2">
             <Input
               placeholder='e.g. "food banks in Burlington VT" or "SNAP application forms"'
@@ -307,6 +423,8 @@ export function ResourcesTab() {
               )}
             </Button>
           </div>
+
+          <DiscoverProgress active={discovering} durationMs={30000} />
 
           {discoverSummary && (
             <p className="text-sm text-green-700 flex items-center gap-1.5">

@@ -77,6 +77,7 @@ interface DiscoverRequest {
   query?: string
   contentType?: ContentType
   maxCandidates?: number
+  nearLocation?: { label?: string; lat?: number; lng?: number }
 }
 
 interface ResourceCandidate {
@@ -277,14 +278,20 @@ interface AgentResult {
   via: 'agent' | 'search'
 }
 
-async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number): Promise<AgentResult | null> {
+async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, nearLocation?: { label: string; lat: number | null; lng: number | null } | null): Promise<AgentResult | null> {
   if (!FIRECRAWL_API_KEY) return null
+
+  const locationBias =
+    nearLocation?.label
+      ? ` Prioritize resources physically located in or serving ${nearLocation.label}. Unless the query text explicitly names a different location, focus results on that area.`
+      : ''
 
   const prompt =
     `Find up to ${maxCandidates} real, currently-operating mutual-aid / public-benefit ` +
     `${contentType === 'form' ? 'benefit application forms' : 'community resources'} for: "${query}". ` +
     `For each, include every verifiable field and a "sources" array of citation URLs ` +
-    `(prefer official .gov / .org pages). Only include candidates you can cite.`
+    `(prefer official .gov / .org pages). Only include candidates you can cite.` +
+    locationBias
 
   // Kick off the async job.
   let jobId: string
@@ -343,13 +350,17 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
 // becomes a thin resource candidate whose only source is its own URL — it will
 // only survive verification when that host is authoritative (.gov/.org), which is
 // the correct strict behaviour.
-async function sourceViaSearch(query: string, maxCandidates: number): Promise<AgentResult | null> {
+async function sourceViaSearch(query: string, maxCandidates: number, nearLocation?: { label: string; lat: number | null; lng: number | null } | null): Promise<AgentResult | null> {
   if (!FIRECRAWL_API_KEY) return null
   try {
+    const searchQuery =
+      nearLocation?.label && nearLocation.label.trim()
+        ? `${query} near ${nearLocation.label.trim()}`
+        : query
     const resp = await fetch('https://api.firecrawl.dev/v2/search', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit: Math.min(maxCandidates, 10) }),
+      body: JSON.stringify({ query: searchQuery, limit: Math.min(maxCandidates, 10) }),
     })
     if (!resp.ok) {
       edgeLog('warn', 'discover.search.failed', { status: resp.status })
@@ -548,6 +559,17 @@ serve(async (req: Request) => {
       Math.max(1, Number.isFinite(body.maxCandidates) ? Number(body.maxCandidates) : DEFAULT_MAX_CANDIDATES),
     )
 
+    // Safe parse of optional nearLocation — all fields optional; ignore if malformed
+    const rawNear = body.nearLocation
+    const nearLocation: { label: string; lat: number | null; lng: number | null } | null =
+      rawNear && typeof rawNear === 'object'
+        ? {
+            label: typeof rawNear.label === 'string' ? rawNear.label.trim() : '',
+            lat: typeof rawNear.lat === 'number' && Number.isFinite(rawNear.lat) ? rawNear.lat : null,
+            lng: typeof rawNear.lng === 'number' && Number.isFinite(rawNear.lng) ? rawNear.lng : null,
+          }
+        : null
+
     if (!FIRECRAWL_API_KEY) {
       edgeLog('error', 'discover.no_firecrawl_key', {})
       return new Response(JSON.stringify({ error: 'Sourcing provider not configured' }), {
@@ -558,9 +580,9 @@ serve(async (req: Request) => {
     edgeLog('info', 'discover.start', { userId: user.id, contentType, maxCandidates, queryLen: query.length, correlationId })
 
     // ── SOURCING (one /agent call per request; degrade to /search on miss) ──
-    let sourced = await sourceViaAgent(query, contentType, maxCandidates)
+    let sourced = await sourceViaAgent(query, contentType, maxCandidates, nearLocation ?? undefined)
     if (!sourced) {
-      sourced = await sourceViaSearch(query, maxCandidates)
+      sourced = await sourceViaSearch(query, maxCandidates, nearLocation ?? undefined)
     }
     if (!sourced) {
       return new Response(JSON.stringify({ error: 'Sourcing failed', staged: { resources: 0, forms: 0 }, deduped: 0, rejected: 0, candidates: [] }), {
