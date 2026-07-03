@@ -130,3 +130,6 @@ pipeline-*.log
 /feed-panel-text-issue.png
 /social-demo-full.png
 /Untitled
+
+# Local admin code reference — never commit
+.admin-code.local.md
