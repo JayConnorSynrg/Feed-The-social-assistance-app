@@ -153,16 +153,21 @@ serve(async (req: Request) => {
       })
     }
 
-    // ── AUDIT INSERT ──
-    await admin.from('admin_code_redemptions').insert({
+    // ── AUDIT INSERT (best-effort — grant already succeeded) ──
+    // Fire-and-forget: a failure here must not mask the successful grant.
+    admin.from('admin_code_redemptions').insert({
       user_id: userId,
       success: true,
       ip_address: ipAddress,
       user_agent: userAgent,
+    }).catch((auditInsertErr: unknown) => {
+      const msg = auditInsertErr instanceof Error ? auditInsertErr.message : String(auditInsertErr)
+      // Never log code/hash/pepper
+      edgeLog('warn', 'claim-facilitator-admin.audit_insert_failed', { correlationId, message: msg })
     })
 
-    // ── AUDIT LOG ──
-    await admin.rpc('log_audit_event', {
+    // ── AUDIT LOG (best-effort — grant already succeeded) ──
+    admin.rpc('log_audit_event', {
       p_user_id: userId,
       p_event_type: 'facilitator_admin_claimed',
       p_event_category: 'authorization',
@@ -171,6 +176,10 @@ serve(async (req: Request) => {
       p_resource_type: 'profiles',
       p_resource_id: userId,
       p_details: { via: 'claim-facilitator-admin' },
+    }).catch((auditLogErr: unknown) => {
+      const msg = auditLogErr instanceof Error ? auditLogErr.message : String(auditLogErr)
+      // Never log code/hash/pepper
+      edgeLog('warn', 'claim-facilitator-admin.audit_log_failed', { correlationId, message: msg })
     })
 
     edgeLog('info', 'claim-facilitator-admin.granted', { userId, correlationId })

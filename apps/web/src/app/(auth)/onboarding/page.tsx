@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { useAuthContext } from '@/providers/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -309,19 +310,54 @@ export default function OnboardingPage() {
 
       // ── FACILITATOR PATH — code verified server-side via edge function ──
       if (userRole === 'facilitator') {
-        const { data: fnData, error: fnError } = await supabase.functions.invoke(
-          'claim-facilitator-admin',
-          { body: { code: adminCode.trim() } }
-        )
+        // N1: bound the invoke so a hung network resets submitting instead of infinite spinner
+        const INVOKE_TIMEOUT_MS = 15_000
+        let fnData: { success?: boolean; error?: string } | null = null
+        let fnError: Error | null = null
+        try {
+          // Wrap in a typed helper to avoid Promise.race<T | never> inference collapsing to never
+          type InvokeResult = { data: { success?: boolean; error?: string } | null; error: Error | null }
+          const timedInvoke = (): Promise<InvokeResult> => {
+            const invokePromise = supabase.functions.invoke('claim-facilitator-admin', {
+              body: { code: adminCode.trim() },
+            }).then((r): InvokeResult => ({ data: r.data as InvokeResult['data'], error: r.error as Error | null }))
+            const timeoutPromise: Promise<InvokeResult> = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('invoke_timeout')), INVOKE_TIMEOUT_MS)
+            )
+            return Promise.race([invokePromise, timeoutPromise])
+          }
+          const invokeResult = await timedInvoke()
+          fnData = invokeResult.data
+          fnError = invokeResult.error
+        } catch (invokeErr: unknown) {
+          fnError = invokeErr instanceof Error ? invokeErr : new Error(String(invokeErr))
+        }
+
         if (fnError || !fnData?.success) {
-          const errCode = fnData?.error ?? fnError?.message ?? 'unknown'
+          // M2: FunctionsHttpError carries the JSON body — read it for the structured error code.
+          // supabase-js v2 wraps non-2xx responses as FunctionsHttpError with data=null,
+          // so fnData?.error is always undefined on HTTP errors. Parse the body instead.
+          let errCode = fnData?.error ?? 'unknown'
+          if (fnError instanceof FunctionsHttpError) {
+            try {
+              const body = await fnError.context.json().catch(() => ({})) as { error?: string }
+              errCode = body?.error ?? 'unknown'
+            } catch {
+              errCode = 'unknown'
+            }
+          } else if (fnError?.message === 'invoke_timeout') {
+            errCode = 'invoke_timeout'
+          }
+
           let errorMsg = 'Invalid administrator code. Please try again.'
           if (errCode === 'rate_limited') {
-            errorMsg = 'Too many failed attempts. Please try again in an hour.'
+            errorMsg = 'Too many attempts — please wait and try again.'
           } else if (errCode === 'not_configured') {
-            errorMsg = 'Administrator registration is not currently available. Contact support.'
+            errorMsg = "Administrator onboarding isn’t configured yet — contact the project owner."
           } else if (errCode === 'invalid_code') {
             errorMsg = 'Invalid administrator code. Please check and try again.'
+          } else if (errCode === 'invoke_timeout') {
+            errorMsg = 'Request timed out. Please check your connection and try again.'
           }
           setError(errorMsg)
           setSubmitting(false)
