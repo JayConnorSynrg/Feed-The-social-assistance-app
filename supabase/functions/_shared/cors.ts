@@ -42,7 +42,7 @@ export const ALLOWED_ORIGINS: ReadonlySet<string> = (() => {
 // Standard header values (shared across all responses)
 // ---------------------------------------------------------------------------
 
-const ALLOW_HEADERS = 'authorization, x-client-info, apikey, content-type'
+const ALLOW_HEADERS = 'authorization, x-client-info, apikey, content-type, x-request-id'
 const ALLOW_METHODS = 'POST, OPTIONS'
 
 // ---------------------------------------------------------------------------
