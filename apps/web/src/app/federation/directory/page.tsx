@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useIsAdmin } from '@/hooks/use-is-admin'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,7 @@ interface FederatedInstance {
   instance_name: string
   instance_url: string
   status: string
-  trust_level: string
+  trust_level?: string
   metadata: {
     city?: string
     state?: string
@@ -51,34 +51,50 @@ interface FederatedInstance {
 
 export default function FederationDirectoryPage() {
   const router = useRouter()
-  const isAdmin = useIsAdmin()
+  // Tri-state: null = resolving, true = admin, false = not admin
+  const [adminResolved, setAdminResolved] = useState<boolean | null>(null)
   const [instances, setInstances] = useState<FederatedInstance[]>([])
   const [filteredInstances, setFilteredInstances] = useState<FederatedInstance[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [adminChecked, setAdminChecked] = useState(false)
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
+  // Resolve admin status via RPC — redirect non-admins only after the check settles
   useEffect(() => {
-    // Allow a tick for useIsAdmin to resolve; if still false after settle, redirect
-    const timer = setTimeout(() => {
-      setAdminChecked(true)
-    }, 500)
-    return () => clearTimeout(timer)
+    let active = true
+    const supabase = createClient()
+
+    supabase
+      .rpc('is_current_user_admin')
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          logger.warn('admin.check.failed', { code: error.code })
+          setAdminResolved(false)
+          return
+        }
+        setAdminResolved(data === true)
+      })
+
+    return () => {
+      active = false
+    }
   }, [])
 
+  // Redirect non-admins once the check has resolved
   useEffect(() => {
-    if (adminChecked && !isAdmin) {
+    if (adminResolved === false) {
       router.replace('/')
     }
-  }, [adminChecked, isAdmin, router])
+  }, [adminResolved, router])
 
+  // Load instances only after admin status confirmed
   useEffect(() => {
-    if (isAdmin) {
+    if (adminResolved === true) {
       loadInstances()
     }
-  }, [isAdmin])
+  }, [adminResolved])
 
   useEffect(() => {
     filterInstances()
@@ -87,10 +103,7 @@ export default function FederationDirectoryPage() {
   async function loadInstances() {
     setIsLoading(true)
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
+      const supabase = createClient()
 
       const { data, error } = await supabase
         .from('federated_instances')
@@ -100,7 +113,7 @@ export default function FederationDirectoryPage() {
 
       if (error) throw error
 
-      setInstances(data || [])
+      setInstances((data || []) as unknown as FederatedInstance[])
     } catch (error) {
       console.error('Error loading instances:', error)
     } finally {
@@ -180,7 +193,8 @@ export default function FederationDirectoryPage() {
     window.location.href = `mailto:${adminEmail}?subject=${subject}&body=${body}`
   }
 
-  if (!adminChecked || !isAdmin) {
+  // Show loading state until admin check resolves
+  if (adminResolved === null || adminResolved === false) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white p-6 flex items-center justify-center">
         <div className="text-stone-500 text-sm">Loading...</div>
@@ -304,7 +318,7 @@ export default function FederationDirectoryPage() {
                         )}
                       </CardDescription>
                     </div>
-                    <div>{getTrustBadge(instance.trust_level)}</div>
+                    <div>{getTrustBadge(instance.trust_level ?? 'unknown')}</div>
                   </div>
                 </CardHeader>
                 <CardContent>
