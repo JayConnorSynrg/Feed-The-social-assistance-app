@@ -24,13 +24,9 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
+  const { data: isAdmin } = await supabase.rpc('is_current_user_admin')
 
-  if (!profile?.is_admin) {
+  if (!isAdmin) {
     logger.error('[admin:users] delete_user unauthorized attempt', { actorId: user.id })
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
