@@ -18,16 +18,16 @@
     "federation:register-local": "npx ts-node scripts/federation/register-local-instance.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.62.1",
     "duck-duck-scrape": "^2.2.7",
-    "turbo": "^2.0.0"
+    "turbo": "^2.10.12"
   },
   "packageManager": "npm@10.0.0",
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "date-fns": "^4.1.0",
-    "playwright": "^1.60.0"
+    "date-fns": "^4.4.0",
+    "playwright": "^1.62.1"
   }
 }
