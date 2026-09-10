@@ -165,9 +165,8 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
     <header className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-white flex-shrink-0">
       {/* Logo */}
       <button onClick={() => setActivePanel('overview')} className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full bg-[#4a5d23]/20 flex items-center justify-center">
-          <span className="text-[#4a5d23] font-bold text-sm">F</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/feed-logo.svg" alt="FEED" className="w-8 h-8" />
         <span className="font-semibold text-stone-800 hidden sm:inline">FEED</span>
       </button>
 
