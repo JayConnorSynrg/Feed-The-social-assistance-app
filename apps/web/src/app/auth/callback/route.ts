@@ -95,6 +95,15 @@ export async function GET(request: Request) {
       hasSession: true,
     })
 
+    // Guarantee: exchangeCodeForSession writes the authenticated session into
+    // the same sb-* cookie, replacing any prior anonymous/guest session. Surface
+    // the resolved identity so a lingering guest cookie would be visible here.
+    logger.info('oauth.callback.session_identity', {
+      userId: data.session.user.id,
+      isAnonymous:
+        (data.session.user as unknown as { is_anonymous?: boolean }).is_anonymous ?? false,
+    })
+
     // ── 6. Log which sb-* cookies are now present ─────────────────────────
     const cookieStore = await cookies()
     const sbCookies = cookieStore

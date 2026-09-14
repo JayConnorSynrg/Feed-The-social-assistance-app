@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
 import type { Database } from '@feed/database'
@@ -38,6 +39,7 @@ export interface PetitionWithMeta extends Petition {
 
 export function usePetitions() {
   const supabase = createClient()
+  const { loading: authLoading } = useAuth()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   // Unique channel name per hook instance — prevents multiple mounted PetitionsPanel
   // instances from stomping on each other's realtime subscriptions.
@@ -128,8 +130,13 @@ export function usePetitions() {
     }
   }, [supabase])
 
-  // Realtime subscription for live count updates
+  // Realtime subscription for live count updates.
+  // Wait for auth to reconcile (guest OR user) before the first fetch so it runs
+  // against the reconciled session, not a pre-reconciliation guest session.
+  // Gate on !authLoading only: approved petitions are guest-readable — no user required.
   useEffect(() => {
+    if (authLoading) return
+
     fetchPetitions()
 
     const channel = supabase
@@ -164,7 +171,7 @@ export function usePetitions() {
         channelRef.current = null
       }
     }
-  }, [fetchPetitions, supabase])
+  }, [authLoading, fetchPetitions, supabase])
 
   /**
    * sign(petitionId) — optimistic count++ + mark signed.

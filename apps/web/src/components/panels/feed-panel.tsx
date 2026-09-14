@@ -1505,10 +1505,15 @@ export function FeedPanel() {
     }
   }, [supabase, user, fetchOptInsForPosts])
 
-  // Initial fetch
+  // Initial fetch — wait for auth to reconcile (guest OR user) before the first
+  // fetch so it runs against the reconciled session, not a pre-reconciliation
+  // guest session. Gate on !authLoading only: posts are guest-readable, so we
+  // never require a user here.
   useEffect(() => {
-    fetchPosts(null)
-  }, [fetchPosts])
+    if (!authLoading) {
+      fetchPosts(null)
+    }
+  }, [authLoading, fetchPosts])
 
   // Load following ids on mount (and when auth resolves)
   useEffect(() => {
