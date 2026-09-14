@@ -19,6 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
 import type { Database } from '@feed/database'
@@ -174,6 +175,7 @@ export function usePollData(postId: string | null): {
   error: string | null
 } {
   const supabase = createClient()
+  const { loading: authLoading } = useAuth()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   const [poll, setPoll] = useState<PollWithTallies | null>(null)
@@ -326,7 +328,13 @@ export function usePollData(postId: string | null): {
     }
   }, [postId, supabase, computeTallies])
 
+  // Wait for auth to reconcile (guest OR user) before fetching so the query runs
+  // against the reconciled session, not a pre-reconciliation guest session.
+  // Gate on !authLoading only (in addition to the existing !postId guard inside
+  // fetchPollData): polls are guest-readable — no user required.
   useEffect(() => {
+    if (authLoading) return
+
     fetchPollData()
 
     return () => {
@@ -335,7 +343,7 @@ export function usePollData(postId: string | null): {
         channelRef.current = null
       }
     }
-  }, [fetchPollData, supabase])
+  }, [authLoading, fetchPollData, supabase])
 
   return { poll, userVote, loading, error }
 }

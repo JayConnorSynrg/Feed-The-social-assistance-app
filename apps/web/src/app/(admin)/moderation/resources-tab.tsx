@@ -306,6 +306,9 @@ export function ResourcesTab() {
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
       console.error('Error approving item:', err)
+      // Surface the failure in the UI instead of silently leaving the item in the queue.
+      const msg = err instanceof Error ? err.message : 'Failed to approve item'
+      setQueueError(`Approve failed: ${msg}`)
     } finally {
       setProcessingId(null)
     }
@@ -322,6 +325,9 @@ export function ResourcesTab() {
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
       console.error('Error rejecting item:', err)
+      // Surface the failure in the UI instead of silently leaving the item in the queue.
+      const msg = err instanceof Error ? err.message : 'Failed to reject item'
+      setQueueError(`Reject failed: ${msg}`)
     } finally {
       setProcessingId(null)
     }

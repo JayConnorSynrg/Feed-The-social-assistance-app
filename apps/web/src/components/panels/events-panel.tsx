@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Calendar, Loader2, AlertCircle, MapPin, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 import { CheckinSheet, type CheckinOccurrence } from './checkin-sheet'
 
 interface OccurrenceWithEvent {
@@ -64,6 +65,7 @@ function getDateGroup(dateStr: string): 'today' | 'week' | 'upcoming' {
 
 export function EventsPanel() {
   const supabase = createClient()
+  const { loading: authLoading } = useAuth()
 
   const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,9 +119,14 @@ export function EventsPanel() {
     }
   }, [supabase])
 
+  // Wait for auth to reconcile (guest OR user) before fetching so the query runs
+  // against the reconciled session, not a pre-reconciliation guest session.
+  // Gate on !authLoading only: event occurrences are guest-readable — no user required.
   useEffect(() => {
-    fetchOccurrences()
-  }, [fetchOccurrences])
+    if (!authLoading) {
+      fetchOccurrences()
+    }
+  }, [authLoading, fetchOccurrences])
 
   if (loading) {
     return (
