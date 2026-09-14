@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
+import { createClient } from "@/lib/supabase/server";
+import type { InitialUser } from "@/providers/auth-provider";
 import "./globals.css";
 
 // metadataBase resolves relative og:image / twitter:image URLs to absolute.
@@ -69,8 +71,32 @@ export default async function RootLayout({
   // so the per-request nonce CSP does not apply (mobile CSP is a separate
   // native concern). Skip force-dynamic for the Capacitor build so the static
   // export still compiles.
+  //
+  // Server-trusted identity: read the JWT-verified claims from the request
+  // cookie via the server Supabase client. getClaims() verifies the token, so
+  // this is the authoritative identity the browser client must reconcile to.
+  // Passing it into Providers → AuthProvider lets a server-authenticated user
+  // render authenticated on the first paint (no client getSession race) and
+  // gives the client the server sub/anon flag to detect a stale guest session.
+  let initialUser: InitialUser | null = null;
   if (process.env.CAPACITOR_BUILD !== 'true') {
     await connection();
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase.auth.getClaims();
+      const claims = data?.claims;
+      if (claims?.sub) {
+        initialUser = {
+          id: claims.sub,
+          email: claims.email ?? null,
+          is_anonymous: claims.is_anonymous ?? false,
+        };
+      }
+    } catch {
+      // No verified session on this request — render unauthenticated and let
+      // the browser client resolve auth from the cookie on mount.
+      initialUser = null;
+    }
   }
 
   return (
@@ -78,7 +104,7 @@ export default async function RootLayout({
       <body
         className="antialiased"
       >
-        <Providers>{children}</Providers>
+        <Providers initialUser={initialUser}>{children}</Providers>
         <SpeedInsights />
         <Analytics />
       </body>

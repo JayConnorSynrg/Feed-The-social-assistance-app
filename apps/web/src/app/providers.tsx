@@ -1,11 +1,17 @@
 'use client'
 
-import { AuthProvider } from '@/providers/auth-provider'
+import { AuthProvider, type InitialUser } from '@/providers/auth-provider'
 import { VaultProvider } from '@/contexts/vault-context'
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  initialUser = null,
+}: {
+  children: React.ReactNode
+  initialUser?: InitialUser | null
+}) {
   return (
-    <AuthProvider>
+    <AuthProvider initialUser={initialUser}>
       <VaultProvider>
         {children}
       </VaultProvider>

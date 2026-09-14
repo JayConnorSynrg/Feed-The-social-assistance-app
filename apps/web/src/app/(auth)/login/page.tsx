@@ -97,6 +97,14 @@ function LoginForm() {
           }
         }
 
+        // Capture whether a guest/anonymous session is currently active. A
+        // password sign-in replaces it, but we verify below that the browser
+        // client ends on the real session so no guest token lingers behind the
+        // new credentials.
+        const { data: { session: priorSession } } = await supabase.auth.getSession()
+        const priorWasAnonymous =
+          (priorSession?.user as unknown as { is_anonymous?: boolean } | undefined)?.is_anonymous ?? false
+
         // 2. Attempt login
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -120,6 +128,13 @@ function LoginForm() {
           // AUTH_LOGIN_FAILED is now captured server-side in check-lockout/route.ts
           // (service-role insert avoids the anon RLS 42501 that silently dropped it here)
           throw error
+        }
+
+        // A prior guest session has been replaced by this authenticated
+        // sign-in. Refresh once to guarantee the browser client holds the real
+        // session and no anonymous token lingers behind the new credentials.
+        if (priorWasAnonymous) {
+          await supabase.auth.refreshSession()
         }
 
         // Log successful login
