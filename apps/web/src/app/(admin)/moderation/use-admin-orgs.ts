@@ -21,7 +21,6 @@ export function useAdminOrgs() {
     if (authLoading) return
 
     const supabase = createClient()
-    setError(null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(supabase.rpc as any)('get_admin_org_list')
       .then(({ data, error: rpcError }: { data: AdminOrg[] | null; error: unknown }) => {
@@ -32,8 +31,12 @@ export function useAdminOrgs() {
               ? rpcError.message
               : 'Failed to load admin organizations'
           setError(message)
-        } else if (data) {
-          setOrgs(data)
+        } else {
+          // Clear any stale error from a prior fetch on the success path.
+          setError(null)
+          if (data) {
+            setOrgs(data)
+          }
         }
         setLoading(false)
       })
