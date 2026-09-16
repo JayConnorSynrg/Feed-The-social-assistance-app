@@ -2134,6 +2134,7 @@ export type Database = {
           name: string
           phone: string | null
           rejection_reason: string | null
+          service_mode: Database["public"]["Enums"]["resource_service_mode"]
           services_offered: string[] | null
           source: Database["public"]["Enums"]["resource_source"] | null
           state: string | null
@@ -2169,6 +2170,7 @@ export type Database = {
           name: string
           phone?: string | null
           rejection_reason?: string | null
+          service_mode?: Database["public"]["Enums"]["resource_service_mode"]
           services_offered?: string[] | null
           source?: Database["public"]["Enums"]["resource_source"] | null
           state?: string | null
@@ -2204,6 +2206,7 @@ export type Database = {
           name?: string
           phone?: string | null
           rejection_reason?: string | null
+          service_mode?: Database["public"]["Enums"]["resource_service_mode"]
           services_offered?: string[] | null
           source?: Database["public"]["Enums"]["resource_source"] | null
           state?: string | null
@@ -3265,6 +3268,7 @@ export type Database = {
           lng: number
           name: string
           phone: string
+          service_mode: string
           state: string
           status: string
           website: string
@@ -3293,6 +3297,7 @@ export type Database = {
           moderated_at: string
           name: string
           phone: string
+          service_mode: string
           source: string
           state: string
           status: string
@@ -3356,8 +3361,11 @@ export type Database = {
           p_description?: string
           p_email?: string
           p_id: string
+          p_lat?: number
+          p_lng?: number
           p_name?: string
           p_phone?: string
+          p_service_mode?: string
           p_state?: string
           p_status?: string
           p_website?: string
@@ -3376,6 +3384,7 @@ export type Database = {
           moderated_at: string
           name: string
           phone: string
+          service_mode: string
           source: string
           state: string
           status: string
@@ -3871,6 +3880,7 @@ export type Database = {
           name: string
           phone: string | null
           rejection_reason: string | null
+          service_mode: Database["public"]["Enums"]["resource_service_mode"]
           services_offered: string[] | null
           source: Database["public"]["Enums"]["resource_source"] | null
           state: string | null
@@ -4833,6 +4843,7 @@ export type Database = {
         | "waste_disposal"
         | "free_camping"
         | "free_goods_donation"
+      resource_service_mode: "physical" | "online" | "hybrid"
       resource_source:
         | "user_submitted"
         | "211_api"
@@ -5533,6 +5544,7 @@ export const Constants = {
         "free_camping",
         "free_goods_donation",
       ],
+      resource_service_mode: ["physical", "online", "hybrid"],
       resource_source: [
         "user_submitted",
         "211_api",
