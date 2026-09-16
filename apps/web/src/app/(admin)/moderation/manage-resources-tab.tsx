@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   Search, Loader2, MapPin, AlertCircle, Pencil, CheckCircle2,
+  Map as MapIcon, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,6 +12,9 @@ import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+import { MapView, type MapViewHandle } from '@/components/map/map-view'
+import { ResourceMarker } from '@/components/map/resource-marker'
+import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
 import {
   ResourceEditDialog,
   type ResourceEditDialogInput,
@@ -63,6 +67,43 @@ function toDialogInputFromManageRow(r: ResourceRow): ResourceEditDialogInput {
   }
 }
 
+// Maps a manage-list row into the shape <ResourceMarker> expects. Only ever
+// called on rows that have already passed the `mappable` filter (INV A) —
+// non-null lat/lng guaranteed by that filter, not re-checked here.
+function toMarkerResource(r: ResourceRow): ResourceMarkerResource {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    category: r.category,
+    address_line1: r.address_line1,
+    city: r.city,
+    state: r.state,
+    phone: r.phone,
+    website: r.website,
+    latitude: r.lat!,
+    longitude: r.lng!,
+  }
+}
+
+// Picks a flyTo zoom level from the lat/lng degree-span of a marker set —
+// MapViewHandle exposes flyTo(center, zoom) only (no fitBounds/getMap), so the
+// viewport-fit approximates a bounding-box fit by choosing a tighter zoom for
+// a tighter spread. Capped at 12 to mirror the padding used by a true
+// map.fitBounds() call, in case MapViewHandle later exposes one.
+function zoomForSpan(span: number): number {
+  if (span < 0.01) return 12
+  if (span < 0.05) return 11
+  if (span < 0.1) return 10
+  if (span < 0.5) return 9
+  if (span < 1) return 8
+  if (span < 2) return 7
+  if (span < 5) return 6
+  if (span < 10) return 5
+  if (span < 20) return 4
+  return 3
+}
+
 const PAGE_SIZE = 100
 
 // ─────────────────────────────────────────────────────────────
@@ -71,11 +112,15 @@ const PAGE_SIZE = 100
 
 export function ManageResourcesTab() {
   const supabase = createClient()
+  const mapRef = useRef<MapViewHandle>(null)
 
   // Filters
   const [stateFilter, setStateFilter] = useState('')   // full state name from dropdown
   const [cityFilter, setCityFilter] = useState('')
   const [searchInput, setSearchInput] = useState('')
+
+  // Map panel — collapsed by default (INV B); mounts MapView only when expanded.
+  const [mapExpanded, setMapExpanded] = useState(false)
 
   // List
   const [rows, setRows] = useState<ResourceRow[]>([])
@@ -177,6 +222,72 @@ export function ManageResourcesTab() {
     setEditing(null)
   }, [])
 
+  // ── Map (INV A/C) ───────────────────────────────────────────
+  // Derived directly from `rows` — the same filtered list the cards render
+  // (INV C) — so state/city/search filters change the map's markers too.
+  // Online resources are never plotted even when they carry coordinates
+  // (INV A): a food-bank PDF list geocoded to an org's mailing address is not
+  // a physical location an admin should be sent to.
+  // Memoized so identity only changes when `rows` itself changes (a filter
+  // apply or a load) — not on every unrelated re-render (dialog open/close,
+  // savedId timeout, etc). The fit-viewport effect below depends on this
+  // identity to avoid fighting the admin's manual pan/zoom.
+  const mappable = useMemo(
+    () => rows.filter((r) => r.lat != null && r.lng != null && r.service_mode !== 'online'),
+    [rows]
+  )
+  const onlineExcludedCount = rows.filter(
+    (r) => r.lat != null && r.lng != null && r.service_mode === 'online'
+  ).length
+
+  // Structured log on expand — counts only, no PII (INV E).
+  useEffect(() => {
+    if (!mapExpanded) return
+    logger.info('admin.resource.map.expand', {
+      total: rows.length,
+      mappable: mappable.length,
+      online_excluded: onlineExcludedCount,
+    })
+    // Re-logs when the toggle re-opens after a filter change; intentionally
+    // excludes mappable/onlineExcludedCount from deps to avoid re-firing on
+    // every row mutation while already expanded (e.g. after an edit save).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapExpanded, rows])
+
+  // Fit the viewport to the current markers so the map "shows the locations
+  // of the resources" on first paint instead of opening at the default
+  // US-center/zoom-4 view. Runs when the map expands (MapView mounts fresh —
+  // mapRef.current is guaranteed set by commit time) and whenever the
+  // mappable set changes identity while already expanded (a filter narrows
+  // results to a state/city). Deliberately does NOT depend on anything else,
+  // so an unrelated re-render never fights the admin's manual pan/zoom.
+  useEffect(() => {
+    if (!mapExpanded || mappable.length === 0) return
+    const map = mapRef.current
+    if (!map) return
+
+    if (mappable.length === 1) {
+      const only = mappable[0]
+      if (only.lat != null && only.lng != null) {
+        map.flyTo({ center: [only.lng, only.lat], zoom: 11 })
+      }
+      return
+    }
+
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
+    for (const r of mappable) {
+      if (r.lat == null || r.lng == null) continue
+      minLat = Math.min(minLat, r.lat)
+      maxLat = Math.max(maxLat, r.lat)
+      minLng = Math.min(minLng, r.lng)
+      maxLng = Math.max(maxLng, r.lng)
+    }
+    const centerLat = (minLat + maxLat) / 2
+    const centerLng = (minLng + maxLng) / 2
+    const span = Math.max(maxLat - minLat, maxLng - minLng)
+    map.flyTo({ center: [centerLng, centerLat], zoom: zoomForSpan(span) })
+  }, [mapExpanded, mappable])
+
   // ─────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────
@@ -241,7 +352,34 @@ export function ManageResourcesTab() {
         <span className="text-sm font-medium text-stone-700">
           Approved resources{!loading && ` — showing ${rows.length}${hasMore ? ' (more available)' : ''}`}
         </span>
+        <button
+          type="button"
+          onClick={() => setMapExpanded((prev) => !prev)}
+          className="flex items-center gap-1.5 text-xs font-medium text-lime-700 hover:text-lime-800 transition-colors"
+          aria-expanded={mapExpanded}
+        >
+          <MapIcon className="h-3.5 w-3.5" />
+          {mapExpanded ? 'Hide map' : 'Show map'}
+          {mapExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
       </div>
+
+      {/* ── Map (collapsible; toggling never disturbs the list or its filters — INV B/D) ── */}
+      {mapExpanded && (
+        <div className="rounded-xl overflow-hidden border border-stone-200 h-72 bg-stone-50">
+          {loading ? (
+            <div className="h-full flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-stone-400" />
+            </div>
+          ) : (
+            <MapView ref={mapRef} className="h-full w-full">
+              {mappable.map((r) => (
+                <ResourceMarker key={r.id} resource={toMarkerResource(r)} />
+              ))}
+            </MapView>
+          )}
+        </div>
+      )}
 
       {/* ── Error ── */}
       {error && (
