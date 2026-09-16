@@ -10,10 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
 import { DiscoverProgress } from '@/components/ui/discover-progress'
+import {
+  ResourceEditDialog,
+  type ResourceEditDialogInput,
+  type ResourceEditDialogSavedRow,
+} from './resource-edit-dialog'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -39,11 +45,13 @@ interface PendingItem {
   state: string | null
   zip_code: string | null
   phone: string | null
+  email: string | null
   website: string | null
   status: string
   discovery_metadata: DiscoveryMeta | null
   lat: number | null
   lng: number | null
+  service_mode: string
 }
 
 type ContentFilter = 'all' | 'resource' | 'link' | 'form'
@@ -77,6 +85,30 @@ function toMarkerResource(item: PendingItem): ResourceMarkerResource {
     website: item.website,
     latitude: item.lat!,
     longitude: item.lng!,
+  }
+}
+
+// Normalizes a pending-queue row (admin_list_pending_resources shape) into the
+// shape <ResourceEditDialog> expects. Shape differs from the manage-list row:
+// `address` (not `address_line1`) — email is now available on this RPC's
+// return shape (INV D) and is mapped the same as every other visible field.
+function toDialogInputFromPendingRow(item: PendingItem): ResourceEditDialogInput {
+  return {
+    id: item.id,
+    name: item.name ?? '',
+    description: item.description ?? '',
+    category: item.category ?? 'other',
+    address_line1: item.address ?? '',
+    city: item.city ?? '',
+    state: item.state ?? '',
+    zip_code: item.zip_code ?? '',
+    phone: item.phone ?? '',
+    email: item.email ?? '',
+    website: item.website ?? '',
+    status: item.status ?? 'pending',
+    service_mode: item.service_mode ?? 'physical',
+    lat: item.lat,
+    lng: item.lng,
   }
 }
 
@@ -142,6 +174,10 @@ export function ResourcesTab() {
   const [view, setView] = useState<'list' | 'map'>('list')
   const [nearLocation, setNearLocation] = useState<{ label: string; lat: number | null; lng: number | null }>({ label: '', lat: null, lng: null })
   const [discoveryJustCompleted, setDiscoveryJustCompleted] = useState(false)
+
+  // Edit-then-confirm approve dialog (INV D) — resource/link items only; form
+  // items keep the one-click approve_form_template path (no resource fields to edit).
+  const [approveTarget, setApproveTarget] = useState<PendingItem | null>(null)
 
   // ── Load pending queue ──────────────────────────────────────
 
@@ -285,6 +321,18 @@ export function ResourcesTab() {
   }, [discoveryJustCompleted, pending, nearLocation, view, mapRef])
 
   // ── Approve / Reject ────────────────────────────────────────
+  //
+  // Two approve paths, by content type:
+  // - 'form' items have no resource fields to edit (they are form-template
+  //   rows), so they keep the original one-click approve via handleApprove
+  //   below — this call is NOT dead code, it is still the only approve path
+  //   for forms and is also reused by "Bulk approve high-confidence" (which
+  //   is unchanged by this wave and must stay one-click for all content types).
+  // - 'resource' / 'link' items now go through the edit-then-confirm dialog
+  //   (INV D): clicking "Approve" opens <ResourceEditDialog mode="approve">
+  //   via setApproveTarget below; the dialog persists edits via
+  //   admin_update_resource FIRST, then calls handleConfirmApprove exactly
+  //   once, which is the sole caller of approve_resource for this path.
 
   const handleApprove = useCallback(async (item: PendingItem) => {
     setProcessingId(item.id)
@@ -312,6 +360,25 @@ export function ResourcesTab() {
       setProcessingId(null)
     }
   }, [supabase])
+
+  // Called by <ResourceEditDialog mode="approve"> AFTER admin_update_resource
+  // has persisted the edited fields. Guarded against double-fire by the
+  // dialog's own `saving` state (the Confirm button disables while in flight).
+  const handleConfirmApprove = useCallback(async (resourceId: string) => {
+    const { error } = await supabase.rpc('approve_resource', {
+      p_resource_id: resourceId,
+      p_reason: 'Admin approved from discovery queue',
+    })
+    if (error) throw error
+    logger.info('admin.resource.approve_confirm', { resource_id: resourceId })
+  }, [supabase])
+
+  // Called once both admin_update_resource and approve_resource succeed —
+  // the item is no longer pending, so remove it from the queue and close.
+  const handleApproveDialogSaved = useCallback((row: ResourceEditDialogSavedRow) => {
+    setPending((prev) => prev.filter((p) => p.id !== row.id))
+    setApproveTarget(null)
+  }, [])
 
   const handleReject = useCallback(async (item: PendingItem) => {
     setProcessingId(item.id)
@@ -660,7 +727,12 @@ export function ResourcesTab() {
                     <Button
                       size="sm"
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
-                      onClick={() => void handleApprove(item)}
+                      onClick={() => {
+                        // Forms have no resource fields to edit — keep the
+                        // one-click approve_form_template path. resource/link
+                        // items open the edit-then-confirm dialog (INV D).
+                        if (contentType === 'form') { void handleApprove(item) } else { setApproveTarget(item) }
+                      }}
                       disabled={isProcessing || bulkRunning}
                     >
                       {isProcessing ? (
@@ -691,6 +763,16 @@ export function ResourcesTab() {
           })}
         </div>
       )}
+
+      {/* ── Edit-then-confirm approve dialog (shared with Manage tab — INV D) ── */}
+      <ResourceEditDialog
+        open={approveTarget !== null}
+        resource={approveTarget ? toDialogInputFromPendingRow(approveTarget) : null}
+        mode="approve"
+        onOpenChange={(open) => { if (!open) setApproveTarget(null) }}
+        onSaved={handleApproveDialogSaved}
+        onConfirm={handleConfirmApprove}
+      />
     </div>
   )
 }

@@ -2,19 +2,20 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Search, Loader2, MapPin, AlertCircle, Pencil, Save, X, CheckCircle2,
+  Search, Loader2, MapPin, AlertCircle, Pencil, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+import {
+  ResourceEditDialog,
+  type ResourceEditDialogInput,
+  type ResourceEditDialogSavedRow,
+} from './resource-edit-dialog'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -38,42 +39,13 @@ interface ResourceRow {
   moderated_at: string | null
   lat: number | null
   lng: number | null
+  service_mode: string
 }
 
-// The editable subset of a resource, as strings for form binding.
-interface EditForm {
-  name: string
-  description: string
-  category: string
-  address_line1: string
-  city: string
-  state: string
-  zip_code: string
-  phone: string
-  email: string
-  website: string
-  status: string
-}
-
-// resource_category enum values — MUST mirror the resource_category enum in
-// packages/database/types.ts exactly (all 25 values). An opened resource always
-// shows its true category rather than silently defaulting to 'food'. Human labels
-// are derived from each value via .replace(/_/g, ' '), matching the existing style.
-const CATEGORIES = [
-  'food', 'housing', 'healthcare', 'employment', 'education', 'legal',
-  'transportation', 'utilities', 'clothing', 'financial', 'mental_health',
-  'substance_abuse', 'domestic_violence', 'childcare', 'senior_services',
-  'disability_services', 'veteran_services', 'immigration', 'other',
-  'eitc_tax_filing', 'free_legal', 'prenatal_natal_care', 'waste_disposal',
-  'free_camping', 'free_goods_donation',
-] as const
-
-const STATUSES = ['approved', 'pending', 'rejected', 'archived'] as const
-
-const PAGE_SIZE = 100
-
-function toForm(r: ResourceRow): EditForm {
+// Normalizes a manage-list row into the shape <ResourceEditDialog> expects.
+function toDialogInputFromManageRow(r: ResourceRow): ResourceEditDialogInput {
   return {
+    id: r.id,
     name: r.name ?? '',
     description: r.description ?? '',
     category: r.category ?? 'other',
@@ -85,16 +57,13 @@ function toForm(r: ResourceRow): EditForm {
     email: r.email ?? '',
     website: r.website ?? '',
     status: r.status ?? 'approved',
+    service_mode: r.service_mode ?? 'physical',
+    lat: r.lat,
+    lng: r.lng,
   }
 }
 
-// Which fields differ between the original row and the edited form.
-function changedFields(orig: ResourceRow, form: EditForm): string[] {
-  const base = toForm(orig)
-  return (Object.keys(form) as (keyof EditForm)[]).filter(
-    (k) => (form[k] ?? '').trim() !== (base[k] ?? '').trim(),
-  )
-}
+const PAGE_SIZE = 100
 
 // ─────────────────────────────────────────────────────────────
 // Component
@@ -115,11 +84,8 @@ export function ManageResourcesTab() {
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Edit modal
+  // Edit dialog
   const [editing, setEditing] = useState<ResourceRow | null>(null)
-  const [form, setForm] = useState<EditForm | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
 
   // ── Load list ───────────────────────────────────────────────
@@ -194,79 +160,22 @@ export function ManageResourcesTab() {
   // ── Edit ────────────────────────────────────────────────────
   const openEdit = useCallback((r: ResourceRow) => {
     setEditing(r)
-    setForm(toForm(r))
-    setSaveError(null)
   }, [])
 
   const closeEdit = useCallback(() => {
-    if (saving) return
     setEditing(null)
-    setForm(null)
-    setSaveError(null)
-  }, [saving])
+  }, [])
 
-  const handleSave = useCallback(async () => {
-    if (!editing || !form) return
-
-    // Required fields can never be cleared — validate before hitting the RPC.
-    // Optional fields may be blank (an empty value clears the column server-side).
-    if (!form.name.trim()) { setSaveError('Name is required.'); return }
-    if (!form.category) { setSaveError('Category is required.'); return }
-    if (!form.status) { setSaveError('Status is required.'); return }
-
-    setSaving(true)
-    setSaveError(null)
-    try {
-      // Required fields (name/category/status) are guarded server-side (COALESCE-keep)
-      // and here (validation above). Optional fields send their trimmed value — an
-      // empty string clears the column, since the RPC now SETs optionals directly.
-      const { data, error: rpcError } = await supabase.rpc('admin_update_resource', {
-        p_id: editing.id,
-        p_name: form.name.trim(),
-        p_description: form.description.trim(),
-        p_category: form.category,
-        p_address_line1: form.address_line1.trim(),
-        p_city: form.city.trim(),
-        p_state: normalizeState(form.state) ?? '',
-        p_zip_code: form.zip_code.trim(),
-        p_phone: form.phone.trim(),
-        p_email: form.email.trim(),
-        p_website: form.website.trim(),
-        p_status: form.status,
-      })
-      if (rpcError) throw rpcError
-
-      const updated = ((data ?? []) as ResourceRow[])[0] ?? null
-      const fields = changedFields(editing, form)
-
-      const { data: userData } = await supabase.auth.getUser()
-      logger.info('admin.resource.update', {
-        resource_id: editing.id,
-        by: userData?.user?.id ?? null,
-        fields_changed: fields,
-      })
-
-      // Merge the updated row back into the list (falls back to a local merge
-      // if the RPC did not return a row, so the UI never shows stale values).
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === editing.id ? (updated ?? { ...r, ...form }) : r,
-        ),
-      )
-      setSavedId(editing.id)
-      setTimeout(() => setSavedId(null), 2500)
-      setEditing(null)
-      setForm(null)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to save resource'
-      setSaveError(msg)
-    } finally {
-      setSaving(false)
-    }
-  }, [editing, form, supabase])
-
-  const setField = (k: keyof EditForm, v: string) =>
-    setForm((prev) => (prev ? { ...prev, [k]: v } : prev))
+  // <ResourceEditDialog> owns the admin_update_resource RPC call, geocoding, and
+  // structured logging (INV A/B/C/E). This just merges the saved row back into
+  // the list and shows the "Saved" indicator — zero field regression from the
+  // pre-extraction inline modal (every field it saved still saves identically).
+  const handleDialogSaved = useCallback((row: ResourceEditDialogSavedRow) => {
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...row } : r)))
+    setSavedId(row.id)
+    setTimeout(() => setSavedId(null), 2500)
+    setEditing(null)
+  }, [])
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -419,135 +328,14 @@ export function ManageResourcesTab() {
         </div>
       )}
 
-      {/* ── Edit modal ── */}
-      <Dialog open={editing !== null} onOpenChange={(open) => { if (!open) closeEdit() }}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit resource</DialogTitle>
-            <DialogDescription>
-              Changes persist to the resources table and are recorded with your admin identity.
-            </DialogDescription>
-          </DialogHeader>
-
-          {form && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Name</Label>
-                <Input value={form.name} onChange={(e) => setField('name', e.target.value)}
-                  className="text-stone-900" />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Description</Label>
-                <Textarea value={form.description} onChange={(e) => setField('description', e.target.value)}
-                  className="text-stone-900 min-h-[80px]" />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">Category</Label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setField('category', e.target.value)}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">Status</Label>
-                  <select
-                    value={form.status}
-                    onChange={(e) => setField('status', e.target.value)}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Address</Label>
-                <Input value={form.address_line1} onChange={(e) => setField('address_line1', e.target.value)}
-                  className="text-stone-900" />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">City</Label>
-                  <Input value={form.city} onChange={(e) => setField('city', e.target.value)}
-                    className="text-stone-900" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">State</Label>
-                  <select
-                    value={normalizeState(form.state) ?? ''}
-                    onChange={(e) => setField('state', e.target.value)}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    <option value="">—</option>
-                    {US_STATES.map((s) => (
-                      <option key={s} value={STATE_TO_ABBR[s]}>{STATE_TO_ABBR[s]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">ZIP</Label>
-                  <Input value={form.zip_code} onChange={(e) => setField('zip_code', e.target.value)}
-                    className="text-stone-900" />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">Phone</Label>
-                  <Input value={form.phone} onChange={(e) => setField('phone', e.target.value)}
-                    className="text-stone-900" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-stone-500">Email</Label>
-                  <Input value={form.email} onChange={(e) => setField('email', e.target.value)}
-                    className="text-stone-900" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Website</Label>
-                <Input value={form.website} onChange={(e) => setField('website', e.target.value)}
-                  className="text-stone-900" />
-              </div>
-
-              {saveError && (
-                <p className="text-sm text-red-600 flex items-center gap-1.5">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {saveError}
-                </p>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeEdit} disabled={saving}>
-              <X className="h-4 w-4 mr-1" /> Cancel
-            </Button>
-            <Button
-              onClick={() => void handleSave()}
-              disabled={saving}
-              className="bg-lime-600 hover:bg-lime-700 text-white"
-            >
-              {saving ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
-              ) : (
-                <><Save className="h-4 w-4 mr-2" />Save changes</>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Edit dialog (shared with the Approve tab — see resource-edit-dialog.tsx) ── */}
+      <ResourceEditDialog
+        open={editing !== null}
+        resource={editing ? toDialogInputFromManageRow(editing) : null}
+        mode="edit"
+        onOpenChange={(open) => { if (!open) closeEdit() }}
+        onSaved={handleDialogSaved}
+      />
     </div>
   )
 }

@@ -3263,6 +3263,7 @@ export type Database = {
           city: string
           description: string
           discovery_metadata: Json
+          email: string
           id: string
           lat: number
           lng: number
