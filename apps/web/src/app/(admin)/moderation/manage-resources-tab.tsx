@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   Search, Loader2, MapPin, AlertCircle, Pencil, CheckCircle2,
-  Map as MapIcon, ChevronDown, ChevronUp,
+  Map as MapIcon, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -366,7 +366,7 @@ export function ManageResourcesTab() {
 
       {/* ── Map (collapsible; toggling never disturbs the list or its filters — INV B/D) ── */}
       {mapExpanded && (
-        <div className="rounded-xl overflow-hidden border border-stone-200 h-72 bg-stone-50">
+        <div className="rounded-xl overflow-hidden border border-stone-200 h-96 bg-stone-50">
           {loading ? (
             <div className="h-full flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-stone-400" />
@@ -441,6 +441,18 @@ export function ManageResourcesTab() {
                 )}
                 {r.description && (
                   <p className="text-xs text-stone-600 line-clamp-3">{r.description}</p>
+                )}
+                {r.website && (
+                  <a
+                    href={r.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => logger.info('admin.resource.link.visit', { resource_id: r.id })}
+                    className="text-xs text-lime-700 hover:underline flex items-center gap-1 truncate mt-auto"
+                  >
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{r.website}</span>
+                  </a>
                 )}
               </CardContent>
             </Card>
