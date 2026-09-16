@@ -77,7 +77,8 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .select('*')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
-        .eq('source', 'admin_added')
+        // Programs feed = admin-curated benefits + HUD housing resources (imls/libraries handled separately)
+        .in('source', ['admin_added', 'hud'])
         .in('category', filters.category ? [filters.category as Database['public']['Enums']['resource_category']] : FORM_CATEGORIES)
         .eq('state', normalizeState(filters.state) ?? filters.state)
         .order('category', { ascending: true })
@@ -101,6 +102,20 @@ export function useProgramBrowser(): ProgramBrowserResult {
       if (fetchError) throw fetchError
 
       const results = (data ?? []) as Resource[]
+
+      // Observability: how many programs returned, broken down by source (admin_added vs hud)
+      const bySource = results.reduce<Record<string, number>>((acc, r) => {
+        const src = (r.source as string) ?? 'unknown'
+        acc[src] = (acc[src] ?? 0) + 1
+        return acc
+      }, {})
+      logger.info('programs.fetch.count', {
+        total: results.length,
+        by_source: bySource,
+        category: filters.category ?? null,
+        state: filters.state ?? null,
+      })
+
       setPrograms(results)
     } catch (err) {
       // Log the raw error for observability before mapping to user-friendly text
@@ -130,7 +145,8 @@ export function useProgramBrowser(): ProgramBrowserResult {
         .select('category')
         .eq('status', 'approved')
         .eq('is_volunteer_resource', false)
-        .eq('source', 'admin_added')
+        // Keep category counts consistent with the programs query above (benefits + HUD housing)
+        .in('source', ['admin_added', 'hud'])
         .in('category', FORM_CATEGORIES)
         .eq('state', normalizeState(filters.state) ?? filters.state)
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
