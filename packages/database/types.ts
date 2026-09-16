@@ -4072,6 +4072,28 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      snap_retailers_in_bounds: {
+        Args: {
+          east: number
+          max_results?: number
+          north: number
+          south: number
+          west: number
+        }
+        Returns: {
+          address: string
+          city: string
+          id: string
+          incentive_program: string
+          lat: number
+          lng: number
+          name: string
+          retailer_id: string
+          state: string
+          type: string
+          zip: string
+        }[]
+      }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown

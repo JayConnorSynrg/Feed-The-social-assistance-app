@@ -33,6 +33,11 @@ export const ClusterMarker = dynamic(
   { ssr: false }
 )
 
+export const SnapRetailerMarker = dynamic(
+  () => import('./snap-retailer-marker').then((mod) => mod.SnapRetailerMarker),
+  { ssr: false }
+)
+
 // Re-export types
 export type { ViewState, MapViewHandle, Resource }
 
