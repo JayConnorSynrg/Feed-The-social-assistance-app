@@ -228,13 +228,12 @@ export function ResourcesTab() {
       }
 
       const result = await response.json() as {
-        staged?: number
+        staged?: { resources?: number; forms?: number }
         rejected?: number
-        resources?: number
-        forms?: number
+        deduped?: number
       }
 
-      const total = result.staged ?? (result.resources ?? 0) + (result.forms ?? 0)
+      const total = (result.staged?.resources ?? 0) + (result.staged?.forms ?? 0)
       setDiscoverSummary(
         `Staged ${total} candidate${total !== 1 ? 's' : ''} for review` +
         (result.rejected != null ? ` (${result.rejected} rejected by provenance filter)` : '')

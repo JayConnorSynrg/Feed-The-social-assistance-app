@@ -50,6 +50,31 @@ const HARD_CAP_CANDIDATES = 25
 const AGENT_POLL_BUDGET_MS = 30_000 // bounded async poll budget for /v2/agent (proxy-timeout hygiene)
 const AGENT_POLL_INTERVAL_MS = 3_000
 
+// Region-relevance guardrail. A candidate whose resolved point lies farther than
+// this from the admin's resolved lat/lng is treated as out-of-region and rejected
+// (used when a per-candidate state match is unavailable). ~150 km ≈ 93 mi keeps
+// same-metro / adjacent-town results while dropping cross-state noise.
+const MAX_REGION_RADIUS_KM = 150
+
+// US state / territory name → USPS 2-letter code. Used to normalize candidate and
+// region state values to a comparable token during the region-relevance filter.
+const US_STATE_ABBR: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'district of columbia': 'DC', 'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI',
+  'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY', 'puerto rico': 'PR',
+}
+const VALID_STATE_CODES = new Set<string>(Object.values(US_STATE_ABBR))
+
 // resource_category enum (live values, fetched 2026-06-26). Used to constrain /
 // normalize the agent's category output. Anything unmapped → 'other'.
 const RESOURCE_CATEGORIES = new Set<string>([
@@ -278,12 +303,12 @@ interface AgentResult {
   via: 'agent' | 'search'
 }
 
-async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, nearLocation?: { label: string; lat: number | null; lng: number | null } | null): Promise<AgentResult | null> {
+async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, geoBias?: string | null): Promise<AgentResult | null> {
   if (!FIRECRAWL_API_KEY) return null
 
   const locationBias =
-    nearLocation?.label
-      ? ` Prioritize resources physically located in or serving ${nearLocation.label}. Unless the query text explicitly names a different location, focus results on that area.`
+    geoBias && geoBias.trim()
+      ? ` Prioritize resources physically located in or serving ${geoBias.trim()}. Only include candidates in that state/region. Unless the query text explicitly names a different location, focus results on that area.`
       : ''
 
   const prompt =
@@ -350,12 +375,12 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
 // becomes a thin resource candidate whose only source is its own URL — it will
 // only survive verification when that host is authoritative (.gov/.org), which is
 // the correct strict behaviour.
-async function sourceViaSearch(query: string, maxCandidates: number, nearLocation?: { label: string; lat: number | null; lng: number | null } | null): Promise<AgentResult | null> {
+async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: string | null): Promise<AgentResult | null> {
   if (!FIRECRAWL_API_KEY) return null
   try {
     const searchQuery =
-      nearLocation?.label && nearLocation.label.trim()
-        ? `${query} near ${nearLocation.label.trim()}`
+      geoBias && geoBias.trim()
+        ? `${query} near ${geoBias.trim()}`
         : query
     const resp = await fetch('https://api.firecrawl.dev/v2/search', {
       method: 'POST',
@@ -454,6 +479,145 @@ async function geocodeCandidate(
   if (byAddress) return byAddress
   if (parts.zip_code) return await geocodeByZip(service, parts.zip_code)
   return null
+}
+
+// ═══════════════════════════════════════════════════════════
+// Region resolution + relevance filter — the geo-relevance core.
+//
+// The admin's map pin carries lat/lng (not just a text label). We resolve those
+// coordinates to a concrete { city, state, zip } region (Mapbox reverse-geocode
+// when MAPBOX_TOKEN is set; label parsing otherwise) and use it BOTH to bias the
+// sourcing query AND to reject candidates proven to be outside the region.
+// ═══════════════════════════════════════════════════════════
+
+interface Region {
+  city: string | null
+  state: string | null // USPS 2-letter code
+  zip: string | null
+  lat: number | null
+  lng: number | null
+}
+
+/** Normalize a state name or code to a validated USPS 2-letter code (else null). */
+function normalizeStateAbbr(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  if (/^[A-Za-z]{2}$/.test(s)) {
+    const up = s.toUpperCase()
+    return VALID_STATE_CODES.has(up) ? up : null
+  }
+  return US_STATE_ABBR[s.toLowerCase()] ?? null
+}
+
+/** Extract { city, state, zip } from a free-text location label, e.g. "Burlington, VT 05401". */
+function parseRegionFromLabel(label: string | null | undefined): { city: string | null; state: string | null; zip: string | null } {
+  if (!label) return { city: null, state: null, zip: null }
+  const zipMatch = label.match(/\b(\d{5})(?:-\d{4})?\b/)
+  const zip = zipMatch ? zipMatch[1] : null
+  let state: string | null = null
+  // A 2-letter token immediately before a zip or at end of string is the state.
+  const abbrMatch = label.match(/\b([A-Za-z]{2})\b(?=[,\s]*\d{5}|\s*$)/)
+  if (abbrMatch) state = normalizeStateAbbr(abbrMatch[1])
+  if (!state) {
+    const tail = label.slice(label.lastIndexOf(',') + 1).toLowerCase()
+    const match = Object.keys(US_STATE_ABBR)
+      .filter((name) => tail.includes(name))
+      .sort((a, b) => b.length - a.length)[0]
+    if (match) state = US_STATE_ABBR[match]
+  }
+  const city = label.split(',')[0]?.trim() || null
+  return { city, state, zip }
+}
+
+/**
+ * Reverse-geocode lat/lng to { city, state, zip } via Mapbox. Returns null when no
+ * MAPBOX_TOKEN is configured or the lookup fails — callers degrade to label parsing.
+ */
+async function reverseGeocodeRegion(lat: number, lng: number): Promise<{ city: string | null; state: string | null; zip: string | null } | null> {
+  if (!MAPBOX_TOKEN) return null
+  try {
+    const url =
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json` +
+      `?access_token=${MAPBOX_TOKEN}&country=US&types=region,place,postcode&limit=5`
+    const resp = await fetch(url)
+    if (!resp.ok) {
+      edgeLog('warn', 'discover.region.reverse_failed', { status: resp.status })
+      return null
+    }
+    const json = await resp.json()
+    const feats = Array.isArray(json?.features) ? json.features : []
+    let city: string | null = null, state: string | null = null, zip: string | null = null
+    const stateFromShortCode = (sc: unknown, fallbackText: unknown): string | null =>
+      typeof sc === 'string' && sc.includes('-')
+        ? normalizeStateAbbr(sc.split('-')[1])
+        : normalizeStateAbbr(typeof fallbackText === 'string' ? fallbackText : null)
+    for (const f of feats) {
+      const types: string[] = Array.isArray(f?.place_type) ? f.place_type : []
+      if (types.includes('place') && !city) city = f?.text ?? null
+      if (types.includes('postcode') && !zip) zip = (f?.text ?? '').slice(0, 5) || null
+      if (types.includes('region') && !state) state = stateFromShortCode(f?.properties?.short_code, f?.text)
+      for (const c of (Array.isArray(f?.context) ? f.context : [])) {
+        const id: string = c?.id ?? ''
+        if (id.startsWith('region') && !state) state = stateFromShortCode(c?.short_code, c?.text)
+        if (id.startsWith('place') && !city) city = c?.text ?? null
+        if (id.startsWith('postcode') && !zip) zip = (c?.text ?? '').slice(0, 5) || null
+      }
+    }
+    return { city, state, zip }
+  } catch (e) {
+    edgeLog('warn', 'discover.region.reverse_error', { error: e instanceof Error ? e.message : String(e) })
+    return null
+  }
+}
+
+/**
+ * Resolve the admin's nearLocation to a concrete Region using its lat/lng first
+ * (Mapbox reverse-geocode) and the text label as a fallback. Returns the region
+ * plus which path supplied the state/city/zip, for the run-summary log.
+ */
+async function resolveRegion(
+  near: { label: string; lat: number | null; lng: number | null } | null,
+): Promise<{ region: Region; fallbackUsed: string }> {
+  if (!near) return { region: { city: null, state: null, zip: null, lat: null, lng: null }, fallbackUsed: 'none' }
+  const fromLabel = parseRegionFromLabel(near.label)
+  let { city, state, zip } = fromLabel
+  let fallbackUsed = 'label'
+  if (near.lat != null && near.lng != null) {
+    const rev = await reverseGeocodeRegion(near.lat, near.lng)
+    if (rev) {
+      state = rev.state ?? state
+      city = rev.city ?? city
+      zip = rev.zip ?? zip
+      fallbackUsed = 'mapbox_reverse'
+    }
+  }
+  return { region: { city, state, zip, lat: near.lat, lng: near.lng }, fallbackUsed }
+}
+
+/** Great-circle distance in km between two lat/lng points. */
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(bLat - aLat)
+  const dLng = toRad(bLng - aLng)
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)))
+}
+
+/**
+ * Region-relevance decision. Rejects ONLY on positive out-of-region evidence:
+ *   - candidate state is known AND differs from the region state, OR
+ *   - candidate point is known AND lies beyond MAX_REGION_RADIUS_KM of the region.
+ * When the region carries no constraint, or the candidate cannot be localized,
+ * the candidate is kept (it is not provably out-of-region).
+ */
+function classifyRegion(region: Region, candState: string | null, geo: { lat: number; lng: number } | null): 'keep' | 'reject' {
+  const hasStateConstraint = !!region.state
+  const hasGeoConstraint = region.lat != null && region.lng != null
+  if (!hasStateConstraint && !hasGeoConstraint) return 'keep'
+  if (hasStateConstraint && candState && candState !== region.state) return 'reject'
+  if (hasGeoConstraint && geo && haversineKm(region.lat!, region.lng!, geo.lat, geo.lng) > MAX_REGION_RADIUS_KM) return 'reject'
+  return 'keep'
 }
 
 /**
@@ -583,10 +747,20 @@ serve(async (req: Request) => {
 
     edgeLog('info', 'discover.start', { userId: user.id, contentType, maxCandidates, queryLen: query.length, correlationId })
 
+    // ── REGION RESOLUTION: resolve the admin's pin (lat/lng) to a concrete
+    //    { city, state, zip } region used to BIAS the query and FILTER candidates. ──
+    const { region, fallbackUsed } = await resolveRegion(nearLocation)
+    const geoBias =
+      region.city && region.state
+        ? `${region.city}, ${region.state}${region.zip ? ' ' + region.zip : ''}`
+        : region.state
+          ? region.state
+          : (nearLocation?.label || null)
+
     // ── SOURCING (one /agent call per request; degrade to /search on miss) ──
-    let sourced = await sourceViaAgent(query, contentType, maxCandidates, nearLocation ?? undefined)
+    let sourced = await sourceViaAgent(query, contentType, maxCandidates, geoBias)
     if (!sourced) {
-      sourced = await sourceViaSearch(query, maxCandidates, nearLocation ?? undefined)
+      sourced = await sourceViaSearch(query, maxCandidates, geoBias)
     }
     if (!sourced) {
       return new Response(JSON.stringify({ error: 'Sourcing failed', staged: { resources: 0, forms: 0 }, deduped: 0, rejected: 0, candidates: [] }), {
@@ -601,6 +775,9 @@ serve(async (req: Request) => {
     let stagedForms = 0
     let deduped = 0
     let rejected = 0
+    let geocodedCount = 0
+    let inRegionKept = 0
+    let rejectedOutOfRegion = 0
     const summaries: Array<{ kind: 'resource' | 'form'; name: string; confidence: string; sources: string[] }> = []
 
     // ── RESOURCES ──
@@ -624,6 +801,19 @@ serve(async (req: Request) => {
         state: cand.state?.trim() || null,
         zip_code: cand.zip_code?.trim() || null,
       })
+      if (geo) geocodedCount++
+
+      // ── REGION FILTER: drop candidates proven to be outside the admin's region
+      //    (state mismatch, or point beyond the radius of the resolved lat/lng).
+      const candState = normalizeStateAbbr(cand.state)
+      if (classifyRegion(region, candState, geo) === 'reject') {
+        edgeLog('info', 'discover.resource.out_of_region', { name, candState, regionState: region.state, correlationId })
+        rejectedOutOfRegion++
+        rejected++
+        continue
+      }
+      inRegionKept++
+
       // A physical resource resolves to a location; a candidate with a URL but no
       // resolvable location is an informational site-link.
       const contentTypeStamp: 'resource' | 'link' =
@@ -710,6 +900,17 @@ serve(async (req: Request) => {
       stagedForms++
       summaries.push({ kind: 'form', name, confidence: prov.confidence, sources: prov.sources.slice(0, 5) })
     }
+
+    // ── RUN SUMMARY: single structured line capturing the geo-relevance outcome. ──
+    edgeLog('info', 'discover.geo.summary', {
+      region: geoBias ?? region.state ?? 'unspecified',
+      candidates_returned: rawResources.length,
+      geocoded_count: geocodedCount,
+      in_region_kept: inRegionKept,
+      rejected_out_of_region: rejectedOutOfRegion,
+      fallback_used: fallbackUsed,
+      correlationId,
+    })
 
     const result = {
       staged: { resources: stagedResources, forms: stagedForms },
