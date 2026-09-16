@@ -16,6 +16,8 @@
  *   SUPABASE_URL           — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — service role key (bypasses RLS)
  *   SNAP_SYNC_SECRET       — shared secret for admin trigger
+ *   SNAP_RETAILER_URL      — (optional) national USDA SNAP retailer FeatureServer
+ *                            layer URL; defaults to the pinned no-key national layer.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -24,10 +26,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Config
 // ---------------------------------------------------------------------------
 
-const ARCGIS_BASE_URL =
-  'https://services2.arcgis.com/qvkbeam7Wirps6zC/arcgis/rest/services/SNAP_Retailer_Locations/FeatureServer/0/query'
+// National USDA SNAP retailer FeatureServer layer (no API key required).
+// 251k+ records, maxRecordCount 1000, paginated via resultOffset/resultRecordCount.
+// Overridable via SNAP_RETAILER_URL; the pinned default is the full national layer.
+const SNAP_RETAILER_LAYER_URL =
+  Deno.env.get('SNAP_RETAILER_URL') ||
+  'https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/snap_retailer_location_data/FeatureServer/0'
 
-const BATCH_SIZE = 2000 // ArcGIS max records per request
+// Query endpoint derived from the layer URL (tolerates a trailing /query in the env value).
+const ARCGIS_QUERY_URL = SNAP_RETAILER_LAYER_URL.replace(/\/query\/?$/, '') + '/query'
+
+const BATCH_SIZE = 1000 // National endpoint maxRecordCount per request
 const INTER_BATCH_DELAY_MS = 1000 // 1 s pause between batches to avoid 429
 const UPSERT_CHUNK_SIZE = 500 // rows per Supabase upsert call
 
@@ -56,28 +65,20 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
 // Types
 // ---------------------------------------------------------------------------
 
+// National USDA SNAP retailer schema (case-sensitive field names).
 interface ArcGISAttributes {
-  ObjectId: number
-  Store_Name: string
+  Record_ID?: number | string // stable USDA id → retailer_id (upsert key)
+  Store_Name?: string
+  Store_Street_Address?: string
+  Additonal_Address?: string // USDA's misspelling — kept intentionally
+  City?: string
+  State?: string // 2-letter
+  Zip_Code?: string | number // 5-digit
   Store_Type?: string
-  Address: string
-  City: string
-  State: string
-  Zip5: string
-  Longitude: number
-  Latitude: number
-  // Some datasets use alternate field names
-  RETAILER_NAME?: string
-  RETAILER_TYPE?: string
-  ADDRESS?: string
-  CITY?: string
-  STATE?: string
-  ZIP5?: string
-  LONGITUDE?: number
-  LATITUDE?: number
-  // Incentive program field (may vary by dataset version)
   Incentive_Program?: string
-  INCENTIVE_PROGRAM?: string
+  Latitude?: number // WGS84
+  Longitude?: number // WGS84
+  ObjectId?: number
 }
 
 interface ArcGISFeature {
@@ -156,7 +157,7 @@ async function fetchArcGISBatch(
     f: 'json',
   })
 
-  const url = `${ARCGIS_BASE_URL}?${params.toString()}`
+  const url = `${ARCGIS_QUERY_URL}?${params.toString()}`
   const res = await fetch(url)
 
   if (!res.ok) {
@@ -183,30 +184,44 @@ async function fetchArcGISBatch(
 function mapFeature(feature: ArcGISFeature, now: string): SnapRetailerRow | null {
   const a = feature.attributes
 
-  const name = a.Store_Name || a.RETAILER_NAME
-  const objectId = a.ObjectId
+  const name = a.Store_Name
+  const recordId = a.Record_ID
 
-  if (!name || objectId == null) return null
+  // Record_ID is the stable USDA id and the upsert key — a row without it is unusable.
+  if (!name || recordId == null || String(recordId).trim() === '') return null
 
-  const longitude = a.Longitude ?? a.LONGITUDE
-  const latitude = a.Latitude ?? a.LATITUDE
+  const longitude = typeof a.Longitude === 'number' ? a.Longitude : Number(a.Longitude)
+  const latitude = typeof a.Latitude === 'number' ? a.Latitude : Number(a.Latitude)
 
-  // Build EWKT string for PostGIS geography column
+  // Build EWKT string for the PostGIS GEOGRAPHY(POINT,4326) column.
+  // Drop the ocean-null (0,0) sentinel so bad rows never render on the map.
   const location =
-    longitude != null && latitude != null && !isNaN(longitude) && !isNaN(latitude)
+    Number.isFinite(longitude) &&
+    Number.isFinite(latitude) &&
+    (longitude !== 0 || latitude !== 0)
       ? `SRID=4326;POINT(${longitude} ${latitude})`
       : null
 
+  // USDA splits the secondary address into the (misspelled) Additonal_Address field.
+  const address =
+    [a.Store_Street_Address, a.Additonal_Address]
+      .map((s) => (s ?? '').trim())
+      .filter(Boolean)
+      .join(', ') || null
+
+  const zip =
+    a.Zip_Code != null && String(a.Zip_Code).trim() !== '' ? String(a.Zip_Code).trim() : null
+
   return {
-    retailer_id: String(objectId),
+    retailer_id: String(recordId),
     retailer_name: name,
-    retailer_type: a.Store_Type ?? a.RETAILER_TYPE ?? null,
-    address: a.Address ?? a.ADDRESS ?? null,
-    city: a.City ?? a.CITY ?? null,
-    state: a.State ?? a.STATE ?? null,
-    zip_code: a.Zip5 ?? a.ZIP5 ?? null,
+    retailer_type: a.Store_Type ?? null,
+    address,
+    city: a.City ?? null,
+    state: a.State ?? null,
+    zip_code: zip,
     location,
-    incentive_program: a.Incentive_Program ?? a.INCENTIVE_PROGRAM ?? null,
+    incentive_program: a.Incentive_Program ?? null,
     last_synced_at: now,
   }
 }
@@ -285,6 +300,7 @@ Deno.serve(async (req: Request) => {
     // ---- pagination loop ----
     let offset = 0
     let batchNum = 0
+    let totalFetched = 0
     let totalSynced = 0
     let totalErrors = 0
     let totalSkipped = 0
@@ -302,6 +318,8 @@ Deno.serve(async (req: Request) => {
         console.log(`[snap-retailer-sync] Batch ${batchNum}: 0 features, done`)
         break
       }
+
+      totalFetched += features.length
 
       // Map + filter
       const now = new Date().toISOString()
@@ -327,8 +345,9 @@ Deno.serve(async (req: Request) => {
         errorMessages.push(...result.messages)
       }
 
-      // Check if more data is available
-      keepGoing = data.exceededTransferLimit === true
+      // National paging: a full page (== BATCH_SIZE) means more rows remain; a short
+      // page is the last one. Honor exceededTransferLimit as a belt-and-suspenders signal.
+      keepGoing = features.length >= BATCH_SIZE || data.exceededTransferLimit === true
       offset += features.length
 
       // Rate-limit pause between batches
@@ -338,10 +357,20 @@ Deno.serve(async (req: Request) => {
     }
 
     const durationMs = Date.now() - startTime
+
+    // Structured run-summary — the canonical {fetched, upserted, pages, errors} log line.
+    const runSummary = {
+      fetched: totalFetched,
+      upserted: totalSynced,
+      pages: batchNum,
+      errors: totalErrors,
+    }
+    console.log(`[snap-retailer-sync] run-summary ${JSON.stringify(runSummary)}`)
+
     const result = {
       success: true,
+      ...runSummary,
       synced: totalSynced,
-      errors: totalErrors,
       skipped: totalSkipped,
       batches: batchNum,
       duration_ms: durationMs,

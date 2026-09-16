@@ -20,16 +20,18 @@ import {
   Map as MapIcon,
   Loader2,
   MessageCircle,
+  ShoppingBasket,
 } from 'lucide-react'
 import { track } from '@vercel/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
-import { ResourceMarker, ClusterMarker, type ViewState, type Resource } from '@/components/map'
+import { ResourceMarker, ClusterMarker, SnapRetailerMarker, type ViewState, type Resource } from '@/components/map'
 import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
 import { useViewportResources } from '@/hooks/use-viewport-resources'
+import { useSnapRetailers } from '@/hooks/use-snap-retailers'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -299,6 +301,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [showCategoryFilter, setShowCategoryFilter] = useState(false)
+  // Distinct SNAP food-access layer visibility (public data, isolated snap_retailers table)
+  const [showSnapLayer, setShowSnapLayer] = useState(true)
   const [viewState, setViewState] = useState<ViewState>({
     longitude: -98.5795, // Default: US center
     latitude: 39.8283,
@@ -518,6 +522,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { resources: realResources, loading: resourcesLoading, error: resourcesError } = useViewportResources({
     bounds,
     enabled: !!bounds && !authLoading,
+  })
+
+  // SNAP food-access layer — national retailers from the isolated snap_retailers
+  // table via the bounded snap_retailers_in_bounds RPC. Public data → no auth gate.
+  // Kept fully separate from the resource path above; toggled via showSnapLayer.
+  const { retailers: snapRetailers } = useSnapRetailers({
+    bounds,
+    enabled: !!bounds && showSnapLayer,
   })
 
   // Safety alerts layer — live alerts in the current viewport
@@ -837,6 +849,12 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               />
             )
           )}
+          {/* SNAP food-access layer — distinct green food-basket markers, isolated
+              from resource markers/clustering. Toggled via showSnapLayer. */}
+          {showSnapLayer &&
+            snapRetailers.map((retailer) => (
+              <SnapRetailerMarker key={`snap-${retailer.id}`} retailer={retailer} />
+            ))}
           {/* Safety alert markers — rendered on top of resource markers */}
           {safetyAlerts.map((alert) => (
             <SafetyAlertMarker
@@ -859,6 +877,21 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             />
           )}
         </MapView>
+        {/* SNAP food-access layer toggle — top-left, clear of the top-right map controls */}
+        <button
+          type="button"
+          onClick={() => setShowSnapLayer((v) => !v)}
+          aria-pressed={showSnapLayer}
+          title={showSnapLayer ? 'Hide SNAP food-access retailers' : 'Show SNAP food-access retailers'}
+          className={`absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-md transition-colors ${
+            showSnapLayer
+              ? 'bg-[#15803d] text-white hover:bg-[#116631]'
+              : 'bg-white/95 text-stone-700 hover:bg-white'
+          }`}
+        >
+          <ShoppingBasket className="h-3.5 w-3.5" />
+          SNAP food access
+        </button>
         {/* Bubble menu — all roles report hazards; providers also add resources */}
         <HazardBubbleMenu
           viewCenter={currentMapCenter}
