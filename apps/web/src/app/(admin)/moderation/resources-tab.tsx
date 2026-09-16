@@ -605,7 +605,7 @@ export function ResourcesTab() {
 
       {/* ── Map view ── */}
       {view === 'map' && (
-        <div className="rounded-xl overflow-hidden border border-stone-200 h-72">
+        <div className="rounded-xl overflow-hidden border border-stone-200 h-96">
           {queueLoading ? (
             <div className="h-full flex items-center justify-center bg-stone-50">
               <Loader2 className="h-6 w-6 animate-spin text-stone-400" />
