@@ -61,10 +61,28 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   useImperativeHandle(ref, () => ({
     flyTo(opts) {
-      mapRef.current?.flyTo({
-        center: opts.center,
+      const map = mapRef.current?.getMap()
+      if (map && map.isStyleLoaded()) {
+        // Style already loaded: animate via the underlying Mapbox instance.
+        // Its `move` events feed handleMove → setViewState, so the controlled
+        // viewState prop stays in sync with the animation as it plays.
+        mapRef.current?.flyTo({
+          center: opts.center,
+          zoom: opts.zoom,
+          duration: opts.duration ?? 1000,
+        })
+        return
+      }
+      // Style not yet loaded (e.g. a fit-to-markers effect fires at commit,
+      // right as the map mounts). No `move` events fire pre-load, so calling
+      // only the imperative Mapbox flyTo here would have react-map-gl re-pin
+      // the controlled camera to DEFAULT_VIEW_STATE on the next render. Set
+      // the controlling state directly so the camera lands on, and stays at,
+      // the target regardless of load timing.
+      setViewState({
+        longitude: opts.center[0],
+        latitude: opts.center[1],
         zoom: opts.zoom,
-        duration: opts.duration ?? 1000,
       })
     },
   }))
