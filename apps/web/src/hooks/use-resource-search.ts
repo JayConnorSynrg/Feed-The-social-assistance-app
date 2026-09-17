@@ -173,6 +173,8 @@ export function searchRowToResourceRow(
     eligibility_requirements: null,
     email: null,
     external_id: null,
+    geocode_accuracy: null,
+    geocode_confidence: null,
     hours_of_operation: null,
     id: row.id,
     is_verified: false,
