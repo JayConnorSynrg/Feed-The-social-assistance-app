@@ -2122,6 +2122,8 @@ export type Database = {
           eligibility_requirements: string | null
           email: string | null
           external_id: string | null
+          geocode_accuracy: string | null
+          geocode_confidence: string | null
           hours_of_operation: Json | null
           id: string
           is_verified: boolean | null
@@ -2159,6 +2161,8 @@ export type Database = {
           eligibility_requirements?: string | null
           email?: string | null
           external_id?: string | null
+          geocode_accuracy?: string | null
+          geocode_confidence?: string | null
           hours_of_operation?: Json | null
           id?: string
           is_verified?: boolean | null
@@ -2196,6 +2200,8 @@ export type Database = {
           eligibility_requirements?: string | null
           email?: string | null
           external_id?: string | null
+          geocode_accuracy?: string | null
+          geocode_confidence?: string | null
           hours_of_operation?: Json | null
           id?: string
           is_verified?: boolean | null
@@ -3877,6 +3883,8 @@ export type Database = {
           eligibility_requirements: string | null
           email: string | null
           external_id: string | null
+          geocode_accuracy: string | null
+          geocode_confidence: string | null
           hours_of_operation: Json | null
           id: string
           is_verified: boolean | null
@@ -4097,6 +4105,16 @@ export type Database = {
       seekers_within_radius: {
         Args: { p_radius_miles: number; p_resource_id: string }
         Returns: number
+      }
+      set_resource_geocode: {
+        Args: {
+          p_accuracy?: string
+          p_confidence?: string
+          p_id: string
+          p_lat: number
+          p_lng: number
+        }
+        Returns: undefined
       }
       set_resource_location: {
         Args: {
