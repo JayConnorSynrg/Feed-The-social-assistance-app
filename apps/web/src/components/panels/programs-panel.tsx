@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   CheckCircle2,
   ChevronDown,
@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { useProgramBrowser, type Resource } from '@/hooks/use-program-browser'
+import { useResourceSearch, searchRowToResourceRow } from '@/hooks/use-resource-search'
 import { useSavedResources, type SavedResource } from '@/hooks/use-saved-resources'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { useAuth } from '@/hooks/use-auth'
@@ -506,9 +507,32 @@ export function ProgramsPanel() {
   const [activeTab, setActiveTab] = useState<ProgramsTab>('browse')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** Resource being shared — drives the ShareToFeedDialog open/closed state */
   const [sharingResource, setSharingResource] = useState<Resource | null>(null)
+
+  // Exhaustive server-side search — bypasses the curated admin_added/hud +
+  // state-filtered browse query entirely. Fires only on a non-empty query;
+  // useResourceSearch debounces (~300ms) internally.
+  const trimmedProgramSearch = searchInput.trim()
+  const isProgramSearchActive = trimmedProgramSearch.length > 0
+  const {
+    results: programSearchResults,
+    loading: programSearchLoading,
+    error: programSearchError,
+  } = useResourceSearch({ query: searchInput, surface: 'programs' })
+
+  const searchResources: Resource[] = useMemo(
+    () => programSearchResults.map(searchRowToResourceRow),
+    [programSearchResults]
+  )
+
+  // Category chips still apply on top of search results, same as browse.
+  const displayItems: Resource[] = useMemo(() => {
+    if (!isProgramSearchActive) return programs
+    return filters.category
+      ? searchResources.filter((r) => r.category === filters.category)
+      : searchResources
+  }, [isProgramSearchActive, searchResources, programs, filters.category])
 
   useEffect(() => {
     logger.info('programs.panel.opened', {})
@@ -534,28 +558,14 @@ export function ProgramsPanel() {
   }, [error, setActivePanel, setPanelParams])
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      // Functional update so the debounce only touches `search` and never
-      // overwrites a `state`/`category` seeded by the hook between the effect
-      // closing over `filters` and the timer firing (stale-closure bug: the
-      // initial state:null was clobbering the profile-seeded state → 0 results).
-      setFilters((prev) => ({ ...prev, search: searchInput }))
-    }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [searchInput, setFilters])
-
-  useEffect(() => {
-    if (!isLoading) {
+    if (!isProgramSearchActive && !isLoading) {
       logger.info('programs.filter', {
         category: filters.category ?? null,
         search: filters.search ?? null,
         result_count: programs.length,
       })
     }
-  }, [filters, programs.length, isLoading])
+  }, [filters, programs.length, isLoading, isProgramSearchActive])
 
   const handleCategoryFilter = useCallback((category: string | null) => {
     setFilters({ ...filters, category })
@@ -741,12 +751,19 @@ export function ProgramsPanel() {
           </div>
 
           <div className="flex-1 overflow-y-auto min-h-0">
-            {isLoading ? (
+            {(isProgramSearchActive ? programSearchLoading : isLoading) ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-[#4a5d23]" />
-                <p className="text-sm text-stone-500">Loading programs...</p>
+                <p className="text-sm text-stone-500">
+                  {isProgramSearchActive ? 'Searching...' : 'Loading programs...'}
+                </p>
               </div>
-            ) : error ? (
+            ) : isProgramSearchActive && programSearchError ? (
+              <div data-testid="programs-search-error" className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+                <p className="text-sm text-stone-700">{programSearchError.message}</p>
+              </div>
+            ) : !isProgramSearchActive && error ? (
               <div data-testid="programs-fetch-error" className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
                 <AlertCircle className="w-8 h-8 text-red-400" />
                 <p className="text-sm text-stone-700">{error}</p>
@@ -768,7 +785,7 @@ export function ProgramsPanel() {
                   </button>
                 </div>
               </div>
-            ) : !filters.state ? (
+            ) : !isProgramSearchActive && !filters.state ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
                   <MapPin className="w-8 h-8 text-stone-400" />
@@ -778,19 +795,23 @@ export function ProgramsPanel() {
                   Programs are state-specific. Choose your state above to see available benefits.
                 </p>
               </div>
-            ) : programs.length === 0 ? (
+            ) : displayItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
                   <Search className="w-8 h-8 text-stone-400" />
                 </div>
-                <h3 className="font-semibold text-stone-900">No programs found</h3>
+                <h3 className="font-semibold text-stone-900">
+                  {isProgramSearchActive ? `No results for "${trimmedProgramSearch}"` : 'No programs found'}
+                </h3>
                 <p className="text-sm text-stone-500">
-                  Try adjusting your search or selecting a different category.
+                  {isProgramSearchActive
+                    ? 'Try a different search term.'
+                    : 'Try adjusting your search or selecting a different category.'}
                 </p>
               </div>
             ) : filters.category ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4 pr-1">
-                {programs.map((resource) => (
+                {displayItems.map((resource) => (
                   <ProgramTile
                     key={resource.id}
                     resource={resource}
@@ -806,7 +827,7 @@ export function ProgramsPanel() {
             ) : (
               <div className="space-y-6 pb-4 pr-1">
                 {Object.entries(
-                  programs.reduce<Record<string, Resource[]>>((acc, r) => {
+                  displayItems.reduce<Record<string, Resource[]>>((acc, r) => {
                     const cat = r.category as string
                     if (!acc[cat]) acc[cat] = []
                     acc[cat].push(r)
