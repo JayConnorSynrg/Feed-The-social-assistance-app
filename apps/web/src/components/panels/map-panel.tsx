@@ -31,6 +31,7 @@ import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
 import { useViewportResources } from '@/hooks/use-viewport-resources'
+import { useResourceSearch, type SearchResourceRow } from '@/hooks/use-resource-search'
 import { useSnapRetailers } from '@/hooks/use-snap-retailers'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { useAuth } from '@/hooks/use-auth'
@@ -104,6 +105,30 @@ function formatDistance(km: number): string {
 }
 
 // DEMO_RESOURCES removed - now using real Supabase data via useViewportResources
+
+// Convert an exhaustive-search RPC row into the list/marker-facing MapResource
+// shape. lat/lng are nullable on the RPC (ungeocoded resources are still
+// returned) — mapped to NaN so the row still satisfies MapResource's numeric
+// latitude/longitude fields; every consumer below explicitly excludes NaN
+// coordinates from map placement, distance sort, and pan-to-select.
+function searchRowToMapResource(row: SearchResourceRow): MapResource {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    category: row.category,
+    address_line1: row.address_line1,
+    city: row.city,
+    state: row.state,
+    zip_code: row.zip_code ?? undefined,
+    phone: row.phone,
+    website: row.website,
+    hours_of_operation: null,
+    latitude: row.lat ?? NaN,
+    longitude: row.lng ?? NaN,
+    is_volunteer_resource: false,
+  }
+}
 
 // Category display helpers are now sourced from lib/resource-categories.ts (SSOT)
 
@@ -524,6 +549,21 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && !authLoading,
   })
 
+  // Exhaustive server-side search — fires only when searchQuery is non-empty.
+  // Not viewport-gated: returns every approved resource of every source
+  // (including ungeocoded ones) that matches the query.
+  const trimmedSearchQuery = searchQuery.trim()
+  const isSearchActive = trimmedSearchQuery.length > 0
+  const { results: searchResults, loading: searchLoading, error: searchError } = useResourceSearch({
+    query: searchQuery,
+    surface: 'map',
+  })
+
+  const searchMapResources: MapResource[] = useMemo(
+    () => searchResults.map(searchRowToMapResource),
+    [searchResults]
+  )
+
   // SNAP food-access layer — national retailers from the isolated snap_retailers
   // table via the bounded snap_retailers_in_bounds RPC. Public data → no auth gate.
   // Kept fully separate from the resource path above; toggled via showSnapLayer.
@@ -575,44 +615,83 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     }))
   }, [realResources])
 
-  // Filter resources by search query and category
+  // Resource source: exhaustive server search when a query is active, otherwise
+  // the existing viewport-bounded browse list. Category chips apply to either.
   const filteredResources = useMemo(() => {
-    let filtered = mapResources
+    let filtered = isSearchActive ? searchMapResources : mapResources
     if (selectedCategory) {
       filtered = filtered.filter((r) => r.category === selectedCategory)
     }
-    if (searchQuery.trim()) {
-      filtered = filtered.filter((r) =>
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
     return filtered
-  }, [searchQuery, selectedCategory, mapResources])
+  }, [isSearchActive, searchMapResources, mapResources, selectedCategory])
 
-  // Sort filtered resources by proximity to current map center
+  // Sort filtered resources by proximity to current map center. Ungeocoded
+  // search results (NaN coords) sort last and never get a distance label.
   const sortedResources = useMemo(() => {
     return [...filteredResources]
       .sort((a, b) => {
-        const distA = Math.hypot(a.latitude - viewState.latitude, a.longitude - viewState.longitude)
-        const distB = Math.hypot(b.latitude - viewState.latitude, b.longitude - viewState.longitude)
+        const distA = Number.isNaN(a.latitude) || Number.isNaN(a.longitude)
+          ? Infinity
+          : Math.hypot(a.latitude - viewState.latitude, a.longitude - viewState.longitude)
+        const distB = Number.isNaN(b.latitude) || Number.isNaN(b.longitude)
+          ? Infinity
+          : Math.hypot(b.latitude - viewState.latitude, b.longitude - viewState.longitude)
         return distA - distB
       })
       .map((r) => ({
         ...r,
-        distance: userOrigin
+        distance: userOrigin && !Number.isNaN(r.latitude) && !Number.isNaN(r.longitude)
           ? formatDistance(calculateDistance(userOrigin[1], userOrigin[0], r.latitude, r.longitude))
           : undefined,
       }))
   }, [filteredResources, viewState.latitude, viewState.longitude, userOrigin])
 
+  // Mappable subset — excludes ungeocoded rows (NaN coords) from markers/clustering.
+  // Those rows still render in the list above; they simply have no pin.
+  const mappableResources = useMemo(
+    () => filteredResources.filter((r) => !Number.isNaN(r.latitude) && !Number.isNaN(r.longitude)),
+    [filteredResources]
+  )
+
   // Use clustering for map markers
   const clusters = useCluster({
-    resources: filteredResources,
+    resources: mappableResources,
     zoom: viewState.zoom,
     bounds: bounds ? [bounds.west, bounds.south, bounds.east, bounds.north] : null,
   })
+
+  // On a non-empty search, fly the map to fit the geocoded subset of results
+  // (centroid + a span-derived zoom — MapView exposes flyTo(center,zoom), not
+  // a bounds-fit API). Ungeocoded results are unaffected; they stay list-only.
+  useEffect(() => {
+    if (!isSearchActive) return
+    const geocoded = searchMapResources.filter(
+      (r) => !Number.isNaN(r.latitude) && !Number.isNaN(r.longitude)
+    )
+    if (geocoded.length === 0) return
+
+    const lats = geocoded.map((r) => r.latitude)
+    const lngs = geocoded.map((r) => r.longitude)
+    const minLat = Math.min(...lats)
+    const maxLat = Math.max(...lats)
+    const minLng = Math.min(...lngs)
+    const maxLng = Math.max(...lngs)
+    const centerLat = (minLat + maxLat) / 2
+    const centerLng = (minLng + maxLng) / 2
+    const maxSpan = Math.max(maxLat - minLat, maxLng - minLng)
+
+    let zoom = 13
+    if (maxSpan > 20) zoom = 3
+    else if (maxSpan > 10) zoom = 4
+    else if (maxSpan > 5) zoom = 5
+    else if (maxSpan > 2) zoom = 6
+    else if (maxSpan > 1) zoom = 8
+    else if (maxSpan > 0.5) zoom = 9
+    else if (maxSpan > 0.1) zoom = 11
+
+    mapViewRef.current?.flyTo({ center: [centerLng, centerLat], zoom, duration: 1000 })
+    logger.info('map.search.fly', { result_count: geocoded.length, zoom })
+  }, [isSearchActive, searchMapResources])
 
   const handleViewStateChange = useCallback((newViewState: ViewState) => {
     setViewState(newViewState)
@@ -627,12 +706,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   const handleResourceSelect = useCallback((resource: MapResource) => {
     setSelectedResource(resource)
-    // Pan to selected resource
-    setViewState({
-      longitude: resource.longitude,
-      latitude: resource.latitude,
-      zoom: 14,
-    })
+    // Pan to selected resource — skip for ungeocoded search results (NaN coords)
+    if (!Number.isNaN(resource.latitude) && !Number.isNaN(resource.longitude)) {
+      setViewState({
+        longitude: resource.longitude,
+        latitude: resource.latitude,
+        zoom: 14,
+      })
+    }
   }, [])
 
   const handleClusterClick = useCallback(
@@ -777,13 +858,13 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                 onClick={() => handleResourceSelect(resource)}
               />
             ))}
-            {resourcesLoading && (
+            {(isSearchActive ? searchLoading : resourcesLoading) && (
               <div className="text-center py-8 text-stone-600">
                 <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
-                <p className="text-xs">Loading resources...</p>
+                <p className="text-xs">{isSearchActive ? 'Searching...' : 'Loading resources...'}</p>
               </div>
             )}
-            {!resourcesLoading && resourcesError && (
+            {!isSearchActive && !resourcesLoading && resourcesError && (
               <div data-testid="map-resource-error" className="text-center py-8 text-stone-600 px-2">
                 <MapPin className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm text-stone-700 mb-1">Couldn&apos;t load resources</p>
@@ -798,11 +879,24 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                 </button>
               </div>
             )}
-            {!resourcesLoading && !resourcesError && sortedResources.length === 0 && (
+            {isSearchActive && !searchLoading && searchError && (
+              <div data-testid="map-search-error" className="text-center py-8 text-stone-600 px-2">
+                <MapPin className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm text-stone-700 mb-1">Search failed</p>
+                <p className="text-xs text-stone-500">Check your connection and try again.</p>
+              </div>
+            )}
+            {!isSearchActive && !resourcesLoading && !resourcesError && sortedResources.length === 0 && (
               <div className="text-center py-8 text-stone-600">
                 <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No resources found</p>
                 <p className="text-xs mt-1">Pan the map to search this area</p>
+              </div>
+            )}
+            {isSearchActive && !searchLoading && !searchError && sortedResources.length === 0 && (
+              <div className="text-center py-8 text-stone-600">
+                <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No results for &ldquo;{trimmedSearchQuery}&rdquo;</p>
               </div>
             )}
           </div>
