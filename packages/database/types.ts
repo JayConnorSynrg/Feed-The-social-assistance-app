@@ -2134,6 +2134,7 @@ export type Database = {
           name: string
           phone: string | null
           rejection_reason: string | null
+          search_document: unknown
           service_mode: Database["public"]["Enums"]["resource_service_mode"]
           services_offered: string[] | null
           source: Database["public"]["Enums"]["resource_source"] | null
@@ -2170,6 +2171,7 @@ export type Database = {
           name: string
           phone?: string | null
           rejection_reason?: string | null
+          search_document?: unknown
           service_mode?: Database["public"]["Enums"]["resource_service_mode"]
           services_offered?: string[] | null
           source?: Database["public"]["Enums"]["resource_source"] | null
@@ -2206,6 +2208,7 @@ export type Database = {
           name?: string
           phone?: string | null
           rejection_reason?: string | null
+          search_document?: unknown
           service_mode?: Database["public"]["Enums"]["resource_service_mode"]
           services_offered?: string[] | null
           source?: Database["public"]["Enums"]["resource_source"] | null
@@ -3433,6 +3436,10 @@ export type Database = {
         }
         Returns: number
       }
+      category_label: {
+        Args: { p_category: Database["public"]["Enums"]["resource_category"] }
+        Returns: string
+      }
       cleanup_expired_lockouts: { Args: never; Returns: undefined }
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       cleanup_old_login_attempts: { Args: never; Returns: undefined }
@@ -3523,6 +3530,7 @@ export type Database = {
       earth: { Args: never; Returns: number }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      expand_state: { Args: { p_state: string }; Returns: string }
       export_petition_signatures: {
         Args: { p_petition_id: string }
         Returns: {
@@ -3881,6 +3889,7 @@ export type Database = {
           name: string
           phone: string | null
           rejection_reason: string | null
+          search_document: unknown
           service_mode: Database["public"]["Enums"]["resource_service_mode"]
           services_offered: string[] | null
           source: Database["public"]["Enums"]["resource_source"] | null
@@ -4062,6 +4071,27 @@ export type Database = {
           severity: number
           status: string
           verified: boolean
+        }[]
+      }
+      search_resources: {
+        Args: { p_limit?: number; p_offset?: number; p_query: string }
+        Returns: {
+          address_line1: string
+          category: string
+          city: string
+          description: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          phone: string
+          rank: number
+          service_mode: string
+          source: string
+          state: string
+          status: string
+          website: string
+          zip_code: string
         }[]
       }
       seekers_within_radius: {
