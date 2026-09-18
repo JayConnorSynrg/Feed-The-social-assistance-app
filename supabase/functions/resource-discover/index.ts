@@ -26,6 +26,7 @@ import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { edgeLog, getCorrelationId } from '../_shared/log.ts'
+import { classifyGeocodeWrite, geocodeForwardV6, type GeocodeAccuracyTier } from '../_shared/mapbox-v6.ts'
 
 // ═══════════════════════════════════════════════════════════
 // Env
@@ -429,13 +430,31 @@ async function geocodeByZip(service: SupabaseClient, zip: string): Promise<{ lat
 }
 
 /**
- * Precise street-level geocode via the Mapbox Geocoding API (server-side). Returns
- * null when no MAPBOX_TOKEN is configured, the address is unusable, or Mapbox
- * returns no result. Never throws — failures degrade to the ZIP-centroid path.
+ * Result of address-first geocoding, always carrying a stamped
+ * geocode_accuracy tier (never null) so every written resource is tagged —
+ * see THE INVARIANT in the resource-discover-v6 task: a strong Mapbox v6
+ * match writes its precise tier, any weaker outcome (coarser tier, medium/low
+ * confidence) or the ZIP-centroid fallback writes 'approximate'.
+ */
+interface GeocodeCandidateResult {
+  lat: number
+  lng: number
+  accuracy: GeocodeAccuracyTier
+  confidence: string | null
+}
+
+/**
+ * Precise street-level geocode via the Mapbox Geocoding API v6 (server-side).
+ * Returns null when no MAPBOX_TOKEN is configured, the address is unusable, or
+ * Mapbox returns no result. Never throws — failures degrade to the
+ * ZIP-centroid path. The move-only-on-strong-match gate (classifyGeocodeWrite)
+ * stamps 'approximate' on any result weaker than rooftop/parcel/point +
+ * exact/high confidence — the v6 coordinates are still returned as the
+ * best-effort location either way.
  */
 async function geocodeByAddressMapbox(
   parts: { address_line1?: string | null; city?: string | null; state?: string | null; zip_code?: string | null },
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<GeocodeCandidateResult | null> {
   if (!MAPBOX_TOKEN) return null
   const segments = [parts.address_line1, parts.city, parts.state, parts.zip_code]
     .map((s) => (s ?? '').trim())
@@ -444,40 +463,32 @@ async function geocodeByAddressMapbox(
   // forward geocode; otherwise let the ZIP-centroid fallback handle it.
   if (!parts.address_line1?.trim() || segments.length < 2) return null
   const queryStr = segments.join(', ')
-  try {
-    const url =
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(queryStr)}.json` +
-      `?access_token=${MAPBOX_TOKEN}&country=US&types=address&limit=1`
-    const resp = await fetch(url)
-    if (!resp.ok) {
-      edgeLog('warn', 'discover.geocode.mapbox_failed', { status: resp.status })
-      return null
-    }
-    const json = await resp.json()
-    const center = json?.features?.[0]?.center
-    if (Array.isArray(center) && typeof center[0] === 'number' && typeof center[1] === 'number') {
-      // Mapbox returns [lng, lat].
-      return { lat: center[1], lng: center[0] }
-    }
-    return null
-  } catch (e) {
-    edgeLog('warn', 'discover.geocode.mapbox_error', { error: e instanceof Error ? e.message : String(e) })
+  const result = await geocodeForwardV6(queryStr, MAPBOX_TOKEN)
+  if (!result) {
+    edgeLog('warn', 'discover.geocode.mapbox_no_result', {})
     return null
   }
+  const { accuracy } = classifyGeocodeWrite(result.tier, result.confidence)
+  return { lat: result.lat, lng: result.lng, accuracy, confidence: result.confidence }
 }
 
 /**
- * Address-first geocoding: precise Mapbox street geocode when an address +
+ * Address-first geocoding: precise Mapbox v6 street geocode when an address +
  * MAPBOX_TOKEN are available, falling back to the ZIP centroid otherwise.
- * Returns null when neither path resolves (location legitimately stays null).
+ * Returns null only when neither path resolves any coordinates at all
+ * (location legitimately stays null); every non-null result carries a
+ * geocode_accuracy tag — never left NULL, per THE INVARIANT.
  */
 async function geocodeCandidate(
   service: SupabaseClient,
   parts: { address_line1?: string | null; city?: string | null; state?: string | null; zip_code?: string | null },
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<GeocodeCandidateResult | null> {
   const byAddress = await geocodeByAddressMapbox(parts)
   if (byAddress) return byAddress
-  if (parts.zip_code) return await geocodeByZip(service, parts.zip_code)
+  if (parts.zip_code) {
+    const centroid = await geocodeByZip(service, parts.zip_code)
+    if (centroid) return { ...centroid, accuracy: 'approximate', confidence: 'low' }
+  }
   return null
 }
 
@@ -851,10 +862,16 @@ serve(async (req: Request) => {
         continue
       }
 
-      // Set PostGIS location via RPC when geocoding resolved a point.
+      // Atomically stamp PostGIS location + geocode_accuracy + geocode_confidence
+      // when geocoding resolved a point. set_resource_geocode never leaves the
+      // row untagged — geo.accuracy is always non-null (see THE INVARIANT).
       if (geo) {
-        await ctx.service.rpc('set_resource_location_by_id', {
-          p_id: inserted.id, p_lat: geo.lat, p_lng: geo.lng,
+        await ctx.service.rpc('set_resource_geocode', {
+          p_id: inserted.id,
+          p_lat: geo.lat,
+          p_lng: geo.lng,
+          p_accuracy: geo.accuracy,
+          p_confidence: geo.confidence,
         })
       }
 
