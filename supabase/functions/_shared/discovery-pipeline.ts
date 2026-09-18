@@ -224,6 +224,72 @@ export function isDuplicateUrl(url: string | null | undefined, existing: Set<str
   return norm !== null && existing.has(norm)
 }
 
+function toggleTrailingSlash(u: string): string {
+  try {
+    const url = new URL(u)
+    if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+      url.pathname = url.pathname.replace(/\/+$/, '')
+    } else if (url.pathname === '' || url.pathname === '/') {
+      url.pathname = '/'
+    } else {
+      url.pathname = url.pathname + '/'
+    }
+    return url.toString()
+  } catch {
+    return u
+  }
+}
+
+function swapScheme(u: string): string {
+  if (u.startsWith('https://')) return 'http://' + u.slice(8)
+  if (u.startsWith('http://')) return 'https://' + u.slice(7)
+  return u
+}
+
+/**
+ * Build the small exact-match key set to probe `resources` with for dedup —
+ * for each candidate URL: {raw, trailing-slash toggled, http/https variant}
+ * and their combinations. Lets the handler dedup table-wide with an O(candidates)
+ * `.in()` query instead of scanning the whole (~19k-row) table into memory.
+ */
+export function buildDedupLookupKeys(urls: (string | null | undefined)[]): string[] {
+  const set = new Set<string>()
+  for (const raw of urls) {
+    if (!raw) continue
+    const u = raw.trim()
+    if (!u) continue
+    const base = [u, toggleTrailingSlash(u)]
+    for (const v of [...base]) base.push(swapScheme(v))
+    for (const v of base) set.add(v)
+  }
+  return [...set]
+}
+
+/**
+ * Build the normalized existing-URL index for dedup, bounded to the candidate
+ * URLs (NOT the whole table). `fetchRows` receives the exact-match key set from
+ * buildDedupLookupKeys and returns the matching resource rows; each row's
+ * website/application_url is normalized into the returned Set. A candidate whose
+ * canonical URL matches an existing row is then caught table-wide via
+ * isDuplicateUrl, regardless of table size.
+ */
+export async function buildExistingUrlIndex(
+  candidateUrls: (string | null | undefined)[],
+  fetchRows: (keys: string[]) => Promise<Array<{ website?: string | null; application_url?: string | null }>>,
+): Promise<Set<string>> {
+  const set = new Set<string>()
+  const keys = buildDedupLookupKeys(candidateUrls)
+  if (keys.length === 0) return set
+  const rows = await fetchRows(keys)
+  for (const r of rows) {
+    for (const u of [r.website, r.application_url]) {
+      const n = normalizeUrlForDedup(u)
+      if (n) set.add(n)
+    }
+  }
+  return set
+}
+
 // ═══════════════════════════════════════════════════════════
 // Transient-failure retry  (INV-0b)
 // ═══════════════════════════════════════════════════════════
@@ -246,9 +312,16 @@ export function parseRetryAfterMs(
 ): number {
   const expo = baseDelayMs * Math.pow(2, attempt) + Math.floor(jitter * baseDelayMs)
   if (header) {
-    const secs = Number(header.trim())
+    const trimmed = header.trim()
+    // delta-seconds form: `Retry-After: 120`
+    const secs = Number(trimmed)
     if (Number.isFinite(secs) && secs >= 0) {
       return Math.max(expo, Math.round(secs * 1000))
+    }
+    // HTTP-date form: `Retry-After: Wed, 21 Oct 2026 07:28:00 GMT`
+    const dateMs = Date.parse(trimmed)
+    if (Number.isFinite(dateMs)) {
+      return Math.max(expo, Math.max(0, dateMs - Date.now()))
     }
   }
   return expo
@@ -335,12 +408,22 @@ export function mergeResults(a: AgentResult | null, b: AgentResult | null): Agen
   return { resources, forms, via }
 }
 
+export interface ProviderOutcome {
+  result: AgentResult | null
+  /** true on a transient rate-limit (429) or server error (5xx). */
+  rateLimited: boolean
+  /** true on a hard, non-retryable, non-empty failure (auth 4xx, malformed body). */
+  providerError: boolean
+}
+
 export interface SourcingOutcome {
   result: AgentResult | null
   searchCount: number
   agentRan: boolean
   /** true when either provider signalled a transient rate-limit/unavailability. */
   rateLimited: boolean
+  /** true when either provider hard-failed for a non-retryable, non-empty reason. */
+  providerError: boolean
 }
 
 /**
@@ -352,8 +435,8 @@ export interface SourcingOutcome {
  * marks a transient rate-limit so the handler can emit the honest signal.
  */
 export async function sourceCandidates(opts: {
-  runSearch: () => Promise<{ result: AgentResult | null; rateLimited: boolean }>
-  runAgent: () => Promise<{ result: AgentResult | null; rateLimited: boolean }>
+  runSearch: () => Promise<ProviderOutcome>
+  runAgent: () => Promise<ProviderOutcome>
   enrichThreshold?: number
 }): Promise<SourcingOutcome> {
   const threshold = opts.enrichThreshold ?? DEFAULT_ENRICH_THRESHOLD
@@ -363,12 +446,14 @@ export async function sourceCandidates(opts: {
 
   let agentRan = false
   let agentRateLimited = false
+  let agentProviderError = false
   let agentResult: AgentResult | null = null
   if (searchCount < threshold) {
     agentRan = true
     const agent = await opts.runAgent() // SEQUENTIAL — never overlaps search
     agentResult = agent.result
     agentRateLimited = agent.rateLimited
+    agentProviderError = agent.providerError
   }
 
   const merged = mergeResults(search.result, agentResult)
@@ -377,6 +462,7 @@ export async function sourceCandidates(opts: {
     searchCount,
     agentRan,
     rateLimited: search.rateLimited || agentRateLimited,
+    providerError: search.providerError || agentProviderError,
   }
 }
 
@@ -384,7 +470,7 @@ export async function sourceCandidates(opts: {
 // Honest admin-facing outcome classification  (INV-0c)
 // ═══════════════════════════════════════════════════════════
 
-export type OutcomeState = 'candidates' | 'empty' | 'rate_limited'
+export type OutcomeState = 'candidates' | 'empty' | 'rate_limited' | 'provider_error'
 
 export interface OutcomeClassification {
   state: OutcomeState
@@ -393,18 +479,31 @@ export interface OutcomeClassification {
 }
 
 /**
- * Map a sourcing outcome to the three admin-facing states. Replaces the raw
+ * Map a sourcing outcome to the admin-facing states. Replaces the raw
  * {"error":"Sourcing failed"} blob:
- *   candidates   — >=1 sourced (200)
- *   empty        — providers responded cleanly with zero matches (200); this
- *                  is a real "no results", NOT an error
- *   rate_limited — provider was transiently rate-limited/unavailable AND we
- *                  have no candidates (503); NOT "no results"
+ *   candidates     — >=1 sourced (200)
+ *   empty          — providers responded cleanly with zero matches (200); a
+ *                    real "no results", NOT an error
+ *   rate_limited   — provider transiently rate-limited/unavailable AND no
+ *                    candidates (503); NOT "no results"
+ *   provider_error — provider hard-failed (auth 4xx / malformed body) AND no
+ *                    candidates (502); NOT "no results", NOT rate-limited
+ * Precedence when count == 0: provider_error > rate_limited > empty, so an
+ * auth/parse failure is never misreported as a clean empty result.
  */
-export function classifyOutcome(o: { result: AgentResult | null; rateLimited: boolean }): OutcomeClassification {
+export function classifyOutcome(
+  o: { result: AgentResult | null; rateLimited: boolean; providerError?: boolean },
+): OutcomeClassification {
   const count = (o.result?.resources.length ?? 0) + (o.result?.forms.length ?? 0)
   if (count > 0) {
     return { state: 'candidates', status: 200, message: 'Candidates sourced.' }
+  }
+  if (o.providerError) {
+    return {
+      state: 'provider_error',
+      status: 502,
+      message: 'Resource sourcing is temporarily unavailable — please retry.',
+    }
   }
   if (o.rateLimited) {
     return {
@@ -414,6 +513,38 @@ export function classifyOutcome(o: { result: AgentResult | null; rateLimited: bo
     }
   }
   return { state: 'empty', status: 200, message: 'No results found for this query.' }
+}
+
+/** The zero-staged response body an admin sees for a non-candidates outcome. */
+export interface OutcomeResponse {
+  status: number
+  body: {
+    state: OutcomeState
+    message: string
+    staged: { resources: number; forms: number }
+    deduped: number
+    rejected: number
+    candidates: never[]
+  }
+}
+
+/**
+ * Build the actual HTTP response (status + JSON body) the handler returns for a
+ * non-candidates outcome. Pure, so the handler's response contract is unit
+ * tested directly (empty / rate_limited / provider_error).
+ */
+export function buildOutcomeResponse(oc: OutcomeClassification): OutcomeResponse {
+  return {
+    status: oc.status,
+    body: {
+      state: oc.state,
+      message: oc.message,
+      staged: { resources: 0, forms: 0 },
+      deduped: 0,
+      rejected: 0,
+      candidates: [],
+    },
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -428,7 +559,65 @@ export interface LivenessResult {
   finalHost: string | null
   /** true when the final URL is on the same host as the input. */
   sameHost: boolean
-  reason: 'ok' | 'not_found' | 'cross_host_redirect' | 'error' | 'bad_url'
+  reason: 'ok' | 'not_found' | 'cross_host_redirect' | 'error' | 'bad_url' | 'private_or_invalid'
+}
+
+// ── SSRF guard (INV-2a hardening): only public http(s) targets may be probed
+//    server-side. Blocks loopback, link-local (incl. the cloud metadata IP
+//    169.254.169.254), RFC1918, ULA, localhost/*.local/metadata hostnames. ──
+
+function isPublicIpv4(host: string): boolean {
+  const parts = host.split('.')
+  if (parts.length !== 4) return false
+  const nums = parts.map((p) => Number(p))
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false
+  const [a, b] = nums
+  if (a === 0) return false // "this network"
+  if (a === 127) return false // loopback 127.0.0.0/8
+  if (a === 10) return false // RFC1918 10/8
+  if (a === 172 && b >= 16 && b <= 31) return false // RFC1918 172.16/12
+  if (a === 192 && b === 168) return false // RFC1918 192.168/16
+  if (a === 169 && b === 254) return false // link-local 169.254/16 (metadata)
+  return true
+}
+
+function isPublicIpv6(host: string): boolean {
+  const h = host.toLowerCase()
+  if (h === '::1' || h === '::') return false // loopback / unspecified
+  // link-local fe80::/10  → fe8x .. febx
+  if (/^fe[89ab]/.test(h)) return false
+  // unique-local fc00::/7 → fc.. / fd..
+  if (/^f[cd]/.test(h)) return false
+  // IPv4-mapped (::ffff:a.b.c.d) — validate the embedded v4
+  const m = h.match(/(?:^|:)ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
+  if (m) return isPublicIpv4(m[1])
+  return true
+}
+
+/**
+ * true only for a public http(s) URL. Rejects non-http(s) schemes,
+ * localhost/*.local/metadata hostnames, and IP literals in loopback,
+ * link-local, RFC1918, or ULA ranges. A DNS name (not an IP literal) is
+ * allowed — its resolved address is outside this synchronous check's scope.
+ */
+export function isPublicHttpUrl(rawUrl: string | null | undefined): boolean {
+  if (!rawUrl) return false
+  let u: URL
+  try {
+    u = new URL(rawUrl.trim())
+  } catch {
+    return false
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+  let host = u.hostname.toLowerCase()
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1) // ipv6 literal
+  if (!host) return false
+  if (host === 'localhost' || host === 'localhost.localdomain') return false
+  if (host.endsWith('.local') || host.endsWith('.localhost')) return false
+  if (host === 'metadata' || host === 'metadata.google.internal') return false
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return isPublicIpv4(host)
+  if (host.includes(':')) return isPublicIpv6(host)
+  return true
 }
 
 /** Minimal Response shape the liveness check reads (real fetch Response satisfies it). */
@@ -452,9 +641,18 @@ export async function checkUrlLiveness(url: string, doFetch: FetchLike): Promise
   if (!originHost) {
     return { url, ok: false, status: null, finalHost: null, sameHost: false, reason: 'bad_url' }
   }
+  // SSRF guard: never issue the probe for a private/invalid target.
+  if (!isPublicHttpUrl(url)) {
+    return { url, ok: false, status: null, finalHost: originHost, sameHost: false, reason: 'private_or_invalid' }
+  }
   const evaluate = (status: number, finalUrl: string): LivenessResult => {
     const finalHost = hostOf(finalUrl) ?? originHost
     const sameHost = finalHost === originHost
+    // Re-check the resolved target: a redirect that landed on a private/invalid
+    // host fails even if it reported 2xx.
+    if (!isPublicHttpUrl(finalUrl)) {
+      return { url, ok: false, status, finalHost, sameHost, reason: 'private_or_invalid' }
+    }
     if (status >= 200 && status < 300 && sameHost) {
       return { url, ok: true, status, finalHost, sameHost, reason: 'ok' }
     }

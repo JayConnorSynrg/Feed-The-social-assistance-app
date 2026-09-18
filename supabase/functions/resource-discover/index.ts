@@ -33,6 +33,8 @@ import {
   type GeocodeAccuracyTier,
 } from '../_shared/mapbox-v6.ts'
 import {
+  buildExistingUrlIndex,
+  buildOutcomeResponse,
   checkUrlLiveness,
   classifyOutcome,
   fetchWithRetry,
@@ -229,6 +231,7 @@ function buildAgentSchema(contentType: ContentType) {
 interface SourceOutcome {
   result: AgentResult | null
   rateLimited: boolean
+  providerError: boolean
 }
 
 // Backoff dependencies for fetchWithRetry (INV-0b). Real timers + jittered
@@ -261,7 +264,7 @@ async function pruneDeadSources(urls: string[]): Promise<string[]> {
 }
 
 async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, geoBias?: string | null): Promise<SourceOutcome> {
-  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false }
+  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false, providerError: false }
 
   const locationBias =
     geoBias && geoBias.trim()
@@ -284,18 +287,19 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
       body: JSON.stringify({ prompt, schema: buildAgentSchema(contentType) }),
     }), RETRY_DEPS)
     if (!resp.ok) {
+      const transient = resp.status === 429 || resp.status >= 500
       edgeLog('warn', 'discover.agent.start_failed', { status: resp.status })
-      return { result: null, rateLimited: resp.status === 429 || resp.status >= 500 }
+      return { result: null, rateLimited: transient, providerError: !transient }
     }
     const json = await resp.json()
     if (!json?.success || !json?.id) {
       edgeLog('warn', 'discover.agent.no_id', {})
-      return { result: null, rateLimited: false }
+      return { result: null, rateLimited: false, providerError: true }
     }
     jobId = json.id
   } catch (e) {
     edgeLog('warn', 'discover.agent.start_error', { error: e instanceof Error ? e.message : String(e) })
-    return { result: null, rateLimited: false }
+    return { result: null, rateLimited: false, providerError: true }
   }
 
   // Poll within a bounded budget.
@@ -314,18 +318,18 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
         const resources = Array.isArray(data.resources) ? data.resources : []
         const forms = Array.isArray(data.forms) ? data.forms : []
         edgeLog('info', 'discover.agent.completed', { jobId, resources: resources.length, forms: forms.length })
-        return { result: { resources, forms, via: 'agent' }, rateLimited: false }
+        return { result: { resources, forms, via: 'agent' }, rateLimited: false, providerError: false }
       }
       if (status === 'failed' || status === 'cancelled') {
         edgeLog('warn', 'discover.agent.terminal', { jobId, status })
-        return { result: null, rateLimited: false }
+        return { result: null, rateLimited: false, providerError: false }
       }
     } catch {
       // transient — keep polling within budget
     }
   }
   edgeLog('warn', 'discover.agent.timeout', { jobId, budgetMs: AGENT_POLL_BUDGET_MS })
-  return { result: null, rateLimited: false }
+  return { result: null, rateLimited: false, providerError: false }
 }
 
 // PRIMARY fast path: /v2/search returns {url,title,description} per hit. Each hit
@@ -333,7 +337,7 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
 // only survive verification when that host is authoritative (.gov/.org) or is
 // corroborated, which is the correct strict behaviour.
 async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: string | null): Promise<SourceOutcome> {
-  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false }
+  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false, providerError: false }
   try {
     const searchQuery =
       geoBias && geoBias.trim()
@@ -345,8 +349,9 @@ async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: s
       body: JSON.stringify({ query: searchQuery, limit: Math.min(maxCandidates, 10) }),
     }), RETRY_DEPS)
     if (!resp.ok) {
+      const transient = resp.status === 429 || resp.status >= 500
       edgeLog('warn', 'discover.search.failed', { status: resp.status })
-      return { result: null, rateLimited: resp.status === 429 || resp.status >= 500 }
+      return { result: null, rateLimited: transient, providerError: !transient }
     }
     const json = await resp.json()
     const web = json?.data?.web ?? []
@@ -358,10 +363,10 @@ async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: s
       sources: [w.url],
     })).filter((r) => r.name)
     edgeLog('info', 'discover.search.completed', { resources: resources.length })
-    return { result: { resources, forms: [], via: 'search' }, rateLimited: false }
+    return { result: { resources, forms: [], via: 'search' }, rateLimited: false, providerError: false }
   } catch (e) {
     edgeLog('warn', 'discover.search.error', { error: e instanceof Error ? e.message : String(e) })
-    return { result: null, rateLimited: false }
+    return { result: null, rateLimited: false, providerError: true }
   }
 }
 
@@ -713,19 +718,13 @@ serve(async (req: Request) => {
     const sourced = outcome.result
 
     // ── HONEST ADMIN SIGNAL (INV-0c): distinguish candidates / clean-empty /
-    //    provider-rate-limited. No more raw {"error":"Sourcing failed"} blob. ──
+    //    rate-limited / provider-error. No more raw {"error":"Sourcing failed"}. ──
     if (!sourced || (sourced.resources.length === 0 && sourced.forms.length === 0)) {
       const oc = classifyOutcome(outcome)
-      edgeLog('info', 'discover.outcome', { state: oc.state, rateLimited: outcome.rateLimited, correlationId })
-      return new Response(JSON.stringify({
-        state: oc.state,
-        message: oc.message,
-        staged: { resources: 0, forms: 0 },
-        deduped: 0,
-        rejected: 0,
-        candidates: [],
-      }), {
-        status: oc.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      const { status, body } = buildOutcomeResponse(oc)
+      edgeLog('info', 'discover.outcome', { state: oc.state, rateLimited: outcome.rateLimited, providerError: outcome.providerError, correlationId })
+      return new Response(JSON.stringify(body), {
+        status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -742,25 +741,26 @@ serve(async (req: Request) => {
     let rejectedOutOfRegion = 0
     const summaries: Array<{ kind: 'resource' | 'form'; name: string; confidence: string; sources: string[] }> = []
 
-    // ── URL DEDUP INDEX (INV-2d): normalized URLs already present in `resources`,
-    //    plus URLs staged during THIS run, so an exact/near-dup site is skipped. ──
-    const existingUrlSet = new Set<string>()
-    {
-      const { data: existingUrls } = await ctx.service
-        .from('resources')
-        .select('website, application_url')
-        .or('website.not.is.null,application_url.not.is.null')
-        .limit(1000)
-      for (const r of (existingUrls ?? []) as Array<{ website: string | null; application_url: string | null }>) {
-        for (const u of [r.website, r.application_url]) {
-          const n = normalizeUrlForDedup(u)
-          if (n) existingUrlSet.add(n)
-        }
-      }
-    }
-
     // ── RESOURCES ──
     const rawResources = (sourced.resources ?? []).slice(0, maxCandidates)
+
+    // ── URL DEDUP INDEX (INV-2d): bounded to the CANDIDATE URLs, not the whole
+    //    ~19k-row table (the db-max-rows footgun). We probe `resources` with the
+    //    small {raw, slash-toggled, http/https} key set for the ≤~25 candidate
+    //    URLs via two O(candidates) `.in()` queries, then normalize-compare the
+    //    small returned subset. Exact/near-exact dupes are caught table-wide;
+    //    URLs staged during THIS run are added below for intra-run dedup. ──
+    const candidateUrls = rawResources.flatMap((c) => [cleanUrl(c.website), cleanUrl(c.application_url)])
+    const existingUrlSet = await buildExistingUrlIndex(candidateUrls, async (keys) => {
+      const [byWeb, byApp] = await Promise.all([
+        ctx.service.from('resources').select('website, application_url').in('website', keys),
+        ctx.service.from('resources').select('website, application_url').in('application_url', keys),
+      ])
+      return [
+        ...((byWeb.data ?? []) as Array<{ website: string | null; application_url: string | null }>),
+        ...((byApp.data ?? []) as Array<{ website: string | null; application_url: string | null }>),
+      ]
+    })
     for (const cand of rawResources) {
       const name = (cand.name ?? '').trim()
       if (!name || name.length < 2) { rejected++; continue }
