@@ -3370,6 +3370,8 @@ export type Database = {
           p_city?: string
           p_description?: string
           p_email?: string
+          p_geocode_accuracy?: string
+          p_geocode_confidence?: string
           p_id: string
           p_lat?: number
           p_lng?: number
@@ -3387,6 +3389,8 @@ export type Database = {
           city: string
           description: string
           email: string
+          geocode_accuracy: string
+          geocode_confidence: string
           id: string
           is_verified: boolean
           lat: number
@@ -4774,6 +4778,19 @@ export type Database = {
       }
       trust_score_to_level: { Args: { score: number }; Returns: string }
       unlockrows: { Args: { "": string }; Returns: number }
+      untagged_geocode_targets: {
+        Args: { p_limit?: number }
+        Returns: {
+          address_line1: string
+          address_line2: string
+          city: string
+          country: string
+          geocode_accuracy: string
+          id: string
+          state: string
+          zip_code: string
+        }[]
+      }
       update_safety_alert: {
         Args: {
           p_alert_id: string
