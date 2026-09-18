@@ -16,15 +16,20 @@
  *   POST /geocode-backfill                 → up to `limit` (default 200) candidates
  *   POST /geocode-backfill  { "limit": 50 } (JSON body) or ?limit=50 (query)
  *
- * Usage (coarse mode — PR-3, re-geocode the 1,123 zip-centroid pins that are
- * already approved+located but carry geocode_accuracy IS NULL, so the map
- * renders them as if they were exact addresses):
- *   POST /geocode-backfill?target=coarse&limit=50
- *   Candidates come from coarse_geocode_targets() (20260922000100). Per row,
- *   the pin is MOVED only on a strong match (tier rooftop/parcel/point AND
- *   confidence exact/high — see decision.ts computeCoarseDecision); every
- *   other outcome keeps the existing centroid and tags geocode_accuracy =
- *   'approximate'. A coarse target is never left with geocode_accuracy still
+ * Usage (untagged mode — PR-4, orphan-proof closure: re-geocode EVERY
+ * approved+located pin that carries geocode_accuracy IS NULL, not just the
+ * ~1,123 that collided on a shared zip-centroid coordinate. Selection is by
+ * the row's OWN accuracy, not by collision, so processing any row can never
+ * de-select any other row — repeated invocations converge to zero remaining
+ * untagged pins with no orphans):
+ *   POST /geocode-backfill?target=untagged&limit=2000
+ *   Candidates come from untagged_geocode_targets() (20260923000000), which
+ *   supersedes and replaces coarse_geocode_targets() (PR-3, dropped in the
+ *   same migration — accuracy-based selection is a strict superset). Per
+ *   row, the pin is MOVED only on a strong match (tier rooftop/parcel/point
+ *   AND confidence exact/high — see decision.ts computeCoarseDecision);
+ *   every other outcome keeps the existing centroid and tags geocode_accuracy
+ *   = 'approximate'. A target row is never left with geocode_accuracy still
  *   NULL after a successfully-processed batch.
  *
  * Authentication: requires x-backfill-secret header matching BACKFILL_SECRET env
@@ -32,7 +37,7 @@
  * in-code check is the gate.
  *
  * Idempotent + re-runnable: default mode only SELECTs rows where location IS
- * NULL, so a row that already has a location is never touched. Coarse mode
+ * NULL, so a row that already has a location is never touched. Untagged mode
  * only selects rows where geocode_accuracy IS NULL, so a row already
  * upgraded or tagged drops out of the target set on the next run.
  *
@@ -49,6 +54,7 @@ import { edgeLog } from '../_shared/log.ts'
 import {
   buildAddressQuery,
   bucketAccuracy,
+  pageThroughRpc,
   resolveCoarseWrite,
   runWithConcurrency,
   type AccuracyBucket,
@@ -70,24 +76,30 @@ const MAPBOX_BATCH_URL = 'https://api.mapbox.com/search/geocode/v6/batch'
 
 const DEFAULT_LIMIT = 200 // covers the ~33 now + headroom
 const MAX_LIMIT = 1000 // hard ceiling to keep a single (default-mode) run bounded
-// FIX-2: coarse mode needs a single invocation able to cover the whole
-// ~1,123-row zip-centroid population in one snapshot — collisions are
-// recomputed fresh on every run, so a moved pin can "orphan" its sibling's
-// collision signature between runs. A cap below the population forces
-// multiple runs and reopens that race; 1500 comfortably covers 1,123 with
-// headroom as the population is worked down over time. The SQL fn's own
-// default (coarse_geocode_targets p_limit=1200) already assumes single-snapshot intent.
-const COARSE_DEFAULT_LIMIT = 1200
-const COARSE_MAX_LIMIT = 1500
+// PR-4: untagged mode is orphan-proof by construction (INV-A — selection is
+// by the row's OWN accuracy, never by a collision computed across rows), so
+// unlike the superseded coarse mode there is no correctness reason to cover
+// the whole population in one snapshot. The cap is chosen purely for edge
+// wall-clock safety: a 1,000-row coarse run measured ~18s in prod, so 4,000
+// stays comfortably inside the edge function's wall-clock budget while
+// cutting the number of runs needed to close the ~18,004-row population.
+const UNTAGGED_DEFAULT_LIMIT = 4000
+const UNTAGGED_MAX_LIMIT = 4000
+// FIX (limit-cap root cause, see fetchTargetsPaged below): the Supabase
+// project's API "Max Rows" setting is a hard PostgREST db-max-rows cap
+// (observed = 1000) that truncates ANY single response — including a
+// table-returning RPC call — regardless of the function's own SQL LIMIT or
+// a supabase-js .limit() requesting more. Page in chunks of this size.
+const RPC_PAGE_SIZE = 1000
 const MAPBOX_BATCH_MAX = 50 // v6 batch accepts up to 50 queries per call
 const FETCH_TIMEOUT_MS = 20_000 // per Mapbox batch call
-const COARSE_WRITE_CONCURRENCY = 8 // FIX-3: bounded-concurrency pool for the independent per-row writes
+const UNTAGGED_WRITE_CONCURRENCY = 8 // FIX-3: bounded-concurrency pool for the independent per-row writes
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type TargetMode = 'null_location' | 'coarse'
+type TargetMode = 'null_location' | 'untagged'
 
 interface BackfillSummary {
   candidates: number
@@ -95,12 +107,12 @@ interface BackfillSummary {
   by_accuracy: Record<AccuracyBucket, number>
   skipped_no_result: number
   errors: number
-  // Coarse mode only (target=coarse): move-vs-tag decision counts + the size
-  // of the coarse target population fetched this run. Omitted entirely in
-  // default (null-location) mode so that response shape is unchanged (INV-3).
+  // Untagged mode only (target=untagged): move-vs-tag decision counts + the
+  // size of the target population fetched this run. Omitted entirely in
+  // default (null-location) mode so that response shape is unchanged (INV-D).
   upgraded?: number
   tagged?: number
-  coarse_target_count?: number
+  target_count?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +147,33 @@ async function geocodeBatch(
   } finally {
     clearTimeout(timer)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Paged RPC fetch (limit-cap fix) — see RPC_PAGE_SIZE above for root cause.
+// Thin Supabase-specific wrapper around decision.ts's pure pageThroughRpc:
+// each page is one .rpc(...).range(offset, pageEnd) call, which respects the
+// platform's hard db-max-rows cap even when `limit` exceeds it.
+// ---------------------------------------------------------------------------
+async function fetchTargetsPaged(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  rpcName: string,
+  limit: number,
+): Promise<ResourceRow[]> {
+  return pageThroughRpc<ResourceRow>(
+    async (offset, pageEnd) => {
+      const { data, error } = await supabase
+        .rpc(rpcName, { p_limit: limit })
+        .range(offset, pageEnd)
+      if (error) {
+        throw new Error(`${rpcName} RPC failed: ${error.message}`)
+      }
+      return (data ?? []) as ResourceRow[]
+    },
+    limit,
+    RPC_PAGE_SIZE,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -188,11 +227,11 @@ Deno.serve(async (req: Request) => {
     const targetParam = (
       url.searchParams.get('target') ?? url.searchParams.get('mode') ?? ''
     ).trim()
-    const targetMode: TargetMode = targetParam === 'coarse' ? 'coarse' : 'null_location'
+    const targetMode: TargetMode = targetParam === 'untagged' ? 'untagged' : 'null_location'
 
     // ---- parse limit (query param or JSON body) ----
-    // Default-mode default/ceiling (200 / 1000) are UNCHANGED (INV-3) — this
-    // branch only takes effect when targetMode === 'coarse'.
+    // Default-mode default/ceiling (200 / 1000) are UNCHANGED (INV-D) — this
+    // branch only takes effect when targetMode === 'untagged'.
     let limit = Number(url.searchParams.get('limit'))
     if (!Number.isFinite(limit) || limit <= 0) {
       // Fall back to JSON body if present.
@@ -206,11 +245,11 @@ Deno.serve(async (req: Request) => {
       }
     }
     if (!Number.isFinite(limit) || limit <= 0) {
-      limit = targetMode === 'coarse' ? COARSE_DEFAULT_LIMIT : DEFAULT_LIMIT
+      limit = targetMode === 'untagged' ? UNTAGGED_DEFAULT_LIMIT : DEFAULT_LIMIT
     }
     limit = Math.min(
       Math.floor(limit),
-      targetMode === 'coarse' ? COARSE_MAX_LIMIT : MAX_LIMIT,
+      targetMode === 'untagged' ? UNTAGGED_MAX_LIMIT : MAX_LIMIT,
     )
 
     edgeLog('info', 'geocode-backfill.request.start', { limit, target: targetMode })
@@ -219,25 +258,20 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // ---- SELECT only rows needing coverage (idempotent invariant) ----
-    // Default mode (INV-3, UNCHANGED): status='approved' AND location IS NULL
+    // Default mode (INV-D, UNCHANGED): status='approved' AND location IS NULL
     // AND address_line1 IS NOT NULL, ordered stably by id.
-    // Coarse mode (PR-3): the 1,123-row zip-centroid collision population —
-    // status='approved' AND location IS NOT NULL AND geocode_accuracy IS NULL
-    // AND the point collides with >=1 other approved row — computed via
-    // coarse_geocode_targets() (20260922000100) since PostgREST can't express
-    // the required self-join/group-by.
+    // Untagged mode (PR-4, INV-A orphan-proof): status='approved' AND
+    // location IS NOT NULL AND geocode_accuracy IS NULL — no collision
+    // check, so selection depends only on the row's own accuracy — via
+    // untagged_geocode_targets() (20260923000000), paged past the
+    // platform's hard row cap by fetchTargetsPaged.
     let candidates: ResourceRow[]
-    if (targetMode === 'coarse') {
-      const { data: rows, error: rpcSelectError } = await supabase.rpc(
-        'coarse_geocode_targets',
-        { p_limit: limit },
+    if (targetMode === 'untagged') {
+      candidates = await fetchTargetsPaged(
+        supabase,
+        'untagged_geocode_targets',
+        limit,
       )
-      if (rpcSelectError) {
-        throw new Error(
-          `coarse_geocode_targets RPC failed: ${rpcSelectError.message}`,
-        )
-      }
-      candidates = (rows ?? []) as ResourceRow[]
     } else {
       const { data: rows, error: selectError } = await supabase
         .from('resources')
@@ -269,10 +303,10 @@ Deno.serve(async (req: Request) => {
       skipped_no_result: 0,
       errors: 0,
     }
-    if (targetMode === 'coarse') {
+    if (targetMode === 'untagged') {
       summary.upgraded = 0
       summary.tagged = 0
-      summary.coarse_target_count = candidates.length
+      summary.target_count = candidates.length
     }
 
     if (candidates.length === 0) {
@@ -286,15 +320,15 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // ---- coarse-mode per-row write task (closure over supabase/summary) ----
+    // ---- untagged-mode per-row write task (closure over supabase/summary) ----
     // Unifies FIX-1 (address-less rows: tagged directly, no Mapbox call
-    // possible) and INV-2 (addressed rows: moved only on a strong match) via
+    // possible) and INV-B (addressed rows: moved only on a strong match) via
     // the single pure decision function resolveCoarseWrite — see decision.ts.
     // `fc` is omitted for address-less rows (resolveCoarseWrite ignores it
     // once buildAddressQuery(row) is null). Returns a zero-arg task function
     // so callers can queue it into the bounded-concurrency pool (FIX-3)
     // without awaiting immediately.
-    function coarseWriteTask(
+    function untaggedWriteTask(
       row: ResourceRow,
       fc: MapboxFeatureCollection | undefined,
     ): () => Promise<void> {
@@ -325,7 +359,7 @@ Deno.serve(async (req: Request) => {
             summary.by_accuracy.approximate++
           }
 
-          edgeLog('info', 'geocode-backfill.coarse.decision', {
+          edgeLog('info', 'geocode-backfill.untagged.decision', {
             resource_id: row.id,
             tier: result.rpcArgs.p_accuracy,
             confidence: result.rpcArgs.p_confidence,
@@ -347,8 +381,8 @@ Deno.serve(async (req: Request) => {
     for (let i = 0; i < candidates.length; i += MAPBOX_BATCH_MAX) {
       const window = candidates.slice(i, i + MAPBOX_BATCH_MAX)
 
-      if (targetMode === 'coarse') {
-        // ---- coarse mode ----
+      if (targetMode === 'untagged') {
+        // ---- untagged mode ----
         // Split the window: rows with a usable address go through Mapbox;
         // rows with no usable address (FIX-1) can never produce a Mapbox
         // query at all and are tagged directly. Both kinds of write are
@@ -364,7 +398,7 @@ Deno.serve(async (req: Request) => {
           if (!q) {
             // FIX-1: no usable address → no Mapbox call possible → tag
             // directly (resolveCoarseWrite short-circuits on no-address).
-            writeTasks.push(coarseWriteTask(row, undefined))
+            writeTasks.push(untaggedWriteTask(row, undefined))
             continue
           }
           addressed.push({
@@ -415,7 +449,7 @@ Deno.serve(async (req: Request) => {
             } else {
               for (let j = 0; j < addressed.length; j++) {
                 writeTasks.push(
-                  coarseWriteTask(addressed[j].row, batchResults[j]),
+                  untaggedWriteTask(addressed[j].row, batchResults[j]),
                 )
               }
             }
@@ -424,7 +458,7 @@ Deno.serve(async (req: Request) => {
 
         // ---- FIX-3: bounded-concurrency pool for the independent per-row
         // writes queued above (tag-only + decision-based). ----
-        await runWithConcurrency(writeTasks, COARSE_WRITE_CONCURRENCY)
+        await runWithConcurrency(writeTasks, UNTAGGED_WRITE_CONCURRENCY)
         continue
       }
 

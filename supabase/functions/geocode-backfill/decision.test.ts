@@ -3,6 +3,7 @@ import {
   bucketAccuracy,
   buildAddressQuery,
   computeCoarseDecision,
+  pageThroughRpc,
   resolveCoarseWrite,
   runWithConcurrency,
   type MapboxFeatureCollection,
@@ -251,5 +252,58 @@ describe('runWithConcurrency', () => {
 
   it('completes with zero tasks (no hang, no throw)', async () => {
     await expect(runWithConcurrency([], 8)).resolves.toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PR-4 limit-cap fix: pageThroughRpc
+// ---------------------------------------------------------------------------
+describe('pageThroughRpc — limit-cap fix', () => {
+  /** Simulates a platform hard-cap of `cap` rows per single request, backed
+   * by a total pool of `total` rows — mirrors the observed prod behavior
+   * where a single request for >1000 rows silently came back as 1000. */
+  function makeCappedSource(total: number, cap: number) {
+    const calls: Array<{ offset: number; pageEnd: number }> = []
+    const fetchPage = async (offset: number, pageEnd: number): Promise<number[]> => {
+      calls.push({ offset, pageEnd })
+      const requested = pageEnd - offset + 1
+      const grantable = Math.min(requested, cap, Math.max(0, total - offset))
+      return Array.from({ length: grantable }, (_, i) => offset + i)
+    }
+    return { fetchPage, calls }
+  }
+
+  it('a single request for more than the platform cap returns only `cap` rows (proves the bug this fix targets)', async () => {
+    const { fetchPage } = makeCappedSource(1200, 1000)
+    const singleShot = await fetchPage(0, 1199)
+    expect(singleShot.length).toBe(1000) // NOT 1200 — the cap silently truncates
+  })
+
+  it('pages past a platform cap smaller than the requested limit (1200 requested, 1000 cap → all 1200 collected across 2 pages)', async () => {
+    const { fetchPage, calls } = makeCappedSource(1200, 1000)
+    const rows = await pageThroughRpc<number>(fetchPage, 1200, 1000)
+    expect(rows.length).toBe(1200)
+    expect(new Set(rows).size).toBe(1200) // no duplicates
+    expect(calls.length).toBe(2) // 0-999, 1000-1199
+  })
+
+  it('stops early when the underlying set is smaller than `limit` (short page signals exhaustion, no extra round trip)', async () => {
+    const { fetchPage, calls } = makeCappedSource(450, 1000)
+    const rows = await pageThroughRpc<number>(fetchPage, 4000, 1000)
+    expect(rows.length).toBe(450)
+    expect(calls.length).toBe(1) // one short page proves exhaustion — no wasted 2nd call
+  })
+
+  it('collects exactly `limit` rows across many pages (4000 requested, 1000 cap → 4 pages)', async () => {
+    const { fetchPage, calls } = makeCappedSource(10_000, 1000)
+    const rows = await pageThroughRpc<number>(fetchPage, 4000, 1000)
+    expect(rows.length).toBe(4000)
+    expect(calls.length).toBe(4)
+  })
+
+  it('never exceeds `limit` even if a page could return more (page slice bound is enforced by fetchPage\'s own contract)', async () => {
+    const { fetchPage } = makeCappedSource(2000, 1000)
+    const rows = await pageThroughRpc<number>(fetchPage, 1500, 1000)
+    expect(rows.length).toBe(1500)
   })
 })
