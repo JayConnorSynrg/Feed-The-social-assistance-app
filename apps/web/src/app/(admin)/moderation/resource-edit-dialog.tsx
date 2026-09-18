@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+import { resolveGeoPointV6, type GeocodeMatch } from '@/lib/mapbox-geocode-v6'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -87,6 +88,8 @@ export interface ResourceEditDialogSavedRow {
   lat: number | null
   lng: number | null
   service_mode: string
+  geocode_accuracy: string | null
+  geocode_confidence: string | null
 }
 
 interface EditForm {
@@ -125,27 +128,15 @@ function toForm(r: ResourceEditDialogInput): EditForm {
 
 // ─────────────────────────────────────────────────────────────
 // Forward geocode (INV C) — client-side only; NEXT_PUBLIC_MAPBOX_TOKEN is
-// browser-referer-restricted so it can never be used server-side. Returns null
-// on ANY failure (missing token, empty query, network error, empty features) —
-// geocode failure must never block save.
+// browser-referer-restricted so it can never be used server-side. Delegates
+// to the shared Mapbox Geocoding v6 client (lib/mapbox-geocode-v6.ts), which
+// returns null on ANY failure (missing token, empty query, network error, no
+// usable feature) — geocode failure must never block save — and otherwise
+// classifies the top result into a precise-tier or 'approximate' accuracy
+// tag (mirrors the geocode-backfill move-only-on-strong-match gate).
 // ─────────────────────────────────────────────────────────────
-export async function resolveGeoPoint(query: string): Promise<{ lat: number; lng: number } | null> {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-  const q = query.trim()
-  if (!token || !q) return null
-  try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${token}&limit=1&country=us`
-    const resp = await fetch(url)
-    if (!resp.ok) return null
-    const json = await resp.json() as { features?: Array<{ center?: [number, number] }> }
-    const center = json.features?.[0]?.center
-    if (!center || center.length !== 2) return null
-    const [lng, lat] = center
-    if (typeof lat !== 'number' || typeof lng !== 'number') return null
-    return { lat, lng }
-  } catch {
-    return null
-  }
+export async function resolveGeoPoint(query: string): Promise<GeocodeMatch | null> {
+  return resolveGeoPointV6(query, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
 }
 
 type GeocodeSource =
@@ -250,6 +241,8 @@ export function ResourceEditDialog({
     // also omits p_lat/p_lng and never blocks save.
     let geoLat: number | undefined
     let geoLng: number | undefined
+    let geoAccuracy: string | undefined
+    let geoConfidence: string | undefined
     let source: GeocodeSource
     const hasAddress = Boolean(
       form.address_line1.trim() && (form.city.trim() || form.state.trim() || form.zip_code.trim()),
@@ -276,6 +269,8 @@ export function ResourceEditDialog({
       if (point) {
         geoLat = point.lat
         geoLng = point.lng
+        geoAccuracy = point.accuracy
+        geoConfidence = point.confidence
         source = 'mapbox_forward'
       } else {
         source = 'geocode_failed'
@@ -308,6 +303,8 @@ export function ResourceEditDialog({
         p_service_mode: form.service_mode,
         p_lat: geoLat,
         p_lng: geoLng,
+        p_geocode_accuracy: geoAccuracy,
+        p_geocode_confidence: geoConfidence,
       })
       if (rpcError) throw rpcError
 
@@ -346,6 +343,8 @@ export function ResourceEditDialog({
           lat: geoLat ?? null,
           lng: geoLng ?? null,
           service_mode: form.service_mode,
+          geocode_accuracy: geoAccuracy ?? null,
+          geocode_confidence: geoConfidence ?? null,
         },
       )
       onOpenChange(false)
