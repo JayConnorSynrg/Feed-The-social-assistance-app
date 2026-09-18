@@ -45,6 +45,7 @@ import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
 import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
 import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
+import { isApproximateGeocode, buildTierHistogram } from '@/lib/geocode-accuracy'
 
 // ============================================
 // GEOCODE CACHE (localStorage + in-memory, keyed by "city, state")
@@ -127,6 +128,7 @@ function searchRowToMapResource(row: SearchResourceRow): MapResource {
     latitude: row.lat ?? NaN,
     longitude: row.lng ?? NaN,
     is_volunteer_resource: false,
+    geocode_accuracy: row.geocode_accuracy ?? null,
   }
 }
 
@@ -563,6 +565,19 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     () => searchResults.map(searchRowToMapResource),
     [searchResults]
   )
+
+  // Once per result set (not per render): map-pin precision tracking for the
+  // search surface. Mirrors the viewport-surface log in use-viewport-resources.ts.
+  useEffect(() => {
+    if (!isSearchActive) return
+    logger.info('map.pins.rendered', {
+      event: 'map.pins.rendered',
+      surface: 'search',
+      total_pins: searchMapResources.length,
+      approximate_pins: searchMapResources.filter((r) => isApproximateGeocode(r.geocode_accuracy)).length,
+      tier_histogram: buildTierHistogram(searchMapResources),
+    })
+  }, [isSearchActive, searchMapResources])
 
   // SNAP food-access layer — national retailers from the isolated snap_retailers
   // table via the bounded snap_retailers_in_bounds RPC. Public data → no auth gate.
