@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { logger, withMetric } from '@/lib/logger'
 import type { Resource } from '@/components/map/resource-marker'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+import { isApproximateGeocode, buildTierHistogram } from '@/lib/geocode-accuracy'
 
 interface Bounds {
   west: number
@@ -43,6 +44,9 @@ interface ResourceRow {
   // Supabase REST returns PostGIS GEOGRAPHY as EWKB hex string; may also be GeoJSON in tests
   location: string | { coordinates?: [number, number] } | null
   is_volunteer_resource: boolean | null
+  // Generated RPC type is non-null `string`, but at runtime this is null for
+  // untagged rows -- always treat as nullable regardless of the generated type.
+  geocode_accuracy: string | null
 }
 
 /**
@@ -159,6 +163,7 @@ export function useViewportResources({
             latitude,
             longitude,
             is_volunteer_resource: row.is_volunteer_resource ?? false,
+            geocode_accuracy: row.geocode_accuracy ?? null,
           }
         }).filter((r) => r.latitude !== 0 && r.longitude !== 0)
 
@@ -172,6 +177,15 @@ export function useViewportResources({
           category,
           count: filtered.length,
           result_count: filtered.length,
+        })
+
+        // Once per result set (not per render): map-pin precision tracking.
+        logger.info('map.pins.rendered', {
+          event: 'map.pins.rendered',
+          surface: 'viewport',
+          total_pins: filtered.length,
+          approximate_pins: filtered.filter((r) => isApproximateGeocode(r.geocode_accuracy)).length,
+          tier_histogram: buildTierHistogram(filtered),
         })
 
         setResources(filtered)

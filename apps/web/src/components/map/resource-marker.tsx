@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
+import { isApproximateGeocode } from '@/lib/geocode-accuracy'
 
 interface Resource {
   id: string
@@ -22,6 +23,7 @@ interface Resource {
   latitude: number
   longitude: number
   is_volunteer_resource?: boolean
+  geocode_accuracy?: string | null
 }
 
 interface ResourceMarkerProps {
@@ -33,6 +35,7 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
   const [showPopup, setShowPopup] = useState(false)
 
   const color = getCategoryHex(resource.category)
+  const isApproximate = isApproximateGeocode(resource.geocode_accuracy)
 
   const handleClick = useCallback(() => {
     setShowPopup(true)
@@ -65,8 +68,15 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
         <div
           className="cursor-pointer transition-transform hover:scale-110"
           style={{ color }}
+          role="img"
+          aria-label={isApproximate ? `${resource.name} (approximate location)` : resource.name}
+          title={isApproximate ? 'Approximate location' : undefined}
         >
-          <MapPin className="h-8 w-8 drop-shadow-md" fill={color} />
+          <MapPin
+            className="h-8 w-8 drop-shadow-md"
+            fill={isApproximate ? 'none' : color}
+            strokeWidth={isApproximate ? 2.5 : 2}
+          />
         </div>
       </Marker>
 
@@ -83,11 +93,18 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
         >
           <Card className="border-0 shadow-none">
             <CardHeader className="pb-2 pt-0 px-0">
-              <div
-                className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1 w-fit"
-                style={{ backgroundColor: color }}
-              >
-                {formatCategory(resource.category)}
+              <div className="flex items-center gap-1.5 mb-1">
+                <div
+                  className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white w-fit"
+                  style={{ backgroundColor: color }}
+                >
+                  {formatCategory(resource.category)}
+                </div>
+                {isApproximate && (
+                  <div className="inline-block px-2 py-0.5 rounded text-xs font-medium text-stone-600 bg-stone-100 border border-stone-300 w-fit">
+                    Approximate location
+                  </div>
+                )}
               </div>
               <CardTitle className="text-base">{resource.name}</CardTitle>
             </CardHeader>

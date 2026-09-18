@@ -4048,6 +4048,7 @@ export type Database = {
           category: string
           city: string
           description: string
+          geocode_accuracy: string
           hours_of_operation: Json
           id: string
           is_volunteer_resource: boolean
@@ -4088,6 +4089,7 @@ export type Database = {
           category: string
           city: string
           description: string
+          geocode_accuracy: string
           id: string
           lat: number
           lng: number
