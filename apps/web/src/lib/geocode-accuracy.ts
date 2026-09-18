@@ -5,15 +5,19 @@
 // consumer MUST derive from this ONE module so the render decision and the
 // logged histogram can never desync.
 
-// Precise geocode tiers render as the normal solid pin. Any other present,
-// non-empty value (interpolated/approximate/intersection/etc.) renders the
-// distinct hollow "approximate" pin. Null/absent ALWAYS renders solid --
-// runtime data has untagged rows despite the generated RPC type being
-// non-null `string`, so this guard must defend against null regardless of type.
+// Life-safety render fail-safe: a pin renders EXACT (solid) if and only if
+// its accuracy is a verified precise tier -- exactly 'rooftop', 'parcel', or
+// 'point'. Every other value renders APPROXIMATE (hollow), including NULL,
+// undefined, empty string, and unknown/coarse tiers (interpolated,
+// approximate, intersection, etc.). An untagged pin must never claim
+// exactness -- absence of a verified tier is treated the same as an
+// explicit coarse tier. Production has zero null-accuracy located rows as
+// of the backfill closure, so this governs only future/new rows written by
+// ingest or admin paths, and is the safe default for them.
 export const PRECISE_GEOCODE_TIERS = new Set(['rooftop', 'parcel', 'point'])
 
 export function isApproximateGeocode(accuracy: string | null | undefined): boolean {
-  return accuracy != null && accuracy !== '' && !PRECISE_GEOCODE_TIERS.has(accuracy)
+  return !(accuracy != null && PRECISE_GEOCODE_TIERS.has(accuracy))
 }
 
 export function buildTierHistogram(rows: { geocode_accuracy?: string | null }[]): Record<string, number> {
