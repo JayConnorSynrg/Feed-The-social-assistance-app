@@ -25,7 +25,7 @@ export interface ResourceRow {
   state: string | null
   zip_code: string | null
   country: string | null
-  /** Only present on rows returned by coarse_geocode_targets(); always NULL there by definition. */
+  /** Only present on rows returned by untagged_geocode_targets(); always NULL there by definition. */
   geocode_accuracy?: string | null
 }
 
@@ -240,4 +240,41 @@ export async function runWithConcurrency(
     }
   })
   await Promise.all(workers)
+}
+
+// ---------------------------------------------------------------------------
+// Paged RPC fetch (PR-4 limit-cap fix)
+//
+// Root cause: the Supabase project's API "Max Rows" setting is a hard
+// PostgREST db-max-rows cap (observed = 1000) that truncates ANY single
+// response — including a table-returning RPC call — to that many rows,
+// regardless of the function's own internal SQL LIMIT or a supabase-js
+// .limit()/.range() call requesting more in one shot. `?target=coarse&limit=
+// 1200` in prod (PR-3) silently came back as 1000 rows for exactly this
+// reason — COARSE_MAX_LIMIT=1500 (an application-level clamp) was never the
+// bottleneck; the platform-level cap downstream of it was.
+//
+// Fix: page. Each individual request asks for <=pageSize rows (a caller-
+// supplied fetchPage callback so this stays decoupled from the Supabase
+// client and unit-testable), which respects the hard cap, and we issue
+// repeated sequential requests against the SAME deterministic (ORDER BY id,
+// STABLE) underlying result set until `limit` rows are collected or a short
+// page proves the target set is exhausted.
+// ---------------------------------------------------------------------------
+export async function pageThroughRpc<T>(
+  fetchPage: (offset: number, pageEnd: number) => Promise<T[]>,
+  limit: number,
+  pageSize: number,
+): Promise<T[]> {
+  const rows: T[] = []
+  let offset = 0
+  while (offset < limit) {
+    const pageEnd = Math.min(offset + pageSize, limit) - 1
+    const page = await fetchPage(offset, pageEnd)
+    rows.push(...page)
+    const requested = pageEnd - offset + 1
+    if (page.length < requested) break // short page → target set exhausted
+    offset += pageSize
+  }
+  return rows
 }
