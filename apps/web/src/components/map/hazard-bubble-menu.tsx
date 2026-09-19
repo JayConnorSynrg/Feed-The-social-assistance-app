@@ -37,6 +37,8 @@ import type { Database } from '@feed/database'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
 import { cn } from '@/lib/utils'
+import { resolveGeoPointV6 } from '@/lib/mapbox-geocode-v6'
+import { planHazardGeocode } from './hazard-geocode'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -455,22 +457,28 @@ export function HazardBubbleMenu({
     setGeocodeSuccess(false)
     const t0 = Date.now()
     try {
-      const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${token}&limit=1`
-      )
-      const json = await res.json()
-      const feature = json.features?.[0]
-      if (feature) {
-        const [lng, lat] = feature.center as [number, number]
-        onAddressGeocoded({ lng, lat })
+      // Move-only-on-strong-match gate: the staging pin already holds a valid
+      // coordinate (center-seeded or dragged). A weak/approximate address must
+      // never overwrite it, so classify the v6 result and branch on the pure
+      // decision. resolveGeoPointV6 returns null on any failure (never throws).
+      const match = await resolveGeoPointV6(address, token)
+      const decision = planHazardGeocode(match)
+      const ms = Date.now() - t0
+      if (decision.move && decision.coords) {
+        onAddressGeocoded(decision.coords)
         setGeocodeSuccess(true)
-        logger.info('hazard.geocode', { address, ms: Date.now() - t0, success: true })
-        track('safety_alert_geocode', { success: 'true', ms: String(Date.now() - t0) })
       } else {
         setGeocodeError('Address not found — drag the pin to set location')
-        logger.info('hazard.geocode', { address, ms: Date.now() - t0, success: false })
-        track('safety_alert_geocode', { success: 'false' })
       }
+      logger.info('hazard.geocode', {
+        address,
+        ms,
+        success: decision.move,
+        matched: match !== null,
+        accuracy: decision.accuracy ?? null,
+        confidence: decision.confidence ?? null,
+      })
+      track('safety_alert_geocode', { success: String(decision.move), ms: String(ms) })
     } catch {
       setGeocodeError('Could not geocode — drag the pin to set location')
     } finally {
