@@ -153,26 +153,32 @@ export type Database = {
         Row: {
           context: Json | null
           created_at: string
+          duration_ms: number | null
           event: string
           id: string
           level: string
           request_id: string | null
+          user_id: string | null
         }
         Insert: {
           context?: Json | null
           created_at?: string
+          duration_ms?: number | null
           event: string
           id?: string
           level: string
           request_id?: string | null
+          user_id?: string | null
         }
         Update: {
           context?: Json | null
           created_at?: string
+          duration_ms?: number | null
           event?: string
           id?: string
           level?: string
           request_id?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1798,6 +1804,7 @@ export type Database = {
       }
       posts: {
         Row: {
+          comment_count: number
           content: string
           created_at: string | null
           hidden_at: string | null
@@ -1806,6 +1813,8 @@ export type Database = {
           image_url: string | null
           is_hidden: boolean | null
           is_pinned: boolean | null
+          like_count: number
+          location: unknown
           max_seekers: number | null
           metadata: Json | null
           petition_id: string | null
@@ -1816,6 +1825,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          comment_count?: number
           content: string
           created_at?: string | null
           hidden_at?: string | null
@@ -1824,6 +1834,8 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          like_count?: number
+          location?: unknown
           max_seekers?: number | null
           metadata?: Json | null
           petition_id?: string | null
@@ -1834,6 +1846,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          comment_count?: number
           content?: string
           created_at?: string | null
           hidden_at?: string | null
@@ -1842,6 +1855,8 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          like_count?: number
+          location?: unknown
           max_seekers?: number | null
           metadata?: Json | null
           petition_id?: string | null
@@ -1969,6 +1984,30 @@ export type Database = {
           username?: string | null
           venmo_username?: string | null
           zip_code?: string | null
+        }
+        Relationships: []
+      }
+      ranking_config: {
+        Row: {
+          comment_weight: number
+          distance_decay_km: number
+          half_life_hours: number
+          singleton_guard: boolean
+          updated_at: string
+        }
+        Insert: {
+          comment_weight?: number
+          distance_decay_km?: number
+          half_life_hours?: number
+          singleton_guard?: boolean
+          updated_at?: string
+        }
+        Update: {
+          comment_weight?: number
+          distance_decay_km?: number
+          half_life_hours?: number
+          singleton_guard?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
@@ -3433,6 +3472,32 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      app_logs_latency_percentiles: {
+        Args: { p_window?: string }
+        Returns: {
+          operation: string
+          p50_ms: number
+          p95_ms: number
+          p99_ms: number
+          samples: number
+        }[]
+      }
+      app_logs_latency_regressions: {
+        Args: {
+          p_current?: string
+          p_factor?: number
+          p_min_samples?: number
+          p_prior?: string
+        }
+        Returns: {
+          current_n: number
+          current_p95: number
+          operation: string
+          prior_n: number
+          prior_p95: number
+          ratio: number
+        }[]
       }
       approve_form_template: { Args: { p_id: string }; Returns: undefined }
       approve_resource: {
