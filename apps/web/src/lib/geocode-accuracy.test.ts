@@ -14,7 +14,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isApproximateGeocode, PRECISE_GEOCODE_TIERS } from './geocode-accuracy'
+import {
+  isApproximateGeocode, PRECISE_GEOCODE_TIERS,
+  needsLocation, LOCATION_ERROR_ACCURACY, buildTierHistogram,
+} from './geocode-accuracy'
 
 describe('isApproximateGeocode', () => {
   it('treats null accuracy as approximate (the core fail-safe fix)', () => {
@@ -39,4 +42,35 @@ describe('isApproximateGeocode', () => {
       expect(isApproximateGeocode(tier)).toBe(true)
     }
   )
+
+  it('treats the unlocated sentinel as approximate (never a solid pin)', () => {
+    expect(isApproximateGeocode(LOCATION_ERROR_ACCURACY)).toBe(true)
+  })
+})
+
+describe('needsLocation — W1 location-error state', () => {
+  it('is true ONLY for the unlocated sentinel', () => {
+    expect(needsLocation(LOCATION_ERROR_ACCURACY)).toBe(true)
+    expect(LOCATION_ERROR_ACCURACY).toBe('unlocated')
+  })
+
+  it.each(['rooftop', 'parcel', 'point', 'approximate', 'interpolated', '', null, undefined])(
+    'is false for %s',
+    (acc) => {
+      expect(needsLocation(acc as string | null | undefined)).toBe(false)
+    }
+  )
+})
+
+describe('buildTierHistogram — unlocated bucket', () => {
+  it('counts unlocated rows in their own bucket, not "other"', () => {
+    const h = buildTierHistogram([
+      { geocode_accuracy: 'unlocated' },
+      { geocode_accuracy: 'unlocated' },
+      { geocode_accuracy: 'rooftop' },
+    ])
+    expect(h.unlocated).toBe(2)
+    expect(h.rooftop).toBe(1)
+    expect(h.other).toBe(0)
+  })
 })

@@ -8,9 +8,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
-import { logger } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
+import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
@@ -52,6 +52,7 @@ interface PendingItem {
   lat: number | null
   lng: number | null
   service_mode: string
+  geocode_accuracy: string | null
 }
 
 type ContentFilter = 'all' | 'resource' | 'link' | 'form'
@@ -109,6 +110,7 @@ function toDialogInputFromPendingRow(item: PendingItem): ResourceEditDialogInput
     service_mode: item.service_mode ?? 'physical',
     lat: item.lat,
     lng: item.lng,
+    geocode_accuracy: item.geocode_accuracy,
   }
 }
 
@@ -352,7 +354,12 @@ export function ResourcesTab() {
 
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
-      console.error('Error approving item:', err)
+      // W2: every approve failure reaches logger.error → app_logs (was console-only).
+      logger.error('admin.resource.approve', err, {
+        resource_id: item.id,
+        content_type: item.discovery_metadata?.content_type ?? 'resource',
+        outcome: 'error',
+      })
       // Surface the failure in the UI instead of silently leaving the item in the queue.
       const msg = err instanceof Error ? err.message : 'Failed to approve item'
       setQueueError(`Approve failed: ${msg}`)
@@ -365,12 +372,16 @@ export function ResourcesTab() {
   // has persisted the edited fields. Guarded against double-fire by the
   // dialog's own `saving` state (the Confirm button disables while in flight).
   const handleConfirmApprove = useCallback(async (resourceId: string) => {
-    const { error } = await supabase.rpc('approve_resource', {
-      p_resource_id: resourceId,
-      p_reason: 'Admin approved from discovery queue',
+    // W2: one admin.resource.approve_confirm event carrying latency + outcome;
+    // withMetric emits logger.error → app_logs on failure (a previously
+    // unlogged throw) and re-throws so the dialog surfaces it and stays open.
+    await withMetric('admin.resource.approve_confirm', { resource_id: resourceId }, async () => {
+      const { error } = await supabase.rpc('approve_resource', {
+        p_resource_id: resourceId,
+        p_reason: 'Admin approved from discovery queue',
+      })
+      if (error) throw error
     })
-    if (error) throw error
-    logger.info('admin.resource.approve_confirm', { resource_id: resourceId })
   }, [supabase])
 
   // Called once both admin_update_resource and approve_resource succeed —
@@ -390,7 +401,8 @@ export function ResourcesTab() {
       if (error) throw error
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
-      console.error('Error rejecting item:', err)
+      // W2: reject failures reach logger.error → app_logs (was console-only).
+      logger.error('admin.resource.reject', err, { resource_id: item.id, outcome: 'error' })
       // Surface the failure in the UI instead of silently leaving the item in the queue.
       const msg = err instanceof Error ? err.message : 'Failed to reject item'
       setQueueError(`Reject failed: ${msg}`)
@@ -660,6 +672,12 @@ export function ResourcesTab() {
                         {meta && (
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${confidenceClass(meta.confidence)}`}>
                             {meta.confidence} confidence
+                          </span>
+                        )}
+                        {/* W1: 'location error' badge — off the map, still listed/findable. */}
+                        {needsLocation(item.geocode_accuracy) && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" /> Needs location
                           </span>
                         )}
                       </div>

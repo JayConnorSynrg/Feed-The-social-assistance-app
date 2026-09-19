@@ -16,8 +16,25 @@
 // ingest or admin paths, and is the safe default for them.
 export const PRECISE_GEOCODE_TIERS = new Set(['rooftop', 'parcel', 'point'])
 
+// The 'location error' sentinel written into geocode_accuracy (plain text
+// column, no enum/constraint) when a geocode attempt was weak or failed AND
+// the row has no existing pin (admin_update_resource, p_mark_unlocated). It is
+// the SINGLE state consumed by every surface: the admin list/editor badge
+// ("needs location"), the map (never plotted — these rows carry no
+// coordinates), and search (still findable — search filters on status, never
+// on location). It is NOT a precise tier, so isApproximateGeocode() already
+// treats it as approximate if a coordinate ever coexisted with it.
+export const LOCATION_ERROR_ACCURACY = 'unlocated'
+
 export function isApproximateGeocode(accuracy: string | null | undefined): boolean {
   return !(accuracy != null && PRECISE_GEOCODE_TIERS.has(accuracy))
+}
+
+/** True when a row is flagged with the 'location error' state — the admin must
+ *  give it a location before it can appear on the map. Consumed by the admin
+ *  list card badge and the edit/approve dialog badge. */
+export function needsLocation(accuracy: string | null | undefined): boolean {
+  return accuracy === LOCATION_ERROR_ACCURACY
 }
 
 export function buildTierHistogram(rows: { geocode_accuracy?: string | null }[]): Record<string, number> {
@@ -28,6 +45,7 @@ export function buildTierHistogram(rows: { geocode_accuracy?: string | null }[])
     interpolated: 0,
     approximate: 0,
     intersection: 0,
+    unlocated: 0,
     null: 0,
     other: 0,
   }
