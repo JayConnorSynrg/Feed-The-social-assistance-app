@@ -294,6 +294,13 @@ export function ResourceEditDialog({
         },
       )
 
+      // admin_update_resource ALWAYS RETURNS the row, so `updated` is the source
+      // of truth and this fallback is effectively unreachable. It exists only to
+      // satisfy the row shape if a row ever fails to come back — so its geo
+      // fields echo the row's PRIOR known state (what the server would preserve),
+      // never the client's optimistic guess: fabricating coords/accuracy here
+      // could contradict the server's "keep existing pin / only-tag-unlocated-
+      // when-location-null" gate.
       onSaved(
         (updated as ResourceEditDialogSavedRow | null) ?? {
           id: resource.id,
@@ -311,11 +318,11 @@ export function ResourceEditDialog({
           source: null,
           is_verified: null,
           moderated_at: null,
-          lat: geo.lat ?? null,
-          lng: geo.lng ?? null,
+          lat: resource.lat,
+          lng: resource.lng,
           service_mode: form.service_mode,
-          geocode_accuracy: geo.markUnlocated ? 'unlocated' : (geo.accuracy ?? resource.geocode_accuracy),
-          geocode_confidence: geo.confidence ?? null,
+          geocode_accuracy: resource.geocode_accuracy,
+          geocode_confidence: null,
         },
       )
       onOpenChange(false)

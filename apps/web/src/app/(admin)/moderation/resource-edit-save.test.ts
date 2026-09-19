@@ -185,18 +185,56 @@ describe('runResourceSave — W2 logging', () => {
 
   // MUTATION-PROOF: deleting the logger.error call in runResourceSave's catch
   // turns this RED (today the dialog only set a local saveError — no app_logs).
-  it('rpc failure → logger.error admin.resource.save AND rethrows', async () => {
+  it('rpc failure → logger.error admin.resource.save (code, not message) AND rethrows original', async () => {
     const logger = fakeLogger()
-    const boom = new Error('rls denied')
+    const boom = Object.assign(new Error('rls denied'), { code: '42501' })
     const rpc = vi.fn(async () => ({ data: null, error: boom }))
+    // The ORIGINAL error is re-thrown (dialog needs its message for the UX saveError).
     await expect(runResourceSave(
       { resourceId: 'r1', mode: 'edit', serviceMode: 'physical', basePayload: base, geo: PLACED, changedFields: [] },
       { rpc, logger },
     )).rejects.toThrow('rls denied')
     const errCalls = logger.error.mock.calls.filter((c) => c[0] === 'admin.resource.save')
     expect(errCalls).toHaveLength(1)
-    expect(errCalls[0][1]).toBe(boom)
-    expect(errCalls[0][2]).toMatchObject({ outcome: 'error', reason: 'rls denied' })
+    // The reason logged is the non-value-bearing SQLSTATE code, never the message.
+    expect(errCalls[0][2]).toMatchObject({ outcome: 'error', reason: '42501' })
+    // A SCRUBBED error is handed to logger.error — a static message, name = code —
+    // so the real logger's error_message/stack serialization cannot leak a value.
+    const logged = errCalls[0][1] as Error
+    expect(logged).not.toBe(boom)
+    expect(logged.message).toBe('admin_update_resource RPC failed')
+    expect(logged.name).toBe('42501')
+  })
+
+  // MUTATION-PROOF (FIX 1): a Postgres error whose MESSAGE quotes a field VALUE
+  // must never reach the admin.resource.save error log. Reverting the scrub
+  // (logger.error(..., err, buildSaveEvent(..., err.message))) turns this RED.
+  it('save ERROR path never logs a field VALUE embedded in the Postgres error message', async () => {
+    const logger = fakeLogger()
+    const LEAK = 'secret.person@leak.example'
+    const leaky = Object.assign(
+      new Error(`duplicate key value violates unique constraint "resources_email_key" (email)=(${LEAK})`),
+      { code: '23505' },
+    )
+    const rpc = vi.fn(async () => ({ data: null, error: leaky }))
+    await expect(runResourceSave(
+      { resourceId: 'r1', mode: 'edit', serviceMode: 'physical', basePayload: base, geo: PLACED, changedFields: ['email'] },
+      { rpc, logger },
+    )).rejects.toBeTruthy()
+
+    const call = logger.error.mock.calls.find((c) => c[0] === 'admin.resource.save')!
+    const loggedError = call[1] as Error | undefined
+    const loggedData = call[2]
+    // Reconstruct exactly what logger.ts serializes into app_logs from BOTH args:
+    // the error's name + message + the structured data object.
+    const serialized = [
+      JSON.stringify(loggedData),
+      loggedError instanceof Error ? loggedError.message : String(loggedError),
+      loggedError instanceof Error ? loggedError.name : '',
+    ].join('\n')
+    expect(serialized).not.toContain(LEAK)
+    // Ops still gets a stable, non-value-bearing identifier.
+    expect(loggedData).toMatchObject({ reason: '23505' })
   })
 
   it('approve mode awaits onConfirm AFTER persist; onConfirm throw rethrows', async () => {

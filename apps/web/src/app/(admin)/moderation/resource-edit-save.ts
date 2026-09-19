@@ -254,6 +254,21 @@ export function buildSaveEvent(
   }
 }
 
+/**
+ * A non-value-bearing failure identifier for logging: the Postgres SQLSTATE /
+ * PostgREST error code when present, else the Error name, else 'unknown'. NEVER
+ * the error message — a constraint-violation message can quote a column value.
+ */
+export function errorCode(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const code = (err as { code?: unknown }).code
+    if (typeof code === 'string' && code) return code
+    const name = (err as { name?: unknown }).name
+    if (typeof name === 'string' && name) return name
+  }
+  return 'unknown'
+}
+
 // ─────────────────────────────────────────────────────────────
 // Save orchestrator (W1 + W2)
 // ─────────────────────────────────────────────────────────────
@@ -311,11 +326,21 @@ export async function runResourceSave(input: RunSaveInput, deps: RunSaveDeps): P
       buildSaveEvent(resourceId, mode, geo, changedFields, Math.round(now() - t0), 'ok'),
     )
   } catch (err) {
-    const reason = err instanceof Error ? err.message : 'unknown'
+    // Privacy: a Postgres/PostgREST error MESSAGE can echo a column VALUE — a
+    // unique/constraint violation quotes the offending value, e.g.
+    // "…(email)=(a@b.org)…". Log only a non-value-bearing identifier (SQLSTATE /
+    // PostgREST code, else Error.name) plus a STATIC message; never raw
+    // err.message. A scrubbed error is handed to logger.error so its own
+    // error_message/stack serialization cannot leak the value into app_logs.
+    // The original err is re-thrown so the dialog's user-facing saveError (UX,
+    // not a log) still shows the full message.
+    const code = errorCode(err)
+    const safeErr = new Error('admin_update_resource RPC failed')
+    safeErr.name = code
     deps.logger.error(
       'admin.resource.save',
-      err,
-      buildSaveEvent(resourceId, mode, geo, changedFields, Math.round(now() - t0), 'error', reason),
+      safeErr,
+      buildSaveEvent(resourceId, mode, geo, changedFields, Math.round(now() - t0), 'error', code),
     )
     throw err
   }
