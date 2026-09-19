@@ -10,6 +10,7 @@
  */
 
 import { track } from '@vercel/analytics'
+import { runWithMetric } from './with-metric-core.mjs'
 
 // ============================================
 // Server-side Supabase log sink
@@ -45,7 +46,10 @@ function sinkToSupabase(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
-        body: JSON.stringify({ level, event, context, duration_ms }),
+        // Forward the caller's correlation id so the persisted client row is
+        // not orphaned (request_id != null). The route treats request_id as a
+        // non-security field and still derives user_id from the cookie session.
+        body: JSON.stringify({ level, event, context, duration_ms, request_id }),
       }).catch(() => {
         // Swallow network errors — logging must never surface to the caller.
       })
@@ -254,36 +258,21 @@ export async function withMetric<T>(
   attrs: Record<string, string | number | boolean | null>,
   fn: () => Promise<T>
 ): Promise<T> {
-  const start = performance.now()
-  try {
-    const result = await fn()
-    const duration_ms = Math.round(performance.now() - start)
-    const event = `${operation}.complete`
-    // Console (Vercel Log Drain) AND exactly one persisted info wide-event row
-    // carrying duration_ms (I1). This is the single completion write for every
-    // withMetric call site — the sink is the sole persist path, so success
-    // writes exactly one row and never also an error row.
-    emit({ level: 'info', message: event, timestamp: new Date().toISOString(), ...attrs, duration_ms })
-    sinkToSupabase('info', event, { ...attrs }, undefined, duration_ms)
-    track(operation, { ...attrs, duration_ms, ok: true })
-    return result
-  } catch (error) {
-    const duration_ms = Math.round(performance.now() - start)
-    const error_code = error instanceof Error ? error.name : 'UnknownError'
-    const event = `${operation}.error`
-    const ctx = {
-      ...attrs,
-      error_code,
-      error_message: error instanceof Error ? error.message : String(error),
-    }
-    // A failed operation still records its outcome — exactly one persisted error
-    // wide-event row carrying duration_ms (I1). No double write: this is the only
-    // sink on the failure path.
-    emit({ level: 'error', message: event, timestamp: new Date().toISOString(), ...ctx, duration_ms })
-    sinkToSupabase('error', event, ctx, undefined, duration_ms)
-    if (error_code !== 'AbortError') {
-      track(operation, { ...attrs, duration_ms, ok: false, error_code })
-    }
-    throw error
-  }
+  // Client operations have no server request scope, so mint a per-op
+  // correlation id that ties this operation's persisted wide-event row back to
+  // the op (I5). On the server, request_id stays undefined so sinkToSupabase
+  // reads the proxy-stamped x-request-id (I4) — server correlation is unchanged.
+  const requestId = typeof window !== 'undefined' ? createOpId() : undefined
+  // The guarded body lives in with-metric-core.mjs so the shipped path and the
+  // node:test suite exercise the SAME code. Real emit/sink/track wired here.
+  return runWithMetric(
+    // `emit` requires a full LogEntry; the core's dep slot is intentionally
+    // broader. The core only ever calls it with a valid LogEntry-shaped object,
+    // so this boundary cast is safe and keeps runtime behavior unchanged.
+    { emit: emit as (entry: Record<string, unknown>) => void, sink: sinkToSupabase, track },
+    operation,
+    attrs,
+    fn,
+    requestId
+  ) as Promise<T>
 }

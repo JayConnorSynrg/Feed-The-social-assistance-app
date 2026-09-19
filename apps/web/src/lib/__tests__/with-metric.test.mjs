@@ -1,58 +1,31 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { runWithMetric } from '../with-metric-core.mjs'
 
 /**
- * Minimal inline replica of withMetric (src/lib/logger.ts) so the contract can
- * be exercised with node:test + no bundler. track() and logger are stubbed as
- * no-op capture sinks. Keep this replica in sync with the real implementation.
+ * Exercises the REAL withMetric body. The shipped withMetric (src/lib/logger.ts)
+ * delegates to `runWithMetric` in with-metric-core.mjs, wiring the real
+ * emit/sink/track. This suite imports that SAME module and injects capture
+ * stubs, so a regression in the shipped persist path (a double-write or a
+ * dropped sink call) turns these assertions RED. `sinks` captures the
+ * app_logs wide-event rows — one call per outcome, the sole persist path (I1).
  */
-function makeWithMetric() {
+function makeStubDeps() {
   const tracks = []
   const logs = []
-  // `sinks` captures the persisted app_logs wide-event rows. In the real impl
-  // (src/lib/logger.ts) this is sinkToSupabase — one call per outcome, the sole
-  // persist path, so success writes exactly one info row and failure exactly one
-  // error row, never both, never zero (I1).
   const sinks = []
-  const track = (name, props) => tracks.push({ name, props })
-  const emit = (entry) => logs.push(entry)
-  const sinkToSupabase = (level, event, context, request_id, duration_ms) =>
-    sinks.push({ level, event, context, request_id, duration_ms })
-
-  async function withMetric(operation, attrs, fn) {
-    const start = performance.now()
-    try {
-      const result = await fn()
-      const duration_ms = Math.round(performance.now() - start)
-      const event = `${operation}.complete`
-      emit({ level: 'info', message: event, ...attrs, duration_ms })
-      sinkToSupabase('info', event, { ...attrs }, undefined, duration_ms)
-      track(operation, { ...attrs, duration_ms, ok: true })
-      return result
-    } catch (error) {
-      const duration_ms = Math.round(performance.now() - start)
-      const error_code = error instanceof Error ? error.name : 'UnknownError'
-      const event = `${operation}.error`
-      const ctx = {
-        ...attrs,
-        error_code,
-        error_message: error instanceof Error ? error.message : String(error),
-      }
-      emit({ level: 'error', message: event, ...ctx, duration_ms })
-      sinkToSupabase('error', event, ctx, undefined, duration_ms)
-      if (error_code !== 'AbortError') {
-        track(operation, { ...attrs, duration_ms, ok: false, error_code })
-      }
-      throw error
-    }
+  const deps = {
+    track: (name, props) => tracks.push({ name, props }),
+    emit: (entry) => logs.push(entry),
+    sink: (level, event, context, request_id, duration_ms) =>
+      sinks.push({ level, event, context, request_id, duration_ms }),
   }
-
-  return { withMetric, tracks, logs, sinks }
+  return { deps, tracks, logs, sinks }
 }
 
 test('success path returns fn result and records duration_ms + ok:true', async () => {
-  const { withMetric, tracks, logs } = makeWithMetric()
-  const result = await withMetric('op.success', { category: 'all' }, async () => 42)
+  const { deps, tracks, logs } = makeStubDeps()
+  const result = await runWithMetric(deps, 'op.success', { category: 'all' }, async () => 42)
 
   assert.equal(result, 42)
   assert.equal(tracks.length, 1)
@@ -65,10 +38,10 @@ test('success path returns fn result and records duration_ms + ok:true', async (
 })
 
 test('I1: success persists EXACTLY ONE info wide-event row with duration_ms', async () => {
-  const { withMetric, sinks } = makeWithMetric()
-  await withMetric('op.success', { category: 'all' }, async () => 42)
+  const { deps, sinks } = makeStubDeps()
+  await runWithMetric(deps, 'op.success', { category: 'all' }, async () => 42)
 
-  // Exactly once on success — one info row, no error row, never zero.
+  // Exactly once on success — one info row, no error row, never twice, never zero.
   assert.equal(sinks.length, 1)
   assert.equal(sinks[0].level, 'info')
   assert.equal(sinks[0].event, 'op.success.complete')
@@ -77,7 +50,7 @@ test('I1: success persists EXACTLY ONE info wide-event row with duration_ms', as
 })
 
 test('error path re-throws and records ok:false + error_code', async () => {
-  const { withMetric, tracks } = makeWithMetric()
+  const { deps, tracks } = makeStubDeps()
   class BoomError extends Error {
     constructor() {
       super('boom')
@@ -86,7 +59,7 @@ test('error path re-throws and records ok:false + error_code', async () => {
   }
 
   await assert.rejects(
-    () => withMetric('op.fail', {}, async () => {
+    () => runWithMetric(deps, 'op.fail', {}, async () => {
       throw new BoomError()
     }),
     /boom/
@@ -98,7 +71,7 @@ test('error path re-throws and records ok:false + error_code', async () => {
 })
 
 test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', async () => {
-  const { withMetric, sinks } = makeWithMetric()
+  const { deps, sinks } = makeStubDeps()
   class BoomError extends Error {
     constructor() {
       super('boom')
@@ -107,7 +80,7 @@ test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', a
   }
 
   await assert.rejects(
-    () => withMetric('op.fail', {}, async () => {
+    () => runWithMetric(deps, 'op.fail', {}, async () => {
       throw new BoomError()
     }),
     /boom/
@@ -122,16 +95,41 @@ test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', a
 })
 
 test('AbortError path re-throws but skips the metric event', async () => {
-  const { withMetric, tracks } = makeWithMetric()
+  const { deps, tracks } = makeStubDeps()
   const abort = new Error('aborted')
   abort.name = 'AbortError'
 
   await assert.rejects(
-    () => withMetric('op.abort', {}, async () => {
+    () => runWithMetric(deps, 'op.abort', {}, async () => {
       throw abort
     }),
     /aborted/
   )
 
   assert.equal(tracks.length, 0)
+})
+
+test('I5: a supplied correlation id is threaded to the persisted row (success and failure)', async () => {
+  // Client withMetric mints a per-op id and passes it here; the sink forwards it
+  // to /api/client-log which writes it to app_logs.request_id (non-null row).
+  const ok = makeStubDeps()
+  await runWithMetric(ok.deps, 'op.ok', {}, async () => 1, 'op-abc123')
+  assert.equal(ok.sinks.length, 1)
+  assert.equal(ok.sinks[0].request_id, 'op-abc123')
+
+  const bad = makeStubDeps()
+  class BoomError extends Error {
+    constructor() {
+      super('boom')
+      this.name = 'BoomError'
+    }
+  }
+  await assert.rejects(
+    () => runWithMetric(bad.deps, 'op.bad', {}, async () => {
+      throw new BoomError()
+    }, 'op-def456'),
+    /boom/
+  )
+  assert.equal(bad.sinks.length, 1)
+  assert.equal(bad.sinks[0].request_id, 'op-def456')
 })
