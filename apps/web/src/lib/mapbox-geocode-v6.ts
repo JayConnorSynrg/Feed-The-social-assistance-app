@@ -13,10 +13,26 @@
 import { PRECISE_GEOCODE_TIERS } from './geocode-accuracy'
 
 export interface MapboxV6Feature {
+  id?: string
   geometry?: { coordinates?: [number, number] } // [lng, lat]
   properties?: {
+    mapbox_id?: string
+    feature_type?: string
+    /** Standardized primary line, e.g. "1600 Pennsylvania Avenue Northwest". */
+    name?: string
+    /** Whole formatted address including name, e.g. "1600 … Ave, Washington, DC 20500". */
+    full_address?: string
+    /** Formatted context only (city, region, postcode, country) without the name line. */
+    place_formatted?: string
     coordinates?: { accuracy?: string }
     match_code?: { confidence?: string }
+    context?: {
+      address?: { name?: string }
+      street?: { name?: string }
+      postcode?: { name?: string }
+      place?: { name?: string }
+      region?: { name?: string; region_code?: string }
+    }
   }
 }
 
@@ -83,5 +99,96 @@ export async function resolveGeoPointV6(query: string, token: string | undefined
     return classifyV6Feature(json.features?.[0])
   } catch {
     return null
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Address autocomplete (W2) — live suggestions + component parts
+// ─────────────────────────────────────────────────────────────
+
+/** The address fields an autocomplete selection can autofill. */
+export interface ParsedV6Address {
+  address_line1: string
+  city: string
+  /** Two-letter region code (e.g. 'VT') when available, else ''. */
+  state: string
+  zip: string
+}
+
+/**
+ * Pure extraction of the autofillable address parts from a v6 feature. Reads
+ * `properties.context` (place/region/postcode) with sensible fallbacks to
+ * `properties.name` for the street line. Missing parts come back as '' so a
+ * selection never writes `undefined` into a form field.
+ */
+export function parseV6Address(feature: MapboxV6Feature | undefined): ParsedV6Address {
+  const p = feature?.properties
+  const ctx = p?.context
+  const address_line1 = (ctx?.address?.name ?? p?.name ?? '').trim()
+  const city = (ctx?.place?.name ?? '').trim()
+  const state = (ctx?.region?.region_code ?? '').trim()
+  const zip = (ctx?.postcode?.name ?? '').trim()
+  return { address_line1, city, state, zip }
+}
+
+/** One live address suggestion: a display label, the parsed autofill parts,
+ *  and the classified geocode match (coords + accuracy/confidence) or null. */
+export interface AddressSuggestion extends ParsedV6Address {
+  /** Stable key for React lists — the feature's mapbox_id/id, else a synthesized index. */
+  id: string
+  /** Human-readable full address shown in the dropdown row. */
+  label: string
+  /** Classified coordinate match for the accuracy gate; null when unusable. */
+  match: GeocodeMatch | null
+}
+
+/** Builds the display label for a suggestion row from a v6 feature. */
+function suggestionLabel(feature: MapboxV6Feature): string {
+  const p = feature.properties
+  if (p?.full_address) return p.full_address
+  return [p?.name, p?.place_formatted].filter(Boolean).join(', ')
+}
+
+export interface SuggestOptions {
+  limit?: number
+  /** Injectable fetch for testing; defaults to global fetch. */
+  fetchImpl?: typeof fetch
+}
+
+/**
+ * Forward-geocodes `query` via Mapbox Geocoding v6 with autocomplete on and
+ * returns up to `limit` (default 5, hard-capped at 10 per the v6 API) address
+ * suggestions, each carrying its parsed parts and classified coordinate match.
+ * Returns [] on ANY failure (missing token, empty/blank query, network error,
+ * non-OK response, or a response with no features) — an autocomplete failure
+ * must never block typing or saving; the on-save geocode remains the fallback.
+ */
+export async function suggestAddressesV6(
+  query: string,
+  token: string | undefined,
+  opts: SuggestOptions = {},
+): Promise<AddressSuggestion[]> {
+  const q = query.trim()
+  if (!token || !q) return []
+  const limit = Math.min(Math.max(opts.limit ?? 5, 1), 10)
+  const doFetch = opts.fetchImpl ?? fetch
+  try {
+    const url = `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(q)}`
+      + `&access_token=${token}&autocomplete=true&types=address&limit=${limit}&country=us`
+    const resp = await doFetch(url)
+    if (!resp.ok) return []
+    const json = await resp.json() as MapboxV6Response
+    const features = json.features ?? []
+    return features.map((feature, i) => {
+      const parts = parseV6Address(feature)
+      return {
+        id: feature.properties?.mapbox_id ?? feature.id ?? `sugg-${i}`,
+        label: suggestionLabel(feature) || parts.address_line1 || q,
+        ...parts,
+        match: classifyV6Feature(feature),
+      }
+    })
+  } catch {
+    return []
   }
 }

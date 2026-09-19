@@ -12,7 +12,11 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
-import { resolveGeoPointV6, type GeocodeMatch } from '@/lib/mapbox-geocode-v6'
+import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { AddressAutocomplete } from './address-autocomplete'
+import {
+  planSaveGeo, applySuggestion, addressSnapshotOf, type AddressSnapshot,
+} from './resource-edit-geo'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -139,31 +143,6 @@ export async function resolveGeoPoint(query: string): Promise<GeocodeMatch | nul
   return resolveGeoPointV6(query, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
 }
 
-type GeocodeSource =
-  | 'mapbox_forward'
-  | 'skipped_online'
-  | 'skipped_address_unchanged'
-  | 'no_address'
-  | 'geocode_failed'
-
-// The address fields whose change (since the dialog was prefilled) can trigger
-// a re-geocode. Kept as a standalone shape so the initial-snapshot ref does not
-// need to retain the entire EditForm.
-type AddressSnapshot = Pick<EditForm, 'address_line1' | 'city' | 'state' | 'zip_code'>
-
-function addressSnapshotOf(f: EditForm): AddressSnapshot {
-  return { address_line1: f.address_line1, city: f.city, state: f.state, zip_code: f.zip_code }
-}
-
-function addressChanged(a: AddressSnapshot, b: AddressSnapshot): boolean {
-  return (
-    a.address_line1 !== b.address_line1
-    || a.city !== b.city
-    || a.state !== b.state
-    || a.zip_code !== b.zip_code
-  )
-}
-
 // ─────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────
@@ -192,6 +171,10 @@ export function ResourceEditDialog({
   const [form, setForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // The live-autocomplete suggestion currently backing the address, or null when
+  // the address was free-typed / hand-edited. Drives the move-only-on-strong-match
+  // gate at save time (see handleSave / planSaveGeo).
+  const [selectedSuggestion, setSelectedSuggestion] = useState<AddressSuggestion | null>(null)
 
   // Address fields + coordinates as of prefill — read at Save time to decide
   // whether the address changed since the dialog opened (see handleSave INV C).
@@ -203,11 +186,13 @@ export function ResourceEditDialog({
       const f = toForm(resource)
       setForm(f)
       setSaveError(null)
+      setSelectedSuggestion(null)
       initialAddressRef.current = addressSnapshotOf(f)
       initialHasCoordsRef.current = resource.lat != null && resource.lng != null
     } else if (!open) {
       setForm(null)
       setSaveError(null)
+      setSelectedSuggestion(null)
       initialAddressRef.current = null
       initialHasCoordsRef.current = false
     }
@@ -215,6 +200,21 @@ export function ResourceEditDialog({
 
   const setField = (k: keyof EditForm, v: string) =>
     setForm((prev) => (prev ? { ...prev, [k]: v } : prev))
+
+  // Editing any address field by hand invalidates a prior suggestion selection —
+  // the typed text may no longer correspond to the picked geocode, so the
+  // free-typed on-save geocode path (not the stale selection) must decide coords.
+  const setAddressField = (k: 'address_line1' | 'city' | 'state' | 'zip_code', v: string) => {
+    setSelectedSuggestion(null)
+    setField(k, v)
+  }
+
+  // A suggestion was chosen: autofill the four address parts and remember the
+  // match so the accuracy gate can move the pin only on a strong match.
+  const handleSelectSuggestion = (s: AddressSuggestion) => {
+    setForm((prev) => (prev ? applySuggestion(prev, s) : prev))
+    setSelectedSuggestion(s)
+  }
 
   const close = useCallback(() => {
     if (saving) return
@@ -231,41 +231,35 @@ export function ResourceEditDialog({
     setSaving(true)
     setSaveError(null)
 
-    // ── INV C: forward geocode on save, both directions ──
-    // physical/hybrid + a usable address + (address changed since the dialog
-    // opened OR the resource currently has no coordinates) -> geocode and pass
-    // p_lat/p_lng so location gets written. Every other case (online, no usable
-    // address, or address unchanged with existing coordinates) omits p_lat/p_lng
-    // so location is left untouched — this is the fix for unrelated-field edits
-    // (e.g. phone) clobbering a manually-corrected pin. A failed/empty geocode
-    // also omits p_lat/p_lng and never blocks save.
+    // ── INV C + W2: decide the save-payload coordinates, both directions ──
+    // planSaveGeo (pure) picks one of: use a selected strong-match suggestion's
+    // coords; skip a weak-match selection (fill text, leave the pin); run the
+    // on-save forward geocode for a free-typed address (changed since prefill or
+    // no existing coords); or skip entirely (online / no address / unchanged).
+    // Every "skip" omits p_lat/p_lng so the RPC leaves the existing location
+    // untouched — an unrelated-field edit never flings a manually-corrected pin,
+    // and a geocode failure never blocks save.
     let geoLat: number | undefined
     let geoLng: number | undefined
     let geoAccuracy: string | undefined
     let geoConfidence: string | undefined
-    let source: GeocodeSource
-    const hasAddress = Boolean(
-      form.address_line1.trim() && (form.city.trim() || form.state.trim() || form.zip_code.trim()),
-    )
-    const shouldGeocode = hasAddress && (
-      addressChanged(addressSnapshotOf(form), initialAddressRef.current ?? addressSnapshotOf(form))
-      || !initialHasCoordsRef.current
-    )
 
-    if (form.service_mode === 'online') {
-      source = 'skipped_online'
-    } else if (!hasAddress) {
-      source = 'no_address'
-    } else if (!shouldGeocode) {
-      source = 'skipped_address_unchanged'
-    } else {
-      const query = [
-        form.address_line1.trim(),
-        form.city.trim(),
-        normalizeState(form.state) ?? form.state.trim(),
-        form.zip_code.trim(),
-      ].filter(Boolean).join(', ')
-      const point = await resolveGeoPoint(query)
+    const plan = planSaveGeo({
+      serviceMode: form.service_mode,
+      form,
+      initialAddress: initialAddressRef.current,
+      initialHasCoords: initialHasCoordsRef.current,
+      selection: selectedSuggestion,
+    })
+    let source: string = plan.source
+
+    if (plan.selected) {
+      geoLat = plan.selected.lat
+      geoLng = plan.selected.lng
+      geoAccuracy = plan.selected.accuracy
+      geoConfidence = plan.selected.confidence
+    } else if (plan.geocode) {
+      const point = await resolveGeoPoint(plan.query)
       if (point) {
         geoLat = point.lat
         geoLng = point.lng
@@ -282,7 +276,9 @@ export function ResourceEditDialog({
     logger.info('admin.resource.edit_dialog.geocode', {
       resource_id: resource.id,
       mode,
-      geocoded: source === 'mapbox_forward',
+      // Coordinates were written into the payload (from a selected strong match
+      // OR a successful on-save forward geocode).
+      placed: geoLat != null && geoLng != null,
       source,
     })
 
@@ -315,7 +311,8 @@ export function ResourceEditDialog({
         resource_id: resource.id,
         mode,
         by: userData?.user?.id ?? null,
-        geocoded: source === 'mapbox_forward',
+        placed: geoLat != null && geoLng != null,
+        source,
       })
 
       // ── INV D: approve mode persists edits FIRST, then confirms exactly once ──
@@ -356,13 +353,13 @@ export function ResourceEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [resource, form, saving, supabase, mode, onConfirm, onSaved, onOpenChange])
+  }, [resource, form, saving, selectedSuggestion, supabase, mode, onConfirm, onSaved, onOpenChange])
 
   const isApprove = mode === 'approve'
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent disableOutsideClose className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isApprove ? 'Review and confirm resource' : 'Edit resource'}</DialogTitle>
           <DialogDescription>
@@ -432,21 +429,28 @@ export function ResourceEditDialog({
 
             <div className="space-y-1">
               <Label className="text-xs text-stone-500">Address</Label>
-              <Input value={form.address_line1} onChange={(e) => setField('address_line1', e.target.value)}
-                className="text-stone-900" />
+              {/* W2: live Mapbox v6 autocomplete. Typing shows suggestions;
+                  picking one autofills City/State/ZIP below and stamps coords
+                  on a strong match. Free typing still saves via on-save geocode. */}
+              <AddressAutocomplete
+                value={form.address_line1}
+                onChange={(v) => setAddressField('address_line1', v)}
+                onSelect={handleSelectSuggestion}
+                disabled={saving}
+              />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label className="text-xs text-stone-500">City</Label>
-                <Input value={form.city} onChange={(e) => setField('city', e.target.value)}
+                <Input value={form.city} onChange={(e) => setAddressField('city', e.target.value)}
                   className="text-stone-900" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-stone-500">State</Label>
                 <select
                   value={normalizeState(form.state) ?? ''}
-                  onChange={(e) => setField('state', e.target.value)}
+                  onChange={(e) => setAddressField('state', e.target.value)}
                   className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 >
                   <option value="">—</option>
@@ -457,7 +461,7 @@ export function ResourceEditDialog({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-stone-500">ZIP</Label>
-                <Input value={form.zip_code} onChange={(e) => setField('zip_code', e.target.value)}
+                <Input value={form.zip_code} onChange={(e) => setAddressField('zip_code', e.target.value)}
                   className="text-stone-900" />
               </div>
             </div>
