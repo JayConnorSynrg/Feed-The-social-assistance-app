@@ -16,6 +16,7 @@ import { Loader2, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { logger } from '@/lib/logger'
 import { suggestAddressesV6, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { createDebouncedRunner, type DebouncedRunner } from './debounced-runner'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LEN = 3
@@ -40,7 +41,11 @@ export function AddressAutocomplete({
   const [active, setActive] = useState(-1)
 
   const wrapRef = useRef<HTMLDivElement | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Stable per-mount debounce runner (lazy-initialized once). schedule() queues a
+  // search; cancel() drops any pending one — called on selection so a keystroke's
+  // still-pending debounce can never fire (and re-open the list) after a pick.
+  const runnerRef = useRef<DebouncedRunner | null>(null)
+  if (runnerRef.current === null) runnerRef.current = createDebouncedRunner(DEBOUNCE_MS)
   // Monotonic request id — a later query invalidates any in-flight earlier one,
   // so a slow response can never overwrite suggestions for newer input.
   const reqSeq = useRef(0)
@@ -73,16 +78,17 @@ export function AddressAutocomplete({
   // Debounced search on typed value. Skips the fetch right after a selection
   // (the value became the chosen address) and for sub-threshold queries.
   useEffect(() => {
+    const runner = runnerRef.current!
     if (justSelected.current) { justSelected.current = false; return }
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    runner.cancel()
     const q = value.trim()
     if (q.length < MIN_QUERY_LEN) {
       reqSeq.current++ // invalidate any in-flight request
       setSuggestions([]); setOpen(false); setActive(-1); setLoading(false)
       return
     }
-    debounceRef.current = setTimeout(() => { void runSearch(q) }, DEBOUNCE_MS)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    runner.schedule(() => { void runSearch(q) })
+    return () => runner.cancel()
   }, [value, runSearch])
 
   // Close the list when the pointer goes down outside this widget. Only closes
@@ -98,6 +104,9 @@ export function AddressAutocomplete({
 
   const choose = useCallback((s: AddressSuggestion) => {
     justSelected.current = true
+    // Cancel any debounce still pending from a keystroke before this pick — else
+    // it fires ~300ms later, re-runs the stale search and re-opens the list.
+    runnerRef.current?.cancel()
     reqSeq.current++ // invalidate any in-flight request so it can't reopen the list
     setOpen(false)
     setSuggestions([])
