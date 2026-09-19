@@ -367,7 +367,7 @@ export function FormWizard({
   const startTimeRef = useRef<number>(Date.now())
   const stepStartTimeRef = useRef<number>(Date.now())
   const draftInitialized = useRef(false)
-  // Two independent guards — public-sourced fields (name/email/phone) lock separately
+  // Two independent guards — public-sourced fields (name/email) lock separately
   // from vault-sourced fields (address.*) so each applies exactly once when its
   // data source resolves, regardless of which arrives first.
   const publicAutofillApplied = useRef(false)
@@ -432,7 +432,7 @@ export function FormWizard({
     })
   }, [template, isUnlocked])
 
-  // PUBLIC autofill effect — applies first_name / last_name / email / phone exactly once
+  // PUBLIC autofill effect — applies first_name / last_name / email exactly once
   // when public sources (publicProfile or user.email) are available. Locks immediately
   // so user edits are never overwritten by subsequent re-renders.
   useEffect(() => {
@@ -446,7 +446,6 @@ export function FormWizard({
       publicProfile: publicProfile
         ? {
             full_name: publicProfile.full_name,
-            phone: publicProfile.phone,
             location_city: publicProfile.location_city,
             location_state: publicProfile.location_state,
             zip_code: publicProfile.zip_code,
@@ -461,8 +460,8 @@ export function FormWizard({
       first_name: 'first_name',
       last_name: 'last_name',
       email: 'email',
-      phone: 'phone',
       // ssn, date_of_birth, income intentionally omitted — see form-field-mapper.ts
+      // phone omitted — get_my_profile() never returns phone, so it is never autofillable
     }
 
     for (const field of template.fields) {
