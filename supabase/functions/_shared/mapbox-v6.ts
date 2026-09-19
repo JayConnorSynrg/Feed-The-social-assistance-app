@@ -16,6 +16,9 @@
 
 // Mapbox Geocoding API v6 (2026) single-query forward endpoint.
 const MAPBOX_FORWARD_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
+// Mapbox Geocoding API v6 reverse endpoint (replaces the retired v5
+// geocoding/v5/mapbox.places reverse call that 422s in resource-discover).
+const MAPBOX_REVERSE_URL = 'https://api.mapbox.com/search/geocode/v6/reverse'
 
 // v6 `properties.coordinates.accuracy` values: rooftop | parcel | point |
 // interpolated | approximate | street | (region/place fallbacks) — all
@@ -98,6 +101,87 @@ export async function geocodeForwardV6(
       tier: bucketAccuracyTier(feature.properties?.coordinates?.accuracy),
       confidence: feature.properties?.match_code?.confidence ?? null,
     }
+  } catch {
+    return null
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// v6 reverse geocode — lat/lng → { city, state, zip }  (INV-0d)
+// Replaces the legacy v5 geocoding/v5/mapbox.places reverse call (422 on the
+// retired endpoint). Non-fatal by contract: returns null on any failure so the
+// caller degrades to text-label parsing.
+// ═══════════════════════════════════════════════════════════
+
+export interface ReverseRegion {
+  city: string | null
+  /** USPS 2-letter region code straight from v6 region_code (uppercased), or null. */
+  state: string | null
+  zip: string | null
+}
+
+interface MapboxV6ReverseFeature {
+  properties?: {
+    feature_type?: string
+    name?: string
+    context?: {
+      region?: { region_code?: string; name?: string }
+      place?: { name?: string }
+      postcode?: { name?: string }
+    }
+  }
+}
+
+/**
+ * Pure parser for a v6 reverse-geocode response body → { city, state, zip }.
+ * Reads each feature's own type plus its `context` block so a single postcode
+ * feature still yields the enclosing place + region. Exported for unit testing.
+ */
+export function parseV6Reverse(json: unknown): ReverseRegion {
+  const feats = (json as { features?: MapboxV6ReverseFeature[] })?.features ?? []
+  let city: string | null = null
+  let state: string | null = null
+  let zip: string | null = null
+  const up = (s: string | undefined | null): string | null => {
+    if (!s) return null
+    const t = s.trim().toUpperCase()
+    return /^[A-Z]{2}$/.test(t) ? t : null
+  }
+  for (const f of feats) {
+    const p = f?.properties ?? {}
+    const t = p.feature_type
+    if (t === 'place' && !city) city = p.name ?? null
+    if (t === 'postcode' && !zip) zip = (p.name ?? '').slice(0, 5) || null
+    if (t === 'region' && !state) state = up(p.name)
+    const ctx = p.context ?? {}
+    if (!state && ctx.region?.region_code) state = up(ctx.region.region_code)
+    if (!city && ctx.place?.name) city = ctx.place.name
+    if (!zip && ctx.postcode?.name) zip = (ctx.postcode.name ?? '').slice(0, 5) || null
+  }
+  return { city, state, zip }
+}
+
+/**
+ * Reverse-geocode lat/lng to { city, state, zip } via Mapbox v6. Returns null
+ * on any failure (no token, network error, non-OK, no features) — callers
+ * degrade to text-label parsing. Never throws.
+ */
+export async function reverseGeocodeV6(
+  lat: number,
+  lng: number,
+  token: string,
+): Promise<ReverseRegion | null> {
+  if (!token || !Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  try {
+    const url =
+      `${MAPBOX_REVERSE_URL}?longitude=${encodeURIComponent(String(lng))}` +
+      `&latitude=${encodeURIComponent(String(lat))}` +
+      `&access_token=${encodeURIComponent(token)}` +
+      `&country=US&types=region,place,postcode&limit=5`
+    const resp = await fetch(url)
+    if (!resp.ok) return null
+    const json = await resp.json()
+    return parseV6Reverse(json)
   } catch {
     return null
   }

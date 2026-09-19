@@ -26,7 +26,25 @@ import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { edgeLog, getCorrelationId } from '../_shared/log.ts'
-import { classifyGeocodeWrite, geocodeForwardV6, type GeocodeAccuracyTier } from '../_shared/mapbox-v6.ts'
+import {
+  classifyGeocodeWrite,
+  geocodeForwardV6,
+  reverseGeocodeV6,
+  type GeocodeAccuracyTier,
+} from '../_shared/mapbox-v6.ts'
+import {
+  buildExistingUrlIndex,
+  buildOutcomeResponse,
+  checkUrlLiveness,
+  classifyOutcome,
+  fetchWithRetry,
+  isDuplicateUrl,
+  normalizeUrlForDedup,
+  sourceCandidates,
+  verify,
+  type AgentResult,
+  type ResourceCandidate,
+} from '../_shared/discovery-pipeline.ts'
 
 // ═══════════════════════════════════════════════════════════
 // Env
@@ -106,100 +124,9 @@ interface DiscoverRequest {
   nearLocation?: { label?: string; lat?: number; lng?: number }
 }
 
-interface ResourceCandidate {
-  name?: string
-  description?: string
-  category?: string
-  address_line1?: string
-  city?: string
-  state?: string
-  zip_code?: string
-  phone?: string
-  email?: string
-  website?: string
-  application_url?: string
-  sources?: string[]
-}
-
-interface FormCandidate {
-  name?: string
-  form_type?: string
-  description?: string
-  agency_name?: string
-  agency_website?: string
-  application_url?: string
-  sources?: string[]
-}
-
-interface Provenance {
-  source_url: string | null
-  confidence: 'high' | 'medium'
-  corroborating_count: number
-  authoritative_domain: boolean
-  query: string
-  discovered_at: string
-  sources: string[]
-}
-
-// ═══════════════════════════════════════════════════════════
-// Verification layer — the core value.
-//
-//   authoritative_domain = any source/website host ends in .gov or .org
-//   corroborating_count  = number of DISTINCT source hosts
-//   ACCEPT iff authoritative_domain === true OR corroborating_count >= 2
-//   confidence: 'high'  if authoritative AND corroborating_count >= 2
-//               'medium' if exactly one of the two holds
-//               (rejected otherwise — returns null)
-// ═══════════════════════════════════════════════════════════
-
-function hostOf(url: string): string | null {
-  try {
-    const h = new URL(url.trim()).hostname.toLowerCase()
-    return h.startsWith('www.') ? h.slice(4) : h
-  } catch {
-    return null
-  }
-}
-
-function isAuthoritativeHost(host: string): boolean {
-  return host.endsWith('.gov') || host.endsWith('.org')
-}
-
-/**
- * Computes provenance for a candidate from its citation URLs (+ optional website).
- * Returns null when the candidate fails BOTH acceptance tests (→ drop, don't stage).
- */
-function verify(query: string, sources: string[], website?: string | null): Provenance | null {
-  const urls = [...sources]
-  if (website) urls.push(website)
-
-  const hosts = new Set<string>()
-  let authoritative = false
-  for (const u of urls) {
-    const h = hostOf(u)
-    if (!h) continue
-    hosts.add(h)
-    if (isAuthoritativeHost(h)) authoritative = true
-  }
-
-  const corroborating_count = hosts.size
-  const accept = authoritative || corroborating_count >= 2
-  if (!accept) return null
-
-  const confidence: 'high' | 'medium' =
-    authoritative && corroborating_count >= 2 ? 'high' : 'medium'
-
-  const cleanSources = urls.filter((u) => hostOf(u) !== null)
-  return {
-    source_url: cleanSources[0] ?? null,
-    confidence,
-    corroborating_count,
-    authoritative_domain: authoritative,
-    query,
-    discovered_at: new Date().toISOString(),
-    sources: cleanSources,
-  }
-}
+// ResourceCandidate, FormCandidate, Provenance + the verification layer
+// (hostOf / isAuthoritativeHost / verify — INV-2b/2c) now live in
+// ../_shared/discovery-pipeline.ts and are imported above.
 
 // ═══════════════════════════════════════════════════════════
 // Normalization helpers
@@ -298,14 +225,46 @@ function buildAgentSchema(contentType: ContentType) {
   return { type: 'object', properties }
 }
 
-interface AgentResult {
-  resources: ResourceCandidate[]
-  forms: FormCandidate[]
-  via: 'agent' | 'search'
+// Outcome of one provider call: the parsed result (null on hard failure) plus a
+// transient-rate-limit flag so the handler can emit the honest admin signal
+// (INV-0c) instead of a generic error when Firecrawl is temporarily throttled.
+interface SourceOutcome {
+  result: AgentResult | null
+  rateLimited: boolean
+  providerError: boolean
 }
 
-async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, geoBias?: string | null): Promise<AgentResult | null> {
-  if (!FIRECRAWL_API_KEY) return null
+// Backoff dependencies for fetchWithRetry (INV-0b). Real timers + jittered
+// exponential backoff, honoring Retry-After, bounded to a proxy-safe budget.
+const RETRY_DEPS = {
+  sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+  jitter: () => Math.random(),
+  maxRetries: 3,
+  baseDelayMs: 600,
+  maxBudgetMs: 15_000,
+}
+
+// ── Candidate liveness (INV-2a): keep only URLs that resolve 200 on the SAME
+//    host (HEAD → ranged-GET fallback), each bounded by a per-URL timeout. ──
+const LIVENESS_TIMEOUT_MS = 5_000
+
+async function isUrlLive(url: string): Promise<boolean> {
+  const res = await checkUrlLiveness(url, (input, init) =>
+    fetch(input, { ...init, signal: AbortSignal.timeout(LIVENESS_TIMEOUT_MS) }),
+  )
+  return res.ok
+}
+
+// Filter a candidate's citation URLs down to those that pass liveness. A
+// candidate with ANY live source is kept (with its dead links pruned); a
+// candidate whose every source is dead/cross-host/404 is dropped upstream.
+async function pruneDeadSources(urls: string[]): Promise<string[]> {
+  const checks = await Promise.all(urls.map(async (u) => ({ u, live: await isUrlLive(u) })))
+  return checks.filter((c) => c.live).map((c) => c.u)
+}
+
+async function sourceViaAgent(query: string, contentType: ContentType, maxCandidates: number, geoBias?: string | null): Promise<SourceOutcome> {
+  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false, providerError: false }
 
   const locationBias =
     geoBias && geoBias.trim()
@@ -319,27 +278,28 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
     `(prefer official .gov / .org pages). Only include candidates you can cite.` +
     locationBias
 
-  // Kick off the async job.
+  // Kick off the async job (retrying transient 429/5xx — INV-0b).
   let jobId: string
   try {
-    const resp = await fetch('https://api.firecrawl.dev/v2/agent', {
+    const resp = await fetchWithRetry(() => fetch('https://api.firecrawl.dev/v2/agent', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, schema: buildAgentSchema(contentType) }),
-    })
+    }), RETRY_DEPS)
     if (!resp.ok) {
+      const transient = resp.status === 429 || resp.status >= 500
       edgeLog('warn', 'discover.agent.start_failed', { status: resp.status })
-      return null
+      return { result: null, rateLimited: transient, providerError: !transient }
     }
     const json = await resp.json()
     if (!json?.success || !json?.id) {
       edgeLog('warn', 'discover.agent.no_id', {})
-      return null
+      return { result: null, rateLimited: false, providerError: true }
     }
     jobId = json.id
   } catch (e) {
     edgeLog('warn', 'discover.agent.start_error', { error: e instanceof Error ? e.message : String(e) })
-    return null
+    return { result: null, rateLimited: false, providerError: true }
   }
 
   // Poll within a bounded budget.
@@ -358,39 +318,40 @@ async function sourceViaAgent(query: string, contentType: ContentType, maxCandid
         const resources = Array.isArray(data.resources) ? data.resources : []
         const forms = Array.isArray(data.forms) ? data.forms : []
         edgeLog('info', 'discover.agent.completed', { jobId, resources: resources.length, forms: forms.length })
-        return { resources, forms, via: 'agent' }
+        return { result: { resources, forms, via: 'agent' }, rateLimited: false, providerError: false }
       }
       if (status === 'failed' || status === 'cancelled') {
         edgeLog('warn', 'discover.agent.terminal', { jobId, status })
-        return null
+        return { result: null, rateLimited: false, providerError: false }
       }
     } catch {
       // transient — keep polling within budget
     }
   }
   edgeLog('warn', 'discover.agent.timeout', { jobId, budgetMs: AGENT_POLL_BUDGET_MS })
-  return null
+  return { result: null, rateLimited: false, providerError: false }
 }
 
-// Degraded fallback: /v2/search returns {url,title,description} per hit. Each hit
+// PRIMARY fast path: /v2/search returns {url,title,description} per hit. Each hit
 // becomes a thin resource candidate whose only source is its own URL — it will
-// only survive verification when that host is authoritative (.gov/.org), which is
-// the correct strict behaviour.
-async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: string | null): Promise<AgentResult | null> {
-  if (!FIRECRAWL_API_KEY) return null
+// only survive verification when that host is authoritative (.gov/.org) or is
+// corroborated, which is the correct strict behaviour.
+async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: string | null): Promise<SourceOutcome> {
+  if (!FIRECRAWL_API_KEY) return { result: null, rateLimited: false, providerError: false }
   try {
     const searchQuery =
       geoBias && geoBias.trim()
         ? `${query} near ${geoBias.trim()}`
         : query
-    const resp = await fetch('https://api.firecrawl.dev/v2/search', {
+    const resp = await fetchWithRetry(() => fetch('https://api.firecrawl.dev/v2/search', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: searchQuery, limit: Math.min(maxCandidates, 10) }),
-    })
+    }), RETRY_DEPS)
     if (!resp.ok) {
+      const transient = resp.status === 429 || resp.status >= 500
       edgeLog('warn', 'discover.search.failed', { status: resp.status })
-      return null
+      return { result: null, rateLimited: transient, providerError: !transient }
     }
     const json = await resp.json()
     const web = json?.data?.web ?? []
@@ -402,10 +363,10 @@ async function sourceViaSearch(query: string, maxCandidates: number, geoBias?: s
       sources: [w.url],
     })).filter((r) => r.name)
     edgeLog('info', 'discover.search.completed', { resources: resources.length })
-    return { resources, forms: [], via: 'search' }
+    return { result: { resources, forms: [], via: 'search' }, rateLimited: false, providerError: false }
   } catch (e) {
     edgeLog('warn', 'discover.search.error', { error: e instanceof Error ? e.message : String(e) })
-    return null
+    return { result: null, rateLimited: false, providerError: true }
   }
 }
 
@@ -541,44 +502,21 @@ function parseRegionFromLabel(label: string | null | undefined): { city: string 
 }
 
 /**
- * Reverse-geocode lat/lng to { city, state, zip } via Mapbox. Returns null when no
- * MAPBOX_TOKEN is configured or the lookup fails — callers degrade to label parsing.
+ * Reverse-geocode lat/lng to { city, state, zip } via the Mapbox Geocoding API
+ * v6 (INV-0d — the legacy v5 geocoding/v5/mapbox.places endpoint 422s). Returns
+ * null when no MAPBOX_TOKEN is configured or the lookup fails — callers degrade
+ * to text-label parsing. Non-fatal by contract.
  */
 async function reverseGeocodeRegion(lat: number, lng: number): Promise<{ city: string | null; state: string | null; zip: string | null } | null> {
   if (!MAPBOX_TOKEN) return null
-  try {
-    const url =
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json` +
-      `?access_token=${MAPBOX_TOKEN}&country=US&types=region,place,postcode&limit=5`
-    const resp = await fetch(url)
-    if (!resp.ok) {
-      edgeLog('warn', 'discover.region.reverse_failed', { status: resp.status })
-      return null
-    }
-    const json = await resp.json()
-    const feats = Array.isArray(json?.features) ? json.features : []
-    let city: string | null = null, state: string | null = null, zip: string | null = null
-    const stateFromShortCode = (sc: unknown, fallbackText: unknown): string | null =>
-      typeof sc === 'string' && sc.includes('-')
-        ? normalizeStateAbbr(sc.split('-')[1])
-        : normalizeStateAbbr(typeof fallbackText === 'string' ? fallbackText : null)
-    for (const f of feats) {
-      const types: string[] = Array.isArray(f?.place_type) ? f.place_type : []
-      if (types.includes('place') && !city) city = f?.text ?? null
-      if (types.includes('postcode') && !zip) zip = (f?.text ?? '').slice(0, 5) || null
-      if (types.includes('region') && !state) state = stateFromShortCode(f?.properties?.short_code, f?.text)
-      for (const c of (Array.isArray(f?.context) ? f.context : [])) {
-        const id: string = c?.id ?? ''
-        if (id.startsWith('region') && !state) state = stateFromShortCode(c?.short_code, c?.text)
-        if (id.startsWith('place') && !city) city = c?.text ?? null
-        if (id.startsWith('postcode') && !zip) zip = (c?.text ?? '').slice(0, 5) || null
-      }
-    }
-    return { city, state, zip }
-  } catch (e) {
-    edgeLog('warn', 'discover.region.reverse_error', { error: e instanceof Error ? e.message : String(e) })
+  const rev = await reverseGeocodeV6(lat, lng, MAPBOX_TOKEN)
+  if (!rev) {
+    edgeLog('warn', 'discover.region.reverse_failed', {})
     return null
   }
+  // v6 already returns an uppercased 2-letter region code; normalizeStateAbbr
+  // validates it against the known USPS set (else null).
+  return { city: rev.city, state: normalizeStateAbbr(rev.state), zip: rev.zip }
 }
 
 /**
@@ -768,14 +706,25 @@ serve(async (req: Request) => {
           ? region.state
           : (nearLocation?.label || null)
 
-    // ── SOURCING (one /agent call per request; degrade to /search on miss) ──
-    let sourced = await sourceViaAgent(query, contentType, maxCandidates, geoBias)
-    if (!sourced) {
-      sourced = await sourceViaSearch(query, maxCandidates, geoBias)
-    }
-    if (!sourced) {
-      return new Response(JSON.stringify({ error: 'Sourcing failed', staged: { resources: 0, forms: 0 }, deduped: 0, rejected: 0, candidates: [] }), {
-        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // ── SOURCING (INV-0a): /v2/search is the PRIMARY fast path and is fully
+    //    awaited first (its Firecrawl concurrency slot releases); /v2/agent runs
+    //    SEQUENTIALLY afterwards as best-effort enrichment, only when search
+    //    under-delivered. The two endpoints never contend for the same slot, so
+    //    an agent timeout no longer forces a colliding fallback into a 429. ──
+    const outcome = await sourceCandidates({
+      runSearch: () => sourceViaSearch(query, maxCandidates, geoBias),
+      runAgent: () => sourceViaAgent(query, contentType, maxCandidates, geoBias),
+    })
+    const sourced = outcome.result
+
+    // ── HONEST ADMIN SIGNAL (INV-0c): distinguish candidates / clean-empty /
+    //    rate-limited / provider-error. No more raw {"error":"Sourcing failed"}. ──
+    if (!sourced || (sourced.resources.length === 0 && sourced.forms.length === 0)) {
+      const oc = classifyOutcome(outcome)
+      const { status, body } = buildOutcomeResponse(oc)
+      edgeLog('info', 'discover.outcome', { state: oc.state, rateLimited: outcome.rateLimited, providerError: outcome.providerError, correlationId })
+      return new Response(JSON.stringify(body), {
+        status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -786,6 +735,7 @@ serve(async (req: Request) => {
     let stagedForms = 0
     let deduped = 0
     let rejected = 0
+    let rejectedDead = 0
     let geocodedCount = 0
     let inRegionKept = 0
     let rejectedOutOfRegion = 0
@@ -793,12 +743,46 @@ serve(async (req: Request) => {
 
     // ── RESOURCES ──
     const rawResources = (sourced.resources ?? []).slice(0, maxCandidates)
+
+    // ── URL DEDUP INDEX (INV-2d): bounded to the CANDIDATE URLs, not the whole
+    //    ~19k-row table (the db-max-rows footgun). We probe `resources` with the
+    //    small {raw, slash-toggled, http/https} key set for the ≤~25 candidate
+    //    URLs via two O(candidates) `.in()` queries, then normalize-compare the
+    //    small returned subset. Exact/near-exact dupes are caught table-wide;
+    //    URLs staged during THIS run are added below for intra-run dedup. ──
+    const candidateUrls = rawResources.flatMap((c) => [cleanUrl(c.website), cleanUrl(c.application_url)])
+    const existingUrlSet = await buildExistingUrlIndex(candidateUrls, async (keys) => {
+      const [byWeb, byApp] = await Promise.all([
+        ctx.service.from('resources').select('website, application_url').in('website', keys),
+        ctx.service.from('resources').select('website, application_url').in('application_url', keys),
+      ])
+      return [
+        ...((byWeb.data ?? []) as Array<{ website: string | null; application_url: string | null }>),
+        ...((byApp.data ?? []) as Array<{ website: string | null; application_url: string | null }>),
+      ]
+    })
     for (const cand of rawResources) {
       const name = (cand.name ?? '').trim()
       if (!name || name.length < 2) { rejected++; continue }
 
-      const prov = verify(query, collectSources(cand), cleanUrl(cand.website))
+      // ── LIVENESS (INV-2a): keep only citation URLs that resolve 200 on the
+      //    same host; a candidate whose every source is dead/404/cross-host is
+      //    dropped before it can be staged. ──
+      const liveSources = await pruneDeadSources(collectSources(cand))
+      const cleanWebsite = cleanUrl(cand.website)
+      const liveWebsite = cleanWebsite && (await isUrlLive(cleanWebsite)) ? cleanWebsite : null
+      if (liveSources.length === 0 && !liveWebsite) {
+        edgeLog('info', 'discover.resource.dead_sources', { name, correlationId })
+        rejectedDead++; rejected++; continue
+      }
+
+      const prov = verify(query, liveSources, liveWebsite)
       if (!prov) { rejected++; continue }
+
+      // URL-based dedup (INV-2d) — attribute match against existing + this run.
+      if (isDuplicateUrl(liveWebsite, existingUrlSet) || isDuplicateUrl(cleanUrl(cand.application_url), existingUrlSet)) {
+        deduped++; continue
+      }
 
       const phone = normalizePhone(cand.phone)
       const address = cand.address_line1?.trim() || null
@@ -875,6 +859,13 @@ serve(async (req: Request) => {
         })
       }
 
+      // Register this run's staged URLs so a later candidate with the same site
+      // is deduped within the same request (INV-2d, intra-run).
+      for (const u of [liveWebsite, cleanUrl(cand.application_url)]) {
+        const n = normalizeUrlForDedup(u)
+        if (n) existingUrlSet.add(n)
+      }
+
       stagedResources++
       summaries.push({ kind: 'resource', name, confidence: prov.confidence, sources: prov.sources.slice(0, 5) })
     }
@@ -925,6 +916,7 @@ serve(async (req: Request) => {
       geocoded_count: geocodedCount,
       in_region_kept: inRegionKept,
       rejected_out_of_region: rejectedOutOfRegion,
+      rejected_dead_url: rejectedDead,
       fallback_used: fallbackUsed,
       correlationId,
     })
