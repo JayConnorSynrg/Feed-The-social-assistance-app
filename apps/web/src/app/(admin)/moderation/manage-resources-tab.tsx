@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
@@ -44,6 +45,7 @@ interface ResourceRow {
   lat: number | null
   lng: number | null
   service_mode: string
+  geocode_accuracy: string | null
 }
 
 // Normalizes a manage-list row into the shape <ResourceEditDialog> expects.
@@ -64,6 +66,7 @@ function toDialogInputFromManageRow(r: ResourceRow): ResourceEditDialogInput {
     service_mode: r.service_mode ?? 'physical',
     lat: r.lat,
     lng: r.lng,
+    geocode_accuracy: r.geocode_accuracy,
   }
 }
 
@@ -418,6 +421,12 @@ export function ManageResourcesTab() {
                       {savedId === r.id && (
                         <span className="text-xs text-green-700 flex items-center gap-1">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Saved
+                        </span>
+                      )}
+                      {/* W1: 'location error' badge — off the map, still listed. */}
+                      {needsLocation(r.geocode_accuracy) && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" /> Needs location
                         </span>
                       )}
                     </div>

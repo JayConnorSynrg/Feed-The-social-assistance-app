@@ -13,10 +13,14 @@ import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { needsLocation } from '@/lib/geocode-accuracy'
 import { AddressAutocomplete } from './address-autocomplete'
 import {
-  planSaveGeo, applySuggestion, addressSnapshotOf, type AddressSnapshot,
+  applySuggestion, addressSnapshotOf, type AddressSnapshot,
 } from './resource-edit-geo'
+import {
+  decideGeoWrite, runResourceSave, buildGeocodeEvent, changedFieldKeys,
+} from './resource-edit-save'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -68,6 +72,9 @@ export interface ResourceEditDialogInput {
   service_mode: string
   lat: number | null
   lng: number | null
+  /** Current geocode_accuracy tag; 'unlocated' drives the "needs location"
+   *  editor badge (W1). Null on rows never geocoded. */
+  geocode_accuracy: string | null
 }
 
 // Shape returned by the admin_update_resource RPC (packages/database/types.ts).
@@ -231,97 +238,71 @@ export function ResourceEditDialog({
     setSaving(true)
     setSaveError(null)
 
-    // ── INV C + W2: decide the save-payload coordinates, both directions ──
-    // planSaveGeo (pure) picks one of: use a selected strong-match suggestion's
-    // coords; skip a weak-match selection (fill text, leave the pin); run the
-    // on-save forward geocode for a free-typed address (changed since prefill or
-    // no existing coords); or skip entirely (online / no address / unchanged).
-    // Every "skip" omits p_lat/p_lng so the RPC leaves the existing location
-    // untouched — an unrelated-field edit never flings a manually-corrected pin,
-    // and a geocode failure never blocks save.
-    let geoLat: number | undefined
-    let geoLng: number | undefined
-    let geoAccuracy: string | undefined
-    let geoConfidence: string | undefined
+    // ── W1: decide the coordinates ONCE, one rule for every path ──
+    // decideGeoWrite runs planSaveGeo and, for a free-typed address, the on-save
+    // forward geocode — then applies the single rule in both directions: a STRONG
+    // match writes coords + tier; a WEAK/FAILED result writes NO coords and asks
+    // the RPC to flag 'unlocated' (server-gated to rows with no existing pin, so
+    // a good pin is never overwritten); online / no-address / unchanged skip.
+    const geo = await decideGeoWrite(
+      {
+        serviceMode: form.service_mode,
+        form,
+        initialAddress: initialAddressRef.current,
+        initialHasCoords: initialHasCoordsRef.current,
+        selection: selectedSuggestion,
+      },
+      { resolveGeoPoint },
+    )
 
-    const plan = planSaveGeo({
-      serviceMode: form.service_mode,
-      form,
-      initialAddress: initialAddressRef.current,
-      initialHasCoords: initialHasCoordsRef.current,
-      selection: selectedSuggestion,
-    })
-    let source: string = plan.source
+    // ── W2: exactly one geocode event (privacy-safe field builder). ──
+    logger.info('admin.resource.geocode', buildGeocodeEvent(resource.id, form.service_mode, geo))
 
-    if (plan.selected) {
-      geoLat = plan.selected.lat
-      geoLng = plan.selected.lng
-      geoAccuracy = plan.selected.accuracy
-      geoConfidence = plan.selected.confidence
-    } else if (plan.geocode) {
-      const point = await resolveGeoPoint(plan.query)
-      if (point) {
-        geoLat = point.lat
-        geoLng = point.lng
-        geoAccuracy = point.accuracy
-        geoConfidence = point.confidence
-        source = 'mapbox_forward'
-      } else {
-        source = 'geocode_failed'
-      }
-    }
-
-    // INV E — structured logging via the existing app logger. No user/admin PII;
-    // address is resource data, not logged here to keep the event minimal.
-    logger.info('admin.resource.edit_dialog.geocode', {
-      resource_id: resource.id,
-      mode,
-      // Coordinates were written into the payload (from a selected strong match
-      // OR a successful on-save forward geocode).
-      placed: geoLat != null && geoLng != null,
-      source,
-    })
+    const changedFields = changedFieldKeys(resource, form)
 
     try {
-      const { data, error: rpcError } = await supabase.rpc('admin_update_resource', {
-        p_id: resource.id,
-        p_name: form.name.trim(),
-        p_description: form.description.trim(),
-        p_category: form.category,
-        p_address_line1: form.address_line1.trim(),
-        p_city: form.city.trim(),
-        p_state: normalizeState(form.state) ?? '',
-        p_zip_code: form.zip_code.trim(),
-        p_phone: form.phone.trim(),
-        p_email: form.email.trim(),
-        p_website: form.website.trim(),
-        p_status: form.status,
-        p_service_mode: form.service_mode,
-        p_lat: geoLat,
-        p_lng: geoLng,
-        p_geocode_accuracy: geoAccuracy,
-        p_geocode_confidence: geoConfidence,
-      })
-      if (rpcError) throw rpcError
+      // runResourceSave owns the admin_update_resource call, the single
+      // admin.resource.save event (info on success / logger.error on failure —
+      // no more swallowed catch), and the INV-D approve confirm-after-persist.
+      const updated = await runResourceSave(
+        {
+          resourceId: resource.id,
+          mode,
+          serviceMode: form.service_mode,
+          basePayload: {
+            p_id: resource.id,
+            p_name: form.name.trim(),
+            p_description: form.description.trim(),
+            p_category: form.category,
+            p_address_line1: form.address_line1.trim(),
+            p_city: form.city.trim(),
+            p_state: normalizeState(form.state) ?? '',
+            p_zip_code: form.zip_code.trim(),
+            p_phone: form.phone.trim(),
+            p_email: form.email.trim(),
+            p_website: form.website.trim(),
+            p_status: form.status,
+            p_service_mode: form.service_mode,
+          },
+          geo,
+          changedFields,
+        },
+        {
+          rpc: (payload) => supabase.rpc('admin_update_resource', payload),
+          onConfirm: mode === 'approve' ? onConfirm : undefined,
+          logger,
+        },
+      )
 
-      const updated = ((data ?? []) as ResourceEditDialogSavedRow[])[0] ?? null
-
-      const { data: userData } = await supabase.auth.getUser()
-      logger.info('admin.resource.edit_dialog.save', {
-        resource_id: resource.id,
-        mode,
-        by: userData?.user?.id ?? null,
-        placed: geoLat != null && geoLng != null,
-        source,
-      })
-
-      // ── INV D: approve mode persists edits FIRST, then confirms exactly once ──
-      if (mode === 'approve' && onConfirm) {
-        await onConfirm(resource.id)
-      }
-
+      // admin_update_resource ALWAYS RETURNS the row, so `updated` is the source
+      // of truth and this fallback is effectively unreachable. It exists only to
+      // satisfy the row shape if a row ever fails to come back — so its geo
+      // fields echo the row's PRIOR known state (what the server would preserve),
+      // never the client's optimistic guess: fabricating coords/accuracy here
+      // could contradict the server's "keep existing pin / only-tag-unlocated-
+      // when-location-null" gate.
       onSaved(
-        updated ?? {
+        (updated as ResourceEditDialogSavedRow | null) ?? {
           id: resource.id,
           name: form.name.trim(),
           description: form.description.trim(),
@@ -337,11 +318,11 @@ export function ResourceEditDialog({
           source: null,
           is_verified: null,
           moderated_at: null,
-          lat: geoLat ?? null,
-          lng: geoLng ?? null,
+          lat: resource.lat,
+          lng: resource.lng,
           service_mode: form.service_mode,
-          geocode_accuracy: geoAccuracy ?? null,
-          geocode_confidence: geoConfidence ?? null,
+          geocode_accuracy: resource.geocode_accuracy,
+          geocode_confidence: null,
         },
       )
       onOpenChange(false)
@@ -426,6 +407,16 @@ export function ResourceEditDialog({
                 <p className="text-xs text-stone-400">Online resources are not geocoded or placed on the map.</p>
               )}
             </div>
+
+            {/* W1: 'location error' state — this row has no map pin. Shown in the
+                editor so an admin knows to give it a locatable address; the row
+                stays off the map and findable in search until then. */}
+            {resource && needsLocation(resource.geocode_accuracy) && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                Needs location — not shown on the map. Enter an address and pick a suggestion to place it.
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs text-stone-500">Address</Label>

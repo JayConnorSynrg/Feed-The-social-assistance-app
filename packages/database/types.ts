@@ -3273,6 +3273,7 @@ export type Database = {
           description: string
           discovery_metadata: Json
           email: string
+          geocode_accuracy: string
           id: string
           lat: number
           lng: number
@@ -3300,6 +3301,7 @@ export type Database = {
           city: string
           description: string
           email: string
+          geocode_accuracy: string
           id: string
           is_verified: boolean
           lat: number
@@ -3375,6 +3377,7 @@ export type Database = {
           p_id: string
           p_lat?: number
           p_lng?: number
+          p_mark_unlocated?: boolean
           p_name?: string
           p_phone?: string
           p_service_mode?: string

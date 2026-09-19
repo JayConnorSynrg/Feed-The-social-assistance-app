@@ -16,6 +16,7 @@ import { Loader2, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { logger } from '@/lib/logger'
 import { suggestAddressesV6, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { buildAutocompleteEvent } from './resource-edit-save'
 import { createDebouncedRunner, type DebouncedRunner } from './debounced-runner'
 
 const DEBOUNCE_MS = 300
@@ -58,9 +59,18 @@ export function AddressAutocomplete({
   const runSearch = useCallback(async (q: string) => {
     const seq = ++reqSeq.current
     setLoading(true)
+    const startedAt = performance.now()
     try {
       const results = await suggestAddressesV6(q, token, { limit: 5 })
       if (seq !== reqSeq.current) return // a newer query superseded this one
+      // W2: one admin.resource.autocomplete event per completed suggest —
+      // query LENGTH + result count + latency only (never the typed text).
+      logger.info('admin.resource.autocomplete', buildAutocompleteEvent({
+        queryLen: q.length,
+        resultCount: results.length,
+        suggestLatencyMs: Math.round(performance.now() - startedAt),
+        outcome: 'suggest',
+      }))
       setSuggestions(results)
       setOpen(results.length > 0)
       setActive(results.length > 0 ? 0 : -1)
@@ -102,17 +112,24 @@ export function AddressAutocomplete({
     return () => document.removeEventListener('pointerdown', onDown)
   }, [open])
 
-  const choose = useCallback((s: AddressSuggestion) => {
+  const choose = useCallback((s: AddressSuggestion, index: number) => {
     justSelected.current = true
     // Cancel any debounce still pending from a keystroke before this pick — else
     // it fires ~300ms later, re-runs the stale search and re-opens the list.
     runnerRef.current?.cancel()
     reqSeq.current++ // invalidate any in-flight request so it can't reopen the list
+    // W2: the 'select' outcome carries which suggestion index was chosen.
+    logger.info('admin.resource.autocomplete', buildAutocompleteEvent({
+      queryLen: value.trim().length,
+      resultCount: suggestions.length,
+      selectedIndex: index,
+      outcome: 'select',
+    }))
     setOpen(false)
     setSuggestions([])
     setActive(-1)
     onSelect(s)
-  }, [onSelect])
+  }, [onSelect, value, suggestions.length])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open || suggestions.length === 0) {
@@ -128,7 +145,7 @@ export function AddressAutocomplete({
     } else if (e.key === 'Enter') {
       if (active >= 0 && active < suggestions.length) {
         e.preventDefault()
-        choose(suggestions[active])
+        choose(suggestions[active], active)
       }
     } else if (e.key === 'Escape') {
       // Close only the suggestion list; stop the event so Radix does not also
@@ -182,7 +199,7 @@ export function AddressAutocomplete({
               aria-selected={i === active}
               // pointerdown (not click) so selection wins over the document
               // pointerdown listener that would otherwise close the list first.
-              onPointerDown={(e) => { e.preventDefault(); choose(s) }}
+              onPointerDown={(e) => { e.preventDefault(); choose(s, i) }}
               onMouseEnter={() => setActive(i)}
               className={`flex cursor-pointer items-start gap-2 px-3 py-2 text-sm ${
                 i === active ? 'bg-lime-50 text-stone-900' : 'text-stone-700'
