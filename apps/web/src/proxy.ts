@@ -27,18 +27,27 @@ export async function proxy(request: NextRequest) {
   const nonce = generateNonce()
   const csp = buildCsp(nonce, { embed: request.nextUrl.pathname.startsWith('/s/embed/') })
 
-  // Forward the nonce + CSP to the app via request headers. Both the initial
-  // and the supabase-cookie-callback responses are built from these headers so
-  // Next sees the nonce regardless of which response object is returned.
+  // --- W0.2: per-request correlation id (I4) --------------------------------
+  // One id per server request, reused if an upstream already set it. Forwarded
+  // on the REQUEST so server logs (logger reads x-request-id via next/headers)
+  // and Sentry (onRequestError tags it) share the SAME id, and echoed on the
+  // RESPONSE so a request is traceable from the client/network side too.
+  const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID()
+
+  // Forward the nonce + CSP + request id to the app via request headers. Both
+  // the initial and the supabase-cookie-callback responses are built from these
+  // headers so Next sees them regardless of which response object is returned.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-nonce', nonce)
   requestHeaders.set('Content-Security-Policy', csp)
+  requestHeaders.set('x-request-id', requestId)
 
-  // Stamp the enforced CSP on the RESPONSE for the browser. Applied to EVERY
+  // Stamp the enforced CSP + correlation id on the RESPONSE. Applied to EVERY
   // return path (the pass-through responses AND the inline redirects) so no
-  // exit escapes the policy.
+  // exit escapes the policy or loses its request id.
   const withCsp = <T extends NextResponse>(response: T): T => {
     response.headers.set('Content-Security-Policy', csp)
+    response.headers.set('x-request-id', requestId)
     return response
   }
 
@@ -64,6 +73,7 @@ export async function proxy(request: NextRequest) {
           const refreshedHeaders = new Headers(request.headers)
           refreshedHeaders.set('x-nonce', nonce)
           refreshedHeaders.set('Content-Security-Policy', csp)
+          refreshedHeaders.set('x-request-id', requestId)
           supabaseResponse = NextResponse.next({
             request: { headers: refreshedHeaders },
           })

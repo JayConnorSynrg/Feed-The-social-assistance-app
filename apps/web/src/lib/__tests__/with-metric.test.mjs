@@ -9,25 +9,37 @@ import assert from 'node:assert/strict'
 function makeWithMetric() {
   const tracks = []
   const logs = []
+  // `sinks` captures the persisted app_logs wide-event rows. In the real impl
+  // (src/lib/logger.ts) this is sinkToSupabase — one call per outcome, the sole
+  // persist path, so success writes exactly one info row and failure exactly one
+  // error row, never both, never zero (I1).
+  const sinks = []
   const track = (name, props) => tracks.push({ name, props })
-  const logger = {
-    info: (message, data) => logs.push({ level: 'info', message, data }),
-    error: (message, error, data) =>
-      logs.push({ level: 'error', message, error, data }),
-  }
+  const emit = (entry) => logs.push(entry)
+  const sinkToSupabase = (level, event, context, request_id, duration_ms) =>
+    sinks.push({ level, event, context, request_id, duration_ms })
 
   async function withMetric(operation, attrs, fn) {
     const start = performance.now()
     try {
       const result = await fn()
       const duration_ms = Math.round(performance.now() - start)
-      logger.info(`${operation}.complete`, { ...attrs, duration_ms })
+      const event = `${operation}.complete`
+      emit({ level: 'info', message: event, ...attrs, duration_ms })
+      sinkToSupabase('info', event, { ...attrs }, undefined, duration_ms)
       track(operation, { ...attrs, duration_ms, ok: true })
       return result
     } catch (error) {
       const duration_ms = Math.round(performance.now() - start)
       const error_code = error instanceof Error ? error.name : 'UnknownError'
-      logger.error(`${operation}.error`, error, { ...attrs, duration_ms, error_code })
+      const event = `${operation}.error`
+      const ctx = {
+        ...attrs,
+        error_code,
+        error_message: error instanceof Error ? error.message : String(error),
+      }
+      emit({ level: 'error', message: event, ...ctx, duration_ms })
+      sinkToSupabase('error', event, ctx, undefined, duration_ms)
       if (error_code !== 'AbortError') {
         track(operation, { ...attrs, duration_ms, ok: false, error_code })
       }
@@ -35,7 +47,7 @@ function makeWithMetric() {
     }
   }
 
-  return { withMetric, tracks, logs }
+  return { withMetric, tracks, logs, sinks }
 }
 
 test('success path returns fn result and records duration_ms + ok:true', async () => {
@@ -49,7 +61,19 @@ test('success path returns fn result and records duration_ms + ok:true', async (
   assert.equal(typeof tracks[0].props.duration_ms, 'number')
   assert.equal(tracks[0].props.category, 'all')
   assert.equal(logs[0].message, 'op.success.complete')
-  assert.equal(typeof logs[0].data.duration_ms, 'number')
+  assert.equal(typeof logs[0].duration_ms, 'number')
+})
+
+test('I1: success persists EXACTLY ONE info wide-event row with duration_ms', async () => {
+  const { withMetric, sinks } = makeWithMetric()
+  await withMetric('op.success', { category: 'all' }, async () => 42)
+
+  // Exactly once on success — one info row, no error row, never zero.
+  assert.equal(sinks.length, 1)
+  assert.equal(sinks[0].level, 'info')
+  assert.equal(sinks[0].event, 'op.success.complete')
+  assert.equal(typeof sinks[0].duration_ms, 'number')
+  assert.ok(sinks[0].duration_ms >= 0)
 })
 
 test('error path re-throws and records ok:false + error_code', async () => {
@@ -71,6 +95,30 @@ test('error path re-throws and records ok:false + error_code', async () => {
   assert.equal(tracks.length, 1)
   assert.equal(tracks[0].props.ok, false)
   assert.equal(tracks[0].props.error_code, 'BoomError')
+})
+
+test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', async () => {
+  const { withMetric, sinks } = makeWithMetric()
+  class BoomError extends Error {
+    constructor() {
+      super('boom')
+      this.name = 'BoomError'
+    }
+  }
+
+  await assert.rejects(
+    () => withMetric('op.fail', {}, async () => {
+      throw new BoomError()
+    }),
+    /boom/
+  )
+
+  // Exactly once on failure — one error row, no info row, never twice, never zero.
+  assert.equal(sinks.length, 1)
+  assert.equal(sinks[0].level, 'error')
+  assert.equal(sinks[0].event, 'op.fail.error')
+  assert.equal(sinks[0].context.error_code, 'BoomError')
+  assert.equal(typeof sinks[0].duration_ms, 'number')
 })
 
 test('AbortError path re-throws but skips the metric event', async () => {

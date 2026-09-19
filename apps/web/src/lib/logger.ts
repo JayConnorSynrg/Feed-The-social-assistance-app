@@ -18,15 +18,24 @@ import { track } from '@vercel/analytics'
 /**
  * Fire-and-forget insert into public.app_logs.
  * - On the SERVER (Node.js runtime): writes directly via service-role client.
+ *   The per-request correlation id set by the proxy (`x-request-id`) is read
+ *   from next/headers when a request scope is active, so a server log row and
+ *   its Sentry scope share one id (I4).
  * - On the CLIENT (browser): posts to /api/client-log with keepalive:true so
- *   the request survives navigation and the event is not lost on redirect.
+ *   the request survives navigation and the event is not lost on redirect. The
+ *   route derives user_id server-side from the cookie session (never trusted
+ *   from the client body).
  * Wrapped in try/catch: a log write must NEVER throw or await in the caller.
+ *
+ * `duration_ms` (nullable) lands in its own column so latency is queryable per
+ * operation. `level` accepts 'info' so completion wide-events persist (I1).
  */
 function sinkToSupabase(
-  level: 'warn' | 'error',
+  level: 'info' | 'warn' | 'error',
   event: string,
   context?: Record<string, unknown>,
-  request_id?: string
+  request_id?: string,
+  duration_ms?: number
 ): void {
   if (typeof window !== 'undefined') {
     // Browser path — fire-and-forget via the client-log API route.
@@ -36,7 +45,7 @@ function sinkToSupabase(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
-        body: JSON.stringify({ level, event, context }),
+        body: JSON.stringify({ level, event, context, duration_ms }),
       }).catch(() => {
         // Swallow network errors — logging must never surface to the caller.
       })
@@ -54,11 +63,31 @@ function sinkToSupabase(
   // Detached promise — intentionally not awaited so callers are never blocked.
   Promise.resolve().then(async () => {
     try {
+      // Correlate with the proxy-stamped request id when inside a request scope.
+      // next/headers is server-only; the AsyncLocalStorage request context
+      // propagates through this microtask. Absent a request scope it throws —
+      // swallowed, request_id stays whatever the caller passed (usually none).
+      let rid = request_id
+      if (!rid) {
+        try {
+          const { headers } = await import('next/headers')
+          const h = await headers()
+          rid = h.get('x-request-id') ?? undefined
+        } catch {
+          // Not in a request scope (e.g. cron/startup) — no correlation id.
+        }
+      }
       const { createClient } = await import('@supabase/supabase-js')
       const client = createClient(url, key, {
         auth: { persistSession: false, autoRefreshToken: false },
       })
-      await client.from('app_logs').insert({ level, event, context, request_id })
+      await client.from('app_logs').insert({
+        level,
+        event,
+        context,
+        request_id: rid,
+        duration_ms: duration_ms ?? null,
+      })
     } catch {
       // Swallow unconditionally — logging must never break a request.
     }
@@ -229,13 +258,29 @@ export async function withMetric<T>(
   try {
     const result = await fn()
     const duration_ms = Math.round(performance.now() - start)
-    logger.info(`${operation}.complete`, { ...attrs, duration_ms })
+    const event = `${operation}.complete`
+    // Console (Vercel Log Drain) AND exactly one persisted info wide-event row
+    // carrying duration_ms (I1). This is the single completion write for every
+    // withMetric call site — the sink is the sole persist path, so success
+    // writes exactly one row and never also an error row.
+    emit({ level: 'info', message: event, timestamp: new Date().toISOString(), ...attrs, duration_ms })
+    sinkToSupabase('info', event, { ...attrs }, undefined, duration_ms)
     track(operation, { ...attrs, duration_ms, ok: true })
     return result
   } catch (error) {
     const duration_ms = Math.round(performance.now() - start)
     const error_code = error instanceof Error ? error.name : 'UnknownError'
-    logger.error(`${operation}.error`, error, { ...attrs, duration_ms, error_code })
+    const event = `${operation}.error`
+    const ctx = {
+      ...attrs,
+      error_code,
+      error_message: error instanceof Error ? error.message : String(error),
+    }
+    // A failed operation still records its outcome — exactly one persisted error
+    // wide-event row carrying duration_ms (I1). No double write: this is the only
+    // sink on the failure path.
+    emit({ level: 'error', message: event, timestamp: new Date().toISOString(), ...ctx, duration_ms })
+    sinkToSupabase('error', event, ctx, undefined, duration_ms)
     if (error_code !== 'AbortError') {
       track(operation, { ...attrs, duration_ms, ok: false, error_code })
     }
