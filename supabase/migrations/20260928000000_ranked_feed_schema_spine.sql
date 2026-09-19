@@ -133,6 +133,11 @@ BEGIN
 END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.sync_post_like_count() FROM PUBLIC;
+-- Harden: the REVOKE … FROM PUBLIC above is inert against Supabase's default
+-- explicit EXECUTE grants to anon/authenticated, so strip those too. Trigger
+-- firing is unaffected (triggers execute as the table owner, not the invoker);
+-- this only removes a direct-call path no caller uses.
+REVOKE EXECUTE ON FUNCTION public.sync_post_like_count() FROM anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.sync_post_comment_count()
 RETURNS trigger
@@ -158,6 +163,10 @@ BEGIN
 END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.sync_post_comment_count() FROM PUBLIC;
+-- Harden: as above — strip Supabase's default explicit EXECUTE grants to
+-- anon/authenticated (the FROM PUBLIC revoke does not touch them). Trigger
+-- firing is unaffected; this removes an unused direct-call path.
+REVOKE EXECUTE ON FUNCTION public.sync_post_comment_count() FROM anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_sync_post_like_count    ON public.post_likes;
 CREATE TRIGGER trg_sync_post_like_count
@@ -203,6 +212,11 @@ CREATE POLICY ranking_config_select_all
   USING (true);
 
 GRANT SELECT ON public.ranking_config TO anon, authenticated;
+-- Harden: lock writes to owner/service_role at the GRANT level, so anon and
+-- authenticated cannot write these constants even if a future RLS policy is
+-- added — the privilege itself is gone, not merely gated by RLS. (These roles
+-- were never granted write here; this makes the intent explicit and durable.)
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.ranking_config FROM anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- V5 — keyset index swap. New 3-col index serves ORDER BY (is_pinned DESC,
