@@ -16,7 +16,26 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: wave6a-edge-chat-hardening
+next_action_id: feed-fullfeed-p0
+
+```yaml
+id: feed-fullfeed-p0
+status: in_progress
+type: branch+commit+pr+merge
+description: "P0 FullFeed foundation — 6 commits on feature/feed-fullfeed-p0 → develop. W0.1 dead-code removal (6680bcf): orphaned realtime-likes hook + inert phone autofill deleted. W0.2 observability SHIPPED+ACTIVE (473152f + 64931e0): wide-event persistence via withMetric, app_logs gains duration_ms + user_id, p50/p95/p99 latency query + week-over-week regression alert, pg_cron 30d retention, x-request-id request correlation (proxy.ts), @sentry/nextjs onRequestError capture — Sentry RUNTIME capture is INERT until NEXT_PUBLIC_SENTRY_DSN + SENTRY_DSN are set in Vercel env (post-deploy follow-up, not a code gap). W0.3 schema spine LIVE (9aad367 + a8d3ca9 + f28949c): posts.location geography+GIST present but EMPTY and intentionally UNGATED — column-privilege gate DEFERRED to W1.3 as a hard precondition (apply commented V1b block BEFORE any coordinate is written; PostgREST 401s select=* under column grants and the feed reads posts via .select('*')); like_count/comment_count denorm counters + recompute triggers; ranking_config singleton (SELECT-only for anon/authenticated, writes+REFERENCES+TRIGGER revoked from client roles); image_url drift-heal; keyset index swap (3-col); duplicate SELECT policy dropped. Migrations applied to prod ndtpovonpadugthmcntl via Management API (not db push); files present under supabase/migrations/. Merge-gate: type-check EXIT 0, build EXIT 0, test EXIT 0 (43 test files / 341 tests pass with valid Mgmt token). 0 behind / 6 ahead origin/develop, no rebase needed. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-p0
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20260928000000_ranked_feed_schema_spine.sql
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-09-19T00:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: wave6a-edge-chat-hardening

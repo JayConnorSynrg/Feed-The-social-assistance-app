@@ -10,6 +10,7 @@
  */
 
 import { track } from '@vercel/analytics'
+import { runWithMetric } from './with-metric-core.mjs'
 
 // ============================================
 // Server-side Supabase log sink
@@ -18,15 +19,24 @@ import { track } from '@vercel/analytics'
 /**
  * Fire-and-forget insert into public.app_logs.
  * - On the SERVER (Node.js runtime): writes directly via service-role client.
+ *   The per-request correlation id set by the proxy (`x-request-id`) is read
+ *   from next/headers when a request scope is active, so a server log row and
+ *   its Sentry scope share one id (I4).
  * - On the CLIENT (browser): posts to /api/client-log with keepalive:true so
- *   the request survives navigation and the event is not lost on redirect.
+ *   the request survives navigation and the event is not lost on redirect. The
+ *   route derives user_id server-side from the cookie session (never trusted
+ *   from the client body).
  * Wrapped in try/catch: a log write must NEVER throw or await in the caller.
+ *
+ * `duration_ms` (nullable) lands in its own column so latency is queryable per
+ * operation. `level` accepts 'info' so completion wide-events persist (I1).
  */
 function sinkToSupabase(
-  level: 'warn' | 'error',
+  level: 'info' | 'warn' | 'error',
   event: string,
   context?: Record<string, unknown>,
-  request_id?: string
+  request_id?: string,
+  duration_ms?: number
 ): void {
   if (typeof window !== 'undefined') {
     // Browser path — fire-and-forget via the client-log API route.
@@ -36,7 +46,10 @@ function sinkToSupabase(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
-        body: JSON.stringify({ level, event, context }),
+        // Forward the caller's correlation id so the persisted client row is
+        // not orphaned (request_id != null). The route treats request_id as a
+        // non-security field and still derives user_id from the cookie session.
+        body: JSON.stringify({ level, event, context, duration_ms, request_id }),
       }).catch(() => {
         // Swallow network errors — logging must never surface to the caller.
       })
@@ -54,11 +67,31 @@ function sinkToSupabase(
   // Detached promise — intentionally not awaited so callers are never blocked.
   Promise.resolve().then(async () => {
     try {
+      // Correlate with the proxy-stamped request id when inside a request scope.
+      // next/headers is server-only; the AsyncLocalStorage request context
+      // propagates through this microtask. Absent a request scope it throws —
+      // swallowed, request_id stays whatever the caller passed (usually none).
+      let rid = request_id
+      if (!rid) {
+        try {
+          const { headers } = await import('next/headers')
+          const h = await headers()
+          rid = h.get('x-request-id') ?? undefined
+        } catch {
+          // Not in a request scope (e.g. cron/startup) — no correlation id.
+        }
+      }
       const { createClient } = await import('@supabase/supabase-js')
       const client = createClient(url, key, {
         auth: { persistSession: false, autoRefreshToken: false },
       })
-      await client.from('app_logs').insert({ level, event, context, request_id })
+      await client.from('app_logs').insert({
+        level,
+        event,
+        context,
+        request_id: rid,
+        duration_ms: duration_ms ?? null,
+      })
     } catch {
       // Swallow unconditionally — logging must never break a request.
     }
@@ -225,20 +258,21 @@ export async function withMetric<T>(
   attrs: Record<string, string | number | boolean | null>,
   fn: () => Promise<T>
 ): Promise<T> {
-  const start = performance.now()
-  try {
-    const result = await fn()
-    const duration_ms = Math.round(performance.now() - start)
-    logger.info(`${operation}.complete`, { ...attrs, duration_ms })
-    track(operation, { ...attrs, duration_ms, ok: true })
-    return result
-  } catch (error) {
-    const duration_ms = Math.round(performance.now() - start)
-    const error_code = error instanceof Error ? error.name : 'UnknownError'
-    logger.error(`${operation}.error`, error, { ...attrs, duration_ms, error_code })
-    if (error_code !== 'AbortError') {
-      track(operation, { ...attrs, duration_ms, ok: false, error_code })
-    }
-    throw error
-  }
+  // Client operations have no server request scope, so mint a per-op
+  // correlation id that ties this operation's persisted wide-event row back to
+  // the op (I5). On the server, request_id stays undefined so sinkToSupabase
+  // reads the proxy-stamped x-request-id (I4) — server correlation is unchanged.
+  const requestId = typeof window !== 'undefined' ? createOpId() : undefined
+  // The guarded body lives in with-metric-core.mjs so the shipped path and the
+  // node:test suite exercise the SAME code. Real emit/sink/track wired here.
+  return runWithMetric(
+    // `emit` requires a full LogEntry; the core's dep slot is intentionally
+    // broader. The core only ever calls it with a valid LogEntry-shaped object,
+    // so this boundary cast is safe and keeps runtime behavior unchanged.
+    { emit: emit as (entry: Record<string, unknown>) => void, sink: sinkToSupabase, track },
+    operation,
+    attrs,
+    fn,
+    requestId
+  ) as Promise<T>
 }

@@ -7,10 +7,9 @@
  *   1. Full name split — "Maria Santos Cruz" → first="Maria" last="Santos Cruz"
  *   2. Single-token name — "Cher" → first="Cher", no last_name key
  *   3. Email passthrough from the email arg
- *   4. Phone from publicProfile.phone
- *   5. Address remap — zip_code → zip, no zip_code key leaks
- *   6. SECURITY — household_members ssn/date_of_birth/income never in output
- *   7. Graceful empty/undefined inputs — returns object, no throw
+ *   4. Address remap — zip_code → zip, no zip_code key leaks
+ *   5. SECURITY — household_members ssn/date_of_birth/income never in output
+ *   6. Graceful empty/undefined inputs — returns object, no throw
  */
 
 import { describe, it, expect } from 'vitest'
@@ -58,15 +57,7 @@ describe('mapProfileToAutofill', () => {
     expect(result.email).toBe('user@example.com')
   })
 
-  // Case 4: phone from publicProfile.phone
-  it('maps publicProfile.phone to output phone', () => {
-    const result = mapProfileToAutofill(
-      makeArgs({ publicProfile: { phone: '802-555-1234' } })
-    )
-    expect(result.phone).toBe('802-555-1234')
-  })
-
-  // Case 5: address remap — zip_code becomes zip; no zip_code key leaks into address
+  // Case 4: address remap — zip_code becomes zip; no zip_code key leaks into address
   it('remaps vaultProfile.residential_address.zip_code to address.zip and omits zip_code from output', () => {
     const vaultProfile: SecureProfileInput = {
       residential_address: {
@@ -83,7 +74,7 @@ describe('mapProfileToAutofill', () => {
     expect('zip_code' in (result.address as object)).toBe(false)
   })
 
-  // Case 6: SECURITY — household_members sensitive fields never autofilled
+  // Case 5: SECURITY — household_members sensitive fields never autofilled
   it('SECURITY: does not include ssn, date_of_birth, or income from household_members in output', () => {
     const vaultProfile: SecureProfileInput = {
       household_members: [
@@ -112,7 +103,7 @@ describe('mapProfileToAutofill', () => {
     expect('annual_income' in result).toBe(false)
   })
 
-  // Case 7: all-empty/undefined inputs — no throw, returns plain object
+  // Case 6: all-empty/undefined inputs — no throw, returns plain object
   it('returns an object without throwing when all inputs are null/undefined', () => {
     expect(() => mapProfileToAutofill(makeArgs())).not.toThrow()
     const result = mapProfileToAutofill(makeArgs())

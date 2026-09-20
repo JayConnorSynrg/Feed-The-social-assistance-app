@@ -23,7 +23,6 @@ import type { SecureProfileInput, Address } from '@/lib/field-encryption'
  */
 export interface PublicProfileForAutofill {
   full_name?: string | null
-  phone?: string | null
   location_city?: string | null
   location_state?: string | null
   zip_code?: string | null
@@ -79,7 +78,6 @@ export type AutofillValues = {
  * - first_name  ← publicProfile.full_name split on first space (part 0)
  * - last_name   ← publicProfile.full_name remainder after first space
  * - email       ← auth user email
- * - phone       ← publicProfile.phone
  * - address     ← vaultProfile.residential_address, with zip_code remapped to zip
  *
  * Fields NOT autofilled (security): ssn, date_of_birth, annual_income
@@ -108,12 +106,6 @@ export function mapProfileToAutofill(args: MapProfileToAutofillArgs): AutofillVa
   // --- email from auth user ---
   if (email) {
     result.email = email
-  }
-
-  // --- phone from public profile ---
-  const phone = publicProfile?.phone?.trim() ?? ''
-  if (phone) {
-    result.phone = phone
   }
 
   // --- address from vault residential_address ---
