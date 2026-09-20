@@ -43,6 +43,8 @@ import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { getErrorMessage } from '@/lib/errors'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
+import { PostTypeBody } from '@/components/feed/post-type-body'
+import { rowToPost, FEED_POST_SELECT, type Post, type FeedPostRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
@@ -54,31 +56,9 @@ import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 // ============================================
 // TYPES
 // ============================================
-interface Post {
-  id: string
-  author: {
-    id: string
-    name: string
-    avatar?: string
-    role: string
-    harmonyScore: number | null
-    harmonyReviewsCount: number
-  }
-  content: string
-  timestamp: Date
-  likes: number
-  comments: number
-  isLiked: boolean
-  category: 'update' | 'request' | 'offer' | 'announcement'
-  resourceId: string | null
-  resourceName: string | null
-  resourceCategory: string | null
-  maxSeekers: number | null
-  slotsRemaining: number | null
-  postType: 'feed' | 'resource_post' | 'petition'
-  petitionId: string | null
-  isHidden: boolean
-}
+// Post / FeedPostRow / rowToPost / FEED_POST_SELECT are the shared feed model,
+// imported from '@/components/feed/post-model'. The union covers all 7
+// post_type discriminants and the transform is reused by the realtime path.
 
 /** An opt-in row enriched with the seeker's profile for the author's management list. */
 interface EnrichedOptIn {
@@ -376,7 +356,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
           )
         } catch (notifyEx: unknown) {
-          logger.error('geo.notify.fanout', { error: String(notifyEx) })
+          logger.error('geo.notify.fanout', notifyEx)
           setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
         }
       }
@@ -809,6 +789,11 @@ function PostCard({
 
       {/* Content */}
       <p className="text-sm leading-relaxed mb-3">{post.content}</p>
+
+      {/* Type-specific body via the typed render registry (INV1): poll (with
+          vote control), event, seeker-request, source-offer. Petition + plain
+          types render nothing here (petition keeps its embed below). */}
+      <PostTypeBody post={post} />
 
       {/* Resource chip — shown when the post is linked to a resource */}
       {post.resourceId && post.resourceName && (
@@ -1273,7 +1258,11 @@ export function FeedPanel() {
       await Promise.race([timeoutPromise, (async () => {
       let query = supabase
         .from('posts')
-        .select('*, user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), resource:resources(id, name, category)')
+        // Explicit column list (INV4) — never select('*'): includes the
+        // discriminant, metadata, denormalized counts, and the columns each
+        // card type needs, so a later coordinate/PII column gate can't
+        // silently break or over-expose the feed.
+        .select(FEED_POST_SELECT)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .limit(PAGE_SIZE)
@@ -1299,7 +1288,10 @@ export function FeedPanel() {
 
       if (error) throw error
 
-      const rows = data || []
+      // The typed client returns GenericStringError[] for a dynamic (non-literal)
+      // select string, so cast to the known joined shape (INV4 keeps the columns
+      // explicit; FeedPostRow documents them).
+      const rows = (data ?? []) as unknown as FeedPostRow[]
       const postIds = rows.map((p) => p.id)
 
       // Posts with a capacity set — need opt-in counts for the author view
@@ -1307,57 +1299,40 @@ export function FeedPanel() {
         .filter((r) => r.max_seekers != null)
         .map((r) => r.id)
 
-      let likeCounts: Record<string, number> = {}
+      // Counts come from the denormalized posts.like_count / comment_count
+      // columns returned by the main query (INV3) — NO secondary aggregation
+      // fetch. The only per-post lookup that remains is "my likes", which
+      // decides isLiked and cannot be derived from a denormalized column.
       let userLikes: Set<string> = new Set()
-      let commentCounts: Record<string, number> = {}
 
       if (postIds.length > 0) {
         type PostIdRow = { post_id: string }
         type QueryResult = { data: PostIdRow[] | null }
 
-        // Fetch likes, my-likes, comments, and opt-in counts in parallel.
-        // Each secondary query carries an AbortSignal so they can't block the
-        // finally block indefinitely if the connection stalls mid-fetch.
+        // My-likes + opt-in counts in parallel. Each carries an AbortSignal so
+        // it can't block the finally block if the connection stalls mid-fetch.
         const secondarySignal = AbortSignal.timeout(QUERY_TIMEOUT_MS)
-        const [likesResult, myLikesResult, commentsResult, optInResult] =
-          await Promise.all([
-            supabase.from('post_likes').select('post_id').in('post_id', postIds).abortSignal(secondarySignal) as unknown as Promise<QueryResult>,
-            user
-              ? supabase
-                  .from('post_likes')
-                  .select('post_id')
-                  .in('post_id', postIds)
-                  .eq('user_id', user.id)
-                  .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
-              : Promise.resolve({ data: [] as PostIdRow[] }),
-            supabase
-              .from('post_comments')
-              .select('post_id')
-              .in('post_id', postIds)
-              .eq('is_hidden', false)
-              .abortSignal(secondarySignal) as unknown as Promise<QueryResult>,
-            cappedPostIds.length > 0
-              ? supabase
-                  .from('resource_opt_ins')
-                  .select('post_id')
-                  .in('post_id', cappedPostIds)
-                  .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
-              : Promise.resolve({ data: [] as PostIdRow[] }),
-          ])
+        const [myLikesResult, optInResult] = await Promise.all([
+          user
+            ? supabase
+                .from('post_likes')
+                .select('post_id')
+                .in('post_id', postIds)
+                .eq('user_id', user.id)
+                .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
+            : Promise.resolve({ data: [] as PostIdRow[] }),
+          cappedPostIds.length > 0
+            ? supabase
+                .from('resource_opt_ins')
+                .select('post_id')
+                .in('post_id', cappedPostIds)
+                .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
+            : Promise.resolve({ data: [] as PostIdRow[] }),
+        ])
 
-        if (likesResult.data) {
-          for (const like of likesResult.data) {
-            likeCounts[like.post_id] = (likeCounts[like.post_id] || 0) + 1
-          }
-        }
         if (myLikesResult.data) {
           for (const like of myLikesResult.data) {
             userLikes.add(like.post_id)
-          }
-        }
-        if (commentsResult.data) {
-          for (const comment of commentsResult.data) {
-            commentCounts[comment.post_id] = (commentCounts[comment.post_id] || 0) + 1
           }
         }
         if (optInResult?.data) {
@@ -1369,32 +1344,12 @@ export function FeedPanel() {
         }
       }
 
-      // Transform to Post interface (runs even when postIds is empty)
-      const transformed: Post[] = rows.map((row) => ({
-        id: row.id,
-        author: {
-          id: row.user?.id || '',
-          name: row.user?.first_name || 'Anonymous',
-          avatar: row.user?.avatar_url || undefined,
-          role: row.user?.is_staff ? 'Admin' : 'Community Member',
-          harmonyScore: (row.user as { harmony_score?: number | null } | undefined)?.harmony_score ?? null,
-          harmonyReviewsCount: (row.user as { harmony_reviews_count?: number | null } | undefined)?.harmony_reviews_count ?? 0,
-        },
-        content: row.content,
-        timestamp: new Date(row.created_at ?? Date.now()),
-        likes: likeCounts[row.id] || 0,
-        comments: commentCounts[row.id] || 0,
-        isLiked: userLikes.has(row.id),
-        category: row.is_pinned ? 'announcement' : 'update',
-        resourceId: row.resource?.id ?? null,
-        resourceName: row.resource?.name ?? null,
-        resourceCategory: (row.resource as { category?: string | null } | null)?.category ?? null,
-        maxSeekers: row.max_seekers ?? null,
-        slotsRemaining: row.slots_remaining ?? null,
-        postType: (row.post_type as 'feed' | 'resource_post' | 'petition') ?? 'feed',
-        petitionId: (row as { petition_id?: string | null }).petition_id ?? null,
-        isHidden: (row as { is_hidden?: boolean }).is_hidden ?? false,
-      }))
+      // Transform to Post via the shared rowToPost (runs even when postIds is
+      // empty). Counts read straight from like_count/comment_count; the
+      // discriminant + metadata are preserved for every type.
+      const transformed: Post[] = rows.map((row) =>
+        rowToPost(row, { isLiked: userLikes.has(row.id) })
+      )
 
       // Update pagination cursor: last row's created_at + id becomes the next-page cursor.
       // hasMore is true when the page returned exactly PAGE_SIZE rows (there may be more).
@@ -1492,7 +1447,7 @@ export function FeedPanel() {
           ? "Couldn\'t load the feed right now — please retry."
           : serializedMsg
 
-      logger.error('feed.posts.fetch_failed', {
+      logger.error('feed.posts.fetch_failed', err, {
         code: (err as { code?: string })?.code,
         message: serializedMsg,
         kind: isTimeout ? 'timeout' : isPermission ? 'permission' : 'unknown',
@@ -1527,31 +1482,49 @@ export function FeedPanel() {
   // same post later appears in a Load More page.
   useRealtimeFeed({
     onInsert: (newPost) => {
-      // State updater: only derive new state — no side effects inside the updater
-      // because React may call it multiple times (StrictMode double-invocation).
-      setPosts((prev) => {
-        // Dedupe: skip if already present (e.g. optimistic insert from this session)
-        if (prev.some((p) => p.id === newPost.id)) return prev
-        const hydrated: Post = {
-          id: newPost.id,
-          author: { id: '', name: 'Loading…', role: '', harmonyScore: null, harmonyReviewsCount: 0 },
-          content: newPost.content,
-          timestamp: new Date(newPost.created_at),
-          likes: 0,
-          comments: 0,
-          isLiked: false,
-          category: newPost.is_pinned ? 'announcement' : 'update',
-          resourceId: null,
-          resourceName: null,
-          resourceCategory: null,
-          maxSeekers: null,
-          slotsRemaining: null,
-          postType: 'feed',
-          petitionId: null,
-          isHidden: newPost.is_hidden,
+      // The postgres_changes payload carries the posts row but NOT the joined
+      // author/resource data, nor the poll/petition side-tables. Hydrate the
+      // real row by id with the SAME explicit select as the main query, then
+      // run it through the SAME rowToPost transform — so a live-inserted post
+      // renders as its TRUE type with full data fidelity, exactly once (INV2).
+      // No blank 'feed' stub, no client-side type guess.
+      void (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('posts')
+            .select(FEED_POST_SELECT)
+            .eq('id', newPost.id)
+            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+            .maybeSingle()
+          if (error) throw error
+          if (!data) return
+
+          let isLiked = false
+          if (user) {
+            const { data: liked } = await supabase
+              .from('post_likes')
+              .select('post_id')
+              .eq('post_id', newPost.id)
+              .eq('user_id', user.id)
+              .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+              .maybeSingle()
+            isLiked = liked != null
+          }
+
+          const hydrated = rowToPost(data as unknown as FeedPostRow, { isLiked })
+          // Dedupe by id: guards against StrictMode double-invocation and against
+          // a post this session inserted optimistically or paged in already.
+          setPosts((prev) =>
+            prev.some((p) => p.id === hydrated.id) ? prev : [hydrated, ...prev]
+          )
+        } catch (err) {
+          if (isQueryTimeout(err)) return
+          logger.warn('feed.realtime.hydrate_failed', {
+            postId: newPost.id,
+            error: getErrorMessage(err),
+          })
         }
-        return [hydrated, ...prev]
-      })
+      })()
     },
     onUpdate: () => fetchPosts(null),
     onDelete: (postId) => {
@@ -1603,8 +1576,12 @@ export function FeedPanel() {
             is_mine: false,
           }))
         )
-      } catch {
-        /* non-critical; strip hides gracefully on error */
+      } catch (err) {
+        // Non-critical; the strip hides gracefully on error. Still report it so
+        // a persistent safety-alert load failure is observable (INV5).
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          logger.warn('feed.safety_alerts.fetch_failed', { error: getErrorMessage(err) })
+        }
       }
     })()
     return () => ctrl.abort()
@@ -1639,7 +1616,7 @@ export function FeedPanel() {
       // Real-time subscription will handle adding the post to the feed
       return data?.id ?? null
     } catch (err) {
-      console.error('Error creating post:', err)
+      logger.error('feed.post.create_failed', err)
       return null
     }
   }
@@ -1714,8 +1691,7 @@ export function FeedPanel() {
       // Refresh post data so the management list and seeker view stay in sync
       fetchPosts()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not update opt-in.'
-      logger.error('feed.optin.update', { error: msg })
+      logger.error('feed.optin.update', err, { optInId, status })
     }
   }
 
@@ -1747,32 +1723,50 @@ export function FeedPanel() {
     const post = posts.find(p => p.id === postId)
     if (!post) return
 
-    // Optimistic update
-    setPosts(posts.map(p =>
+    // Optimistic update — immediate feedback only. The displayed count is
+    // reconciled to the server's denormalized like_count below (INV3) so
+    // repeated like/unlike can never accumulate client-side arithmetic drift.
+    setPosts((prev) => prev.map(p =>
       p.id === postId
-        ? { ...p, isLiked: !p.isLiked, likes: p.isLiked ? p.likes - 1 : p.likes + 1 }
+        ? { ...p, isLiked: !p.isLiked, likes: p.isLiked ? Math.max(p.likes - 1, 0) : p.likes + 1 }
         : p
     ))
 
     try {
       if (post.isLiked) {
-        await supabase
+        const { error } = await supabase
           .from('post_likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id)
+        if (error) throw error
       } else {
-        await supabase
+        const { error } = await supabase
           .from('post_likes')
           .insert({ post_id: postId, user_id: user.id })
+        if (error) throw error
+      }
+
+      // Settle from server truth: the recompute trigger maintains like_count.
+      const { data: fresh, error: readErr } = await supabase
+        .from('posts')
+        .select('like_count')
+        .eq('id', postId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        .maybeSingle()
+      if (!readErr && fresh && typeof fresh.like_count === 'number') {
+        setPosts((prev) => prev.map(p =>
+          p.id === postId ? { ...p, likes: fresh.like_count } : p
+        ))
       }
     } catch (err) {
-      // Revert optimistic update
-      setPosts(posts.map(p =>
+      // Revert optimistic update to the pre-click server-backed values.
+      setPosts((prev) => prev.map(p =>
         p.id === postId
           ? { ...p, isLiked: post.isLiked, likes: post.likes }
           : p
       ))
+      logger.error('feed.like.toggle_failed', err, { postId })
     }
   }
 

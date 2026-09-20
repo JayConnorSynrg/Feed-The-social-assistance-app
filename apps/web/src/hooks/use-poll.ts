@@ -72,7 +72,7 @@ export async function createPoll(
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
   if (error) {
-    logger.error('poll.create.error', { postId, error: error.message })
+    logger.error('poll.create.error', error, { postId })
     return { error: error.message }
   }
 
@@ -114,7 +114,7 @@ export async function castVote(
     if (error.code === '23505') {
       return { error: 'Already voted' }
     }
-    logger.error('poll.castVote.error', { pollId, optionIndex, error: error.message })
+    logger.error('poll.castVote.error', error, { pollId, optionIndex })
     return { error: error.message }
   }
 
@@ -144,7 +144,7 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
     .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
   if (error) {
-    logger.error('poll.revokeVote.error', { pollId, error: error.message })
+    logger.error('poll.revokeVote.error', error, { pollId })
     return { error: error.message }
   }
 
@@ -322,7 +322,7 @@ export function usePollData(postId: string | null): {
         return
       }
       setError('Unable to load poll. Please try again.')
-      console.error('use-poll fetch error:', err)
+      logger.error('poll.fetch.error', err, { postId })
     } finally {
       setLoading(false)
     }

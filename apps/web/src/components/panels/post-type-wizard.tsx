@@ -178,7 +178,7 @@ function GeneralForm({ onClose, dispatch, isSubmitting, error, onPost }: General
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -239,7 +239,7 @@ function SeekerRequestForm({ onClose, dispatch, isSubmitting, error }: BaseFormP
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -310,7 +310,7 @@ function SourceOfferForm({ onClose, dispatch, isSubmitting, error, resourceOptio
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -387,7 +387,7 @@ function ResourceForm({ onClose, dispatch, isSubmitting, error, resourceOptions,
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -486,7 +486,7 @@ function PollForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -598,7 +598,7 @@ function EventForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
@@ -720,7 +720,7 @@ function PetitionDraftForm({ onClose, dispatch, isSubmitting, error }: BaseFormP
       ) {
         return
       }
-      logger.error('wizard.submit.error', { error: err instanceof Error ? err.message : String(err) })
+      logger.error('wizard.submit.error', err)
       dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
