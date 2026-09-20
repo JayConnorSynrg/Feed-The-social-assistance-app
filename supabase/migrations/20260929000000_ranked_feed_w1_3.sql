@@ -83,36 +83,22 @@ AS $$
              ELSE NULL
            END AS geo
   ),
-  -- `base` computes the raw (double precision) score ONCE per visible post, along
-  -- with the distance in km. `scored` then clamps + casts to real. Splitting these
-  -- keeps the score expression written exactly once (no duplication).
-  base AS (
+  -- `visible` computes the exact distance in km ONCE per row that passes the row
+  -- filter (posts_select_public reproduced). dist_km stays internal — it is used
+  -- only to derive the coarse bucket; it is NEVER returned.
+  visible AS (
     SELECT
       p.id,
-      -- Distance in km ONLY when both caller-geo and post-location exist; drives the
-      -- bucket. NEVER surfaced as a raw number (INV-A).
+      p.is_pinned,
+      p.like_count,
+      p.comment_count,
+      p.created_at,
       CASE
         WHEN o.geo IS NOT NULL AND p.location IS NOT NULL
         THEN ST_Distance(p.location, o.geo) / 1000.0
         ELSE NULL
-      END AS dist_km,
-      (
-          (1 + log(10.0, 1 + p.like_count + cfg.comment_weight * p.comment_count))
-        * exp( -ln(2.0)
-               * (EXTRACT(EPOCH FROM (now() - p.created_at)) / 3600.0)
-               / cfg.half_life_hours )
-        * CASE
-            WHEN o.geo IS NOT NULL AND p.location IS NOT NULL
-            THEN exp( -( ST_Distance(p.location, o.geo) / 1000.0 ) / cfg.distance_decay_km )
-            ELSE 1.0
-          END
-        -- Pinned-first: a boost that dominates any realistic organic score, so the
-        -- sort collapses to a single monotonic key (score DESC, id DESC) and the
-        -- keyset cursor stays a clean 2-tuple (INV-C).
-        + CASE WHEN p.is_pinned THEN 1000000.0 ELSE 0 END
-      ) AS raw_score
+      END AS dist_km
     FROM public.posts p
-    CROSS JOIN cfg
     CROSS JOIN origin o
     CROSS JOIN caller c
     WHERE
@@ -123,22 +109,60 @@ AS $$
            WHERE pr.id = c.uid AND pr.is_staff = true
          )
   ),
+  -- `base` computes the raw (double precision) score ONCE per visible post.
+  --
+  -- ANTI-ORACLE (SEV-HIGH fix): the distance contribution is QUANTIZED to the SAME
+  -- coarse buckets as the returned distance_bucket, using a representative distance
+  -- per bucket — NOT the continuous exp(-exact_dist/decay). A continuous factor made
+  -- `score` a distance oracle: with decay_km readable from ranking_config and the
+  -- caller controlling the origin, `d = -decay*ln(S_origin/S_null)` recovers exact
+  -- distance, and three origins multilaterate any geo-tagged post's coordinates.
+  -- With the step function, two posts in the same bucket at different exact distances
+  -- get the IDENTICAL factor, so the score ratio can only take the handful of discrete
+  -- bucket values → no exact distance is recoverable. dist_factor and distance_bucket
+  -- are both derived from the SAME dist_km thresholds below, so they can never disagree.
+  -- Representative distances (bucket midpoints, km): <2→1, 2-10→6, 10-50→30, >50→75.
+  base AS (
+    SELECT
+      v.id,
+      v.dist_km,
+      (
+          (1 + log(10.0, 1 + v.like_count + cfg.comment_weight * v.comment_count))
+        * exp( -ln(2.0)
+               * (EXTRACT(EPOCH FROM (now() - v.created_at)) / 3600.0)
+               / cfg.half_life_hours )
+        * CASE
+            WHEN v.dist_km IS NULL THEN 1.0                                  -- unknown / no geo
+            WHEN v.dist_km < 2     THEN exp( -1.0  / cfg.distance_decay_km ) -- <2km   rep 1km
+            WHEN v.dist_km < 10    THEN exp( -6.0  / cfg.distance_decay_km ) -- 2-10km rep 6km
+            WHEN v.dist_km < 50    THEN exp( -30.0 / cfg.distance_decay_km ) -- 10-50km rep 30km
+            ELSE                        exp( -75.0 / cfg.distance_decay_km ) -- >50km  rep 75km
+          END
+        -- Pinned-first: a boost that dominates any realistic organic score, so the
+        -- sort collapses to a single monotonic key (score DESC, id DESC) and the
+        -- keyset cursor stays a clean 2-tuple (INV-C).
+        + CASE WHEN v.is_pinned THEN 1000000.0 ELSE 0 END
+      ) AS raw_score
+    FROM visible v
+    CROSS JOIN cfg
+  ),
   scored AS (
     SELECT
       b.id,
       b.dist_km,
-      -- Clamp to 0 below 1e-20 BEFORE the ::real cast: a very distant post's
-      -- distance factor (e.g. exp(-thousands/decay)) is a valid double but
-      -- underflows float4, which Postgres raises as "value out of range: underflow".
-      -- Such scores are negligible; flooring them to 0 keeps the row (ranked last,
-      -- ordered by id) instead of erroring the whole page. 1e-20 sits far above the
-      -- float4 minimum (~1.2e-38) so no representable meaningful score is lost.
+      -- Clamp to 0 below 1e-20 BEFORE the ::real cast: a very old post's time-decay
+      -- factor can be a valid double that underflows float4, which Postgres raises as
+      -- "value out of range: underflow". Such scores are negligible; flooring them to
+      -- 0 keeps the row (ranked last, ordered by id) instead of erroring the whole
+      -- page. 1e-20 sits far above the float4 minimum (~1.2e-38) so no representable
+      -- meaningful score is lost.
       (CASE WHEN b.raw_score < 1e-20 THEN 0.0 ELSE b.raw_score END)::real AS score
     FROM base b
   )
   SELECT
     s.id,
     s.score,
+    -- SAME thresholds as the dist_factor above, so bucket and factor never disagree.
     CASE
       WHEN s.dist_km IS NULL   THEN 'unknown'
       WHEN s.dist_km < 2       THEN '<2km'
@@ -147,6 +171,12 @@ AS $$
       ELSE                          '>50km'
     END AS distance_bucket
   FROM scored s
+  -- Keyset (INV-C): (score, id) < cursor in the same (DESC, DESC) order. score is now
+  -- a STEP function of the bucket, so many rows share a score; the id tiebreak keeps
+  -- the key strictly monotonic and every row is returned exactly once (no cursor stall
+  -- on ties). OBS-1 (accepted by design): score reflects like/comment counts captured
+  -- at query time, so a post gaining engagement mid-pagination can shift buckets of
+  -- the sort key between pages and be skipped or repeated across a Load-More boundary.
   WHERE
     p_cursor_score IS NULL
     OR (s.score, s.id) < (p_cursor_score, p_cursor_id)
