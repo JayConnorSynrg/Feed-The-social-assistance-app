@@ -15,6 +15,13 @@ interface Post {
   is_hidden: boolean
   created_at: string
   updated_at: string
+  // Discriminant + relation columns present on the posts row in the
+  // postgres_changes payload. Declared so the insert handler can hydrate the
+  // true post type instead of assuming 'feed' (INV2).
+  post_type: string | null
+  petition_id: string | null
+  resource_id: string | null
+  max_seekers: number | null
 }
 
 interface UseRealtimeFeedOptions {
