@@ -4103,6 +4103,20 @@ export type Database = {
       }
       refresh_community_stats: { Args: never; Returns: undefined }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
+      ranked_feed: {
+        Args: {
+          p_cursor_id?: string
+          p_cursor_score?: number
+          p_lat?: number
+          p_limit?: number
+          p_lng?: number
+        }
+        Returns: {
+          distance_bucket: string
+          id: string
+          score: number
+        }[]
+      }
       reject_resource: {
         Args: { p_reason: string; p_resource_id: string }
         Returns: undefined
