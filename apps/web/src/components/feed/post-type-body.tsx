@@ -71,6 +71,12 @@ function PollBody({ post }: { post: Post }) {
     const prevState: PollVoteState = { tallies: poll.tallies, totalVotes: poll.totalVotes, userVote }
     const isRevoke = userVote === index
     setVoteState(isRevoke ? removeVote(prevState) : applyVote(prevState, index))
+    // Tracks whether a write has already mutated the server on this path. A
+    // switch vote's revoke succeeds BEFORE its cast; once that revoke lands the
+    // pre-click snapshot no longer matches the database, so any later failure
+    // must reconcile to server truth (settleVotes) rather than revert to a
+    // stale prevState that would falsely show the old choice as still active.
+    let serverMutated = false
     try {
       let writeErr: string | null = null
       if (isRevoke) {
@@ -82,17 +88,30 @@ function PollBody({ post }: { post: Post }) {
           // Switch vote: revoke the prior choice first (UNIQUE(poll_id,user_id)).
           const { error: revErr } = await revokeVote(poll.id)
           if (revErr) {
+            // Revoke failed — nothing was written; the pre-click snapshot is
+            // still server-accurate, so revert to it.
             setVoteError(revErr)
             setVoteState(prevState)
             return
           }
+          // Revoke landed: the server now holds zero votes for this user.
+          serverMutated = true
         }
         const { error: castErr } = await castVote(poll.id, index)
         writeErr = castErr
       }
       if (writeErr) {
         setVoteError(writeErr)
-        setVoteState(prevState)
+        if (serverMutated) {
+          // Switch-vote cast failed after the revoke already committed —
+          // reconcile the display to server truth (zero votes), never to the
+          // stale prevState showing the revoked choice as active.
+          await settleVotes()
+        } else {
+          // Fresh cast or revoke-only failure: no write mutated the server, so
+          // reverting the optimistic UI to the pre-click snapshot is correct.
+          setVoteState(prevState)
+        }
         return
       }
       // Settle the mark + tallies from server truth (both directions).
@@ -100,7 +119,13 @@ function PollBody({ post }: { post: Post }) {
     } catch (err) {
       logger.error('poll.vote.click', err, { pollId: poll.id, optionIndex: index })
       setVoteError('Could not record your vote. Please try again.')
-      setVoteState(prevState)
+      if (serverMutated) {
+        // An unexpected throw after the switch-vote revoke committed: the
+        // server truth (zero votes) differs from prevState — reconcile to it.
+        await settleVotes()
+      } else {
+        setVoteState(prevState)
+      }
     } finally {
       setBusyIndex(null)
     }
