@@ -301,7 +301,8 @@ interface CreatePostCardProps {
   onPost: (
     content: string,
     resourceId: string | null,
-    maxSeekers: number | null
+    maxSeekers: number | null,
+    imageUrl?: string | null
   ) => Promise<string | null>
   resourceOptions: ResourceOption[]
   /** Navigates to the map panel to place a safety pin */
@@ -850,6 +851,27 @@ function PostCard({
 
       {/* Content */}
       <p className="text-sm leading-relaxed mb-3">{post.content}</p>
+
+      {/* Attached photo (W1.2). Post-level media renders here in the shared
+          card chrome — the ONLY surface that renders for a plain/general post
+          (post-type-body returns null for 'plain'). Rendered only when present
+          (no empty box on photo-less posts); a fixed aspect box + object-cover
+          prevents layout shift, and the public bucket URL loads lazily. */}
+      {post.imageUrl && (
+        <div
+          data-testid={`post-image-${post.id}`}
+          className="relative mb-3 w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-100 aspect-video"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={post.imageUrl}
+            alt={`Photo attached to ${post.author.name}'s post`}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      )}
 
       {/* Type-specific body via the typed render registry (INV1): poll (with
           vote control), event, seeker-request, source-offer. Petition + plain
@@ -1850,7 +1872,8 @@ export function FeedPanel() {
   const handleCreatePost = async (
     content: string,
     resourceId: string | null,
-    maxSeekers: number | null
+    maxSeekers: number | null,
+    imageUrl?: string | null
   ): Promise<string | null> => {
     if (!user) return null
 
@@ -1862,6 +1885,7 @@ export function FeedPanel() {
           content,
           resource_id: resourceId ?? null,
           max_seekers: maxSeekers ?? null,
+          image_url: imageUrl ?? null,
         })
         .select('id')
         .single()

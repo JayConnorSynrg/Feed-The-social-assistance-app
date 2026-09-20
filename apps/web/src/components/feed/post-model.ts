@@ -161,6 +161,8 @@ export interface Post {
   postType: PostType
   petitionId: string | null
   isHidden: boolean
+  /** Public URL of an attached photo (W1.2), or null when the post has none. */
+  imageUrl: string | null
   /** Parsed event fields (event_post only; null otherwise). */
   eventMeta: EventMeta | null
   /** Category chips (seeker_request / source_offer). */
@@ -197,6 +199,7 @@ export interface FeedPostRow {
   created_at: string | null
   is_pinned: boolean | null
   is_hidden: boolean | null
+  image_url: string | null
   max_seekers: number | null
   slots_remaining: number | null
   post_type: string | null
@@ -263,6 +266,7 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
     postType,
     petitionId: row.petition_id ?? null,
     isHidden: row.is_hidden ?? false,
+    imageUrl: row.image_url ?? null,
     eventMeta: postType === 'event_post' ? parseEventMeta(row.metadata) : null,
     requestCategories:
       postType === 'seeker_request' || postType === 'source_offer'

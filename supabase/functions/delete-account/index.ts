@@ -81,6 +81,37 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Terminal removal of the user's post-image blobs (W1.2 INV-M5). Account
+    // deletion is a terminal/hard removal, so the public blobs must go too — a
+    // DB-row delete alone would orphan them in the public bucket. Every post
+    // image lives under `post-images/<uid>/`, so listing that folder + removing
+    // the objects deletes them all regardless of individual post rows.
+    async function safeDeletePostImages(uid: string) {
+      try {
+        const { data: objects, error: listErr } = await admin.storage
+          .from('post-images')
+          .list(uid, { limit: 1000 })
+        if (listErr) {
+          log.push(`post-images: skipped (${listErr.message})`)
+          return
+        }
+        if (!objects || objects.length === 0) {
+          log.push('post-images: none')
+          return
+        }
+        const paths = objects.map((o) => `${uid}/${o.name}`)
+        const { error: rmErr } = await admin.storage.from('post-images').remove(paths)
+        if (rmErr) {
+          log.push(`post-images: skipped (${rmErr.message})`)
+        } else {
+          log.push(`post-images: deleted ${paths.length}`)
+        }
+      } catch (e) {
+        log.push(`post-images: skipped (${e instanceof Error ? e.message : 'unknown'})`)
+      }
+    }
+    await safeDeletePostImages(userId)
+
     // Delete in dependency order — skip missing tables
     await safeDelete('post_likes', 'user_id', userId)
     await safeDelete('post_comments', 'user_id', userId)
