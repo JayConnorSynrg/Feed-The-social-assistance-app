@@ -14,9 +14,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = await createClient()
   const appUrl = await getAppUrlFromHeaders()
 
+  // Explicit column list (omits posts.location — W1.3 V1b column-privacy gate):
+  // this anon-facing SSR read must never select('*') on posts.
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(first_name, username)')
+    .select('id, content, user:profiles(first_name, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -70,10 +72,11 @@ export default async function SharedPostPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join)
+  // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join).
+  // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(id, first_name, username, avatar_url)')
+    .select('id, content, image_url, user:profiles(id, first_name, username, avatar_url)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()

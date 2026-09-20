@@ -165,6 +165,13 @@ export interface Post {
   eventMeta: EventMeta | null
   /** Category chips (seeker_request / source_offer). */
   requestCategories: string[]
+  /**
+   * Coarse distance label from the ranked_feed RPC ('<2km' | '2-10km' | '10-50km'
+   * | '>50km' | 'unknown'). Present ONLY in ranked mode with caller geo; the raw
+   * coordinate/distance is never sent to the client (W1.3 INV-A). Undefined in the
+   * chronological feed and in the single-row realtime hydration path.
+   */
+  distanceBucket?: string
 }
 
 /**
@@ -262,6 +269,39 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
         ? parseCategories(row.metadata)
         : [],
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ranked feed (W1.3) — client re-sort + distance-bucket attach
+// ---------------------------------------------------------------------------
+
+/** One row from the ranked_feed RPC. The RPC emits ONLY these three fields — no
+ *  latitude/longitude/distance ever reaches the client (W1.3 INV-A). */
+export interface RankedFeedRow {
+  id: string
+  score: number
+  distance_bucket: string
+}
+
+/**
+ * Re-order the hydrated posts to match the RPC's exact score order and attach each
+ * row's distance bucket by id (W1.3). The RPC returns ids already ordered by
+ * (score DESC, id DESC); the hydrate fetch (`.in('id', ids)`) returns them in an
+ * arbitrary order, so this restores rank order and drops any id the RPC returned but
+ * the hydrate did not surface (e.g. a row filtered by the explicit-column read).
+ * Pure + JSX-free so the ranked-ordering invariant is unit-testable directly.
+ */
+export function orderByRankAndAttachBucket(
+  ranked: readonly RankedFeedRow[],
+  hydrated: readonly Post[]
+): Post[] {
+  const byId = new Map(hydrated.map((p) => [p.id, p]))
+  const out: Post[] = []
+  for (const r of ranked) {
+    const p = byId.get(r.id)
+    if (p) out.push({ ...p, distanceBucket: r.distance_bucket })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

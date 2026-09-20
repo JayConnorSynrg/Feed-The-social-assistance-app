@@ -25,9 +25,11 @@ import {
   removeVote,
   postBodyKind,
   POST_TYPE_VALUES,
+  orderByRankAndAttachBucket,
   type FeedPostRow,
   type PostType,
   type PollVoteState,
+  type RankedFeedRow,
 } from './post-model'
 
 // A minimal valid joined row; override per test.
@@ -283,5 +285,52 @@ describe('exhaustive render registry (INV1)', () => {
     expect(postBodyKind('petition')).toBe('petition')
     expect(postBodyKind('feed')).toBe('plain')
     expect(postBodyKind('resource_post')).toBe('plain')
+  })
+})
+
+describe('ranked feed client re-sort + distance-bucket attach (W1.3)', () => {
+  // Build a Post through the real rowToPost transform so the test exercises the
+  // same shape the feed renders (compounds on the makeRow/rowToPost coverage above).
+  const post = (id: string) => rowToPost(makeRow({ id }), { isLiked: false })
+
+  it('returns posts in the RPC score order, not the hydrate order', () => {
+    // RPC order (score DESC): c, a, b. Hydrate arrives in an unrelated order.
+    const ranked: RankedFeedRow[] = [
+      { id: 'c', score: 9, distance_bucket: '<2km' },
+      { id: 'a', score: 5, distance_bucket: '2-10km' },
+      { id: 'b', score: 1, distance_bucket: '>50km' },
+    ]
+    const hydrated = [post('a'), post('b'), post('c')]
+    const out = orderByRankAndAttachBucket(ranked, hydrated)
+    expect(out.map((p) => p.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('attaches each row its own distance bucket by id', () => {
+    const ranked: RankedFeedRow[] = [
+      { id: 'a', score: 5, distance_bucket: '2-10km' },
+      { id: 'b', score: 1, distance_bucket: 'unknown' },
+    ]
+    const out = orderByRankAndAttachBucket(ranked, [post('b'), post('a')])
+    const byId = Object.fromEntries(out.map((p) => [p.id, p.distanceBucket]))
+    expect(byId).toEqual({ a: '2-10km', b: 'unknown' })
+  })
+
+  it('drops a ranked id that the hydrate did not surface (RLS-filtered row)', () => {
+    const ranked: RankedFeedRow[] = [
+      { id: 'a', score: 5, distance_bucket: '<2km' },
+      { id: 'gone', score: 4, distance_bucket: '<2km' },
+    ]
+    const out = orderByRankAndAttachBucket(ranked, [post('a')])
+    expect(out.map((p) => p.id)).toEqual(['a'])
+  })
+
+  it('does not mutate the input posts (attach is a copy)', () => {
+    const original = post('a')
+    orderByRankAndAttachBucket([{ id: 'a', score: 5, distance_bucket: '<2km' }], [original])
+    expect(original.distanceBucket).toBeUndefined()
+  })
+
+  it('returns empty when the RPC returned no rows', () => {
+    expect(orderByRankAndAttachBucket([], [post('a')])).toEqual([])
   })
 })

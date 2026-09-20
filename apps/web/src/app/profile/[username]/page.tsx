@@ -88,15 +88,19 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     ? donationHandles[0] as { paypal_email: string | null; venmo_username: string | null }
     : { paypal_email: null, venmo_username: null }
 
-  // Get user's posts
+  // Get user's posts. Explicit column list (omits posts.location — W1.3 V1b column-privacy
+  // gate): exactly the columns PostWithUser / PostCard render, never select('*').
   const { data: postsData } = await supabase
     .from('posts')
-    .select('*, user:profiles(id, username, first_name, avatar_url)')
+    .select(
+      'id, user_id, content, image_url, is_pinned, is_hidden, created_at, updated_at, ' +
+      'user:profiles(id, username, first_name, avatar_url)'
+    )
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const posts = (postsData || []) as PostWithUser[]
+  const posts = (postsData || []) as unknown as PostWithUser[]
 
   const isOwnProfile = user?.id === profile.id
 

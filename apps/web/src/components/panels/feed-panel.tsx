@@ -44,7 +44,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
-import { rowToPost, FEED_POST_SELECT, type Post, type FeedPostRow } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
@@ -69,6 +69,36 @@ interface EnrichedOptIn {
   seekerHarmonyScore: number | null
   seekerHarmonyCount: number
   status: string
+}
+
+/** Ranked-feed ordering mode. Default 'ranked' (proximity/recency/engagement blend
+ *  via the ranked_feed RPC); 'recent' is the legacy chronological keyset query. */
+type FeedRankMode = 'ranked' | 'recent'
+
+/**
+ * Read the caller's coordinates ONLY when geolocation permission is already granted —
+ * this never triggers a new permission prompt (W1.3). Returns null on any browser
+ * without the Permissions API, when permission is not 'granted', on native (no
+ * Permissions API), or on any error. A null result makes ranked_feed fall back to
+ * recency-only ranking (no distance factor), which is the graceful default.
+ */
+async function readGeoIfGranted(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return null
+    const perms = (navigator as Navigator & { permissions?: Permissions }).permissions
+    if (!perms?.query) return null
+    const status = await perms.query({ name: 'geolocation' as PermissionName })
+    if (status.state !== 'granted') return null
+    return await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300_000 }
+      )
+    })
+  } catch {
+    return null
+  }
 }
 
 type FilterType = 'all' | 'following' | 'mine' | 'announcements'
@@ -103,19 +133,50 @@ function getRelativeTime(date: Date): string {
 interface FeedHeaderProps {
   activeFilter: FilterType
   onFilterChange: (filter: FilterType) => void
+  rankMode: FeedRankMode
+  onRankModeChange: (mode: FeedRankMode) => void
 }
 
-function FeedHeader({ activeFilter, onFilterChange }: FeedHeaderProps) {
+function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeChange }: FeedHeaderProps) {
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'following', label: 'Following' },
     { key: 'mine', label: 'My Posts' },
     { key: 'announcements', label: 'Announcements' },
   ]
+  const rankModes: { key: FeedRankMode; label: string }[] = [
+    { key: 'ranked', label: 'Ranked' },
+    { key: 'recent', label: 'Recent' },
+  ]
 
   return (
     <div className="mb-4">
-      <h2 className="font-semibold text-lg mb-3">Community Feed</h2>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="font-semibold text-lg">Community Feed</h2>
+        {/* Ranked ↔ chronological toggle (default ranked). */}
+        <div
+          role="group"
+          aria-label="Feed ordering"
+          className="flex items-center rounded-full bg-[#f0ede6] p-0.5 shrink-0"
+        >
+          {rankModes.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={rankMode === m.key}
+              data-testid={`feed-rankmode-${m.key}`}
+              onClick={() => onRankModeChange(m.key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                rankMode === m.key
+                  ? 'bg-[#4a5d23] text-white'
+                  : 'text-stone-700 hover:text-stone-900'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="flex gap-2 overflow-x-auto">
         {filters.map((filter) => (
           <button
@@ -1137,6 +1198,12 @@ export function FeedPanel() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [paginationCursor, setPaginationCursor] = useState<{ createdAt: string; id: string } | null>(null)
+  // Ranked feed (W1.3): default 'ranked'. rankCursor is the keyset for ranked pages.
+  const [feedRankMode, setFeedRankMode] = useState<FeedRankMode>('ranked')
+  const [rankCursor, setRankCursor] = useState<{ score: number; id: string } | null>(null)
+  // Cached caller geo (undefined = not yet read; null = unavailable/denied). Read at
+  // most once per mount and never triggers a permission prompt.
+  const geoRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   // Active safety alerts for the feed strip — fetched independently of the map
   const [safetyAlerts, setSafetyAlerts] = useState<SafetyAlert[]>([])
@@ -1235,6 +1302,61 @@ export function FeedPanel() {
   // ordered by created_at desc, id desc. The realtime prepend path dedupes by id
   // so new posts don't duplicate rows already paged in.
   const PAGE_SIZE = 25
+
+  // Shared post-list side-data loader: this user's opt-in statuses + full seeker
+  // opt-in rows (seeker + author views) + the reviews they've submitted. Used by
+  // BOTH the chronological (fetchPosts) and ranked (fetchRankedPosts) paths so the
+  // author-management + review affordances behave identically in either ordering.
+  const loadPostSideData = useCallback((postIds: string[]) => {
+    if (!user || postIds.length === 0) return
+    const uid = user.id
+    fetchOptInsForPosts(postIds).then(setOptInMap)
+
+    // Fetch full seeker opt-in rows (for review prompts and author management)
+    supabase
+      .from('resource_opt_ins')
+      .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, first_name, harmony_score, harmony_reviews_count)')
+      .in('post_id', postIds)
+      .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      .then(({ data: oisData }) => {
+        if (!oisData) return
+
+        // Map post_id → seeker opt-in id for the current user (seeker view)
+        const seekerIds: Record<string, string> = {}
+        // Map post_id → enriched list for the author view
+        const authorMap: Record<string, EnrichedOptIn[]> = {}
+
+        for (const oi of oisData) {
+          if (oi.seeker_id === uid) {
+            seekerIds[oi.post_id] = oi.id
+          }
+          // Build author management list (one entry per seeker per post)
+          const seeker = oi.seeker as { id: string; first_name: string | null; harmony_score: number | null; harmony_reviews_count: number } | null
+          if (!authorMap[oi.post_id]) authorMap[oi.post_id] = []
+          authorMap[oi.post_id].push({
+            id: oi.id,
+            postId: oi.post_id,
+            seekerId: oi.seeker_id,
+            seekerName: seeker?.first_name ?? 'Unknown',
+            seekerHarmonyScore: seeker?.harmony_score ?? null,
+            seekerHarmonyCount: seeker?.harmony_reviews_count ?? 0,
+            status: oi.status,
+          })
+        }
+        setSeekerOptInIds(seekerIds)
+        setAuthorOptInsMap(authorMap)
+
+        // Fetch reviews the current user has submitted (seeker+author directions)
+        const allOptInIds = oisData.map((oi) => oi.id)
+        if (allOptInIds.length > 0) {
+          fetchMyReviewsForOptIns(allOptInIds).then((reviewMap) => {
+            setMyReviewMap(reviewMap)
+            // Build the set of opt-in ids the current user has reviewed (for author side)
+            setAuthorReviewedSet(new Set(reviewMap.keys()))
+          })
+        }
+      })
+  }, [supabase, user, fetchOptInsForPosts, fetchMyReviewsForOptIns])
 
   // Fetch posts from Supabase
   // When cursor is provided, fetches the NEXT page after that cursor position.
@@ -1388,55 +1510,8 @@ export function FeedPanel() {
         setHasMore(false)
       }
 
-      // Fetch this user's opt-in statuses + seeker opt-in rows + author opt-in lists
-      if (user && postIds.length > 0) {
-        fetchOptInsForPosts(postIds).then(setOptInMap)
-
-        // Fetch full seeker opt-in rows (for review prompts and author management)
-        supabase
-          .from('resource_opt_ins')
-          .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, first_name, harmony_score, harmony_reviews_count)')
-          .in('post_id', postIds)
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-          .then(({ data: oisData }) => {
-            if (!oisData) return
-
-            // Map post_id → seeker opt-in id for the current user (seeker view)
-            const seekerIds: Record<string, string> = {}
-            // Map post_id → enriched list for the author view
-            const authorMap: Record<string, EnrichedOptIn[]> = {}
-
-            for (const oi of oisData) {
-              if (oi.seeker_id === user.id) {
-                seekerIds[oi.post_id] = oi.id
-              }
-              // Build author management list (one entry per seeker per post)
-              const seeker = oi.seeker as { id: string; first_name: string | null; harmony_score: number | null; harmony_reviews_count: number } | null
-              if (!authorMap[oi.post_id]) authorMap[oi.post_id] = []
-              authorMap[oi.post_id].push({
-                id: oi.id,
-                postId: oi.post_id,
-                seekerId: oi.seeker_id,
-                seekerName: seeker?.first_name ?? 'Unknown',
-                seekerHarmonyScore: seeker?.harmony_score ?? null,
-                seekerHarmonyCount: seeker?.harmony_reviews_count ?? 0,
-                status: oi.status,
-              })
-            }
-            setSeekerOptInIds(seekerIds)
-            setAuthorOptInsMap(authorMap)
-
-            // Fetch reviews the current user has submitted (seeker+author directions)
-            const allOptInIds = oisData.map((oi) => oi.id)
-            if (allOptInIds.length > 0) {
-              fetchMyReviewsForOptIns(allOptInIds).then((reviewMap) => {
-                setMyReviewMap(reviewMap)
-                // Build the set of opt-in ids the current user has reviewed (for author side)
-                setAuthorReviewedSet(new Set(reviewMap.keys()))
-              })
-            }
-          })
-      }
+      // Opt-in / seeker / review side-data — shared with the ranked path.
+      loadPostSideData(postIds)
       })()])
     } catch (err: unknown) {
       const isTimeout = isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError')
@@ -1462,17 +1537,180 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, fetchOptInsForPosts])
+  }, [supabase, user, loadPostSideData])
 
-  // Initial fetch — wait for auth to reconcile (guest OR user) before the first
-  // fetch so it runs against the reconciled session, not a pre-reconciliation
-  // guest session. Gate on !authLoading only: posts are guest-readable, so we
-  // never require a user here.
-  useEffect(() => {
-    if (!authLoading) {
+  // Ranked feed (W1.3): fetch a page via the hardened ranked_feed RPC, then hydrate
+  // full rows with the SAME explicit FEED_POST_SELECT + rowToPost transform the
+  // chronological path uses (single-transform invariant). The RPC returns only
+  // id + score + distance_bucket (never coords). Caller geo is read at most once and
+  // only when already granted; without geo the RPC ranks by recency+engagement.
+  const fetchRankedPosts = useCallback(async (cursor: { score: number; id: string } | null = null) => {
+    if (cursor === null) {
+      setLoading(true)
+    } else {
+      setLoadingMore(true)
+    }
+    setError(null)
+    const timeoutMs = QUERY_TIMEOUT_MS + 2_000
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new DOMException('Feed fetch timed out', 'TimeoutError')),
+        timeoutMs
+      )
+    })
+    try {
+      await Promise.race([timeoutPromise, (async () => {
+        if (geoRef.current === undefined) {
+          geoRef.current = await readGeoIfGranted()
+        }
+        const geo = geoRef.current
+        const hasGeo = geo !== null
+
+        const { data: rankedData, error: rankErr } = await withMetric(
+          'feed.load',
+          { mode: 'ranked', has_geo: hasGeo, page_size: PAGE_SIZE },
+          async () =>
+            supabase.rpc('ranked_feed', {
+              // Omit (→ undefined) rather than null so the RPC's own DEFAULT NULL
+              // applies; the generated Args type treats every param as optional.
+              p_lat: geo?.lat ?? undefined,
+              p_lng: geo?.lng ?? undefined,
+              p_limit: PAGE_SIZE,
+              p_cursor_score: cursor?.score ?? undefined,
+              p_cursor_id: cursor?.id ?? undefined,
+            }).abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        )
+        if (rankErr) throw rankErr
+
+        const ranked = (rankedData ?? []) as unknown as RankedFeedRow[]
+        logger.info('feed.rank', { mode: 'ranked', has_geo: hasGeo, returned_count: ranked.length })
+
+        const ids = ranked.map((r) => r.id)
+        if (ids.length === 0) {
+          if (cursor === null) setPosts([])
+          setRankCursor(null)
+          setHasMore(false)
+          return
+        }
+
+        // Hydrate the ranked ids with the SAME explicit select as the chronological
+        // feed (omits location). RLS still applies to this SECURITY INVOKER read.
+        const { data: rowData, error: rowErr } = await supabase
+          .from('posts')
+          .select(FEED_POST_SELECT)
+          .in('id', ids)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rowErr) throw rowErr
+        const rows = (rowData ?? []) as unknown as FeedPostRow[]
+
+        // my-likes + opt-in counts in parallel (mirrors the chronological path).
+        const cappedPostIds = rows.filter((r) => r.max_seekers != null).map((r) => r.id)
+        const userLikes = new Set<string>()
+        type PostIdRow = { post_id: string }
+        type QueryResult = { data: PostIdRow[] | null }
+        const secondarySignal = AbortSignal.timeout(QUERY_TIMEOUT_MS)
+        const [myLikesResult, optInResult] = await Promise.all([
+          user
+            ? supabase
+                .from('post_likes')
+                .select('post_id')
+                .in('post_id', ids)
+                .eq('user_id', user.id)
+                .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
+            : Promise.resolve({ data: [] as PostIdRow[] }),
+          cappedPostIds.length > 0
+            ? supabase
+                .from('resource_opt_ins')
+                .select('post_id')
+                .in('post_id', cappedPostIds)
+                .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
+            : Promise.resolve({ data: [] as PostIdRow[] }),
+        ])
+        if (myLikesResult.data) {
+          for (const like of myLikesResult.data) userLikes.add(like.post_id)
+        }
+        if (optInResult?.data) {
+          const counts: Record<string, number> = {}
+          for (const row of optInResult.data) {
+            counts[row.post_id] = (counts[row.post_id] || 0) + 1
+          }
+          setOptInCounts(counts)
+        }
+
+        // Transform via the shared rowToPost, then re-order to the RPC's score order
+        // and attach each row's distance bucket by id. The RPC already places pinned
+        // posts first (via the score boost), so NO client-side pinned re-sort here.
+        const transformed = rows.map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+        const ordered = orderByRankAndAttachBucket(ranked, transformed)
+
+        if (cursor === null) {
+          setPosts(ordered)
+        } else {
+          setPosts((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id))
+            const fresh = ordered.filter((p) => !existingIds.has(p.id))
+            return [...prev, ...fresh]
+          })
+        }
+
+        if (ranked.length === PAGE_SIZE) {
+          const last = ranked[ranked.length - 1]
+          setRankCursor({ score: last.score, id: last.id })
+          setHasMore(true)
+        } else {
+          setRankCursor(null)
+          setHasMore(false)
+        }
+
+        // Opt-in / seeker / review side-data — shared with the chronological path.
+        loadPostSideData(ids)
+      })()])
+    } catch (err: unknown) {
+      const isTimeout = isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError')
+      const serializedMsg = getErrorMessage(err)
+      const isPermission =
+        (err as { code?: string })?.code === '42501' ||
+        serializedMsg.toLowerCase().includes('permission denied')
+
+      const msg = isTimeout
+        ? 'Feed timed out — please check your connection and retry.'
+        : isPermission
+          ? "Couldn\'t load the feed right now — please retry."
+          : serializedMsg
+
+      logger.error('feed.rank.fetch_failed', err, {
+        code: (err as { code?: string })?.code,
+        message: serializedMsg,
+        kind: isTimeout ? 'timeout' : isPermission ? 'permission' : 'unknown',
+      })
+      setError(msg)
+    } finally {
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }, [supabase, user, loadPostSideData])
+
+  // Refresh the feed in the CURRENT ordering mode — used by the initial load, the
+  // mode toggle, the retry button, and realtime UPDATE/DELETE reconciliation.
+  const refreshFeed = useCallback(() => {
+    if (feedRankMode === 'ranked') {
+      fetchRankedPosts(null)
+    } else {
       fetchPosts(null)
     }
-  }, [authLoading, fetchPosts])
+  }, [feedRankMode, fetchRankedPosts, fetchPosts])
+
+  // Initial fetch + mode-change refetch — wait for auth to reconcile (guest OR user)
+  // before the first fetch so it runs against the reconciled session. Gate on
+  // !authLoading only: posts are guest-readable, so we never require a user here.
+  // refreshFeed depends on feedRankMode, so toggling the mode re-runs this effect.
+  useEffect(() => {
+    if (!authLoading) {
+      refreshFeed()
+    }
+  }, [authLoading, refreshFeed])
 
   // Load following ids on mount (and when auth resolves)
   useEffect(() => {
@@ -1536,7 +1774,7 @@ export function FeedPanel() {
         }
       })()
     },
-    onUpdate: () => fetchPosts(null),
+    onUpdate: () => refreshFeed(),
     onDelete: (postId) => {
       setPosts(prev => prev.filter(p => p.id !== postId))
     },
@@ -1599,9 +1837,15 @@ export function FeedPanel() {
 
   // ── Load more ────────────────────────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
-    if (!paginationCursor || loadingMore) return
-    fetchPosts(paginationCursor)
-  }, [paginationCursor, loadingMore, fetchPosts])
+    if (loadingMore) return
+    if (feedRankMode === 'ranked') {
+      if (!rankCursor) return
+      fetchRankedPosts(rankCursor)
+    } else {
+      if (!paginationCursor) return
+      fetchPosts(paginationCursor)
+    }
+  }, [feedRankMode, rankCursor, paginationCursor, loadingMore, fetchRankedPosts, fetchPosts])
 
   const handleCreatePost = async (
     content: string,
@@ -2003,7 +2247,12 @@ export function FeedPanel() {
           className="flex-1 flex flex-col"
         >
           {/* Header with Filter Tabs */}
-          <FeedHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+          <FeedHeader
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            rankMode={feedRankMode}
+            onRankModeChange={setFeedRankMode}
+          />
 
           {/* Create Post Card — full users only; guests see account prompt */}
           {isAuthenticated && !isAnonymous && (
@@ -2048,7 +2297,7 @@ export function FeedPanel() {
               <div className="text-center py-8">
                 <p className="text-sm text-red-600">{error}</p>
                 <button
-                  onClick={() => { setError(null); fetchPosts() }}
+                  onClick={() => { setError(null); refreshFeed() }}
                   className="text-sm text-stone-600 underline mt-2"
                 >
                   Retry
