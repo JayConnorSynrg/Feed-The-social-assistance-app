@@ -34,8 +34,10 @@ const MAX_BYTES = 5 * 1024 * 1024 // 5 MB — mirrors the bucket file_size_limit
 type ImageType = 'jpeg' | 'png' | 'webp'
 
 /**
- * Sniff image magic bytes — mirror of apps/web/src/lib/image-magic-bytes.ts.
- * Fixed format constants; kept in sync with the app-side sniffer.
+ * Sniff image magic bytes. This is the AUTHORITATIVE server-side gate — the
+ * client re-encode (canvas → WebP) plus validateFileUpload is the first-line
+ * check; the bytes are re-verified here before anything lands in the public
+ * bucket. Fixed format constants (JPEG / PNG / WebP).
  */
 function sniffImageType(bytes: Uint8Array): ImageType | null {
   if (bytes.length < 12) return null
@@ -129,7 +131,9 @@ Deno.serve(async (req: Request) => {
 
     const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(path)
     edgeLog('info', 'post_image.uploaded', { requestId, userId: user.id, path, type: imageType, size: buf.byteLength })
-    return json({ url: publicUrl }, 200, respHeaders)
+    // `path` is returned so the client can delete the object it just created
+    // (owner-folder DELETE policy) when the user removes or replaces the photo.
+    return json({ url: publicUrl, path }, 200, respHeaders)
   } catch (err) {
     edgeLog('error', 'post_image.unexpected', { requestId, msg: err instanceof Error ? err.message : 'unknown' })
     return json({ error: 'Internal server error' }, 500, respHeaders)

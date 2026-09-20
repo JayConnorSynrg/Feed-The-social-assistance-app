@@ -44,6 +44,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
+import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -315,6 +316,16 @@ type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreatePostCardProps) {
   const supabase = createClient()
   const [content, setContent] = useState('')
+  const {
+    imageUrl,
+    previewUrl,
+    imageUploading,
+    imageError,
+    fileInputRef,
+    handleFileSelect,
+    clearImage,
+    resetAfterPost,
+  } = usePostImagePicker()
   const [error, setError] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string>('')
   const [maxSeekersInput, setMaxSeekersInput] = useState<string>('')
@@ -380,6 +391,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
   const handleSubmit = async () => {
     if (!content.trim()) return
+    if (imageUploading) return // wait for the in-flight photo upload to settle
     setError(null)
     setGeoNotifyResult(null)
 
@@ -397,12 +409,15 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
       const shouldNotify = geoNotify && !!resourceId
       const radiusSnapshot = geoRadius
 
-      const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers)
+      const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers, imageUrl)
       setContent('')
       setSelectedResourceId('')
       setMaxSeekersInput('')
       setGeoNotify(false)
       setSeekerCount(null)
+      // The photo blob is now committed to the post — clear the picker WITHOUT
+      // deleting it (resetAfterPost, not clearImage).
+      resetAfterPost()
 
       // Fan-out geo notifications after post is created — failure does NOT block the post
       if (shouldNotify && newPostId) {
@@ -452,7 +467,40 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
         {/* Input, Resource Selector, and Send */}
         <div className="flex-1 flex flex-col gap-2">
-          {/* Post creation trigger */}
+          {/* Inline quick-compose: a plain update with an optional photo, posted
+              directly from the always-visible composer (W1.2). Structured post
+              types (offer, request, poll, event, petition) open via the wizard
+              trigger below. */}
+          <Textarea
+            data-testid="composer-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Share a quick update with the community…"
+            className="min-h-[72px] bg-white text-stone-900 placeholder:text-stone-400"
+            aria-label="Share a quick update"
+          />
+          <PostImagePickerField
+            previewUrl={previewUrl}
+            imageUploading={imageUploading}
+            imageError={imageError}
+            fileInputRef={fileInputRef}
+            onFileSelect={handleFileSelect}
+            onClear={clearImage}
+            compact
+          />
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              data-testid="composer-post-btn"
+              onClick={handleSubmit}
+              disabled={!content.trim() || imageUploading || isLimited}
+              className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white"
+            >
+              {imageUploading ? 'Uploading…' : 'Post'}
+            </Button>
+          </div>
+
+          {/* Post creation trigger — structured post types */}
           <button
             type="button"
             data-testid="post-wizard-trigger"
@@ -462,7 +510,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
               <Plus className="w-4 h-4 text-white" />
             </span>
-            <span>Share an update, offer, request, or more…</span>
+            <span>More: offer, request, poll, event, or petition…</span>
           </button>
 
           {/* Optional resource link selector */}

@@ -87,25 +87,34 @@ Deno.serve(async (req: Request) => {
     // image lives under `post-images/<uid>/`, so listing that folder + removing
     // the objects deletes them all regardless of individual post rows.
     async function safeDeletePostImages(uid: string) {
+      const PAGE = 1000
+      const MAX_PAGES = 1000 // hard cap → guarantees termination (≤1M images)
+      let deleted = 0
       try {
-        const { data: objects, error: listErr } = await admin.storage
-          .from('post-images')
-          .list(uid, { limit: 1000 })
-        if (listErr) {
-          log.push(`post-images: skipped (${listErr.message})`)
-          return
+        // Paginate: a prolific user may have more than one page of images. Each
+        // iteration deletes a page, so the next list from offset 0 returns the
+        // remaining objects; stop when a page is short (folder exhausted) or the
+        // cap is hit. The cap makes an infinite loop impossible if a delete were
+        // ever a silent no-op.
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const { data: objects, error: listErr } = await admin.storage
+            .from('post-images')
+            .list(uid, { limit: PAGE, offset: 0 })
+          if (listErr) {
+            log.push(`post-images: skipped (${listErr.message})`)
+            return
+          }
+          if (!objects || objects.length === 0) break
+          const paths = objects.map((o) => `${uid}/${o.name}`)
+          const { error: rmErr } = await admin.storage.from('post-images').remove(paths)
+          if (rmErr) {
+            log.push(`post-images: skipped (${rmErr.message})`)
+            return
+          }
+          deleted += paths.length
+          if (objects.length < PAGE) break
         }
-        if (!objects || objects.length === 0) {
-          log.push('post-images: none')
-          return
-        }
-        const paths = objects.map((o) => `${uid}/${o.name}`)
-        const { error: rmErr } = await admin.storage.from('post-images').remove(paths)
-        if (rmErr) {
-          log.push(`post-images: skipped (${rmErr.message})`)
-        } else {
-          log.push(`post-images: deleted ${paths.length}`)
-        }
+        log.push(deleted > 0 ? `post-images: deleted ${deleted}` : 'post-images: none')
       } catch (e) {
         log.push(`post-images: skipped (${e instanceof Error ? e.message : 'unknown'})`)
       }
