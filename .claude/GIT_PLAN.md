@@ -16,7 +16,32 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: feed-fullfeed-p0
+next_action_id: feed-fullfeed-p1
+
+```yaml
+id: feed-fullfeed-p1
+status: in_progress
+type: branch+commit+pr+merge
+description: "P1 W1.1 rich feed rendering — 4 commits on feature/feed-fullfeed-p1 → develop (base develop @ 5b94a6e, 4 ahead / 0 behind, no rebase needed). b69fc35: typed 7-type post render model (post-model.ts + post-model.test.ts) + realtime payload widening (use-realtime-feed.ts) so every post type's columns arrive on live inserts. 55661b1: render all 7 post types (post-type-body.tsx), hydrate live inserts into the feed, consume denormalized like_count/comment_count counters (feed-panel.tsx). 5d3bf2b: adversarial-review fixes — poll votes made visible, like-action guard, render exhaustiveness over the typed union, WCAG contrast. aa2e2e3: reconcile poll UI to server truth when a switch-vote cast fails (use-poll.ts). Invariants held: SPA panel model preserved (no route pages), feed reads posts via .select('*') so posts.location column gate stays DEFERRED to W1.3 read-path conversion (unchanged here), realtime payload widened without RLS change. Merge-gate evidence: tsc EXIT 0, build EXIT 0, 284 non-smoke tests pass; 94 *.smoke.ts failures are env-gated Mgmt-API 401s (expected without a live Mgmt token, not a code regression). Review-clean: 2 adversarial review passes + smoke-runner + re-review. Residual: poll rendering is correctness-verified in tests but 0 live polls exist, so the poll pixel-render path is unverified against a real browser (pixel-render residual). DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-p1
+base: develop
+remote: origin
+files:
+  - apps/web/src/components/feed/post-model.ts
+  - apps/web/src/components/feed/post-model.test.ts
+  - apps/web/src/components/feed/post-type-body.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/components/panels/post-type-wizard.tsx
+  - apps/web/src/hooks/use-poll.ts
+  - apps/web/src/hooks/use-realtime-feed.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+created_at: "2026-09-19T00:00:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: feed-fullfeed-p0
