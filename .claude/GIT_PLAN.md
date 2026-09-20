@@ -16,24 +16,38 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: feed-fullfeed-p2-w1.3-postdeploy-v1b
+next_action_id: null
 
-<!-- NOTE: feed-fullfeed-p2-w1.2 merged to develop (PR #203, squash 330474e). Two orchestrator-owned post-deploy steps remain pending: feed-fullfeed-p2-w1.3-postdeploy-v1b (W1.3 CONTRACT migration) and the W1.2 edge-fn deploy (post-image-upload + delete-account) — the git merge deliberately did NOT deploy edge fns or apply Mgmt-API SQL. -->
-<!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge): deploy supabase/functions/post-image-upload (browser-called → --no-verify-jwt, in-code JWT verify + anon-block) and the updated supabase/functions/delete-account (adds paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
+<!-- NOTE: feed-fullfeed-p2-w1.2 merged to develop (PR #203, squash 330474e). Both orchestrator-owned post-deploy steps are now COMPLETE: feed-fullfeed-p2-w1.2-postdeploy-edgefns (edge-fn deploy) and feed-fullfeed-p2-w1.3-postdeploy-v1b (W1.3 CONTRACT migration + WAL gate). No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
+<!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge) — DONE 2026-09-20: deployed supabase/functions/post-image-upload (verify_jwt=false, in-code JWT verify + anon/guest-block) and the updated supabase/functions/delete-account (paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
 
 <!-- COMPLETED (superseded-note): feed-fullfeed-p2-w1.2 was the active executor work; now complete + merged. -->
 
 
 ```yaml
 id: feed-fullfeed-p2-w1.3-postdeploy-v1b
-status: pending
+status: complete
 type: migration
-description: "POST-DEPLOY step for W1.3 (PR #202, squash 0a2318c). After Vercel ships the EXPAND (explicit-column anon reads omitting posts.location), apply migration supabase/migrations/20260929000000_ranked_feed_w1_3.sql Section 2 (V1b CONTRACT: atomic REVOKE SELECT ON posts FROM anon,authenticated → GRANT SELECT on all columns EXCEPT location) and Section 3 (Realtime WAL gate: ALTER PUBLICATION supabase_realtime SET TABLE posts with all columns except location) to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint. Section 1 (ranked_feed RPC) already applied at build. Verify post-apply: posts.location attacl shows no anon/authenticated SELECT grant; anon select('*') on posts now 401/42501 (must confirm all read paths use explicit column lists first); publication column list excludes location. DO NOT apply as part of the git merge — separate post-deploy step."
+description: "POST-DEPLOY step for W1.3 (PR #202, squash 0a2318c). After Vercel ships the EXPAND (explicit-column anon reads omitting posts.location), apply migration supabase/migrations/20260929000000_ranked_feed_w1_3.sql Section 2 (V1b CONTRACT: atomic REVOKE SELECT ON posts FROM anon,authenticated → GRANT SELECT on all columns EXCEPT location) and Section 3 (Realtime WAL gate: ALTER PUBLICATION supabase_realtime SET TABLE posts with all columns except location) to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint. Section 1 (ranked_feed RPC) already applied at build. Verify post-apply: posts.location attacl shows no anon/authenticated SELECT grant; anon select('*') on posts now 401/42501 (must confirm all read paths use explicit column lists first); publication column list excludes location. DO NOT apply as part of the git merge — separate post-deploy step. COMPLETE 2026-09-20: Section 2+3 were applied to prod earlier; verified live from the anon surface this ship step — anon select=* on posts → HTTP 401 code 42501 'permission denied for table posts'; anon select=location → 401/42501; anon select=id,content,post_type → HTTP 200 (safe cols readable); supabase_realtime publication for posts lists 18 columns EXCLUDING location. V1b gate confirmed live."
 project_ref: ndtpovonpadugthmcntl
 migration: supabase/migrations/20260929000000_ranked_feed_w1_3.sql
 depends_on: feed-fullfeed-p2-w1.3
 created_at: "2026-09-20T04:41:00.000Z"
-completed_at: null
+completed_at: "2026-09-20T05:40:00.000Z"
+```
+
+```yaml
+id: feed-fullfeed-p2-w1.2-postdeploy-edgefns
+status: complete
+type: edge-function-deploy
+description: "POST-DEPLOY (ship) step for W1.2 photo-on-post (PR #203, squash 330474e; develop HEAD 44c5c9d). The photo-upload capability was INERT until the edge fn was deployed; this step made it live. Gate: Vercel develop production deployment dpl_BLzNgy6FwPkp7VWJp9TwZfmNzXkH (SHA 44c5c9d, ref develop) readyState=READY, https://www.sourcetofeed.com → 200 (client that INVOKES the fn shipped). Deployed to prod ndtpovonpadugthmcntl via supabase CLI 2.65.5 with the valid PAT (note: the shell-exported SUPABASE_ACCESS_TOKEN was stale/401 and shadowed a valid PAT in apps/web/.env.local — used the file token): (1) post-image-upload deployed with --no-verify-jwt (browser-called, in-code auth.getUser() + is_anonymous guest-block; confirmed index.ts does getUser in-code) → version 1, verify_jwt=false; (2) delete-account redeployed (paginated post-images/<uid>/ blob hard-delete added) keeping its existing JWT mode (verify_jwt=false, unchanged) → version 21. LIVE AUTH-GATE VERIFY (no persistent named user created, no real account deletion run): no-auth probe POST /functions/v1/post-image-upload with anon apikey as Bearer + valid 1x1 PNG → HTTP 401 {\"error\":\"Unauthorized\"} (in-code auth rejects non-user); guest probe with an is_anonymous GoTrue access_token + valid PNG → HTTP 403 {\"error\":\"Create a free account to attach a photo.\"} (INV-M2 guest-block). RESIDUAL: authenticated valid-upload→render path and account-delete→blob-gone path are unit-proven + review-confirmed but require a real logged-in browser session to exercise end-to-end; not run here (destructive / needs persistent user)."
+project_ref: ndtpovonpadugthmcntl
+files:
+  - supabase/functions/post-image-upload/index.ts
+  - supabase/functions/delete-account/index.ts
+depends_on: feed-fullfeed-p1
+created_at: "2026-09-20T05:31:00.000Z"
+completed_at: "2026-09-20T05:35:00.000Z"
 ```
 
 ```yaml
