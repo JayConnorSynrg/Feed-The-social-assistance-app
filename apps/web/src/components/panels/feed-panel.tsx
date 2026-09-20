@@ -1163,6 +1163,10 @@ export function FeedPanel() {
   const [reviewModalOptInId, setReviewModalOptInId] = useState<string | null>(null)
   const [reviewModalRevieweeName, setReviewModalRevieweeName] = useState('')
   const [reviewModalRevieweeRole, setReviewModalRevieweeRole] = useState('')
+  // Per-post like-toggle in-flight guard (see handleLike): postIds with an
+  // unsettled like/unlike write, so a rapid double-click cannot flip isLiked
+  // out of sync with the server.
+  const likeInFlightRef = useRef<Set<string>>(new Set())
 
   const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
@@ -1497,7 +1501,13 @@ export function FeedPanel() {
             .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
             .maybeSingle()
           if (error) throw error
-          if (!data) return
+          if (!data) {
+            // The row vanished between the realtime INSERT and this hydration
+            // read (e.g. deleted/hidden). Log so a dropped live insert is
+            // observable rather than silently swallowed.
+            logger.warn('feed.realtime.insert.hydrate.empty', { postId: newPost.id })
+            return
+          }
 
           let isLiked = false
           if (user) {
@@ -1723,6 +1733,13 @@ export function FeedPanel() {
     const post = posts.find(p => p.id === postId)
     if (!post) return
 
+    // In-flight guard: ignore a second toggle for the same post until the first
+    // settles. A rapid double-click could otherwise leave isLiked transiently
+    // disagreeing with the server on the heart-fill (the counts already
+    // reconcile from server truth below; this closes the isLiked drift).
+    if (likeInFlightRef.current.has(postId)) return
+    likeInFlightRef.current.add(postId)
+
     // Optimistic update — immediate feedback only. The displayed count is
     // reconciled to the server's denormalized like_count below (INV3) so
     // repeated like/unlike can never accumulate client-side arithmetic drift.
@@ -1767,6 +1784,8 @@ export function FeedPanel() {
           : p
       ))
       logger.error('feed.like.toggle_failed', err, { postId })
+    } finally {
+      likeInFlightRef.current.delete(postId)
     }
   }
 

@@ -21,10 +21,13 @@ import {
   derivePollView,
   pollHasEnded,
   canCastVote,
+  applyVote,
+  removeVote,
   postBodyKind,
   POST_TYPE_VALUES,
   type FeedPostRow,
   type PostType,
+  type PollVoteState,
 } from './post-model'
 
 // A minimal valid joined row; override per test.
@@ -202,6 +205,59 @@ describe('poll vote gating (INV6)', () => {
     const future = new Date(Date.now() + 60_000).toISOString()
     expect(pollHasEnded(future)).toBe(false)
     expect(canCastVote(true, future)).toBe(true)
+  })
+})
+
+describe('applyVote / removeVote — optimistic vote transitions (INV6, FIX1)', () => {
+  it('casting a fresh vote sets userVote and increments that option + total', () => {
+    const before: PollVoteState = { tallies: [0, 0, 0], totalVotes: 0, userVote: null }
+    const after = applyVote(before, 1)
+    expect(after.userVote).toBe(1)
+    expect(after.tallies).toEqual([0, 1, 0])
+    expect(after.totalVotes).toBe(1)
+    // purity: input untouched
+    expect(before.tallies).toEqual([0, 0, 0])
+    expect(before.userVote).toBeNull()
+  })
+
+  it('switching choice moves the tally and keeps the total (one effective vote)', () => {
+    const before: PollVoteState = { tallies: [1, 0], totalVotes: 1, userVote: 0 }
+    const after = applyVote(before, 1)
+    expect(after.userVote).toBe(1)
+    expect(after.tallies).toEqual([0, 1])
+    expect(after.totalVotes).toBe(1)
+  })
+
+  it('re-casting the same option is a no-op', () => {
+    const before: PollVoteState = { tallies: [0, 1], totalVotes: 1, userVote: 1 }
+    expect(applyVote(before, 1)).toBe(before)
+  })
+
+  it('an out-of-range option index is a no-op', () => {
+    const before: PollVoteState = { tallies: [0, 0], totalVotes: 0, userVote: null }
+    expect(applyVote(before, 5)).toBe(before)
+    expect(applyVote(before, -1)).toBe(before)
+  })
+
+  it('revoking clears userVote and decrements that option + total', () => {
+    const before: PollVoteState = { tallies: [0, 1], totalVotes: 1, userVote: 1 }
+    const after = removeVote(before)
+    expect(after.userVote).toBeNull()
+    expect(after.tallies).toEqual([0, 0])
+    expect(after.totalVotes).toBe(0)
+    // purity: input untouched
+    expect(before.tallies).toEqual([0, 1])
+    expect(before.userVote).toBe(1)
+  })
+
+  it('revoking with no current vote is a no-op', () => {
+    const before: PollVoteState = { tallies: [2, 3], totalVotes: 5, userVote: null }
+    expect(removeVote(before)).toBe(before)
+  })
+
+  it('total never goes negative on revoke', () => {
+    const before: PollVoteState = { tallies: [0], totalVotes: 0, userVote: 0 }
+    expect(removeVote(before).totalVotes).toBe(0)
   })
 })
 

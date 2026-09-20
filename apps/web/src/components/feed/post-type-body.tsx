@@ -21,7 +21,11 @@ import {
   derivePollView,
   pollHasEnded,
   canCastVote,
+  applyVote,
+  removeVote,
+  assertNever,
   type Post,
+  type PollVoteState,
 } from './post-model'
 import { usePollData, castVote, revokeVote } from '@/hooks/use-poll'
 import { useAuth } from '@/hooks/use-auth'
@@ -32,7 +36,7 @@ import { logger } from '@/lib/logger'
 // ---------------------------------------------------------------------------
 
 function PollBody({ post }: { post: Post }) {
-  const { poll, userVote, loading, error } = usePollData(post.id)
+  const { poll, userVote, loading, error, setVoteState, settleVotes } = usePollData(post.id)
   const { isAuthenticated } = useAuth()
   const [busyIndex, setBusyIndex] = React.useState<number | null>(null)
   const [voteError, setVoteError] = React.useState<string | null>(null)
@@ -60,26 +64,43 @@ function PollBody({ post }: { post: Post }) {
     if (!votingAllowed || busyIndex !== null) return
     setVoteError(null)
     setBusyIndex(index)
+    // Snapshot the pre-click state so we can both apply an immediate optimistic
+    // update and revert to server-backed values if the DB write fails. The
+    // displayed result does NOT depend on the poll_votes realtime channel
+    // (dead until W1.4): we settle from a fresh read after the write succeeds.
+    const prevState: PollVoteState = { tallies: poll.tallies, totalVotes: poll.totalVotes, userVote }
+    const isRevoke = userVote === index
+    setVoteState(isRevoke ? removeVote(prevState) : applyVote(prevState, index))
     try {
-      if (userVote === index) {
+      let writeErr: string | null = null
+      if (isRevoke) {
         // Toggle off — revoke the existing vote.
         const { error: revErr } = await revokeVote(poll.id)
-        if (revErr) setVoteError(revErr)
+        writeErr = revErr
       } else {
         if (userVote !== null) {
           // Switch vote: revoke the prior choice first (UNIQUE(poll_id,user_id)).
           const { error: revErr } = await revokeVote(poll.id)
           if (revErr) {
             setVoteError(revErr)
+            setVoteState(prevState)
             return
           }
         }
         const { error: castErr } = await castVote(poll.id, index)
-        if (castErr) setVoteError(castErr)
+        writeErr = castErr
       }
+      if (writeErr) {
+        setVoteError(writeErr)
+        setVoteState(prevState)
+        return
+      }
+      // Settle the mark + tallies from server truth (both directions).
+      await settleVotes()
     } catch (err) {
       logger.error('poll.vote.click', err, { pollId: poll.id, optionIndex: index })
       setVoteError('Could not record your vote. Please try again.')
+      setVoteState(prevState)
     } finally {
       setBusyIndex(null)
     }
@@ -135,7 +156,7 @@ function PollBody({ post }: { post: Post }) {
           {poll.totalVotes} vote{poll.totalVotes !== 1 ? 's' : ''}
         </span>
         {!isAuthenticated && !ended && (
-          <span className="text-[11px] text-stone-400">Sign in to vote</span>
+          <span className="text-[11px] text-stone-600">Sign in to vote</span>
         )}
       </div>
       {voteError && <p className="mt-1 text-[11px] text-red-600">{voteError}</p>}
@@ -228,7 +249,8 @@ function RequestOfferBody({ post, intent }: { post: Post; intent: 'request' | 'o
 // ---------------------------------------------------------------------------
 
 export function PostTypeBody({ post }: { post: Post }) {
-  switch (postBodyKind(post.postType)) {
+  const kind = postBodyKind(post.postType)
+  switch (kind) {
     case 'poll':
       return <PollBody post={post} />
     case 'event':
@@ -242,5 +264,8 @@ export function PostTypeBody({ post }: { post: Post }) {
       // Petition keeps its existing embed in PostCard; plain types have no
       // type-specific body beyond the shared chrome.
       return null
+    default:
+      // A new PostBodyKind without a case here is a compile error (INV1).
+      return assertNever(kind)
   }
 }

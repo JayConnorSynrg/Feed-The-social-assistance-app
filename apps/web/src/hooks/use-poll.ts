@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
 import type { Database } from '@feed/database'
+import type { PollVoteState } from '@/components/feed/post-model'
 
 // ---------------------------------------------------------------------------
 // Types derived from generated schema
@@ -173,6 +174,10 @@ export function usePollData(postId: string | null): {
   userVote: number | null
   loading: boolean
   error: string | null
+  /** Overwrite the displayed vote state (optimistic apply, or revert on error). */
+  setVoteState: (next: PollVoteState) => void
+  /** Re-read this poll's votes and settle tallies + userVote from server truth. */
+  settleVotes: () => Promise<void>
 } {
   const supabase = createClient()
   const { loading: authLoading } = useAuth()
@@ -182,6 +187,9 @@ export function usePollData(postId: string | null): {
   const [userVote, setUserVote] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // The current poll's id, kept in a ref so settleVotes can re-read without a
+  // stale closure and independently of the (W1.4) realtime channel.
+  const pollIdRef = useRef<string | null>(null)
 
   // Derive tallies from a flat list of vote rows.
   // options is Json so we derive option count separately.
@@ -200,6 +208,7 @@ export function usePollData(postId: string | null): {
 
   const fetchPollData = useCallback(async () => {
     if (!postId) {
+      pollIdRef.current = null
       setPoll(null)
       setUserVote(null)
       setLoading(false)
@@ -221,6 +230,7 @@ export function usePollData(postId: string | null): {
       if (pollError) throw pollError
 
       if (!pollRow) {
+        pollIdRef.current = null
         setPoll(null)
         setUserVote(null)
         setLoading(false)
@@ -242,6 +252,7 @@ export function usePollData(postId: string | null): {
       const voteRows: PollVoteRow[] = votes ?? []
       const tallies = computeTallies(optionCount, voteRows)
 
+      pollIdRef.current = pollRow.id
       setPoll({
         ...pollRow,
         tallies,
@@ -328,6 +339,53 @@ export function usePollData(postId: string | null): {
     }
   }, [postId, supabase, computeTallies])
 
+  /**
+   * Overwrite the displayed vote state. Used by the poll body to apply the pure
+   * optimistic transition (applyVote/removeVote) immediately, and to revert to
+   * the pre-click snapshot when the DB write fails.
+   */
+  const setVoteState = useCallback((next: PollVoteState) => {
+    setPoll((prev) => (prev ? { ...prev, tallies: next.tallies, totalVotes: next.totalVotes } : prev))
+    setUserVote(next.userVote)
+  }, [])
+
+  /**
+   * Settle from server truth: re-read this poll's votes, recompute tallies +
+   * total + the current user's choice, and write them to state. This is what
+   * makes a cast/revoke visible without depending on the poll_votes realtime
+   * channel (dead until W1.4). Mirrors handleLike's re-read-and-settle.
+   */
+  const settleVotes = useCallback(async () => {
+    const pollId = pollIdRef.current
+    if (!pollId) return
+    try {
+      const { data: votes, error: votesError } = await supabase
+        .from('poll_votes')
+        .select('id, poll_id, user_id, option_index, created_at')
+        .eq('poll_id', pollId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      if (votesError) throw votesError
+      const voteRows: PollVoteRow[] = votes ?? []
+      setPoll((prev) => {
+        if (!prev) return prev
+        const optionCount = Array.isArray(prev.options) ? (prev.options as unknown[]).length : 0
+        return { ...prev, tallies: computeTallies(optionCount, voteRows), totalVotes: voteRows.length }
+      })
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUserVote(user ? voteRows.find((v) => v.user_id === user.id)?.option_index ?? null : null)
+    } catch (err: unknown) {
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.message.includes('signal'))
+      ) {
+        return
+      }
+      logger.error('poll.settleVotes.error', err, { pollId })
+    }
+  }, [supabase, computeTallies])
+
   // Wait for auth to reconcile (guest OR user) before fetching so the query runs
   // against the reconciled session, not a pre-reconciliation guest session.
   // Gate on !authLoading only (in addition to the existing !postId guard inside
@@ -345,5 +403,5 @@ export function usePollData(postId: string | null): {
     }
   }, [authLoading, fetchPollData, supabase])
 
-  return { poll, userVote, loading, error }
+  return { poll, userVote, loading, error, setVoteState, settleVotes }
 }

@@ -314,3 +314,58 @@ export function pollHasEnded(endsAt: string | null): boolean {
 export function canCastVote(isAuthenticated: boolean, endsAt: string | null): boolean {
   return isAuthenticated && !pollHasEnded(endsAt)
 }
+
+// ---------------------------------------------------------------------------
+// Optimistic vote transitions (INV6)
+// ---------------------------------------------------------------------------
+
+/**
+ * The minimal poll state a vote acts on: per-option tallies, the running total,
+ * and the current user's chosen option index (null = has not voted). Kept pure
+ * and JSX-free so the transition can be unit-tested directly.
+ */
+export interface PollVoteState {
+  tallies: number[]
+  totalVotes: number
+  userVote: number | null
+}
+
+/**
+ * Apply the current user casting (or switching to) a vote for `optionIndex`.
+ * Pure: returns the next state, never mutates the input.
+ *   - fresh vote (no prior choice): increments that option + total, sets userVote
+ *   - switch (prior choice differs): decrements the old option, increments the
+ *     new one, total unchanged (UNIQUE(poll_id,user_id) → one effective vote)
+ *   - re-cast of the same option: no-op
+ * An out-of-range index is a no-op. This is the settle-independent optimistic
+ * transition the poll body shows immediately, before the fresh server read.
+ */
+export function applyVote(state: PollVoteState, optionIndex: number): PollVoteState {
+  if (optionIndex < 0 || optionIndex >= state.tallies.length) return state
+  if (state.userVote === optionIndex) return state
+  const tallies = [...state.tallies]
+  let totalVotes = state.totalVotes
+  if (state.userVote === null) {
+    totalVotes += 1
+  } else if (state.userVote >= 0 && state.userVote < tallies.length && tallies[state.userVote] > 0) {
+    // Switching choice: drop the prior option; total is unchanged.
+    tallies[state.userVote] -= 1
+  }
+  tallies[optionIndex] += 1
+  return { tallies, totalVotes, userVote: optionIndex }
+}
+
+/**
+ * Apply the current user revoking their vote. Pure: clears userVote, decrements
+ * that option's tally and the total (floored at 0). A no-op when there is no
+ * current vote.
+ */
+export function removeVote(state: PollVoteState): PollVoteState {
+  if (state.userVote === null) return state
+  const tallies = [...state.tallies]
+  const idx = state.userVote
+  if (idx >= 0 && idx < tallies.length && tallies[idx] > 0) {
+    tallies[idx] -= 1
+  }
+  return { tallies, totalVotes: Math.max(0, state.totalVotes - 1), userVote: null }
+}
