@@ -40,6 +40,7 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
     created_at: '2026-09-01T12:00:00.000Z',
     is_pinned: false,
     is_hidden: false,
+    image_url: null,
     max_seekers: null,
     slots_remaining: null,
     post_type: 'feed',
@@ -85,6 +86,27 @@ describe('rowToPost — discriminant fidelity (INV1/INV2)', () => {
   it('coerces a null post_type to "feed"', () => {
     const post = rowToPost(makeRow({ post_type: null }), { isLiked: false })
     expect(post.postType).toBe('feed')
+  })
+})
+
+describe('rowToPost — attached photo (W1.2 INV-M3 read side)', () => {
+  it('maps image_url from the row onto post.imageUrl so the card can render it', () => {
+    const url = 'https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/u1/abc.webp'
+    const post = rowToPost(makeRow({ image_url: url }), { isLiked: false })
+    expect(post.imageUrl).toBe(url)
+  })
+
+  it('leaves imageUrl null when the post has no photo (no broken/empty image)', () => {
+    const post = rowToPost(makeRow({ image_url: null }), { isLiked: false })
+    expect(post.imageUrl).toBeNull()
+  })
+
+  it('preserves image_url through the SAME transform the realtime hydration path uses', () => {
+    // A live-inserted post must surface its photo identically to a refetched one.
+    const url = 'https://cdn.example/post-images/u1/live.webp'
+    const post = rowToPost(makeRow({ post_type: 'feed', image_url: url }), { isLiked: false })
+    expect(post.postType).toBe('feed')
+    expect(post.imageUrl).toBe(url)
   })
 })
 

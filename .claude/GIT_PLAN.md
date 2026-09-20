@@ -16,7 +16,10 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: feed-fullfeed-p2-w1.3-postdeploy-v1b
+next_action_id: feed-fullfeed-p2-w1.2
+
+<!-- NOTE: feed-fullfeed-p2-w1.3-postdeploy-v1b remains pending (orchestrator-owned post-deploy step); feed-fullfeed-p2-w1.2 is the active executor work. -->
+
 
 ```yaml
 id: feed-fullfeed-p2-w1.3-postdeploy-v1b
@@ -2168,5 +2171,37 @@ pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/85
 merge_sha: null
 merged_into: null
 created_at: "2026-06-11T16:20:00.000Z"
+completed_at: null
+```
+
+```yaml
+id: feed-fullfeed-p2-w1.2
+status: in_progress
+type: branch+commit+pr
+description: "feat(feed): P2 W1.2 — attach a photo to a community-feed post + display. Creates PUBLIC post-images bucket (file_size_limit 5MB, allowed_mime_types image/jpeg,image/png,image/webp) with RLS: SELECT public-read (anon+authenticated) + owner-folder DELETE (authenticated). DELIBERATELY NO direct client INSERT policy — all writes route through the validating edge fn (service_role); a direct INSERT policy on a PUBLIC bucket is itself the INV-M1 hole (spoofed content-type SVG/HTML → stored XSS), so the secure design has no direct client write path (anon-block satisfied a fortiori). New edge fn post-image-upload: in-code JWT verify + anon-block (is_anonymous claim), server-side MAGIC-BYTE sniff (JPEG FFD8FF / PNG 89504E47 / WebP RIFF....WEBP), size cap, service_role write to post-images/<uid>/<uuid>.webp, returns public URL; deploy --no-verify-jwt (browser-called). Client re-encode helper image-reencode.ts (canvas draw → toBlob WebP@0.8, max dim 1600px aspect-preserved — inherently strips EXIF/GPS) + pure image-magic-bytes.ts sniffer + post-image-upload.ts client flow (validateFileUpload → reencode → edge invoke). GeneralForm (post-type-wizard) gains image picker→preview→upload; onPost + handleCreatePost gain optional imageUrl; posts.image_url written. Read path: image_url wired through FeedPostRow + Post + rowToPost; rendered in PostCard shared chrome (plain-type posts — the general-update-with-photo target — for which post-type-body returns null), plain <img> loading=lazy + alt + contained aspect box (no layout shift, no empty box when absent). INV-M5 blob HARD-delete wired into delete-account edge fn only (existing terminal path): service_role list post-images/<uid>/ + remove. GAP: no owner-facing post-delete exists today (not built speculatively); admin_remove_post is soft-hide (is_hidden) so its blob persists by design. Migration 20260930000000_post_images_bucket.sql applied to prod ndtpovonpadugthmcntl via Mgmt API. Tests: magic-byte accept/reject, rowToPost image_url mapping, reencode dimension math. DO NOT MERGE — orchestrator-gated after adversarial review."
+branch: feature/feed-fullfeed-p2-w1.2
+base: develop
+base_sha: a242a3a
+remote: origin
+project_ref: ndtpovonpadugthmcntl
+files:
+  - supabase/migrations/20260930000000_post_images_bucket.sql
+  - supabase/functions/post-image-upload/index.ts
+  - supabase/functions/delete-account/index.ts
+  - apps/web/src/lib/image-reencode.ts
+  - apps/web/src/lib/image-magic-bytes.ts
+  - apps/web/src/lib/post-image-upload.ts
+  - apps/web/src/lib/__tests__/image-magic-bytes.test.ts
+  - apps/web/src/lib/__tests__/image-reencode.test.ts
+  - apps/web/src/components/feed/post-model.ts
+  - apps/web/src/components/feed/post-model.test.ts
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/components/panels/post-type-wizard.tsx
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+depends_on: feed-fullfeed-p2-w1.1
+created_at: "2026-09-20T05:00:00.000Z"
 completed_at: null
 ```

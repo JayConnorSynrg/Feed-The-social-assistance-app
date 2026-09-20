@@ -44,6 +44,8 @@ import { getErrorMessage } from '@/lib/errors'
 import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
+import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
+import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -301,7 +303,8 @@ interface CreatePostCardProps {
   onPost: (
     content: string,
     resourceId: string | null,
-    maxSeekers: number | null
+    maxSeekers: number | null,
+    imageUrl?: string | null
   ) => Promise<string | null>
   resourceOptions: ResourceOption[]
   /** Navigates to the map panel to place a safety pin */
@@ -314,10 +317,24 @@ type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreatePostCardProps) {
   const supabase = createClient()
   const [content, setContent] = useState('')
+  const {
+    imageUrl,
+    previewUrl,
+    imageUploading,
+    imageError,
+    fileInputRef,
+    handleFileSelect,
+    clearImage,
+    resetAfterPost,
+  } = usePostImagePicker()
   const [error, setError] = useState<string | null>(null)
   const [selectedResourceId, setSelectedResourceId] = useState<string>('')
   const [maxSeekersInput, setMaxSeekersInput] = useState<string>('')
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [isPosting, setIsPosting] = useState(false)
+  // Synchronous single-flight gate — guarantees a double-click fires onPost once
+  // (a disabled/state flag alone races: both handlers run before the re-render).
+  const postGateRef = useRef(createSingleFlight())
 
   // Geo-outreach state
   const [geoNotify, setGeoNotify] = useState(false)
@@ -379,8 +396,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
   const handleSubmit = async () => {
     if (!content.trim()) return
-    setError(null)
-    setGeoNotifyResult(null)
+    if (imageUploading) return // wait for the in-flight photo upload to settle
 
     // Parse max_seekers — blank = unlimited (null)
     const maxSeekers =
@@ -390,42 +406,60 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
       return
     }
 
-    const result = await executeRateLimited(async () => {
-      const sanitizedContent = sanitizeInput(content)
-      const resourceId = selectedResourceId || null
-      const shouldNotify = geoNotify && !!resourceId
-      const radiusSnapshot = geoRadius
+    // Single-flight: a second synchronous click returns here without a 2nd INSERT.
+    await postGateRef.current.run(async () => {
+      setIsPosting(true)
+      setError(null)
+      setGeoNotifyResult(null)
+      try {
+        await executeRateLimited(async () => {
+          const sanitizedContent = sanitizeInput(content)
+          const resourceId = selectedResourceId || null
+          const shouldNotify = geoNotify && !!resourceId
+          const radiusSnapshot = geoRadius
 
-      const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers)
-      setContent('')
-      setSelectedResourceId('')
-      setMaxSeekersInput('')
-      setGeoNotify(false)
-      setSeekerCount(null)
+          const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers, imageUrl)
+          const outcome = composerSubmitOutcome(newPostId)
+          if (!outcome.reset) {
+            // INSERT failed (handleCreatePost swallows + returns null): keep the
+            // user's content + surface the error so they can retry. Leave the
+            // uploaded blob as-is (account-deletion cleanup reclaims any orphan).
+            setError(outcome.error)
+            return
+          }
 
-      // Fan-out geo notifications after post is created — failure does NOT block the post
-      if (shouldNotify && newPostId) {
-        try {
-          const { data: notifyData, error: notifyErr } = await supabase
-            .rpc('notify_seekers_near_resource', {
-              p_post_id: newPostId,
-              p_radius_miles: radiusSnapshot,
-            })
-          if (notifyErr) throw notifyErr
-          const count = typeof notifyData === 'number' ? notifyData : 0
-          setGeoNotifyResult(
-            `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
-          )
-        } catch (notifyEx: unknown) {
-          logger.error('geo.notify.fanout', notifyEx)
-          setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
-        }
+          // Success — clear the composer. The photo blob is now committed to the
+          // post, so resetAfterPost (NOT clearImage) clears state without deleting it.
+          setContent('')
+          setSelectedResourceId('')
+          setMaxSeekersInput('')
+          setGeoNotify(false)
+          setSeekerCount(null)
+          resetAfterPost()
+
+          // Fan-out geo notifications after post is created — failure does NOT block the post
+          if (shouldNotify && newPostId) {
+            try {
+              const { data: notifyData, error: notifyErr } = await supabase
+                .rpc('notify_seekers_near_resource', {
+                  p_post_id: newPostId,
+                  p_radius_miles: radiusSnapshot,
+                })
+              if (notifyErr) throw notifyErr
+              const count = typeof notifyData === 'number' ? notifyData : 0
+              setGeoNotifyResult(
+                `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
+              )
+            } catch (notifyEx: unknown) {
+              logger.error('geo.notify.fanout', notifyEx)
+              setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
+            }
+          }
+        })
+      } finally {
+        setIsPosting(false)
       }
     })
-
-    if (!result) {
-      // Rate limited - error is already set
-    }
   }
 
   return (
@@ -451,7 +485,40 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
         {/* Input, Resource Selector, and Send */}
         <div className="flex-1 flex flex-col gap-2">
-          {/* Post creation trigger */}
+          {/* Inline quick-compose: a plain update with an optional photo, posted
+              directly from the always-visible composer (W1.2). Structured post
+              types (offer, request, poll, event, petition) open via the wizard
+              trigger below. */}
+          <Textarea
+            data-testid="composer-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Share a quick update with the community…"
+            className="min-h-[72px] bg-white text-stone-900 placeholder:text-stone-400"
+            aria-label="Share a quick update"
+          />
+          <PostImagePickerField
+            previewUrl={previewUrl}
+            imageUploading={imageUploading}
+            imageError={imageError}
+            fileInputRef={fileInputRef}
+            onFileSelect={handleFileSelect}
+            onClear={clearImage}
+            compact
+          />
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              data-testid="composer-post-btn"
+              onClick={handleSubmit}
+              disabled={!content.trim() || imageUploading || isLimited || isPosting}
+              className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white"
+            >
+              {imageUploading ? 'Uploading…' : isPosting ? 'Posting…' : 'Post'}
+            </Button>
+          </div>
+
+          {/* Post creation trigger — structured post types */}
           <button
             type="button"
             data-testid="post-wizard-trigger"
@@ -461,7 +528,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
               <Plus className="w-4 h-4 text-white" />
             </span>
-            <span>Share an update, offer, request, or more…</span>
+            <span>More: offer, request, poll, event, or petition…</span>
           </button>
 
           {/* Optional resource link selector */}
@@ -850,6 +917,27 @@ function PostCard({
 
       {/* Content */}
       <p className="text-sm leading-relaxed mb-3">{post.content}</p>
+
+      {/* Attached photo (W1.2). Post-level media renders here in the shared
+          card chrome — the ONLY surface that renders for a plain/general post
+          (post-type-body returns null for 'plain'). Rendered only when present
+          (no empty box on photo-less posts); a fixed aspect box + object-cover
+          prevents layout shift, and the public bucket URL loads lazily. */}
+      {post.imageUrl && (
+        <div
+          data-testid={`post-image-${post.id}`}
+          className="relative mb-3 w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-100 aspect-video"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={post.imageUrl}
+            alt={`Photo attached to ${post.author.name}'s post`}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      )}
 
       {/* Type-specific body via the typed render registry (INV1): poll (with
           vote control), event, seeker-request, source-offer. Petition + plain
@@ -1850,7 +1938,8 @@ export function FeedPanel() {
   const handleCreatePost = async (
     content: string,
     resourceId: string | null,
-    maxSeekers: number | null
+    maxSeekers: number | null,
+    imageUrl?: string | null
   ): Promise<string | null> => {
     if (!user) return null
 
@@ -1862,6 +1951,7 @@ export function FeedPanel() {
           content,
           resource_id: resourceId ?? null,
           max_seekers: maxSeekers ?? null,
+          image_url: imageUrl ?? null,
         })
         .select('id')
         .single()

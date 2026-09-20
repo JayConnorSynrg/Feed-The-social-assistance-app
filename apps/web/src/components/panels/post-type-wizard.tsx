@@ -3,6 +3,7 @@
 import React, { useState, useReducer, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInput } from '@/lib/security'
+import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
@@ -39,7 +40,7 @@ import type { Database } from '@feed/database'
 export interface PostTypeWizardProps {
   open: boolean
   onClose: () => void
-  onPost: (content: string, resourceId: string | null, maxSeekers: number | null) => Promise<string | null>
+  onPost: (content: string, resourceId: string | null, maxSeekers: number | null, imageUrl?: string | null) => Promise<string | null>
   resourceOptions: Array<{ id: string; name: string }>
   onSafetyAlertClick: () => void
 }
@@ -162,14 +163,24 @@ interface GeneralFormProps extends BaseFormProps {
 
 function GeneralForm({ onClose, dispatch, isSubmitting, error, onPost }: GeneralFormProps) {
   const [content, setContent] = useState('')
+  const {
+    imageUrl,
+    previewUrl,
+    imageUploading,
+    imageError,
+    fileInputRef,
+    handleFileSelect,
+    clearImage,
+  } = usePostImagePicker()
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (content.trim().length < 3) return
+    if (imageUploading) return // wait for the in-flight upload to settle
     dispatch({ type: 'SET_SUBMITTING', payload: true })
     dispatch({ type: 'SET_ERROR', payload: null })
     try {
-      await onPost(sanitizeInput(content), null, null)
+      await onPost(sanitizeInput(content), null, null, imageUrl)
       onClose()
     } catch (err) {
       if (
@@ -183,7 +194,7 @@ function GeneralForm({ onClose, dispatch, isSubmitting, error, onPost }: General
     } finally {
       dispatch({ type: 'SET_SUBMITTING', payload: false })
     }
-  }, [content, dispatch, onClose, onPost])
+  }, [content, imageUrl, imageUploading, dispatch, onClose, onPost])
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -200,7 +211,15 @@ function GeneralForm({ onClose, dispatch, isSubmitting, error, onPost }: General
           className="mt-1 min-h-[120px]"
         />
       </div>
-      <Button type="submit" disabled={isSubmitting || content.trim().length < 3} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
+      <PostImagePickerField
+        previewUrl={previewUrl}
+        imageUploading={imageUploading}
+        imageError={imageError}
+        fileInputRef={fileInputRef}
+        onFileSelect={handleFileSelect}
+        onClear={clearImage}
+      />
+      <Button type="submit" disabled={isSubmitting || imageUploading || content.trim().length < 3} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
         {isSubmitting ? 'Posting…' : 'Post Update'}
       </Button>
     </form>
