@@ -45,6 +45,7 @@ import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
+import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -330,6 +331,10 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
   const [selectedResourceId, setSelectedResourceId] = useState<string>('')
   const [maxSeekersInput, setMaxSeekersInput] = useState<string>('')
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [isPosting, setIsPosting] = useState(false)
+  // Synchronous single-flight gate — guarantees a double-click fires onPost once
+  // (a disabled/state flag alone races: both handlers run before the re-render).
+  const postGateRef = useRef(createSingleFlight())
 
   // Geo-outreach state
   const [geoNotify, setGeoNotify] = useState(false)
@@ -392,8 +397,6 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
   const handleSubmit = async () => {
     if (!content.trim()) return
     if (imageUploading) return // wait for the in-flight photo upload to settle
-    setError(null)
-    setGeoNotifyResult(null)
 
     // Parse max_seekers — blank = unlimited (null)
     const maxSeekers =
@@ -403,45 +406,60 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
       return
     }
 
-    const result = await executeRateLimited(async () => {
-      const sanitizedContent = sanitizeInput(content)
-      const resourceId = selectedResourceId || null
-      const shouldNotify = geoNotify && !!resourceId
-      const radiusSnapshot = geoRadius
+    // Single-flight: a second synchronous click returns here without a 2nd INSERT.
+    await postGateRef.current.run(async () => {
+      setIsPosting(true)
+      setError(null)
+      setGeoNotifyResult(null)
+      try {
+        await executeRateLimited(async () => {
+          const sanitizedContent = sanitizeInput(content)
+          const resourceId = selectedResourceId || null
+          const shouldNotify = geoNotify && !!resourceId
+          const radiusSnapshot = geoRadius
 
-      const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers, imageUrl)
-      setContent('')
-      setSelectedResourceId('')
-      setMaxSeekersInput('')
-      setGeoNotify(false)
-      setSeekerCount(null)
-      // The photo blob is now committed to the post — clear the picker WITHOUT
-      // deleting it (resetAfterPost, not clearImage).
-      resetAfterPost()
+          const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers, imageUrl)
+          const outcome = composerSubmitOutcome(newPostId)
+          if (!outcome.reset) {
+            // INSERT failed (handleCreatePost swallows + returns null): keep the
+            // user's content + surface the error so they can retry. Leave the
+            // uploaded blob as-is (account-deletion cleanup reclaims any orphan).
+            setError(outcome.error)
+            return
+          }
 
-      // Fan-out geo notifications after post is created — failure does NOT block the post
-      if (shouldNotify && newPostId) {
-        try {
-          const { data: notifyData, error: notifyErr } = await supabase
-            .rpc('notify_seekers_near_resource', {
-              p_post_id: newPostId,
-              p_radius_miles: radiusSnapshot,
-            })
-          if (notifyErr) throw notifyErr
-          const count = typeof notifyData === 'number' ? notifyData : 0
-          setGeoNotifyResult(
-            `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
-          )
-        } catch (notifyEx: unknown) {
-          logger.error('geo.notify.fanout', notifyEx)
-          setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
-        }
+          // Success — clear the composer. The photo blob is now committed to the
+          // post, so resetAfterPost (NOT clearImage) clears state without deleting it.
+          setContent('')
+          setSelectedResourceId('')
+          setMaxSeekersInput('')
+          setGeoNotify(false)
+          setSeekerCount(null)
+          resetAfterPost()
+
+          // Fan-out geo notifications after post is created — failure does NOT block the post
+          if (shouldNotify && newPostId) {
+            try {
+              const { data: notifyData, error: notifyErr } = await supabase
+                .rpc('notify_seekers_near_resource', {
+                  p_post_id: newPostId,
+                  p_radius_miles: radiusSnapshot,
+                })
+              if (notifyErr) throw notifyErr
+              const count = typeof notifyData === 'number' ? notifyData : 0
+              setGeoNotifyResult(
+                `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
+              )
+            } catch (notifyEx: unknown) {
+              logger.error('geo.notify.fanout', notifyEx)
+              setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
+            }
+          }
+        })
+      } finally {
+        setIsPosting(false)
       }
     })
-
-    if (!result) {
-      // Rate limited - error is already set
-    }
   }
 
   return (
@@ -493,10 +511,10 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
               type="button"
               data-testid="composer-post-btn"
               onClick={handleSubmit}
-              disabled={!content.trim() || imageUploading || isLimited}
+              disabled={!content.trim() || imageUploading || isLimited || isPosting}
               className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white"
             >
-              {imageUploading ? 'Uploading…' : 'Post'}
+              {imageUploading ? 'Uploading…' : isPosting ? 'Posting…' : 'Post'}
             </Button>
           </div>
 
