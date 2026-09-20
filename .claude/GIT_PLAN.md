@@ -16,11 +16,23 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: feed-fullfeed-p2-w1.3
+next_action_id: feed-fullfeed-p2-w1.3-postdeploy-v1b
+
+```yaml
+id: feed-fullfeed-p2-w1.3-postdeploy-v1b
+status: pending
+type: migration
+description: "POST-DEPLOY step for W1.3 (PR #202, squash 0a2318c). After Vercel ships the EXPAND (explicit-column anon reads omitting posts.location), apply migration supabase/migrations/20260929000000_ranked_feed_w1_3.sql Section 2 (V1b CONTRACT: atomic REVOKE SELECT ON posts FROM anon,authenticated → GRANT SELECT on all columns EXCEPT location) and Section 3 (Realtime WAL gate: ALTER PUBLICATION supabase_realtime SET TABLE posts with all columns except location) to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint. Section 1 (ranked_feed RPC) already applied at build. Verify post-apply: posts.location attacl shows no anon/authenticated SELECT grant; anon select('*') on posts now 401/42501 (must confirm all read paths use explicit column lists first); publication column list excludes location. DO NOT apply as part of the git merge — separate post-deploy step."
+project_ref: ndtpovonpadugthmcntl
+migration: supabase/migrations/20260929000000_ranked_feed_w1_3.sql
+depends_on: feed-fullfeed-p2-w1.3
+created_at: "2026-09-20T04:41:00.000Z"
+completed_at: null
+```
 
 ```yaml
 id: feed-fullfeed-p2-w1.3
-status: in_progress
+status: completed
 type: branch+commit+pr+merge
 description: "P2 W1.3 ranked community feed + posts.location column-privacy gate (V1b). Branch feature/feed-fullfeed-p2-w1.3 off develop @ f91d3a1. Migration supabase/migrations/20260929000000_ranked_feed_w1_3.sql has 3 sections: (1) SECURITY DEFINER ranked_feed(p_lat,p_lng,p_limit,p_cursor_score,p_cursor_id) RPC — search_path pinned public,pg_temp, REVOKE EXECUTE FROM PUBLIC + GRANT to anon/authenticated/service_role; score = (1+log10(1+likes+2*comments)) * exp(-ln2*age_h/24) * exp(-dist_km/20) with pinned-first via a dominating +1e6 boost (single monotonic key → clean (score,id) keyset), returns ONLY (id, score, distance_bucket) so no coord ever reaches the client, WHERE reproduces posts_select_public exactly (hidden-post safe), negligible scores clamped to 0 before ::real to avoid float4 underflow; (2) V1b CONTRACT REVOKE SELECT ON posts FROM anon,authenticated → GRANT SELECT(all cols EXCEPT location) (atomic DO block); (3) Realtime WAL gate ALTER PUBLICATION supabase_realtime SET TABLE posts (all cols except location). EXPAND (same PR): the 4 anon-facing posts select('*') reads converted to explicit column lists omitting location — s/post/[id]/page.tsx (generateMetadata + page), api/og/post/[id]/route.tsx, profile/[username]/page.tsx. Client: ranked↔recent toggle (default ranked) in feed-panel.tsx; ranked path rpc('ranked_feed') → hydrate via FEED_POST_SELECT .in('id',ids) → orderByRankAndAttachBucket (post-model.ts) reusing rowToPost unchanged; distanceBucket added to Post; caller geo read only when permission already granted (no new prompt), null → recency ranking; withMetric('feed.load',{mode:'ranked',has_geo,page_size}) + feed.rank log. types.ts gains ranked_feed (surgical add). PROD-APPLIED AT BUILD: RPC (Section 1) only — verified via contract probe (pinned first, hidden excluded despite 999 likes, buckets correct, result keys = id/score/distance_bucket only) + 5 read-only smoke assertions. NOT applied to prod: Section 2 (V1b REVOKE→GRANT) + Section 3 (WAL gate) — confirmed live: location attacl null, anon still reads location, publication has no column list. Merge-gate: type-check EXIT 0, build EXIT 0 (ƒ Proxy Middleware present), 289 non-smoke tests pass (+5 ranked unit tests), ranked-feed smoke 5/5 pass. DEPLOY SEQUENCE: merge → Vercel deploys EXPAND → THEN orchestrator applies Section 2+3 to prod → verify. DO NOT MERGE — orchestrator validates + authorizes."
 branch: feature/feed-fullfeed-p2-w1.3
@@ -37,12 +49,12 @@ files:
   - apps/web/src/__tests__/smoke/23-ranked-feed.smoke.ts
   - packages/database/types.ts
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
-merge_sha: null
-merged_into: null
+pr: 202
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/202
+merge_sha: 0a2318c5d1e210336e9b57d150683d9224dcb57a
+merged_into: develop
 created_at: "2026-09-20T00:00:00.000Z"
-completed_at: null
+completed_at: "2026-09-20T04:40:47.000Z"
 ```
 
 ```yaml
