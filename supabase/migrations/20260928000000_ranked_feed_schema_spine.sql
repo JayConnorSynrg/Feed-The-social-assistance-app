@@ -217,6 +217,10 @@ GRANT SELECT ON public.ranking_config TO anon, authenticated;
 -- added — the privilege itself is gone, not merely gated by RLS. (These roles
 -- were never granted write here; this makes the intent explicit and durable.)
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.ranking_config FROM anon, authenticated;
+-- Defense-in-depth: also strip the default REFERENCES + TRIGGER grants so anon /
+-- authenticated cannot reference this table in a FK or attach a trigger to it;
+-- SELECT is the only privilege these client roles retain on the config table.
+REVOKE REFERENCES, TRIGGER ON public.ranking_config FROM anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- V5 — keyset index swap. New 3-col index serves ORDER BY (is_pinned DESC,
