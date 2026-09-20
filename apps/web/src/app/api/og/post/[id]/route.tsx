@@ -10,9 +10,10 @@ export async function GET(
   const { id } = await params
   const supabase = await createClient()
 
+  // Explicit column list (omits posts.location — W1.3 V1b): OG image needs content + author.
   const { data: post } = await supabase
     .from('posts')
-    .select('*, user:profiles(first_name, avatar_url, username)')
+    .select('id, content, user:profiles(first_name, avatar_url, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
