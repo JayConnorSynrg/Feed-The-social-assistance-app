@@ -309,6 +309,53 @@ export function orderByRankAndAttachBucket(
 }
 
 // ---------------------------------------------------------------------------
+// Realtime count patch (W1.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The count-bearing subset of a posts WAL row that a realtime UPDATE carries.
+ * These columns are maintained in-txn by the like/comment count triggers and are
+ * part of the posts publication column list, so every realtime UPDATE ships the
+ * server's authoritative absolute counts.
+ */
+export interface PostCountPatchRow {
+  id: string
+  like_count?: number | null
+  comment_count?: number | null
+  slots_remaining?: number | null
+}
+
+/**
+ * Patch a single post's counts in place from a posts realtime UPDATE row (W1.4).
+ *
+ * Consumes the SERVER's absolute counts (like_count -> likes, comment_count ->
+ * comments, slots_remaining -> slotsRemaining) — no client-side arithmetic, so a
+ * dropped or duplicated event cannot drift the displayed count. The post is
+ * matched by id; every other post is returned untouched and the list ORDER is
+ * preserved (a count change must never re-rank the feed under the reader). When
+ * the row's id is not in the list the original array is returned unchanged (a
+ * true no-op — same reference, no re-render).
+ *
+ * Generic over the view model so it stays pure and unit-testable without React.
+ */
+export function applyPostCountPatch<
+  T extends { id: string; likes: number; comments: number; slotsRemaining: number | null }
+>(posts: readonly T[], row: PostCountPatchRow): T[] {
+  if (!posts.some((p) => p.id === row.id)) {
+    return posts as T[]
+  }
+  return posts.map((p) => {
+    if (p.id !== row.id) return p
+    return {
+      ...p,
+      likes: row.like_count ?? p.likes,
+      comments: row.comment_count ?? p.comments,
+      slotsRemaining: row.slots_remaining ?? null,
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Poll view derivation (INV6)
 // ---------------------------------------------------------------------------
 

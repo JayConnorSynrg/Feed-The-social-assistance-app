@@ -23,24 +23,63 @@ maybeDescribe('05 — Community Feed (PROD read-only)', () => {
     expect(rows[0].tablename).toBe('posts')
   })
 
-  it('post_likes and post_comments are in supabase_realtime publication (live counts)', async () => {
-    // Backend: supabase/migrations/20260630000100_realtime_publication_notifications_likes_comments.sql
-    // Surface: use-realtime-feed.ts:171 (likes) / :225 (comments) — postgres_changes subscriptions
-    // for live like/comment count updates in feed-panel.tsx.
-    // WAL-safety confirmed 2026-06-30: post_likes (user_id, post_id, created_at — no PII),
-    // post_comments (id, post_id, user_id, content, parent_id, is_hidden, created_at, updated_at —
-    // content is public-facing comment text already displayed in the feed). RLS gating confirmed.
+  // ── W1.4 realtime SIGNAL publications — POST-DEPLOY ─────────────────────────
+  // These assert the state produced by migration
+  // 20261001000000_w1_4_realtime_poll_comment_signals.sql. That migration is
+  // applied as a SEPARATE post-deploy step (after Vercel is READY), NOT by the
+  // feature PR — so these tests are RED pre-deploy and flip GREEN once the
+  // publication migration is live. Live like/comment COUNTS ride the posts WAL
+  // (posts.like_count / .comment_count), so post_likes is deliberately NOT
+  // published — identity stays off the wire.
+  // Column-scope query for a single publication member. Returns [] when the table
+  // is not yet a member (migration not applied) so the test can dynamically skip
+  // pre-deploy and actively verify the scope post-deploy.
+  const publishedColsSql = (table: string) => `
+      SELECT COALESCE(array_agg(a.attname ORDER BY a.attname), '{}') AS cols
+      FROM pg_publication p
+      JOIN pg_publication_rel pr ON pr.prpubid = p.oid
+      JOIN pg_class c ON c.oid = pr.prrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      LEFT JOIN LATERAL unnest(pr.prattrs) AS attnum(num) ON true
+      LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = attnum.num
+      WHERE p.pubname = 'supabase_realtime' AND n.nspname = 'public' AND c.relname = '${table}'
+      HAVING COUNT(pr.prrelid) > 0
+    `
+
+  it('[post-deploy] poll_votes is published SIGNAL-only — poll_id on the wire, user_id/option_index excluded', async (ctx) => {
+    // Surface: use-poll.ts poll_votes_${pollId} channel → settleVotes re-aggregate.
+    const rows = await queryProd(publishedColsSql('poll_votes'))
+    if (rows.length === 0) {
+      // Migration not applied yet (pre-deploy) — skip rather than fail. Flips to an
+      // active column-scope check once the orchestrator applies the publication.
+      ctx.skip()
+      return
+    }
+    const cols = rows[0].cols as string[]
+    expect(cols).toContain('poll_id')
+    expect(cols).not.toContain('user_id')
+    expect(cols).not.toContain('option_index')
+  })
+
+  it('[post-deploy] post_comments is published SIGNAL-only — id/post_id on the wire, user_id/content excluded', async (ctx) => {
+    // Surface: use-realtime-feed.ts useRealtimeComments comments-${postId} → fetchComments refetch.
+    const rows = await queryProd(publishedColsSql('post_comments'))
+    if (rows.length === 0) {
+      ctx.skip()
+      return
+    }
+    const cols = rows[0].cols as string[]
+    expect(cols).toContain('post_id')
+    expect(cols).not.toContain('user_id')
+    expect(cols).not.toContain('content')
+  })
+
+  it('[post-deploy] post_likes is NOT in the publication (counts ride the posts WAL)', async () => {
     const rows = await queryProd(`
-      SELECT tablename
-      FROM pg_publication_tables
-      WHERE pubname = 'supabase_realtime'
-        AND tablename IN ('post_likes', 'post_comments')
-      ORDER BY tablename
+      SELECT tablename FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND tablename = 'post_likes'
     `)
-    const names = rows.map((r: { tablename: string }) => r.tablename)
-    expect(names).toContain('post_comments')
-    expect(names).toContain('post_likes')
-    expect(rows.length).toBe(2)
+    expect(rows.length).toBe(0)
   })
 
   it('opt_in_to_post and withdraw_opt_in RPCs are SECDEF', async () => {

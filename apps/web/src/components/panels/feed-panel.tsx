@@ -46,7 +46,7 @@ import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostCountPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
@@ -1862,7 +1862,16 @@ export function FeedPanel() {
         }
       })()
     },
-    onUpdate: () => refreshFeed(),
+    onUpdate: (row) => {
+      // W1.4: a posts UPDATE carries the server's absolute counts (like_count /
+      // comment_count maintained in-txn by the count triggers) plus
+      // slots_remaining. Patch the matching post's counts in place — no refetch,
+      // no re-rank. applyPostCountPatch preserves list order and is a no-op when
+      // the id is not present. (is_hidden=true is remapped to a delete upstream
+      // in useRealtimeFeed before this fires.)
+      setPosts((prev) => applyPostCountPatch(prev, row))
+    },
+    onResubscribe: () => refreshFeed(),
     onDelete: (postId) => {
       setPosts(prev => prev.filter(p => p.id !== postId))
     },

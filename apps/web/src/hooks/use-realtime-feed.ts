@@ -22,12 +22,24 @@ interface Post {
   petition_id: string | null
   resource_id: string | null
   max_seekers: number | null
+  // Denormalized counts maintained in-txn by the like/comment count triggers and
+  // shipped on the posts WAL (they are in the posts publication column list). The
+  // update handler patches these absolute counts into the feed in place (W1.4).
+  like_count: number | null
+  comment_count: number | null
+  slots_remaining: number | null
 }
 
 interface UseRealtimeFeedOptions {
   onInsert?: (post: Post) => void
   onUpdate?: (post: Post) => void
   onDelete?: (postId: string) => void
+  /**
+   * Fired when the channel returns to SUBSCRIBED after a prior CHANNEL_ERROR /
+   * TIMED_OUT — i.e. a reconnect. Lets the feed backfill any events missed while
+   * the socket was down (W1.4).
+   */
+  onResubscribe?: () => void
   enabled?: boolean
 }
 
@@ -35,10 +47,14 @@ export function useRealtimeFeed({
   onInsert,
   onUpdate,
   onDelete,
+  onResubscribe,
   enabled = true,
 }: UseRealtimeFeedOptions = {}) {
   const supabase = createClient()
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  // Tracks whether the channel has been in an error/timeout state so a return to
+  // SUBSCRIBED is recognized as a reconnect (and triggers onResubscribe backfill).
+  const hadChannelErrorRef = useRef(false)
   const { session } = useAuth()
 
   const handleChange = useCallback(
@@ -99,7 +115,15 @@ export function useRealtimeFeed({
           ).catch(() => {
             // Swallow — metric emission must never affect subscription state.
           })
+          // Reconnect backfill: if the channel had errored/timed out, this
+          // SUBSCRIBED is a recovery — fire onResubscribe so the feed re-reads
+          // and backfills events missed while the socket was down (W1.4).
+          if (hadChannelErrorRef.current) {
+            hadChannelErrorRef.current = false
+            onResubscribe?.()
+          }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          hadChannelErrorRef.current = true
           reconnectCount++
           logger.info('feed.realtime.reconnect', { count: reconnectCount, status, channel: 'posts-realtime' })
           logger.error('realtime-feed.subscribe.status', undefined, {
@@ -122,7 +146,7 @@ export function useRealtimeFeed({
         channelRef.current = null
       }
     }
-  }, [supabase, enabled, session, handleChange])
+  }, [supabase, enabled, session, handleChange, onResubscribe])
 
   const unsubscribe = useCallback(() => {
     if (channelRef.current) {

@@ -24,6 +24,7 @@ import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
 import type { Database } from '@feed/database'
 import type { PollVoteState } from '@/components/feed/post-model'
+import { aggregatePollTallies } from '@/hooks/poll-tally'
 
 // ---------------------------------------------------------------------------
 // Types derived from generated schema
@@ -190,21 +191,51 @@ export function usePollData(postId: string | null): {
   // The current poll's id, kept in a ref so settleVotes can re-read without a
   // stale closure and independently of the (W1.4) realtime channel.
   const pollIdRef = useRef<string | null>(null)
+  // Tracks whether the realtime channel has been in an error/timeout state, so a
+  // return to SUBSCRIBED triggers a backfill settle for votes missed during the gap.
+  const hadChannelErrorRef = useRef(false)
 
-  // Derive tallies from a flat list of vote rows.
-  // options is Json so we derive option count separately.
-  const computeTallies = useCallback(
-    (optionCount: number, votes: PollVoteRow[]): number[] => {
-      const tallies = Array<number>(optionCount).fill(0)
-      for (const v of votes) {
-        if (v.option_index >= 0 && v.option_index < optionCount) {
-          tallies[v.option_index]++
-        }
+  /**
+   * Settle from server truth: re-read this poll's votes, recompute tallies +
+   * total + the current user's choice, and write them to state. This is the
+   * authoritative re-aggregate the poll uses everywhere a vote may have changed:
+   * after the actor's own cast/revoke, on every poll_votes realtime SIGNAL (which
+   * carries no tally delta under the W1.4 signal-only publication), and on
+   * reconnect backfill. Mirrors handleLike's re-read-and-settle.
+   *
+   * Defined before fetchPollData because the realtime handlers set up there close
+   * over it.
+   */
+  const settleVotes = useCallback(async () => {
+    const pollId = pollIdRef.current
+    if (!pollId) return
+    try {
+      const { data: votes, error: votesError } = await supabase
+        .from('poll_votes')
+        .select('id, poll_id, user_id, option_index, created_at')
+        .eq('poll_id', pollId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      if (votesError) throw votesError
+      const voteRows: PollVoteRow[] = votes ?? []
+      setPoll((prev) => {
+        if (!prev) return prev
+        const optionCount = Array.isArray(prev.options) ? (prev.options as unknown[]).length : 0
+        return { ...prev, tallies: aggregatePollTallies(optionCount, voteRows), totalVotes: voteRows.length }
+      })
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUserVote(user ? voteRows.find((v) => v.user_id === user.id)?.option_index ?? null : null)
+    } catch (err: unknown) {
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.message.includes('signal'))
+      ) {
+        return
       }
-      return tallies
-    },
-    []
-  )
+      logger.error('poll.settleVotes.error', err, { pollId })
+    }
+  }, [supabase])
 
   const fetchPollData = useCallback(async () => {
     if (!postId) {
@@ -250,7 +281,7 @@ export function usePollData(postId: string | null): {
       if (votesError) throw votesError
 
       const voteRows: PollVoteRow[] = votes ?? []
-      const tallies = computeTallies(optionCount, voteRows)
+      const tallies = aggregatePollTallies(optionCount, voteRows)
 
       pollIdRef.current = pollRow.id
       setPoll({
@@ -277,6 +308,13 @@ export function usePollData(postId: string | null): {
         channelRef.current = null
       }
 
+      // W1.4: poll_votes is published SIGNAL-only (poll_id column only), so a
+      // realtime payload carries no option_index — it is a pure "this poll
+      // changed" signal. On any INSERT or DELETE we re-aggregate from an
+      // authoritative RLS-filtered read (settleVotes) rather than incrementing
+      // from the payload (which under the signal-only publication would read an
+      // undefined option_index and corrupt the tally). settleVotes is guarded
+      // (idempotent re-read), so a direct call per event is fine.
       const channel = supabase
         .channel(`poll_votes_${pollRow.id}`)
         .on(
@@ -287,16 +325,8 @@ export function usePollData(postId: string | null): {
             table: 'poll_votes',
             filter: `poll_id=eq.${pollRow.id}`,
           },
-          (payload) => {
-            const newVote = payload.new as PollVoteRow
-            setPoll((prev) => {
-              if (!prev) return prev
-              const tallies = [...prev.tallies]
-              if (newVote.option_index >= 0 && newVote.option_index < tallies.length) {
-                tallies[newVote.option_index]++
-              }
-              return { ...prev, tallies, totalVotes: prev.totalVotes + 1 }
-            })
+          () => {
+            void settleVotes()
           }
         )
         .on(
@@ -307,21 +337,22 @@ export function usePollData(postId: string | null): {
             table: 'poll_votes',
             filter: `poll_id=eq.${pollRow.id}`,
           },
-          (payload) => {
-            const oldVote = payload.old as Partial<PollVoteRow>
-            if (typeof oldVote.option_index !== 'number') return
-            const idx = oldVote.option_index
-            setPoll((prev) => {
-              if (!prev) return prev
-              const tallies = [...prev.tallies]
-              if (idx >= 0 && idx < tallies.length && tallies[idx] > 0) {
-                tallies[idx]--
-              }
-              return { ...prev, tallies, totalVotes: Math.max(0, prev.totalVotes - 1) }
-            })
+          () => {
+            void settleVotes()
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            // Reconnect backfill: if the channel had errored/timed out, re-read
+            // once on recovery so votes cast during the gap are reconciled.
+            if (hadChannelErrorRef.current) {
+              hadChannelErrorRef.current = false
+              void settleVotes()
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            hadChannelErrorRef.current = true
+          }
+        })
 
       channelRef.current = channel
     } catch (err: unknown) {
@@ -337,7 +368,7 @@ export function usePollData(postId: string | null): {
     } finally {
       setLoading(false)
     }
-  }, [postId, supabase, computeTallies])
+  }, [postId, supabase, settleVotes])
 
   /**
    * Overwrite the displayed vote state. Used by the poll body to apply the pure
@@ -348,43 +379,6 @@ export function usePollData(postId: string | null): {
     setPoll((prev) => (prev ? { ...prev, tallies: next.tallies, totalVotes: next.totalVotes } : prev))
     setUserVote(next.userVote)
   }, [])
-
-  /**
-   * Settle from server truth: re-read this poll's votes, recompute tallies +
-   * total + the current user's choice, and write them to state. This is what
-   * makes a cast/revoke visible without depending on the poll_votes realtime
-   * channel (dead until W1.4). Mirrors handleLike's re-read-and-settle.
-   */
-  const settleVotes = useCallback(async () => {
-    const pollId = pollIdRef.current
-    if (!pollId) return
-    try {
-      const { data: votes, error: votesError } = await supabase
-        .from('poll_votes')
-        .select('id, poll_id, user_id, option_index, created_at')
-        .eq('poll_id', pollId)
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      if (votesError) throw votesError
-      const voteRows: PollVoteRow[] = votes ?? []
-      setPoll((prev) => {
-        if (!prev) return prev
-        const optionCount = Array.isArray(prev.options) ? (prev.options as unknown[]).length : 0
-        return { ...prev, tallies: computeTallies(optionCount, voteRows), totalVotes: voteRows.length }
-      })
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUserVote(user ? voteRows.find((v) => v.user_id === user.id)?.option_index ?? null : null)
-    } catch (err: unknown) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('poll.settleVotes.error', err, { pollId })
-    }
-  }, [supabase, computeTallies])
 
   // Wait for auth to reconcile (guest OR user) before fetching so the query runs
   // against the reconciled session, not a pre-reconciliation guest session.
