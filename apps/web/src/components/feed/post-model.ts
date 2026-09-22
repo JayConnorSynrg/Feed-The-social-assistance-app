@@ -309,6 +309,93 @@ export function orderByRankAndAttachBucket(
 }
 
 // ---------------------------------------------------------------------------
+// Realtime count patch (W1.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The posts-row columns a realtime UPDATE carries (the posts publication column
+ * list). All are physically on the posts row, so a WAL UPDATE ships every one of
+ * them — the patch below re-derives the on-row view fields from them while
+ * preserving the fields that come from JOINs or the client (see applyPostRowPatch).
+ */
+export interface PostRowPatch {
+  id: string
+  content?: string | null
+  is_pinned?: boolean | null
+  post_type?: string | null
+  metadata?: unknown
+  image_url?: string | null
+  petition_id?: string | null
+  max_seekers?: number | null
+  like_count?: number | null
+  comment_count?: number | null
+  slots_remaining?: number | null
+}
+
+/**
+ * Patch a single post in place from a posts realtime UPDATE row (W1.4).
+ *
+ * A posts WAL UPDATE carries the full posts row, so this refreshes every on-row
+ * view field — content, category (from is_pinned), postType, the metadata-derived
+ * eventMeta / requestCategories, imageUrl, petitionId, maxSeekers — and takes the
+ * SERVER's absolute counts (like_count -> likes, comment_count -> comments). No
+ * client-side arithmetic, so a dropped or duplicated event cannot drift a count.
+ *
+ * PRESERVED (not on the WAL row): author/profile, the joined resource name and
+ * category, and distanceBucket (a ranked-feed-only derived value). The post is
+ * matched by id; every other post is returned untouched and list ORDER is
+ * preserved (an update must never re-rank the feed under the reader). When the
+ * row's id is not present the original array is returned unchanged — a true no-op
+ * (same reference); the caller handles the not-present case (e.g. an unhide
+ * restore) separately.
+ *
+ * Generic over the view model so it stays pure and unit-testable without React.
+ */
+export function applyPostRowPatch<
+  T extends {
+    id: string
+    content: string
+    likes: number
+    comments: number
+    category: Post['category']
+    postType: PostType
+    slotsRemaining: number | null
+    maxSeekers: number | null
+    petitionId: string | null
+    imageUrl: string | null
+    eventMeta: EventMeta | null
+    requestCategories: string[]
+  }
+>(posts: readonly T[], row: PostRowPatch): T[] {
+  if (!posts.some((p) => p.id === row.id)) {
+    return posts as T[]
+  }
+  return posts.map((p) => {
+    if (p.id !== row.id) return p
+    const postType = row.post_type != null ? coercePostType(row.post_type) : p.postType
+    return {
+      ...p,
+      content: row.content ?? p.content,
+      // Absolute server counts — never incremented.
+      likes: row.like_count ?? p.likes,
+      comments: row.comment_count ?? p.comments,
+      category: row.is_pinned != null ? (row.is_pinned ? 'announcement' : 'update') : p.category,
+      postType,
+      imageUrl: row.image_url ?? null,
+      petitionId: row.petition_id ?? p.petitionId,
+      maxSeekers: row.max_seekers ?? p.maxSeekers,
+      // Forward-safe: keep the prior cap when the row omits slots_remaining.
+      slotsRemaining: row.slots_remaining ?? p.slotsRemaining,
+      eventMeta: postType === 'event_post' ? parseEventMeta(row.metadata) : null,
+      requestCategories:
+        postType === 'seeker_request' || postType === 'source_offer'
+          ? parseCategories(row.metadata)
+          : [],
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Poll view derivation (INV6)
 // ---------------------------------------------------------------------------
 

@@ -46,7 +46,7 @@ import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { ReviewModal } from '@/components/feed/review-modal'
@@ -1281,6 +1281,10 @@ function PostCard({
 // ============================================
 export function FeedPanel() {
   const [posts, setPosts] = useState<Post[]>([])
+  // Mirror of posts for realtime handlers that must decide off the CURRENT list
+  // (e.g. the onUpdate present/absent branch) without re-subscribing on every change.
+  const postsRef = useRef<Post[]>([])
+  useEffect(() => { postsRef.current = posts }, [posts])
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -1862,7 +1866,20 @@ export function FeedPanel() {
         }
       })()
     },
-    onUpdate: () => refreshFeed(),
+    onUpdate: (row) => {
+      // W1.4: a posts UPDATE carries the full posts row. If the post is already in
+      // the list, patch it in place (absolute counts + refreshed on-row fields, no
+      // refetch, no re-rank). If it is NOT in the list, this is an unhide/restore
+      // (is_hidden flipped false) or a post outside the current window — refetch so
+      // it comes back live. (is_hidden=true is remapped to a delete upstream in
+      // useRealtimeFeed before this fires.)
+      if (!postsRef.current.some((p) => p.id === row.id)) {
+        refreshFeed()
+        return
+      }
+      setPosts((prev) => applyPostRowPatch(prev, row))
+    },
+    onResubscribe: () => refreshFeed(),
     onDelete: (postId) => {
       setPosts(prev => prev.filter(p => p.id !== postId))
     },
