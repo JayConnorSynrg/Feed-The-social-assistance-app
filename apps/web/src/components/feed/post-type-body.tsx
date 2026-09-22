@@ -15,7 +15,9 @@
  */
 
 import React from 'react'
+import { m, useReducedMotion } from 'motion/react'
 import { BarChart3, CalendarDays, HandHelping, Gift, Loader2, MapPin, Video, Check } from 'lucide-react'
+import { pollBarTransition } from './feed-motion'
 import {
   postBodyKind,
   derivePollView,
@@ -36,6 +38,7 @@ import { logger } from '@/lib/logger'
 // ---------------------------------------------------------------------------
 
 function PollBody({ post }: { post: Post }) {
+  const reduce = useReducedMotion()
   const { poll, userVote, loading, error, setVoteState, settleVotes } = usePollData(post.id)
   const { isAuthenticated } = useAuth()
   const [busyIndex, setBusyIndex] = React.useState<number | null>(null)
@@ -155,10 +158,15 @@ function PollBody({ post }: { post: Post }) {
             }`}
           >
             {showResults && (
-              <span
+              // W1.5 — the decorative tally bar glides on W1.4 live tally
+              // updates. initial={false} keeps the first paint from sweeping
+              // from 0; reduced motion snaps (pollBarTransition → duration 0).
+              <m.span
                 aria-hidden="true"
                 className="absolute inset-y-0 left-0 bg-lime-100/70"
-                style={{ width: `${opt.pct}%` }}
+                initial={false}
+                animate={{ width: `${opt.pct}%` }}
+                transition={pollBarTransition(reduce)}
               />
             )}
             <span className="relative flex items-center justify-between gap-2">

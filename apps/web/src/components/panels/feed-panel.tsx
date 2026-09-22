@@ -5,6 +5,7 @@
 // Shows create post form, filter tabs, and scrollable feed of PostCards
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react'
 import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, AlertTriangle, Cloud, Construction, Gauge, ShieldAlert, Plus, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,7 @@ import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
+import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -668,20 +670,42 @@ interface PostReactionsProps {
   shareCopied?: boolean
   onEmbed: () => void
   embedCopied?: boolean
+  /** reduced-motion flag from the parent PostCard; skips the like scale pop when set */
+  reduce?: boolean | null
 }
 
-function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied, onEmbed, embedCopied }: PostReactionsProps) {
+function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied, onEmbed, embedCopied, reduce }: PostReactionsProps) {
+  // One-shot Heart pop when the user likes. The pop is fired from the click
+  // handler on the unliked→liked transition only (an event handler, so no
+  // effect/ref-in-render); bumping `pop` remounts the m.span to replay its
+  // scale-in. Reduced motion skips the bump — the red fill still changes via
+  // the button's CSS transition.
+  const [pop, setPop] = useState(0)
+  const handleLikeClick = () => {
+    if (!isLiked && !reduce) setPop((p) => p + 1)
+    onLike()
+  }
+
   return (
     <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
-      <button
-        onClick={onLike}
+      <m.button
+        onClick={handleLikeClick}
+        whileTap={likeTap(reduce ?? null)}
         className={`flex items-center gap-1.5 text-sm transition-colors ${
           isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
         }`}
       >
-        <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500' : ''}`} />
+        <m.span
+          key={pop}
+          initial={pop === 0 ? false : { scale: 1.35 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.26, ease: 'easeOut' }}
+          className="inline-flex"
+        >
+          <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500' : ''}`} />
+        </m.span>
         <span className="font-medium">{likes}</span>
-      </button>
+      </m.button>
 
       <button
         onClick={onComment}
@@ -799,6 +823,7 @@ function PostCard({
   onSignPetition,
   onReport,
 }: PostCardProps) {
+  const reduce = useReducedMotion()
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
   const isFull =
@@ -1171,6 +1196,7 @@ function PostCard({
         shareCopied={shareCopied}
         onEmbed={() => onEmbed(post.id)}
         embedCopied={embedCopied}
+        reduce={reduce}
       />
 
       {/* Report post — only shown to non-authors when authenticated */}
@@ -1280,6 +1306,9 @@ function PostCard({
 // MAIN FEED PANEL
 // ============================================
 export function FeedPanel() {
+  // W1.5 — reduced-motion flag drives the feed list enter/exit degradation
+  // (opacity-only, no y translate) via the shared postEnterExit helper.
+  const reduce = useReducedMotion()
   const [posts, setPosts] = useState<Post[]>([])
   // Mirror of posts for realtime handlers that must decide off the CURRENT list
   // (e.g. the onUpdate present/absent branch) without re-subscribing on every change.
@@ -2399,6 +2428,10 @@ export function FeedPanel() {
           )}
 
           {/* Scrollable Feed */}
+          {/* W1.5 — LazyMotion(strict) loads only the domAnimation feature bundle
+              and FAILS the build if a full `motion.*` component is used, keeping
+              the motion surface to the `m.*` primitives below. */}
+          <LazyMotion features={domAnimation} strict>
           <div className="flex-1 overflow-y-auto space-y-3">
             {error ? (
               <div className="text-center py-8">
@@ -2421,7 +2454,12 @@ export function FeedPanel() {
                 <p className="text-xs mt-1">Be the first to share something!</p>
               </div>
             ) : (
-              filteredPosts.map((post) => {
+              // W1.5 — initial={false} so page-1 / first paint does NOT animate
+              // every post; only subsequent live inserts/removals animate. No
+              // `layout` prop anywhere — positions are never animated (that would
+              // reshuffle on W1.4 count patches). Enter/exit is opacity+transform only.
+              <AnimatePresence initial={false}>
+              {filteredPosts.map((post) => {
                 const seekerOptInId = seekerOptInIds[post.id] ?? null
                 const seekerHasReviewed =
                   seekerOptInId != null && myReviewMap.has(seekerOptInId)
@@ -2431,7 +2469,7 @@ export function FeedPanel() {
                 const postOptInStatus = optInMap.get(post.id)
 
                 return (
-                  <div key={post.id} data-testid={`post-${post.id}`}>
+                  <m.div key={post.id} data-testid={`post-${post.id}`} {...postEnterExit(reduce)}>
                     <PostCard
                       post={post}
                       currentUserId={user?.id ?? null}
@@ -2486,9 +2524,10 @@ export function FeedPanel() {
                         }}
                       />
                     )}
-                  </div>
+                  </m.div>
                 )
-              })
+              })}
+              </AnimatePresence>
             )}
 
             {/* Load More — only shown when there are more pages and the feed has loaded */}
@@ -2512,6 +2551,7 @@ export function FeedPanel() {
               </div>
             )}
           </div>
+          </LazyMotion>
         </div>
       )}
     </div>
