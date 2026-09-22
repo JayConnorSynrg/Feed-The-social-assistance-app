@@ -18,11 +18,37 @@ completed_at: <ISO timestamp or null>
 ## Next Action
 next_action_id: null
 
-<!-- NOTE: feed-fullfeed-p2-w1.2 merged to develop (PR #203, squash 330474e). Both orchestrator-owned post-deploy steps are now COMPLETE: feed-fullfeed-p2-w1.2-postdeploy-edgefns (edge-fn deploy) and feed-fullfeed-p2-w1.3-postdeploy-v1b (W1.3 CONTRACT migration + WAL gate). No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
+<!-- NOTE: feed-fullfeed-p2-w1.5 merged to develop (PR #205, squash ef87a5e) — feed motion micro-interactions, CLIENT-ONLY (no post-deploy step). P1 FullFeed W1.1–W1.5 all shipped; W1.2/W1.3/W1.4 post-deploy steps COMPLETE. No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
 <!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge) — DONE 2026-09-20: deployed supabase/functions/post-image-upload (verify_jwt=false, in-code JWT verify + anon/guest-block) and the updated supabase/functions/delete-account (paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
 
 <!-- COMPLETED (superseded-note): feed-fullfeed-p2-w1.2 was the active executor work; now complete + merged. -->
 
+
+```yaml
+id: feed-fullfeed-p2-w1.5
+status: complete
+type: merge
+description: "Squash-merge PR #205 (branch feature/feed-fullfeed-p2-w1.5-motion, head e05f647) → develop. W1.5 feed motion micro-interactions: LazyMotion(domAnimation, strict) provider over the feed list; post enter/exit via one AnimatePresence(initial=false) (180ms fade + -8px slide-in, opacity-only exit, first paint/page-1 does not animate); poll tally bar (aria-hidden) m.span animating width ~400ms so W1.4 live tallies glide; like tap m.button whileTap scale 0.9 + one-shot Heart pop on unliked->liked. Reduced-motion aware (useReducedMotion): bar snaps (duration 0), pop skipped, enter/exit collapses to opacity-only. No layout/layoutId — positions never animate, so W1.4 count patches do not reshuffle posts. Variant/transition logic extracted to a pure feed-motion helper with 7 focused unit tests. CLIENT-ONLY — NO post-deploy DB/migration step. Passed the evidence bar (build+tests green, adversarial review GO). Squash title: 'feat(feed): P1 W1.5 — feed motion micro-interactions (poll tally, like tap, post enter/exit; reduced-motion aware) (#205)'. Keep the remote branch (--delete-branch=false). NO AI attribution on the squash commit. Pre-merge gates re-verified: PR state=OPEN, base=develop, mergeable=MERGEABLE, mergeStateStatus=CLEAN, headRefOid=e05f647f281335af28516c0d99f2cfc1ff96cace; origin/develop still at a7e9c6c (no cross-session divergence, no collision on feed-panel.tsx / post-type-body.tsx / components/feed/* / package.json / package-lock.json — develop unchanged since branch cut); commit range a7e9c6c..e05f647 IP-clean (author JelalConnor <jcreationsrai@gmail.com>, no Co-Authored-By / Generated-with / noreply@anthropic.com). Adds dependency motion/react (apps/web/package.json + root package-lock.json). DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-p2-w1.5-motion
+base: develop
+remote: origin
+files:
+  - apps/web/package.json
+  - package-lock.json
+  - apps/web/src/components/feed/feed-motion.ts
+  - apps/web/src/components/feed/feed-motion.test.ts
+  - apps/web/src/components/feed/post-type-body.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - .claude/GIT_PLAN.md
+pr: 205
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/205
+merge_sha: ef87a5ee155a2cf5591ef8ed063f42ca315043e1
+merged_into: develop
+depends_on: feed-fullfeed-p2-w1.4
+created_at: "2026-09-22T00:00:00.000Z"
+completed_at: "2026-09-22T00:05:00.000Z"
+verification: "Squash-merged clean to develop as ef87a5e (title 'feat(feed): P1 W1.5 — feed motion micro-interactions (poll tally, like tap, post enter/exit; reduced-motion aware) (#205)'). Squash commit IP-clean: author JayConnorSynrg <jcreationsrai@gmail.com>, committer GitHub <noreply@github.com> (GitHub squash committer, not an Anthropic identifier), body = clean title only, no Co-Authored-By / Generated-with / noreply@anthropic.com. origin/develop advanced a7e9c6c → ef87a5e. CLIENT-ONLY wave — no post-deploy DB/migration step. P1 W1.1–W1.5 all shipped; next_action_id=null."
+```
 
 ```yaml
 id: feed-fullfeed-p2-w1.4
