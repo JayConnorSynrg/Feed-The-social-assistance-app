@@ -35,7 +35,7 @@ maybeDescribe('05 — Community Feed (PROD read-only)', () => {
   // is not yet a member (migration not applied) so the test can dynamically skip
   // pre-deploy and actively verify the scope post-deploy.
   const publishedColsSql = (table: string) => `
-      SELECT COALESCE(array_agg(a.attname ORDER BY a.attname), '{}') AS cols
+      SELECT COALESCE(array_agg(a.attname::text ORDER BY a.attname), '{}'::text[]) AS cols
       FROM pg_publication p
       JOIN pg_publication_rel pr ON pr.prpubid = p.oid
       JOIN pg_class c ON c.oid = pr.prrelid

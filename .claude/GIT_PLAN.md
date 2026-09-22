@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: feed-fullfeed-p2-w1.4-postdeploy
+next_action_id: null
 
 <!-- NOTE: feed-fullfeed-p2-w1.2 merged to develop (PR #203, squash 330474e). Both orchestrator-owned post-deploy steps are now COMPLETE: feed-fullfeed-p2-w1.2-postdeploy-edgefns (edge-fn deploy) and feed-fullfeed-p2-w1.3-postdeploy-v1b (W1.3 CONTRACT migration + WAL gate). No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
 <!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge) — DONE 2026-09-20: deployed supabase/functions/post-image-upload (verify_jwt=false, in-code JWT verify + anon/guest-block) and the updated supabase/functions/delete-account (paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
@@ -50,14 +50,15 @@ completed_at: "2026-09-22T21:42:35.000Z"
 
 ```yaml
 id: feed-fullfeed-p2-w1.4-postdeploy
-status: pending
+status: complete
 type: migration
 description: "POST-DEPLOY step for W1.4 (PR #204). STRICT ORDER — apply ONLY after the develop squash-merge commit reaches Vercel state=READY on project feed-platform (prj_7TeZGzdwFviDMwazZtyYeITMMf6I) AND https://www.sourcetofeed.com returns HTTP 200. Rationale: publishing poll_votes/post_comments to the Realtime WAL before the W1.4 client is live would make the OLD deployed client's poll handler increment from an undefined option_index (NaN tally) for live users. Then apply supabase/migrations/20261001000000_w1_4_realtime_poll_comment_signals.sql to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint (PAT read from apps/web/.env.local; shell env var is stale). The migration is replay-safe (per-table guarded DROP+ADD on pg_publication_rel/pg_attribute; never SET TABLE) and publishes only surrogate columns: poll_votes(id, poll_id), post_comments(id, post_id); drops post_likes if present; posts publication left untouched (W1.3 invariant: excludes location). Verify post-apply: publication column scope EXACTLY poll_votes={id,poll_id}, post_comments={id,post_id}, post_likes ABSENT, posts present + excludes location; DELETE-on-poll_votes probe returns no replica-identity error (B1 fix); prod-smoke 05-community-feed gated tests flip skipped→green (or step-10 direct query as equivalent). DO NOT apply as part of the git merge."
 project_ref: ndtpovonpadugthmcntl
 migration: supabase/migrations/20261001000000_w1_4_realtime_poll_comment_signals.sql
 depends_on: feed-fullfeed-p2-w1.4
 created_at: "2026-09-22T21:41:00.000Z"
-completed_at: null
+completed_at: "2026-09-22T21:47:00.000Z"
+verification: "STRICT-ORDER gate satisfied before apply — squash 92d3cab Vercel deploy dpl_7rVNaQrmwp84pDgWtLYbAuiBtFFD=READY + newer GIT_PLAN chore 076b0a4 dpl_9CaBdBN6FSYwA5MAMRiiuuh46ngD=READY (superset), https://www.sourcetofeed.com HTTP 200 (W1.4 client LIVE). Migration applied via Management-API SQL endpoint (PAT from apps/web/.env.local; shell env stale) → HTTP 201. Post-apply verified live: publication scope EXACT — poll_votes cols={id,poll_id}, post_comments cols={id,post_id}, post_likes ABSENT, posts present with 18 cols EXCLUDING location (W1.3 invariant held). B1 DELETE replica-identity fix proven — zero-row DELETE on poll_votes returned no replica-identity error. Prod-smoke 05-community-feed 8/8 pass (2 gated post-deploy exact-column tests flipped skipped→green). Ambient fix: 05-community-feed.smoke.ts publishedColsSql cast a.attname::text so the Management API returns a JSON array (name[] came back as the Postgres literal string '{id,post_id}' → spread into chars → false-red); authoritative capability was always correct."
 ```
 
 ```yaml
