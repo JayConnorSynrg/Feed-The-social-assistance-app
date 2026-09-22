@@ -2,50 +2,102 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Guards the W1.4 feed onUpdate path: a posts realtime UPDATE patches the matching
-// post's counts IN PLACE from the server's absolute counts — no client arithmetic,
-// no re-rank, and a non-matching id is a true no-op.
+// post IN PLACE from the full posts WAL row — absolute counts (no client
+// arithmetic), refreshed on-row fields, preserved JOIN/client fields, no re-rank,
+// and a non-matching id is a true no-op.
 
 import { describe, it, expect } from 'vitest'
-import { applyPostCountPatch, type PostCountPatchRow } from './post-model'
+import { applyPostRowPatch, type PostRowPatch, type Post } from './post-model'
 
-interface TestPost {
-  id: string
-  likes: number
-  comments: number
-  slotsRemaining: number | null
+function basePost(over: Partial<Post> = {}): Post {
+  return {
+    id: 'a',
+    author: { id: 'u1', name: 'Ada', role: 'Community Member', harmonyScore: null, harmonyReviewsCount: 0 },
+    content: 'hello',
+    timestamp: new Date('2026-01-01T00:00:00Z'),
+    likes: 1,
+    comments: 2,
+    isLiked: false,
+    category: 'update',
+    resourceId: 'r1',
+    resourceName: 'Food Bank',
+    resourceCategory: 'food',
+    maxSeekers: null,
+    slotsRemaining: null,
+    postType: 'feed',
+    petitionId: null,
+    isHidden: false,
+    imageUrl: null,
+    eventMeta: null,
+    requestCategories: [],
+    distanceBucket: '<2km',
+    ...over,
+  }
 }
 
-function post(id: string, likes: number, comments: number, slots: number | null = null): TestPost {
-  return { id, likes, comments, slotsRemaining: slots }
-}
-
-describe('applyPostCountPatch', () => {
-  it('replaces the matched post counts with the server absolute values (not incremented)', () => {
-    const posts = [post('a', 1, 2), post('b', 10, 20)]
-    const row: PostCountPatchRow = { id: 'b', like_count: 11, comment_count: 25 }
-    const next = applyPostCountPatch(posts, row)
-    // Absolute server value, not 10+11.
+describe('applyPostRowPatch', () => {
+  it('applies the server absolute counts (not incremented)', () => {
+    const posts = [basePost({ id: 'a', likes: 1, comments: 2 }), basePost({ id: 'b', likes: 10, comments: 20 })]
+    const row: PostRowPatch = { id: 'b', like_count: 11, comment_count: 25 }
+    const next = applyPostRowPatch(posts, row)
     expect(next[1]).toMatchObject({ id: 'b', likes: 11, comments: 25 })
   })
 
   it('preserves list order and leaves other posts untouched (no re-rank)', () => {
-    const posts = [post('a', 1, 1), post('b', 2, 2), post('c', 3, 3)]
-    const next = applyPostCountPatch(posts, { id: 'b', like_count: 99, comment_count: 99 })
+    const posts = [basePost({ id: 'a' }), basePost({ id: 'b' }), basePost({ id: 'c' })]
+    const next = applyPostRowPatch(posts, { id: 'b', like_count: 99 })
     expect(next.map((p) => p.id)).toEqual(['a', 'b', 'c'])
-    // Non-target posts are the same object references.
     expect(next[0]).toBe(posts[0])
     expect(next[2]).toBe(posts[2])
   })
 
   it('is a no-op (same array reference) when the row id is not present', () => {
-    const posts = [post('a', 1, 1), post('b', 2, 2)]
-    const next = applyPostCountPatch(posts, { id: 'zzz', like_count: 5, comment_count: 5 })
-    expect(next).toBe(posts)
+    const posts = [basePost({ id: 'a' }), basePost({ id: 'b' })]
+    expect(applyPostRowPatch(posts, { id: 'zzz', like_count: 5 })).toBe(posts)
   })
 
-  it('maps slots_remaining, including a null (no slot cap)', () => {
-    const posts = [post('a', 0, 0, 4)]
-    expect(applyPostCountPatch(posts, { id: 'a', like_count: 0, comment_count: 0, slots_remaining: 2 })[0].slotsRemaining).toBe(2)
-    expect(applyPostCountPatch(posts, { id: 'a', like_count: 0, comment_count: 0, slots_remaining: null })[0].slotsRemaining).toBeNull()
+  it('refreshes on-row fields: content, category (from is_pinned), image_url, petitionId', () => {
+    const posts = [basePost({ id: 'a', content: 'old', category: 'update', imageUrl: null, petitionId: null })]
+    const next = applyPostRowPatch(posts, {
+      id: 'a',
+      content: 'edited',
+      is_pinned: true,
+      image_url: 'https://cdn/x.webp',
+      petition_id: 'pet-1',
+    })
+    expect(next[0]).toMatchObject({
+      content: 'edited',
+      category: 'announcement',
+      imageUrl: 'https://cdn/x.webp',
+      petitionId: 'pet-1',
+    })
+  })
+
+  it('re-derives eventMeta from metadata when post_type is event_post', () => {
+    const posts = [basePost({ id: 'a', postType: 'feed', eventMeta: null })]
+    const next = applyPostRowPatch(posts, {
+      id: 'a',
+      post_type: 'event_post',
+      metadata: { starts_at: '2026-02-01T10:00:00Z', is_online: true },
+    })
+    expect(next[0].postType).toBe('event_post')
+    expect(next[0].eventMeta).toMatchObject({ startsAt: '2026-02-01T10:00:00Z', isOnline: true })
+  })
+
+  it('preserves JOIN/client fields not on the WAL row: author, resource name/category, distanceBucket', () => {
+    const posts = [basePost({ id: 'a', resourceName: 'Food Bank', resourceCategory: 'food', distanceBucket: '2-10km' })]
+    const next = applyPostRowPatch(posts, { id: 'a', like_count: 7 })
+    expect(next[0].author.name).toBe('Ada')
+    expect(next[0].resourceName).toBe('Food Bank')
+    expect(next[0].resourceCategory).toBe('food')
+    expect(next[0].distanceBucket).toBe('2-10km')
+  })
+
+  it('keeps the prior slot cap when the row omits slots_remaining (forward-safe), and applies a provided value', () => {
+    const posts = [basePost({ id: 'a', slotsRemaining: 4 })]
+    // omitted -> keep prior
+    expect(applyPostRowPatch(posts, { id: 'a', like_count: 0 })[0].slotsRemaining).toBe(4)
+    // provided -> apply
+    expect(applyPostRowPatch(posts, { id: 'a', slots_remaining: 1 })[0].slotsRemaining).toBe(1)
   })
 })

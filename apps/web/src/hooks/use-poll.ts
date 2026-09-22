@@ -237,6 +237,40 @@ export function usePollData(postId: string | null): {
     }
   }, [supabase])
 
+  // Single-flight coalescing wrapper around settleVotes: at most one re-aggregate
+  // runs at a time, and a request that arrives while one is in flight schedules
+  // exactly one trailing re-run — so an overlapping burst collapses to the latest
+  // authoritative read rather than N stacked reads.
+  const settleInFlightRef = useRef(false)
+  const settlePendingRef = useRef(false)
+  const runSettle = useCallback(async () => {
+    if (settleInFlightRef.current) {
+      settlePendingRef.current = true
+      return
+    }
+    settleInFlightRef.current = true
+    try {
+      do {
+        settlePendingRef.current = false
+        await settleVotes()
+      } while (settlePendingRef.current)
+    } finally {
+      settleInFlightRef.current = false
+    }
+  }, [settleVotes])
+
+  // Trailing debounce for realtime SIGNALS: a vote burst (many INSERT/DELETE
+  // signals in quick succession) collapses to ONE re-aggregate ~300ms after the
+  // last signal, instead of one read per event.
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleSettle = useCallback(() => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null
+      void runSettle()
+    }, 300)
+  }, [runSettle])
+
   const fetchPollData = useCallback(async () => {
     if (!postId) {
       pollIdRef.current = null
@@ -308,13 +342,13 @@ export function usePollData(postId: string | null): {
         channelRef.current = null
       }
 
-      // W1.4: poll_votes is published SIGNAL-only (poll_id column only), so a
-      // realtime payload carries no option_index — it is a pure "this poll
-      // changed" signal. On any INSERT or DELETE we re-aggregate from an
-      // authoritative RLS-filtered read (settleVotes) rather than incrementing
-      // from the payload (which under the signal-only publication would read an
-      // undefined option_index and corrupt the tally). settleVotes is guarded
-      // (idempotent re-read), so a direct call per event is fine.
+      // W1.4: poll_votes is published SIGNAL-only (id, poll_id — id covers the
+      // DELETE replica identity; user_id/option_index stay off the wire), so a
+      // realtime payload carries no option_index. It is a pure "this poll changed"
+      // signal. On any INSERT or DELETE we re-aggregate from an authoritative
+      // RLS-filtered read rather than incrementing from the payload (which would
+      // read an undefined option_index and corrupt the tally). scheduleSettle
+      // debounces a burst to one re-aggregate.
       const channel = supabase
         .channel(`poll_votes_${pollRow.id}`)
         .on(
@@ -326,7 +360,7 @@ export function usePollData(postId: string | null): {
             filter: `poll_id=eq.${pollRow.id}`,
           },
           () => {
-            void settleVotes()
+            scheduleSettle()
           }
         )
         .on(
@@ -338,16 +372,16 @@ export function usePollData(postId: string | null): {
             filter: `poll_id=eq.${pollRow.id}`,
           },
           () => {
-            void settleVotes()
+            scheduleSettle()
           }
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             // Reconnect backfill: if the channel had errored/timed out, re-read
-            // once on recovery so votes cast during the gap are reconciled.
+            // promptly on recovery so votes cast during the gap are reconciled.
             if (hadChannelErrorRef.current) {
               hadChannelErrorRef.current = false
-              void settleVotes()
+              void runSettle()
             }
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             hadChannelErrorRef.current = true
@@ -368,7 +402,7 @@ export function usePollData(postId: string | null): {
     } finally {
       setLoading(false)
     }
-  }, [postId, supabase, settleVotes])
+  }, [postId, supabase, scheduleSettle, runSettle])
 
   /**
    * Overwrite the displayed vote state. Used by the poll body to apply the pure
@@ -394,8 +428,26 @@ export function usePollData(postId: string | null): {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current)
+        settleTimerRef.current = null
+      }
     }
   }, [authLoading, fetchPollData, supabase])
+
+  // Visibility backfill: realtime can silently drop events while a tab is hidden.
+  // On return-to-visible, re-aggregate once for the open poll so a stale tally is
+  // bounded to the brief window before the tab is focused again.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && pollIdRef.current) {
+        void runSettle()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [runSettle])
 
   return { poll, userVote, loading, error, setVoteState, settleVotes }
 }

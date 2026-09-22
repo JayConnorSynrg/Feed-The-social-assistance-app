@@ -46,32 +46,30 @@ maybeDescribe('05 — Community Feed (PROD read-only)', () => {
       HAVING COUNT(pr.prrelid) > 0
     `
 
-  it('[post-deploy] poll_votes is published SIGNAL-only — poll_id on the wire, user_id/option_index excluded', async (ctx) => {
+  it('[post-deploy] poll_votes is published with EXACTLY {id, poll_id}', async (ctx) => {
     // Surface: use-poll.ts poll_votes_${pollId} channel → settleVotes re-aggregate.
+    // Exact-set assertion catches BOTH a privacy regression (user_id/option_index
+    // added) AND the missing-PK break (id absent → DELETE aborts at the DB, B1).
     const rows = await queryProd(publishedColsSql('poll_votes'))
     if (rows.length === 0) {
       // Migration not applied yet (pre-deploy) — skip rather than fail. Flips to an
-      // active column-scope check once the orchestrator applies the publication.
+      // active exact-column check once the orchestrator applies the publication.
       ctx.skip()
       return
     }
-    const cols = rows[0].cols as string[]
-    expect(cols).toContain('poll_id')
-    expect(cols).not.toContain('user_id')
-    expect(cols).not.toContain('option_index')
+    const cols = [...(rows[0].cols as string[])].sort()
+    expect(cols).toEqual(['id', 'poll_id'])
   })
 
-  it('[post-deploy] post_comments is published SIGNAL-only — id/post_id on the wire, user_id/content excluded', async (ctx) => {
+  it('[post-deploy] post_comments is published with EXACTLY {id, post_id}', async (ctx) => {
     // Surface: use-realtime-feed.ts useRealtimeComments comments-${postId} → fetchComments refetch.
     const rows = await queryProd(publishedColsSql('post_comments'))
     if (rows.length === 0) {
       ctx.skip()
       return
     }
-    const cols = rows[0].cols as string[]
-    expect(cols).toContain('post_id')
-    expect(cols).not.toContain('user_id')
-    expect(cols).not.toContain('content')
+    const cols = [...(rows[0].cols as string[])].sort()
+    expect(cols).toEqual(['id', 'post_id'])
   })
 
   it('[post-deploy] post_likes is NOT in the publication (counts ride the posts WAL)', async () => {

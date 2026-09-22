@@ -22,6 +22,9 @@ interface Post {
   petition_id: string | null
   resource_id: string | null
   max_seekers: number | null
+  // Structured metadata (event/request/offer fields) — on the posts WAL row, so
+  // the in-place update patch can re-derive eventMeta / requestCategories (W1.4).
+  metadata: unknown
   // Denormalized counts maintained in-txn by the like/comment count triggers and
   // shipped on the posts WAL (they are in the posts publication column list). The
   // update handler patches these absolute counts into the feed in place (W1.4).
@@ -57,12 +60,26 @@ export function useRealtimeFeed({
   const hadChannelErrorRef = useRef(false)
   const { session } = useAuth()
 
+  // useEvent-style stable refs: the consumer passes fresh callback closures every
+  // render, but the subscribe effect must NOT tear down + rebuild the single
+  // 'posts-realtime' channel each render (feed re-renders on every count tick now
+  // that onUpdate patches state in place). Reading the latest callbacks through
+  // refs keeps handleChange + the effect stable so the channel subscribes ONCE.
+  const onInsertRef = useRef(onInsert)
+  const onUpdateRef = useRef(onUpdate)
+  const onDeleteRef = useRef(onDelete)
+  const onResubscribeRef = useRef(onResubscribe)
+  onInsertRef.current = onInsert
+  onUpdateRef.current = onUpdate
+  onDeleteRef.current = onDelete
+  onResubscribeRef.current = onResubscribe
+
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<Post>) => {
       switch (payload.eventType) {
         case 'INSERT':
           if (payload.new && !payload.new.is_hidden) {
-            onInsert?.(payload.new as Post)
+            onInsertRef.current?.(payload.new as Post)
           }
           break
         case 'UPDATE':
@@ -70,20 +87,20 @@ export function useRealtimeFeed({
             // When is_hidden flips true (admin remove/hold), treat as a DELETE
             // so all connected clients instantly remove the post from their feed.
             if (payload.new.is_hidden === true) {
-              onDelete?.(payload.new.id)
+              onDeleteRef.current?.(payload.new.id)
             } else {
-              onUpdate?.(payload.new as Post)
+              onUpdateRef.current?.(payload.new as Post)
             }
           }
           break
         case 'DELETE':
           if (payload.old?.id) {
-            onDelete?.(payload.old.id)
+            onDeleteRef.current?.(payload.old.id)
           }
           break
       }
     },
-    [onInsert, onUpdate, onDelete]
+    []
   )
 
   useEffect(() => {
@@ -120,7 +137,7 @@ export function useRealtimeFeed({
           // and backfills events missed while the socket was down (W1.4).
           if (hadChannelErrorRef.current) {
             hadChannelErrorRef.current = false
-            onResubscribe?.()
+            onResubscribeRef.current?.()
           }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           hadChannelErrorRef.current = true
@@ -146,7 +163,9 @@ export function useRealtimeFeed({
         channelRef.current = null
       }
     }
-  }, [supabase, enabled, session, handleChange, onResubscribe])
+    // Callbacks are read through refs (useEvent-style), so they are deliberately
+    // NOT deps — the channel subscribes once and survives consumer re-renders.
+  }, [supabase, enabled, session, handleChange])
 
   const unsubscribe = useCallback(() => {
     if (channelRef.current) {

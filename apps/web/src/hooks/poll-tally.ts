@@ -5,11 +5,12 @@
  * its settle-from-server path, and its realtime signal handler.
  *
  * W1.4: poll_votes realtime events are column-scoped SIGNALS — the publication
- * puts ONLY poll_id on the wire, so a realtime payload carries no option_index.
- * The correct response to any signal is therefore to RE-AGGREGATE tallies from an
- * authoritative RLS-filtered read of the vote rows — never to increment/decrement
- * from the payload (which, under the signal-only publication, would read an
- * undefined option_index and corrupt the tally with NaN).
+ * puts only (id, poll_id) on the wire (id is required to cover the DELETE replica
+ * identity; user_id/option_index stay off), so a realtime payload carries no
+ * option_index. The correct response to any signal is therefore to RE-AGGREGATE
+ * tallies from an authoritative RLS-filtered read of the vote rows — never to
+ * increment/decrement from the payload (which, under the signal-only publication,
+ * would read an undefined option_index and corrupt the tally with NaN).
  *
  * JSX-free so the vitest (node-environment) suite can exercise it directly.
  */
