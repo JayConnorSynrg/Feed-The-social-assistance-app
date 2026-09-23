@@ -331,6 +331,30 @@ export type Database = {
         }
         Relationships: []
       }
+      badge_config: {
+        Row: {
+          level1_threshold: number
+          level2_threshold: number
+          level3_threshold: number
+          singleton_guard: boolean
+          updated_at: string
+        }
+        Insert: {
+          level1_threshold?: number
+          level2_threshold?: number
+          level3_threshold?: number
+          singleton_guard?: boolean
+          updated_at?: string
+        }
+        Update: {
+          level1_threshold?: number
+          level2_threshold?: number
+          level3_threshold?: number
+          singleton_guard?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       community_stats: {
         Row: {
           active_users: number
@@ -499,6 +523,51 @@ export type Database = {
           token?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      engagement_events: {
+        Row: {
+          actor_id: string
+          category: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          source_pk: string
+          source_table: string
+          target_id: string
+          target_type: string
+          verified: boolean
+          weight: number
+        }
+        Insert: {
+          actor_id: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json
+          source_pk: string
+          source_table: string
+          target_id: string
+          target_type: string
+          verified?: boolean
+          weight?: number
+        }
+        Update: {
+          actor_id?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          source_pk?: string
+          source_table?: string
+          target_id?: string
+          target_type?: string
+          verified?: boolean
+          weight?: number
         }
         Relationships: []
       }
@@ -1376,6 +1445,30 @@ export type Database = {
         }
         Relationships: []
       }
+      opt_in_declines: {
+        Row: {
+          author_id: string
+          first_declined_at: string
+          last_declined_at: string
+          seeker_id: string
+          times_declined: number
+        }
+        Insert: {
+          author_id: string
+          first_declined_at?: string
+          last_declined_at?: string
+          seeker_id: string
+          times_declined?: number
+        }
+        Update: {
+          author_id?: string
+          first_declined_at?: string
+          last_declined_at?: string
+          seeker_id?: string
+          times_declined?: number
+        }
+        Relationships: []
+      }
       organization_members: {
         Row: {
           id: string
@@ -1629,141 +1722,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      badge_config: {
-        Row: {
-          level1_threshold: number
-          level2_threshold: number
-          level3_threshold: number
-          singleton_guard: boolean
-          updated_at: string
-        }
-        Insert: {
-          level1_threshold?: number
-          level2_threshold?: number
-          level3_threshold?: number
-          singleton_guard?: boolean
-          updated_at?: string
-        }
-        Update: {
-          level1_threshold?: number
-          level2_threshold?: number
-          level3_threshold?: number
-          singleton_guard?: boolean
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      engagement_events: {
-        Row: {
-          actor_id: string
-          category: string | null
-          created_at: string
-          id: string
-          kind: string
-          metadata: Json
-          source_pk: string
-          source_table: string
-          target_id: string
-          target_type: string
-          verified: boolean
-          weight: number
-        }
-        Insert: {
-          actor_id: string
-          category?: string | null
-          created_at?: string
-          id?: string
-          kind: string
-          metadata?: Json
-          source_pk: string
-          source_table: string
-          target_id: string
-          target_type: string
-          verified?: boolean
-          weight?: number
-        }
-        Update: {
-          actor_id?: string
-          category?: string | null
-          created_at?: string
-          id?: string
-          kind?: string
-          metadata?: Json
-          source_pk?: string
-          source_table?: string
-          target_id?: string
-          target_type?: string
-          verified?: boolean
-          weight?: number
-        }
-        Relationships: []
-      }
-      opt_in_declines: {
-        Row: {
-          author_id: string
-          first_declined_at: string
-          last_declined_at: string
-          seeker_id: string
-          times_declined: number
-        }
-        Insert: {
-          author_id: string
-          first_declined_at?: string
-          last_declined_at?: string
-          seeker_id: string
-          times_declined?: number
-        }
-        Update: {
-          author_id?: string
-          first_declined_at?: string
-          last_declined_at?: string
-          seeker_id?: string
-          times_declined?: number
-        }
-        Relationships: []
-      }
-      user_engagement_counters: {
-        Row: {
-          count: number
-          dimension: string
-          scope: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          count?: number
-          dimension: string
-          scope?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          count?: number
-          dimension?: string
-          scope?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_private_badge_summary: {
-        Row: {
-          summary: Json
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          summary?: Json
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          summary?: Json
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       poll_votes: {
         Row: {
@@ -3007,6 +2965,48 @@ export type Database = {
           },
         ]
       }
+      user_engagement_counters: {
+        Row: {
+          count: number
+          dimension: string
+          scope: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          dimension: string
+          scope?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          dimension?: string
+          scope?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_private_badge_summary: {
+        Row: {
+          summary: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          summary?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          summary?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_secure_profiles: {
         Row: {
           created_at: string | null
@@ -3670,6 +3670,10 @@ export type Database = {
           total_visits: number
         }[]
       }
+      credit_post_created: {
+        Args: { p_engager: string; p_post_id: string }
+        Returns: undefined
+      }
       dashboard_adoption_stats: {
         Args: never
         Returns: {
@@ -3745,6 +3749,19 @@ export type Database = {
         | { Args: { table_name: string }; Returns: string }
       earth: { Args: never; Returns: number }
       enablelongtransactions: { Args: never; Returns: string }
+      engagement_category_family: {
+        Args: { p_category: Database["public"]["Enums"]["resource_category"] }
+        Returns: string
+      }
+      engagement_community_dim: { Args: { p_kind: string }; Returns: string }
+      engagement_family_from_chip: { Args: { p_chip: string }; Returns: string }
+      engagement_is_public: { Args: { p_kind: string }; Returns: boolean }
+      engagement_level: { Args: { p_points: number }; Returns: number }
+      engagement_summary_for: {
+        Args: { p_scope: string; p_user: string; p_with_counts: boolean }
+        Returns: Json
+      }
+      engagement_weight: { Args: { p_kind: string }; Returns: number }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       expand_state: { Args: { p_state: string }; Returns: string }
       export_petition_signatures: {
@@ -4034,6 +4051,10 @@ export type Database = {
       is_current_user_admin: { Args: never; Returns: boolean }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
+      lock_two_profiles: {
+        Args: { p_a: string; p_b: string }
+        Returns: undefined
+      }
       log_audit_event: {
         Args: {
           p_action: string
@@ -4049,6 +4070,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
+      }
+      log_engagement_failure: {
+        Args: { p_context: string; p_detail: string }
+        Returns: undefined
       }
       longtransactionsenabled: { Args: never; Returns: boolean }
       nearby_federated_resources: {
@@ -4239,8 +4264,6 @@ export type Database = {
           suppressed: boolean
         }[]
       }
-      refresh_community_stats: { Args: never; Returns: undefined }
-      refresh_federation_trust_overview: { Args: never; Returns: undefined }
       ranked_feed: {
         Args: {
           p_cursor_id?: string
@@ -4255,6 +4278,32 @@ export type Database = {
           score: number
         }[]
       }
+      recompute_all_badge_summaries: { Args: never; Returns: undefined }
+      recompute_badge_summary: { Args: { p_user: string }; Returns: undefined }
+      recompute_private_badge_summary: {
+        Args: { p_user: string }
+        Returns: undefined
+      }
+      recompute_user_engagement: {
+        Args: { p_user: string }
+        Returns: undefined
+      }
+      reconcile_engagement: { Args: { p_user?: string }; Returns: undefined }
+      record_engagement_event: {
+        Args: {
+          p_actor: string
+          p_family: string
+          p_kind: string
+          p_source_pk: string
+          p_source_table: string
+          p_target_id: string
+          p_target_type: string
+          p_verified: boolean
+        }
+        Returns: undefined
+      }
+      refresh_community_stats: { Args: never; Returns: undefined }
+      refresh_federation_trust_overview: { Args: never; Returns: undefined }
       reject_resource: {
         Args: { p_reason: string; p_resource_id: string }
         Returns: undefined
@@ -4997,6 +5046,7 @@ export type Database = {
         }
       }
       trust_score_to_level: { Args: { score: number }; Returns: string }
+      unblock_opt_in: { Args: { p_opt_in_id: string }; Returns: boolean }
       unlockrows: { Args: { "": string }; Returns: number }
       untagged_geocode_targets: {
         Args: { p_limit?: number }
@@ -5057,37 +5107,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      engagement_category_family: {
-        Args: { p_category: Database["public"]["Enums"]["resource_category"] }
-        Returns: string
-      }
-      engagement_community_dim: { Args: { p_kind: string }; Returns: string }
-      engagement_family_from_chip: { Args: { p_chip: string }; Returns: string }
-      engagement_is_public: { Args: { p_kind: string }; Returns: boolean }
-      engagement_level: { Args: { p_points: number }; Returns: number }
-      engagement_summary_for: { Args: { p_user: string; p_scope: string }; Returns: Json }
-      engagement_weight: { Args: { p_kind: string }; Returns: number }
-      credit_post_created: { Args: { p_post_id: string; p_engager: string }; Returns: undefined }
-      recompute_private_badge_summary: { Args: { p_user: string }; Returns: undefined }
-      log_engagement_failure: { Args: { p_context: string; p_detail: string }; Returns: undefined }
-      recompute_all_badge_summaries: { Args: Record<PropertyKey, never>; Returns: undefined }
-      recompute_badge_summary: { Args: { p_user: string }; Returns: undefined }
-      recompute_user_engagement: { Args: { p_user: string }; Returns: undefined }
-      reconcile_engagement: { Args: { p_user?: string }; Returns: undefined }
-      record_engagement_event: {
-        Args: {
-          p_actor: string
-          p_kind: string
-          p_target_type: string
-          p_target_id: string
-          p_source_table: string
-          p_source_pk: string
-          p_family: string
-          p_verified: boolean
-        }
-        Returns: undefined
-      }
-      unblock_opt_in: { Args: { p_opt_in_id: string }; Returns: boolean }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
       withdraw_petition_signature: {
         Args: { p_petition_id: string }
@@ -5212,6 +5231,8 @@ export type Database = {
           created_at: string | null
           file_size_limit: number | null
           id: string
+          lifecycle_configuration: Json | null
+          lifecycle_configuration_generation: string | null
           name: string
           owner: string | null
           owner_id: string | null
@@ -5226,6 +5247,8 @@ export type Database = {
           created_at?: string | null
           file_size_limit?: number | null
           id: string
+          lifecycle_configuration?: Json | null
+          lifecycle_configuration_generation?: string | null
           name: string
           owner?: string | null
           owner_id?: string | null
@@ -5240,6 +5263,8 @@ export type Database = {
           created_at?: string | null
           file_size_limit?: number | null
           id?: string
+          lifecycle_configuration?: Json | null
+          lifecycle_configuration_generation?: string | null
           name?: string
           owner?: string | null
           owner_id?: string | null
@@ -5554,7 +5579,7 @@ export type Database = {
         Returns: string
       }
       get_size_by_bucket: {
-        Args: never
+        Args: { delete_markers?: string; noncurrent_versions?: string }
         Returns: {
           bucket_id: string
           size: number
@@ -5568,6 +5593,7 @@ export type Database = {
           next_key_token?: string
           next_upload_token?: string
           prefix_param: string
+          raw_prefix_param?: string
         }
         Returns: {
           created_at: string
@@ -5578,28 +5604,38 @@ export type Database = {
       list_objects_with_delimiter: {
         Args: {
           _bucket_id: string
+          delete_markers?: string
           delimiter_param: string
           max_keys?: number
           next_token?: string
+          next_token_archived_at?: string
+          next_token_version?: string
+          noncurrent_versions?: string
           prefix_param: string
           sort_order?: string
           start_after?: string
         }
         Returns: {
+          archived_at: string
           created_at: string
           id: string
+          is_delete_marker: boolean
+          is_versioned: boolean
           last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
+          version: string
         }[]
       }
       operation: { Args: never; Returns: string }
       search: {
         Args: {
           bucketname: string
+          delete_markers?: string
           levels?: number
           limits?: number
+          noncurrent_versions?: string
           offsets?: number
           prefix: string
           search?: string
@@ -5607,16 +5643,22 @@ export type Database = {
           sortorder?: string
         }
         Returns: {
+          archived_at: string
           created_at: string
           id: string
+          is_delete_marker: boolean
+          is_versioned: boolean
           last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
+          version: string
         }[]
       }
       search_by_timestamp: {
         Args: {
+          delete_markers?: string
+          noncurrent_versions?: string
           p_bucket_id: string
           p_level: number
           p_limit: number
@@ -5625,36 +5667,50 @@ export type Database = {
           p_sort_column_after: string
           p_sort_order: string
           p_start_after: string
+          p_start_after_version?: string
         }
         Returns: {
+          archived_at: string
           created_at: string
           id: string
+          is_delete_marker: boolean
+          is_versioned: boolean
           key: string
           last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
+          version: string
         }[]
       }
       search_v2: {
         Args: {
           bucket_name: string
+          delete_markers?: string
           levels?: number
           limits?: number
+          noncurrent_versions?: string
           prefix: string
           sort_column?: string
           sort_column_after?: string
           sort_order?: string
           start_after?: string
+          start_after_archived_at?: string
+          start_after_is_continuation?: boolean
+          start_after_version?: string
         }
         Returns: {
+          archived_at: string
           created_at: string
           id: string
+          is_delete_marker: boolean
+          is_versioned: boolean
           key: string
           last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
+          version: string
         }[]
       }
     }
