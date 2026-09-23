@@ -16,13 +16,53 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: feed-fullfeed-p2-0-integrity-postdeploy
 
 <!-- NOTE: feed-fullfeed-p2-w1.5 merged to develop (PR #205, squash ef87a5e) — feed motion micro-interactions, CLIENT-ONLY (no post-deploy step). P1 FullFeed W1.1–W1.5 all shipped; W1.2/W1.3/W1.4 post-deploy steps COMPLETE. No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
 <!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge) — DONE 2026-09-20: deployed supabase/functions/post-image-upload (verify_jwt=false, in-code JWT verify + anon/guest-block) and the updated supabase/functions/delete-account (paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
 
 <!-- COMPLETED (superseded-note): feed-fullfeed-p2-w1.2 was the active executor work; now complete + merged. -->
+<!-- ACTIVE: feed-fullfeed-p2-0-integrity (PR #207) — P2.0 integrity wave; DB migration applied post-deploy (feed-fullfeed-p2-0-integrity-postdeploy). -->
 
+
+```yaml
+id: feed-fullfeed-p2-0-integrity
+status: in_progress
+type: merge
+description: "Squash-merge PR #207 (branch feature/feed-fullfeed-p2-0-integrity) → develop. Wave P2.0 (integrity) — two invariants on the engagement layer; all in-scope tables have 0 prod rows. INVARIANT I1 (every state-bearing column changes only through the entitled path): (a) reviews — DROP+CREATE reviews_update as admin-only (was reviewer-or-admin; reviewer could UPDATE reviewee_id/rating post-hoc = harmony forge reopening PR#50); insert stays submit_review-SECDEF-only, delete stays reviewer-own. (b) resource_opt_ins — DROP opt_ins_insert (direct INSERT bypassed opt_in_to_post own-post+capacity; UI uses the RPC at use-opt-ins.ts:89, RPC INSERT bypasses RLS as owner); REVOKE UPDATE table-level from anon,authenticated + GRANT UPDATE(status) TO authenticated (locks seeker_id/post_id/resource_id; author status flow feed-panel.tsx:2075 .update({status}) keeps working; completed_at trigger runs as owner); DROP+CREATE opt_ins_delete as seeker+pending-only(+admin) (was seeker any-status → could erase completed). (c) conversations — REVOKE UPDATE table-level + GRANT UPDATE(status) (locks volunteer_id/requester_id/resource_id; all client updates are .update({status}) use-conversations.ts:328-408); ADD trigger trg_conversations_transition (BEFORE UPDATE) enforcing participant/resource immutability + status graph (pending→active|declined|cancelled, active→completed|cancelled) + entitled actor (volunteer for active/declined/completed, either participant for cancelled; actor check only when auth.uid() not null). (d) event_checkins — ADD trigger trg_event_checkins_force_checked_in_by (BEFORE INS/UPD) forcing checked_in_by=auth.uid() (was client-supplied → self-checkin could fake organizer verification; both flows already send caller id). INVARIANT I2 (a guest is_anonymous writes no user-data row): 9 RESTRICTIVE guest INSERT blocks mirroring posts_block_anon_* (poll_votes, event_checkins, favorites, saved_resources, saved_resource_documents, saved_resource_events, saved_resource_tasks, impact_metrics, petitions); is_anonymous guard (auth.users lookup) added to SECDEF delete_safety_alert, update_safety_alert, withdraw_petition_signature (search_path + REVOKE/GRANT EXECUTE preserved); service-role route /api/petitions/sign returns 403 account_required for user.is_anonymous, message surfaced via use-petitions signError. Migration supabase/migrations/20261004000000_p2_0_integrity.sql (ledger tip was 20261003000000) — idempotent, no PG17-only syntax, replay-safe verified via ephemeral PG17 double-apply + behavioral trigger tests. Migration NOT applied at merge — see feed-fullfeed-p2-0-integrity-postdeploy (migration and client are INDEPENDENT: client identical before/after, so standard ledger-gated post-deploy order). Adds smoke 25 (ledger-gated) + vitest petition guest-guard test (mutation-checked). Aim proven: 10/10 assertion targets currently vulnerable live (seeker/volunteer writable, reviewer-update, direct opt-in insert, any-status delete, 0 triggers, 0 guest blocks, 0 guards). tsc 0; vitest non-smoke 330 pass; node unit 61 pass; npm run build compiled OK (ƒ Proxy present). Commits: ba6dacc (migration) → 9053c3d (route+hook) → 0e75aaa (tests). NO AI attribution. Pre-merge gates to re-verify: PR #207 state=OPEN, base=develop, mergeable=MERGEABLE, mergeStateStatus=CLEAN; origin/develop still at 3b5cc19 (branch cut point). DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-p2-0-integrity
+base: develop
+remote: origin
+files:
+  - supabase/migrations/20261004000000_p2_0_integrity.sql
+  - apps/web/src/app/api/petitions/sign/route.ts
+  - apps/web/src/hooks/use-petitions.ts
+  - apps/web/src/app/api/petitions/sign/__tests__/route.guest.test.ts
+  - apps/web/src/__tests__/smoke/25-p2-0-integrity.smoke.ts
+  - .claude/GIT_PLAN.md
+pr: 207
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/207
+commits:
+  - ba6dacc
+  - 9053c3d
+  - 0e75aaa
+  - b2ed74d
+  - 4fd6242
+depends_on: feed-fullfeed-h-hygiene
+created_at: "2026-09-23T00:00:00.000Z"
+status_note: "Fix round (adversarial CHANGES-REQUIRED) applied on-branch. (1) smoke 25 no longer trips WRITE_GUARD_RE (SQL comment '; DELETE' reworded) — verified live: 2 skipped today (ledger absent). (2) smoke strengthened: optins insert check +permissive='PERMISSIVE'; reviews UPDATE asserts is_current_user_admin call in both clauses; guest blocks assert exact shape (RESTRICTIVE/FOR INSERT/TO authenticated/is_anonymous); +mfa(3)/anon-EXECUTE/opt-in-trigger. (3) conversation INSERT forge closed — trigger now BEFORE INSERT OR UPDATE: user INSERT must be pending + volunteer_id=resources.submitted_by (bound; sendRequest passes resource.submitted_by, volunteer-resource-detail.tsx:53) + requester!=volunteer. (4) opt-in transition trigger: pending->accepted|declined, accepted->completed, no back (matches feed-panel UI). (5) mfa_backup_codes RESTRICTIVE guest blocks I/U/D (client-side writer lib/mfa.ts). (6) event_checkins force checked_in_by=auth.uid() on INSERT only; UPDATE preserves OLD, allows FK SET NULL cascade. (7) REVOKE EXECUTE FROM anon on the 3 SECDEF fns. Behavioral proof on ephemeral PG17 (as authenticated via SET ROLE + request.jwt.claims): forged completed-conv INSERT REJECTED, non-owner volunteer REJECTED, normal pending ALLOWED; optin completed->pending REJECTED, pending->accepted + accepted->completed ALLOWED, pending->completed jump REJECTED; guest mfa/poll/favorites/petition INSERT REJECTED, normal user ALLOWED; checked_in_by forced on INSERT + reverted on forged UPDATE + NULL cascade passes. tsc 0; vitest non-smoke 330 pass; build OK. Fix commits b2ed74d (migration) + 4fd6242 (smoke)."
+```
+
+```yaml
+id: feed-fullfeed-p2-0-integrity-postdeploy
+status: pending
+type: migration
+description: "POST-DEPLOY step for wave P2.0 (PR #207). STRICT ORDER — apply ONLY after the develop squash-merge commit reaches Vercel state=READY on www.sourcetofeed.com (HTTP 200). Migration and client are INDEPENDENT (the client behaves identically before/after the DB changes: opt-in/conversation status updates send only {status}; event_checkins/petition flows already send the caller id; guest blocks only affect guests), so no migration-before-client requirement — the standard ledger-gated order applies. Apply supabase/migrations/20261004000000_p2_0_integrity.sql to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint (PAT from apps/web/.env.local; shell env var may be stale). It is idempotent/replay-safe (BEGIN/COMMIT; DROP..IF EXISTS / CREATE OR REPLACE / guarded policy DO-block; no PG17-only syntax). VERIFY from the catalog AND the anon surface: (a) has_column_privilege(authenticated,'public.resource_opt_ins','seeker_id','UPDATE')=false, 'status','UPDATE'=true, has_table_privilege(...,'UPDATE')=false; same shape for conversations volunteer_id/status; (b) reviews_update qual has no reviewer_id (admin-only) and reviews has no client INSERT policy; (c) resource_opt_ins has no INSERT policy and DELETE qual contains 'pending'; (d) triggers trg_conversations_transition + trg_event_checkins_force_checked_in_by present; (e) 9 RESTRICTIVE %block_anon_insert policies on the I2 tables; (f) prosrc of delete_safety_alert/update_safety_alert/withdraw_petition_signature contains 'is_anonymous'; (g) anon-surface: an is_anonymous JWT POST /api/petitions/sign → 403 account_required. Then INSERT the ledger row for 20261004000000 into supabase_migrations.schema_migrations (ON CONFLICT DO NOTHING) in the SAME step (Management API does not write the ledger). VERIFY (h): schema_migrations has version 20261004000000. Run prod-smoke 25 (flips skipped→asserting: both I1 and I2 tests pass). DO NOT apply as part of the git merge."
+project_ref: ndtpovonpadugthmcntl
+migration: supabase/migrations/20261004000000_p2_0_integrity.sql
+depends_on: feed-fullfeed-p2-0-integrity
+created_at: "2026-09-23T00:00:00.000Z"
+```
 
 ```yaml
 id: feed-fullfeed-p2-w1.5
