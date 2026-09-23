@@ -5036,19 +5036,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      unblock_opt_in: {
-        Args: { p_opt_in_id: string }
-        Returns: {
-          completed_at: string | null
-          created_at: string
-          id: string
-          post_id: string
-          resource_id: string | null
-          seeker_id: string
-          status: string
-          updated_at: string
-        }
+      engagement_category_family: {
+        Args: { p_category: Database["public"]["Enums"]["resource_category"] }
+        Returns: string
       }
+      engagement_community_dim: { Args: { p_kind: string }; Returns: string }
+      engagement_family_from_chip: { Args: { p_chip: string }; Returns: string }
+      engagement_level: { Args: { p_points: number }; Returns: number }
+      engagement_weight: { Args: { p_kind: string }; Returns: number }
+      log_engagement_failure: { Args: { p_context: string; p_detail: string }; Returns: undefined }
+      recompute_all_badge_summaries: { Args: Record<PropertyKey, never>; Returns: undefined }
+      recompute_badge_summary: { Args: { p_user: string }; Returns: undefined }
+      recompute_user_engagement: { Args: { p_user: string }; Returns: undefined }
+      reconcile_engagement: { Args: { p_user?: string }; Returns: undefined }
+      record_engagement_event: {
+        Args: {
+          p_actor: string
+          p_kind: string
+          p_target_type: string
+          p_target_id: string
+          p_source_table: string
+          p_source_pk: string
+          p_family: string
+          p_verified: boolean
+        }
+        Returns: undefined
+      }
+      unblock_opt_in: { Args: { p_opt_in_id: string }; Returns: boolean }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
       withdraw_petition_signature: {
         Args: { p_petition_id: string }
