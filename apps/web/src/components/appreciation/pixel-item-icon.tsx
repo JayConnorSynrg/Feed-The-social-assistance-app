@@ -22,6 +22,13 @@ const PALETTE = {
   amber: '#e8a020',
   yellow: '#f2c14e',
   orange: '#d98324',
+  // Bowl + steam register for the soup icon (distinct from cream so the bowl never vanishes
+  // on the cream/stone card backgrounds; steam is a soft sage-gray that reads as vapor and
+  // stays visible on cream).
+  bowl: '#c8683a',
+  steam: '#9fb0ad',
+  // A second accent for celebration confetti (cheer).
+  blue: '#5a6b8c',
 } as const
 
 const P = PALETTE
@@ -69,23 +76,29 @@ const ICON_RECTS: Record<AppreciationSlug, readonly Rect[]> = {
     { x: 10, y: 9, w: 1, h: 1, fill: P.outline },
     { x: 6, y: 10, w: 4, h: 1, fill: P.outline },
   ],
+  // Party popper: a cone at bottom-left bursting confetti up-right, with motion streaks.
+  // Reads as celebration (not two blobs) at 32px.
   cheer: [
-    { x: 3, y: 7, w: 1, h: 1, fill: P.trunkLight },
-    { x: 5, y: 7, w: 1, h: 1, fill: P.trunkLight },
-    { x: 2, y: 8, w: 5, h: 1, fill: P.trunkLight },
-    { x: 2, y: 9, w: 5, h: 1, fill: P.trunkLight },
-    { x: 2, y: 10, w: 5, h: 1, fill: P.trunkLight },
-    { x: 3, y: 11, w: 3, h: 1, fill: P.trunkLight },
-    { x: 10, y: 7, w: 1, h: 1, fill: P.trunkLight },
-    { x: 12, y: 7, w: 1, h: 1, fill: P.trunkLight },
-    { x: 9, y: 8, w: 5, h: 1, fill: P.trunkLight },
-    { x: 9, y: 9, w: 5, h: 1, fill: P.trunkLight },
-    { x: 9, y: 10, w: 5, h: 1, fill: P.trunkLight },
-    { x: 10, y: 11, w: 3, h: 1, fill: P.trunkLight },
-    { x: 7, y: 1, w: 2, h: 5, fill: P.yellow },
-    { x: 5, y: 3, w: 6, h: 1, fill: P.yellow },
-    { x: 2, y: 5, w: 1, h: 1, fill: P.yellow },
-    { x: 13, y: 4, w: 1, h: 1, fill: P.yellow },
+    // Cone (amber body, dark tip + opening rim), pointing from bottom-left toward center.
+    { x: 2, y: 13, w: 1, h: 1, fill: P.trunkDark }, // tip
+    { x: 2, y: 12, w: 2, h: 1, fill: P.amber },
+    { x: 3, y: 11, w: 2, h: 1, fill: P.amber },
+    { x: 4, y: 10, w: 2, h: 1, fill: P.amber },
+    { x: 5, y: 9, w: 2, h: 1, fill: P.amber },
+    { x: 3, y: 13, w: 3, h: 1, fill: P.trunkDark }, // cone edge (lower)
+    { x: 6, y: 10, w: 1, h: 3, fill: P.trunkDark }, // cone edge (upper/opening side)
+    { x: 6, y: 8, w: 2, h: 1, fill: P.orange },     // opening rim
+    // Motion streaks radiating from the cone opening.
+    { x: 6, y: 6, w: 1, h: 1, fill: P.trunkLight },
+    { x: 8, y: 9, w: 1, h: 1, fill: P.trunkLight },
+    // Confetti burst (multi-color) scattered top-right.
+    { x: 8, y: 4, w: 2, h: 2, fill: P.red },
+    { x: 11, y: 2, w: 2, h: 2, fill: P.yellow },
+    { x: 13, y: 5, w: 1, h: 2, fill: P.green },
+    { x: 10, y: 6, w: 2, h: 2, fill: P.blue },
+    { x: 12, y: 8, w: 2, h: 1, fill: P.greenMid },
+    { x: 9, y: 1, w: 1, h: 1, fill: P.greenMid },
+    { x: 14, y: 3, w: 1, h: 1, fill: P.red },
   ],
   flower: [
     { x: 6, y: 1, w: 3, h: 3, fill: P.red },
@@ -107,10 +120,21 @@ const ICON_RECTS: Record<AppreciationSlug, readonly Rect[]> = {
     { x: 3, y: 8, w: 10, h: 1, fill: P.yellow },
     { x: 4, y: 9, w: 8, h: 1, fill: P.yellow },
     { x: 6, y: 10, w: 4, h: 1, fill: P.yellow },
+    // Seeded center disc: a two-brown checker (seeds), NOT a face. Base fill then alternating
+    // trunkDark seeds so it never reads as eyes/mouth (was confusable with Smile).
     { x: 5, y: 4, w: 6, h: 4, fill: P.trunk },
+    { x: 5, y: 4, w: 1, h: 1, fill: P.trunkDark },
+    { x: 7, y: 4, w: 1, h: 1, fill: P.trunkDark },
+    { x: 9, y: 4, w: 1, h: 1, fill: P.trunkDark },
     { x: 6, y: 5, w: 1, h: 1, fill: P.trunkDark },
     { x: 8, y: 5, w: 1, h: 1, fill: P.trunkDark },
+    { x: 10, y: 5, w: 1, h: 1, fill: P.trunkDark },
+    { x: 5, y: 6, w: 1, h: 1, fill: P.trunkDark },
     { x: 7, y: 6, w: 1, h: 1, fill: P.trunkDark },
+    { x: 9, y: 6, w: 1, h: 1, fill: P.trunkDark },
+    { x: 6, y: 7, w: 1, h: 1, fill: P.trunkDark },
+    { x: 8, y: 7, w: 1, h: 1, fill: P.trunkDark },
+    { x: 10, y: 7, w: 1, h: 1, fill: P.trunkDark },
     { x: 7, y: 11, w: 1, h: 3, fill: P.green },
     { x: 8, y: 12, w: 2, h: 1, fill: P.green },
   ],
@@ -161,17 +185,26 @@ const ICON_RECTS: Record<AppreciationSlug, readonly Rect[]> = {
     { x: 5, y: 13, w: 6, h: 1, fill: P.red },
     { x: 5, y: 6, w: 2, h: 2, fill: P.cream },
   ],
+  // Bowl of soup: dark-outlined bowl (never vanishes on cream), amber broth surface, orange
+  // ceramic body, sage-gray steam wisps rising above (visible on cream).
   soup: [
-    { x: 3, y: 8, w: 10, h: 1, fill: P.orange },
-    { x: 2, y: 9, w: 12, h: 1, fill: P.cream },
-    { x: 2, y: 10, w: 12, h: 1, fill: P.cream },
-    { x: 3, y: 11, w: 10, h: 1, fill: P.cream },
-    { x: 5, y: 12, w: 6, h: 1, fill: P.cream },
-    { x: 7, y: 1, w: 1, h: 2, fill: P.trunkLight },
-    { x: 5, y: 2, w: 1, h: 2, fill: P.trunkLight },
-    { x: 6, y: 4, w: 1, h: 2, fill: P.trunkLight },
-    { x: 9, y: 2, w: 1, h: 2, fill: P.trunkLight },
-    { x: 10, y: 4, w: 1, h: 2, fill: P.trunkLight },
+    // Steam wisps (sage-gray, wavy).
+    { x: 5, y: 2, w: 1, h: 2, fill: P.steam },
+    { x: 6, y: 4, w: 1, h: 2, fill: P.steam },
+    { x: 8, y: 1, w: 1, h: 2, fill: P.steam },
+    { x: 9, y: 3, w: 1, h: 2, fill: P.steam },
+    { x: 8, y: 5, w: 1, h: 1, fill: P.steam },
+    { x: 11, y: 2, w: 1, h: 2, fill: P.steam },
+    // Bowl: dark rim, walls, and bottom (outline); amber broth; orange body.
+    { x: 2, y: 8, w: 12, h: 1, fill: P.trunkDark }, // top rim
+    { x: 2, y: 9, w: 1, h: 2, fill: P.trunkDark },  // left wall
+    { x: 13, y: 9, w: 1, h: 2, fill: P.trunkDark }, // right wall
+    { x: 3, y: 9, w: 10, h: 1, fill: P.amber },     // broth surface
+    { x: 3, y: 10, w: 10, h: 1, fill: P.bowl },     // body
+    { x: 3, y: 11, w: 1, h: 1, fill: P.trunkDark }, // narrowing walls
+    { x: 12, y: 11, w: 1, h: 1, fill: P.trunkDark },
+    { x: 4, y: 11, w: 8, h: 1, fill: P.bowl },
+    { x: 4, y: 12, w: 8, h: 1, fill: P.trunkDark }, // bottom
   ],
   sun: [
     { x: 6, y: 5, w: 4, h: 1, fill: P.yellow },
