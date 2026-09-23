@@ -25,8 +25,9 @@
 --       opt_in_declines / profiles.badge_summary carry NO client write policy and
 --       table-level REVOKE ALL. Only SECDEF trigger fns (owned by postgres) write them.
 --   I3  SUMMARY = recompute(counters, config), under concurrency. recompute_badge_summary
---       locks the profile row (FOR UPDATE) before rebuilding; two-party events lock both
---       profiles in uuid order (deadlock-safe). Rewritten only when the value changes.
+--       locks the profile row (FOR NO KEY UPDATE) before rebuilding; two-party events lock
+--       both profiles in uuid order (deadlock-safe; NO KEY so inbound FK KEY SHARE never
+--       conflicts). Rewritten only when the value changes.
 --   I4  READ PATHS UNBROKEN. profiles has column-only grants; badge_summary gets an
 --       explicit GRANT SELECT to anon+authenticated. profiles is not in supabase_realtime.
 --   I5  UNBLOCK. unblock_opt_in (author-only, declined-only) DELETEs the declined opt-in
@@ -69,6 +70,9 @@
 -- ============================================================================
 
 BEGIN;
+
+-- Bound any lock wait so a pathological contention never hangs the apply or a write.
+SET LOCAL lock_timeout = '5s';
 
 -- ── 0. Category-family crosswalks ───────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.engagement_category_family(p_category public.resource_category)
@@ -250,7 +254,10 @@ DECLARE
   v_new      jsonb;
   v_current  jsonb;
 BEGIN
-  PERFORM 1 FROM public.profiles WHERE id = p_user FOR UPDATE;
+  -- FOR NO KEY UPDATE (not FOR UPDATE): serialises concurrent crediting of this profile
+  -- without conflicting with the FOR KEY SHARE that inbound FK checks take, so a mutual
+  -- follow (two rows FK-referencing both profiles) cannot deadlock against this lock.
+  PERFORM 1 FROM public.profiles WHERE id = p_user FOR NO KEY UPDATE;
 
   SELECT
     COALESCE(jsonb_object_agg(substr(dimension, 8),
@@ -640,7 +647,7 @@ BEGIN
   BEGIN
     IF OLD.status = 'accepted' AND NEW.status = 'completed' THEN
       SELECT user_id INTO v_author FROM public.posts WHERE id = NEW.post_id;
-      PERFORM 1 FROM public.profiles WHERE id IN (v_author, NEW.seeker_id) ORDER BY id FOR UPDATE;
+      PERFORM 1 FROM public.profiles WHERE id IN (v_author, NEW.seeker_id) ORDER BY id FOR NO KEY UPDATE;
       SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
       PERFORM public.record_engagement_event(v_author,'opt_in_completed_provider','opt_in',NEW.id,'resource_opt_ins',NEW.id::text,v_family,false);
       PERFORM public.record_engagement_event(NEW.seeker_id,'opt_in_completed_seeker','opt_in',NEW.id,'resource_opt_ins',NEW.id::text,v_family,false);
@@ -665,7 +672,7 @@ DECLARE v_family text;
 BEGIN
   BEGIN
     IF OLD.status = 'active' AND NEW.status = 'completed' THEN
-      PERFORM 1 FROM public.profiles WHERE id IN (NEW.volunteer_id, NEW.requester_id) ORDER BY id FOR UPDATE;
+      PERFORM 1 FROM public.profiles WHERE id IN (NEW.volunteer_id, NEW.requester_id) ORDER BY id FOR NO KEY UPDATE;
       SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
       PERFORM public.record_engagement_event(NEW.volunteer_id,'conversation_completed','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
       PERFORM public.record_engagement_event(NEW.requester_id,'conversation_completed','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
@@ -740,17 +747,19 @@ CREATE OR REPLACE FUNCTION public.unblock_opt_in(p_opt_in_id uuid)
   RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-  v_uid    uuid := auth.uid();
-  v_status text;
-  v_author uuid;
-  v_post   public.posts%ROWTYPE;
+  v_uid     uuid := auth.uid();
+  v_status  text;
+  v_author  uuid;
+  v_post_id uuid;
+  v_post    public.posts%ROWTYPE;
+  v_deleted integer;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF EXISTS (SELECT 1 FROM auth.users WHERE id = v_uid AND is_anonymous IS TRUE) THEN
     RAISE EXCEPTION 'Account required for this action' USING ERRCODE = '42501';
   END IF;
 
-  SELECT oi.status, p.user_id INTO v_status, v_author
+  SELECT oi.status, oi.post_id, p.user_id INTO v_status, v_post_id, v_author
   FROM public.resource_opt_ins oi JOIN public.posts p ON p.id = oi.post_id
   WHERE oi.id = p_opt_in_id;
 
@@ -762,19 +771,20 @@ BEGIN
     RAISE EXCEPTION 'Only a declined opt-in can be unblocked' USING ERRCODE = '22023';
   END IF;
 
-  -- Row-lock the post for safe slot restoration, then delete the declined opt-in.
-  SELECT * INTO v_post FROM public.posts
-    WHERE id = (SELECT post_id FROM public.resource_opt_ins WHERE id = p_opt_in_id) FOR UPDATE;
+  -- Row-lock the post FIRST to serialise concurrent unblocks of the same opt-in (mirrors
+  -- withdraw_opt_in), then delete the STILL-declined row. The slot is restored EXACTLY
+  -- ONCE — only when this call is the one that actually deleted the row (rowcount > 0) —
+  -- so two concurrent unblock_opt_in calls cannot both restore a slot (overbook).
+  SELECT * INTO v_post FROM public.posts WHERE id = v_post_id FOR UPDATE;
 
-  DELETE FROM public.resource_opt_ins WHERE id = p_opt_in_id;
+  DELETE FROM public.resource_opt_ins WHERE id = p_opt_in_id AND status = 'declined';
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
 
-  -- Restore the slot the declined opt-in still held (consumed at opt-in, never restored on
-  -- decline), so a later self re-opt-in via opt_in_to_post decrements from the correct base.
-  IF v_post.max_seekers IS NOT NULL THEN
-    UPDATE public.posts SET slots_remaining = LEAST(slots_remaining + 1, v_post.max_seekers) WHERE id = v_post.id;
+  IF v_deleted > 0 AND v_post.max_seekers IS NOT NULL THEN
+    UPDATE public.posts SET slots_remaining = LEAST(slots_remaining + 1, v_post.max_seekers) WHERE id = v_post_id;
   END IF;
 
-  RETURN true;
+  RETURN v_deleted > 0;
 END;
 $fn$;
 
@@ -852,7 +862,27 @@ REVOKE EXECUTE ON FUNCTION public.unblock_opt_in(uuid) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.unblock_opt_in(uuid) TO authenticated;
 
 -- ============================================================================
--- 11. ONE-TIME IDEMPOTENT BACKFILL — credit existing facts through the same path.
+-- 11. NIGHTLY MISSED-CREDIT RECOVERY — schedule reconcile_engagement() via pg_cron.
+--     Idempotent + replay-safe: unschedule-if-exists, then schedule. Guarded on pg_cron
+--     being installed (prod has it; the local test harness does not). Mirrors the existing
+--     app_logs_retention_30d SQL cron (cron.schedule(name, sched, sql), db=postgres). The
+--     job runs as the table owner (postgres), so reconcile_engagement's SECDEF + the
+--     source-derivation guards apply exactly as in the incremental path.
+-- ============================================================================
+DO $cron$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'engagement_reconcile_nightly') THEN
+      PERFORM cron.unschedule('engagement_reconcile_nightly');
+    END IF;
+    PERFORM cron.schedule('engagement_reconcile_nightly', '27 4 * * *',
+                          'SELECT public.reconcile_engagement();');
+  END IF;
+END;
+$cron$;
+
+-- ============================================================================
+-- 12. ONE-TIME IDEMPOTENT BACKFILL — credit existing facts through the same path.
 --     Idempotent (same ON CONFLICT keys); self-verifications earn nothing (guards above).
 -- ============================================================================
 SELECT public.reconcile_engagement(NULL);
