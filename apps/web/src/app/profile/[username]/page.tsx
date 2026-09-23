@@ -5,8 +5,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PostCard } from '@/components/feed/post-card'
+import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { Calendar, ExternalLink } from 'lucide-react'
 import type { Profile } from '@feed/database'
+import type { BadgeSummary } from '@/lib/engagement-badges'
 
 interface ProfilePageProps {
   params: Promise<{ username: string }>
@@ -67,7 +69,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     .from('profiles')
     .select(
       'id, username, first_name, avatar_url, bio, ' +
-      'is_verified, created_at, is_staff'
+      'is_verified, created_at, is_staff, badge_summary'
     )
     .eq('username', username)
     .single()
@@ -79,7 +81,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const profile = profileData as unknown as Pick<Profile,
     'id' | 'username' | 'avatar_url' | 'bio' |
     'is_verified' | 'created_at'
-  > & { is_staff: boolean; first_name: string | null }
+  > & { is_staff: boolean; first_name: string | null; badge_summary: BadgeSummary | null }
 
   // Fetch payment handles via SECURITY DEFINER RPC — isolated column access
   const { data: donationHandles } = await supabase
@@ -166,6 +168,13 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             )}
           </div>
         </CardHeader>
+
+        <CardContent className="border-t pt-4">
+          <EngagementBadges
+            summary={profile.badge_summary}
+            displayName={profile.first_name || profile.username || 'This member'}
+          />
+        </CardContent>
 
         {(handles.venmo_username || handles.paypal_email) && (
           <CardContent className="border-t pt-4">
