@@ -1727,18 +1727,39 @@ export type Database = {
         Row: {
           count: number
           dimension: string
+          scope: string
           updated_at: string
           user_id: string
         }
         Insert: {
           count?: number
           dimension: string
+          scope?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           count?: number
           dimension?: string
+          scope?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_private_badge_summary: {
+        Row: {
+          summary: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          summary?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          summary?: Json
           updated_at?: string
           user_id?: string
         }
@@ -5042,8 +5063,12 @@ export type Database = {
       }
       engagement_community_dim: { Args: { p_kind: string }; Returns: string }
       engagement_family_from_chip: { Args: { p_chip: string }; Returns: string }
+      engagement_is_public: { Args: { p_kind: string }; Returns: boolean }
       engagement_level: { Args: { p_points: number }; Returns: number }
+      engagement_summary_for: { Args: { p_user: string; p_scope: string }; Returns: Json }
       engagement_weight: { Args: { p_kind: string }; Returns: number }
+      credit_post_created: { Args: { p_post_id: string; p_engager: string }; Returns: undefined }
+      recompute_private_badge_summary: { Args: { p_user: string }; Returns: undefined }
       log_engagement_failure: { Args: { p_context: string; p_detail: string }; Returns: undefined }
       recompute_all_badge_summaries: { Args: Record<PropertyKey, never>; Returns: undefined }
       recompute_badge_summary: { Args: { p_user: string }; Returns: undefined }

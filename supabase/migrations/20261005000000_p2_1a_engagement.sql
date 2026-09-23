@@ -2,113 +2,101 @@
 -- Owner: Jelal Connor / SYNRG SCALING, LLC
 -- Wave: feed-fullfeed-p2-1a-engagement
 --
--- Builds the P2.1a engagement subsystem on top of the P2.0 integrity floor
--- (20261004000000): an append-only engagement ledger, per-user counters, a tunable
--- single-row badge_config, a public badge_summary on profiles, and the opt-in unblock
--- flow with a private per-author decline marker.
+-- P2.1a engagement subsystem on the P2.0 integrity floor (20261004000000): an
+-- append-only engagement ledger, per-user scoped counters, a tunable single-row
+-- badge_config, a PUBLIC badge_summary on profiles + a PRIVATE owner-only summary, and
+-- the opt-in unblock flow with a private per-author decline marker.
 --
--- Replay-safe on PG15 (local) and PG17 (prod): every statement is idempotent
--- (CREATE ... IF NOT EXISTS / ADD COLUMN IF NOT EXISTS / CREATE OR REPLACE /
--- DROP ... IF EXISTS / guarded policy creation). No PG16/17-only syntax.
+-- Replay-safe on PG15 (local) and PG17 (prod): every statement is idempotent. No
+-- PG16/17-only syntax. Wrapped in BEGIN/COMMIT with a bounded lock wait.
 --
 -- ============================================================================
 -- INVARIANTS
---   I1  LEDGER EXACTLY-ONCE. Each qualifying fact credits exactly ONE row via
---       UNIQUE(actor_id, kind, target_id) + ON CONFLICT DO NOTHING. Delete-and-redo of
---       any user-reversible source (like, comment, vote, follow, bookmark, save, message,
---       post) never re-awards because the target key is stable (the post / poll / resource
---       / conversation / petition), not the deletable child row. State-transition kinds
---       fire on the transition INTO the qualifying state only. Guests
---       (auth.users.is_anonymous) and NULL actors produce no row. Source-row deletes never
---       remove ledger rows.
---   I2  SERVER-ONLY WRITES. engagement_events / user_engagement_counters / badge_config /
---       opt_in_declines / profiles.badge_summary carry NO client write policy and
---       table-level REVOKE ALL. Only SECDEF trigger fns (owned by postgres) write them.
---   I3  SUMMARY = recompute(counters, config), under concurrency. recompute_badge_summary
---       locks the profile row (FOR NO KEY UPDATE) before rebuilding; two-party events lock
---       both profiles in uuid order (deadlock-safe; NO KEY so inbound FK KEY SHARE never
---       conflicts). Rewritten only when the value changes.
---   I4  READ PATHS UNBROKEN. profiles has column-only grants; badge_summary gets an
---       explicit GRANT SELECT to anon+authenticated. profiles is not in supabase_realtime.
+--   I1  LEDGER EXACTLY-ONCE. UNIQUE(actor_id, kind, target_id) + ON CONFLICT DO NOTHING.
+--       The target key is the durable object (post/poll/resource/conversation/petition/
+--       review-anchor), never a deletable child, so delete-and-redo never re-awards.
+--   I2  SERVER-ONLY WRITES. The ledger, counters, badge_config, both summaries and
+--       opt_in_declines carry no client write policy + table-level REVOKE ALL; only SECDEF
+--       triggers (owner) write them.
+--   I3  SUMMARY = recompute(counters, config), under concurrency. Public summary recompute
+--       locks the profile row FOR NO KEY UPDATE; private summary recompute locks the
+--       private-table owner row FOR NO KEY UPDATE; two-party events lock both profiles in
+--       uuid order. Each summary is rewritten only when its value changes.
+--   I4  READ PATHS UNBROKEN. profiles has column-only grants; badge_summary is GRANTed
+--       SELECT to anon+authenticated (no UPDATE). profiles is not in supabase_realtime.
 --   I5  UNBLOCK. unblock_opt_in (author-only, declined-only) DELETEs the declined opt-in
---       and restores the slot; the seeker may then opt in again themselves via
---       opt_in_to_post. The transition graph is untouched (P2.0 forward-only holds).
---   I7  CORE-FIRST. A ledger failure never aborts the user's source write: every
---       engagement trigger body runs in a BEGIN/EXCEPTION subtransaction that RAISE
---       WARNINGs (and best-effort app_logs) instead of propagating. reconcile_engagement()
---       re-derives missed events idempotently from the source tables.
+--       and restores the slot exactly once (rowcount-gated, post row-locked); the seeker
+--       re-opts via opt_in_to_post. The P2.0 transition graph is untouched.
+--   I7  CORE-FIRST. Every engagement trigger body is a BEGIN/EXCEPTION subtransaction
+--       (RAISE WARNING + best-effort app_logs); reconcile_engagement() re-derives missed
+--       events idempotently (also scheduled nightly via pg_cron).
+--   A1  COMMUNITY-CONFIRMED. An action whose actor OWNS the target content earns nothing
+--       (own like/comment/poll-vote/alert-vote/bookmark/save). Opt-in/review are already
+--       cross-party; resource_approved/safety_alert_verified already exclude the self case.
+--   A2  post_created credits the author EXACTLY ONCE, at the FIRST qualifying engagement
+--       (like/comment/opt-in) by a DIFFERENT non-guest user — never at creation. A post
+--       deleted before outside engagement earns nothing; after credit, deleting the post
+--       keeps it (key (author, post_created, post_id) is stable). Two-account collusion
+--       stays possible; those credits are UNVERIFIED and never gate privilege.
+--   B1/B2  PUBLIC/PRIVATE SPLIT. Each kind is classified public or private from live RLS
+--       (engagement_is_public). Public credit -> profiles.badge_summary; private credit ->
+--       user_private_badge_summary (owner-only RLS, no client writes, not published,
+--       no FK/embed path). Writing private credit never touches profiles (updated_at safe).
+--   B3  verified + P3 eligibility unaffected: verified facts may be public or private;
+--       eligibility reads the ledger server-side, never a summary.
 --
 -- ============================================================================
--- I1 DERIVATION TABLE (as built)
--- kind                      | source              | event (condition)                     | actor(s)                       | target (STABLE key)            | family path                                     | verified   | weight
--- --------------------------|---------------------|---------------------------------------|--------------------------------|--------------------------------|-------------------------------------------------|------------|-------
--- like                      | post_likes          | AFTER INSERT                          | user_id                        | post_id                        | post.resource_id->category->family              | no         | 1
--- poll_vote                 | poll_votes          | AFTER INSERT                          | user_id                        | poll_id                        | poll.post->resource->category->family           | no         | 1
--- follow                    | follows             | AFTER INSERT                          | follower_id                    | following_id                   | none                                            | no         | 1
--- comment                   | post_comments       | AFTER INSERT (is_hidden not true)     | user_id                        | POST_ID (once per post)        | post.resource->category->family                 | no         | 1
--- petition_signature        | petition_signatures | AFTER INSERT                          | signer_id                      | petition_id                    | none                                            | no         | 1
--- post_created              | posts               | AFTER INSERT                          | user_id                        | post.id                        | resource->family OR post chip (metadata)        | no         | 1
--- event_checkin             | event_checkins      | AFTER INSERT (user_id not null)       | user_id (attendee)             | occurrence_id                  | none                                            | no         | 1
--- safety_alert_vote         | safety_alert_votes  | AFTER INSERT                          | voter_id                       | alert_id                       | none                                            | no         | 1
--- message                   | messages            | AFTER INSERT                          | sender_id                      | conversation_id (once/convo)   | none                                            | no         | 1
--- resource_bookmark         | resource_bookmarks  | AFTER INSERT                          | user_id                        | resource_id                    | resource.category->family                       | no         | 1
--- saved_resource            | saved_resources     | AFTER INSERT (resource_id not null)   | user_id                        | resource_id                    | resource.category->family                       | no         | 1
--- opt_in_completed_provider | resource_opt_ins    | AFTER UPDATE (accepted->completed)    | post author (posts.user_id)    | opt_in.id                      | opt_in.resource->category->family               | no         | 3
--- opt_in_completed_seeker   | resource_opt_ins    | AFTER UPDATE (accepted->completed)    | seeker_id                      | opt_in.id                      | opt_in.resource->category->family               | no         | 2
--- conversation_completed    | conversations       | AFTER UPDATE (active->completed)      | volunteer_id AND requester_id  | conversation.id                | conversation.resource->category->family (100%)  | no         | 3
--- review_received           | reviews             | AFTER INSERT                          | reviewee_id                    | COALESCE(opt_in_id,conv_id)*   | anchor->resource->category->family              | yes (peer) | 3
--- safety_alert_verified     | safety_alerts       | AFTER UPDATE (verified false->true, verified_by<>created_by) | created_by | alert.id      | none                                            | yes (admin)| 1
--- resource_approved         | resources           | AFTER UPDATE (->approved, submitted_by set, moderated_by<>submitted_by) | submitted_by | resource.id | resource.category->family                       | yes (admin)| 3
--- appreciation_gift         | (reserved P2.1b)    | none yet                              | recipient                      | giver                          | none                                            | no         | (reserved)
+-- I1 DERIVATION + B1 CLASSIFICATION (18 kinds + reserved)  [scope from live RLS]
+-- kind                          | source              | actor(s)             | target        | scope   | family | verified | wt
+-- ------------------------------|---------------------|----------------------|---------------|---------|--------|----------|---
+-- like                          | post_likes INS      | user_id (≠author)    | post_id       | public  | post   | no       | 1
+-- poll_vote                     | poll_votes INS      | user_id (≠author)    | poll_id       | public  | post   | no       | 1   (poll_votes SELECT USING true → visible)
+-- follow                        | follows INS         | follower(≠following) | following_id  | public  | none   | no       | 1   (follows SELECT true)
+-- comment                       | post_comments INS   | user_id (≠author)    | post_id       | public  | post   | no       | 1   (visible comments)
+-- post_created                  | via like/comment/opt-in | post author      | post.id       | public  | resource/chip | no | 1   (A2: first outside non-guest engagement)
+-- opt_in_completed_provider     | resource_opt_ins UPD| post author          | opt_in.id     | public  | resource| no      | 3   (helping others → public)
+-- conversation_completed_volunteer | conversations UPD| volunteer_id        | conv.id       | public  | resource| no      | 3   (helping others → public)
+-- safety_alert_verified         | safety_alerts UPD   | created_by (verifier≠creator) | alert.id | public | none | yes(admin)| 1  (live alert visible)
+-- resource_approved             | resources UPD       | submitted_by (mod≠sub)| resource.id  | public  | resource| yes(admin)| 3  (approved resource public)
+-- petition_signature            | petition_signatures INS | signer_id        | petition_id   | private | none   | no       | 1   (signer-only RLS)
+-- event_checkin                 | event_checkins INS  | user_id              | occurrence_id | private | none   | no       | 1   (own/admin only)
+-- safety_alert_vote             | safety_alert_votes INS | voter(≠creator)   | alert_id      | private | none   | no       | 1   (voter-only RLS)
+-- message                       | messages INS        | sender_id            | conversation_id| private| none   | no       | 1   (participant-only correspondence)
+-- resource_bookmark             | resource_bookmarks INS | user(≠submitter)  | resource_id   | private | resource| no      | 1   (owner-only RLS)
+-- saved_resource                | saved_resources INS | user(≠submitter)     | resource_id   | private | resource| no      | 1   (owner-only RLS)
+-- opt_in_completed_seeker       | resource_opt_ins UPD| seeker_id            | opt_in.id     | private | resource| no      | 2   (receiving help → private)
+-- conversation_completed_requester | conversations UPD| requester_id        | conv.id       | private | resource| no      | 3   (receiving → private)
+-- review_received               | reviews INS         | reviewee_id          | anchor        | private | resource| yes(peer)| 3   (reviews RLS = parties+admin only)
+-- appreciation_gift             | (reserved P2.1b)    | recipient            | giver         | private | none   | no       | —
 --
--- * review_received keys on the ANCHOR (opt_in_id/conversation_id) per reviewee, NOT on
---   reviews.id, so a delete+resubmit of the same review cannot re-award (review farm).
--- Self-verification earns nothing: resource_approved skips moderated_by=submitted_by;
---   safety_alert_verified skips verified_by=created_by (also applied in the backfill).
--- Completed opt-in credits BOTH parties; completed conversation credits both participants.
--- verified=true only for reviews (peer) + admin approvals; P3 admin eligibility reads those.
+-- Community badges: Voice←comment, Helper←opt_in_completed_provider,
+-- Connector←conversation_completed_volunteer, Watcher←safety_alert_verified (all PUBLIC);
+-- Advocate←petition_signature (PRIVATE — petition signatures are signer-only).
+-- Evidence note: poll_votes SELECT is USING true → poll_vote is PUBLIC (contradicts the
+-- tentative "poll votes private" guess; decided from live RLS per instruction).
 -- ============================================================================
 
 BEGIN;
 
--- Bound any lock wait so a pathological contention never hangs the apply or a write.
 SET LOCAL lock_timeout = '5s';
 
--- ── 0. Category-family crosswalks ───────────────────────────────────────────
+-- ── 0. Pure classification / crosswalk helpers ──────────────────────────────
 CREATE OR REPLACE FUNCTION public.engagement_category_family(p_category public.resource_category)
   RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
   SELECT CASE p_category
-    WHEN 'food' THEN 'food'
-    WHEN 'housing' THEN 'housing'
-    WHEN 'free_camping' THEN 'housing'
-    WHEN 'clothing' THEN 'goods'
-    WHEN 'free_goods_donation' THEN 'goods'
-    WHEN 'waste_disposal' THEN 'goods'
+    WHEN 'food' THEN 'food' WHEN 'housing' THEN 'housing' WHEN 'free_camping' THEN 'housing'
+    WHEN 'clothing' THEN 'goods' WHEN 'free_goods_donation' THEN 'goods' WHEN 'waste_disposal' THEN 'goods'
     WHEN 'transportation' THEN 'transit'
-    WHEN 'healthcare' THEN 'health'
-    WHEN 'mental_health' THEN 'health'
-    WHEN 'substance_abuse' THEN 'health'
-    WHEN 'prenatal_natal_care' THEN 'health'
-    WHEN 'financial' THEN 'money'
-    WHEN 'eitc_tax_filing' THEN 'money'
-    WHEN 'utilities' THEN 'money'
-    WHEN 'childcare' THEN 'care'
-    WHEN 'senior_services' THEN 'care'
-    WHEN 'disability_services' THEN 'care'
-    WHEN 'veteran_services' THEN 'care'
-    WHEN 'domestic_violence' THEN 'care'
-    WHEN 'education' THEN 'education'
-    WHEN 'employment' THEN 'work'
-    WHEN 'legal' THEN 'legal'
-    WHEN 'free_legal' THEN 'legal'
-    WHEN 'immigration' THEN 'legal'
-    ELSE NULL  -- 'other' and any future unmapped value
+    WHEN 'healthcare' THEN 'health' WHEN 'mental_health' THEN 'health' WHEN 'substance_abuse' THEN 'health' WHEN 'prenatal_natal_care' THEN 'health'
+    WHEN 'financial' THEN 'money' WHEN 'eitc_tax_filing' THEN 'money' WHEN 'utilities' THEN 'money'
+    WHEN 'childcare' THEN 'care' WHEN 'senior_services' THEN 'care' WHEN 'disability_services' THEN 'care' WHEN 'veteran_services' THEN 'care' WHEN 'domestic_violence' THEN 'care'
+    WHEN 'education' THEN 'education' WHEN 'employment' THEN 'work'
+    WHEN 'legal' THEN 'legal' WHEN 'free_legal' THEN 'legal' WHEN 'immigration' THEN 'legal'
+    ELSE NULL
   END;
 $fn$;
 
--- A post-type-wizard chip (Food/Housing/Goods/Transit/Health/Money/Care/Education/Work/
--- Legal) is already a family name; lowercase + validate against the 10 families.
 CREATE OR REPLACE FUNCTION public.engagement_family_from_chip(p_chip text)
   RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
@@ -119,35 +107,46 @@ AS $fn$
     WHEN 'legal' THEN 'legal' ELSE NULL END;
 $fn$;
 
--- Weight per kind (single source of truth, shared by record + reconcile).
 CREATE OR REPLACE FUNCTION public.engagement_weight(p_kind text)
   RETURNS integer LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
   SELECT CASE p_kind
     WHEN 'opt_in_completed_provider' THEN 3
     WHEN 'opt_in_completed_seeker'   THEN 2
-    WHEN 'conversation_completed'    THEN 3
+    WHEN 'conversation_completed_volunteer' THEN 3
+    WHEN 'conversation_completed_requester' THEN 3
     WHEN 'review_received'           THEN 3
     WHEN 'resource_approved'         THEN 3
     ELSE 1
   END;
 $fn$;
 
--- Community-badge dimension per kind (shared by record + recompute_user_engagement).
 CREATE OR REPLACE FUNCTION public.engagement_community_dim(p_kind text)
   RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
   SELECT CASE p_kind
-    WHEN 'comment'                   THEN 'badge:voice'
-    WHEN 'opt_in_completed_provider' THEN 'badge:helper'
-    WHEN 'conversation_completed'    THEN 'badge:connector'
-    WHEN 'petition_signature'        THEN 'badge:advocate'
-    WHEN 'safety_alert_verified'     THEN 'badge:watcher'
+    WHEN 'comment'                        THEN 'badge:voice'
+    WHEN 'opt_in_completed_provider'      THEN 'badge:helper'
+    WHEN 'conversation_completed_volunteer' THEN 'badge:connector'
+    WHEN 'petition_signature'             THEN 'badge:advocate'
+    WHEN 'safety_alert_verified'          THEN 'badge:watcher'
     ELSE NULL
   END;
 $fn$;
 
--- ── 1. badge_config (single-row tunable thresholds) ─────────────────────────
+-- B1: a kind is PUBLIC when the underlying fact is visible to other users (per live RLS)
+-- or it records helping others; otherwise PRIVATE (owner-only visibility / receiving help).
+CREATE OR REPLACE FUNCTION public.engagement_is_public(p_kind text)
+  RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
+AS $fn$
+  SELECT p_kind IN (
+    'like','poll_vote','follow','comment','post_created',
+    'opt_in_completed_provider','conversation_completed_volunteer',
+    'safety_alert_verified','resource_approved'
+  );
+$fn$;
+
+-- ── 1. badge_config ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.badge_config (
   singleton_guard  boolean     NOT NULL DEFAULT true,
   level1_threshold integer     NOT NULL DEFAULT 3,
@@ -178,7 +177,8 @@ CREATE TABLE IF NOT EXISTS public.engagement_events (
   CONSTRAINT engagement_events_kind_chk CHECK (kind IN (
     'like','poll_vote','follow','comment','petition_signature','post_created',
     'event_checkin','safety_alert_vote','message','resource_bookmark','saved_resource',
-    'opt_in_completed_provider','opt_in_completed_seeker','conversation_completed',
+    'opt_in_completed_provider','opt_in_completed_seeker',
+    'conversation_completed_volunteer','conversation_completed_requester',
     'review_received','safety_alert_verified','resource_approved','appreciation_gift'
   )),
   CONSTRAINT engagement_events_once UNIQUE (actor_id, kind, target_id)
@@ -186,13 +186,15 @@ CREATE TABLE IF NOT EXISTS public.engagement_events (
 CREATE INDEX IF NOT EXISTS idx_engagement_events_actor ON public.engagement_events (actor_id);
 CREATE INDEX IF NOT EXISTS idx_engagement_events_verified ON public.engagement_events (actor_id, verified) WHERE verified;
 
--- ── 3. user_engagement_counters ─────────────────────────────────────────────
+-- ── 3. user_engagement_counters (per user, per SCOPE, per dimension) ─────────
 CREATE TABLE IF NOT EXISTS public.user_engagement_counters (
   user_id    uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  scope      text        NOT NULL DEFAULT 'public',
   dimension  text        NOT NULL,
   count      integer     NOT NULL DEFAULT 0,
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, dimension)
+  PRIMARY KEY (user_id, scope, dimension),
+  CONSTRAINT user_engagement_counters_scope_chk CHECK (scope IN ('public','private'))
 );
 
 -- ── 4. opt_in_declines (private per-author marker) ──────────────────────────
@@ -205,14 +207,17 @@ CREATE TABLE IF NOT EXISTS public.opt_in_declines (
   PRIMARY KEY (author_id, seeker_id)
 );
 
--- ── 5. profiles.badge_summary ───────────────────────────────────────────────
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS badge_summary jsonb;
+-- ── 5. summaries ────────────────────────────────────────────────────────────
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS badge_summary jsonb;  -- PUBLIC
+CREATE TABLE IF NOT EXISTS public.user_private_badge_summary (               -- PRIVATE
+  user_id    uuid        NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  summary    jsonb       NOT NULL DEFAULT '{"families":{},"badges":{}}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
 -- ============================================================================
 -- 6. WRITE PATH — SECURITY DEFINER helpers
 -- ============================================================================
-
--- 6a. Level from accumulated points (single-row config).
 CREATE OR REPLACE FUNCTION public.engagement_level(p_points integer)
   RETURNS integer LANGUAGE sql STABLE SET search_path = public, pg_temp
 AS $fn$
@@ -221,11 +226,9 @@ AS $fn$
     WHEN p_points >= c.level2_threshold THEN 2
     WHEN p_points >= c.level1_threshold THEN 1
     ELSE 0
-  END
-  FROM public.badge_config c WHERE c.singleton_guard;
+  END FROM public.badge_config c WHERE c.singleton_guard;
 $fn$;
 
--- 6b. Best-effort failure log (I7). RAISE WARNING always; app_logs is a bonus.
 CREATE OR REPLACE FUNCTION public.log_engagement_failure(p_context text, p_detail text)
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
@@ -233,54 +236,67 @@ BEGIN
   RAISE WARNING 'engagement ledger skipped (%): %', p_context, p_detail;
   BEGIN
     INSERT INTO public.app_logs (level, event, context)
-    VALUES ('warn', 'engagement.ledger.skipped',
-            jsonb_build_object('context', p_context, 'detail', p_detail));
-  EXCEPTION WHEN OTHERS THEN
-    NULL;  -- logging must never itself abort the source write
+    VALUES ('warn', 'engagement.ledger.skipped', jsonb_build_object('context', p_context, 'detail', p_detail));
+  EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END;
 $fn$;
 
--- 6c. Rebuild profiles.badge_summary for one user (I3). Locks the profile row FIRST to
---     serialise concurrent crediting. No updated_at key (timing-leak fix); the row is
---     rewritten only when the computed value changes, so profiles.updated_at bumps only
---     on a real level/count change.
+-- Build a summary jsonb from one scope's counters. Shared by both summaries.
+CREATE OR REPLACE FUNCTION public.engagement_summary_for(p_user uuid, p_scope text)
+  RETURNS jsonb LANGUAGE sql STABLE SET search_path = public, pg_temp
+AS $fn$
+  SELECT jsonb_build_object(
+    'families', COALESCE(jsonb_object_agg(substr(dimension, 8),
+                jsonb_build_object('count', count, 'level', public.engagement_level(count)))
+                FILTER (WHERE dimension LIKE 'family:%' AND public.engagement_level(count) > 0), '{}'::jsonb),
+    'badges',   COALESCE(jsonb_object_agg(substr(dimension, 7),
+                jsonb_build_object('count', count, 'level', public.engagement_level(count)))
+                FILTER (WHERE dimension LIKE 'badge:%' AND public.engagement_level(count) > 0), '{}'::jsonb)
+  )
+  FROM public.user_engagement_counters WHERE user_id = p_user AND scope = p_scope;
+$fn$;
+
+-- PUBLIC summary -> profiles.badge_summary. Locks the profile row (NO KEY UPDATE);
+-- rewritten only on change (so profiles.updated_at bumps only on a real change).
 CREATE OR REPLACE FUNCTION public.recompute_badge_summary(p_user uuid)
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
-DECLARE
-  v_families jsonb;
-  v_badges   jsonb;
-  v_new      jsonb;
-  v_current  jsonb;
+DECLARE v_new jsonb; v_cur jsonb;
 BEGIN
-  -- FOR NO KEY UPDATE (not FOR UPDATE): serialises concurrent crediting of this profile
-  -- without conflicting with the FOR KEY SHARE that inbound FK checks take, so a mutual
-  -- follow (two rows FK-referencing both profiles) cannot deadlock against this lock.
   PERFORM 1 FROM public.profiles WHERE id = p_user FOR NO KEY UPDATE;
-
-  SELECT
-    COALESCE(jsonb_object_agg(substr(dimension, 8),
-             jsonb_build_object('count', count, 'level', public.engagement_level(count)))
-             FILTER (WHERE dimension LIKE 'family:%' AND public.engagement_level(count) > 0), '{}'::jsonb),
-    COALESCE(jsonb_object_agg(substr(dimension, 7),
-             jsonb_build_object('count', count, 'level', public.engagement_level(count)))
-             FILTER (WHERE dimension LIKE 'badge:%' AND public.engagement_level(count) > 0), '{}'::jsonb)
-  INTO v_families, v_badges
-  FROM public.user_engagement_counters
-  WHERE user_id = p_user;
-
-  v_new := jsonb_build_object('families', v_families, 'badges', v_badges);
-
-  SELECT badge_summary INTO v_current FROM public.profiles WHERE id = p_user;
-  IF v_current IS DISTINCT FROM v_new THEN
+  v_new := public.engagement_summary_for(p_user, 'public');
+  SELECT badge_summary INTO v_cur FROM public.profiles WHERE id = p_user;
+  -- Write only on a real change, and never write an empty summary over NULL (a user with
+  -- no public badge stays NULL), so profiles.updated_at is untouched for public-empty users.
+  IF v_cur IS DISTINCT FROM v_new
+     AND NOT (v_cur IS NULL AND v_new = '{"families": {}, "badges": {}}'::jsonb) THEN
     UPDATE public.profiles SET badge_summary = v_new WHERE id = p_user;
   END IF;
 END;
 $fn$;
 
--- 6d. Single write primitive. Exactly-once via ON CONFLICT DO NOTHING; guests/NULL actors
---     produce no row. p_family is the resolved family key (or NULL).
+-- PRIVATE summary -> user_private_badge_summary. Locks the private owner row (NO KEY
+-- UPDATE); never touches profiles (so profiles.updated_at is untouched by private credit).
+CREATE OR REPLACE FUNCTION public.recompute_private_badge_summary(p_user uuid)
+  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_new jsonb; v_cur jsonb;
+BEGIN
+  INSERT INTO public.user_private_badge_summary (user_id, summary)
+  VALUES (p_user, '{"families":{},"badges":{}}'::jsonb)
+  ON CONFLICT (user_id) DO NOTHING;
+  PERFORM 1 FROM public.user_private_badge_summary WHERE user_id = p_user FOR NO KEY UPDATE;
+  v_new := public.engagement_summary_for(p_user, 'private');
+  SELECT summary INTO v_cur FROM public.user_private_badge_summary WHERE user_id = p_user;
+  IF v_cur IS DISTINCT FROM v_new THEN
+    UPDATE public.user_private_badge_summary SET summary = v_new, updated_at = now() WHERE user_id = p_user;
+  END IF;
+END;
+$fn$;
+
+-- Single write primitive. Exactly-once; guests/NULL actors produce no row. Scope from
+-- the kind decides which counters + which summary are touched.
 CREATE OR REPLACE FUNCTION public.record_engagement_event(
   p_actor uuid, p_kind text, p_target_type text, p_target_id uuid,
   p_source_table text, p_source_pk text, p_family text, p_verified boolean)
@@ -289,6 +305,7 @@ AS $fn$
 DECLARE
   v_weight    integer := public.engagement_weight(p_kind);
   v_community text    := public.engagement_community_dim(p_kind);
+  v_scope     text    := CASE WHEN public.engagement_is_public(p_kind) THEN 'public' ELSE 'private' END;
   v_inserted  uuid;
 BEGIN
   IF p_actor IS NULL OR p_target_id IS NULL THEN RETURN; END IF;
@@ -300,52 +317,80 @@ BEGIN
     (p_actor, p_kind, p_target_type, p_target_id, p_family, p_verified, v_weight, p_source_table, p_source_pk)
   ON CONFLICT (actor_id, kind, target_id) DO NOTHING
   RETURNING id INTO v_inserted;
-
   IF v_inserted IS NULL THEN RETURN; END IF;
 
   IF p_family IS NOT NULL THEN
-    INSERT INTO public.user_engagement_counters (user_id, dimension, count, updated_at)
-    VALUES (p_actor, 'family:' || p_family, v_weight, now())
-    ON CONFLICT (user_id, dimension)
+    INSERT INTO public.user_engagement_counters (user_id, scope, dimension, count, updated_at)
+    VALUES (p_actor, v_scope, 'family:' || p_family, v_weight, now())
+    ON CONFLICT (user_id, scope, dimension)
       DO UPDATE SET count = public.user_engagement_counters.count + v_weight, updated_at = now();
   END IF;
 
   IF v_community IS NOT NULL THEN
-    INSERT INTO public.user_engagement_counters (user_id, dimension, count, updated_at)
-    VALUES (p_actor, v_community, 1, now())
-    ON CONFLICT (user_id, dimension)
+    INSERT INTO public.user_engagement_counters (user_id, scope, dimension, count, updated_at)
+    VALUES (p_actor, v_scope, v_community, 1, now())
+    ON CONFLICT (user_id, scope, dimension)
       DO UPDATE SET count = public.user_engagement_counters.count + 1, updated_at = now();
   END IF;
 
-  PERFORM public.recompute_badge_summary(p_actor);
+  IF v_scope = 'public' THEN
+    PERFORM public.recompute_badge_summary(p_actor);
+  ELSE
+    PERFORM public.recompute_private_badge_summary(p_actor);
+  END IF;
 END;
 $fn$;
 
--- 6e. Full recompute from the ledger (rebuild counters, then summary). Source of truth
---     the incremental path must always equal (I3).
+-- A2: credit the post author's post_created (public) at the FIRST outside, non-guest
+-- engagement (like/comment/opt-in). Once-ever via the ledger key; needs an engager who is
+-- not the author and not a guest.
+CREATE OR REPLACE FUNCTION public.credit_post_created(p_post_id uuid, p_engager uuid)
+  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_author uuid; v_res uuid; v_meta jsonb; v_family text;
+BEGIN
+  SELECT user_id, resource_id, metadata INTO v_author, v_res, v_meta FROM public.posts WHERE id = p_post_id;
+  IF v_author IS NULL OR p_engager IS NULL OR p_engager = v_author THEN RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM auth.users WHERE id = p_engager AND is_anonymous IS TRUE) THEN RETURN; END IF;
+  IF v_res IS NOT NULL THEN
+    SELECT public.engagement_category_family(category) INTO v_family FROM public.resources WHERE id = v_res;
+  END IF;
+  IF v_family IS NULL AND v_meta ? 'categories' AND jsonb_typeof(v_meta->'categories') = 'array'
+     AND jsonb_array_length(v_meta->'categories') > 0 THEN
+    v_family := public.engagement_family_from_chip(v_meta->'categories'->>0);
+  END IF;
+  PERFORM public.record_engagement_event(v_author, 'post_created', 'post', p_post_id, 'posts', p_post_id::text, v_family, false);
+END;
+$fn$;
+
+-- Full recompute from the ledger (rebuild BOTH scopes' counters, then both summaries).
 CREATE OR REPLACE FUNCTION public.recompute_user_engagement(p_user uuid)
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
 BEGIN
   DELETE FROM public.user_engagement_counters WHERE user_id = p_user;
 
-  INSERT INTO public.user_engagement_counters (user_id, dimension, count, updated_at)
-  SELECT actor_id, 'family:' || category, SUM(weight), now()
+  -- Family dimensions per scope.
+  INSERT INTO public.user_engagement_counters (user_id, scope, dimension, count, updated_at)
+  SELECT actor_id, CASE WHEN public.engagement_is_public(kind) THEN 'public' ELSE 'private' END,
+         'family:' || category, SUM(weight), now()
   FROM public.engagement_events
   WHERE actor_id = p_user AND category IS NOT NULL
-  GROUP BY actor_id, category;
+  GROUP BY actor_id, CASE WHEN public.engagement_is_public(kind) THEN 'public' ELSE 'private' END, category;
 
-  INSERT INTO public.user_engagement_counters (user_id, dimension, count, updated_at)
-  SELECT actor_id, public.engagement_community_dim(kind), COUNT(*), now()
+  -- Community-badge dimensions per scope.
+  INSERT INTO public.user_engagement_counters (user_id, scope, dimension, count, updated_at)
+  SELECT actor_id, CASE WHEN public.engagement_is_public(kind) THEN 'public' ELSE 'private' END,
+         public.engagement_community_dim(kind), COUNT(*), now()
   FROM public.engagement_events
   WHERE actor_id = p_user AND public.engagement_community_dim(kind) IS NOT NULL
-  GROUP BY actor_id, public.engagement_community_dim(kind);
+  GROUP BY actor_id, CASE WHEN public.engagement_is_public(kind) THEN 'public' ELSE 'private' END, public.engagement_community_dim(kind);
 
   PERFORM public.recompute_badge_summary(p_user);
+  PERFORM public.recompute_private_badge_summary(p_user);
 END;
 $fn$;
 
--- 6f. Recompute every user's summary (a config threshold change).
 CREATE OR REPLACE FUNCTION public.recompute_all_badge_summaries()
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
@@ -353,6 +398,7 @@ DECLARE v_user uuid;
 BEGIN
   FOR v_user IN SELECT DISTINCT user_id FROM public.user_engagement_counters LOOP
     PERFORM public.recompute_badge_summary(v_user);
+    PERFORM public.recompute_private_badge_summary(v_user);
   END LOOP;
 END;
 $fn$;
@@ -369,81 +415,68 @@ DROP TRIGGER IF EXISTS trg_badge_config_recompute ON public.badge_config;
 CREATE TRIGGER trg_badge_config_recompute
   AFTER UPDATE ON public.badge_config FOR EACH ROW EXECUTE FUNCTION public.badge_config_recompute();
 
--- 6g. reconcile_engagement — re-derive missed events idempotently from the source tables
---     (I7 recovery + one-time backfill). Same ON CONFLICT keys, weights, family and
---     self-verification guards as the incremental path, so it can never double-award.
---     service_role / admin only. p_user NULL = all users.
+-- reconcile_engagement — re-derive missed events idempotently from source tables, applying
+-- A1 (owner earns nothing) and A2 (post_created only on outside engagement) IDENTICALLY.
 CREATE OR REPLACE FUNCTION public.reconcile_engagement(p_user uuid DEFAULT NULL)
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
-DECLARE r record; v_family text; v_author uuid; v_u uuid;
+DECLARE r record; v_family text; v_author uuid;
 BEGIN
-  -- like
-  FOR r IN SELECT pl.user_id, pl.post_id, p.resource_id FROM public.post_likes pl
+  -- like (A1: liker <> post author)
+  FOR r IN SELECT pl.user_id, pl.post_id, p.user_id AS author, p.resource_id FROM public.post_likes pl
            JOIN public.posts p ON p.id = pl.post_id
-           WHERE p_user IS NULL OR pl.user_id = p_user LOOP
+           WHERE pl.user_id <> p.user_id AND (p_user IS NULL OR pl.user_id = p_user) LOOP
     SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
     PERFORM public.record_engagement_event(r.user_id,'like','post',r.post_id,'post_likes',r.user_id::text||':'||r.post_id::text,v_family,false);
   END LOOP;
-  -- poll_vote
-  FOR r IN SELECT pv.user_id, pv.poll_id, p.resource_id FROM public.poll_votes pv
+  -- poll_vote (A1: voter <> post author)
+  FOR r IN SELECT pv.user_id, pv.poll_id, p.user_id AS author, p.resource_id FROM public.poll_votes pv
            JOIN public.polls pl ON pl.id = pv.poll_id JOIN public.posts p ON p.id = pl.post_id
-           WHERE p_user IS NULL OR pv.user_id = p_user LOOP
+           WHERE pv.user_id <> p.user_id AND (p_user IS NULL OR pv.user_id = p_user) LOOP
     SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
     PERFORM public.record_engagement_event(r.user_id,'poll_vote','poll',r.poll_id,'poll_votes',r.user_id::text||':'||r.poll_id::text,v_family,false);
   END LOOP;
-  -- follow
-  FOR r IN SELECT follower_id, following_id FROM public.follows WHERE p_user IS NULL OR follower_id = p_user LOOP
+  -- follow (A1: follower <> following)
+  FOR r IN SELECT follower_id, following_id FROM public.follows WHERE follower_id <> following_id AND (p_user IS NULL OR follower_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.follower_id,'follow','user',r.following_id,'follows',r.follower_id::text||':'||r.following_id::text,NULL,false);
   END LOOP;
-  -- comment (once per post; visible only)
-  FOR r IN SELECT DISTINCT pc.user_id, pc.post_id, p.resource_id FROM public.post_comments pc
+  -- comment (A1: commenter <> post author; visible only)
+  FOR r IN SELECT DISTINCT pc.user_id, pc.post_id, p.user_id AS author, p.resource_id FROM public.post_comments pc
            JOIN public.posts p ON p.id = pc.post_id
-           WHERE (pc.is_hidden IS NOT TRUE) AND (p_user IS NULL OR pc.user_id = p_user) LOOP
+           WHERE (pc.is_hidden IS NOT TRUE) AND pc.user_id <> p.user_id AND (p_user IS NULL OR pc.user_id = p_user) LOOP
     SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
     PERFORM public.record_engagement_event(r.user_id,'comment','post',r.post_id,'post_comments',r.user_id::text||':'||r.post_id::text,v_family,false);
   END LOOP;
-  -- petition_signature
+  -- petition_signature (private)
   FOR r IN SELECT signer_id, petition_id FROM public.petition_signatures WHERE p_user IS NULL OR signer_id = p_user LOOP
     PERFORM public.record_engagement_event(r.signer_id,'petition_signature','petition',r.petition_id,'petition_signatures',r.signer_id::text||':'||r.petition_id::text,NULL,false);
   END LOOP;
-  -- post_created (resource family, else post chip)
-  FOR r IN SELECT id, user_id, resource_id, metadata FROM public.posts WHERE p_user IS NULL OR user_id = p_user LOOP
-    v_family := NULL;
-    IF r.resource_id IS NOT NULL THEN
-      SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
-    END IF;
-    IF v_family IS NULL AND r.metadata ? 'categories' AND jsonb_typeof(r.metadata->'categories') = 'array'
-       AND jsonb_array_length(r.metadata->'categories') > 0 THEN
-      v_family := public.engagement_family_from_chip(r.metadata->'categories'->>0);
-    END IF;
-    PERFORM public.record_engagement_event(r.user_id,'post_created','post',r.id,'posts',r.id::text,v_family,false);
-  END LOOP;
-  -- event_checkin (attendee, user_id not null)
+  -- event_checkin (private)
   FOR r IN SELECT user_id, occurrence_id FROM public.event_checkins WHERE user_id IS NOT NULL AND (p_user IS NULL OR user_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.user_id,'event_checkin','event',r.occurrence_id,'event_checkins',r.user_id::text||':'||r.occurrence_id::text,NULL,false);
   END LOOP;
-  -- safety_alert_vote
-  FOR r IN SELECT voter_id, alert_id FROM public.safety_alert_votes WHERE p_user IS NULL OR voter_id = p_user LOOP
+  -- safety_alert_vote (A1: voter <> alert creator; private)
+  FOR r IN SELECT v.voter_id, v.alert_id FROM public.safety_alert_votes v JOIN public.safety_alerts a ON a.id = v.alert_id
+           WHERE v.voter_id IS DISTINCT FROM a.created_by AND (p_user IS NULL OR v.voter_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.voter_id,'safety_alert_vote','safety_alert',r.alert_id,'safety_alert_votes',r.voter_id::text||':'||r.alert_id::text,NULL,false);
   END LOOP;
-  -- message (once per conversation)
+  -- message (private; once per conversation)
   FOR r IN SELECT DISTINCT sender_id, conversation_id FROM public.messages WHERE p_user IS NULL OR sender_id = p_user LOOP
     PERFORM public.record_engagement_event(r.sender_id,'message','conversation',r.conversation_id,'messages',r.sender_id::text||':'||r.conversation_id::text,NULL,false);
   END LOOP;
-  -- resource_bookmark
-  FOR r IN SELECT rb.user_id, rb.resource_id, res.category FROM public.resource_bookmarks rb
+  -- resource_bookmark (A1: user <> resource submitter; private)
+  FOR r IN SELECT rb.user_id, rb.resource_id, res.category, res.submitted_by FROM public.resource_bookmarks rb
            JOIN public.resources res ON res.id = rb.resource_id
-           WHERE p_user IS NULL OR rb.user_id = p_user LOOP
+           WHERE rb.user_id IS DISTINCT FROM res.submitted_by AND (p_user IS NULL OR rb.user_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.user_id,'resource_bookmark','resource',r.resource_id,'resource_bookmarks',r.user_id::text||':'||r.resource_id::text,public.engagement_category_family(r.category),false);
   END LOOP;
-  -- saved_resource (resource_id not null)
-  FOR r IN SELECT sr.user_id, sr.resource_id, res.category FROM public.saved_resources sr
+  -- saved_resource (A1: user <> resource submitter; private)
+  FOR r IN SELECT sr.user_id, sr.resource_id, res.category, res.submitted_by FROM public.saved_resources sr
            JOIN public.resources res ON res.id = sr.resource_id
-           WHERE sr.resource_id IS NOT NULL AND (p_user IS NULL OR sr.user_id = p_user) LOOP
+           WHERE sr.resource_id IS NOT NULL AND sr.user_id IS DISTINCT FROM res.submitted_by AND (p_user IS NULL OR sr.user_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.user_id,'saved_resource','resource',r.resource_id,'saved_resources',r.user_id::text||':'||r.resource_id::text,public.engagement_category_family(r.category),false);
   END LOOP;
-  -- opt_in completed (both parties)
+  -- opt_in completed: provider (public) + seeker (private)
   FOR r IN SELECT oi.id, oi.seeker_id, oi.resource_id, p.user_id AS author FROM public.resource_opt_ins oi
            JOIN public.posts p ON p.id = oi.post_id
            WHERE oi.status = 'completed' AND (p_user IS NULL OR oi.seeker_id = p_user OR p.user_id = p_user) LOOP
@@ -451,16 +484,15 @@ BEGIN
     PERFORM public.record_engagement_event(r.author,'opt_in_completed_provider','opt_in',r.id,'resource_opt_ins',r.id::text,v_family,false);
     PERFORM public.record_engagement_event(r.seeker_id,'opt_in_completed_seeker','opt_in',r.id,'resource_opt_ins',r.id::text,v_family,false);
   END LOOP;
-  -- conversation completed (both participants)
+  -- conversation completed: volunteer (public) + requester (private)
   FOR r IN SELECT c.id, c.volunteer_id, c.requester_id, c.resource_id FROM public.conversations c
            WHERE c.status = 'completed' AND (p_user IS NULL OR c.volunteer_id = p_user OR c.requester_id = p_user) LOOP
     SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
-    PERFORM public.record_engagement_event(r.volunteer_id,'conversation_completed','conversation',r.id,'conversations',r.id::text,v_family,false);
-    PERFORM public.record_engagement_event(r.requester_id,'conversation_completed','conversation',r.id,'conversations',r.id::text,v_family,false);
+    PERFORM public.record_engagement_event(r.volunteer_id,'conversation_completed_volunteer','conversation',r.id,'conversations',r.id::text,v_family,false);
+    PERFORM public.record_engagement_event(r.requester_id,'conversation_completed_requester','conversation',r.id,'conversations',r.id::text,v_family,false);
   END LOOP;
-  -- review_received (keyed on anchor; peer-verified)
-  FOR r IN SELECT id, reviewee_id, opt_in_id, conversation_id FROM public.reviews
-           WHERE p_user IS NULL OR reviewee_id = p_user LOOP
+  -- review_received (private; keyed on anchor)
+  FOR r IN SELECT id, reviewee_id, opt_in_id, conversation_id FROM public.reviews WHERE p_user IS NULL OR reviewee_id = p_user LOOP
     v_family := NULL;
     IF r.opt_in_id IS NOT NULL THEN
       SELECT public.engagement_category_family(res.category) INTO v_family
@@ -471,57 +503,90 @@ BEGIN
     END IF;
     PERFORM public.record_engagement_event(r.reviewee_id,'review_received','review',COALESCE(r.opt_in_id, r.conversation_id),'reviews',COALESCE(r.opt_in_id, r.conversation_id)::text,v_family,true);
   END LOOP;
-  -- safety_alert_verified (admin; not self-verified)
+  -- safety_alert_verified (public; admin; not self-verified)
   FOR r IN SELECT id, created_by FROM public.safety_alerts
            WHERE verified IS TRUE AND created_by IS NOT NULL AND verified_by IS NOT NULL AND verified_by <> created_by
              AND (p_user IS NULL OR created_by = p_user) LOOP
     PERFORM public.record_engagement_event(r.created_by,'safety_alert_verified','safety_alert',r.id,'safety_alerts',r.id::text,NULL,true);
   END LOOP;
-  -- resource_approved (admin; not self-approved)
+  -- resource_approved (public; admin; not self-approved)
   FOR r IN SELECT id, submitted_by, category FROM public.resources
            WHERE status = 'approved' AND submitted_by IS NOT NULL AND moderated_by IS NOT NULL AND moderated_by <> submitted_by
              AND (p_user IS NULL OR submitted_by = p_user) LOOP
     PERFORM public.record_engagement_event(r.submitted_by,'resource_approved','resource',r.id,'resources',r.id::text,public.engagement_category_family(r.category),true);
   END LOOP;
+  -- post_created (A2: author credited iff a like/comment/opt-in exists by a non-guest ≠
+  -- author). The EXISTS proves outside engagement; family is derived from the post.
+  FOR r IN SELECT p.id, p.user_id, p.resource_id, p.metadata FROM public.posts p
+           WHERE (p_user IS NULL OR p.user_id = p_user)
+             AND EXISTS (
+               SELECT 1 FROM public.post_likes pl JOIN auth.users u ON u.id = pl.user_id
+                 WHERE pl.post_id = p.id AND pl.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.post_comments pc JOIN auth.users u ON u.id = pc.user_id
+                 WHERE pc.post_id = p.id AND pc.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.resource_opt_ins oi JOIN auth.users u ON u.id = oi.seeker_id
+                 WHERE oi.post_id = p.id AND oi.seeker_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+             ) LOOP
+    v_family := NULL;
+    IF r.resource_id IS NOT NULL THEN
+      SELECT public.engagement_category_family(category) INTO v_family FROM public.resources WHERE id = r.resource_id;
+    END IF;
+    IF v_family IS NULL AND r.metadata ? 'categories' AND jsonb_typeof(r.metadata->'categories') = 'array'
+       AND jsonb_array_length(r.metadata->'categories') > 0 THEN
+      v_family := public.engagement_family_from_chip(r.metadata->'categories'->>0);
+    END IF;
+    PERFORM public.record_engagement_event(r.user_id,'post_created','post',r.id,'posts',r.id::text,v_family,false);
+  END LOOP;
 END;
 $fn$;
 
 -- ============================================================================
--- 7. SOURCE TRIGGERS (each I7-wrapped: a ledger failure never aborts the source write)
+-- 7. SOURCE TRIGGERS (each I7-wrapped; A1 owner guards; A2 post_created relocation)
 -- ============================================================================
 
+-- like -> credit liker (public) unless liker owns the post (A1); then A2 credit author.
 CREATE OR REPLACE FUNCTION public.engagement_on_post_like()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
+DECLARE v_family text; v_author uuid; v_res uuid;
 BEGIN
   BEGIN
-    SELECT public.engagement_category_family(r.category) INTO v_family
-    FROM public.posts p LEFT JOIN public.resources r ON r.id = p.resource_id WHERE p.id = NEW.post_id;
+    SELECT p.user_id, p.resource_id INTO v_author, v_res FROM public.posts p WHERE p.id = NEW.post_id;
+    IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1: own post earns nothing
+    SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'like','post',NEW.post_id,'post_likes',NEW.user_id::text||':'||NEW.post_id::text,v_family,false);
+    PERFORM public.credit_post_created(NEW.post_id, NEW.user_id);  -- A2
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('post_like', SQLERRM); END;
   RETURN NULL;
 END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_post_like ON public.post_likes;
 CREATE TRIGGER trg_engagement_post_like AFTER INSERT ON public.post_likes FOR EACH ROW EXECUTE FUNCTION public.engagement_on_post_like();
 
+-- poll_vote -> credit voter (public) unless voter owns the poll's post (A1).
 CREATE OR REPLACE FUNCTION public.engagement_on_poll_vote()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
+DECLARE v_family text; v_author uuid; v_res uuid; v_post uuid;
 BEGIN
   BEGIN
-    SELECT public.engagement_category_family(r.category) INTO v_family
-    FROM public.polls pl JOIN public.posts p ON p.id = pl.post_id LEFT JOIN public.resources r ON r.id = p.resource_id WHERE pl.id = NEW.poll_id;
+    SELECT p.user_id, p.resource_id, p.id INTO v_author, v_res, v_post
+    FROM public.polls pl JOIN public.posts p ON p.id = pl.post_id WHERE pl.id = NEW.poll_id;
+    IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1
+    SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'poll_vote','poll',NEW.poll_id,'poll_votes',NEW.user_id::text||':'||NEW.poll_id::text,v_family,false);
+    PERFORM public.credit_post_created(v_post, NEW.user_id);  -- A2 (a vote is outside engagement)
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('poll_vote', SQLERRM); END;
   RETURN NULL;
 END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_poll_vote ON public.poll_votes;
 CREATE TRIGGER trg_engagement_poll_vote AFTER INSERT ON public.poll_votes FOR EACH ROW EXECUTE FUNCTION public.engagement_on_poll_vote();
 
+-- follow -> public; A1 self-follow earns nothing.
 CREATE OR REPLACE FUNCTION public.engagement_on_follow()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
   BEGIN
+    IF NEW.follower_id = NEW.following_id THEN RETURN NULL; END IF;  -- A1
     PERFORM public.record_engagement_event(NEW.follower_id,'follow','user',NEW.following_id,'follows',NEW.follower_id::text||':'||NEW.following_id::text,NULL,false);
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('follow', SQLERRM); END;
   RETURN NULL;
@@ -529,22 +594,25 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_follow ON public.follows;
 CREATE TRIGGER trg_engagement_follow AFTER INSERT ON public.follows FOR EACH ROW EXECUTE FUNCTION public.engagement_on_follow();
 
--- comment: Voice once per (actor, POST) — a delete + re-post on the same post never re-awards.
+-- comment -> Voice (public), once per (actor, post); A1 own post earns nothing; A2 author.
 CREATE OR REPLACE FUNCTION public.engagement_on_comment()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
+DECLARE v_family text; v_author uuid; v_res uuid;
 BEGIN
   BEGIN
     IF NEW.is_hidden IS TRUE THEN RETURN NULL; END IF;
-    SELECT public.engagement_category_family(r.category) INTO v_family
-    FROM public.posts p LEFT JOIN public.resources r ON r.id = p.resource_id WHERE p.id = NEW.post_id;
+    SELECT p.user_id, p.resource_id INTO v_author, v_res FROM public.posts p WHERE p.id = NEW.post_id;
+    IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1
+    SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'comment','post',NEW.post_id,'post_comments',NEW.user_id::text||':'||NEW.post_id::text,v_family,false);
+    PERFORM public.credit_post_created(NEW.post_id, NEW.user_id);  -- A2
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('comment', SQLERRM); END;
   RETURN NULL;
 END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_comment ON public.post_comments;
 CREATE TRIGGER trg_engagement_comment AFTER INSERT ON public.post_comments FOR EACH ROW EXECUTE FUNCTION public.engagement_on_comment();
 
+-- petition_signature -> Advocate (PRIVATE).
 CREATE OR REPLACE FUNCTION public.engagement_on_petition_signature()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
@@ -556,26 +624,10 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_petition_signature ON public.petition_signatures;
 CREATE TRIGGER trg_engagement_petition_signature AFTER INSERT ON public.petition_signatures FOR EACH ROW EXECUTE FUNCTION public.engagement_on_petition_signature();
 
-CREATE OR REPLACE FUNCTION public.engagement_on_post_created()
-  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
-BEGIN
-  BEGIN
-    v_family := NULL;
-    IF NEW.resource_id IS NOT NULL THEN
-      SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
-    END IF;
-    IF v_family IS NULL AND NEW.metadata ? 'categories' AND jsonb_typeof(NEW.metadata->'categories') = 'array'
-       AND jsonb_array_length(NEW.metadata->'categories') > 0 THEN
-      v_family := public.engagement_family_from_chip(NEW.metadata->'categories'->>0);
-    END IF;
-    PERFORM public.record_engagement_event(NEW.user_id,'post_created','post',NEW.id,'posts',NEW.id::text,v_family,false);
-  EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('post_created', SQLERRM); END;
-  RETURN NULL;
-END; $fn$;
+-- post_created is NO LONGER credited at creation (A2). Drop any prior creation trigger.
 DROP TRIGGER IF EXISTS trg_engagement_post_created ON public.posts;
-CREATE TRIGGER trg_engagement_post_created AFTER INSERT ON public.posts FOR EACH ROW EXECUTE FUNCTION public.engagement_on_post_created();
 
+-- event_checkin -> PRIVATE (attendee).
 CREATE OR REPLACE FUNCTION public.engagement_on_event_checkin()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
@@ -589,10 +641,14 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_event_checkin ON public.event_checkins;
 CREATE TRIGGER trg_engagement_event_checkin AFTER INSERT ON public.event_checkins FOR EACH ROW EXECUTE FUNCTION public.engagement_on_event_checkin();
 
+-- safety_alert_vote -> PRIVATE; A1 own alert earns nothing.
 CREATE OR REPLACE FUNCTION public.engagement_on_safety_alert_vote()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
+DECLARE v_creator uuid;
 BEGIN
   BEGIN
+    SELECT created_by INTO v_creator FROM public.safety_alerts WHERE id = NEW.alert_id;
+    IF NEW.voter_id IS NOT DISTINCT FROM v_creator THEN RETURN NULL; END IF;  -- A1
     PERFORM public.record_engagement_event(NEW.voter_id,'safety_alert_vote','safety_alert',NEW.alert_id,'safety_alert_votes',NEW.voter_id::text||':'||NEW.alert_id::text,NULL,false);
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('safety_alert_vote', SQLERRM); END;
   RETURN NULL;
@@ -600,6 +656,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_safety_alert_vote ON public.safety_alert_votes;
 CREATE TRIGGER trg_engagement_safety_alert_vote AFTER INSERT ON public.safety_alert_votes FOR EACH ROW EXECUTE FUNCTION public.engagement_on_safety_alert_vote();
 
+-- message -> PRIVATE (once per conversation).
 CREATE OR REPLACE FUNCTION public.engagement_on_message()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
@@ -611,11 +668,14 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_message ON public.messages;
 CREATE TRIGGER trg_engagement_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.engagement_on_message();
 
+-- resource_bookmark -> PRIVATE; A1 own resource earns nothing.
 CREATE OR REPLACE FUNCTION public.engagement_on_resource_bookmark()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
+DECLARE v_family text; v_sub uuid;
 BEGIN
   BEGIN
+    SELECT category, submitted_by INTO v_family, v_sub FROM public.resources WHERE id = NEW.resource_id;
+    IF NEW.user_id IS NOT DISTINCT FROM v_sub THEN RETURN NULL; END IF;  -- A1
     SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
     PERFORM public.record_engagement_event(NEW.user_id,'resource_bookmark','resource',NEW.resource_id,'resource_bookmarks',NEW.user_id::text||':'||NEW.resource_id::text,v_family,false);
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('resource_bookmark', SQLERRM); END;
@@ -624,22 +684,36 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_resource_bookmark ON public.resource_bookmarks;
 CREATE TRIGGER trg_engagement_resource_bookmark AFTER INSERT ON public.resource_bookmarks FOR EACH ROW EXECUTE FUNCTION public.engagement_on_resource_bookmark();
 
+-- saved_resource -> PRIVATE; A1 own resource earns nothing.
 CREATE OR REPLACE FUNCTION public.engagement_on_saved_resource()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
-DECLARE v_family text;
+DECLARE v_family text; v_sub uuid;
 BEGIN
   BEGIN
-    IF NEW.resource_id IS NOT NULL THEN
-      SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
-      PERFORM public.record_engagement_event(NEW.user_id,'saved_resource','resource',NEW.resource_id,'saved_resources',NEW.user_id::text||':'||NEW.resource_id::text,v_family,false);
-    END IF;
+    IF NEW.resource_id IS NULL THEN RETURN NULL; END IF;
+    SELECT submitted_by INTO v_sub FROM public.resources WHERE id = NEW.resource_id;
+    IF NEW.user_id IS NOT DISTINCT FROM v_sub THEN RETURN NULL; END IF;  -- A1
+    SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
+    PERFORM public.record_engagement_event(NEW.user_id,'saved_resource','resource',NEW.resource_id,'saved_resources',NEW.user_id::text||':'||NEW.resource_id::text,v_family,false);
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('saved_resource', SQLERRM); END;
   RETURN NULL;
 END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_saved_resource ON public.saved_resources;
 CREATE TRIGGER trg_engagement_saved_resource AFTER INSERT ON public.saved_resources FOR EACH ROW EXECUTE FUNCTION public.engagement_on_saved_resource();
 
--- opt-in: completed (both parties, two-profile lock in uuid order) + decline marker.
+-- opt_in INSERT -> A2: a seeker opting in is an outside engagement, credit the post author.
+CREATE OR REPLACE FUNCTION public.engagement_on_opt_in_insert()
+  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
+BEGIN
+  BEGIN
+    PERFORM public.credit_post_created(NEW.post_id, NEW.seeker_id);  -- A2
+  EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('opt_in_insert', SQLERRM); END;
+  RETURN NULL;
+END; $fn$;
+DROP TRIGGER IF EXISTS trg_engagement_opt_in_insert ON public.resource_opt_ins;
+CREATE TRIGGER trg_engagement_opt_in_insert AFTER INSERT ON public.resource_opt_ins FOR EACH ROW EXECUTE FUNCTION public.engagement_on_opt_in_insert();
+
+-- opt_in UPDATE -> completed: provider (public) + seeker (private); decline marker.
 CREATE OR REPLACE FUNCTION public.engagement_on_opt_in()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 DECLARE v_family text; v_author uuid;
@@ -666,6 +740,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_opt_in ON public.resource_opt_ins;
 CREATE TRIGGER trg_engagement_opt_in AFTER UPDATE ON public.resource_opt_ins FOR EACH ROW EXECUTE FUNCTION public.engagement_on_opt_in();
 
+-- conversation completed -> volunteer (public) + requester (private).
 CREATE OR REPLACE FUNCTION public.engagement_on_conversation()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 DECLARE v_family text;
@@ -674,8 +749,8 @@ BEGIN
     IF OLD.status = 'active' AND NEW.status = 'completed' THEN
       PERFORM 1 FROM public.profiles WHERE id IN (NEW.volunteer_id, NEW.requester_id) ORDER BY id FOR NO KEY UPDATE;
       SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = NEW.resource_id;
-      PERFORM public.record_engagement_event(NEW.volunteer_id,'conversation_completed','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
-      PERFORM public.record_engagement_event(NEW.requester_id,'conversation_completed','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
+      PERFORM public.record_engagement_event(NEW.volunteer_id,'conversation_completed_volunteer','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
+      PERFORM public.record_engagement_event(NEW.requester_id,'conversation_completed_requester','conversation',NEW.id,'conversations',NEW.id::text,v_family,false);
     END IF;
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('conversation', SQLERRM); END;
   RETURN NULL;
@@ -683,7 +758,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_conversation ON public.conversations;
 CREATE TRIGGER trg_engagement_conversation AFTER UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.engagement_on_conversation();
 
--- review: keyed on the ANCHOR (opt_in_id/conversation_id), so delete+resubmit never re-awards.
+-- review -> review_received (PRIVATE, peer-verified), keyed on the anchor.
 CREATE OR REPLACE FUNCTION public.engagement_on_review()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 DECLARE v_family text;
@@ -703,7 +778,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_review ON public.reviews;
 CREATE TRIGGER trg_engagement_review AFTER INSERT ON public.reviews FOR EACH ROW EXECUTE FUNCTION public.engagement_on_review();
 
--- safety alert verified: admin fact, and NOT self-verified (verified_by <> created_by).
+-- safety_alert verified -> Watcher (public); admin; not self-verified.
 CREATE OR REPLACE FUNCTION public.engagement_on_safety_alert_verify()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
@@ -718,7 +793,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_safety_alert_verify ON public.safety_alerts;
 CREATE TRIGGER trg_engagement_safety_alert_verify AFTER UPDATE ON public.safety_alerts FOR EACH ROW EXECUTE FUNCTION public.engagement_on_safety_alert_verify();
 
--- resource approved: admin fact, and NOT self-approved (moderated_by <> submitted_by).
+-- resource approved -> public; admin; not self-approved.
 CREATE OR REPLACE FUNCTION public.engagement_on_resource_approved()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 DECLARE v_family text;
@@ -736,13 +811,8 @@ DROP TRIGGER IF EXISTS trg_engagement_resource_approved ON public.resources;
 CREATE TRIGGER trg_engagement_resource_approved AFTER UPDATE ON public.resources FOR EACH ROW EXECUTE FUNCTION public.engagement_on_resource_approved();
 
 -- ============================================================================
--- 8. I5 — UNBLOCK (delete-and-requeue semantics; the P2.0 transition graph is untouched)
+-- 8. I5 — UNBLOCK (delete-and-requeue; slot restored exactly once; P2.0 graph untouched)
 -- ============================================================================
--- The author unblocks a seeker they declined by DELETING the declined opt-in row and
--- restoring the slot. The seeker is NOT re-queued automatically — they may opt in again
--- themselves via opt_in_to_post. A declined opt-in never completed, so it has no reviews
--- to cascade. The private opt_in_declines marker survives (untouched here). No
--- enforce_opt_in_transition change is needed (no declined->pending edge).
 CREATE OR REPLACE FUNCTION public.unblock_opt_in(p_opt_in_id uuid)
   RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
@@ -760,8 +830,7 @@ BEGIN
   END IF;
 
   SELECT oi.status, oi.post_id, p.user_id INTO v_status, v_post_id, v_author
-  FROM public.resource_opt_ins oi JOIN public.posts p ON p.id = oi.post_id
-  WHERE oi.id = p_opt_in_id;
+  FROM public.resource_opt_ins oi JOIN public.posts p ON p.id = oi.post_id WHERE oi.id = p_opt_in_id;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Opt-in not found'; END IF;
   IF v_author IS DISTINCT FROM v_uid THEN
@@ -771,25 +840,18 @@ BEGIN
     RAISE EXCEPTION 'Only a declined opt-in can be unblocked' USING ERRCODE = '22023';
   END IF;
 
-  -- Row-lock the post FIRST to serialise concurrent unblocks of the same opt-in (mirrors
-  -- withdraw_opt_in), then delete the STILL-declined row. The slot is restored EXACTLY
-  -- ONCE — only when this call is the one that actually deleted the row (rowcount > 0) —
-  -- so two concurrent unblock_opt_in calls cannot both restore a slot (overbook).
   SELECT * INTO v_post FROM public.posts WHERE id = v_post_id FOR UPDATE;
-
   DELETE FROM public.resource_opt_ins WHERE id = p_opt_in_id AND status = 'declined';
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
-
   IF v_deleted > 0 AND v_post.max_seekers IS NOT NULL THEN
     UPDATE public.posts SET slots_remaining = LEAST(slots_remaining + 1, v_post.max_seekers) WHERE id = v_post_id;
   END IF;
-
   RETURN v_deleted > 0;
 END;
 $fn$;
 
 -- ============================================================================
--- 9. RLS + GRANTS (I2 + I4)
+-- 9. RLS + GRANTS (I2 + I4 + B2)
 -- ============================================================================
 ALTER TABLE public.engagement_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS engagement_events_select_own ON public.engagement_events;
@@ -818,56 +880,64 @@ CREATE POLICY opt_in_declines_select_author ON public.opt_in_declines
 REVOKE ALL ON public.opt_in_declines FROM anon, authenticated;
 GRANT SELECT ON public.opt_in_declines TO authenticated;
 
+-- B2: private summary — owner SELECT only, no client writes, not published, no embed path.
+ALTER TABLE public.user_private_badge_summary ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_private_badge_summary_select_own ON public.user_private_badge_summary;
+CREATE POLICY user_private_badge_summary_select_own ON public.user_private_badge_summary
+  FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));
+REVOKE ALL ON public.user_private_badge_summary FROM anon, authenticated;
+GRANT SELECT ON public.user_private_badge_summary TO authenticated;
+
 GRANT SELECT (badge_summary) ON public.profiles TO anon, authenticated;
 
 -- ============================================================================
 -- 10. FUNCTION EXECUTE GRANTS
 -- ============================================================================
 REVOKE EXECUTE ON FUNCTION public.record_engagement_event(uuid,text,text,uuid,text,text,text,boolean) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.recompute_badge_summary(uuid)      FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.recompute_user_engagement(uuid)    FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.recompute_all_badge_summaries()    FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.reconcile_engagement(uuid)         FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.log_engagement_failure(text, text) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.badge_config_recompute()           FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_post_like()          FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_poll_vote()          FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_follow()             FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_comment()            FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_petition_signature() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_post_created()       FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_event_checkin()      FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_safety_alert_vote()  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_message()            FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_resource_bookmark()  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_saved_resource()     FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_opt_in()             FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_conversation()       FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_review()             FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_safety_alert_verify() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_on_resource_approved()  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.credit_post_created(uuid, uuid)         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.recompute_badge_summary(uuid)           FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.recompute_private_badge_summary(uuid)   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_summary_for(uuid, text)      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.recompute_user_engagement(uuid)         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.recompute_all_badge_summaries()         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.reconcile_engagement(uuid)              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_engagement_failure(text, text)      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.badge_config_recompute()                FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_post_like()               FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_poll_vote()               FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_follow()                  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_comment()                 FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_petition_signature()      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_event_checkin()           FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_safety_alert_vote()       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_message()                 FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_resource_bookmark()       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_saved_resource()          FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_opt_in_insert()           FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_opt_in()                  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_conversation()            FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_review()                  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_safety_alert_verify()     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_on_resource_approved()       FROM PUBLIC, anon, authenticated;
 
-GRANT EXECUTE ON FUNCTION public.recompute_badge_summary(uuid)   TO service_role;
-GRANT EXECUTE ON FUNCTION public.recompute_user_engagement(uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION public.recompute_all_badge_summaries() TO service_role;
-GRANT EXECUTE ON FUNCTION public.reconcile_engagement(uuid)      TO service_role;
+GRANT EXECUTE ON FUNCTION public.recompute_badge_summary(uuid)         TO service_role;
+GRANT EXECUTE ON FUNCTION public.recompute_private_badge_summary(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.recompute_user_engagement(uuid)       TO service_role;
+GRANT EXECUTE ON FUNCTION public.recompute_all_badge_summaries()       TO service_role;
+GRANT EXECUTE ON FUNCTION public.reconcile_engagement(uuid)            TO service_role;
 
 GRANT EXECUTE ON FUNCTION public.engagement_category_family(public.resource_category) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.engagement_family_from_chip(text) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.engagement_level(integer)   TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.engagement_weight(text)     TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.engagement_community_dim(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.engagement_level(integer)         TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.engagement_weight(text)           TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.engagement_community_dim(text)    TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.engagement_is_public(text)        TO anon, authenticated, service_role;
 
 REVOKE EXECUTE ON FUNCTION public.unblock_opt_in(uuid) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.unblock_opt_in(uuid) TO authenticated;
 
 -- ============================================================================
--- 11. NIGHTLY MISSED-CREDIT RECOVERY — schedule reconcile_engagement() via pg_cron.
---     Idempotent + replay-safe: unschedule-if-exists, then schedule. Guarded on pg_cron
---     being installed (prod has it; the local test harness does not). Mirrors the existing
---     app_logs_retention_30d SQL cron (cron.schedule(name, sched, sql), db=postgres). The
---     job runs as the table owner (postgres), so reconcile_engagement's SECDEF + the
---     source-derivation guards apply exactly as in the incremental path.
+-- 11. NIGHTLY MISSED-CREDIT RECOVERY (pg_cron, guarded + idempotent)
 -- ============================================================================
 DO $cron$
 BEGIN
@@ -875,15 +945,13 @@ BEGIN
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'engagement_reconcile_nightly') THEN
       PERFORM cron.unschedule('engagement_reconcile_nightly');
     END IF;
-    PERFORM cron.schedule('engagement_reconcile_nightly', '27 4 * * *',
-                          'SELECT public.reconcile_engagement();');
+    PERFORM cron.schedule('engagement_reconcile_nightly', '27 4 * * *', 'SELECT public.reconcile_engagement();');
   END IF;
 END;
 $cron$;
 
 -- ============================================================================
--- 12. ONE-TIME IDEMPOTENT BACKFILL — credit existing facts through the same path.
---     Idempotent (same ON CONFLICT keys); self-verifications earn nothing (guards above).
+-- 12. ONE-TIME IDEMPOTENT BACKFILL (same rules, incl. A1/A2 + public/private split).
 -- ============================================================================
 SELECT public.reconcile_engagement(NULL);
 
