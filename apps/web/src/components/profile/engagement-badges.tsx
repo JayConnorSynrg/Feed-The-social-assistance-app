@@ -75,7 +75,8 @@ function BadgePill({ badge }: { badge: DisplayBadge }) {
         Lv {levelLabel(badge.level)}
       </span>
       <span className="sr-only">
-        {badge.label} {groupWord} badge, level {badge.level}, {badge.count} points earned
+        {badge.label} {groupWord} badge, level {badge.level}
+        {typeof badge.count === 'number' ? `, ${badge.count} points earned` : ''}
       </span>
     </li>
   )

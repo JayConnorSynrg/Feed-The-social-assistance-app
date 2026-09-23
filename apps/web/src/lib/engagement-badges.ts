@@ -9,9 +9,10 @@
 
 import { CATEGORY_META } from './resource-categories'
 
-/** One dimension's earned state, exactly as recompute_badge_summary writes it. */
+/** One dimension's earned state. The PUBLIC summary carries LEVELS ONLY (no `count` — a
+ *  privacy floor); the PRIVATE summary also carries `count` for the owner. */
 export interface BadgeEntry {
-  count: number
+  count?: number
   level: number
 }
 
@@ -29,7 +30,8 @@ export interface DisplayBadge {
   key: string
   label: string
   level: number
-  count: number
+  /** Present only for PRIVATE badges (public badges publish levels only). */
+  count?: number
   /** Hex color for the badge accent (from CATEGORY_META where applicable). */
   colorHex: string
   /** lucide-react icon name; mapped to a component in the render layer. */
@@ -115,7 +117,7 @@ export function summaryToBadgeList(summary: BadgeSummary | null | undefined): Di
   return out.sort((a, b) => {
     if (a.group !== b.group) return a.group === 'family' ? -1 : 1
     if (b.level !== a.level) return b.level - a.level
-    if (b.count !== a.count) return b.count - a.count
+    if ((b.count ?? 0) !== (a.count ?? 0)) return (b.count ?? 0) - (a.count ?? 0)
     return a.label.localeCompare(b.label)
   })
 }

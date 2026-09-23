@@ -93,10 +93,10 @@ describe('summaryToBadgeList', () => {
 })
 
 describe('summaryToBadgeList — public and private summaries map identically', () => {
-  it('maps a PUBLIC summary (helping + public actions)', () => {
+  it('maps a PUBLIC summary — LEVELS ONLY, no counts (privacy floor)', () => {
     const pub: BadgeSummary = {
-      families: { food: { count: 12, level: 2 } },
-      badges: { helper: { count: 4, level: 1 }, voice: { count: 30, level: 3 } },
+      families: { food: { level: 2 } },
+      badges: { helper: { level: 1 }, voice: { level: 3 } },
     }
     const list = summaryToBadgeList(pub)
     expect(list.map((b) => `${b.group}:${b.key}`)).toEqual([
@@ -104,22 +104,27 @@ describe('summaryToBadgeList — public and private summaries map identically', 
       'community:voice',
       'community:helper',
     ])
+    // public badges carry no count
+    expect(list.every((b) => b.count === undefined)).toBe(true)
   })
 
-  it('maps a PRIVATE summary (receiving help, saves, advocacy) with the same pure mapper', () => {
+  it('maps a PRIVATE summary WITH counts using the same pure mapper', () => {
     const priv: BadgeSummary = {
       families: { housing: { count: 10, level: 2 } }, // receiving help / saves
-      badges: { advocate: { count: 5, level: 1 } }, // petition signatures (private)
+      badges: { advocate: { count: 5, level: 1 }, watcher: { count: 3, level: 1 } }, // petition + alert-verify (both private)
     }
     const list = summaryToBadgeList(priv)
-    expect(list).toHaveLength(2)
+    expect(list).toHaveLength(3)
     const advocate = list.find((b) => b.key === 'advocate')!
-    expect(advocate.group).toBe('community')
     expect(advocate.label).toBe('Advocate')
     expect(advocate.iconName).toBe('Megaphone')
+    expect(advocate.count).toBe(5)
+    const watcher = list.find((b) => b.key === 'watcher')!
+    expect(watcher.label).toBe('Watcher')
+    expect(watcher.count).toBe(3)
     const housing = list.find((b) => b.key === 'housing')!
-    expect(housing.label).toBe('Housing')
     expect(housing.level).toBe(2)
+    expect(housing.count).toBe(10)
   })
 
   it('an empty private summary yields no badges (empty private section)', () => {
