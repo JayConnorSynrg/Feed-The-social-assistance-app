@@ -17,20 +17,23 @@
 -- reviews (insert)        | submit_review SECDEF RPC only (no policy)  | submit_review only                       |   reopens PR#50)                                            | unchanged — no client INSERT policy exists
 -- resource_opt_ins (INS)  | opt_ins_insert policy (direct) + RPC       | opt_in_to_post RPC only                   | direct INSERT bypasses own-post + capacity checks          | DROP opt_ins_insert (route via RPC) (B)
 -- resource_opt_ins.seeker_id/post_id/resource_id | opt_ins_update (post author) | nobody — immutable            | author holds table UPDATE → can repoint counterparty       | REVOKE table UPDATE; GRANT UPDATE(status) only (B)
--- resource_opt_ins.status | opt_ins_update (post author) + feed-panel.tsx:2075 .update({status}) | post author | (kept — legit) | kept: GRANT UPDATE(status) (B)
--- resource_opt_ins (DEL)  | opt_ins_delete (seeker any status) + withdraw_opt_in RPC (pending) | seeker, pending only | seeker can DELETE a completed opt-in | opt_ins_delete → pending-only (B)
+-- resource_opt_ins.status | opt_ins_update (post author) + feed-panel.tsx:2075 .update({status}) | post author, following the state machine | (kept — legit) | kept: GRANT UPDATE(status) + transition trigger pending→accepted|declined, accepted→completed, no path back (B2/B4)
+-- resource_opt_ins.status (transition) | opt_ins_update (post author) | pending→accepted|declined, accepted→completed only | no DB graph enforcement — author could jump pending→completed or resurrect completed→pending | trg_resource_opt_ins_transition enforces the CHECK-value graph (B4)
+-- resource_opt_ins (DEL)  | opt_ins_delete (seeker any status) + withdraw_opt_in RPC (pending) | seeker, pending only | seeker can DELETE a completed opt-in | opt_ins_delete → pending-only (B3)
+-- conversations (INSERT)  | conversations_insert_requester (WITH CHECK requester_id=uid only) | requester; status='pending'; volunteer_id = resources.submitted_by (volunteer-resource-detail.tsx:53) | requester can INSERT status='completed' naming ANY volunteer_id → submit_review once per forged conversation = unlimited harmony forge | trg_conversations_transition INSERT branch: pending-only + volunteer_id=owner + requester≠volunteer (C2)
 -- conversations.volunteer_id/requester_id/resource_id | conversations_update_participants (either party) | nobody — immutable | either party holds table UPDATE → repoint | REVOKE table UPDATE; GRANT UPDATE(status); immutability trigger (C)
 -- conversations.status    | conversations_update_participants + use-conversations.ts (.update({status})) | volunteer: active/declined/completed; either: cancelled | either party could set any status | GRANT UPDATE(status) + transition trigger enforces graph+actor (C)
--- event_checkins.checked_in_by | checkins_insert_auth / checkins_update_own (client-supplied) | the caller (= auth.uid()) | client sets checked_in_by=organizer to fake verification | BEFORE INS/UPD trigger forces checked_in_by=auth.uid() (D)
+-- event_checkins.checked_in_by | checkins_insert_auth / checkins_update_own (client-supplied) | the caller (= auth.uid()) | client sets checked_in_by=organizer to fake verification | trigger forces =auth.uid() on INSERT; preserves OLD on UPDATE (lets FK SET NULL cascade through) (D)
 --
 -- ============================================================================
 -- INVARIANT I2 — a guest (is_anonymous) can write no user-data row anywhere
 -- ----------------------------------------------------------------------------
 -- Direct-write gaps (permissive policy a guest satisfies + no RESTRICTIVE anon block):
 --   poll_votes, event_checkins, favorites, saved_resources, saved_resource_documents,
---   saved_resource_events, saved_resource_tasks, impact_metrics, petitions  → add block (F)
+--   saved_resource_events, saved_resource_tasks, impact_metrics, petitions  → add INSERT block (F1)
+--   mfa_backup_codes (client writer lib/mfa.ts, own-scoped INS/UPD/DEL; no service route) → add INS/UPD/DEL blocks (F2)
 -- SECDEF-writer gaps (no is_anonymous guard): delete_safety_alert, update_safety_alert,
---   withdraw_petition_signature                                             → add guard (E)
+--   withdraw_petition_signature → add guard + REVOKE EXECUTE FROM anon (E)
 -- Service-role route gap: apps/web/src/app/api/petitions/sign/route.ts (checks user,
 --   not is_anonymous) — fixed in the route (not this file).
 -- Not gaps (verified read-only, kept as-is): reviews (no client INSERT path; UPDATE now
@@ -79,25 +82,83 @@ CREATE POLICY opt_ins_delete ON public.resource_opt_ins
     OR (SELECT is_current_user_admin())
   );
 
+-- B4. Enforce the opt-in status state machine. Only the post author can UPDATE (RLS
+--     opt_ins_update) and only the `status` column (B2 column grant); the seeker's
+--     changes go through the RPCs (opt_in_to_post inserts pending; withdraw_opt_in
+--     deletes pending). Live CHECK: status IN (pending, accepted, declined, completed).
+--     Allowed: pending→accepted|declined, accepted→completed. No path back from
+--     completed (or from declined). Matches the UI exactly (feed-panel.tsx:1124/1142:
+--     Accept/Decline shown only when pending, Mark Completed only when accepted).
+CREATE OR REPLACE FUNCTION public.enforce_opt_in_transition()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NOT (
+      (OLD.status = 'pending'  AND NEW.status IN ('accepted','declined'))
+      OR (OLD.status = 'accepted' AND NEW.status = 'completed')
+    ) THEN
+      RAISE EXCEPTION 'invalid opt-in status transition % -> %', OLD.status, NEW.status
+        USING ERRCODE = '22023';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_resource_opt_ins_transition ON public.resource_opt_ins;
+CREATE TRIGGER trg_resource_opt_ins_transition
+  BEFORE UPDATE ON public.resource_opt_ins
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_opt_in_transition();
+
 -- ── C. conversations ─────────────────────────────────────────────────────────
 -- C1. Column-lock UPDATE to `status` only (locks volunteer_id/requester_id/resource_id).
 REVOKE UPDATE ON public.conversations FROM anon, authenticated;
 GRANT  UPDATE (status) ON public.conversations TO authenticated;
 
--- C2. Enforce the status state machine and the entitled actor per transition. Also
---     re-asserts participant/resource immutability (defense-in-depth beyond the column
---     grant; also covers any future service_role path). auth.uid() actor rules apply
---     only to real user calls; a service/null caller (admin tooling) is trusted for
---     the actor check but still bound by the transition graph + immutability.
+-- C2. Enforce the status state machine on BOTH INSERT and UPDATE.
+--   INSERT (I1 for INSERT — closes the requester forge where a user could INSERT
+--     status='completed' naming an arbitrary volunteer_id, then submit_review once per
+--     forged conversation = unlimited harmony forge). A user INSERT MUST: start
+--     status='pending'; name volunteer_id = the resource owner (resources.submitted_by,
+--     which is exactly what use-conversations sendRequest passes,
+--     volunteer-resource-detail.tsx:53); and not request their own resource. resources
+--     is publicly readable, so a plain (INVOKER) lookup of submitted_by is sufficient.
+--   UPDATE: participant/resource immutability + status graph + entitled actor.
+--   auth.uid() rules apply only to real user calls; a service/null caller (admin
+--     tooling, cascades) bypasses the actor/INSERT-shape checks but the UPDATE graph +
+--     immutability still hold.
 CREATE OR REPLACE FUNCTION public.enforce_conversation_transition()
   RETURNS trigger
   LANGUAGE plpgsql
   SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-  v_uid uuid := auth.uid();
+  v_uid   uuid := auth.uid();
+  v_owner uuid;
 BEGIN
-  -- Participants and the anchoring resource are immutable.
+  IF TG_OP = 'INSERT' THEN
+    IF v_uid IS NOT NULL THEN
+      IF NEW.status <> 'pending' THEN
+        RAISE EXCEPTION 'a new conversation must start as pending'
+          USING ERRCODE = '22023';
+      END IF;
+      SELECT submitted_by INTO v_owner FROM public.resources WHERE id = NEW.resource_id;
+      IF NEW.volunteer_id IS DISTINCT FROM v_owner THEN
+        RAISE EXCEPTION 'the volunteer must be the owner of the requested resource'
+          USING ERRCODE = '42501';
+      END IF;
+      IF NEW.requester_id = NEW.volunteer_id THEN
+        RAISE EXCEPTION 'you cannot request your own resource'
+          USING ERRCODE = '42501';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- UPDATE: participants and the anchoring resource are immutable.
   IF NEW.volunteer_id IS DISTINCT FROM OLD.volunteer_id
      OR NEW.requester_id IS DISTINCT FROM OLD.requester_id
      OR NEW.resource_id  IS DISTINCT FROM OLD.resource_id THEN
@@ -136,7 +197,7 @@ $fn$;
 
 DROP TRIGGER IF EXISTS trg_conversations_transition ON public.conversations;
 CREATE TRIGGER trg_conversations_transition
-  BEFORE UPDATE ON public.conversations
+  BEFORE INSERT OR UPDATE ON public.conversations
   FOR EACH ROW EXECUTE FUNCTION public.enforce_conversation_transition();
 
 -- ── D. event_checkins — force checked_in_by = the caller ─────────────────────
@@ -150,7 +211,17 @@ CREATE OR REPLACE FUNCTION public.event_checkins_force_checked_in_by()
   SET search_path = public, pg_temp
 AS $fn$
 BEGIN
-  NEW.checked_in_by := auth.uid();
+  IF TG_OP = 'INSERT' THEN
+    -- The attestor is always the caller; ignore any client-supplied value.
+    NEW.checked_in_by := auth.uid();
+  ELSE
+    -- UPDATE: never let a client change the attestor. Keep OLD, but let a NULL pass
+    -- through — the checked_in_by FK is ON DELETE SET NULL, and that cascade updates
+    -- the row to NULL with auth.uid() = null (no session), which must not be reverted.
+    IF NEW.checked_in_by IS NOT NULL AND NEW.checked_in_by IS DISTINCT FROM OLD.checked_in_by THEN
+      NEW.checked_in_by := OLD.checked_in_by;
+    END IF;
+  END IF;
   RETURN NEW;
 END;
 $fn$;
@@ -281,9 +352,11 @@ $fn$;
 -- Re-assert least-privilege EXECUTE grants on the three recreated SECDEF functions.
 -- (CREATE OR REPLACE preserves existing grants, but restate them so the file is
 --  self-contained and correct on a fresh replay.)
-REVOKE EXECUTE ON FUNCTION public.delete_safety_alert(uuid)             FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.update_safety_alert(uuid, text, integer, text, double precision, double precision) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.withdraw_petition_signature(uuid)     FROM PUBLIC;
+-- Least privilege: only authenticated may EXECUTE (anon carried a stale direct grant
+-- on the safety-alert fns; REVOKE FROM PUBLIC does not remove a direct anon grant).
+REVOKE EXECUTE ON FUNCTION public.delete_safety_alert(uuid)             FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.update_safety_alert(uuid, text, integer, text, double precision, double precision) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.withdraw_petition_signature(uuid)     FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.delete_safety_alert(uuid)             TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.update_safety_alert(uuid, text, integer, text, double precision, double precision) TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.withdraw_petition_signature(uuid)     TO authenticated;
@@ -314,5 +387,26 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- F2. mfa_backup_codes — the writer is the client (lib/mfa.ts, role authenticated:
+--     INSERT to store codes, UPDATE to mark used, DELETE own; own-scoped policies). No
+--     service-role route mints codes, so RESTRICTIVE blocks on the authenticated role
+--     are the correct and sole gate. A guest (anonymous) has no MFA to enroll; block
+--     all three write commands so a guest can neither mint nor touch backup codes.
+DROP POLICY IF EXISTS mfa_backup_codes_block_anon_insert ON public.mfa_backup_codes;
+CREATE POLICY mfa_backup_codes_block_anon_insert ON public.mfa_backup_codes
+  AS RESTRICTIVE FOR INSERT TO authenticated
+  WITH CHECK (COALESCE((SELECT (auth.jwt() ->> 'is_anonymous')::boolean), false) IS NOT TRUE);
+
+DROP POLICY IF EXISTS mfa_backup_codes_block_anon_update ON public.mfa_backup_codes;
+CREATE POLICY mfa_backup_codes_block_anon_update ON public.mfa_backup_codes
+  AS RESTRICTIVE FOR UPDATE TO authenticated
+  USING (COALESCE((SELECT (auth.jwt() ->> 'is_anonymous')::boolean), false) IS NOT TRUE)
+  WITH CHECK (COALESCE((SELECT (auth.jwt() ->> 'is_anonymous')::boolean), false) IS NOT TRUE);
+
+DROP POLICY IF EXISTS mfa_backup_codes_block_anon_delete ON public.mfa_backup_codes;
+CREATE POLICY mfa_backup_codes_block_anon_delete ON public.mfa_backup_codes
+  AS RESTRICTIVE FOR DELETE TO authenticated
+  USING (COALESCE((SELECT (auth.jwt() ->> 'is_anonymous')::boolean), false) IS NOT TRUE);
 
 COMMIT;
