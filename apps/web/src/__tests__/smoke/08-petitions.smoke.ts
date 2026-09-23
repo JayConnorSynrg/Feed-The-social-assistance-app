@@ -11,16 +11,16 @@ const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
 maybeDescribe('08 — Petitions (PROD read-only)', () => {
-  it('petition_signatures is in supabase_realtime publication', async () => {
-    // Backend: supabase/migrations/20260608000200_petitions_and_signatures.sql:141
-    // Surface: use-petitions.ts:135-139 → PetitionsPanel live counter
+  it('petition_signatures is NOT in supabase_realtime publication (PII stays off the WAL)', async () => {
+    // Deliberately excluded (feed-fullfeed-h-hygiene): petition_signatures carries
+    // ip_address/user_agent/signer names and RLS already limits events to the signer,
+    // so no cross-signer live feed is possible — keeping it off the WAL avoids PII leakage.
     const rows = await queryProd(`
       SELECT tablename
       FROM pg_publication_tables
       WHERE pubname = 'supabase_realtime' AND tablename = 'petition_signatures'
     `)
-    expect(rows.length).toBe(1)
-    expect(rows[0].tablename).toBe('petition_signatures')
+    expect(rows.length).toBe(0)
   })
 
   it('petition signature RPCs are SECDEF', async () => {
