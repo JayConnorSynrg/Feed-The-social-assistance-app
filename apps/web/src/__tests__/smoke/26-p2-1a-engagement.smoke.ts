@@ -2,9 +2,10 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 // Mission: 26 — P2.1a engagement ledger + badges + unblock (feed-fullfeed-p2-1a-engagement)
 // Surface: engagement_events / user_engagement_counters / badge_config / opt_in_declines
-//          RLS + grants, profiles.badge_summary SELECT grant, the 10 source-table ledger
-//          triggers (tgtype + enabled), the internal-write-fn EXECUTE lockdown, and the
-//          unblock_opt_in RPC grant.
+//          RLS + grants, profiles.badge_summary SELECT grant + UPDATE denial, the 16
+//          source-table ledger triggers (AFTER + ROW + enabled), the new tables' absence
+//          from supabase_realtime, the internal-write-fn EXECUTE lockdown, and the
+//          unblock_opt_in / reconcile_engagement SECDEF + pinned-search_path + grants.
 // Backend: supabase/migrations/20261005000000_p2_1a_engagement.sql
 //
 // GATE ON THE LEDGER, NOT ON THE STATE. The migration is applied as a SEPARATE
@@ -58,31 +59,47 @@ const STATE_SQL = `
     has_table_privilege('anon','public.opt_in_declines','SELECT')                         AS mark_anon_select,
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='opt_in_declines'
        AND cmd='SELECT' AND coalesce(qual,'') ILIKE '%author_id%')                        AS mark_select_author,
-    -- The 10 source-table ledger triggers: present, ENABLED, firing on the right events.
-    -- tgtype bit 4 = INSERT, bit 16 = UPDATE; tgenabled 'D' = disabled.
+    -- badge_summary is server-maintained: authenticated may READ but never WRITE it.
+    has_column_privilege('authenticated','public.profiles','badge_summary','UPDATE')      AS auth_badge_update,
+    -- The new tables must NOT be in the realtime publication (no WAL exposure).
+    (SELECT count(*) FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public'
+       AND tablename IN ('engagement_events','user_engagement_counters','badge_config','opt_in_declines')) AS new_tables_published,
+    -- The 16 source-table ledger triggers: present, ENABLED, AFTER + ROW, right event.
+    -- tgtype bit 1 = ROW, bit 2 = BEFORE (must be 0 => AFTER), bit 4 = INSERT, bit 16 = UPDATE.
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-       WHERE n.nspname='public' AND t.tgenabled <> 'D' AND (
-         (c.relname='post_likes'          AND t.tgname='trg_engagement_post_like'          AND (t.tgtype & 4) <> 0) OR
-         (c.relname='poll_votes'          AND t.tgname='trg_engagement_poll_vote'          AND (t.tgtype & 4) <> 0) OR
-         (c.relname='follows'             AND t.tgname='trg_engagement_follow'             AND (t.tgtype & 4) <> 0) OR
-         (c.relname='post_comments'       AND t.tgname='trg_engagement_comment'            AND (t.tgtype & 4) <> 0) OR
-         (c.relname='petition_signatures' AND t.tgname='trg_engagement_petition_signature' AND (t.tgtype & 4) <> 0) OR
-         (c.relname='resource_opt_ins'    AND t.tgname='trg_engagement_opt_in'             AND (t.tgtype & 16) <> 0) OR
-         (c.relname='conversations'       AND t.tgname='trg_engagement_conversation'       AND (t.tgtype & 16) <> 0) OR
-         (c.relname='reviews'             AND t.tgname='trg_engagement_review'             AND (t.tgtype & 4) <> 0) OR
-         (c.relname='safety_alerts'       AND t.tgname='trg_engagement_safety_alert_verify' AND (t.tgtype & 16) <> 0) OR
-         (c.relname='resources'           AND t.tgname='trg_engagement_resource_approved'  AND (t.tgtype & 16) <> 0)
+       WHERE n.nspname='public' AND t.tgenabled <> 'D' AND (t.tgtype & 1) <> 0 AND (t.tgtype & 2) = 0 AND (
+         (c.relname='post_likes'          AND t.tgname='trg_engagement_post_like'           AND (t.tgtype & 4) <> 0) OR
+         (c.relname='poll_votes'          AND t.tgname='trg_engagement_poll_vote'           AND (t.tgtype & 4) <> 0) OR
+         (c.relname='follows'             AND t.tgname='trg_engagement_follow'              AND (t.tgtype & 4) <> 0) OR
+         (c.relname='post_comments'       AND t.tgname='trg_engagement_comment'             AND (t.tgtype & 4) <> 0) OR
+         (c.relname='petition_signatures' AND t.tgname='trg_engagement_petition_signature'  AND (t.tgtype & 4) <> 0) OR
+         (c.relname='posts'               AND t.tgname='trg_engagement_post_created'        AND (t.tgtype & 4) <> 0) OR
+         (c.relname='event_checkins'      AND t.tgname='trg_engagement_event_checkin'       AND (t.tgtype & 4) <> 0) OR
+         (c.relname='safety_alert_votes'  AND t.tgname='trg_engagement_safety_alert_vote'   AND (t.tgtype & 4) <> 0) OR
+         (c.relname='messages'            AND t.tgname='trg_engagement_message'             AND (t.tgtype & 4) <> 0) OR
+         (c.relname='resource_bookmarks'  AND t.tgname='trg_engagement_resource_bookmark'   AND (t.tgtype & 4) <> 0) OR
+         (c.relname='saved_resources'     AND t.tgname='trg_engagement_saved_resource'      AND (t.tgtype & 4) <> 0) OR
+         (c.relname='resource_opt_ins'    AND t.tgname='trg_engagement_opt_in'              AND (t.tgtype & 16) <> 0) OR
+         (c.relname='conversations'       AND t.tgname='trg_engagement_conversation'        AND (t.tgtype & 16) <> 0) OR
+         (c.relname='reviews'             AND t.tgname='trg_engagement_review'              AND (t.tgtype & 4) <> 0) OR
+         (c.relname='safety_alerts'       AND t.tgname='trg_engagement_safety_alert_verify'  AND (t.tgtype & 16) <> 0) OR
+         (c.relname='resources'           AND t.tgname='trg_engagement_resource_approved'   AND (t.tgtype & 16) <> 0)
        ))                                                                                  AS source_triggers,
     -- The internal write helper + recompute fns are NOT client-executable.
     has_function_privilege('authenticated','public.record_engagement_event(uuid,text,text,uuid,text,text,text,boolean)','EXECUTE') AS rec_auth_exec,
     has_function_privilege('anon','public.recompute_badge_summary(uuid)','EXECUTE')       AS rbs_anon_exec,
+    has_function_privilege('authenticated','public.reconcile_engagement(uuid)','EXECUTE') AS reconcile_auth_exec,
     -- unblock_opt_in is client-callable by authenticated only.
     has_function_privilege('authenticated','public.unblock_opt_in(uuid)','EXECUTE')       AS unblock_auth_exec,
     has_function_privilege('anon','public.unblock_opt_in(uuid)','EXECUTE')                AS unblock_anon_exec,
-    -- The sanctioned declined->pending edge lives in the transition guard.
-    (SELECT position('feed.optin_unblock' IN pg_get_functiondef(p.oid)) > 0
+    -- unblock_opt_in + reconcile_engagement are SECDEF with a pinned search_path.
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname IN ('unblock_opt_in','reconcile_engagement')
+       AND p.prosecdef AND array_to_string(p.proconfig, ',') ILIKE '%search_path%')       AS secdef_pinned,
+    -- The transition guard is the P2.0 body (no declined->pending GUC bypass — unblock deletes).
+    (SELECT position('feed.optin_unblock' IN pg_get_functiondef(p.oid)) = 0
        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_has_unblock
+       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_no_guc
 `
 
 maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
@@ -117,9 +134,13 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     expect(r.mark_rls, 'opt_in_declines RLS must be enabled').toBe(true)
     expect(r.mark_anon_select, 'anon must NOT read the private decline marker').toBe(false)
     expect(Number(r.mark_select_author), 'opt_in_declines must have an author-only read policy').toBe(1)
+    // badge_summary is server-maintained: no client UPDATE.
+    expect(r.auth_badge_update, 'authenticated must NOT UPDATE profiles.badge_summary').toBe(false)
+    // The new tables must be absent from the realtime publication.
+    expect(Number(r.new_tables_published), 'the 4 new tables must NOT be in supabase_realtime').toBe(0)
   })
 
-  it('[post-deploy] I1/I5 — ledger triggers, write-fn lockdown, unblock RPC grant', async (ctx) => {
+  it('[post-deploy] I1/I5/I7 — ledger triggers, fn lockdown, unblock+reconcile', async (ctx) => {
     const gate = await queryProd(GATE_SQL)
     if (gate[0]?.applied !== true) {
       ctx.skip()
@@ -128,14 +149,17 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     const rows = await queryProd(STATE_SQL)
     expect(rows.length).toBe(1)
     const r = rows[0]
-    // I1: all 10 source triggers present, enabled, firing on the right events.
-    expect(Number(r.source_triggers), 'all 10 engagement source triggers must be present + enabled').toBe(10)
+    // I1: all 16 source triggers present, enabled, AFTER + ROW, right event.
+    expect(Number(r.source_triggers), 'all 16 engagement source triggers must be present, enabled, AFTER+ROW').toBe(16)
     // Internal write helpers are not client-executable.
     expect(r.rec_auth_exec, 'record_engagement_event must NOT be client-executable').toBe(false)
     expect(r.rbs_anon_exec, 'recompute_badge_summary must NOT be anon-executable').toBe(false)
-    // I5: unblock RPC is authenticated-only; the transition guard carries the sanction.
+    expect(r.reconcile_auth_exec, 'reconcile_engagement must NOT be authenticated-executable').toBe(false)
+    // I5: unblock RPC is authenticated-only; reconcile+unblock are SECDEF+pinned.
     expect(r.unblock_auth_exec, 'authenticated must EXECUTE unblock_opt_in').toBe(true)
     expect(r.unblock_anon_exec, 'anon must NOT EXECUTE unblock_opt_in').toBe(false)
-    expect(r.transition_has_unblock, 'enforce_opt_in_transition must carry the sanctioned unblock edge').toBe(true)
+    expect(Number(r.secdef_pinned), 'unblock_opt_in + reconcile_engagement must be SECDEF with a pinned search_path').toBe(2)
+    // The transition graph is the P2.0 body — unblock deletes, no GUC bypass.
+    expect(r.transition_no_guc, 'enforce_opt_in_transition must be the P2.0 body (no GUC bypass)').toBe(true)
   })
 })
