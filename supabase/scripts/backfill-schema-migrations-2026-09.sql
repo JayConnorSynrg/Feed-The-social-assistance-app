@@ -4,8 +4,9 @@
 --
 -- DO NOT run as part of any git merge. This is a PROD post-deploy write, executed
 -- ONCE via the Supabase Management API SQL endpoint by the authorized orchestrator
--- (GIT_PLAN feed-fullfeed-h-hygiene-postdeploy), AFTER migration 20261002000000 is
--- applied. `supabase db push` must NOT be used to run it.
+-- (GIT_PLAN feed-fullfeed-h-hygiene-postdeploy), AFTER both migrations 20261002000000
+-- and 20261003000000 are applied and verified. `supabase db push` must NOT be used to
+-- run it.
 --
 -- ── WHY ──────────────────────────────────────────────────────────────────────
 -- supabase_migrations.schema_migrations holds 97 rows (latest version 20260619000100).
@@ -39,9 +40,10 @@
 --     (PR #160). Its publication ADDs were later wiped by the LIVE W1.3 migration
 --     20260929000000, which used `ALTER PUBLICATION ... SET TABLE public.posts (...)`
 --     (replaces the whole set); W1.4 (20261001000000) re-added post_comments + poll_votes.
---     Current set {posts, post_comments, poll_votes} is the in-order result of the full
---     recorded chain. NOTE: notifications + post_likes remain OFF the realtime WAL — the
---     forward fix is a SEPARATE migration, deliberately NOT authored in this wave.
+--     This wave's 20261003000000 then restores notifications, messages and
+--     conversations(id,volunteer_id,requester_id). post_likes stays OFF the WAL by
+--     design (like counts ride posts.like_count). So the in-order result of the full
+--     recorded chain equals prod.
 --   20260922000100_coarse_geocode_targets_fn — the function was explicitly SUPERSEDED
 --     and DROPped by the LIVE 20260923000000. In-order replay creates then drops it,
 --     matching prod (no such function).

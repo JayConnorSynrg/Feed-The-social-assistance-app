@@ -25,8 +25,11 @@
 --  messages       | use-conversations.ts:234-253           | INSERT | full Message row    | conversation_id             | conversation_id (→conv)    | d / id           | FULL ROW (no list)
 --  notifications  | use-notifications.ts:246-251           | INSERT | full Notification   | (none)                      | user_id                    | d / id           | FULL ROW (no list)
 --  conversations  | use-conversations.ts:170-199 (2 chans) | *      | none (refetch only) | volunteer_id, requester_id  | volunteer_id, requester_id | d / id           | (id, volunteer_id, requester_id)
---  petition_signatures — INTENTIONALLY OUT: carries ip_address / user_agent / names, and
---    RLS already limits events to the signer; no client postgres_changes handler needs it.
+--  petition_signatures — INTENTIONALLY OUT: use-petitions.ts:143-163 DOES subscribe to
+--    its INSERTs, but RLS limits those events to the signer, and the signer's own count
+--    is already optimistic (use-petitions.ts:203) plus server-reconciled (:235) — so that
+--    subscription would receive nothing useful. It also carries ip_address/user_agent/
+--    names, so keeping it off the WAL avoids PII leakage at no functional cost.
 --
 -- messages/notifications are published FULL ROW (approved) — their handlers append the
 -- whole payload.new. conversations is column-scoped to {id, volunteer_id, requester_id}:
