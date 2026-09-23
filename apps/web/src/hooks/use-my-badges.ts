@@ -111,38 +111,33 @@ export function useMyBadges(userId: string | null | undefined): MyBadgesState {
   const [privateSummary, setPrivateSummary] = useState<BadgeSummary | null>(null)
   const [loading, setLoading] = useState<boolean>(Boolean(userId))
   const [error, setError] = useState<string | null>(null)
-  const [nonce, setNonce] = useState(0)
 
-  const reload = useCallback(() => setNonce((n) => n + 1), [])
-
-  useEffect(() => {
+  // All state mutation lives inside this callback (not lexically inside the
+  // effect) — the effect below simply invokes it, mirroring use-notifications.ts.
+  // `reload` re-runs the same flow for the Retry affordance.
+  const reload = useCallback(async () => {
     if (!userId) {
       setSummary(null)
       setPrivateSummary(null)
-      setLoading(false)
       setError(null)
+      setLoading(false)
       return
     }
-
-    let active = true
     setLoading(true)
     setError(null)
-
-    void loadMyBadges(supabase, userId)
-      .then((result) => {
-        if (!active) return
-        setSummary(result.summary)
-        setPrivateSummary(result.privateSummary)
-        setError(result.error)
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
+    try {
+      const result = await loadMyBadges(supabase, userId)
+      setSummary(result.summary)
+      setPrivateSummary(result.privateSummary)
+      setError(result.error)
+    } finally {
+      setLoading(false)
     }
-  }, [userId, supabase, nonce])
+  }, [supabase, userId])
+
+  useEffect(() => {
+    void reload()
+  }, [reload])
 
   return { summary, privateSummary, loading, error, reload }
 }
