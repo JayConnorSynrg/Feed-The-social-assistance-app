@@ -67,6 +67,12 @@ export const COMMUNITY_META: Record<
   voice: { label: 'Voice', colorHex: '#5a6b8c', iconName: 'MessageCircle' },
   advocate: { label: 'Advocate', colorHex: '#8a3b3b', iconName: 'Megaphone' },
   watcher: { label: 'Watcher', colorHex: '#3b6b5a', iconName: 'ShieldAlert' },
+  // P2.1b (USER RULING): the "Appreciated" LEVEL counts DISTINCT PEOPLE who sent appreciation
+  // (once per giver, not per gift; public LEVEL only — the giver→receiver edge stays private in
+  // appreciation_gifts). Warm amber-brown accent, distinct
+  // from connector (#8a6d3b). Without this entry summaryToBadgeList would silently DROP
+  // the 'appreciated' key (see the `if (!meta) continue` guard below).
+  appreciated: { label: 'Appreciated', colorHex: '#9a6a1f', iconName: 'Gift' },
 }
 
 /** Level 1/2/3 -> a short roman-numeral label. */
@@ -125,6 +131,26 @@ export function summaryToBadgeList(summary: BadgeSummary | null | undefined): Di
 /** True when there is nothing earned to show (profile empty state). */
 export function hasNoBadges(summary: BadgeSummary | null | undefined): boolean {
   return summaryToBadgeList(summary).length === 0
+}
+
+/**
+ * The top `limit` public badges by LEVEL (then count, then label) — the compact strip
+ * shown on the feed author row (W P2.1b). Purely level-ranked regardless of family vs
+ * community group (unlike summaryToBadgeList, which groups families first). Returns [] for
+ * an empty/missing summary so the caller renders nothing. Pure + node-testable.
+ */
+export function topBadgesByLevel(
+  summary: BadgeSummary | null | undefined,
+  limit = 3
+): DisplayBadge[] {
+  return summaryToBadgeList(summary)
+    .slice()
+    .sort((a, b) => {
+      if (b.level !== a.level) return b.level - a.level
+      if ((b.count ?? 0) !== (a.count ?? 0)) return (b.count ?? 0) - (a.count ?? 0)
+      return a.label.localeCompare(b.label)
+    })
+    .slice(0, Math.max(0, limit))
 }
 
 /** The render-ready view model for a badge section. */

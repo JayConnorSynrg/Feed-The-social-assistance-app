@@ -12,7 +12,7 @@ import { applyPostRowPatch, type PostRowPatch, type Post } from './post-model'
 function basePost(over: Partial<Post> = {}): Post {
   return {
     id: 'a',
-    author: { id: 'u1', name: 'Ada', role: 'Community Member', harmonyScore: null, harmonyReviewsCount: 0 },
+    author: { id: 'u1', name: 'Ada', role: 'Community Member', harmonyScore: null, harmonyReviewsCount: 0, badgeSummary: null },
     content: 'hello',
     timestamp: new Date('2026-01-01T00:00:00Z'),
     likes: 1,

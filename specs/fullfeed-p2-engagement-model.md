@@ -306,3 +306,105 @@ B1 visibility covers COLUMN grants, not just row RLS. The corrected audit of eve
 
 ## Round-3 — corrected backfill = **0 public rows**
 Under A1/A2 + `safety_alert_verified` now private (measured live 2026-09-23): the single prod `like`/`poll_vote`/`safety_alert_vote` are self-interactions (A1 → 0); the 2 posts have no outside engagement (A2 → 0 `post_created`); all 12 approved user-submitted resources are self-approved (0 `resource_approved`); the one peer-verified alert credits **`safety_alert_verified` into the PRIVATE ledger** for its reporter (count 1, below the level-1 threshold of 3 → invisible in the private summary too). Net public backfill = **0 rows**; net private = 1 ledger row / 1 counter, sub-threshold.
+
+---
+
+# P2.1b — AS BUILT (wave feed-fullfeed-p2-1b-appreciation)
+
+**Migration:** `supabase/migrations/20261006000000_p2_1b_appreciation.sql`. Validated against
+prod (`ndtpovonpadugthmcntl`, PG 17.6) inside a single `BEGIN; … ROLLBACK;` on 2026-09-23 —
+the migration applied cleanly and the `give_appreciation` calls exercised I1/I2/I3/I6.
+
+## The gift model (USER RULING: "Appreciated" counts distinct PEOPLE, not gifts)
+A giver sends one of **12 items** — `heart, smile, cheer, flower, sunflower, leaf, bread,
+apple, soup, sun, seedling, tree` — to another member via the SECDEF RPC
+`give_appreciation(p_receiver, p_item, p_post_id?)`. Rows live in `public.appreciation_gifts`
+(`giver_id`, `receiver_id`, `item`, optional `post_id`), `UNIQUE(giver_id, receiver_id, item)`,
+`CHECK giver_id <> receiver_id`, `CHECK item IN (…12…)`. All 12 items stay individually
+giftable and all show on the receiver's private shelf. `giver_id`/`receiver_id` →
+`profiles(id) ON DELETE CASCADE` (enables the receiver-shelf embed AND lets account deletion
+cascade, since `profiles.id → auth.users ON DELETE CASCADE`); `post_id → posts ON DELETE SET
+NULL` (gifts are permanent). The RPC validates caller non-null + non-guest + not-self +
+**recipient exists AND is non-guest** (a guest receiver is rejected with the SAME generic
+`Recipient not found` as a nonexistent recipient — MEDIUM-2, no guest-status oracle) + item
+valid; the optional `p_post_id` is **pure context** — if the referenced post is missing,
+hidden, or not authored by the recipient the RPC **silently drops it** (`p_post_id := NULL`)
+so a valid gift always succeeds regardless of the post's visibility (LOW-1), and missing /
+hidden / wrong-author are indistinguishable (no post oracle). It inserts `ON CONFLICT DO
+NOTHING`; and on a NEW gift row records the receiver's ledger credit inline (same transaction —
+the gift is the core write, so it fails loudly / rolls back atomically).
+
+## Public/private split (user ruling)
+- **PUBLIC:** the earned community-badge **LEVEL** "Appreciated" (`badge:appreciated`,
+  thresholds 3/10/25 from `badge_config`, level only, no count) on `profiles.badge_summary`.
+  `engagement_is_public('appreciation_gift') = true`; `engagement_community_dim(…) =
+  'badge:appreciated'`.
+- **PRIVATE (the edge):** *who gave which item to whom* lives ONLY in `appreciation_gifts`,
+  RLS-restricted to the two parties (`giver_id = auth.uid() OR receiver_id = auth.uid()`). No
+  view, grant, SECDEF function, or realtime publication exposes a giver→receiver edge to a
+  third party. The receiver reads their own shelf (per-item counts + giver names) via the
+  RLS-scoped SELECT + a `profiles!appreciation_gifts_giver_fk` embed; the giver reads only
+  their own sent rows (to mark already-sent items in the picker).
+
+### `profiles.updated_at` timing channel — evaluated, acceptable
+A public credit calls `recompute_badge_summary(receiver)`, which rewrites `badge_summary` and
+bumps `profiles.updated_at` **only when the receiver's Appreciated LEVEL changes** (at 3/10/25),
+never per gift, and the write carries no giver identity. `appreciation_gifts.created_at` is not
+readable by a third party (RLS), so it cannot be joined to `updated_at` — unlike the P2.1a
+`safety_alert_verified` case, where a *granted* `verified_at` equalled the bump and unmasked the
+reporter (that kind stayed private for exactly this reason). The Appreciated bump is
+indistinguishable from every other public badge threshold crossing (Voice/Helper/Connector).
+**Conclusion: no new giver→receiver channel; acceptable without mitigation.**
+
+## Ledger key = the GIVER (realises P2.1a reserved line 71; USER RULING)
+The P2.1a header reserved `appreciation_gift` as `actor=recipient, target=giver, private`.
+**This wave:** `actor = receiver`, **`target_id = giver_id`**, `kind = appreciation_gift`,
+weight 1, family none, community `badge:appreciated`, **PUBLIC (level only)**.
+The ledger `UNIQUE(actor_id, kind, target_id) = (receiver, appreciation_gift, giver)` makes the
+FIRST gift from a giver the only counted event; every later gift from the same giver still
+creates its gift row (all 12 items giftable) but is an `ON CONFLICT` no-op credit. So the public
+`badge:appreciated` counter = **the number of distinct non-guest givers**, exactly once per
+(receiver, giver) — never per item, never zero for a giver who gave. `source_pk` is
+deterministic per pair (`receiver:giver`). `reconcile_engagement`'s `appreciation_gifts` loop
+iterates **DISTINCT (receiver_id, giver_id)** and writes the byte-identical row, so a
+wipe-ledger→reconcile rebuild reproduces the same counters+summary (verified in-txn: A gives B
+heart+smile+leaf → B's counter 1; C gives B → 2; wipe+reconcile → identical). The classifier
+`CREATE OR REPLACE`s leave every P2.1a kind's public/private verdict unchanged.
+
+## Account deletion of a giver — awards never disappear (I3a)
+`engagement_events.target_id` has **no FK** (bare uuid), so deleting a giver's account —
+which CASCADEs their `profiles` row and thus their `appreciation_gifts` rows away — does NOT
+delete the receiver's credit (keyed `actor=receiver, target=giver`). The counter is derived
+from the surviving ledger row, so it is stable. `reconcile_engagement` is **additive-only**
+(`ON CONFLICT DO NOTHING`; it never DELETEs a ledger row), consistent with every other kind
+(P2.1a Round-3 fix 8 / LOW-8 — a like/comment credit likewise survives its source's deletion
+because reconcile only inserts). The nightly job therefore never drops a deleted-giver credit;
+the only path that would is a test-only "wipe the ledger then rebuild from current source"
+harness, unreachable in production. Documented choice: production honours "awards never
+disappear"; reconcile-from-source is inherently limited to surviving source rows, like every
+other kind.
+
+## Client surfaces (click paths)
+- **Feed author row** (`components/panels/feed-panel.tsx` PostCard): `FEED_POST_SELECT` now
+  embeds `badge_summary`; a compact **top-3 public badge strip** (`AuthorBadgeStrip`,
+  `topBadgesByLevel`) renders after `HarmonyBadge`. The author avatar/name are buttons that
+  open the **profile sheet** (`components/appreciation/appreciation-sheet.tsx`): name, avatar,
+  Harmony, full public badge list (`EngagementBadges` public mode), Follow (reusing the feed's
+  `doFollow`/`doUnfollow`), and — for a signed-in, non-guest, non-self viewer — an **Appreciate**
+  button opening the **12-item picker** (`PixelItemIcon` hand-authored pixel art). Already-sent
+  items show a check + are disabled; a single-flight `useRef` gate blocks double-submit; each
+  give is optimistic and settles from the RPC result; failures show an inline error. Guests see
+  the sheet with a `CreateAccountPrompt` in place of the picker (matching Follow's guest gating).
+- **Settings → Profile** (`components/panels/settings-panel.tsx`): a **Gifts received** shelf
+  (`GiftsReceivedShelf`) under the badges card — each received item with icon, count, and
+  (owner-only) giver names; empty / loading / error+Retry states mirror the badges card.
+- Shared client lib `lib/appreciation.ts` (12 items single source + `giveAppreciation`,
+  `listSentTo`, `aggregateShelf`/`myReceivedShelf`, each `AbortSignal.timeout(12s)`, error≠empty).
+  `lib/engagement-badges.ts` adds `appreciated` to `COMMUNITY_META` (icon `Gift`, `#9a6a1f`) so
+  `summaryToBadgeList` no longer drops it, plus `topBadgesByLevel`.
+
+**Smoke:** `apps/web/src/__tests__/smoke/27-p2-1b-appreciation.smoke.ts` (gated on ledger row
+`20261006000000`): table + RLS + no client writes (relacl + attacl), SECDEF+pinned RPC,
+authenticated-only EXECUTE, the 3 CHECKs, `appreciation_gift` public + dim `appreciated`, no
+realtime, no view leaks the edge, reconcile stays locked, and the P2.1a like/watcher verdicts
+are undisturbed.

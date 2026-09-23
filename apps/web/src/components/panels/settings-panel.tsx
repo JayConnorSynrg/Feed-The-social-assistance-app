@@ -31,6 +31,7 @@ import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
 import { SecurityActivity } from '@/components/security/security-activity'
 import { AvatarUpload } from '@/components/profile/avatar-upload'
 import { EngagementBadges } from '@/components/profile/engagement-badges'
+import { GiftsReceivedShelf } from '@/components/appreciation/gifts-received-shelf'
 import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsAdmin } from '@/hooks/use-is-admin'
@@ -399,6 +400,9 @@ function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: Profil
           />
         )}
       </div>
+
+      {/* Gifts received — the appreciation this user has been sent (P2.1b). Owner-only. */}
+      <GiftsReceivedShelf userId={userId} />
     </SettingsSection>
   )
 }
