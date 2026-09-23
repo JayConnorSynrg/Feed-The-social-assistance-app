@@ -1,0 +1,205 @@
+# FEED P2 — Engagement Ledger + Eco-Badges: Empirical Subsystem Model
+
+Status: READ-ONLY MODEL (input to macro plan; nothing built). Baseline: `develop @ 3b5cc19`, prod `ndtpovonpadugthmcntl` probed 2026-09-23 02:21 UTC via Mgmt API (control query `select 1` → ok).
+Evidence convention: `Q:` = live prod query result; file:line = repo / memory file.
+
+---
+
+## 0. Headline facts
+
+1. **The "16 source tables" are not enumerated anywhere recoverable.** The Sprouts memory states the count only (`memory/project-sprouts-gamification.md:22` "fed by `AFTER INSERT` DB triggers (SECDEF) on 16 source tables") and lists "confirm the 16 source tables' columns" as pending (`:29`). The originating session transcript (`ad196874…`) no longer exists on disk. §1 therefore reconstructs the candidate set from live user-write tables (24 audited) and derives a 16-table set.
+2. **Zero engagement traffic in prod.** Q: exact `count(*)` = 0 for posts, post_likes, post_comments, polls, poll_votes, follows, reviews, resource_opt_ins, conversations, messages, event_checkins, favorites, resource_bookmarks, saved_resources, petition_signatures. Non-zero: petitions 2, safety_alerts 3, safety_alert_votes 1, content_reports 1, resources 19,145 (99.98% ingested). auth.users = 8 (5 anonymous, 3 permanent, of which 2 admins). `n_live_tup` is stale (profiles est 1 vs 8 actual; audit_log est 18 vs 2,802).
+3. **The only peer-verified primitive that exists is `reviews` → it has a live forge vector** (reviewer can UPDATE `reviewee_id`; Q: `has_column_privilege('authenticated','public.reviews','reviewee_id','UPDATE') = true`, policy `reviews_update` checks only `reviewer_id = auth.uid()`). Same class for `resource_opt_ins.status/seeker_id` (post author), `conversations.status` (either party), `event_checkins.checked_in_by` (caller-supplied). Any badge keyed on these facts inherits the forge unless the ledger records the fact at INSERT/transition time via a trigger and the columns are locked.
+4. **Privilege is binary today.** `is_current_user_admin()` = `profiles.is_admin` (Q: function body); 51 RLS policies call it, 2 read `is_staff`, 33 public functions reference admin/staff. There is no moderator tier. The only elevation path is `supabase/functions/claim-facilitator-admin/index.ts:145` (`update({ is_admin: true, user_role: 'facilitator' })`, HMAC code, rate-limited, anonymous-blocked at `:72`).
+5. **No "business" entity exists.** grep for `business` in `apps/web/src` + migrations → 1 hit, seed text only. Candidates: `organizations` (0 rows, `org_type` ∈ food_bank/pantry/shelter/clinic/mutual_aid/other, admin-created only) or `profiles.user_role IN ('providing','both')`.
+
+---
+
+## 1. Source-table audit (question 1)
+
+Legend — Rev = can the actor undo it themselves (and how). Trig = existing non-internal triggers (Q: pg_trigger). Rows = exact count(*) / n_live_tup.
+
+| # | Table | Rows | Actor col | Target col | Rev | Existing triggers | Uniqueness (Q: pg_constraint/pg_indexes) |
+|---|---|---|---|---|---|---|---|
+| 1 | posts | 0/0 | user_id | resource_id (nullable), petition_id | **No** — no DELETE policy; table relacl `authenticated=a` only (INSERT). Admin soft-hide only | trg_posts_init_slots (SECDEF BEFORE IU), 2× updated_at | pk(id) |
+| 2 | post_likes | 0/0 | user_id | post_id | **Yes** — DELETE own (`post_likes_delete_own`) | trg_sync_post_like_count (SECDEF AFTER IDU) | pk(user_id,post_id) |
+| 3 | post_comments | 0/0 | user_id | post_id (+parent_id) | **Yes** — DELETE/UPDATE own; UPDATE can re-point post_id (Q: priv=true) | trg_sync_post_comment_count (SECDEF AFTER IDU), 2× updated_at | pk(id) only — unlimited per target |
+| 4 | poll_votes | 0/0 | user_id | poll_id (→polls.post_id) | **Yes** — DELETE own | none | uniq(poll_id,user_id) |
+| 5 | follows | 0/0 | follower_id | following_id | **Yes** — DELETE own ("Users can unfollow") | none | pk(follower_id,following_id) |
+| 6 | resource_opt_ins | 0/0 | seeker_id | post_id (+resource_id denorm) | **Partly** — `withdraw_opt_in` deletes only `status='pending'`; DELETE policy also lets seeker delete any status directly | trg_resource_opt_ins_completed_at (SECDEF BEFORE U), updated_at | uniq(post_id,seeker_id) |
+| 7 | reviews | 0/0 | reviewer_id | reviewee_id (+opt_in_id XOR conversation_id) | **Yes** — DELETE + UPDATE own (incl. reviewee_id!) | trg_reviews_recompute_harmony (SECDEF AFTER IDU), updated_at | uniq(opt_in_id,reviewer_id); partial uniq(conversation_id,reviewer_id) |
+| 8 | conversations | 0/0 | requester_id (initiator); volunteer_id | resource_id (NOT NULL) | status editable by either party (table UPDATE grant + participant policy) | updated_at | partial uniq(volunteer_id) WHERE pending |
+| 9 | messages | 0/0 | sender_id | conversation_id | No DELETE policy; UPDATE (is_read) by participants | none | pk(id) |
+| 10 | petition_signatures | 0/0 | signer_id | petition_id | **Yes** — `withdraw_petition_signature` until `petitions.exported_at` set | none | uniq(petition_id,signer_id) |
+| 11 | safety_alerts | 3/0 | created_by | (self — location/alert_type) | **Yes** — `delete_safety_alert` (owner) | none | pk(id) |
+| 12 | safety_alert_votes | 1/0 | voter_id | alert_id | **Flip** — `vote_safety_alert` upserts `ON CONFLICT DO UPDATE SET vote` | none (counts recomputed inside RPC) | uniq(alert_id,voter_id) |
+| 13 | event_checkins | 0/0 | user_id (nullable = anonymous household) / checked_in_by | occurrence_id | No DELETE policy; UPDATE own | none | partial uniq(occurrence_id,user_id) WHERE user_id NOT NULL |
+| 14 | resources (user-submitted) | 19,145 (3 user_submitted, 173 admin_added) | submitted_by | self; category | UPDATE own while pending | on_resource_change_webhook ×2 (SECDEF AFTER), updated_at | uniq(external_id,source) |
+| 15 | resource_bookmarks | 0/0 | user_id | resource_id | **Yes** — DELETE own | none | pk(user_id,resource_id) |
+| 16 | content_reports | 1/0 | reporter_id | content_id (post) | No (no DELETE policy; RPC `ON CONFLICT DO NOTHING`) | none | uniq(reporter,type,content) |
+| — | petitions | 2/0 | created_by | — | draft insert only; admin approves | updated_at | — |
+| — | polls | 0/0 | via posts.user_id | post_id | DELETE own (via post owner) | none | — |
+| — | favorites | 0/0 | user_id | resource_id | Yes | none | uniq(user_id,resource_id) |
+| — | saved_resources | 0/0 | user_id | resource_id | Yes (ALL own) | none | partial uniq(user_id,resource_id) |
+| — | organizations / organization_members | 0/0 | created_by / user_id | org_id | admin-only writes | updated_at | uniq(org_id,user_id) |
+| — | impact_metrics | 0 | user_id | — | client INSERT/UPDATE own (self-writable → forgeable) | — | **dead: zero app readers/writers** (grep: only `20260525100001_add_v2b_tables.sql`) |
+
+Derived 16 (rows 1–16) = every table where an authenticated human creates a row that names a counterparty or a community object. None are missing live; **all 16 exist**. The ones the memory implies but that need a note: "weather pins" = `safety_alerts` with `alert_type='weather'` (CHECK: weather/road_closure/speeding/general); `polls` rows are a child of a `posts` insert (count as the post, not separately).
+
+Writers (who performs the INSERT — matters because trigger-time `auth.jwt()` differs):
+- Client direct (RLS): posts (6 sites in `post-type-wizard.tsx`: :246, :316, :485, :600, :723 petitions, + feed composer), post_likes, post_comments, poll_votes, follows, bookmarks, favorites, event_checkins (`checkin-sheet.tsx:55`, `organizer-checkin-display.tsx:75`), conversations, messages, resource_opt_ins (direct INSERT allowed by `opt_ins_insert` — bypasses the RPC's own-post + capacity checks).
+- SECDEF RPC: opt_in_to_post, submit_review (sole review path: no INSERT policy), vote_safety_alert, place_safety_alert, submit_content_report.
+- **Service role (API route)**: petition_signatures via `apps/web/src/app/api/petitions/sign/route.ts:121-133`. In a trigger on this table `auth.jwt()` is the service-role JWT, so a JWT-based guest check is blind there.
+
+---
+
+## 2. "Successful interaction" — cheap vs completed vs peer-verified (question 2)
+
+| Interaction | Tier | "Completed" means | State column that proves it | Who confirms (peer?) | Forge surface (live) |
+|---|---|---|---|---|---|
+| post_likes | cheap, reversible | row exists | — | nobody | like/unlike loop → use once-per-(user,post) |
+| post_comments | cheap, reversible | row exists and `is_hidden=false` | is_hidden | nobody | unlimited per post (no uniq) |
+| poll_votes | cheap, reversible | row exists | — | nobody | delete/re-vote |
+| follows | cheap, reversible | row exists | — | nobody | follow/unfollow |
+| resource_bookmarks/favorites | cheap, private | row exists | — | nobody | — |
+| petition_signatures | medium (legal affirmation, server-stamped) | row exists, petition `status='approved'` | petitions.status, exported_at (locks withdraw) | nobody (self-affirmed) | withdraw until export |
+| safety_alerts | medium | alert live; **admin-verified** | `verified`, `verified_by`, `verified_at` (admin_verify_safety_alert) | admin | owner can delete |
+| safety_alert_votes | medium | vote cast | vote ∈ confirm/clear | nobody (it IS the peer check of someone else's alert) | flip allowed |
+| resource_opt_ins | **completed** | `status='completed'` (CHECK pending/accepted/declined/completed) + `completed_at` set by BEFORE U trigger | status, completed_at | **post author alone** (unilateral UPDATE, `opt_ins_update` policy) | author can UPDATE status/seeker_id (Q: priv true); direct INSERT bypasses RPC |
+| conversations | **completed** | `status='completed'` (enum pending/active/completed/declined/cancelled) | status | intended volunteer-only (`use-conversations.ts:383-390` client `.eq('volunteer_id')`), **DB lets either participant** (`conversations_update_participants`) | either party |
+| reviews | **peer-verified** | row exists for a `completed` opt-in/conversation, reviewer = the counterparty (`submit_review` body) | rating, would_recommend | **the counterparty** — the only true peer confirmation in the schema | reviewer can UPDATE reviewee_id/rating or DELETE (Q: priv true) |
+| event_checkins | completed attendance | row exists | checked_in_by ≠ user_id → organizer-verified | organizer, *if* `checked_in_by` is an org admin | `checked_in_by` is client-supplied (Q: INSERT priv true; policy only constrains user_id) — self check-in sets checked_in_by = self |
+| resources (user-submitted) | **admin-verified contribution** | status pending → `approved` via `approve_resource` | status, moderated_by, moderated_at | admin | none after approval (UPDATE only while pending) |
+| content_reports | moderation | status open → `upheld` | status (admin_resolve_report) | admin | — |
+
+Peer-verified set (another party confirms): **reviews** (counterparty), **opt-in completion** (offerer confirms seeker's receipt, but unilateral), **conversation completion** (unilateral), **safety_alert confirm votes** (other users confirm an alert), **admin approve** (resources, safety alerts, reports upheld), **organizer check-in** (only if checked_in_by is locked). The strongest two-sided proof available is: `completed` opt-in/conversation **AND** a review from the counterparty with `would_recommend = true` (or rating ≥ 4).
+
+State machines (live CHECK/enum):
+- resource_opt_ins: `pending → accepted | declined → completed` (no DB enforcement of ordering; author can jump pending→completed). pending → deleted via withdraw.
+- conversations: `pending → active | declined | cancelled; active → completed` (ordering unenforced).
+- safety_alerts: `live → expired | cleared (≥3 clear & clear>confirm, in vote_safety_alert) | removed (admin)`; verified is orthogonal.
+- resources: `pending → approved | rejected → archived`.
+- petitions: `draft → approved → archived`; exported_at locks signatures.
+- content_reports: `open → dismissed | upheld`; 3 distinct open reporters auto-hide the post.
+
+---
+
+## 3. Category attribution (question 3)
+
+Target taxonomy: `resource_category` enum, 25 values (Q: pg_enum): food, housing, healthcare, employment, education, legal, transportation, utilities, clothing, financial, mental_health, substance_abuse, domestic_violence, childcare, senior_services, disability_services, veteran_services, immigration, other, eitc_tax_filing, free_legal, prenatal_natal_care, waste_disposal, free_camping, free_goods_donation.
+
+| Interaction | Path to resource_category | Coverage |
+|---|---|---|
+| posts (resource_post / source_offer with a resource) | `posts.resource_id → resources.category` | only when resource_id set (nullable) |
+| seeker_request / source_offer chips | `posts.metadata->'categories'` — **different vocabulary**: `OE_CATEGORIES` = Food, Housing, Goods, Transit, Health, Money, Care, Education, Work, Legal (`post-type-wizard.tsx:97-100`) | needs a 10→25 crosswalk |
+| likes / comments / poll_votes | via `post_id → posts.resource_id → resources.category` | only if parent post has resource_id |
+| resource_opt_ins | `resource_id` (denormalized from post by `opt_in_to_post`) → category | as good as the post's resource_id |
+| reviews | `opt_in_id → resource_opt_ins.resource_id` or `conversation_id → conversations.resource_id` | conversation path **always** has a category (resource_id NOT NULL) |
+| conversations | `resource_id NOT NULL → resources.category` | 100% |
+| bookmarks / favorites / saved_resources | `resource_id → category` (saved_resources also has free-text `resource_category`) | 100% (nullable in saved_resources) |
+| resources (submitted) | `category` directly | 100% |
+| petitions / signatures | `petitions.cause_category` text — live values `land_rights`, `infrastructure` (not the enum) | separate vocabulary |
+| safety_alerts / votes | `alert_type` (weather/road_closure/speeding/general) | no resource category |
+| event_checkins | `occurrence → assistance_events.event_type` (text) / `organizations.org_type` | no resource category |
+| follows, content_reports, messages | none | **no category path** |
+
+Data-reality caveat (Q): approved resources by category — `other` 17,631 (92%, mostly IMLS libraries), `housing` 1,364, food 21, everything else ≤ 14. Category-weighted badges will be dominated by "other" unless `other` is excluded or IMLS is remapped (e.g. libraries → education).
+
+---
+
+## 4. Reusable patterns (question 4)
+
+- **Denormalized counter trigger**: `sync_post_like_count` / `sync_post_comment_count` — SECDEF, `SET search_path public,pg_temp`, AFTER I/D/U, recompute `count(*)` for `COALESCE(NEW.x, OLD.x)`, handles re-point on UPDATE, `RETURN NULL` (Q: pg_get_functiondef). Recompute-from-source is idempotent — contrasts with the ledger's append-only increment model.
+- **Aggregate on profiles**: `recompute_harmony` (`supabase/migrations/20260604150000_reviews_and_harmony.sql:96-125`) AVG+COUNT per reviewee into `profiles.harmony_score/harmony_reviews_count`; trigger-maintained because the badge renders on many surfaces (memory phaseC "Harmony = trigger-maintained denormalized column").
+- **Forge-guard lesson** (`20260604150000…:23-40`, memory `pattern-feed-social-resource-matching-phaseC.md` defect 1): a new meaningful profiles column inherits table-level UPDATE; fix = `REVOKE UPDATE ON profiles` table-level then `GRANT UPDATE(<user-editable list>)`. Live state now: profiles relacl has **no** table-level UPDATE for authenticated (only `m`), all writes are column grants (Q: attacl) → a new badge/level column is non-writable by default; it needs an explicit `GRANT SELECT(col)` to anon + authenticated to be readable.
+- **Guest guard inline**: `COALESCE((SELECT (auth.jwt()->>'is_anonymous')::boolean), false)` at top of every SECDEF RPC (submit_review, opt_in_to_post, vote_safety_alert…).
+- **Immutable-ledger precedent (`audit_log`)**: no UPDATE/DELETE policy, but **"Users insert own audit events" INSERT policy + table-level ALL grants to anon/authenticated** (Q) — it is append-only, not forge-proof. A ledger modeled on it must drop the client INSERT policy (trigger-only writes).
+- **Atomic slot RPC**: `SELECT … FOR UPDATE` in `opt_in_to_post` (Q body).
+- **Admin elevation**: `claim-facilitator-admin` (grant-only, HMAC-peppered code, rate limit via `admin_code_redemptions`).
+
+---
+
+## 5. Where badges surface (question 5)
+
+| Surface | File | Current author/profile read | Badge-add implication |
+|---|---|---|---|
+| Feed card author row | `apps/web/src/components/feed/post-model.ts:188-193` `FEED_POST_SELECT` embeds `user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count)`; `rowToPost` :243-253 maps to `PostAuthor` (:137-144) | explicit column list | add column(s) to embed + `FeedPostRow.user` + `PostAuthor`; `HarmonyBadge` rendered at `feed-panel.tsx:908-910, 1109` is the sibling slot |
+| Ranked feed | `ranked_feed` returns `TABLE(id, score, distance_bucket)` only (Q) → hydrated via FEED_POST_SELECT | none | no RPC change needed |
+| Realtime | publication `posts` column list excludes location and carries no author; **profiles is not in supabase_realtime** (Q) | — | badge changes do not stream; card refresh = next fetch |
+| Opt-in seeker list | `feed-panel.tsx:1439` embeds `seeker:profiles(... harmony_score, harmony_reviews_count)` | explicit | second author surface |
+| Public profile | `apps/web/src/app/profile/[username]/page.tsx:66-71` selects `id, username, first_name, avatar_url, bio, is_verified, created_at, is_staff`; posts at :94-97 | explicit | badge shelf goes here (SSR route, not a panel) |
+| Overview/Impact | `apps/web/src/components/panels/overview-panel.tsx` (358 lines) — reads posts + post_likes for Recent Activity (:183-209), static QuickAction cards (:270-312), Reminders placeholder (:346-352) | own rows only | Sprouts memory anchor `overview-panel.tsx:345-353` has **drifted** (now the Reminders placeholder); entry card must be re-anchored |
+| Panel registry | `feed-shell.tsx:59` PanelType union, `:515` VALID_PANELS | — | new `'sprouts'`/badges panel = union + VALID_PANELS + PanelRenderer entry |
+
+Grant constraint (Q: pg_attribute.attacl): profiles has column-only grants; `harmony_score/harmony_reviews_count` = `{authenticated=r, anon=r}`; `full_name`, `last_name`, `location`, `is_admin` are unreadable by clients. Any new profile column shown on the feed must receive `GRANT SELECT(col) TO anon, authenticated`, or the embedded select 401/42501s for the whole query (memory `pattern-feed-column-pii-gate-requires-read-path-first`). A separate `user_badges` table joined into FEED_POST_SELECT would need its own FK path from posts/profiles and SELECT policy + grants for anon.
+
+---
+
+## 6. Guests (question 6)
+
+- Identity: `auth.users.is_anonymous` (Q: 5 of 8 users true) and JWT claim `is_anonymous` (`20260611173053_guest_access_anonymous_gating.sql:8-16`). Guests run as Postgres role `authenticated`, not `anon`.
+- Enforcement: RESTRICTIVE `…_block_anon_insert/update` policies on posts, post_likes, post_comments, follows, resource_bookmarks, resource_opt_ins, resources, conversations, messages, profiles(update), audit_log (Q: pg_policies) + inline guard in SECDEF RPCs.
+- **Gaps (live)**: no RESTRICTIVE guest block on `poll_votes`, `event_checkins`, `favorites`, `saved_resources` (Q); `withdraw_petition_signature` and `delete_safety_alert` have no guest guard (Q bodies); the petition sign route checks `getUser()` only, not `is_anonymous` (`route.ts:61-70`), and inserts with service role → guests can sign petitions today.
+- Ledger implication: the trigger must decide guest-ness from `SELECT is_anonymous FROM auth.users WHERE id = <actor>` (works for service-role writers), not from `auth.jwt()`. A guest who later links an identity keeps the same `auth.users.id` with `is_anonymous` flipping to false — so skip-at-write means pre-conversion activity is never credited (consistent with "guests read-only").
+
+---
+
+## 7. Data reality → thresholds (question 7)
+
+- Permanent users: 3 (2 admins). Guests: 5. First signup 2026-06-07, last 2026-09-20 (Q).
+- Peer-verified interactions ever: 0 reviews, 0 completed opt-ins, 0 conversations (Q).
+- app_logs last 30 d: feed.load.complete 9 events from 2 users; top events are realtime subscribe + admin checks (Q) — traffic is operator/dev.
+- Implication: any absolute threshold (e.g. "10 verified exchanges → Community Moderator") yields zero eligible users for the foreseeable future; any low threshold (1–3) is trivially gamed by two colluding accounts given the forge surfaces in §2. Thresholds must be config (a table row, like `ranking_config` which already exists with 1 row) rather than constants, so they can be tuned once real traffic exists. Backfill is a no-op (source tables empty) — the ledger can start clean.
+
+---
+
+## 8. Entities for the P2 design (derived, not built)
+
+- `engagement_events` (append-only): actor_id, event_type, target_type, target_id, category (resource_category, nullable), verification ('self'|'peer'|'admin'), source_table, source_pk, metadata jsonb, created_at. Uniqueness `(actor_id, event_type, target_id)` enforces award-once-per-pair-ever for reversible types. Writers: SECDEF AFTER triggers only; no client INSERT/UPDATE/DELETE policy; SELECT own.
+- `user_engagement_counters`: user_id, per-event-type and per-category counts, xp. Written by the same trigger transaction.
+- `badges` catalog + `user_badges` (earned, monotonic — never revoked by source-row deletion, per "never wilt" `memory:17`).
+- Privilege ladder: role column/enum or `admin_role_requests` table with approver_id (higher tier) → requires touching `is_current_user_admin()` semantics (51 policies) or adding a parallel `current_user_role_at_least(role)` helper.
+
+Invariants to hold between rows:
+1. Every `engagement_events` row points at a source row that existed at insert time (source_pk), and its actor is non-anonymous per auth.users.
+2. For reversible sources, delete of the source row never deletes the event (append-only) and re-insert never creates a second event (unique pair).
+3. `peer`-verification events are emitted on the state TRANSITION (opt-in → completed, review insert by counterparty), and require the verifying column to be non-writable by the beneficiary — today reviews.reviewee_id, opt_ins.status/seeker_id, conversations.status, event_checkins.checked_in_by are all beneficiary- or counterparty-writable.
+4. Counters = f(events) (recomputable from the ledger); badges = monotone f(counters).
+5. Any profiles column exposed on posts has anon+authenticated SELECT column grants.
+
+Where the traffic will be (by design, not data — data is 0): likes > comments > follows > poll votes (cheap, high-volume, reversible) ≫ opt-ins/conversations ≫ reviews (low-volume, high-trust). A ledger row per cheap action is the volume driver; peer-verified rows are the privilege driver.
+
+---
+
+# P2.1a — AS BUILT (wave feed-fullfeed-p2-1a-engagement)
+
+Migration `supabase/migrations/20261005000000_p2_1a_engagement.sql` (ledger tip 20261004000000). Replays cleanly twice on PG17 (local harness) and is PG15-safe by construction (no PG16/17-only syntax; FILTER aggregates PG9.4+, `gen_random_uuid()` core PG13+, no MERGE). Verified: 9 behavioural cases + 7 vitest units + smoke 26 (gated).
+
+## Entities built
+- **`engagement_events`** (append-only ledger): `id, actor_id→auth.users, kind, target_type, target_id, category (family key, nullable), verified, weight, source_table, source_pk, metadata, created_at`. `UNIQUE(actor_id, kind, target_id)` = award-once-per-pair-ever. RLS on; own-SELECT only; no client write policy; table `REVOKE ALL`, `GRANT SELECT` to authenticated. NOT in `supabase_realtime`.
+- **`user_engagement_counters`** (`user_id, dimension, count, updated_at`, PK `(user_id,dimension)`): `dimension` is `family:<key>` (weighted points) or `badge:<key>` (event count). RLS own-SELECT; no client writes.
+- **`badge_config`** (single row, mirrors `ranking_config`): `level1/2/3_threshold` default `3/10/25`, ordered CHECK, singleton CHECK+UNIQUE. Public SELECT; no client writes. An UPDATE fires `recompute_all_badge_summaries()`.
+- **`opt_in_declines`** (private marker, PK `(author_id, seeker_id)` — per author across all their posts): `first_declined_at, last_declined_at, times_declined`. RLS author-only SELECT; no client writes; not published (WAL-safe).
+- **`profiles.badge_summary jsonb`**: `{families:{<fam>:{count,level}}, badges:{<badge>:{count,level}}, updated_at}` — only level>0 dimensions present. `GRANT SELECT(badge_summary)` to anon+authenticated (profiles has column-only grants). PII columns (full_name etc.) stay private (regression-guarded in smoke 26).
+
+## I1 derivation table (as built)
+See the header of the migration for the full table. Kinds: `like, poll_vote, follow, comment, petition_signature, opt_in_completed_provider, opt_in_completed_seeker, conversation_completed, review_received, safety_alert_verified, resource_approved`, plus the reserved `appreciation_gift` (P2.1b, no producer yet). Completed opt-in credits BOTH provider (Helper + family) and seeker (family). Completed conversation credits both participants (Connector + family). Only `review_received` (peer), `safety_alert_verified` (admin) and `resource_approved` (admin) are `verified=true`; P3 admin eligibility reads verified rows only.
+
+## Weights / dimensions
+Family points += kind weight (like/poll_vote/comment 1; opt_in_completed_seeker 2; opt_in_completed_provider / conversation_completed / review_received / resource_approved 3). Community-badge dimension += 1 per qualifying event. Community badges: `voice`←comment, `helper`←opt_in_completed_provider, `connector`←conversation_completed, `advocate`←petition_signature, `watcher`←safety_alert_verified.
+
+## Category-family crosswalk (`engagement_category_family`)
+25 `resource_category` → 10 families (food, housing, goods, transit, health, money, care, education, work, legal). `other` → NULL (excluded — 92% of approved resources are `other`/IMLS libraries and would swamp the families). `utilities`→money, `waste_disposal`→goods, `free_camping`→housing, `domestic_violence/childcare/senior_services/disability_services/veteran_services`→care.
+
+## I3 summary correctness
+`recompute_badge_summary(user)` rebuilds the jsonb from the user's counters + config. `recompute_user_engagement(user)` rebuilds counters from the ledger then re-derives the summary (full recompute). The incremental trigger path (`record_engagement_event`) is proven equal to the full recompute (behavioural case 5). A `badge_config` UPDATE recomputes every user's summary (case 6). All write helpers are SECDEF, `SET search_path=public,pg_temp`, `REVOKE EXECUTE FROM PUBLIC,anon,authenticated` (recompute fns GRANTed to service_role for ops).
+
+## I5 unblock flow
+`unblock_opt_in(opt_in)` (SECDEF, authenticated-only, guest-guarded): checks the caller authored the post and the opt-in is `declined`, then performs a sanctioned `declined→pending` transition. The P2.0 `enforce_opt_in_transition` graph was extended with a `declined→pending` edge permitted ONLY when the transaction-local GUC `feed.optin_unblock='on'` (set by the RPC) — forward-only holds for every other caller. **Slot-neutral**: the slot is consumed at opt-in and NOT restored on decline (P2.0 behaviour), so the declined seeker still holds it; unblock reuses that same slot. The private `opt_in_declines` marker survives the unblock and is author-only (RLS), never in the seeker's view, a public view, or the WAL.
+
+## UI (capability delivered)
+- Profile page (`app/profile/[username]/page.tsx`) renders an accessible **Community Badges** section from `badge_summary` via the pure `lib/engagement-badges.ts` mapper (+ empty state). Family color from `CATEGORY_META`; lucide icons; earth-tone styling.
+- Author opt-in management (`components/panels/feed-panel.tsx`): an **Unblock** button on `declined` opt-ins (calls `unblock_opt_in`) and a private **"Declined before"** marker label on seekers in `opt_in_declines` (loaded author-only).
+
+## Postdeploy order (see GIT_PLAN)
+The migration is fully additive/non-breaking to the currently-deployed client (new tables/column/RPC; no read path changes for the old client). The new client READS `profiles.badge_summary` and CALLS `unblock_opt_in` + reads `opt_in_declines`, so the migration MUST be live before the new Vercel deploy serves traffic. Because it is additive it is applied to prod BEFORE the deploy (zero risk to the old client): (1) apply migration + record ledger row `20261005000000`; (2) regenerate `packages/database/types.ts` from prod (reconciles the hand-added types); (3) confirm Vercel deploy READY for the develop tip; (4) run smoke 26.

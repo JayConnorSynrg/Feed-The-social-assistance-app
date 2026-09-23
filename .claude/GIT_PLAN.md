@@ -2370,3 +2370,44 @@ depends_on: feed-fullfeed-p2-w1.1
 created_at: "2026-09-20T05:00:00.000Z"
 completed_at: "2026-09-20T05:27:15.000Z"
 ```
+
+```yaml
+id: feed-fullfeed-p2-1a-engagement
+status: in_progress
+type: branch+commit+pr
+description: "feat(feed): P2.1a engagement ledger + profile badges + opt-in unblock (on the P2.0 integrity floor). Migration 20261005000000 (ledger tip 20261004000000) builds: append-only engagement_events ledger (UNIQUE(actor_id,kind,target_id) = award-once-ever; RLS own-read; NO client write policy; not published), user_engagement_counters (family:<k> weighted points / badge:<k> event counts), single-row tunable badge_config (3/10/25, mirrors ranking_config; an UPDATE recomputes all summaries), private per-author opt_in_declines marker (RLS author-only; not published), and profiles.badge_summary jsonb (GRANT SELECT to anon+authenticated — profiles has column-only grants; PII stays private). 11 kinds + reserved appreciation_gift (P2.1b). 10 SECDEF AFTER triggers credit the ledger from post_likes/poll_votes/follows/post_comments/petition_signatures/resource_opt_ins/conversations/reviews/safety_alerts/resources; guests (auth.users.is_anonymous) + NULL actors earn nothing; state-transition kinds fire on the transition INTO the qualifying state only. verified=true only for review_received (peer) / safety_alert_verified + resource_approved (admin); P3 admin eligibility reads verified rows. Completed opt-in credits provider (Helper+family) AND seeker (family); completed conversation credits both (Connector+family). I3: badge_summary = recompute(ledger,config), maintained incrementally + full recompute proven equal. I5: unblock_opt_in(opt_in) SECDEF authenticated-only — author-only, declined-only, sanctioned declined->pending via txn-local GUC feed.optin_unblock (forward-only holds for every other caller); slot-neutral (slot held from opt-in, not restored on decline); marker survives, author-only. UI: profile page Community Badges section (pure lib/engagement-badges.ts mapper + empty state, CATEGORY_META colors, lucide icons, WCAG labels) + feed-panel author Unblock button on declined opt-ins + private 'Declined before' marker label. All write helpers SECDEF search_path=public,pg_temp + REVOKE EXECUTE FROM PUBLIC,anon,authenticated (recompute fns -> service_role). types.ts hand-augmented (4 tables + unblock_opt_in + profiles.badge_summary) to mirror post-apply regen. Verified: migration replays twice on PG17 (PG15-safe by construction); 9 behavioural SQL cases; 7 vitest units; tsc 0; build passes; smoke 26 skips pre-apply with 3 mutation-proven probes. DO NOT MERGE — orchestrator validates + authorizes. Migration applied as a SEPARATE post-deploy step (see -postdeploy)."
+branch: feature/feed-fullfeed-p2-1a-engagement
+base: develop
+base_sha: cd9fd8f
+remote: origin
+project_ref: ndtpovonpadugthmcntl
+files:
+  - supabase/migrations/20261005000000_p2_1a_engagement.sql
+  - specs/fullfeed-p2-engagement-model.md
+  - packages/database/types.ts
+  - apps/web/src/lib/engagement-badges.ts
+  - apps/web/src/lib/engagement-badges.test.ts
+  - apps/web/src/components/profile/engagement-badges.tsx
+  - apps/web/src/app/profile/[username]/page.tsx
+  - apps/web/src/components/panels/feed-panel.tsx
+  - apps/web/src/__tests__/smoke/26-p2-1a-engagement.smoke.ts
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+depends_on: feed-fullfeed-p2-0-integrity
+created_at: "2026-09-23T14:00:00.000Z"
+completed_at: null
+```
+
+```yaml
+id: feed-fullfeed-p2-1a-engagement-postdeploy
+status: pending
+type: migration
+description: "POST-DEPLOY step for wave P2.1a. MIGRATION-BEFORE-DEPLOY ORDER (differs from the P2.0 standard ledger-gated order): the new client READS profiles.badge_summary + opt_in_declines and CALLS the unblock_opt_in RPC, so the migration MUST be live before the new Vercel deploy serves traffic. The migration is fully ADDITIVE and non-breaking to the currently-deployed (old) client (new tables/column/RPC only; no read-path change for the old client — profiles has column-only grants so a select('*') would already fail and there are none; every profiles read is an explicit column list or the get_my_profile RPC, neither of which selects badge_summary), so applying it BEFORE the deploy carries zero risk to the old client. ORDER: (1) apply supabase/migrations/20261005000000_p2_1a_engagement.sql to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint (PAT from apps/web/.env.local; shell env var may be stale) — idempotent/replay-safe (BEGIN/COMMIT; CREATE ... IF NOT EXISTS / CREATE OR REPLACE / ADD COLUMN IF NOT EXISTS / DROP ... IF EXISTS / guarded policy creation; PG15+ safe). (2) INSERT the ledger row for 20261005000000 into supabase_migrations.schema_migrations (ON CONFLICT DO NOTHING) in the SAME step. (3) Regenerate packages/database/types.ts from prod (npx supabase gen types typescript ...) to reconcile the hand-added type stubs; expect no functional diff. (4) Confirm the develop squash-merge commit reaches Vercel state=READY on www.sourcetofeed.com (HTTP 200). (5) Run prod-smoke 26 (flips skipped->asserting: both tests pass). VERIFY from catalog AND anon surface: (a) has_column_privilege(anon,'public.profiles','badge_summary','SELECT')=true, authenticated=true, and has_column_privilege(anon,'public.profiles','full_name','SELECT')=false; (b) engagement_events relrowsecurity=true, has_table_privilege(authenticated,...,'INSERT')=false, own-SELECT policy present, 0 client write policies; (c) badge_config anon SELECT=true, authenticated UPDATE=false; (d) opt_in_declines relrowsecurity=true, anon SELECT=false, author-only SELECT policy; (e) all 10 trg_engagement_* triggers present+enabled with the right tgtype bits; (f) has_function_privilege(authenticated,'record_engagement_event(...)','EXECUTE')=false; (g) has_function_privilege(authenticated,'unblock_opt_in(uuid)','EXECUTE')=true, anon=false; (h) enforce_opt_in_transition body contains 'feed.optin_unblock'. DO NOT apply as part of the git merge."
+project_ref: ndtpovonpadugthmcntl
+migration: supabase/migrations/20261005000000_p2_1a_engagement.sql
+depends_on: feed-fullfeed-p2-1a-engagement
+created_at: "2026-09-23T14:00:00.000Z"
+completed_at: null
+```
