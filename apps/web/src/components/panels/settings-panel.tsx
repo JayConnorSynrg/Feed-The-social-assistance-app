@@ -38,6 +38,8 @@ import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
 import { LANGUAGES, languageLabel, GUEST_LANGUAGE_KEY, detectBrowserLanguage } from '@/lib/languages'
+import { logger } from '@/lib/logger'
+import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
 
 // ============================================
 // TYPES
@@ -466,8 +468,28 @@ interface PrivacySectionProps {
 const CHAT_PERSONALIZATION_KEY = 'feed_chat_personalization'
 
 function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
+  // Location sharing (device GPS auto-centering) is off by default and turning it
+  // on requires an explicit second confirmation (INV-E). false→true shows the
+  // inline consent panel and writes nothing until the user confirms; true→false
+  // writes immediately with no confirmation.
+  const [showLocationConsent, setShowLocationConsent] = useState(false)
+
   const handleToggle = (key: keyof SettingsData['privacy']) => {
     const next = !privacy[key]
+
+    if (key === 'shareLocation') {
+      if (next) {
+        // Turning ON: gate behind the consent panel; do NOT persist yet.
+        setShowLocationConsent(true)
+      } else {
+        // Turning OFF: apply immediately, no confirmation.
+        setShowLocationConsent(false)
+        onUpdate({ ...privacy, shareLocation: false })
+        logger.info('geo.optin.toggled', { enabled: false })
+      }
+      return
+    }
+
     onUpdate({ ...privacy, [key]: next })
     // Sync chatPersonalization to its dedicated localStorage key so use-chat.ts
     // reads the correct value at send-time without an extra prop-drill.
@@ -480,6 +502,14 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
         }
       } catch { /* ignore private browsing write errors */ }
     }
+  }
+
+  // Called only after the user confirms the consent panel: this is where
+  // shareLocation is first persisted as true (INV-E: written only after confirm).
+  const confirmLocationSharing = () => {
+    setShowLocationConsent(false)
+    onUpdate({ ...privacy, shareLocation: true })
+    logger.info('geo.optin.toggled', { enabled: true })
   }
 
   return (
@@ -501,10 +531,37 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
       />
       <ToggleRow
         label="Share Location"
-        description="Share your location to find nearby resources"
+        description="Auto-center the map on your area using your device location"
         value={privacy.shareLocation}
         onChange={() => handleToggle('shareLocation')}
       />
+      {showLocationConsent && (
+        <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+          <p className="font-medium text-sm text-amber-900 mb-2">Turn on location sharing?</p>
+          <p className="text-xs text-amber-800 mb-3">
+            When on, the map uses your device location to auto-center on your area. Your
+            device will ask for permission the next time you open the map. This does not
+            place a live pin or share your location with anyone. You can turn it off any time.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={confirmLocationSharing}
+              className="text-[#4a5d23] border-[#4a5d23] hover:bg-[#4a5d23]/10"
+            >
+              Yes, turn on
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLocationConsent(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
       <ToggleRow
         label="Share Activity"
         description="Show your activity in the community feed"
@@ -1040,7 +1097,9 @@ function AccessibilitySection({ accessibility, onUpdate }: AccessibilitySectionP
 // ============================================
 // LOCAL PREFERENCES (notifications, privacy, accessibility)
 // ============================================
-const PREFS_KEY = 'feed-settings-prefs'
+// Single source of truth for this literal + the shareLocation read logic lives
+// in @/lib/privacy-prefs (INV-F). Alias it here to keep call sites unchanged.
+const PREFS_KEY = PRIVACY_PREFS_KEY
 
 function loadLocalPrefs(): Omit<SettingsData, 'profile'> {
   if (typeof window === 'undefined') {

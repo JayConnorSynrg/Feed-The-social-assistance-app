@@ -43,9 +43,20 @@ import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger } from '@/lib/logger'
+import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
 import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
 import { isApproximateGeocode, buildTierHistogram } from '@/lib/geocode-accuracy'
+
+/**
+ * Coarsen a raw GPS accuracy (meters) into a privacy-safe bucket for telemetry.
+ * Never emit the raw meters — a precise accuracy can narrow a user's location.
+ */
+function accuracyBucket(accuracy: number | null | undefined): 'lt100m' | 'lt1km' | 'gte1km' {
+  if (typeof accuracy === 'number' && accuracy < 100) return 'lt100m'
+  if (typeof accuracy === 'number' && accuracy < 1000) return 'lt1km'
+  return 'gte1km'
+}
 
 // ============================================
 // GEOCODE CACHE (localStorage + in-memory, keyed by "city, state")
@@ -395,7 +406,9 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { profile, loading: authLoading } = useAuth()
 
   // Real geolocation
-  const { position, getCurrentPosition } = useGeolocation()
+  const { position, error: geoError, getCurrentPosition } = useGeolocation()
+  // Timestamp of the device-GPS request, used to derive geo.fix.acquired duration.
+  const geoRequestStartRef = useRef<number | null>(null)
 
   // Origin point for distance estimates: live GPS if available, else profile.
   // Deps use the exact property paths the React Compiler infers (non-optional)
@@ -507,8 +520,16 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   }, [profile?.location_city, profile?.location_state, profile?.latitude, profile?.longitude, userHasMovedMap])
 
   // Priority 2: Browser geolocation — fallback only when profile has no location.
-  // Kicks off the GPS request once on mount.
+  // Kicks off the GPS request once on mount, but ONLY when the user has explicitly
+  // opted in via Settings → Privacy → Share Location. When off (the default, and
+  // the absent/malformed-prefs case), NO device GPS is acquired: getCurrentPosition
+  // is never called, so `position` stays null and the flyTo effect (below) and the
+  // userOrigin memo's GPS branch are both transitively inert. Profile-based
+  // centering (Priority 1a/1b) is unaffected and still runs. Panels unmount on
+  // switch, so this mount-time read reflects the toggle on the next map open.
   useEffect(() => {
+    if (!readShareLocationPref()) return
+    geoRequestStartRef.current = Date.now()
     getCurrentPosition()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -536,14 +557,26 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       duration: 1000,
     })
     track('map_geolocated', { source: 'browser_gps' })
-    logger.info('map.geolocation.acquired', {
-      lng: position.coords.longitude,
-      lat: position.coords.latitude,
+    // INV-G: coordinate-free telemetry — never log raw lat/lng. Emit a coarse
+    // accuracy bucket + duration + source instead. geoRequestStartRef is set at
+    // the mount effect immediately before the sole getCurrentPosition() call, so
+    // it is guaranteed non-null on any path where `position` has resolved.
+    logger.info('geo.fix.acquired', {
+      accuracy_bucket: accuracyBucket(position.coords.accuracy),
+      duration_ms: Date.now() - (geoRequestStartRef.current ?? Date.now()),
       source: 'browser_gps',
     })
     setHasGeocentered(true)
     // Do NOT set userHasMovedMap here — user hasn't touched the map.
   }, [position, userHasMovedMap, hasGeocentered, hasProfileCentered])
+
+  // Emit a coordinate-free geo.fix.error when a device-GPS request fails
+  // (permission denied, timeout, unsupported). Only the numeric error code is
+  // logged — never coordinates or the raw message.
+  useEffect(() => {
+    if (!geoError) return
+    logger.info('geo.fix.error', { error_code: geoError.code })
+  }, [geoError])
 
   // Real Supabase resources query
   const { resources: realResources, loading: resourcesLoading, error: resourcesError } = useViewportResources({

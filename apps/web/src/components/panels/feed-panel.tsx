@@ -39,6 +39,7 @@ import { EventsPanel } from './events-panel'
 import { PetitionsPanel } from './petitions-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
+import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { getErrorMessage } from '@/lib/errors'
@@ -1725,7 +1726,11 @@ export function FeedPanel() {
     try {
       await Promise.race([timeoutPromise, (async () => {
         if (geoRef.current === undefined) {
-          geoRef.current = await readGeoIfGranted()
+          // INV-H: device location is used only when the user has explicitly
+          // opted in via Settings → Privacy → Share Location. When off (default),
+          // skip the read entirely; ranked_feed then falls back to recency+
+          // engagement ranking (the graceful no-geo path).
+          geoRef.current = readShareLocationPref() ? await readGeoIfGranted() : null
         }
         const geo = geoRef.current
         const hasGeo = geo !== null
