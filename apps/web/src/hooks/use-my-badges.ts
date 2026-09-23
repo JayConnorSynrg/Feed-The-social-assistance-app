@@ -14,25 +14,92 @@
  * the private summary regardless. Mirrors the repo read pattern (use-follows.ts,
  * use-comments.ts):
  *   - AbortSignal.timeout(QUERY_TIMEOUT_MS) on every read
- *   - isQueryTimeout treats a timeout / in-flight-fetch abort as benign so the
- *     spinner is always cleared (see pattern-nextjs-fetch-abort) and a friendly
- *     error is shown for real failures
- *   - logger.error on failure; loading always resolves in finally
+ *   - a timeout ALWAYS surfaces the error state with Retry (never the empty
+ *     state) — the card must not imply "No badges yet" on a failed read
+ *   - the unmount abort is ignored by the hook's `!active` guard, not here
+ *   - logger.error on real failure; loading always resolves in finally
  *   - singleton browser client (see pattern-supabase-singleton-stuck-spinner)
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@feed/database'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { logger } from '@/lib/logger'
 import type { BadgeSummary } from '@/lib/engagement-badges'
 
+/** User-visible copy for a read that timed out (matches use-follows.ts style). */
+export const BADGES_TIMEOUT_MESSAGE =
+  'Loading your badges timed out — please check your connection and retry.'
+
+export interface MyBadgesResult {
+  summary: BadgeSummary | null
+  privateSummary: BadgeSummary | null
+  /** User-visible error string, or null on success. */
+  error: string | null
+}
+
+/**
+ * Load the caller's own public + private badge summaries. Pure and node-testable
+ * (see use-my-badges.test.ts): it NEVER throws — a timeout or any failure
+ * resolves with `error` set and null summaries, so the caller renders the error
+ * state and can never fall through to the "No badges yet" empty state on a
+ * failed read. The unmount abort is handled by the hook's `!active` guard, so a
+ * timeout that reaches here is a genuine read timeout and is surfaced as such.
+ */
+export async function loadMyBadges(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<MyBadgesResult> {
+  try {
+    const [pub, priv] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('badge_summary')
+        .eq('id', userId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        .maybeSingle(),
+      supabase
+        .from('user_private_badge_summary')
+        .select('summary')
+        .eq('user_id', userId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        .maybeSingle(),
+    ])
+
+    if (pub.error) throw pub.error
+    // A missing private row is normal (user has no private badges yet).
+    if (priv.error) throw priv.error
+
+    return {
+      summary: (pub.data?.badge_summary as BadgeSummary | null) ?? null,
+      privateSummary: (priv.data?.summary as BadgeSummary | null) ?? null,
+      error: null,
+    }
+  } catch (err: unknown) {
+    if (isQueryTimeout(err)) {
+      // A real read timeout (unmount abort is already filtered by the hook's
+      // !active guard). Surface the error with Retry — never the empty state.
+      return { summary: null, privateSummary: null, error: BADGES_TIMEOUT_MESSAGE }
+    }
+    logger.error('my_badges_fetch_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      summary: null,
+      privateSummary: null,
+      error: getFriendlyErrorMessage(err, "Couldn't load your badges. Please try again."),
+    }
+  }
+}
+
 export interface MyBadgesState {
   summary: BadgeSummary | null
   privateSummary: BadgeSummary | null
   loading: boolean
-  /** User-visible error string, or null. Timeouts/aborts are benign (null). */
+  /** User-visible error string, or null. */
   error: string | null
   /** Re-run the fetch (used by the retry affordance). */
   reload: () => void
@@ -61,46 +128,16 @@ export function useMyBadges(userId: string | null | undefined): MyBadgesState {
     setLoading(true)
     setError(null)
 
-    void (async () => {
-      try {
-        const [pub, priv] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('badge_summary')
-            .eq('id', userId)
-            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-            .maybeSingle(),
-          supabase
-            .from('user_private_badge_summary')
-            .select('summary')
-            .eq('user_id', userId)
-            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-            .maybeSingle(),
-        ])
-
+    void loadMyBadges(supabase, userId)
+      .then((result) => {
         if (!active) return
-        if (pub.error) throw pub.error
-        // A missing private row is normal (user has no private badges yet).
-        if (priv.error) throw priv.error
-
-        setSummary((pub.data?.badge_summary as BadgeSummary | null) ?? null)
-        setPrivateSummary((priv.data?.summary as BadgeSummary | null) ?? null)
-        setError(null)
-      } catch (err: unknown) {
-        if (!active) return
-        if (isQueryTimeout(err)) {
-          // Timeout or an in-flight fetch aborted by a Next.js auth re-render:
-          // benign — clear the spinner, keep whatever we already have.
-          return
-        }
-        logger.error('my_badges_fetch_failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-        setError(getFriendlyErrorMessage(err, "Couldn't load your badges. Please try again."))
-      } finally {
+        setSummary(result.summary)
+        setPrivateSummary(result.privateSummary)
+        setError(result.error)
+      })
+      .finally(() => {
         if (active) setLoading(false)
-      }
-    })()
+      })
 
     return () => {
       active = false
