@@ -1141,9 +1141,11 @@ function PostCard({
                   <button
                     data-testid={`unblock-optin-${oi.id}`}
                     onClick={() => onAuthorUnblockOptIn?.(oi.id)}
+                    title="Unblock — they can request again"
+                    aria-label="Unblock — they can request again"
                     className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
                   >
-                    Unblock
+                    Unblock — they can request again
                   </button>
                 )}
                 {oi.status === 'pending' && (
