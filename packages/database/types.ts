@@ -182,6 +182,55 @@ export type Database = {
         }
         Relationships: []
       }
+      appreciation_gifts: {
+        Row: {
+          created_at: string
+          giver_id: string
+          id: string
+          item: string
+          post_id: string | null
+          receiver_id: string
+        }
+        Insert: {
+          created_at?: string
+          giver_id: string
+          id?: string
+          item: string
+          post_id?: string | null
+          receiver_id: string
+        }
+        Update: {
+          created_at?: string
+          giver_id?: string
+          id?: string
+          item?: string
+          post_id?: string | null
+          receiver_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appreciation_gifts_giver_fk"
+            columns: ["giver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appreciation_gifts_receiver_fk"
+            columns: ["receiver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appreciation_gifts_post_fk"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assistance_events: {
         Row: {
           address: string | null
@@ -4039,6 +4088,10 @@ export type Database = {
         }[]
       }
       gettransactionid: { Args: never; Returns: unknown }
+      give_appreciation: {
+        Args: { p_receiver: string; p_item: string; p_post_id?: string }
+        Returns: Json
+      }
       has_signed_petition: { Args: { p_petition_id: string }; Returns: boolean }
       is_account_locked: {
         Args: { p_email: string }
