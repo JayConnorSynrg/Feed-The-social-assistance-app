@@ -52,6 +52,8 @@ import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
+import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
+import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
 import { getCategoryTailwind, getCategoryLabel } from '@/lib/resource-categories'
@@ -772,6 +774,8 @@ interface PostCardProps {
   authorReviewedOptInIds?: Set<string>
   /** seeker ids this author has declined/blocked before (private marker, author-only) */
   authorDeclinedSeekerIds?: Set<string>
+  /** whether the current signed-in user is a guest (anonymous) — gates the appreciation picker */
+  currentUserIsGuest?: boolean
   /** whether the current user follows this post's author */
   isFollowingAuthor?: boolean
   /** follow/unfollow the post author — only passed when currentUserId != post.author.id */
@@ -823,6 +827,7 @@ function PostCard({
   onAuthorUnblockOptIn,
   authorReviewedOptInIds,
   authorDeclinedSeekerIds,
+  currentUserIsGuest,
   isFollowingAuthor,
   onFollow,
   onUnfollow,
@@ -839,6 +844,8 @@ function PostCard({
     post.slotsRemaining <= 0
 
   const [optInListOpen, setOptInListOpen] = useState(false)
+  // Author profile sheet (name/avatar click) — badges + follow + appreciation (P2.1b).
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false)
 
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -899,24 +906,38 @@ function PostCard({
 
       {/* Author Row */}
       <div className="flex items-start gap-3 mb-3">
-        {/* Avatar */}
-        <div className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0">
+        {/* Avatar — opens the author profile sheet (badges + follow + appreciation). */}
+        <button
+          type="button"
+          onClick={() => setProfileSheetOpen(true)}
+          aria-label={`View ${post.author.name}'s profile`}
+          data-testid={`author-open-${post.author.id}`}
+          className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-lime-500"
+        >
           {post.author.avatar ? (
-            <img src={post.author.avatar} alt={post.author.name} className="w-full h-full rounded-full" />
+            <img src={post.author.avatar} alt={post.author.name} className="w-full h-full rounded-full object-cover" />
           ) : (
             <User className="w-5 h-5 text-white" />
           )}
-        </div>
+        </button>
 
         {/* Author Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <h3 className="font-medium text-sm truncate">{post.author.name}</h3>
+            <button
+              type="button"
+              onClick={() => setProfileSheetOpen(true)}
+              className="font-medium text-sm truncate hover:underline focus:outline-none focus:underline"
+              data-testid={`author-name-${post.author.id}`}
+            >
+              {post.author.name}
+            </button>
             <HarmonyBadge
               score={post.author.harmonyScore}
               count={post.author.harmonyReviewsCount}
               userId={post.author.id}
             />
+            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${categoryColor}`}>
               {post.category}
             </span>
@@ -927,6 +948,27 @@ function PostCard({
             <span>{getRelativeTime(post.timestamp)}</span>
           </div>
         </div>
+
+        {/* Author profile sheet — reuses the feed's follow handlers; appreciation for
+            signed-in non-guest, non-self viewers. */}
+        <AppreciationSheet
+          open={profileSheetOpen}
+          onOpenChange={setProfileSheetOpen}
+          author={{
+            id: post.author.id,
+            name: post.author.name,
+            avatar: post.author.avatar,
+            harmonyScore: post.author.harmonyScore,
+            harmonyReviewsCount: post.author.harmonyReviewsCount,
+            badgeSummary: post.author.badgeSummary,
+          }}
+          currentUserId={currentUserId}
+          isGuest={currentUserIsGuest === true}
+          isFollowing={isFollowingAuthor === true}
+          onFollow={onFollow}
+          onUnfollow={onUnfollow}
+          postId={post.id}
+        />
 
         {/* Follow/Following toggle — only shown for other authors when authenticated */}
         {currentUserId != null && !isAuthor && onFollow && onUnfollow && (
@@ -2559,6 +2601,7 @@ export function FeedPanel() {
                       onAuthorUnblockOptIn={handleAuthorUnblockOptIn}
                       authorReviewedOptInIds={authorReviewedSet}
                       authorDeclinedSeekerIds={authorDeclinedSeekers}
+                      currentUserIsGuest={isAnonymous}
                       isFollowingAuthor={followingIds.has(post.author.id)}
                       onFollow={doFollow}
                       onUnfollow={doUnfollow}

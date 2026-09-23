@@ -19,6 +19,7 @@
  */
 
 import type { Database } from '@feed/database'
+import type { BadgeSummary } from '@/lib/engagement-badges'
 
 // ---------------------------------------------------------------------------
 // Discriminant
@@ -141,6 +142,9 @@ export interface PostAuthor {
   role: string
   harmonyScore: number | null
   harmonyReviewsCount: number
+  /** Public engagement badges (levels only) for the compact author-row strip + profile
+   *  sheet (P2.1b). null when the author has earned none / summary absent. */
+  badgeSummary: BadgeSummary | null
 }
 
 /** The feed's view model for a single post — all 7 discriminants supported. */
@@ -189,7 +193,7 @@ export const FEED_POST_SELECT =
   'id, user_id, content, created_at, is_pinned, is_hidden, image_url, ' +
   'max_seekers, slots_remaining, post_type, petition_id, resource_id, ' +
   'metadata, like_count, comment_count, ' +
-  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count), ' +
+  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count, badge_summary), ' +
   'resource:resources(id, name, category)'
 
 /** The joined row shape returned by FEED_POST_SELECT. */
@@ -215,6 +219,7 @@ export interface FeedPostRow {
     is_staff: boolean | null
     harmony_score: number | null
     harmony_reviews_count: number | null
+    badge_summary: BadgeSummary | null
   } | null
   resource: {
     id: string
@@ -251,6 +256,7 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
       role: row.user?.is_staff ? 'Admin' : 'Community Member',
       harmonyScore: row.user?.harmony_score ?? null,
       harmonyReviewsCount: row.user?.harmony_reviews_count ?? 0,
+      badgeSummary: (row.user?.badge_summary as BadgeSummary | null) ?? null,
     },
     content: row.content,
     timestamp: new Date(row.created_at ?? Date.now()),
