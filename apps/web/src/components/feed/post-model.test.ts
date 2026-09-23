@@ -56,6 +56,7 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
       is_staff: false,
       harmony_score: null,
       harmony_reviews_count: 0,
+      badge_summary: null,
     },
     resource: null,
     ...overrides,

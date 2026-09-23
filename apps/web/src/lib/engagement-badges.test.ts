@@ -7,6 +7,8 @@ import {
   summaryToBadgeList,
   hasNoBadges,
   levelLabel,
+  topBadgesByLevel,
+  COMMUNITY_META,
   type BadgeSummary,
 } from './engagement-badges'
 
@@ -137,5 +139,43 @@ describe('levelLabel', () => {
     expect(levelLabel(1)).toBe('I')
     expect(levelLabel(2)).toBe('II')
     expect(levelLabel(3)).toBe('III')
+  })
+})
+
+describe('appreciated community badge (P2.1b)', () => {
+  it('the "appreciated" key is a known community badge, so it is NOT dropped', () => {
+    // Regression guard: summaryToBadgeList silently drops keys absent from COMMUNITY_META.
+    expect(COMMUNITY_META.appreciated).toBeDefined()
+    const list = summaryToBadgeList({ badges: { appreciated: { level: 2 } } })
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ group: 'community', key: 'appreciated', level: 2 })
+  })
+})
+
+describe('topBadgesByLevel (author-row strip)', () => {
+  const summary: BadgeSummary = {
+    families: { food: { level: 1 }, housing: { level: 3 } },
+    badges: { helper: { level: 2 }, appreciated: { level: 3 }, voice: { level: 1 } },
+  }
+
+  it('returns the top N purely by level desc, across family AND community groups', () => {
+    const top = topBadgesByLevel(summary, 3)
+    expect(top).toHaveLength(3)
+    // Both level-3 badges (housing family, appreciated community) must rank above helper(2).
+    expect(top.map((b) => b.level)).toEqual([3, 3, 2])
+    const keys = top.map((b) => b.key)
+    expect(keys).toContain('housing')
+    expect(keys).toContain('appreciated')
+    expect(keys).toContain('helper')
+    // The level-1 badges (food, voice) must be excluded by the top-3 cut.
+    expect(keys).not.toContain('food')
+    expect(keys).not.toContain('voice')
+  })
+
+  it('returns [] for an empty/missing summary and respects the limit', () => {
+    expect(topBadgesByLevel(null)).toEqual([])
+    expect(topBadgesByLevel(summary, 0)).toEqual([])
+    expect(topBadgesByLevel(summary, 1)).toHaveLength(1)
+    expect(topBadgesByLevel(summary, 1)[0].level).toBe(3)
   })
 })
