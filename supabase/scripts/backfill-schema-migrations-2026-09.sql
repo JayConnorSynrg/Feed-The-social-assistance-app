@@ -11,16 +11,17 @@
 -- supabase_migrations.schema_migrations holds 97 rows (latest version 20260619000100).
 -- supabase/migrations/ holds all 35 versions after 20260619000100, applied to prod
 -- out-of-band through the Management API and never recorded, so `supabase db push`
--- would try to REPLAY them. This wave also ADDS migration 20261002000000
--- (posts_privilege_least), which the post-deploy step applies via the Management API
--- (that endpoint does NOT touch the ledger), so it too must be recorded here.
+-- would try to REPLAY them. This wave also ADDS two migrations — 20261002000000
+-- (posts_privilege_least) and 20261003000000 (restore_realtime_publication) — which the
+-- post-deploy step applies via the Management API (that endpoint does NOT touch the
+-- ledger), so they too must be recorded here.
 --
--- This transaction records ALL 36 versions (35 out-of-band + 20261002000000). Every
--- one is either LIVE now or was SUPERSEDED by a LATER migration that IS live and is
--- also recorded here — so an in-order `db push` replay of the full set reproduces the
--- exact current prod state. Recording them makes push replay nothing.
+-- This transaction records ALL 37 versions (35 out-of-band + 20261002000000 +
+-- 20261003000000). Every one is either LIVE now or was SUPERSEDED by a LATER migration
+-- that IS live and is also recorded here — so an in-order `db push` replay of the full
+-- set reproduces the exact current prod state. Recording them makes push replay nothing.
 --
--- Expected ledger count after this runs: 97 + 36 = 133.
+-- Expected ledger count after this runs: 97 + 37 = 134.
 --
 -- ── VERIFICATION METHOD ──────────────────────────────────────────────────────
 -- Each version was confirmed against the specific catalog object its file
@@ -104,11 +105,12 @@ VALUES
   ('20260929000000', 'ranked_feed_w1_3', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): applied via Supabase Management API; see supabase/migrations/20260929000000_ranked_feed_w1_3.sql']),
   ('20260930000000', 'post_images_bucket', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): applied via Supabase Management API; see supabase/migrations/20260930000000_post_images_bucket.sql']),
   ('20261001000000', 'w1_4_realtime_poll_comment_signals', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): applied via Supabase Management API; see supabase/migrations/20261001000000_w1_4_realtime_poll_comment_signals.sql']),
-  ('20261002000000', 'posts_privilege_least', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): this wave''s migration, applied to prod via Management API in the same post-deploy step; recorded here since that endpoint does not write the ledger'])
+  ('20261002000000', 'posts_privilege_least', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): this wave''s migration, applied to prod via Management API in the same post-deploy step; recorded here since that endpoint does not write the ledger']),
+  ('20261003000000', 'restore_realtime_publication', ARRAY['-- backfilled 2026-09 (feed-fullfeed-h-hygiene): this wave''s migration (restores messages/notifications/conversations to supabase_realtime after the W1.3 SET TABLE wipe), applied to prod via Management API in the same post-deploy step; recorded here since that endpoint does not write the ledger'])
 ON CONFLICT (version) DO NOTHING;
 
--- Expected: 36 rows inserted (0 on a second run — idempotent via ON CONFLICT).
+-- Expected: 37 rows inserted (0 on a second run — idempotent via ON CONFLICT).
 -- Post-apply sanity check (run separately, read-only):
---   SELECT count(*) FROM supabase_migrations.schema_migrations;  -- expect 133 (97 + 36)
+--   SELECT count(*) FROM supabase_migrations.schema_migrations;  -- expect 134 (97 + 37)
 
 COMMIT;
