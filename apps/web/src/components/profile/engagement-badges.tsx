@@ -23,6 +23,7 @@ import {
   MessageCircle,
   Megaphone,
   ShieldAlert,
+  Gift,
   Sprout,
   type LucideIcon,
 } from 'lucide-react'
@@ -49,6 +50,14 @@ const ICONS: Record<string, LucideIcon> = {
   MessageCircle,
   Megaphone,
   ShieldAlert,
+  Gift,
+}
+
+/** Resolve a badge iconName to its lucide component (Sprout fallback). Shared by the
+ *  compact author-row strip (P2.1b) so the icon set stays in one place. */
+export function BadgeGlyph({ iconName, className }: { iconName: string; className?: string }) {
+  const Icon = ICONS[iconName] ?? Sprout
+  return <Icon className={className} strokeWidth={2.5} aria-hidden="true" />
 }
 
 function BadgePill({ badge }: { badge: DisplayBadge }) {
