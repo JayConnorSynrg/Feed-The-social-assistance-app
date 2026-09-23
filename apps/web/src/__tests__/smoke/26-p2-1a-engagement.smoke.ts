@@ -83,7 +83,7 @@ const STATE_SQL = `
          (c.relname='follows'             AND t.tgname='trg_engagement_follow'              AND (t.tgtype & 4) <> 0) OR
          (c.relname='post_comments'       AND t.tgname='trg_engagement_comment'             AND (t.tgtype & 4) <> 0) OR
          (c.relname='petition_signatures' AND t.tgname='trg_engagement_petition_signature'  AND (t.tgtype & 4) <> 0) OR
-         (c.relname='posts'               AND t.tgname='trg_engagement_post_created'        AND (t.tgtype & 4) <> 0) OR
+         (c.relname='resource_opt_ins'    AND t.tgname='trg_engagement_opt_in_insert'       AND (t.tgtype & 4) <> 0) OR
          (c.relname='event_checkins'      AND t.tgname='trg_engagement_event_checkin'       AND (t.tgtype & 4) <> 0) OR
          (c.relname='safety_alert_votes'  AND t.tgname='trg_engagement_safety_alert_vote'   AND (t.tgtype & 4) <> 0) OR
          (c.relname='messages'            AND t.tgname='trg_engagement_message'             AND (t.tgtype & 4) <> 0) OR
@@ -101,6 +101,8 @@ const STATE_SQL = `
     has_function_privilege('authenticated','public.reconcile_engagement(uuid)','EXECUTE') AS reconcile_auth_exec,
     has_function_privilege('anon','public.reconcile_engagement(uuid)','EXECUTE')          AS reconcile_anon_exec,
     has_function_privilege('anon','public.record_engagement_event(uuid,text,text,uuid,text,text,text,boolean)','EXECUTE') AS rec_anon_exec,
+    has_function_privilege('anon','public.credit_post_created(uuid,uuid)','EXECUTE')          AS cpc_anon_exec,
+    has_function_privilege('authenticated','public.credit_post_created(uuid,uuid)','EXECUTE') AS cpc_auth_exec,
     -- unblock_opt_in is client-callable by authenticated only.
     has_function_privilege('authenticated','public.unblock_opt_in(uuid)','EXECUTE')       AS unblock_auth_exec,
     has_function_privilege('anon','public.unblock_opt_in(uuid)','EXECUTE')                AS unblock_anon_exec,
@@ -180,6 +182,8 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     expect(r.reconcile_auth_exec, 'reconcile_engagement must NOT be authenticated-executable').toBe(false)
     expect(r.reconcile_anon_exec, 'reconcile_engagement must NOT be anon-executable').toBe(false)
     expect(r.rec_anon_exec, 'record_engagement_event must NOT be anon-executable').toBe(false)
+    expect(r.cpc_anon_exec, 'credit_post_created must NOT be anon-executable').toBe(false)
+    expect(r.cpc_auth_exec, 'credit_post_created must NOT be authenticated-executable').toBe(false)
     // I5: unblock RPC is authenticated-only; reconcile+unblock are SECDEF+pinned.
     expect(r.unblock_auth_exec, 'authenticated must EXECUTE unblock_opt_in').toBe(true)
     expect(r.unblock_anon_exec, 'anon must NOT EXECUTE unblock_opt_in').toBe(false)
