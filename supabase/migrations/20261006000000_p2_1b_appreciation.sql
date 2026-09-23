@@ -140,11 +140,18 @@ AS $fn$
   END;
 $fn$;
 
--- appreciation_gift is PUBLIC: the earned LEVEL is public (levels only). The giver→receiver
--- edge is private via appreciation_gifts RLS, not via ledger scope. See I4.
+-- engagement_is_public — extends the P2.1a classifier with appreciation_gift (public level).
 CREATE OR REPLACE FUNCTION public.engagement_is_public(p_kind text)
   RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
+  -- Public ONLY when another user can read the actor↔target link through a granted column
+  -- (column grants, not just row RLS). safety_alert_verified is PRIVATE: safety_alerts
+  -- .created_by has no client grant, but verified_at IS granted, so a public write would let
+  -- anyone join profiles.updated_at = verified_at to unmask the hidden reporter. Watcher is
+  -- therefore a private badge.
+  -- appreciation_gift is PUBLIC (level only): the earned "Appreciated" LEVEL lands in
+  -- profiles.badge_summary, while the giver→receiver EDGE stays private via appreciation_gifts
+  -- RLS — no granted column exposes it (see I4) — so no third party can reconstruct who gave.
   SELECT p_kind IN (
     'like','poll_vote','follow','comment','post_created',
     'opt_in_completed_provider','conversation_completed_volunteer',
@@ -207,7 +214,7 @@ BEGIN
     -- preserving the hidden-vs-nonexistent property the review required — no error tells the
     -- caller whether a post exists or is merely hidden.
     SELECT user_id INTO v_post_author
-    FROM public.posts WHERE id = p_post_id AND is_hidden IS NOT TRUE;
+    FROM public.posts WHERE id = p_post_id AND is_hidden = false;
     IF v_post_author IS NULL OR v_post_author <> p_receiver THEN
       p_post_id := NULL;
     END IF;

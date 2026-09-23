@@ -54,6 +54,7 @@ import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
 import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
+import { resolveFollowGate } from '@/lib/follow-gate'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
 import { getCategoryTailwind, getCategoryLabel } from '@/lib/resource-categories'
@@ -838,6 +839,15 @@ function PostCard({
   const reduce = useReducedMotion()
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
+  // Follow affordance decision (shared with the author profile sheet). A guest resolves to
+  // 'guest-prompt' so a tap opens the account prompt instead of a follows insert that the
+  // RESTRICTIVE anon-insert policy blocks (which reverts silently).
+  const followGate = resolveFollowGate({
+    currentUserId,
+    authorId: post.author.id,
+    isGuest: currentUserIsGuest === true,
+    hasHandlers: !!onFollow && !!onUnfollow,
+  })
   const isFull =
     post.maxSeekers != null &&
     post.slotsRemaining != null &&
@@ -970,13 +980,21 @@ function PostCard({
           postId={post.id}
         />
 
-        {/* Follow/Following toggle — only shown for other authors when authenticated */}
-        {currentUserId != null && !isAuthor && onFollow && onUnfollow && (
+        {/* Follow/Following toggle — shown for other authors to any signed-in viewer. A guest's
+            tap opens the author profile sheet (whose account prompt is shown immediately) rather
+            than attempting a follows insert that the anon-insert block reverts silently. */}
+        {followGate !== 'hidden' && (
           <button
             data-testid={`follow-btn-${post.author.id}`}
-            onClick={() =>
-              isFollowingAuthor ? onUnfollow(post.author.id) : onFollow(post.author.id)
-            }
+            onClick={() => {
+              if (followGate === 'guest-prompt') {
+                setProfileSheetOpen(true)
+              } else if (isFollowingAuthor) {
+                onUnfollow!(post.author.id)
+              } else {
+                onFollow!(post.author.id)
+              }
+            }}
             className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
               isFollowingAuthor
                 ? 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'

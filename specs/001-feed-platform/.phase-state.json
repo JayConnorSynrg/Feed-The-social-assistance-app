@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-09-23T00:00:00.000Z",
+  "lastUpdated": "2026-06-11T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -668,8 +668,8 @@
           "P9-T1"
         ],
         "status": "complete",
-        "phase": "Phase 9: Community Launch Readiness \u2014 COMPLETE / ALL PHASES COMPLETE",
-        "notes": "P9-T1 fulfillment view shipped (feature/fulfillment-view). Lifecycle verified: opt_in_to_post inserts status='pending'; provider path: pending\u2192accepted\u2192completed (or pending\u2192declined). Feed-panel.tsx already had the full provider Seekers accordion with Accept/Decline/Mark-Complete/Review-Seeker UI; only missing testids for e2e \u2014 data-testid accept-optin-{id} + decline-optin-{id} added. No migration. RLS opt_ins_update policy (post owner gate) confirmed live in migration 20260604140000. e2e fulfillment-view.spec.ts 4/4 green. Full suite 110 passed / 1 skipped / 0 failed (+4 vs 106 baseline). type-check 0 errors. Docsync: checklist v1.5.2, Phase 9 COMPLETE, all phases COMPLETE, totals 120/120."
+        "phase": "Phase 9: Community Launch Readiness — COMPLETE / ALL PHASES COMPLETE",
+        "notes": "P9-T1 fulfillment view shipped (feature/fulfillment-view). Lifecycle verified: opt_in_to_post inserts status='pending'; provider path: pending→accepted→completed (or pending→declined). Feed-panel.tsx already had the full provider Seekers accordion with Accept/Decline/Mark-Complete/Review-Seeker UI; only missing testids for e2e — data-testid accept-optin-{id} + decline-optin-{id} added. No migration. RLS opt_ins_update policy (post owner gate) confirmed live in migration 20260604140000. e2e fulfillment-view.spec.ts 4/4 green. Full suite 110 passed / 1 skipped / 0 failed (+4 vs 106 baseline). type-check 0 errors. Docsync: checklist v1.5.2, Phase 9 COMPLETE, all phases COMPLETE, totals 120/120."
       }
     ]
   },
@@ -678,7 +678,7 @@
       "status": "COMPLETE_PENDING_MERGE",
       "migration": "20261006000000_p2_1b_appreciation",
       "branch": "feature/feed-fullfeed-p2-1b-appreciation",
-      "note": "Peer appreciation gifts. USER RULING: public 'Appreciated' level counts DISTINCT PEOPLE (one credit per giver), all 12 items still giftable + shelf-visible. Fix round: guest-receiver reject (MEDIUM-2), error!=empty + slug-guard tests (MEDIUM-3), optional post context silently dropped (LOW-1), sheet Follow matches card guest behaviour (LOW-5), removed unused import (LOW-6), icons redrawn (soup/cheer/sunflower). Migration is a separate post-deploy step; pending orchestrator merge.",
+      "note": "Peer appreciation gifts. USER RULING: public 'Appreciated' level counts DISTINCT PEOPLE (one credit per giver); all 12 items still giftable + shelf-visible. Round-2 fixes: guest Follow routes to CreateAccountPrompt via shared resolveFollowGate on both surfaces, no anon insert attempted (MEDIUM); post-context visibility check uses is_hidden = false to match the posts SELECT policy (LOW-1); restored the P2.1a watcher-privacy comment + added an appreciation_gift note in engagement_is_public (LOW-2). Migration 20261006000000_p2_1b_appreciation is a separate post-deploy step; pending orchestrator merge.",
       "recordedAt": "2026-09-23"
     }
   }

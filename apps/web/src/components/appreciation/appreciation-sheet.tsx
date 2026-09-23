@@ -9,11 +9,13 @@
 // viewer — an "Appreciate" button that reveals a 12-item picker. Already-sent items are
 // disabled with a check. A single-flight ref gate blocks double-submits; each give is
 // optimistic and settles from the RPC result; failures surface an inline error + Retry.
-// Follow is shown to the SAME viewers the post card shows it to — any non-self viewer with a
-// user id, guests included (the card wires Follow whenever currentUserId != null; LOW-5 aligns
-// the sheet with that). Appreciation is stricter: only a signed-in NON-GUEST non-self viewer
-// sees the picker; guests get a sign-up prompt in its place (guests cannot give — the RPC
-// rejects anonymous givers).
+// Follow gating is shared with the post card via resolveFollowGate: a signed-in NON-GUEST
+// non-self viewer gets the working toggle ('active'); a guest gets a Follow button that
+// surfaces CreateAccountPrompt on tap ('guest-prompt') and attempts NO follows insert (the
+// prod RESTRICTIVE anon-insert block would revert it silently — round-2 MEDIUM); self /
+// signed-out resolve to 'hidden'. Appreciation is likewise guest-gated: only a signed-in
+// NON-GUEST non-self viewer sees the picker; guests get a sign-up prompt in its place (the
+// RPC rejects anonymous givers).
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2, Check, Gift } from 'lucide-react'
@@ -29,6 +31,7 @@ import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { PixelItemIcon } from '@/components/appreciation/pixel-item-icon'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { createClient } from '@/lib/supabase/client'
+import { resolveFollowGate } from '@/lib/follow-gate'
 import { APPRECIATION_ITEMS, giveAppreciation, listSentTo } from '@/lib/appreciation'
 import type { BadgeSummary } from '@/lib/engagement-badges'
 
@@ -207,10 +210,16 @@ export function AppreciationSheet({
   postId,
 }: AppreciationSheetProps) {
   const [showPicker, setShowPicker] = useState(false)
+  const [showFollowPrompt, setShowFollowPrompt] = useState(false)
   const isSelf = currentUserId != null && currentUserId === author.id
-  // LOW-5: match the post card's Follow gating exactly (card: currentUserId != null && !isAuthor
-  // && onFollow && onUnfollow — no !isGuest). Guests see Follow on both surfaces now.
-  const canFollow = currentUserId != null && !isSelf && !!onFollow && !!onUnfollow
+  // Shared with the post card via resolveFollowGate: 'active' toggles follow/unfollow;
+  // 'guest-prompt' surfaces CreateAccountPrompt on tap and never inserts; 'hidden' shows nothing.
+  const followGate = resolveFollowGate({
+    currentUserId,
+    authorId: author.id,
+    isGuest,
+    hasHandlers: !!onFollow && !!onUnfollow,
+  })
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -242,8 +251,8 @@ export function AppreciationSheet({
           {/* Full public badge list (public mode: no private section). */}
           <EngagementBadges summary={author.badgeSummary} displayName={author.name} />
 
-          {/* Follow toggle — reuses the feed's follow handlers. */}
-          {canFollow && (
+          {/* Follow toggle — 'active' reuses the feed's follow handlers. */}
+          {followGate === 'active' && (
             <button
               type="button"
               data-testid={`sheet-follow-btn-${author.id}`}
@@ -257,6 +266,21 @@ export function AppreciationSheet({
               {isFollowing ? 'Following' : 'Follow'}
             </button>
           )}
+
+          {/* Guest Follow — a tap surfaces the account prompt (no follows insert is attempted). */}
+          {followGate === 'guest-prompt' &&
+            (showFollowPrompt ? (
+              <CreateAccountPrompt message={`Create a free account to follow ${author.name}`} />
+            ) : (
+              <button
+                type="button"
+                data-testid={`sheet-follow-btn-${author.id}`}
+                onClick={() => setShowFollowPrompt(true)}
+                className="w-full rounded-full border border-lime-300 bg-lime-50 px-3 py-2 text-sm font-medium text-lime-700 transition-colors hover:bg-lime-100"
+              >
+                Follow
+              </button>
+            ))}
 
           {/* Appreciation */}
           <section aria-labelledby="appreciate-heading" className="border-t border-stone-200 pt-4">
