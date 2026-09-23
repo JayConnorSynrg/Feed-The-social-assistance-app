@@ -221,3 +221,53 @@ Verified on BOTH PG15 and PG17 (migration applied twice; 16 behavioural cases + 
 9. **types.ts** hand-augmented with all engagement functions (level, category_family, family_from_chip, weight, community_dim, record_engagement_event, recompute_*, reconcile_engagement, log_engagement_failure) and `unblock_opt_in` now returns boolean — to be reconciled by regen post-apply.
 10. **Smoke 26** additionally asserts: triggers are AFTER + ROW; `badge_summary` UPDATE denied to authenticated; the 4 new tables are absent from `supabase_realtime`; `unblock_opt_in` + `reconcile_engagement` are SECDEF with a pinned search_path; `reconcile_engagement` is not authenticated-executable. 16 source triggers checked.
 11. **Postdeploy order (GIT_PLAN):** review clean → apply migration → verify → insert ledger row → regenerate types.ts from prod and push to the PR branch → CI green → merge (auto-deploys) → Vercel READY → run smoke 26.
+
+---
+
+# P2.1a — DECISIONS A + B (community-confirmed earning + public/private split) [final]
+
+Verified on PG15 (15.19) + PG17 (17.7), migration applied twice; ab.sql + i1/i5/i7/race2/dbl + v2 all green.
+
+## Decision A — community-confirmed
+- **A1**: an action whose actor OWNS the target earns nothing — own like/comment/poll-vote/alert-vote/bookmark/save are skipped at the trigger (no ledger row, no family, no post_created). Opt-in/review are already cross-party; resource_approved/safety_alert_verified already exclude the self case.
+- **A2**: `post_created` credits the author EXACTLY ONCE at the FIRST qualifying engagement by a DIFFERENT non-guest user (like / comment / opt-in) — never at creation. Key `(author, post_created, post_id)` is stable, so later engagements never re-award; a post deleted before outside engagement earns nothing; after credit, deleting the post keeps it. Implemented via `credit_post_created(post, engager)` called from the like/comment/opt-in-insert triggers; the posts-AFTER-INSERT credit is removed.
+- **Collusion**: two accounts engaging each other still earns credit — accepted. Those credits are UNVERIFIED (`verified=false`) and never gate privilege (P3 reads verified ledger rows only).
+
+## Decision B — public / private split (classification from LIVE RLS)
+
+| kind | can another user see THIS actor did it? (live RLS) | scope |
+|---|---|---|
+| like | post_likes SELECT `USING true` → yes | **public** |
+| poll_vote | poll_votes SELECT `USING true` → yes | **public** (contradicts the tentative "private" guess; decided from evidence) |
+| follow | follows SELECT `USING true` → yes | **public** |
+| comment | post_comments SELECT `USING (NOT is_hidden)` → yes | **public** |
+| post_created | posts SELECT public → the post is visible | **public** |
+| opt_in_completed_provider | opt-in row is author/seeker-scoped, but records HELPING others | **public** |
+| conversation_completed_volunteer | records HELPING others | **public** |
+| safety_alert_verified | safety_alerts SELECT `status='live'` → visible | **public** |
+| resource_approved | resources SELECT `status='approved'` → visible | **public** |
+| petition_signature | petition_signatures SELECT `signer_id = auth.uid()` → signer-only | **private** (so **Advocate** is a private badge) |
+| event_checkin | event_checkins SELECT own/admin only | **private** |
+| safety_alert_vote | safety_alert_votes SELECT `voter_id = auth.uid()` | **private** |
+| message | messages SELECT participants-only (private correspondence) | **private** |
+| resource_bookmark | resource_bookmarks SELECT `user_id = auth.uid()` | **private** |
+| saved_resource | saved_resources ALL `user_id = auth.uid()` | **private** |
+| opt_in_completed_seeker | receiving help | **private** |
+| conversation_completed_requester | receiving help | **private** |
+| review_received | reviews SELECT parties+admin only (not arbitrary users) | **private** (verified=true; feeds P3 via ledger, not the summary) |
+
+Community badges: **Voice/Helper/Connector/Watcher = public**; **Advocate = private** (petition signatures are signer-only). `conversation_completed` is split into `_volunteer` (public) and `_requester` (private). **18 kinds** total + reserved `appreciation_gift`.
+
+## B2 — storage
+- Public credit → `profiles.badge_summary` (recompute locks the profile row `FOR NO KEY UPDATE`, writes only on change, never writes an empty summary over NULL → `profiles.updated_at` untouched for public-empty users).
+- Private credit → `user_private_badge_summary` (owner PK; RLS owner-SELECT only; `REVOKE ALL` + `GRANT SELECT` to authenticated; no client write policy; **not** in `supabase_realtime`; no FK/embed path). Recompute locks the private owner row `FOR NO KEY UPDATE`; **writing private credit never touches profiles**.
+- `user_engagement_counters` gains a `scope` column (`public`/`private`, in the PK); one event bumps only its scope's counters and recomputes only that scope's summary. `recompute_user_engagement` rebuilds BOTH scopes from the ledger; incremental == full for both (proven).
+
+## B3 — verified / P3 unaffected
+Verified facts may be public (`safety_alert_verified`, `resource_approved`) or private (`review_received`). P3 eligibility reads the ledger server-side (`verified=true`), never a summary.
+
+## UI
+Own-profile view shows public **Community Badges** plus a **"Private — only you can see this"** section (from `user_private_badge_summary`, fetched only when `isOwnProfile`). Other viewers see public badges only. Pure mapper (`summaryToBadgeList`) is scope-agnostic; unit-tested for public and private inputs.
+
+## Predicted prod backfill (re-derived under A1/A2, measured live 2026-09-23) = **1 row**
+`safety_alert_verified` × 1 (public), for the alert creator whose alert was peer-verified. Everything else is **0**: the single prod `like`, `poll_vote` and `safety_alert_vote` are all SELF-interactions (A1 → 0); the 2 posts have no outside engagement (A2 → 0 `post_created`); all 12 approved user-submitted resources are self-approved. (Round-2 predicted 6 before A1/A2; A1/A2 correctly drop the 5 self-interaction rows.)
