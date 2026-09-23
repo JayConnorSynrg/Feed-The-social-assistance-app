@@ -34,7 +34,8 @@
 --       (own like/comment/poll-vote/alert-vote/bookmark/save). Opt-in/review are already
 --       cross-party; resource_approved/safety_alert_verified already exclude the self case.
 --   A2  post_created credits the author EXACTLY ONCE, at the FIRST qualifying engagement
---       (like/comment/opt-in) by a DIFFERENT non-guest user — never at creation. A post
+--       (a like, a NON-HIDDEN comment, a poll vote, or an opt-in) by a DIFFERENT non-guest
+--       user — never at creation. Live triggers and reconcile share this exact rule. A post
 --       deleted before outside engagement earns nothing; after credit, deleting the post
 --       keeps it (key (author, post_created, post_id) is stable). Two-account collusion
 --       stays possible; those credits are UNVERIFIED and never gate privilege.
@@ -56,7 +57,7 @@
 -- post_created                  | via like/comment/opt-in | post author      | post.id       | public  | resource/chip | no | 1   (A2: first outside non-guest engagement)
 -- opt_in_completed_provider     | resource_opt_ins UPD| post author          | opt_in.id     | public  | resource| no      | 3   (helping others → public)
 -- conversation_completed_volunteer | conversations UPD| volunteer_id        | conv.id       | public  | resource| no      | 3   (helping others → public)
--- safety_alert_verified         | safety_alerts UPD   | created_by (verifier≠creator) | alert.id | public | none | yes(admin)| 1  (live alert visible)
+-- safety_alert_verified         | safety_alerts UPD   | created_by (verifier≠creator) | alert.id | PRIVATE | none | yes(admin)| 1  (created_by has NO client grant; verified_at IS granted → a public write would unmask the reporter via profiles.updated_at=verified_at)
 -- resource_approved             | resources UPD       | submitted_by (mod≠sub)| resource.id  | public  | resource| yes(admin)| 3  (approved resource public)
 -- petition_signature            | petition_signatures INS | signer_id        | petition_id   | private | none   | no       | 1   (signer-only RLS)
 -- event_checkin                 | event_checkins INS  | user_id              | occurrence_id | private | none   | no       | 1   (own/admin only)
@@ -70,8 +71,9 @@
 -- appreciation_gift             | (reserved P2.1b)    | recipient            | giver         | private | none   | no       | —
 --
 -- Community badges: Voice←comment, Helper←opt_in_completed_provider,
--- Connector←conversation_completed_volunteer, Watcher←safety_alert_verified (all PUBLIC);
--- Advocate←petition_signature (PRIVATE — petition signatures are signer-only).
+-- Connector←conversation_completed_volunteer (PUBLIC); Voice/Helper/Connector public.
+-- Watcher←safety_alert_verified (PRIVATE) and Advocate←petition_signature (PRIVATE) — both
+-- private (reporter unmasking / signer-only RLS).
 -- Evidence note: poll_votes SELECT is USING true → poll_vote is PUBLIC (contradicts the
 -- tentative "poll votes private" guess; decided from live RLS per instruction).
 -- ============================================================================
@@ -139,10 +141,15 @@ $fn$;
 CREATE OR REPLACE FUNCTION public.engagement_is_public(p_kind text)
   RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
 AS $fn$
+  -- Public ONLY when another user can read the actor↔target link through a granted column
+  -- (column grants, not just row RLS). safety_alert_verified is PRIVATE: safety_alerts
+  -- .created_by has no client grant, but verified_at IS granted, so a public write would let
+  -- anyone join profiles.updated_at = verified_at to unmask the hidden reporter. Watcher is
+  -- therefore a private badge.
   SELECT p_kind IN (
     'like','poll_vote','follow','comment','post_created',
     'opt_in_completed_provider','conversation_completed_volunteer',
-    'safety_alert_verified','resource_approved'
+    'resource_approved'
   );
 $fn$;
 
@@ -242,16 +249,32 @@ BEGIN
 END;
 $fn$;
 
--- Build a summary jsonb from one scope's counters. Shared by both summaries.
-CREATE OR REPLACE FUNCTION public.engagement_summary_for(p_user uuid, p_scope text)
+-- Lock up to two profile rows in uuid order (deadlock-safe; FOR NO KEY UPDATE so inbound
+-- FK KEY SHARE never conflicts). Used before any trigger path that credits two profiles.
+CREATE OR REPLACE FUNCTION public.lock_two_profiles(p_a uuid, p_b uuid)
+  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  PERFORM 1 FROM public.profiles WHERE id IN (p_a, p_b) ORDER BY id FOR NO KEY UPDATE;
+END;
+$fn$;
+
+-- Build a summary jsonb from one scope's counters. PUBLIC summary publishes LEVELS ONLY
+-- (no raw counts — a privacy floor, and it is rewritten only when a level changes because
+-- counts never appear); the PRIVATE summary (p_with_counts=true) keeps counts for the owner.
+CREATE OR REPLACE FUNCTION public.engagement_summary_for(p_user uuid, p_scope text, p_with_counts boolean)
   RETURNS jsonb LANGUAGE sql STABLE SET search_path = public, pg_temp
 AS $fn$
   SELECT jsonb_build_object(
     'families', COALESCE(jsonb_object_agg(substr(dimension, 8),
-                jsonb_build_object('count', count, 'level', public.engagement_level(count)))
+                CASE WHEN p_with_counts
+                  THEN jsonb_build_object('count', count, 'level', public.engagement_level(count))
+                  ELSE jsonb_build_object('level', public.engagement_level(count)) END)
                 FILTER (WHERE dimension LIKE 'family:%' AND public.engagement_level(count) > 0), '{}'::jsonb),
     'badges',   COALESCE(jsonb_object_agg(substr(dimension, 7),
-                jsonb_build_object('count', count, 'level', public.engagement_level(count)))
+                CASE WHEN p_with_counts
+                  THEN jsonb_build_object('count', count, 'level', public.engagement_level(count))
+                  ELSE jsonb_build_object('level', public.engagement_level(count)) END)
                 FILTER (WHERE dimension LIKE 'badge:%' AND public.engagement_level(count) > 0), '{}'::jsonb)
   )
   FROM public.user_engagement_counters WHERE user_id = p_user AND scope = p_scope;
@@ -265,10 +288,11 @@ AS $fn$
 DECLARE v_new jsonb; v_cur jsonb;
 BEGIN
   PERFORM 1 FROM public.profiles WHERE id = p_user FOR NO KEY UPDATE;
-  v_new := public.engagement_summary_for(p_user, 'public');
+  v_new := public.engagement_summary_for(p_user, 'public', false);  -- LEVELS ONLY (no counts)
   SELECT badge_summary INTO v_cur FROM public.profiles WHERE id = p_user;
-  -- Write only on a real change, and never write an empty summary over NULL (a user with
-  -- no public badge stays NULL), so profiles.updated_at is untouched for public-empty users.
+  -- The public summary has levels only, so it changes only when a LEVEL changes; write only
+  -- then, and never write an empty summary over NULL (public-empty users stay NULL), so
+  -- profiles.updated_at is untouched unless a public level actually changes.
   IF v_cur IS DISTINCT FROM v_new
      AND NOT (v_cur IS NULL AND v_new = '{"families": {}, "badges": {}}'::jsonb) THEN
     UPDATE public.profiles SET badge_summary = v_new WHERE id = p_user;
@@ -287,7 +311,7 @@ BEGIN
   VALUES (p_user, '{"families":{},"badges":{}}'::jsonb)
   ON CONFLICT (user_id) DO NOTHING;
   PERFORM 1 FROM public.user_private_badge_summary WHERE user_id = p_user FOR NO KEY UPDATE;
-  v_new := public.engagement_summary_for(p_user, 'private');
+  v_new := public.engagement_summary_for(p_user, 'private', true);  -- owner keeps counts
   SELECT summary INTO v_cur FROM public.user_private_badge_summary WHERE user_id = p_user;
   IF v_cur IS DISTINCT FROM v_new THEN
     UPDATE public.user_private_badge_summary SET summary = v_new, updated_at = now() WHERE user_id = p_user;
@@ -418,7 +442,9 @@ CREATE TRIGGER trg_badge_config_recompute
 -- reconcile_engagement — re-derive missed events idempotently from source tables, applying
 -- A1 (owner earns nothing) and A2 (post_created only on outside engagement) IDENTICALLY.
 CREATE OR REPLACE FUNCTION public.reconcile_engagement(p_user uuid DEFAULT NULL)
-  RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+  RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public, pg_temp
+  SET lock_timeout = '5s'   -- bound each lock wait (nightly cron + backfill); no batching (8 users)
 AS $fn$
 DECLARE r record; v_family text; v_author uuid;
 BEGIN
@@ -447,8 +473,10 @@ BEGIN
     SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
     PERFORM public.record_engagement_event(r.user_id,'comment','post',r.post_id,'post_comments',r.user_id::text||':'||r.post_id::text,v_family,false);
   END LOOP;
-  -- petition_signature (private)
-  FOR r IN SELECT signer_id, petition_id FROM public.petition_signatures WHERE p_user IS NULL OR signer_id = p_user LOOP
+  -- petition_signature (private; A1: signer <> petition creator)
+  FOR r IN SELECT ps.signer_id, ps.petition_id FROM public.petition_signatures ps
+           JOIN public.petitions pt ON pt.id = ps.petition_id
+           WHERE ps.signer_id IS DISTINCT FROM pt.created_by AND (p_user IS NULL OR ps.signer_id = p_user) LOOP
     PERFORM public.record_engagement_event(r.signer_id,'petition_signature','petition',r.petition_id,'petition_signatures',r.signer_id::text||':'||r.petition_id::text,NULL,false);
   END LOOP;
   -- event_checkin (private)
@@ -515,8 +543,10 @@ BEGIN
              AND (p_user IS NULL OR submitted_by = p_user) LOOP
     PERFORM public.record_engagement_event(r.submitted_by,'resource_approved','resource',r.id,'resources',r.id::text,public.engagement_category_family(r.category),true);
   END LOOP;
-  -- post_created (A2: author credited iff a like/comment/opt-in exists by a non-guest ≠
-  -- author). The EXISTS proves outside engagement; family is derived from the post.
+  -- post_created (A2: author credited iff a QUALIFYING outside engagement exists by a
+  -- non-guest ≠ author — a like, a NON-HIDDEN comment, a POLL VOTE, or an opt-in. This must
+  -- match the live triggers exactly (poll_vote also credits post_created; hidden comments do
+  -- not). The EXISTS proves outside engagement; family is derived from the post.
   FOR r IN SELECT p.id, p.user_id, p.resource_id, p.metadata FROM public.posts p
            WHERE (p_user IS NULL OR p.user_id = p_user)
              AND EXISTS (
@@ -525,6 +555,11 @@ BEGIN
                UNION ALL
                SELECT 1 FROM public.post_comments pc JOIN auth.users u ON u.id = pc.user_id
                  WHERE pc.post_id = p.id AND pc.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+                   AND pc.is_hidden IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.poll_votes pv JOIN public.polls pol ON pol.id = pv.poll_id
+                 JOIN auth.users u ON u.id = pv.user_id
+                 WHERE pol.post_id = p.id AND pv.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
                UNION ALL
                SELECT 1 FROM public.resource_opt_ins oi JOIN auth.users u ON u.id = oi.seeker_id
                  WHERE oi.post_id = p.id AND oi.seeker_id <> p.user_id AND u.is_anonymous IS NOT TRUE
@@ -554,6 +589,9 @@ BEGIN
   BEGIN
     SELECT p.user_id, p.resource_id INTO v_author, v_res FROM public.posts p WHERE p.id = NEW.post_id;
     IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1: own post earns nothing
+    -- This path credits TWO profiles (liker + author via post_created). Lock both up front in
+    -- uuid order so a cross-like (A likes B, B likes A concurrently) cannot deadlock.
+    PERFORM public.lock_two_profiles(NEW.user_id, v_author);
     SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'like','post',NEW.post_id,'post_likes',NEW.user_id::text||':'||NEW.post_id::text,v_family,false);
     PERFORM public.credit_post_created(NEW.post_id, NEW.user_id);  -- A2
@@ -572,6 +610,7 @@ BEGIN
     SELECT p.user_id, p.resource_id, p.id INTO v_author, v_res, v_post
     FROM public.polls pl JOIN public.posts p ON p.id = pl.post_id WHERE pl.id = NEW.poll_id;
     IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1
+    PERFORM public.lock_two_profiles(NEW.user_id, v_author);  -- credits voter + author; lock both
     SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'poll_vote','poll',NEW.poll_id,'poll_votes',NEW.user_id::text||':'||NEW.poll_id::text,v_family,false);
     PERFORM public.credit_post_created(v_post, NEW.user_id);  -- A2 (a vote is outside engagement)
@@ -603,6 +642,7 @@ BEGIN
     IF NEW.is_hidden IS TRUE THEN RETURN NULL; END IF;
     SELECT p.user_id, p.resource_id INTO v_author, v_res FROM public.posts p WHERE p.id = NEW.post_id;
     IF NEW.user_id = v_author THEN RETURN NULL; END IF;  -- A1
+    PERFORM public.lock_two_profiles(NEW.user_id, v_author);  -- credits commenter + author; lock both
     SELECT public.engagement_category_family(r.category) INTO v_family FROM public.resources r WHERE r.id = v_res;
     PERFORM public.record_engagement_event(NEW.user_id,'comment','post',NEW.post_id,'post_comments',NEW.user_id::text||':'||NEW.post_id::text,v_family,false);
     PERFORM public.credit_post_created(NEW.post_id, NEW.user_id);  -- A2
@@ -615,8 +655,11 @@ CREATE TRIGGER trg_engagement_comment AFTER INSERT ON public.post_comments FOR E
 -- petition_signature -> Advocate (PRIVATE).
 CREATE OR REPLACE FUNCTION public.engagement_on_petition_signature()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
+DECLARE v_creator uuid;
 BEGIN
   BEGIN
+    SELECT created_by INTO v_creator FROM public.petitions WHERE id = NEW.petition_id;
+    IF NEW.signer_id IS NOT DISTINCT FROM v_creator THEN RETURN NULL; END IF;  -- A1: signing own petition earns nothing
     PERFORM public.record_engagement_event(NEW.signer_id,'petition_signature','petition',NEW.petition_id,'petition_signatures',NEW.signer_id::text||':'||NEW.petition_id::text,NULL,false);
   EXCEPTION WHEN OTHERS THEN PERFORM public.log_engagement_failure('petition_signature', SQLERRM); END;
   RETURN NULL;
@@ -897,7 +940,8 @@ REVOKE EXECUTE ON FUNCTION public.record_engagement_event(uuid,text,text,uuid,te
 REVOKE EXECUTE ON FUNCTION public.credit_post_created(uuid, uuid)         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.recompute_badge_summary(uuid)           FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.recompute_private_badge_summary(uuid)   FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.engagement_summary_for(uuid, text)      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.engagement_summary_for(uuid, text, boolean) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.lock_two_profiles(uuid, uuid)           FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.recompute_user_engagement(uuid)         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.recompute_all_badge_summaries()         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.reconcile_engagement(uuid)              FROM PUBLIC, anon, authenticated;
