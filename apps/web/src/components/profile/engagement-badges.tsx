@@ -5,7 +5,7 @@
 //
 // Renders a user's earned engagement badges (from profiles.badge_summary) on the
 // public profile page. Pure display: all mapping/sorting lives in
-// lib/engagement-badges.ts. Earth-tone styling per CLAUDE.md; WCAG-labelled.
+// lib/engagement-badges.ts. Earth-tone styling; WCAG-labelled.
 
 import {
   Apple,

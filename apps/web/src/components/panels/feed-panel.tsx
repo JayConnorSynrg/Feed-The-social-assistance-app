@@ -1385,6 +1385,8 @@ export function FeedPanel() {
   // unsettled like/unlike write, so a rapid double-click cannot flip isLiked
   // out of sync with the server.
   const likeInFlightRef = useRef<Set<string>>(new Set())
+  // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
+  const unblockGateRef = useRef(createSingleFlight())
 
   const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
@@ -2125,18 +2127,23 @@ export function FeedPanel() {
     }
   }
 
-  // Author unblocks a previously-declined opt-in -> the seeker may opt in again. The
-  // private "declined before" marker survives (opt_in_declines is untouched here).
+  // Author unblocks a previously-declined opt-in -> the DB DELETEs the declined row and
+  // restores the slot exactly once; the seeker may then opt in again. The private
+  // "declined before" marker survives (opt_in_declines is untouched here). A single-flight
+  // gate makes a rapid double-click fire the RPC once (the server is also idempotent: a
+  // second concurrent call deletes 0 rows and restores no slot).
   const handleAuthorUnblockOptIn = async (optInId: string) => {
-    try {
-      const { error: rpcErr } = await supabase
-        .rpc('unblock_opt_in', { p_opt_in_id: optInId })
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      if (rpcErr) throw rpcErr
-      fetchPosts()
-    } catch (err: unknown) {
-      logger.error('feed.optin.unblock', err, { optInId })
-    }
+    await unblockGateRef.current.run(async () => {
+      try {
+        const { error: rpcErr } = await supabase
+          .rpc('unblock_opt_in', { p_opt_in_id: optInId })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcErr) throw rpcErr
+        fetchPosts()
+      } catch (err: unknown) {
+        logger.error('feed.optin.unblock', err, { optInId })
+      }
+    })
   }
 
   // Author opens review modal for a specific seeker
