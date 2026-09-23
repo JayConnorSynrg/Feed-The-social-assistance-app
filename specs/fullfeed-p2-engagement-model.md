@@ -183,7 +183,7 @@ Migration `supabase/migrations/20261005000000_p2_1a_engagement.sql` (ledger tip 
 - **`profiles.badge_summary jsonb`**: `{families:{<fam>:{count,level}}, badges:{<badge>:{count,level}}}` — NO `updated_at` key (timing-leak fix), only level>0 dimensions present, and rewritten only when the value changes (`IS DISTINCT FROM`), so `profiles.updated_at` bumps only on a real level/count change. `GRANT SELECT(badge_summary)` to anon+authenticated (profiles has column-only grants); no UPDATE grant. PII columns (full_name etc.) stay private (regression-guarded in smoke 26).
 
 ## I1 derivation table (as built)
-See the header of the migration for the full table. **17 kinds** + reserved `appreciation_gift` (P2.1b): `like, poll_vote, follow, comment, petition_signature, post_created, event_checkin, safety_alert_vote, message, resource_bookmark, saved_resource, opt_in_completed_provider, opt_in_completed_seeker, conversation_completed, review_received, safety_alert_verified, resource_approved`. Completed opt-in credits BOTH provider (Helper + family) and seeker (family). Completed conversation credits both participants (Connector + family). `review_received` keys on the anchor `COALESCE(opt_in_id,conversation_id)` and `comment` on the post (delete+redo never re-awards). Only `review_received` (peer), `safety_alert_verified` (admin) and `resource_approved` (admin) are `verified=true`; P3 admin eligibility reads verified rows only.
+See the migration header for the authoritative table. **18 kinds** + reserved `appreciation_gift` (`conversation_completed` split into `_volunteer`/`_requester`; the full public/private classification and the final kind list live in the "DECISIONS A + B" and "Round-3" sections below). Completed opt-in credits BOTH provider (Helper, public) and seeker (family, private). `review_received` keys on the anchor `COALESCE(opt_in_id,conversation_id)`, `comment` on the post. Verified facts: `review_received` (peer, private), `safety_alert_verified` (admin, private), `resource_approved` (admin, public); P3 reads verified ledger rows server-side, never a summary.
 
 ## Weights / dimensions
 Family points += kind weight (like/poll_vote/comment 1; opt_in_completed_seeker 2; opt_in_completed_provider / conversation_completed / review_received / resource_approved 3). Community-badge dimension += 1 per qualifying event. Community badges: `voice`←comment, `helper`←opt_in_completed_provider, `connector`←conversation_completed, `advocate`←petition_signature, `watcher`←safety_alert_verified.
@@ -215,7 +215,7 @@ Verified on BOTH PG15 and PG17 (migration applied twice; 16 behavioural cases + 
 3. **I7 core-first.** Every engagement trigger body runs in a `BEGIN … EXCEPTION WHEN OTHERS THEN log_engagement_failure(); END` subtransaction, so a ledger failure never aborts the user's source write (RAISE WARNING + best-effort `app_logs`). `reconcile_engagement(p_user default null)` (SECDEF, service_role-only) re-derives missed events idempotently from the source tables. Proven: an injected ledger failure lets the like commit with 0 ledger rows; reconcile then recovers the event.
 4. **Comment farm closed.** `comment` (Voice) keys on `(actor, POST)`, not the comment row. Delete + re-post on the same post never re-awards.
 5. **Self-verification earns nothing.** `resource_approved` skips `moderated_by = submitted_by`; `safety_alert_verified` skips `verified_by = created_by`. Applied identically in the backfill.
-6. **Coverage (all interactions earn).** Added kinds (each once per (actor,target), non-verified, weight 1): `post_created` (family via resource or post chip), `event_checkin` (attendee), `safety_alert_vote`, `message` (once per conversation), `resource_bookmark`, `saved_resource`. Full kind set = 17 + reserved `appreciation_gift`. A one-time idempotent BACKFILL (`SELECT reconcile_engagement(NULL)` at the end of the migration) credits existing prod facts through the same functions. **Predicted prod backfill = exactly 6 ledger rows** (measured against live 2026-09-23): `like`×1, `poll_vote`×1, `post_created`×2, `safety_alert_vote`×1, `safety_alert_verified`×1 (peer); `resource_approved`×0 (all 12 approved user-submitted resources are self-approved, `moderated_by=submitted_by`); everything else 0. A **nightly pg_cron job** (`engagement_reconcile_nightly`, `27 4 * * *`, `SELECT public.reconcile_engagement();`) re-derives any missed events (I7 recovery); it is scheduled idempotently (unschedule-if-exists → schedule) and guarded on the pg_cron extension being installed.
+6. **Coverage (all interactions earn).** Added kinds (each once per (actor,target), non-verified, weight 1): `post_created` (family via resource or post chip), `event_checkin` (attendee), `safety_alert_vote`, `message` (once per conversation), `resource_bookmark`, `saved_resource`. A one-time idempotent BACKFILL (`SELECT reconcile_engagement(NULL)` at the end of the migration) credits existing prod facts through the same functions (the corrected backfill figure is in "Round-3 — corrected backfill" below). A **nightly pg_cron job** (`engagement_reconcile_nightly`, `27 4 * * *`, `SELECT public.reconcile_engagement();`) re-derives any missed events (I7 recovery); scheduled idempotently (unschedule-if-exists → schedule), guarded on the pg_cron extension, with `SET lock_timeout='5s'` on `reconcile_engagement`.
 7. **Timing leak closed.** `badge_summary` no longer carries `updated_at`, and the row is rewritten only when the computed value changes (`IS DISTINCT FROM`), so `profiles.updated_at` bumps only on a real level/count change.
 8. **Unblock = delete-and-requeue (user's words); double-unblock closed.** `unblock_opt_in` (SECDEF, author-only, declined-only) locks the post `FOR UPDATE`, DELETEs the still-`declined` row, and restores the slot **exactly once — only when its own DELETE rowcount > 0** (mirrors withdraw_opt_in), so two concurrent unblocks cannot both restore a slot / overbook. The seeker re-opts themselves via `opt_in_to_post`. The `enforce_opt_in_transition` graph is the P2.0 body verbatim (no `declined→pending` edge, no GUC bypass). The private `opt_in_declines` marker survives. Client Unblock button carries a `createSingleFlight` gate. UI copy: "Unblock — they can request again". Proven by dbl.sh on both versions: after two concurrent unblocks, `slots_remaining` is correct (second returns false, no double-restore).
 9. **types.ts** hand-augmented with all engagement functions (level, category_family, family_from_chip, weight, community_dim, record_engagement_event, recompute_*, reconcile_engagement, log_engagement_failure) and `unblock_opt_in` now returns boolean — to be reconciled by regen post-apply.
@@ -244,7 +244,7 @@ Verified on PG15 (15.19) + PG17 (17.7), migration applied twice; ab.sql + i1/i5/
 | post_created | posts SELECT public → the post is visible | **public** |
 | opt_in_completed_provider | opt-in row is author/seeker-scoped, but records HELPING others | **public** |
 | conversation_completed_volunteer | records HELPING others | **public** |
-| safety_alert_verified | safety_alerts SELECT `status='live'` → visible | **public** |
+| safety_alert_verified | safety_alerts.created_by has NO client grant (only verified_at/verified_by granted) → a public write would unmask the reporter via `profiles.updated_at = verified_at` | **private** (→ Watcher is a private badge) |
 | resource_approved | resources SELECT `status='approved'` → visible | **public** |
 | petition_signature | petition_signatures SELECT `signer_id = auth.uid()` → signer-only | **private** (so **Advocate** is a private badge) |
 | event_checkin | event_checkins SELECT own/admin only | **private** |
@@ -256,7 +256,7 @@ Verified on PG15 (15.19) + PG17 (17.7), migration applied twice; ab.sql + i1/i5/
 | conversation_completed_requester | receiving help | **private** |
 | review_received | reviews SELECT parties+admin only (not arbitrary users) | **private** (verified=true; feeds P3 via ledger, not the summary) |
 
-Community badges: **Voice/Helper/Connector/Watcher = public**; **Advocate = private** (petition signatures are signer-only). `conversation_completed` is split into `_volunteer` (public) and `_requester` (private). **18 kinds** total + reserved `appreciation_gift`.
+Community badges: **Voice/Helper/Connector = public**; **Watcher + Advocate = private** (Watcher — the reporter is unmaskable via timestamp correlation; Advocate — petition signatures are signer-only). `conversation_completed` is split into `_volunteer` (public) and `_requester` (private). **18 kinds** total + reserved `appreciation_gift`.
 
 ## B2 — storage
 - Public credit → `profiles.badge_summary` (recompute locks the profile row `FOR NO KEY UPDATE`, writes only on change, never writes an empty summary over NULL → `profiles.updated_at` untouched for public-empty users).
@@ -269,5 +269,40 @@ Verified facts may be public (`safety_alert_verified`, `resource_approved`) or p
 ## UI
 Own-profile view shows public **Community Badges** plus a **"Private — only you can see this"** section (from `user_private_badge_summary`, fetched only when `isOwnProfile`). Other viewers see public badges only. Pure mapper (`summaryToBadgeList`) is scope-agnostic; unit-tested for public and private inputs.
 
-## Predicted prod backfill (re-derived under A1/A2, measured live 2026-09-23) = **1 row**
-`safety_alert_verified` × 1 (public), for the alert creator whose alert was peer-verified. Everything else is **0**: the single prod `like`, `poll_vote` and `safety_alert_vote` are all SELF-interactions (A1 → 0); the 2 posts have no outside engagement (A2 → 0 `post_created`); all 12 approved user-submitted resources are self-approved. (Round-2 predicted 6 before A1/A2; A1/A2 correctly drop the 5 self-interaction rows.)
+## Predicted prod backfill (re-derived; superseded by the round-3 figure below)
+See "Round-3 — corrected backfill" at the end of this document. Under A1/A2 + the round-3 privacy fix (`safety_alert_verified` now private), the public backfill is **0 rows** and the single `safety_alert_verified` credit lands in the private ledger, below the level-1 threshold.
+
+---
+
+# P2.1a — Round-3 (privacy audit against COLUMN grants, deadlock, oracle) [authoritative]
+
+Verified on PG15 (15.19) + PG17 (17.7), migration applied twice; a1a2 / conc / oracle / state26 / race2 / dbl / i1 / i5 / i7 / ab all green.
+
+## Fix 1 — safety_alert_verified is PRIVATE (column-grant audit, B1)
+B1 visibility covers COLUMN grants, not just row RLS. The corrected audit of every PUBLIC kind's actor↔target link (live grants):
+
+| kind | actor column | readable by another user? | verdict |
+|---|---|---|---|
+| like | post_likes.user_id | table SELECT grant (relacl `r`) + RLS `USING true` | public ✓ |
+| poll_vote | poll_votes.user_id | table SELECT grant + RLS `USING true` | public ✓ |
+| comment | post_comments.user_id | table SELECT grant + RLS `NOT is_hidden` | public ✓ |
+| follow | follows.follower_id | table SELECT grant + RLS `USING true` | public ✓ |
+| post_created | posts.user_id | column grant `{anon=r,authenticated=r}` (posts table has no table SELECT, but user_id is column-granted) | public ✓ |
+| opt_in_completed_provider | posts.user_id (author) | author is public; badge is an aggregate, actor not hidden | public ✓ |
+| conversation_completed_volunteer | volunteer (helping) | helping-others signal; actor not hidden | public ✓ |
+| resource_approved | resources.submitted_by | table SELECT grant (relacl `r`) → submitted_by readable on approved rows | public ✓ |
+| **safety_alert_verified** | **safety_alerts.created_by** | **NO grant** (table relacl lacks `r`, created_by attacl NULL) while **verified_at IS granted** → a public write bumps `profiles.updated_at`, and anyone can join `profiles.updated_at = verified_at` to unmask the hidden reporter | **PRIVATE** ✗→moved |
+
+`safety_alert_verified` is the only kind whose actor is hidden yet correlatable via a granted timestamp, so it moves to private (Watcher → private badge). **Regression** (`oracle.sql`): after admin verifies a reporter's alert, an authenticated observer joining `profiles.updated_at = safety_alerts.verified_at` finds NO reporter row — `profiles.updated_at` and `badge_summary` are unchanged (private credit never touches profiles).
+
+## Fixes 2–8
+2. **Smoke 26 / state26** trigger list corrected: `posts/trg_engagement_post_created` removed, `resource_opt_ins/trg_engagement_opt_in_insert` (INSERT bit) added → 16 triggers; asserts `credit_post_created` not executable by anon/authenticated. state26 on a migrated cluster matches every expected value (both versions).
+3. **Deadlock**: every trigger path that may credit two profiles calls `lock_two_profiles(a,b)` (uuid order, `FOR NO KEY UPDATE`) BEFORE recording — applied to like/comment/poll_vote (actor + author via post_created) and the two-party completions. `conc.sh` C2 cross-like: 0 deadlocks, all credits present, both versions. Private owner rows use the same `FOR NO KEY UPDATE` discipline.
+4. **Reconcile ⇔ live post_created parity**: qualifying outside engagement = like, NON-HIDDEN comment, **poll vote**, or opt-in — identical in the live triggers and reconcile's EXISTS. `a1a2.sql`: poll-only post → post_created=1 (live and reconcile); hidden-comment-only → 0 (both). Migration header line fixed.
+5. **Public summary = levels only** (no raw counts), rewritten only when a level changes; the private summary keeps counts. UI mapper + tests updated (`BadgeEntry.count` optional; public badges carry no count).
+6. **Petition self-sign**: `signer_id <> petitions.created_by` in both trigger and reconcile (`a1a2`: creator self-sign → 0).
+7. **Nightly reconcile** carries `SET lock_timeout='5s'` on the function; no batching (8 users). **Scaling note**: at ~10k users a full `reconcile_engagement(NULL)` scan is the known cost point — revisit with per-user batching or an incremental cursor then; not needed now.
+8. **LOW-8 (by design)**: engagement credit SURVIVES source moderation/deletion (unlike/unpost/hide after credit) — awards never disappear. Consequence: a destructive `delete engagement_events; reconcile` does NOT recreate credits whose source rows were since deleted (reconcile derives from CURRENT source); the nightly job is ADDITIVE-only and never removes credits, so this is not reachable in production. `a1a2` shows this as "only-in-live" rows for a post whose like/comment were deleted after crediting — expected, and orthogonal to the poll-only/hidden-comment parity (fix 4).
+
+## Round-3 — corrected backfill = **0 public rows**
+Under A1/A2 + `safety_alert_verified` now private (measured live 2026-09-23): the single prod `like`/`poll_vote`/`safety_alert_vote` are self-interactions (A1 → 0); the 2 posts have no outside engagement (A2 → 0 `post_created`); all 12 approved user-submitted resources are self-approved (0 `resource_approved`); the one peer-verified alert credits **`safety_alert_verified` into the PRIVATE ledger** for its reporter (count 1, below the level-1 threshold of 3 → invisible in the private summary too). Net public backfill = **0 rows**; net private = 1 ledger row / 1 counter, sub-threshold.
