@@ -46,8 +46,11 @@ commits:
   - ba6dacc
   - 9053c3d
   - 0e75aaa
+  - b2ed74d
+  - 4fd6242
 depends_on: feed-fullfeed-h-hygiene
 created_at: "2026-09-23T00:00:00.000Z"
+status_note: "Fix round (adversarial CHANGES-REQUIRED) applied on-branch. (1) smoke 25 no longer trips WRITE_GUARD_RE (SQL comment '; DELETE' reworded) — verified live: 2 skipped today (ledger absent). (2) smoke strengthened: optins insert check +permissive='PERMISSIVE'; reviews UPDATE asserts is_current_user_admin call in both clauses; guest blocks assert exact shape (RESTRICTIVE/FOR INSERT/TO authenticated/is_anonymous); +mfa(3)/anon-EXECUTE/opt-in-trigger. (3) conversation INSERT forge closed — trigger now BEFORE INSERT OR UPDATE: user INSERT must be pending + volunteer_id=resources.submitted_by (bound; sendRequest passes resource.submitted_by, volunteer-resource-detail.tsx:53) + requester!=volunteer. (4) opt-in transition trigger: pending->accepted|declined, accepted->completed, no back (matches feed-panel UI). (5) mfa_backup_codes RESTRICTIVE guest blocks I/U/D (client-side writer lib/mfa.ts). (6) event_checkins force checked_in_by=auth.uid() on INSERT only; UPDATE preserves OLD, allows FK SET NULL cascade. (7) REVOKE EXECUTE FROM anon on the 3 SECDEF fns. Behavioral proof on ephemeral PG17 (as authenticated via SET ROLE + request.jwt.claims): forged completed-conv INSERT REJECTED, non-owner volunteer REJECTED, normal pending ALLOWED; optin completed->pending REJECTED, pending->accepted + accepted->completed ALLOWED, pending->completed jump REJECTED; guest mfa/poll/favorites/petition INSERT REJECTED, normal user ALLOWED; checked_in_by forced on INSERT + reverted on forged UPDATE + NULL cascade passes. tsc 0; vitest non-smoke 330 pass; build OK. Fix commits b2ed74d (migration) + 4fd6242 (smoke)."
 ```
 
 ```yaml
