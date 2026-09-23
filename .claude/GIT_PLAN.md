@@ -63,14 +63,15 @@ files:
   - supabase/migrations/20261002000000_posts_privilege_least.sql
   - apps/web/src/__tests__/smoke/24-posts-privilege-least.smoke.ts
   - .claude/GIT_PLAN.md
-pr: null
-pr_url: null
+pr: 206
+pr_url: https://github.com/JayConnorSynrg/Feed-The-social-assistance-app/pull/206
 merge_sha: null
 merged_into: null
 depends_on: feed-fullfeed-p2-w1.5
 created_at: "2026-09-22T00:00:00.000Z"
 completed_at: null
 verification: null
+status_note: "PR #206 OPEN, base=develop, mergeable=MERGEABLE (mergeStateStatus at open=UNSTABLE — CI checks pending). tsc 0 errors; vitest non-smoke 328 passed/14 todo (29 files); node test:unit 61 passed; smoke 24 2 skipped (pre-deploy gate). Branch cut from origin/develop 64a9fab; no divergence."
 ```
 
 ```yaml
