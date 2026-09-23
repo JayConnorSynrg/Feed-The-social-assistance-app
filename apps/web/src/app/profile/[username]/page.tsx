@@ -5,8 +5,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PostCard } from '@/components/feed/post-card'
+import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { Calendar, ExternalLink } from 'lucide-react'
 import type { Profile } from '@feed/database'
+import type { BadgeSummary } from '@/lib/engagement-badges'
 
 interface ProfilePageProps {
   params: Promise<{ username: string }>
@@ -67,7 +69,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     .from('profiles')
     .select(
       'id, username, first_name, avatar_url, bio, ' +
-      'is_verified, created_at, is_staff'
+      'is_verified, created_at, is_staff, badge_summary'
     )
     .eq('username', username)
     .single()
@@ -79,7 +81,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const profile = profileData as unknown as Pick<Profile,
     'id' | 'username' | 'avatar_url' | 'bio' |
     'is_verified' | 'created_at'
-  > & { is_staff: boolean; first_name: string | null }
+  > & { is_staff: boolean; first_name: string | null; badge_summary: BadgeSummary | null }
 
   // Fetch payment handles via SECURITY DEFINER RPC — isolated column access
   const { data: donationHandles } = await supabase
@@ -103,6 +105,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const posts = (postsData || []) as unknown as PostWithUser[]
 
   const isOwnProfile = user?.id === profile.id
+
+  // Private badges are owner-only (user_private_badge_summary RLS). Fetch only for the
+  // owner's own profile; another viewer's RLS returns no row and none are shown.
+  let privateSummary: BadgeSummary | null = null
+  if (isOwnProfile) {
+    const { data: priv } = await supabase
+      .from('user_private_badge_summary')
+      .select('summary')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    privateSummary = (priv?.summary as BadgeSummary | undefined) ?? null
+  }
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return '?'
@@ -166,6 +180,15 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             )}
           </div>
         </CardHeader>
+
+        <CardContent className="border-t pt-4">
+          <EngagementBadges
+            summary={profile.badge_summary}
+            displayName={profile.first_name || profile.username || 'This member'}
+            privateSummary={privateSummary}
+            isOwnProfile={isOwnProfile}
+          />
+        </CardContent>
 
         {(handles.venmo_username || handles.paypal_email) && (
           <CardContent className="border-t pt-4">

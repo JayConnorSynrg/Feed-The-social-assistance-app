@@ -765,8 +765,12 @@ interface PostCardProps {
   authorOptIns?: EnrichedOptIn[]
   onAuthorUpdateOptIn?: (optInId: string, status: 'accepted' | 'declined' | 'completed') => void
   onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
+  /** author unblocks a previously-declined opt-in -> seeker may opt in again */
+  onAuthorUnblockOptIn?: (optInId: string) => void
   /** set of opt-in ids the author has already reviewed */
   authorReviewedOptInIds?: Set<string>
+  /** seeker ids this author has declined/blocked before (private marker, author-only) */
+  authorDeclinedSeekerIds?: Set<string>
   /** whether the current user follows this post's author */
   isFollowingAuthor?: boolean
   /** follow/unfollow the post author — only passed when currentUserId != post.author.id */
@@ -815,7 +819,9 @@ function PostCard({
   authorOptIns,
   onAuthorUpdateOptIn,
   onAuthorReviewSeeker,
+  onAuthorUnblockOptIn,
   authorReviewedOptInIds,
+  authorDeclinedSeekerIds,
   isFollowingAuthor,
   onFollow,
   onUnfollow,
@@ -1119,8 +1125,29 @@ function PostCard({
                 }`}>
                   {oi.status}
                 </span>
+                {authorDeclinedSeekerIds?.has(oi.seekerId) && (
+                  <span
+                    data-testid={`declined-before-marker-${oi.seekerId}`}
+                    title="You have declined this person before"
+                    className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-50 border border-amber-200 text-amber-700"
+                  >
+                    <ShieldAlert className="w-2.5 h-2.5" aria-hidden="true" />
+                    Declined before
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1">
+                {oi.status === 'declined' && (
+                  <button
+                    data-testid={`unblock-optin-${oi.id}`}
+                    onClick={() => onAuthorUnblockOptIn?.(oi.id)}
+                    title="Unblock — they can request again"
+                    aria-label="Unblock — they can request again"
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
+                  >
+                    Unblock — they can request again
+                  </button>
+                )}
                 {oi.status === 'pending' && (
                   <>
                     <button
@@ -1346,6 +1373,9 @@ export function FeedPanel() {
   const [myReviewMap, setMyReviewMap] = useState<ReviewMap>(new Map())
   // Reviews the author has submitted (set of optInIds they've reviewed)
   const [authorReviewedSet, setAuthorReviewedSet] = useState<Set<string>>(new Set())
+  // Seekers this author has declined/blocked before (private marker; RLS returns only
+  // rows where author_id = me). Persists across an unblock.
+  const [authorDeclinedSeekers, setAuthorDeclinedSeekers] = useState<Set<string>>(new Set())
   // Review modal state
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
   const [reviewModalOptInId, setReviewModalOptInId] = useState<string | null>(null)
@@ -1355,6 +1385,8 @@ export function FeedPanel() {
   // unsettled like/unlike write, so a rapid double-click cannot flip isLiked
   // out of sync with the server.
   const likeInFlightRef = useRef<Set<string>>(new Set())
+  // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
+  const unblockGateRef = useRef(createSingleFlight())
 
   const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
@@ -1432,6 +1464,16 @@ export function FeedPanel() {
     if (!user || postIds.length === 0) return
     const uid = user.id
     fetchOptInsForPosts(postIds).then(setOptInMap)
+
+    // Load this author's private decline markers (author-only via RLS). Best-effort:
+    // the marker is a supplementary label, so a failure never blocks the opt-in list.
+    supabase
+      .from('opt_in_declines')
+      .select('seeker_id')
+      .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+      .then(({ data }) => {
+        if (data) setAuthorDeclinedSeekers(new Set(data.map((r) => r.seeker_id as string)))
+      })
 
     // Fetch full seeker opt-in rows (for review prompts and author management)
     supabase
@@ -2085,6 +2127,25 @@ export function FeedPanel() {
     }
   }
 
+  // Author unblocks a previously-declined opt-in -> the DB DELETEs the declined row and
+  // restores the slot exactly once; the seeker may then opt in again. The private
+  // "declined before" marker survives (opt_in_declines is untouched here). A single-flight
+  // gate makes a rapid double-click fire the RPC once (the server is also idempotent: a
+  // second concurrent call deletes 0 rows and restores no slot).
+  const handleAuthorUnblockOptIn = async (optInId: string) => {
+    await unblockGateRef.current.run(async () => {
+      try {
+        const { error: rpcErr } = await supabase
+          .rpc('unblock_opt_in', { p_opt_in_id: optInId })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcErr) throw rpcErr
+        fetchPosts()
+      } catch (err: unknown) {
+        logger.error('feed.optin.unblock', err, { optInId })
+      }
+    })
+  }
+
   // Author opens review modal for a specific seeker
   const handleAuthorReviewSeeker = (optInId: string, seekerName: string) => {
     setReviewModalOptInId(optInId)
@@ -2490,7 +2551,9 @@ export function FeedPanel() {
                       authorOptIns={authorOptInsMap[post.id]}
                       onAuthorUpdateOptIn={handleAuthorUpdateOptIn}
                       onAuthorReviewSeeker={handleAuthorReviewSeeker}
+                      onAuthorUnblockOptIn={handleAuthorUnblockOptIn}
                       authorReviewedOptInIds={authorReviewedSet}
+                      authorDeclinedSeekerIds={authorDeclinedSeekers}
                       isFollowingAuthor={followingIds.has(post.author.id)}
                       onFollow={doFollow}
                       onUnfollow={doUnfollow}
