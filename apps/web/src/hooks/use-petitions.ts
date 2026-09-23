@@ -211,6 +211,10 @@ export function usePetitions() {
 
       logger.info('petition.sign.attempt', { petitionId })
 
+      // Server-supplied, user-facing message (e.g. the guest 403) surfaced verbatim
+      // in the genuine-error branch below.
+      let serverMessage: string | undefined
+
       try {
         const res = await fetch('/api/petitions/sign', {
           method: 'POST',
@@ -224,9 +228,11 @@ export function usePetitions() {
           alreadySigned?: boolean
           count?: number
           error?: string
+          message?: string
         }
 
         if (!res.ok && !json.alreadySigned) {
+          serverMessage = json.message
           throw new Error(json.error || 'sign_failed')
         }
 
@@ -297,7 +303,7 @@ export function usePetitions() {
           )
         )
 
-        setSignError('Unable to add your signature. Please try again.')
+        setSignError(serverMessage || 'Unable to add your signature. Please try again.')
         logger.error('petition.sign.failed', {
           petitionId,
           error: err instanceof Error ? err.message : String(err),

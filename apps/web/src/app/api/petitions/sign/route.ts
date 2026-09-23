@@ -69,6 +69,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
+    // Guest guard: anonymous (is_anonymous) users are read-only. This route inserts
+    // via the service-role client (which bypasses RLS), so the guest block must be
+    // enforced here in-code — the RESTRICTIVE RLS policies do not apply to service-role
+    // writes. Return 403 with a message the UI surfaces to the signer.
+    if (user.is_anonymous) {
+      logger.warn('petition.sign.guest_blocked', { latencyMs: Math.round(performance.now() - start) })
+      return NextResponse.json(
+        {
+          error: 'account_required',
+          message: 'Sign in with an account to add your verified signature of support.',
+        },
+        { status: 403 }
+      )
+    }
+
     const serviceClient = getServiceClient()
 
     // ── Fetch petition ─────────────────────────────────────────
