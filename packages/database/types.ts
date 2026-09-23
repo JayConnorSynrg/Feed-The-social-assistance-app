@@ -1630,6 +1630,120 @@ export type Database = {
           },
         ]
       }
+      badge_config: {
+        Row: {
+          level1_threshold: number
+          level2_threshold: number
+          level3_threshold: number
+          singleton_guard: boolean
+          updated_at: string
+        }
+        Insert: {
+          level1_threshold?: number
+          level2_threshold?: number
+          level3_threshold?: number
+          singleton_guard?: boolean
+          updated_at?: string
+        }
+        Update: {
+          level1_threshold?: number
+          level2_threshold?: number
+          level3_threshold?: number
+          singleton_guard?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      engagement_events: {
+        Row: {
+          actor_id: string
+          category: string | null
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          source_pk: string
+          source_table: string
+          target_id: string
+          target_type: string
+          verified: boolean
+          weight: number
+        }
+        Insert: {
+          actor_id: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json
+          source_pk: string
+          source_table: string
+          target_id: string
+          target_type: string
+          verified?: boolean
+          weight?: number
+        }
+        Update: {
+          actor_id?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          source_pk?: string
+          source_table?: string
+          target_id?: string
+          target_type?: string
+          verified?: boolean
+          weight?: number
+        }
+        Relationships: []
+      }
+      opt_in_declines: {
+        Row: {
+          author_id: string
+          first_declined_at: string
+          last_declined_at: string
+          seeker_id: string
+          times_declined: number
+        }
+        Insert: {
+          author_id: string
+          first_declined_at?: string
+          last_declined_at?: string
+          seeker_id: string
+          times_declined?: number
+        }
+        Update: {
+          author_id?: string
+          first_declined_at?: string
+          last_declined_at?: string
+          seeker_id?: string
+          times_declined?: number
+        }
+        Relationships: []
+      }
+      user_engagement_counters: {
+        Row: {
+          count: number
+          dimension: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          dimension: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          dimension?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       poll_votes: {
         Row: {
           created_at: string
@@ -1900,6 +2014,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          badge_summary: Json | null
           bio: string | null
           created_at: string | null
           first_name: string | null
@@ -1929,6 +2044,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          badge_summary?: Json | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
@@ -1958,6 +2074,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          badge_summary?: Json | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
@@ -4917,6 +5034,19 @@ export type Database = {
           to: "safety_alerts"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      unblock_opt_in: {
+        Args: { p_opt_in_id: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          post_id: string
+          resource_id: string | null
+          seeker_id: string
+          status: string
+          updated_at: string
         }
       }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
