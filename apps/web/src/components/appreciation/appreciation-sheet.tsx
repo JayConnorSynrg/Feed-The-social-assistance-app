@@ -9,8 +9,11 @@
 // viewer — an "Appreciate" button that reveals a 12-item picker. Already-sent items are
 // disabled with a check. A single-flight ref gate blocks double-submits; each give is
 // optimistic and settles from the RPC result; failures surface an inline error + Retry.
-// Guests see the sheet but a sign-up prompt in place of the picker (matches Follow's guest
-// gating: the feed only wires Follow for signed-in users; here we prompt guests to join).
+// Follow is shown to the SAME viewers the post card shows it to — any non-self viewer with a
+// user id, guests included (the card wires Follow whenever currentUserId != null; LOW-5 aligns
+// the sheet with that). Appreciation is stricter: only a signed-in NON-GUEST non-self viewer
+// sees the picker; guests get a sign-up prompt in its place (guests cannot give — the RPC
+// rejects anonymous givers).
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2, Check, Gift } from 'lucide-react'
@@ -22,7 +25,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
-import { EngagementBadges, BadgeGlyph } from '@/components/profile/engagement-badges'
+import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { PixelItemIcon } from '@/components/appreciation/pixel-item-icon'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { createClient } from '@/lib/supabase/client'
@@ -47,8 +50,9 @@ interface AppreciationSheetProps {
   isFollowing: boolean
   onFollow?: (id: string) => void
   onUnfollow?: (id: string) => void
-  /** Optional post the appreciation is sent in the context of (must be authored by the
-   *  recipient; the RPC enforces this). */
+  /** Optional post the appreciation is sent in the context of. Pure optional context: the RPC
+   *  silently drops it if the post is missing, hidden, or not authored by the recipient (LOW-1),
+   *  so the gift still succeeds. */
   postId?: string | null
 }
 
@@ -204,7 +208,9 @@ export function AppreciationSheet({
 }: AppreciationSheetProps) {
   const [showPicker, setShowPicker] = useState(false)
   const isSelf = currentUserId != null && currentUserId === author.id
-  const canFollow = currentUserId != null && !isGuest && !isSelf && !!onFollow && !!onUnfollow
+  // LOW-5: match the post card's Follow gating exactly (card: currentUserId != null && !isAuthor
+  // && onFollow && onUnfollow — no !isGuest). Guests see Follow on both surfaces now.
+  const canFollow = currentUserId != null && !isSelf && !!onFollow && !!onUnfollow
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
