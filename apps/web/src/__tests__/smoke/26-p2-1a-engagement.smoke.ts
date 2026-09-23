@@ -112,7 +112,10 @@ const STATE_SQL = `
        AND p.prosecdef AND array_to_string(p.proconfig, ',') ILIKE '%search_path%')       AS secdef_pinned,
     -- The transition guard is the P2.0 body (no declined->pending GUC bypass — unblock deletes).
     (SELECT md5(prosrc) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_md5
+       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_md5,
+    -- safety_alert_verified is PRIVATE (reporter unmasking); 'like' is public (mutation pair).
+    public.engagement_is_public('safety_alert_verified')                                  AS sav_public,
+    public.engagement_is_public('like')                                                   AS like_public
 `
 
 // The P2.0 enforce_opt_in_transition prosrc md5 (live @ ndtpovonpadugthmcntl, 2026-09-23).
@@ -190,5 +193,8 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     expect(Number(r.secdef_pinned), 'unblock_opt_in + reconcile_engagement must be SECDEF with a pinned search_path').toBe(2)
     // The transition guard is byte-identical to the P2.0 body — unblock deletes, no edge added.
     expect(r.transition_md5, 'enforce_opt_in_transition must be the byte-identical P2.0 body').toBe(P20_TRANSITION_MD5)
+    // safety_alert_verified must be PRIVATE (reporter unmasking); 'like' stays public (mutation pair).
+    expect(r.sav_public, 'safety_alert_verified must be private (engagement_is_public=false)').toBe(false)
+    expect(r.like_public, 'like must remain public (engagement_is_public=true)').toBe(true)
   })
 })

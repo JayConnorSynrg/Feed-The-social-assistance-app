@@ -307,6 +307,12 @@ CREATE OR REPLACE FUNCTION public.recompute_private_badge_summary(p_user uuid)
 AS $fn$
 DECLARE v_new jsonb; v_cur jsonb;
 BEGIN
+  -- Global lock order: profiles(u) BEFORE user_private_badge_summary(u). A review credit
+  -- (private) shares the reviews harmony trigger that writes profiles(u); a completion
+  -- credit locks profiles then private. Taking profiles first here makes every path acquire
+  -- profiles before the private row, so they cannot deadlock. Taking the lock does NOT
+  -- UPDATE profiles, so profiles.updated_at stays untouched for private credit.
+  PERFORM 1 FROM public.profiles WHERE id = p_user FOR NO KEY UPDATE;
   INSERT INTO public.user_private_badge_summary (user_id, summary)
   VALUES (p_user, '{"families":{},"badges":{}}'::jsonb)
   ON CONFLICT (user_id) DO NOTHING;
@@ -531,7 +537,7 @@ BEGIN
     END IF;
     PERFORM public.record_engagement_event(r.reviewee_id,'review_received','review',COALESCE(r.opt_in_id, r.conversation_id),'reviews',COALESCE(r.opt_in_id, r.conversation_id)::text,v_family,true);
   END LOOP;
-  -- safety_alert_verified (public; admin; not self-verified)
+  -- safety_alert_verified (PRIVATE — reporter created_by has no client grant; admin; not self-verified)
   FOR r IN SELECT id, created_by FROM public.safety_alerts
            WHERE verified IS TRUE AND created_by IS NOT NULL AND verified_by IS NOT NULL AND verified_by <> created_by
              AND (p_user IS NULL OR created_by = p_user) LOOP
@@ -821,7 +827,7 @@ END; $fn$;
 DROP TRIGGER IF EXISTS trg_engagement_review ON public.reviews;
 CREATE TRIGGER trg_engagement_review AFTER INSERT ON public.reviews FOR EACH ROW EXECUTE FUNCTION public.engagement_on_review();
 
--- safety_alert verified -> Watcher (public); admin; not self-verified.
+-- safety_alert verified -> Watcher (PRIVATE — created_by is not client-readable); admin; not self-verified.
 CREATE OR REPLACE FUNCTION public.engagement_on_safety_alert_verify()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
