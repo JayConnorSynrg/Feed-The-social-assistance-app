@@ -89,6 +89,8 @@ const STATE_SQL = `
     has_function_privilege('authenticated','public.record_engagement_event(uuid,text,text,uuid,text,text,text,boolean)','EXECUTE') AS rec_auth_exec,
     has_function_privilege('anon','public.recompute_badge_summary(uuid)','EXECUTE')       AS rbs_anon_exec,
     has_function_privilege('authenticated','public.reconcile_engagement(uuid)','EXECUTE') AS reconcile_auth_exec,
+    has_function_privilege('anon','public.reconcile_engagement(uuid)','EXECUTE')          AS reconcile_anon_exec,
+    has_function_privilege('anon','public.record_engagement_event(uuid,text,text,uuid,text,text,text,boolean)','EXECUTE') AS rec_anon_exec,
     -- unblock_opt_in is client-callable by authenticated only.
     has_function_privilege('authenticated','public.unblock_opt_in(uuid)','EXECUTE')       AS unblock_auth_exec,
     has_function_privilege('anon','public.unblock_opt_in(uuid)','EXECUTE')                AS unblock_anon_exec,
@@ -97,10 +99,13 @@ const STATE_SQL = `
        WHERE n.nspname='public' AND p.proname IN ('unblock_opt_in','reconcile_engagement')
        AND p.prosecdef AND array_to_string(p.proconfig, ',') ILIKE '%search_path%')       AS secdef_pinned,
     -- The transition guard is the P2.0 body (no declined->pending GUC bypass — unblock deletes).
-    (SELECT position('feed.optin_unblock' IN pg_get_functiondef(p.oid)) = 0
-       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_no_guc
+    (SELECT md5(prosrc) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname='enforce_opt_in_transition')                AS transition_md5
 `
+
+// The P2.0 enforce_opt_in_transition prosrc md5 (live @ ndtpovonpadugthmcntl, 2026-09-23).
+// P2.1a must NOT touch this function, so md5 must be unchanged post-apply.
+const P20_TRANSITION_MD5 = 'f3bc362fce1361a5717007ea2f7a88e7'
 
 maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
   it('[post-deploy] I2/I4 — server-only ledger writes, public summary, private marker', async (ctx) => {
@@ -155,11 +160,13 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     expect(r.rec_auth_exec, 'record_engagement_event must NOT be client-executable').toBe(false)
     expect(r.rbs_anon_exec, 'recompute_badge_summary must NOT be anon-executable').toBe(false)
     expect(r.reconcile_auth_exec, 'reconcile_engagement must NOT be authenticated-executable').toBe(false)
+    expect(r.reconcile_anon_exec, 'reconcile_engagement must NOT be anon-executable').toBe(false)
+    expect(r.rec_anon_exec, 'record_engagement_event must NOT be anon-executable').toBe(false)
     // I5: unblock RPC is authenticated-only; reconcile+unblock are SECDEF+pinned.
     expect(r.unblock_auth_exec, 'authenticated must EXECUTE unblock_opt_in').toBe(true)
     expect(r.unblock_anon_exec, 'anon must NOT EXECUTE unblock_opt_in').toBe(false)
     expect(Number(r.secdef_pinned), 'unblock_opt_in + reconcile_engagement must be SECDEF with a pinned search_path').toBe(2)
-    // The transition graph is the P2.0 body — unblock deletes, no GUC bypass.
-    expect(r.transition_no_guc, 'enforce_opt_in_transition must be the P2.0 body (no GUC bypass)').toBe(true)
+    // The transition guard is byte-identical to the P2.0 body — unblock deletes, no edge added.
+    expect(r.transition_md5, 'enforce_opt_in_transition must be the byte-identical P2.0 body').toBe(P20_TRANSITION_MD5)
   })
 })
