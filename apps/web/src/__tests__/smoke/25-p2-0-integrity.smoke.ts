@@ -2,18 +2,19 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 // Mission: 25 — P2.0 integrity (Invariants I1 + I2, feed-fullfeed-p2-0-integrity)
 // Surface: reviews / resource_opt_ins / conversations / event_checkins grants +
-//          policies + triggers, SECDEF guest guards, and the 9 guest INSERT blocks.
+//          policies + triggers, SECDEF guest guards + EXECUTE, and the guest write
+//          blocks (9 direct-write tables + mfa_backup_codes).
 // Backend: supabase/migrations/20261004000000_p2_0_integrity.sql
 //
 // GATE ON THE LEDGER, NOT ON THE STATE. The migration is applied as a SEPARATE
 // post-deploy step (GIT_PLAN feed-fullfeed-p2-0-integrity-postdeploy) and recorded in
 // supabase_migrations.schema_migrations in the SAME step. The suite skips ONLY while
-// that ledger row is absent (pre-deploy). Once recorded, the assertions ALWAYS run —
-// so a later regression (a re-grant of a locked column, a dropped guest block, a guard
-// removed) FAILS the suite instead of silently skipping.
+// that ledger row is absent (pre-deploy). Once recorded, the assertions ALWAYS run.
 //
-// Every privilege/keyword below is a quoted argument or string literal (never a leading
-// SQL verb), so this passes prod-client's WRITE_GUARD_RE.
+// NOTE ON SQL SAFETY: prod-client's WRITE_GUARD_RE rejects any statement with a SQL
+// verb (insert/update/delete/alter/drop/truncate) at a line start or after ';'. This
+// query is a single SELECT; every such word is a quoted string literal or column
+// argument, and the inline comments deliberately avoid a verb after a newline or ';'.
 
 import { describe, it, expect } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
@@ -27,44 +28,65 @@ const GATE_AND_STATE_SQL = `
       SELECT 1 FROM supabase_migrations.schema_migrations
       WHERE version = '20261004000000'
     )                                                                                    AS applied,
-    -- I1: resource_opt_ins column-lock (seeker_id locked, status writable, table revoked)
     has_column_privilege('authenticated','public.resource_opt_ins','seeker_id','UPDATE') AS optins_seeker_upd,
     has_column_privilege('authenticated','public.resource_opt_ins','status','UPDATE')     AS optins_status_upd,
     has_table_privilege('authenticated','public.resource_opt_ins','UPDATE')               AS optins_tbl_upd,
-    -- I1: conversations column-lock (participant locked, status writable, table revoked)
     has_column_privilege('authenticated','public.conversations','volunteer_id','UPDATE')  AS conv_volunteer_upd,
     has_column_privilege('authenticated','public.conversations','status','UPDATE')         AS conv_status_upd,
     has_table_privilege('authenticated','public.conversations','UPDATE')                   AS conv_tbl_upd,
-    -- I1: reviews UPDATE is admin-only (no reviewer_id in the qual) and no client INSERT policy
+    -- reviews UPDATE must be admin-gated (calls is_current_user_admin in BOTH clauses)
+    -- and must NOT reference reviewer_id; and reviews must have no client INSERT policy.
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='reviews'
-       AND cmd='UPDATE' AND coalesce(qual,'') ILIKE '%reviewer_id%')                       AS reviews_upd_reviewer,
+       AND cmd='UPDATE'
+       AND coalesce(qual,'') ILIKE '%is_current_user_admin%'
+       AND coalesce(with_check,'') ILIKE '%is_current_user_admin%'
+       AND coalesce(qual,'') NOT ILIKE '%reviewer_id%'
+       AND coalesce(with_check,'') NOT ILIKE '%reviewer_id%')                              AS reviews_upd_adminonly,
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='reviews'
        AND cmd='INSERT')                                                                   AS reviews_insert_policies,
-    -- I1: resource_opt_ins no direct INSERT policy (RPC-only); DELETE is pending-only
+    -- resource_opt_ins: no PERMISSIVE direct INSERT policy (RPC path only); the
+    -- RESTRICTIVE guest block does not count. DELETE is pending-only.
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='resource_opt_ins'
-       AND cmd='INSERT')                                                                   AS optins_insert_policies,
+       AND cmd='INSERT' AND permissive='PERMISSIVE')                                       AS optins_insert_permissive,
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='resource_opt_ins'
        AND cmd='DELETE' AND coalesce(qual,'') ILIKE '%pending%')                           AS optins_delete_pending,
-    -- I1: transition + force triggers present
+    -- transition + force triggers present
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
        JOIN pg_namespace n ON n.oid=c.relnamespace
        WHERE n.nspname='public' AND c.relname='conversations'
        AND t.tgname='trg_conversations_transition')                                        AS conv_transition_trg,
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
        JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relname='resource_opt_ins'
+       AND t.tgname='trg_resource_opt_ins_transition')                                     AS optins_transition_trg,
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+       JOIN pg_namespace n ON n.oid=c.relnamespace
        WHERE n.nspname='public' AND c.relname='event_checkins'
        AND t.tgname='trg_event_checkins_force_checked_in_by')                              AS checkins_force_trg,
-    -- I2: 9 guest RESTRICTIVE INSERT blocks present
-    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND permissive='RESTRICTIVE'
-       AND policyname LIKE '%block_anon_insert' AND cmd='INSERT'
+    -- I2: the 9 direct-write guest blocks — assert the EXACT shape (RESTRICTIVE,
+    -- FOR INSERT, TO authenticated, WITH CHECK referencing the is_anonymous negation).
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public'
+       AND permissive='RESTRICTIVE' AND cmd='INSERT' AND roles::text = '{authenticated}'
+       AND coalesce(with_check,'') ILIKE '%is_anonymous%'
+       AND coalesce(with_check,'') ILIKE '%not true%'
+       AND policyname LIKE '%block_anon_insert'
        AND tablename IN ('poll_votes','event_checkins','favorites','saved_resources',
          'saved_resource_documents','saved_resource_events','saved_resource_tasks',
          'impact_metrics','petitions'))                                                    AS guest_blocks,
-    -- I2: 3 SECDEF writers carry the is_anonymous guard
+    -- I2: mfa_backup_codes — RESTRICTIVE guest blocks on all three write commands.
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='mfa_backup_codes'
+       AND permissive='RESTRICTIVE' AND roles::text = '{authenticated}'
+       AND cmd IN ('INSERT','UPDATE','DELETE')
+       AND coalesce(qual,'') || coalesce(with_check,'') ILIKE '%is_anonymous%')            AS mfa_guest_blocks,
+    -- I2: SECDEF writers carry the is_anonymous guard, EXECUTE only for authenticated.
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public'
        AND p.proname IN ('delete_safety_alert','update_safety_alert','withdraw_petition_signature')
-       AND position('is_anonymous' IN pg_get_functiondef(p.oid)) > 0)                      AS secdef_guards
+       AND position('is_anonymous' IN pg_get_functiondef(p.oid)) > 0)                      AS secdef_guards,
+    has_function_privilege('anon','public.delete_safety_alert(uuid)','EXECUTE')            AS anon_exec_del_alert,
+    has_function_privilege('anon','public.withdraw_petition_signature(uuid)','EXECUTE')    AS anon_exec_withdraw_sig,
+    has_function_privilege('authenticated','public.delete_safety_alert(uuid)','EXECUTE')  AS auth_exec_del_alert,
+    has_function_privilege('authenticated','public.withdraw_petition_signature(uuid)','EXECUTE') AS auth_exec_withdraw_sig
 `
 
 maybeDescribe('25 — P2.0 integrity (PROD read-only)', () => {
@@ -84,14 +106,15 @@ maybeDescribe('25 — P2.0 integrity (PROD read-only)', () => {
     expect(r.conv_volunteer_upd, 'conversations.volunteer_id must NOT be client-writable').toBe(false)
     expect(r.conv_status_upd, 'conversations.status must remain client-writable').toBe(true)
     expect(r.conv_tbl_upd, 'conversations table-level UPDATE must be revoked').toBe(false)
-    // reviews: UPDATE admin-only (reviewee_id/rating forge closed); no client INSERT path.
-    expect(Number(r.reviews_upd_reviewer), 'reviews UPDATE must not admit the reviewer').toBe(0)
+    // reviews: UPDATE admin-only (calls is_current_user_admin, no reviewer_id); no client INSERT.
+    expect(Number(r.reviews_upd_adminonly), 'reviews UPDATE must be admin-gated only').toBe(1)
     expect(Number(r.reviews_insert_policies), 'reviews must have no client INSERT policy').toBe(0)
-    // resource_opt_ins: RPC-only INSERT; DELETE pending-only.
-    expect(Number(r.optins_insert_policies), 'opt_ins must have no direct INSERT policy').toBe(0)
+    // resource_opt_ins: no PERMISSIVE INSERT (RPC-only); DELETE pending-only.
+    expect(Number(r.optins_insert_permissive), 'opt_ins must have no permissive INSERT policy').toBe(0)
     expect(Number(r.optins_delete_pending), 'opt_ins DELETE must be pending-only').toBe(1)
     // transition + force triggers present.
     expect(Number(r.conv_transition_trg), 'conversation transition trigger must exist').toBe(1)
+    expect(Number(r.optins_transition_trg), 'opt-in transition trigger must exist').toBe(1)
     expect(Number(r.checkins_force_trg), 'event_checkins force-checked_in_by trigger must exist').toBe(1)
   })
 
@@ -103,9 +126,15 @@ maybeDescribe('25 — P2.0 integrity (PROD read-only)', () => {
       ctx.skip()
       return
     }
-    // Every direct-write gap now carries a RESTRICTIVE guest INSERT block.
-    expect(Number(r.guest_blocks), 'all 9 guest INSERT blocks must be present').toBe(9)
-    // Every owner-scoped SECDEF writer now carries the is_anonymous guard.
+    // Every direct-write gap carries the exact-shape RESTRICTIVE guest INSERT block.
+    expect(Number(r.guest_blocks), 'all 9 guest INSERT blocks must be present with the exact shape').toBe(9)
+    // mfa_backup_codes carries RESTRICTIVE guest blocks on INSERT/UPDATE/DELETE.
+    expect(Number(r.mfa_guest_blocks), 'mfa_backup_codes must block guest INSERT/UPDATE/DELETE').toBe(3)
+    // Every owner-scoped SECDEF writer carries the is_anonymous guard, EXECUTE authenticated-only.
     expect(Number(r.secdef_guards), 'all 3 SECDEF guest guards must be present').toBe(3)
+    expect(r.anon_exec_del_alert, 'anon must NOT EXECUTE delete_safety_alert').toBe(false)
+    expect(r.anon_exec_withdraw_sig, 'anon must NOT EXECUTE withdraw_petition_signature').toBe(false)
+    expect(r.auth_exec_del_alert, 'authenticated must EXECUTE delete_safety_alert').toBe(true)
+    expect(r.auth_exec_withdraw_sig, 'authenticated must EXECUTE withdraw_petition_signature').toBe(true)
   })
 })
