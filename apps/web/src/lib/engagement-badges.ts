@@ -126,3 +126,36 @@ export function summaryToBadgeList(summary: BadgeSummary | null | undefined): Di
 export function hasNoBadges(summary: BadgeSummary | null | undefined): boolean {
   return summaryToBadgeList(summary).length === 0
 }
+
+/** The render-ready view model for a badge section. */
+export interface BadgeView {
+  /** Publicly-visible earned badges (families + community), sorted. */
+  publicBadges: DisplayBadge[]
+  /** Owner-only earned badges; always [] unless isOwnProfile. */
+  privateBadges: DisplayBadge[]
+  /** True when the public list is empty (drives the empty-state copy). */
+  showEmptyState: boolean
+  /** True when the owner-only private section should render. */
+  showPrivateSection: boolean
+}
+
+/**
+ * Derive the render decisions for a badge section from the raw summaries.
+ * Pure and node-testable — the single source of truth shared by the public
+ * profile page and the Settings → Profile own-badges surface. Private badges
+ * are surfaced only to the owner (isOwnProfile); a non-owner always gets [].
+ */
+export function deriveBadgeView(
+  summary: BadgeSummary | null | undefined,
+  privateSummary: BadgeSummary | null | undefined,
+  isOwnProfile: boolean
+): BadgeView {
+  const publicBadges = summaryToBadgeList(summary)
+  const privateBadges = isOwnProfile ? summaryToBadgeList(privateSummary) : []
+  return {
+    publicBadges,
+    privateBadges,
+    showEmptyState: publicBadges.length === 0,
+    showPrivateSection: isOwnProfile && privateBadges.length > 0,
+  }
+}

@@ -27,7 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import {
-  summaryToBadgeList,
+  deriveBadgeView,
   levelLabel,
   type BadgeSummary,
   type DisplayBadge,
@@ -94,8 +94,8 @@ export function EngagementBadges({
   privateSummary?: BadgeSummary | null | undefined
   isOwnProfile?: boolean
 }) {
-  const badges = summaryToBadgeList(summary)
-  const privateBadges = isOwnProfile ? summaryToBadgeList(privateSummary) : []
+  const { publicBadges: badges, privateBadges, showEmptyState, showPrivateSection } =
+    deriveBadgeView(summary, privateSummary, isOwnProfile)
 
   return (
     <div className="space-y-4">
@@ -103,7 +103,7 @@ export function EngagementBadges({
         <h2 id="engagement-badges-heading" className="mb-3 text-sm font-semibold text-stone-500">
           Community Badges
         </h2>
-        {badges.length === 0 ? (
+        {showEmptyState ? (
           <p className="flex items-center gap-2 text-sm text-stone-500">
             <Sprout className="h-4 w-4 text-lime-600" aria-hidden="true" />
             <span>No badges yet — {displayName} earns badges by helping, connecting, and taking part.</span>
@@ -117,7 +117,7 @@ export function EngagementBadges({
         )}
       </section>
 
-      {isOwnProfile && privateBadges.length > 0 && (
+      {showPrivateSection && (
         <section aria-labelledby="private-badges-heading" data-testid="engagement-private-section">
           <h2 id="private-badges-heading" className="mb-1 text-sm font-semibold text-stone-500">
             Private — only you can see this

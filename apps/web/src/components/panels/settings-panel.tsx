@@ -30,6 +30,8 @@ import Image from 'next/image'
 import { MFAEnrollment } from '@/components/auth/mfa-enrollment'
 import { SecurityActivity } from '@/components/security/security-activity'
 import { AvatarUpload } from '@/components/profile/avatar-upload'
+import { EngagementBadges } from '@/components/profile/engagement-badges'
+import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsAdmin } from '@/hooks/use-is-admin'
 import { createClient } from '@/lib/supabase/client'
@@ -251,6 +253,9 @@ interface ProfileSectionProps {
 function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: ProfileSectionProps) {
   const [editMode, setEditMode] = useState(false)
   const [localProfile, setLocalProfile] = useState(profile)
+  // Own earned badges — get_my_profile() omits badge_summary, so read directly.
+  const { summary, privateSummary, loading: badgesLoading, error: badgesError, reload: reloadBadges } =
+    useMyBadges(userId)
 
   const handleSave = () => {
     onUpdate(localProfile)
@@ -365,6 +370,33 @@ function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: Profil
           </div>
         </>
       )}
+
+      {/* Earned engagement badges — the signed-in user's own public + private badges. */}
+      <div
+        className="rounded-xl border border-stone-200 bg-stone-50/95 p-4 text-stone-900"
+        data-testid="settings-badges-section"
+      >
+        {badgesLoading ? (
+          <p className="flex items-center gap-2 text-sm text-stone-600">
+            <Loader2 className="w-4 h-4 animate-spin text-stone-500" aria-hidden="true" />
+            <span>Loading your badges…</span>
+          </p>
+        ) : badgesError ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-stone-600">{badgesError}</p>
+            <Button size="sm" variant="outline" onClick={reloadBadges}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <EngagementBadges
+            summary={summary}
+            privateSummary={privateSummary}
+            isOwnProfile
+            displayName={profile.name || 'You'}
+          />
+        )}
+      </div>
     </SettingsSection>
   )
 }

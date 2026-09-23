@@ -2415,3 +2415,32 @@ created_at: "2026-09-23T14:00:00.000Z"
 completed_at: "2026-09-23T18:52:00.000Z"
 evidence: "Applied verbatim to prod ndtpovonpadugthmcntl via Mgmt API (reconcile backfill ran clean). 2.2 verified live: 5 new tables RLS-on, no client writes on ledger/counters/config/private; SELECT(badge_summary) anon+authenticated; 16 trg_engagement_* AFTER-ROW enabled; 7 SECDEF fns pinned; reconcile/record/credit_post_created NOT anon/auth-exec, unblock_opt_in auth-only; enforce_opt_in_transition md5=f3bc362fce1361a5717007ea2f7a88e7 (unchanged); supabase_realtime membership UNCHANGED (6 tables: conversations/messages/notifications/poll_votes/post_comments/posts; no new tables); cron engagement_reconcile_nightly as postgres. Backfill = 0 public badge_summary writes; 1 ledger row safety_alert_verified (reporter 472149ce, alert 4b0de224) → 1 PRIVATE counter badge:watcher=1 (sub-threshold). Anon surface: posts+profiles.badge_summary → 200; engagement_events + user_private_badge_summary → 401. Ledger row 20261005000000 inserted (schema_migrations count 135→136). types.ts regenerated from prod (tsc 0) + pushed (0ed2462). Prod smoke 05/06/08/16/24/25/26 = 27 pass 0 skip. Merged c09e8ed; Vercel READY (xw8WbieQvrRRWR32q4NegfKdBFsh); site 200; smoke 26 post-merge asserts 2 pass."
 ```
+
+<!-- ACTIVE: feed-fullfeed-p2-1a-badges-surface — P2.1a follow-up capability fix; CLIENT-ONLY (no DB/post-deploy step). Surfaces earned badges in Settings -> Profile because /profile/[username] is unreachable (all prod usernames NULL, no SPA link). -->
+
+```yaml
+id: feed-fullfeed-p2-1a-badges-surface
+status: pending
+next_action_id: null
+type: branch+commit+pr
+description: "fix(feed): surface earned badges in Settings -> Profile. CAPABILITY GAP: P2.1a (PR #208, live) renders EngagementBadges only on /profile/[username], but all 8 prod profiles have username NULL, username is never collected, and nothing in the SPA links to /profile/*, so no signed-in user can see their own badges — the capability was not delivered. FIX (client-only, no schema change): (1) new hook apps/web/src/hooks/use-my-badges.ts reads the caller's OWN profiles.badge_summary (public, SELECT granted to authenticated) and user_private_badge_summary.summary (owner-only via RLS), keyed on auth user.id — get_my_profile() omits badge_summary so a direct read is required (that RPC is unchanged). Mirrors the repo read pattern: singleton browser client, AbortSignal.timeout(QUERY_TIMEOUT_MS=12s) on both reads, isQueryTimeout treats timeout / in-flight-fetch abort as benign (spinner always clears, pattern-nextjs-fetch-abort), logger.error + getFriendlyErrorMessage on real failure, loading resolves in finally, reload() for retry. (2) settings-panel.tsx ProfileSection renders EngagementBadges (isOwnProfile) inside an earth-tone bg-stone-50/95 card with loading / error+Retry / content states; guests never reach it (isAnonymous early-return already gates them). (3) engagement-badges.ts gains a pure node-testable deriveBadgeView(summary,privateSummary,isOwnProfile) -> {publicBadges,privateBadges,showEmptyState,showPrivateSection}; engagement-badges.tsx now consumes it (behavior preserved) so the tests protect the real rendered branches. Existing profile page + component props unchanged. TEST: apps/web/src/lib/badge-view.test.ts (4 vitest cases, node env — repo has no testing-library) asserting owner sees public badges + private section, null summaries -> empty state + no private section, non-owner never sees private, owner with no private badges hides the private section; mutation-checked (breaking showPrivateSection fails the owner case). Merge-gate: tsc 0; 344 non-smoke vitest pass (+4 new, 10 existing engagement-badges still green after refactor); build passes (ƒ Proxy Middleware present); dev server boots clean, root 200, settings bundle compiles no error. Residual: authenticated ProfileSection DOM not browser-verified — needs a signed-in Supabase session; no local Supabase runs (env -> hosted prod) and a local sign-up would be a prod auth write (forbidden), no test credentials available. Close by logging in a test account on the dev server -> Settings -> Profile. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-p2-1a-badges-surface
+base: develop
+base_sha: f89a304
+remote: origin
+project_ref: ndtpovonpadugthmcntl
+files:
+  - apps/web/src/hooks/use-my-badges.ts
+  - apps/web/src/lib/engagement-badges.ts
+  - apps/web/src/lib/badge-view.test.ts
+  - apps/web/src/components/profile/engagement-badges.tsx
+  - apps/web/src/components/panels/settings-panel.tsx
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+depends_on: feed-fullfeed-p2-1a-engagement
+created_at: "2026-09-23T15:10:00.000Z"
+completed_at: null
+evidence: null
+```
