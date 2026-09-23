@@ -1835,6 +1835,10 @@ Action: Complete {dependency_task_id} first, then return to {task_id}
 
 ---
 
+| 1.6.0 | 2026-09-23 | FULL-FEED P2.1b COMPLETE (feature/feed-fullfeed-p2-1b-appreciation) — peer appreciation gifts + fix round. Migration 20261006000000: appreciation_gifts table (server-write-only via SECDEF give_appreciation RPC; RLS party-read; UNIQUE(giver,receiver,item); 12 items), classifier extends appreciation_gift → PUBLIC badge:appreciated. USER RULING: the public "Appreciated" LEVEL counts DISTINCT PEOPLE who gave, not gifts — ledger keyed actor=receiver/target=giver so UNIQUE(actor,kind,target) = one credit per (receiver,giver) pair; all 12 items still individually giftable + shelf-visible; reconcile iterates DISTINCT (receiver_id,giver_id). Fix-round: MEDIUM-2 guest receiver rejected as generic "Recipient not found" (no oracle); MEDIUM-3 error≠empty tests on shelf+sent reads + slug guard (mutation-proven); LOW-1 optional post context silently dropped when hidden/missing/wrong-author (gift always succeeds, no post oracle); LOW-5 sheet Follow now matches post-card guest behaviour; LOW-6 removed unused BadgeGlyph import; icons redrawn (soup outlined bowl+steam, cheer party-popper, sunflower seeded center — no face). Account deletion of a giver keeps the credit (target_id has no FK; reconcile additive-only). Client: AuthorBadgeStrip + AppreciationSheet (12-item picker, single-flight, optimistic) on feed author row; Gifts-received shelf in Settings → Profile. Verified: tsc 0, eslint 0 on changed files, full vitest green, .mjs node tests green, BEGIN/ROLLBACK prod validation (distinct-giver counting, guest-receiver reject, reconcile parity, smoke 26+27 STATE_SQL). Migration applied as a SEPARATE post-deploy step (see GIT_PLAN). Pending merge → orchestrator authorizes. |
+
+---
+
 **Checklist Hash**: To be generated after each update
-**Last Agent Session**: feat/preferred-language (2026-06-13)
+**Last Agent Session**: feature/feed-fullfeed-p2-1b-appreciation (2026-09-23)
 **Total Development Time**: 0 hours
