@@ -215,11 +215,17 @@ BEGIN
     -- The attestor is always the caller; ignore any client-supplied value.
     NEW.checked_in_by := auth.uid();
   ELSE
-    -- UPDATE: never let a client change the attestor. Keep OLD, but let a NULL pass
-    -- through — the checked_in_by FK is ON DELETE SET NULL, and that cascade updates
-    -- the row to NULL with auth.uid() = null (no session), which must not be reverted.
-    IF NEW.checked_in_by IS NOT NULL AND NEW.checked_in_by IS DISTINCT FROM OLD.checked_in_by THEN
-      NEW.checked_in_by := OLD.checked_in_by;
+    -- UPDATE: never let a client change the attestor. A NULL is accepted ONLY when it
+    -- originates from the FK ON DELETE SET NULL cascade — i.e. there is no session
+    -- (auth.uid() IS NULL) or we are running inside another statement's trigger depth
+    -- (pg_trigger_depth() > 1). Any other change (a forged uuid, or a direct NULL from
+    -- a real user session) is reverted to OLD.checked_in_by.
+    IF NEW.checked_in_by IS DISTINCT FROM OLD.checked_in_by THEN
+      IF NEW.checked_in_by IS NULL AND (auth.uid() IS NULL OR pg_trigger_depth() > 1) THEN
+        NULL;  -- FK cascade → allow the NULL through unchanged
+      ELSE
+        NEW.checked_in_by := OLD.checked_in_by;
+      END IF;
     END IF;
   END IF;
   RETURN NEW;

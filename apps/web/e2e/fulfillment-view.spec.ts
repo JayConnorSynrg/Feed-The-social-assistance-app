@@ -201,12 +201,27 @@ test('provider expands Seekers accordion and sees seeker with pending badge', as
   console.log('[fulfillment-view] Accept button visible for pending opt-in')
 })
 
+// Reset the opt-in to a known status. The DB now enforces a forward-only status graph
+// (pending→accepted→completed, no path back), so a service_role UPDATE back to an
+// earlier state is rejected — which would make a retry fail. Delete-and-recreate the
+// row (INSERT is not gated by the transition trigger) at the desired status, reusing
+// the same id so the DOM selectors (accept-optin-${optInId} etc.) stay valid.
+async function resetOptIn(status: 'pending' | 'accepted') {
+  const { error: delErr } = await admin.from('resource_opt_ins').delete().eq('id', optInId)
+  if (delErr) throw new Error(`[fulfillment-view] resetOptIn delete failed: ${delErr.message}`)
+  const { error: insErr } = await admin.from('resource_opt_ins').insert({
+    id: optInId,
+    post_id: postId,
+    seeker_id: seekerProvision.userId,
+    resource_id: null,
+    status,
+  })
+  if (insErr) throw new Error(`[fulfillment-view] resetOptIn insert failed: ${insErr.message}`)
+}
+
 test('provider accepts opt-in → badge transitions to accepted', async ({ page }) => {
   // Ensure opt-in is pending (reset in case prior test left it in another state)
-  await admin
-    .from('resource_opt_ins')
-    .update({ status: 'pending' })
-    .eq('id', optInId)
+  await resetOptIn('pending')
 
   await loginAndGoToFeed(page, PROVIDER_EMAIL, USER_PASSWORD)
 
@@ -243,10 +258,7 @@ test('provider accepts opt-in → badge transitions to accepted', async ({ page 
 
 test('provider marks opt-in completed → badge shows completed and DB status = completed', async ({ page }) => {
   // Ensure opt-in is in accepted state
-  await admin
-    .from('resource_opt_ins')
-    .update({ status: 'accepted' })
-    .eq('id', optInId)
+  await resetOptIn('accepted')
 
   await loginAndGoToFeed(page, PROVIDER_EMAIL, USER_PASSWORD)
 
