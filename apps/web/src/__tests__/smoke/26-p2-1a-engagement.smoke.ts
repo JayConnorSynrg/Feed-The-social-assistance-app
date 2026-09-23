@@ -63,7 +63,17 @@ const STATE_SQL = `
     has_column_privilege('authenticated','public.profiles','badge_summary','UPDATE')      AS auth_badge_update,
     -- The new tables must NOT be in the realtime publication (no WAL exposure).
     (SELECT count(*) FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public'
-       AND tablename IN ('engagement_events','user_engagement_counters','badge_config','opt_in_declines')) AS new_tables_published,
+       AND tablename IN ('engagement_events','user_engagement_counters','badge_config','opt_in_declines','user_private_badge_summary')) AS new_tables_published,
+    -- B2: user_private_badge_summary — owner-only RLS, no client writes, not anon-readable.
+    (SELECT relrowsecurity FROM pg_class WHERE oid='public.user_private_badge_summary'::regclass) AS priv_rls,
+    has_table_privilege('anon','public.user_private_badge_summary','SELECT')            AS priv_anon_select,
+    has_table_privilege('authenticated','public.user_private_badge_summary','SELECT')   AS priv_auth_select,
+    has_table_privilege('authenticated','public.user_private_badge_summary','INSERT')   AS priv_auth_insert,
+    has_table_privilege('authenticated','public.user_private_badge_summary','UPDATE')   AS priv_auth_update,
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='user_private_badge_summary'
+       AND cmd='SELECT' AND coalesce(qual,'') ILIKE '%user_id%')                        AS priv_select_own,
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='user_private_badge_summary'
+       AND cmd IN ('INSERT','UPDATE','DELETE','ALL'))                                   AS priv_write_policies,
     -- The 16 source-table ledger triggers: present, ENABLED, AFTER + ROW, right event.
     -- tgtype bit 1 = ROW, bit 2 = BEFORE (must be 0 => AFTER), bit 4 = INSERT, bit 16 = UPDATE.
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -142,7 +152,15 @@ maybeDescribe('26 — P2.1a engagement (PROD read-only)', () => {
     // badge_summary is server-maintained: no client UPDATE.
     expect(r.auth_badge_update, 'authenticated must NOT UPDATE profiles.badge_summary').toBe(false)
     // The new tables must be absent from the realtime publication.
-    expect(Number(r.new_tables_published), 'the 4 new tables must NOT be in supabase_realtime').toBe(0)
+    expect(Number(r.new_tables_published), 'the 5 new tables must NOT be in supabase_realtime').toBe(0)
+    // B2: private summary — owner-only RLS, no client writes.
+    expect(r.priv_rls, 'user_private_badge_summary RLS must be enabled').toBe(true)
+    expect(r.priv_anon_select, 'anon must NOT read the private summary').toBe(false)
+    expect(r.priv_auth_select, 'authenticated may SELECT (RLS-scoped to owner)').toBe(true)
+    expect(r.priv_auth_insert, 'authenticated must NOT INSERT the private summary').toBe(false)
+    expect(r.priv_auth_update, 'authenticated must NOT UPDATE the private summary').toBe(false)
+    expect(Number(r.priv_select_own), 'private summary must have an owner-only read policy').toBe(1)
+    expect(Number(r.priv_write_policies), 'private summary must have NO client write policy').toBe(0)
   })
 
   it('[post-deploy] I1/I5/I7 — ledger triggers, fn lockdown, unblock+reconcile', async (ctx) => {
