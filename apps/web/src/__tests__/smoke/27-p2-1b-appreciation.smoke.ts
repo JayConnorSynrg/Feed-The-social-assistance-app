@@ -12,9 +12,17 @@
 // recorded in supabase_migrations.schema_migrations. The suite skips ONLY while that ledger
 // row is absent (pre-deploy). Once recorded, the assertions ALWAYS run.
 //
+// I3 (USER RULING): the public "Appreciated" LEVEL counts DISTINCT PEOPLE who gave, not gifts.
+// The ledger credit is keyed actor=receiver, kind=appreciation_gift, target_id=GIVER, so
+// UNIQUE(actor,kind,target) = one credit per (receiver, giver) pair — every later gift from the
+// same giver still creates its gift row (all 12 items giftable) but adds no credit. The counter
+// = number of distinct non-guest givers. reconcile iterates DISTINCT (receiver_id, giver_id).
+//
 // EMPIRICAL NOTE: every predicate below was validated against prod inside a single
 // BEGIN; … ROLLBACK; transaction on 2026-09-23 (the migration applied cleanly on PG 17.6 and
-// the give_appreciation calls exercised I1/I2/I3/I6) — the assertions mirror those results.
+// the give_appreciation calls exercised I1/I2/I3/I6, incl. distinct-giver counting: A gives B
+// heart+smile → B counter 1; C gives B → 2; guest receiver + self/guest giver rejected;
+// wipe-ledger→reconcile parity) — the assertions mirror those results.
 //
 // SQL SAFETY: single SELECT; every mutating word is a quoted literal / column argument.
 // No SQL verb appears at a line start or after ';' (prod-client WRITE_GUARD_RE).

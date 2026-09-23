@@ -315,18 +315,24 @@ Under A1/A2 + `safety_alert_verified` now private (measured live 2026-09-23): th
 prod (`ndtpovonpadugthmcntl`, PG 17.6) inside a single `BEGIN; … ROLLBACK;` on 2026-09-23 —
 the migration applied cleanly and the `give_appreciation` calls exercised I1/I2/I3/I6.
 
-## The gift model
+## The gift model (USER RULING: "Appreciated" counts distinct PEOPLE, not gifts)
 A giver sends one of **12 items** — `heart, smile, cheer, flower, sunflower, leaf, bread,
 apple, soup, sun, seedling, tree` — to another member via the SECDEF RPC
 `give_appreciation(p_receiver, p_item, p_post_id?)`. Rows live in `public.appreciation_gifts`
 (`giver_id`, `receiver_id`, `item`, optional `post_id`), `UNIQUE(giver_id, receiver_id, item)`,
-`CHECK giver_id <> receiver_id`, `CHECK item IN (…12…)`. `giver_id`/`receiver_id` →
+`CHECK giver_id <> receiver_id`, `CHECK item IN (…12…)`. All 12 items stay individually
+giftable and all show on the receiver's private shelf. `giver_id`/`receiver_id` →
 `profiles(id) ON DELETE CASCADE` (enables the receiver-shelf embed AND lets account deletion
 cascade, since `profiles.id → auth.users ON DELETE CASCADE`); `post_id → posts ON DELETE SET
 NULL` (gifts are permanent). The RPC validates caller non-null + non-guest + not-self +
-recipient exists + item valid + (if given) the post is visible and authored by the recipient;
-inserts `ON CONFLICT DO NOTHING`; and on a NEW row records the receiver's ledger credit inline
-(same transaction — the gift is the core write, so it fails loudly / rolls back atomically).
+**recipient exists AND is non-guest** (a guest receiver is rejected with the SAME generic
+`Recipient not found` as a nonexistent recipient — MEDIUM-2, no guest-status oracle) + item
+valid; the optional `p_post_id` is **pure context** — if the referenced post is missing,
+hidden, or not authored by the recipient the RPC **silently drops it** (`p_post_id := NULL`)
+so a valid gift always succeeds regardless of the post's visibility (LOW-1), and missing /
+hidden / wrong-author are indistinguishable (no post oracle). It inserts `ON CONFLICT DO
+NOTHING`; and on a NEW gift row records the receiver's ledger credit inline (same transaction —
+the gift is the core write, so it fails loudly / rolls back atomically).
 
 ## Public/private split (user ruling)
 - **PUBLIC:** the earned community-badge **LEVEL** "Appreciated" (`badge:appreciated`,
@@ -350,15 +356,33 @@ reporter (that kind stayed private for exactly this reason). The Appreciated bum
 indistinguishable from every other public badge threshold crossing (Voice/Helper/Connector).
 **Conclusion: no new giver→receiver channel; acceptable without mitigation.**
 
-## Ledger key correction (supersedes P2.1a reserved line 71)
+## Ledger key = the GIVER (realises P2.1a reserved line 71; USER RULING)
 The P2.1a header reserved `appreciation_gift` as `actor=recipient, target=giver, private`.
-**Corrected:** `actor = receiver`, **`target_id = the gift row id`** (not the giver),
-`kind = appreciation_gift`, weight 1, family none, community `badge:appreciated`, **PUBLIC**.
-Keying on the giver would collapse all gifts from one giver-to-one-receiver into a single ledger
-row (one-per-pair) and drop repeats; keying on `gift.id` makes each distinct gift its own credit.
-`reconcile_engagement` gains an `appreciation_gifts` loop that rebuilds the identical counts
-(verified in-txn: wipe ledger+counters for the receiver, reconcile → same 2 credits). The
-classifier `CREATE OR REPLACE`s leave every P2.1a kind's public/private verdict unchanged.
+**This wave:** `actor = receiver`, **`target_id = giver_id`**, `kind = appreciation_gift`,
+weight 1, family none, community `badge:appreciated`, **PUBLIC (level only)**.
+The ledger `UNIQUE(actor_id, kind, target_id) = (receiver, appreciation_gift, giver)` makes the
+FIRST gift from a giver the only counted event; every later gift from the same giver still
+creates its gift row (all 12 items giftable) but is an `ON CONFLICT` no-op credit. So the public
+`badge:appreciated` counter = **the number of distinct non-guest givers**, exactly once per
+(receiver, giver) — never per item, never zero for a giver who gave. `source_pk` is
+deterministic per pair (`receiver:giver`). `reconcile_engagement`'s `appreciation_gifts` loop
+iterates **DISTINCT (receiver_id, giver_id)** and writes the byte-identical row, so a
+wipe-ledger→reconcile rebuild reproduces the same counters+summary (verified in-txn: A gives B
+heart+smile+leaf → B's counter 1; C gives B → 2; wipe+reconcile → identical). The classifier
+`CREATE OR REPLACE`s leave every P2.1a kind's public/private verdict unchanged.
+
+## Account deletion of a giver — awards never disappear (I3a)
+`engagement_events.target_id` has **no FK** (bare uuid), so deleting a giver's account —
+which CASCADEs their `profiles` row and thus their `appreciation_gifts` rows away — does NOT
+delete the receiver's credit (keyed `actor=receiver, target=giver`). The counter is derived
+from the surviving ledger row, so it is stable. `reconcile_engagement` is **additive-only**
+(`ON CONFLICT DO NOTHING`; it never DELETEs a ledger row), consistent with every other kind
+(P2.1a Round-3 fix 8 / LOW-8 — a like/comment credit likewise survives its source's deletion
+because reconcile only inserts). The nightly job therefore never drops a deleted-giver credit;
+the only path that would is a test-only "wipe the ledger then rebuild from current source"
+harness, unreachable in production. Documented choice: production honours "awards never
+disappear"; reconcile-from-source is inherently limited to surviving source rows, like every
+other kind.
 
 ## Client surfaces (click paths)
 - **Feed author row** (`components/panels/feed-panel.tsx` PostCard): `FEED_POST_SELECT` now

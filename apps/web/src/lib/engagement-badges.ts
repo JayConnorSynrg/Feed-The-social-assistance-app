@@ -67,8 +67,9 @@ export const COMMUNITY_META: Record<
   voice: { label: 'Voice', colorHex: '#5a6b8c', iconName: 'MessageCircle' },
   advocate: { label: 'Advocate', colorHex: '#8a3b3b', iconName: 'Megaphone' },
   watcher: { label: 'Watcher', colorHex: '#3b6b5a', iconName: 'ShieldAlert' },
-  // P2.1b: earned when others send appreciation gifts (public LEVEL only; the giver→
-  // receiver edge stays private in appreciation_gifts). Warm amber-brown accent, distinct
+  // P2.1b (USER RULING): the "Appreciated" LEVEL counts DISTINCT PEOPLE who sent appreciation
+  // (once per giver, not per gift; public LEVEL only — the giver→receiver edge stays private in
+  // appreciation_gifts). Warm amber-brown accent, distinct
   // from connector (#8a6d3b). Without this entry summaryToBadgeList would silently DROP
   // the 'appreciated' key (see the `if (!meta) continue` guard below).
   appreciated: { label: 'Appreciated', colorHex: '#9a6a1f', iconName: 'Gift' },

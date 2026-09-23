@@ -7,6 +7,12 @@
 -- community badge "Appreciated" (level only, thresholds from badge_config). WHO gave
 -- WHICH gift to whom is visible ONLY to the two parties (RLS), never to a third party.
 --
+-- USER RULING: the public "Appreciated" LEVEL counts DISTINCT PEOPLE who gave, not gifts —
+-- the receiver's badge:appreciated counter = the number of distinct non-guest givers who have
+-- ever sent them at least one item, exactly once per (receiver, giver), never per item, never
+-- zero for a giver who gave. All 12 items stay individually giftable (UNIQUE(giver,receiver,
+-- item)) and all still show on the receiver's private shelf; only the public counting changes.
+--
 -- Replay-safe on PG15 (local) and PG17.6 (prod). Every statement is idempotent; no
 -- PG16/17-only syntax. Wrapped in BEGIN/COMMIT with a bounded lock wait. No publication
 -- change (the new table is never added to supabase_realtime).
@@ -15,18 +21,38 @@
 -- INVARIANTS (derived per-site, not pattern-matched)
 --   I1  AT-MOST-ONCE PER (giver, receiver, item). UNIQUE(giver_id,receiver_id,item) +
 --       ON CONFLICT DO NOTHING in give_appreciation → re-gifting the same item is an
---       idempotent no-op that returns the existing row (created=false). One ledger row
---       per gift (never zero, never twice).
+--       idempotent no-op that returns the existing row (created=false). One gift row per
+--       (giver, receiver, item) (never zero, never twice); all 12 items remain giftable.
 --   I2  SERVER-ONLY WRITES. appreciation_gifts has NO client write policy and table-level
 --       REVOKE ALL; only the SECDEF give_appreciation RPC (owner) inserts. Gifts are
 --       PERMANENT (Sprouts ethics) — there is no UPDATE/DELETE path. A guest (JWT
---       is_anonymous) and anon cannot give (RPC raises); anon cannot execute the RPC.
---   I3  ONE LEDGER EVENT PER GIFT, CREDITED TO THE RECEIVER, keyed target_id = gift.id
---       (NOT the giver — that would collapse to one-per-pair and drop repeat gifts). The
---       ledger UNIQUE(actor_id,kind,target_id) with actor=receiver, target=gift.id makes
---       each distinct gift its own credit. reconcile_engagement rebuilds identical counts
---       by iterating appreciation_gifts. (This CORRECTS the reserved P2.1a header line 71
---       which said target=giver; see the crosswalk note below.)
+--       is_anonymous) and anon cannot GIVE (RPC raises); a guest RECEIVER is rejected with
+--       the same generic 'Recipient not found' as a nonexistent recipient (MEDIUM-2 — no
+--       guest-status oracle); anon cannot execute the RPC.
+--   I3  ONE LEDGER EVENT PER DISTINCT (RECEIVER, GIVER), CREDITED TO THE RECEIVER, keyed
+--       target_id = giver_id (USER RULING: the public "Appreciated" LEVEL counts distinct
+--       PEOPLE, not gifts). The ledger UNIQUE(actor_id,kind,target_id) with actor=receiver,
+--       target=giver makes the FIRST gift from a giver the only counted event; every later
+--       gift from the same giver still creates its gift row (I1) but adds no credit (ON
+--       CONFLICT no-op). So badge:appreciated counter = number of distinct non-guest givers,
+--       exactly once per pair. reconcile_engagement rebuilds identical counts by iterating
+--       DISTINCT (receiver_id, giver_id) from appreciation_gifts with the same actor/kind/
+--       target/source_pk. (This realises the reserved P2.1a header line 71 target=giver.)
+--   I3a ACCOUNT DELETION OF A GIVER — awards never disappear (Sprouts ethics). The credit is
+--       a ledger row keyed (actor=receiver, kind, target_id=giver): target_id has NO FK
+--       (engagement_events.target_id is a bare uuid), so deleting the giver's auth.users row —
+--       which CASCADEs their profiles row and thus their appreciation_gifts rows away — does
+--       NOT delete the receiver's credit. recompute_user_engagement derives the counter from
+--       the surviving ledger row, so the count is stable. reconcile_engagement is ADDITIVE
+--       ONLY (ON CONFLICT DO NOTHING; it never DELETEs a ledger row) — consistent with every
+--       other kind (P2.1a Round-3 fix 8 / LOW-8: a like/comment credit likewise survives its
+--       source deletion, because reconcile only inserts). The nightly job therefore never
+--       drops a credit for a deleted giver. The ONLY way a deleted-giver credit is not
+--       reconstructed is a destructive "wipe the ledger then rebuild from current source" —
+--       a test-only harness path (used to prove wipe+rebuild parity when all gifts are
+--       present), never reachable in production. CHOICE (documented): production honours
+--       "awards never disappear"; reconcile-from-source is inherently limited to surviving
+--       source rows, exactly like every other kind.
 --   I4  PUBLIC LEVEL, PRIVATE EDGE. appreciation_gift is PUBLIC in engagement_is_public,
 --       so the RECEIVER's badge LEVEL lands in profiles.badge_summary (levels only, no
 --       count — the P2.1a public-summary floor). The giver→receiver EDGE lives ONLY in
@@ -52,14 +78,17 @@
 --   I7  UI DOES SOMETHING. Every element shipped is wired to this RPC / these reads.
 --
 -- ============================================================================
--- CROSSWALK CORRECTION to P2.1a header (line 71):
---   OLD (reserved): appreciation_gift | actor=recipient | target=giver     | private
---   NEW (this wave): appreciation_gift | actor=receiver  | target=gift.id   | PUBLIC (level)
+-- CROSSWALK to P2.1a header (line 71):
+--   RESERVED (P2.1a): appreciation_gift | actor=recipient | target=giver | private
+--   THIS WAVE:        appreciation_gift | actor=receiver  | target=giver | PUBLIC (level)
 --       wt 1, family none, community dim badge:appreciated, verified no.
---   Rationale: target=giver collapses all gifts from one giver-to-one-receiver into a
---   single ledger row (one-per-pair) and drops repeats; target=gift.id counts each gift.
---   PUBLIC (not private) because the user ruling makes the EARNED LEVEL public; the private
---   part (who/what) is enforced by appreciation_gifts RLS, not by ledger scope.
+--   Rationale (USER RULING): the public "Appreciated" LEVEL counts distinct PEOPLE who gave,
+--   so target=giver is exactly right — UNIQUE(actor=receiver, kind, target=giver) yields
+--   one-credit-per-pair for free (the reserved design's target). All 12 items stay giftable
+--   (per-item UNIQUE(giver,receiver,item) on appreciation_gifts) and shelf-visible; only the
+--   public COUNT is distinct-people. PUBLIC (not private) because the ruling makes the EARNED
+--   LEVEL public; the private part (who gave what) is enforced by appreciation_gifts RLS, not
+--   by ledger scope.
 -- ============================================================================
 
 BEGIN;
@@ -150,7 +179,17 @@ BEGIN
   IF p_receiver = v_giver THEN
     RAISE EXCEPTION 'You cannot appreciate yourself' USING ERRCODE = '22023';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_receiver) THEN
+  -- MEDIUM-2: a guest (auth.users.is_anonymous) receiver is treated EXACTLY like a
+  -- nonexistent recipient — same generic 'Recipient not found', no separate guest branch —
+  -- so the caller cannot use the error to learn whether a target is a guest (no guest-status
+  -- oracle; the minimal-leak choice). This also keeps every gift row backed by a credit:
+  -- record_engagement_event silently skips anonymous ACTORS (the receiver is the actor here),
+  -- so without this a guest receiver would get a gift row with no ledger credit.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles pr
+    JOIN auth.users u ON u.id = pr.id
+    WHERE pr.id = p_receiver AND u.is_anonymous IS NOT TRUE
+  ) THEN
     RAISE EXCEPTION 'Recipient not found' USING ERRCODE = '22023';
   END IF;
   IF p_item IS NULL OR p_item NOT IN (
@@ -159,14 +198,18 @@ BEGIN
     RAISE EXCEPTION 'Unknown appreciation item: %', COALESCE(p_item, '(null)') USING ERRCODE = '22023';
   END IF;
   IF p_post_id IS NOT NULL THEN
-    -- The optional post link must be a visible post authored BY the recipient.
+    -- LOW-1: the post is OPTIONAL context only. A valid gift from a signed-in non-guest to a
+    -- real non-guest other member must SUCCEED regardless of the context post's visibility (a
+    -- post can be hidden after the sheet loads; staff see hidden posts). If the referenced post
+    -- is missing, hidden, or not authored by the recipient, silently DROP the context
+    -- (p_post_id := NULL) instead of raising. This also removes every post oracle: missing,
+    -- hidden, and wrong-author are now indistinguishable (all yield a gift with no post link),
+    -- preserving the hidden-vs-nonexistent property the review required — no error tells the
+    -- caller whether a post exists or is merely hidden.
     SELECT user_id INTO v_post_author
     FROM public.posts WHERE id = p_post_id AND is_hidden IS NOT TRUE;
-    IF v_post_author IS NULL THEN
-      RAISE EXCEPTION 'Post not found' USING ERRCODE = '22023';
-    END IF;
-    IF v_post_author <> p_receiver THEN
-      RAISE EXCEPTION 'That post is not authored by the recipient' USING ERRCODE = '22023';
+    IF v_post_author IS NULL OR v_post_author <> p_receiver THEN
+      p_post_id := NULL;
     END IF;
   END IF;
 
@@ -184,12 +227,18 @@ BEGIN
       'created', false, 'created_at', v_existing.created_at);
   END IF;
 
-  -- I3: credit the RECEIVER exactly once for THIS gift (target = gift id → each counts).
+  -- I3 (USER RULING): the public "Appreciated" counter counts DISTINCT PEOPLE, not gifts.
+  -- Credit the RECEIVER with the GIVER as target, so UNIQUE(actor=receiver, kind, target=giver)
+  -- makes the FIRST gift from this giver the only counted event; every later gift from the
+  -- same giver still creates its gift row (I1) but this credit is an ON CONFLICT no-op. The
+  -- counter = number of distinct non-guest givers, exactly once per pair. source_pk is
+  -- deterministic per pair (receiver:giver), so reconcile rebuilds byte-identical rows no
+  -- matter which of the pair's gifts it iterates first.
   -- Inline (not exception-wrapped): the gift is the core write, so any ledger failure must
   -- roll back the whole transaction — no gift row can exist without its credit.
   PERFORM public.record_engagement_event(
-    p_receiver, 'appreciation_gift', 'appreciation_gift', v_gift.id,
-    'appreciation_gifts', v_gift.id::text, NULL, false);
+    p_receiver, 'appreciation_gift', 'user', v_giver,
+    'appreciation_gifts', p_receiver::text || ':' || v_giver::text, NULL, false);
 
   RETURN jsonb_build_object(
     'id', v_gift.id, 'item', v_gift.item,
@@ -303,12 +352,17 @@ BEGIN
              AND (p_user IS NULL OR submitted_by = p_user) LOOP
     PERFORM public.record_engagement_event(r.submitted_by,'resource_approved','resource',r.id,'resources',r.id::text,public.engagement_category_family(r.category),true);
   END LOOP;
-  -- appreciation_gift (P2.1b) — PUBLIC badge level; edge stays private in appreciation_gifts.
-  -- Credit the RECEIVER once per gift row (target_id = gift id → each gift counts, matching
-  -- give_appreciation's inline write). record_engagement_event skips guest receivers.
-  FOR r IN SELECT id, receiver_id FROM public.appreciation_gifts
+  -- appreciation_gift (P2.1b, USER RULING) — PUBLIC badge level; edge stays private in
+  -- appreciation_gifts. Credit the RECEIVER once per DISTINCT giver (target_id = giver_id), so
+  -- the counter = number of distinct non-guest givers — byte-identical to give_appreciation's
+  -- inline write (same actor/kind/target/source_pk). DISTINCT collapses repeat gifts from one
+  -- giver to a single credit; record_engagement_event additionally skips any guest receiver.
+  -- ADDITIVE-only (ON CONFLICT DO NOTHING): a credit for a giver whose account was later
+  -- deleted (their gift rows CASCADE away) is never recreated here, but is also never removed —
+  -- the surviving ledger row keeps it (target_id has no FK). See I3a in the header.
+  FOR r IN SELECT DISTINCT receiver_id, giver_id FROM public.appreciation_gifts
            WHERE (p_user IS NULL OR receiver_id = p_user) LOOP
-    PERFORM public.record_engagement_event(r.receiver_id,'appreciation_gift','appreciation_gift',r.id,'appreciation_gifts',r.id::text,NULL,false);
+    PERFORM public.record_engagement_event(r.receiver_id,'appreciation_gift','user',r.giver_id,'appreciation_gifts',r.receiver_id::text||':'||r.giver_id::text,NULL,false);
   END LOOP;
   -- post_created (A2: author credited iff a QUALIFYING outside engagement exists by a
   -- non-guest ≠ author — a like, a NON-HIDDEN comment, a POLL VOTE, or an opt-in. This must
