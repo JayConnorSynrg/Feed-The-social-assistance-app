@@ -16,7 +16,7 @@ completed_at: <ISO timestamp or null>
 ```
 
 ## Next Action
-next_action_id: null
+next_action_id: feed-fullfeed-h-hygiene
 
 <!-- NOTE: feed-fullfeed-p2-w1.5 merged to develop (PR #205, squash ef87a5e) — feed motion micro-interactions, CLIENT-ONLY (no post-deploy step). P1 FullFeed W1.1–W1.5 all shipped; W1.2/W1.3/W1.4 post-deploy steps COMPLETE. No registered pending FullFeed action remains; next_action_id=null pending next-wave planning. -->
 <!-- SHIP STEP (W1.2, orchestrator-gated, NOT the git merge) — DONE 2026-09-20: deployed supabase/functions/post-image-upload (verify_jwt=false, in-code JWT verify + anon/guest-block) and the updated supabase/functions/delete-account (paginated post-images/<uid>/ blob hard-delete) to prod ndtpovonpadugthmcntl. -->
@@ -48,6 +48,42 @@ depends_on: feed-fullfeed-p2-w1.4
 created_at: "2026-09-22T00:00:00.000Z"
 completed_at: "2026-09-22T00:05:00.000Z"
 verification: "Squash-merged clean to develop as ef87a5e (title 'feat(feed): P1 W1.5 — feed motion micro-interactions (poll tally, like tap, post enter/exit; reduced-motion aware) (#205)'). Squash commit IP-clean: author JayConnorSynrg <jcreationsrai@gmail.com>, committer GitHub <noreply@github.com> (GitHub squash committer, not an Anthropic identifier), body = clean title only, no Co-Authored-By / Generated-with / noreply@anthropic.com. origin/develop advanced a7e9c6c → ef87a5e. CLIENT-ONLY wave — no post-deploy DB/migration step. P1 W1.1–W1.5 all shipped; next_action_id=null."
+```
+
+```yaml
+id: feed-fullfeed-h-hygiene
+status: pending
+type: merge
+description: "Squash-merge PR (branch feature/feed-fullfeed-h-hygiene) → develop. Wave H (hygiene) — two schema-truth invariants, no runtime UI change. INVARIANT 1 (migration ledger matches prod): supabase_migrations.schema_migrations holds 97 rows (latest 20260619000100); supabase/migrations/ holds 133 files (latest 20261001000000). The 35 versions after 20260619000100 were applied out-of-band via the Management API and never recorded, so `supabase db push` would replay them. Adds supabase/scripts/backfill-schema-migrations-2026-09.sql (NOT executed at merge — see feed-fullfeed-h-hygiene-postdeploy): a single ON CONFLICT DO NOTHING transaction inserting ONLY the 33 verifiably-LIVE versions (each confirmed against its specific live catalog object). Two versions are DELIBERATELY EXCLUDED as NOT-LIVE and reported, not backfilled: 20260630000100 (notifications/post_likes/post_comments publication ADDs were wiped by the later LIVE W1.3 SET TABLE; replay would re-expose post_likes on the WAL — regression) and 20260922000100 (coarse_geocode_targets fn dropped by the later LIVE 20260923000000). Version-collision hazards flagged (20260619000200 has two files; 20260610210000 already-recorded shares a version with government_forms_bucket). Reverse orphan flagged (ledger 20260611173000 create_follows_table_reconcile has no repo file; follows table live). INVARIANT 2 (least privilege on public.posts): adds migration supabase/migrations/20261002000000_posts_privilege_least.sql — REVOKE INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN from anon; REVOKE UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN from authenticated (keeps INSERT). Derivation: the only client write is INSERT (post-type-wizard.tsx / feed-panel.tsx run as authenticated); every UPDATE/DELETE flows through SECURITY DEFINER fns (admin_remove/hold/authorize_post, opt_in/withdraw_opt_in, submit_content_report, sync_post_like_count/comment_count triggers) that run as owner and need no caller grant; anon has no write path. Does NOT touch SELECT/column grants (W1.3 location gate) or the realtime publication; REVOKE is replay-safe. Adds smoke test apps/web/src/__tests__/smoke/24-posts-privilege-least.smoke.ts asserting the full has_table_privilege matrix, gated to SKIP until the migration is live (detected via catalog: anon TRUNCATE still true ⇒ pre-deploy). NO AI attribution on the squash commit. Pre-merge gates to re-verify at merge: PR state=OPEN, base=develop, mergeable=MERGEABLE, mergeStateStatus=CLEAN; origin/develop still at 64a9fab (branch cut point; no collision — new files only + additive GIT_PLAN edit). Migration 20261002000000 + the backfill script are NOT applied at merge — see feed-fullfeed-h-hygiene-postdeploy. DO NOT MERGE — orchestrator validates + authorizes."
+branch: feature/feed-fullfeed-h-hygiene
+base: develop
+remote: origin
+files:
+  - supabase/scripts/backfill-schema-migrations-2026-09.sql
+  - supabase/migrations/20261002000000_posts_privilege_least.sql
+  - apps/web/src/__tests__/smoke/24-posts-privilege-least.smoke.ts
+  - .claude/GIT_PLAN.md
+pr: null
+pr_url: null
+merge_sha: null
+merged_into: null
+depends_on: feed-fullfeed-p2-w1.5
+created_at: "2026-09-22T00:00:00.000Z"
+completed_at: null
+verification: null
+```
+
+```yaml
+id: feed-fullfeed-h-hygiene-postdeploy
+status: pending
+type: migration
+description: "POST-DEPLOY step for wave H (two PROD writes, read-only prod only until then). STRICT ORDER after the develop squash-merge reaches Vercel state=READY on www.sourcetofeed.com (HTTP 200). (1) Apply supabase/migrations/20261002000000_posts_privilege_least.sql to prod ndtpovonpadugthmcntl via the Management-API SQL endpoint (PAT from apps/web/.env.local; shell env var is stale). It REVOKEs unused table privileges on public.posts from anon (all 7) and authenticated (all except INSERT); REVOKE is idempotent/replay-safe; SELECT/column grants and the realtime publication are untouched. (2) Then run supabase/scripts/backfill-schema-migrations-2026-09.sql (single ON CONFLICT DO NOTHING transaction, 33 LIVE rows). Order is arbitrary between the two but BOTH are prod writes done only post-merge. Verify post-apply: (a) has_table_privilege matrix — anon INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN all false; authenticated INSERT true, UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN all false; posts SELECT/column grants unchanged (18 cols, location excluded); (b) schema_migrations count 97 → 130; (c) prod-smoke 24-posts-privilege-least flips skipped→green. Migration 20261002000000 also then becomes a real ledger row via the same backfill's ON CONFLICT (it is a repo migration file that ran through the Management API). DO NOT apply as part of the git merge. UNRESOLVED (orchestrator/user decision, surfaced by the derivation): the 2 NOT-LIVE excluded versions (20260630000100, 20260922000100) still lack ledger rows, so a future `supabase db push` would replay them — decide whether to record them or add corrective migrations before relying on push."
+project_ref: ndtpovonpadugthmcntl
+migration: supabase/migrations/20261002000000_posts_privilege_least.sql
+depends_on: feed-fullfeed-h-hygiene
+created_at: "2026-09-22T00:00:00.000Z"
+completed_at: null
+verification: null
 ```
 
 ```yaml
