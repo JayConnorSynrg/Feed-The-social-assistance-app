@@ -84,32 +84,53 @@ function BadgePill({ badge }: { badge: DisplayBadge }) {
 export function EngagementBadges({
   summary,
   displayName,
+  privateSummary,
+  isOwnProfile = false,
 }: {
   summary: BadgeSummary | null | undefined
   displayName: string
+  /** Owner-only private badges (from user_private_badge_summary); rendered only on own profile. */
+  privateSummary?: BadgeSummary | null | undefined
+  isOwnProfile?: boolean
 }) {
   const badges = summaryToBadgeList(summary)
+  const privateBadges = isOwnProfile ? summaryToBadgeList(privateSummary) : []
 
   return (
-    <section aria-labelledby="engagement-badges-heading">
-      <h2
-        id="engagement-badges-heading"
-        className="mb-3 text-sm font-semibold text-stone-500"
-      >
-        Community Badges
-      </h2>
-      {badges.length === 0 ? (
-        <p className="flex items-center gap-2 text-sm text-stone-500">
-          <Sprout className="h-4 w-4 text-lime-600" aria-hidden="true" />
-          <span>No badges yet — {displayName} earns badges by helping, connecting, and taking part.</span>
-        </p>
-      ) : (
-        <ul className="flex flex-wrap gap-2" data-testid="engagement-badges-list">
-          {badges.map((b) => (
-            <BadgePill key={`${b.group}:${b.key}`} badge={b} />
-          ))}
-        </ul>
+    <div className="space-y-4">
+      <section aria-labelledby="engagement-badges-heading">
+        <h2 id="engagement-badges-heading" className="mb-3 text-sm font-semibold text-stone-500">
+          Community Badges
+        </h2>
+        {badges.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-stone-500">
+            <Sprout className="h-4 w-4 text-lime-600" aria-hidden="true" />
+            <span>No badges yet — {displayName} earns badges by helping, connecting, and taking part.</span>
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-2" data-testid="engagement-badges-list">
+            {badges.map((b) => (
+              <BadgePill key={`${b.group}:${b.key}`} badge={b} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {isOwnProfile && privateBadges.length > 0 && (
+        <section aria-labelledby="private-badges-heading" data-testid="engagement-private-section">
+          <h2 id="private-badges-heading" className="mb-1 text-sm font-semibold text-stone-500">
+            Private — only you can see this
+          </h2>
+          <p className="mb-3 text-xs text-stone-400">
+            Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else.
+          </p>
+          <ul className="flex flex-wrap gap-2" data-testid="engagement-private-list">
+            {privateBadges.map((b) => (
+              <BadgePill key={`priv:${b.group}:${b.key}`} badge={b} />
+            ))}
+          </ul>
+        </section>
       )}
-    </section>
+    </div>
   )
 }

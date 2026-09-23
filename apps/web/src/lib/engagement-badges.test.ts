@@ -92,6 +92,41 @@ describe('summaryToBadgeList', () => {
   })
 })
 
+describe('summaryToBadgeList — public and private summaries map identically', () => {
+  it('maps a PUBLIC summary (helping + public actions)', () => {
+    const pub: BadgeSummary = {
+      families: { food: { count: 12, level: 2 } },
+      badges: { helper: { count: 4, level: 1 }, voice: { count: 30, level: 3 } },
+    }
+    const list = summaryToBadgeList(pub)
+    expect(list.map((b) => `${b.group}:${b.key}`)).toEqual([
+      'family:food',
+      'community:voice',
+      'community:helper',
+    ])
+  })
+
+  it('maps a PRIVATE summary (receiving help, saves, advocacy) with the same pure mapper', () => {
+    const priv: BadgeSummary = {
+      families: { housing: { count: 10, level: 2 } }, // receiving help / saves
+      badges: { advocate: { count: 5, level: 1 } }, // petition signatures (private)
+    }
+    const list = summaryToBadgeList(priv)
+    expect(list).toHaveLength(2)
+    const advocate = list.find((b) => b.key === 'advocate')!
+    expect(advocate.group).toBe('community')
+    expect(advocate.label).toBe('Advocate')
+    expect(advocate.iconName).toBe('Megaphone')
+    const housing = list.find((b) => b.key === 'housing')!
+    expect(housing.label).toBe('Housing')
+    expect(housing.level).toBe(2)
+  })
+
+  it('an empty private summary yields no badges (empty private section)', () => {
+    expect(summaryToBadgeList({ families: {}, badges: {} })).toEqual([])
+  })
+})
+
 describe('levelLabel', () => {
   it('maps 1/2/3 to roman numerals', () => {
     expect(levelLabel(1)).toBe('I')

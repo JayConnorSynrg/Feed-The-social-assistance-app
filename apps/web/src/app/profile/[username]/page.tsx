@@ -106,6 +106,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   const isOwnProfile = user?.id === profile.id
 
+  // Private badges are owner-only (user_private_badge_summary RLS). Fetch only for the
+  // owner's own profile; another viewer's RLS returns no row and none are shown.
+  let privateSummary: BadgeSummary | null = null
+  if (isOwnProfile) {
+    const { data: priv } = await supabase
+      .from('user_private_badge_summary')
+      .select('summary')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    privateSummary = (priv?.summary as BadgeSummary | undefined) ?? null
+  }
+
   const getInitials = (name: string | null | undefined) => {
     if (!name) return '?'
     return name
@@ -173,6 +185,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           <EngagementBadges
             summary={profile.badge_summary}
             displayName={profile.first_name || profile.username || 'This member'}
+            privateSummary={privateSummary}
+            isOwnProfile={isOwnProfile}
           />
         </CardContent>
 
