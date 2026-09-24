@@ -4171,6 +4171,7 @@ export type Database = {
       }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
+      is_org_admin_any: { Args: never; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
       lock_two_profiles: {
         Args: { p_a: string; p_b: string }
