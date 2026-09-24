@@ -196,9 +196,10 @@ export function EventScheduler({ selectedOrgId }: Props) {
     }
   }, [selectedOrgId])
 
-  // Collect all occurrences with event info. Include ended (completed / past) occurrences —
-  // not just upcoming — so the organizer can reach Attendance for events that already ran.
-  // Cancelled occurrences are excluded (no attendance to review).
+  // Collect all occurrences with event info for the calendar. Include ended (completed / past)
+  // occurrences — not just upcoming — so the organizer can reach Attendance for events that
+  // already ran. Cancelled occurrences are hidden HERE to keep the calendar clean; they remain
+  // reachable for Attendance in the dedicated "Past & cancelled" section below (K5b).
   const allOccurrences = events.flatMap((event) =>
     (event.occurrences ?? [])
       .filter((occ) => occ.status !== 'cancelled')
@@ -209,6 +210,30 @@ export function EventScheduler({ selectedOrgId }: Props) {
         org_name: event.org?.name ?? '',
       }))
   )
+
+  // K5a: an occurrence has ENDED once it is completed or past its end time. Cancel is offered
+  // ONLY on a not-yet-ended, not-already-cancelled occurrence — an ended occurrence's attendance
+  // history is permanent (D2) and the DB refuses to cancel it, so the UI must not present Cancel.
+  const nowTs = Date.now()
+  const isEnded = (occ: { status: string; ends_at: string }) =>
+    occ.status === 'completed' || new Date(occ.ends_at).getTime() < nowTs
+  const canCancel = (occ: { status: string; ends_at: string }) =>
+    occ.status !== 'cancelled' && !isEnded(occ)
+
+  // K5b: cancelled AND past occurrences stay reachable for Attendance review in a dedicated
+  // "Past & cancelled" section (the week/day calendar above hides cancelled ones to stay clean).
+  const pastAndCancelled = events
+    .flatMap((event) =>
+      (event.occurrences ?? [])
+        .filter((occ) => occ.status === 'cancelled' || isEnded(occ))
+        .map((occ) => ({
+          ...occ,
+          event_title: event.title,
+          event_type: event.event_type,
+          org_name: event.org?.name ?? '',
+        }))
+    )
+    .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
 
@@ -447,8 +472,10 @@ export function EventScheduler({ selectedOrgId }: Props) {
   async function handleRetireEvent() {
     if (!editEventId) return
     // Retire = set is_active=false. The event drops off the member feed and the scheduler
-    // default; occurrences with check-ins keep their history. Reversible from the DB.
-    if (!confirm('Retire this event? It will no longer appear to members or in the scheduler.')) return
+    // default. D1: only NOT-YET-STARTED occurrences are cancelled; an occurrence already in
+    // progress continues to its end (members there can still confirm) and ended occurrences keep
+    // their attendance history. Reversible from the DB.
+    if (!confirm('Retire this event? Upcoming (not-yet-started) occurrences will be cancelled. Any occurrence already in progress finishes normally, and past attendance is kept.')) return
     setSavingEdit(true)
     setEditError(null)
     setEditInfo(null)
@@ -492,6 +519,15 @@ export function EventScheduler({ selectedOrgId }: Props) {
         >
           Attendance
         </button>
+        {canCancel(occ) && (
+          <button
+            type="button"
+            onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
+            className="mt-1 w-full text-center text-[10px] font-semibold bg-white/30 hover:bg-red-50 text-red-700 rounded px-1 py-0.5 transition-colors"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     )
   }
@@ -639,13 +675,15 @@ export function EventScheduler({ selectedOrgId }: Props) {
                       >
                         Attendance
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
-                        className="rounded-lg bg-white/30 hover:bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors"
-                      >
-                        Cancel
-                      </button>
+                      {canCancel(occ) && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
+                          className="rounded-lg bg-white/30 hover:bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -695,6 +733,36 @@ export function EventScheduler({ selectedOrgId }: Props) {
           </div>
         )}
       </div>
+
+      {/* K5b: Past & cancelled occurrences — Attendance stays reachable (history is permanent, D2). */}
+      {pastAndCancelled.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-4">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Past &amp; cancelled ({pastAndCancelled.length})</h3>
+          <div className="divide-y divide-stone-50">
+            {pastAndCancelled.map((occ) => (
+              <div key={occ.id} className="py-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{occ.event_title}</p>
+                  <p className="text-xs text-stone-400">
+                    {format(parseISO(occ.starts_at), 'MMM d, yyyy · h:mm a')}
+                    {' · '}
+                    <span className={occ.status === 'cancelled' ? 'text-red-600' : 'text-stone-500'}>
+                      {occ.status === 'cancelled' ? 'Cancelled' : 'Ended'}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+                  className="shrink-0 text-xs font-semibold text-[#4a5d23] hover:underline"
+                >
+                  Attendance
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Create Event Modal */}
       {showCreateModal && (
