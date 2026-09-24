@@ -120,8 +120,11 @@ const STATE_SQL = `
     -- is_anonymous marker column (NOT NULL, default false) — the authoritative anonymous flag.
     (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
        AND table_name='event_checkins' AND column_name='is_anonymous' AND is_nullable='NO')  AS checkin_is_anon_col,
-    -- attendance counts anonymous by the marker, not by user_id IS NULL.
-    (SELECT pg_get_functiondef(p.oid) ILIKE '%is_anonymous%' FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    -- attendance counts anonymous by the marker, not by user_id IS NULL. F6: match the ACTUAL
+    -- code token (the FILTER expression) not the bare word 'is_anonymous' which also appears in
+    -- the explanatory comment — so this guard is mutation-provable (flips false if the count
+    -- expression is changed to e.g. FILTER (WHERE user_id IS NULL)).
+    (SELECT pg_get_functiondef(p.oid) ILIKE '%FILTER (WHERE is_anonymous)%' FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public' AND p.proname='event_attendance')                            AS att_uses_is_anon_marker,
     -- M2: my_anonymous_claims is SECDEF + pinned, authenticated-only.
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'

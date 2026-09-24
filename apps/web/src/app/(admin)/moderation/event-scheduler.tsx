@@ -310,6 +310,25 @@ export function EventScheduler({ selectedOrgId }: Props) {
     setSelectedMatch(s.match)
   }
 
+  // F5: an occurrence with check-ins can never be DELETED (the DB guard refuses); cancelling
+  // is the correct action — it preserves the attendance history and drops the occurrence from
+  // the member feed + active accounting. We expose Cancel (never Delete) so the UI can only
+  // reach the allowed path. Cancellation is always permitted, even once people have checked in.
+  async function handleCancelOccurrence(occ: { id: string; event_title: string }) {
+    if (!confirm(`Cancel this occurrence of "${occ.event_title}"? It will be removed from the schedule and members will no longer see it. Attendance already recorded is kept.`)) return
+    const { error } = await supabase
+      .from('event_occurrences')
+      .update({ status: 'cancelled' })
+      .eq('id', occ.id)
+    if (error) {
+      logger.error('admin.occurrence.cancel_failed', { occurrence_id: occ.id, error: error.message })
+      alert(error.message)
+      return
+    }
+    logger.info('admin.occurrence.cancelled', { occurrence_id: occ.id })
+    await fetchEvents()
+  }
+
   async function openAttendance(occ: { id: string; event_title: string; starts_at: string }) {
     setAttendance({ occurrence: occ, data: null, loading: true, error: null })
     const { data, error } = await supabase.rpc('event_attendance', { p_occurrence: occ.id })
@@ -619,6 +638,13 @@ export function EventScheduler({ selectedOrgId }: Props) {
                         className="rounded-lg bg-white/40 hover:bg-white/80 px-3 py-1.5 text-xs font-semibold transition-colors"
                       >
                         Attendance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
+                        className="rounded-lg bg-white/30 hover:bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors"
+                      >
+                        Cancel
                       </button>
                     </div>
                   </div>

@@ -200,3 +200,57 @@ one still works:
 
 Smoke `28-w1-6a-events-checkin.smoke.ts` gates on ledger row `20261007000000` (applied as a separate
 post-deploy step) and asserts the state read-only.
+
+## Fix round 3 — truthful no-show accounting + integrity (F1–F9)
+
+Round-3 adversarial review found several ways an early ("I'm coming") intent could be turned into
+a no-show without the event actually running, dashboards inflated by unconfirmed intents, and a few
+integrity gaps. All are closed and each was verified **both directions** (the forbidden action fails
+AND the legitimate one still works), via the extended harness `gen6.py` + `check_r3.py`
+(40/40 assertions), a local concurrency harness (`racerun.sh`), and mutation proofs.
+
+- **F1 — a no-show is only a real ended run.** Marking an occurrence `completed` *before* its
+  `starts_at` while check-ins exist is refused by the M3 guard (cancel instead). Retiring an event
+  (`admin_update_event(p_is_active:=false)`, UI **Retire event**) cancels every not-yet-ended
+  occurrence (in-progress included), so its early rows drop out of accounting rather than decaying
+  into no-shows. Belt-and-suspenders: `my_attendance_rate` and `w1_6a_user_org_rate` count only
+  occurrences whose **event and org are active**. Legitimate: normal completion *after* the
+  occurrence has started is still allowed; a genuine ended-occurrence early row is still a no-show;
+  grace-window organizer confirm still lands the credit.
+- **F2 — event reassignment is locked once check-ins exist.** The M3 guard now also blocks changing
+  `event_occurrences.event_id` (same-org or cross-org) once any check-in/claim exists. Legitimate:
+  reassigning an occurrence with no check-ins still works, and `capacity`/`notes` edits are allowed.
+- **F3 — platform dashboards count confirmed presence only.** `dashboard_event_stats` and
+  `community_people_fed` are redefined (W5 bodies verbatim + `status = 'confirmed'` on the check-in
+  aggregates); their numbers equal the confirmed-only truth (e.g. `total_checkins`/`people_fed`
+  reflect confirmed rows, not early intents). Consumers (`overview-tab.tsx`, `dashboard-section.tsx`)
+  read the same fields unchanged.
+- **F4 — concurrent anonymous + identified check-in can't both commit.** `check_in` takes a
+  transaction-scoped `pg_advisory_xact_lock` on a hash of `(occurrence, member)` at entry; the loser
+  re-reads and hits the once-per-member guard. Proven locally under both orderings — always exactly
+  one row (member counted once), never both.
+- **F5 — clients can't delete an occurrence with check-ins.** A `BEFORE DELETE` guard refuses a
+  client delete when any check-in/claim exists (cancel instead); an occurrence with none is still
+  deletable by org/platform admins; server-side cascades (account deletion) bypass. UI exposes
+  **Cancel** (never Delete) on each occurrence.
+- **F6 — the anonymous-marker smoke check is mutation-provable.** Smoke 28's
+  `att_uses_is_anon_marker` now matches the actual `FILTER (WHERE is_anonymous)` expression, not the
+  bare word (which also appears in comments); a mutation to `FILTER (WHERE user_id IS NULL)` flips it
+  false.
+- **F7 — an inactive org has no organizer powers, and its events are hidden from members.**
+  `admin_update_event`, `event_attendance`, and the org-admin occurrence INSERT/UPDATE policies all
+  require the owning org active (platform admins retain access); `events_select_active` +
+  `occurrences_select_active_event` require the org active, so members no longer see a retired org's
+  events. `is_org_admin` itself is unchanged (keeps `orgs_update_org_admin` out of scope).
+- **F8 — clearing the address clears the pin.** `p_clear` containing `address` always nulls
+  `location` + `geocode_accuracy` + `geocode_confidence`, whether or not `p_regeocode` was passed.
+- **F9 — the legacy summary is dropped.** `get_occurrence_checkin_summary` (42702 ambiguous-column
+  bug; counted deleted users as anonymous; zero app callers) is dropped; `event_attendance`
+  supersedes it. Anonymous rows already carry minute-coarsened timestamps and are excluded from the
+  identified attendees list, so no default ordering reveals their relative order beyond minute
+  precision.
+
+Verification: `gen6.py` (both directions + earlier scenarios: legit organizer confirm, grace, anon
+once, retire → no no-show, reconcile parity `0/0`, account deletion, smoke 25/26/27/28 STATE,
+`enforce_opt_in_transition` md5 `f3bc362…` unchanged, dashboards == confirmed truth) → `check_r3.py`
+40/40; `racerun.sh` (F4, both orderings); mutation proofs killing the F1, F2, and F6 guards.
