@@ -240,6 +240,8 @@ export type Database = {
           default_capacity: number | null
           description: string | null
           event_type: string
+          geocode_accuracy: string | null
+          geocode_confidence: string | null
           id: string
           is_active: boolean
           location: unknown
@@ -260,6 +262,8 @@ export type Database = {
           default_capacity?: number | null
           description?: string | null
           event_type?: string
+          geocode_accuracy?: string | null
+          geocode_confidence?: string | null
           id?: string
           is_active?: boolean
           location?: unknown
@@ -280,6 +284,8 @@ export type Database = {
           default_capacity?: number | null
           description?: string | null
           event_type?: string
+          geocode_accuracy?: string | null
+          geocode_confidence?: string | null
           id?: string
           is_active?: boolean
           location?: unknown
@@ -624,31 +630,40 @@ export type Database = {
         Row: {
           checked_in_at: string
           checked_in_by: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
           household_key: string | null
           household_size: number
           id: string
           notes: string | null
           occurrence_id: string
+          status: string
           user_id: string | null
         }
         Insert: {
           checked_in_at?: string
           checked_in_by?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           household_key?: string | null
           household_size?: number
           id?: string
           notes?: string | null
           occurrence_id: string
+          status?: string
           user_id?: string | null
         }
         Update: {
           checked_in_at?: string
           checked_in_by?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           household_key?: string | null
           household_size?: number
           id?: string
           notes?: string | null
           occurrence_id?: string
+          status?: string
           user_id?: string | null
         }
         Relationships: [
@@ -3348,6 +3363,59 @@ export type Database = {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
       }
+      admin_create_event: {
+        Args: {
+          p_org_id: string
+          p_title: string
+          p_event_type?: string
+          p_description?: string
+          p_location_name?: string
+          p_address?: string
+          p_city?: string
+          p_state?: string
+          p_zip_code?: string
+          p_rrule?: string
+          p_default_capacity?: number
+          p_requires_registration?: boolean
+          p_lat?: number
+          p_lng?: number
+          p_geocode_accuracy?: string
+          p_geocode_confidence?: string
+        }
+        Returns: string
+      }
+      admin_update_event: {
+        Args: {
+          p_event_id: string
+          p_title?: string
+          p_event_type?: string
+          p_description?: string
+          p_location_name?: string
+          p_address?: string
+          p_city?: string
+          p_state?: string
+          p_zip_code?: string
+          p_rrule?: string
+          p_default_capacity?: number
+          p_requires_registration?: boolean
+          p_lat?: number
+          p_lng?: number
+          p_geocode_accuracy?: string
+          p_geocode_confidence?: string
+          p_regeocode?: boolean
+        }
+        Returns: string
+      }
+      check_in: {
+        Args: { p_occurrence: string; p_household_size?: number; p_anonymous?: boolean }
+        Returns: string
+      }
+      event_attendance: { Args: { p_occurrence: string }; Returns: Json }
+      my_attendance_rate: { Args: never; Returns: Json }
+      organizer_confirm: {
+        Args: { p_occurrence: string; p_user?: string; p_household_size?: number }
+        Returns: string
+      }
       _postgis_index_extent: {
         Args: { col: string; tbl: unknown }
         Returns: unknown
@@ -4030,17 +4098,6 @@ export type Database = {
           username: string
         }[]
       }
-      get_occurrence_checkin_summary: {
-        Args: { p_occurrence_id: string }
-        Returns: {
-          anonymous_visits: number
-          identified_visits: number
-          occurrence_id: string
-          people_fed: number
-          total_visits: number
-          unique_households: number
-        }[]
-      }
       get_petition_signature_count: {
         Args: { p_petition_id: string }
         Returns: number
@@ -4103,6 +4160,7 @@ export type Database = {
       }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
+      is_org_admin_any: { Args: never; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
       lock_two_profiles: {
         Args: { p_a: string; p_b: string }

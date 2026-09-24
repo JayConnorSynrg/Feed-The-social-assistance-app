@@ -13,12 +13,20 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  // Use SECURITY DEFINER RPC — enforces own-row access at the Postgres layer.
-  // After PII hardening revokes direct is_admin column reads from authenticated role,
-  // this RPC remains the only supported gate for admin status.
+  // Use SECURITY DEFINER RPCs — enforce access at the Postgres layer. After PII hardening
+  // revoked direct is_admin column reads, these RPCs are the only supported gate. A
+  // platform admin reaches the full shell; a non-platform-admin who administers at least
+  // one org reaches it too (the shell then shows only the Events tab, scoped to their orgs).
+  // This group layout admits both; the platform-only surfaces tighten the gate in their own
+  // nested layouts (see federation/layout.tsx), redirecting org admins back to /moderation.
   const { data: isAdmin } = await supabase.rpc('is_current_user_admin')
+  let allowed = isAdmin === true
+  if (!allowed) {
+    const { data: isOrgAdmin } = await supabase.rpc('is_org_admin_any')
+    allowed = isOrgAdmin === true
+  }
 
-  if (!isAdmin) {
+  if (!allowed) {
     redirect('/')
   }
 

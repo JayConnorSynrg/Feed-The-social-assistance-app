@@ -19,12 +19,22 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RecurrencePicker } from './recurrence-picker'
 import { OrganizerCheckinDisplay } from './organizer-checkin-display'
+import { AddressAutocomplete } from './address-autocomplete'
+import { useAdminOrgs } from './use-admin-orgs'
+import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { PRECISE_GEOCODE_TIERS } from '@/lib/geocode-accuracy'
+import { formatRatePct } from '@/lib/event-checkin'
 
 interface AssistanceEvent {
   id: string
   title: string
   event_type: string
+  description: string | null
   location_name: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
   org_id: string
   rrule: string | null
   is_active: boolean
@@ -64,11 +74,31 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other: 'bg-stone-100 text-stone-600 border-stone-200',
 }
 
+interface AttendanceView {
+  occurrence: { id: string; event_title: string; starts_at: string }
+  data: {
+    early: number
+    confirmed: number
+    no_show: number
+    anonymous_confirmed: number
+    people_confirmed: number
+    show_rate: number | null
+    ended: boolean
+    attendees: Array<{ user_id: string; name: string; status: string; household_size: number; attendance_rate: number | null }>
+  } | null
+  loading: boolean
+  error: string | null
+}
+
 export function EventScheduler({ selectedOrgId }: Props) {
   const supabase = createClient()
+  const { orgs: adminOrgs } = useAdminOrgs()
 
   const [events, setEvents] = useState<AssistanceEvent[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Attendance view (per occurrence)
+  const [attendance, setAttendance] = useState<AttendanceView | null>(null)
 
   // Calendar navigation
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
@@ -89,6 +119,13 @@ export function EventScheduler({ selectedOrgId }: Props) {
   const [createOrgId, setCreateOrgId] = useState(selectedOrgId === 'all' ? '' : selectedOrgId)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createInfo, setCreateInfo] = useState<string | null>(null)
+  // Address + geocode (reuses the resource-edit Mapbox v6 path; strong-match-only gate)
+  const [createAddress, setCreateAddress] = useState('')
+  const [createCity, setCreateCity] = useState('')
+  const [createState, setCreateState] = useState('')
+  const [createZip, setCreateZip] = useState('')
+  const [selectedMatch, setSelectedMatch] = useState<GeocodeMatch | null>(null)
 
   // Add occurrence modal
   const [addOccurrenceEventId, setAddOccurrenceEventId] = useState<string | null>(null)
@@ -97,21 +134,64 @@ export function EventScheduler({ selectedOrgId }: Props) {
   const [addingOccurrence, setAddingOccurrence] = useState(false)
   const [addOccurrenceError, setAddOccurrenceError] = useState<string | null>(null)
 
+  // Edit event modal state (wires admin_update_event; re-geocodes when the address changes)
+  const [editEventId, setEditEventId] = useState<string | null>(null)
+  const [editIsActive, setEditIsActive] = useState<boolean>(true)
+  const [editTitle, setEditTitle] = useState('')
+  const [editEventType, setEditEventType] = useState('distribution')
+  const [editLocationName, setEditLocationName] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [editCity, setEditCity] = useState('')
+  const [editState, setEditState] = useState('')
+  const [editZip, setEditZip] = useState('')
+  const [editOriginalAddress, setEditOriginalAddress] = useState('')
+  const [editSelectedMatch, setEditSelectedMatch] = useState<GeocodeMatch | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editInfo, setEditInfo] = useState<string | null>(null)
+
+  function openEditEvent(ev: AssistanceEvent) {
+    setEditEventId(ev.id)
+    setEditIsActive(ev.is_active)
+    setEditTitle(ev.title)
+    setEditEventType(ev.event_type)
+    setEditLocationName(ev.location_name ?? '')
+    setEditAddress(ev.address ?? '')
+    setEditCity(ev.city ?? '')
+    setEditState(ev.state ?? '')
+    setEditZip(ev.zip_code ?? '')
+    setEditOriginalAddress([ev.address, ev.city, ev.state, ev.zip_code].filter(Boolean).join(', '))
+    setEditSelectedMatch(null)
+    setEditError(null)
+    setEditInfo(null)
+  }
+
   const fetchEvents = useCallback(async () => {
     setLoading(true)
+    // G1 (D1 reachability): do NOT filter on is_active here. A RETIRED event whose org is still
+    // active keeps an in-progress occurrence LIVE (D1) and its ENDED occurrences are permanent
+    // history (D2), and the org admin must reach both (kiosk + Attendance). RLS scopes this to the
+    // org admin's own active org (events_select_reachable_authed / occurrences_select_reachable_authed
+    // + occurrences_org_admin_select), so a retired event surfaces only when it still has a
+    // reachable occurrence; the calendar hides cancelled ones and the "Past & cancelled" section
+    // carries the ended history. Platform admins see everything via the *_admin_select policies.
     const query = supabase
       .from('assistance_events')
-      .select('id, title, event_type, location_name, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
-      .eq('is_active', true)
+      .select('id, title, event_type, description, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
 
     if (selectedOrgId !== 'all') {
       query.eq('org_id', selectedOrgId)
+    } else {
+      // M4: the "All Organizations" default must not leak other orgs' events. A non-platform
+      // org admin's adminOrgs are exactly the orgs they administer; a platform admin's
+      // adminOrgs are all active orgs, so this filter is a no-op for them (unchanged).
+      query.in('org_id', adminOrgs.map((o) => o.id))
     }
 
     const { data } = await query
     setEvents((data as AssistanceEvent[]) ?? [])
     setLoading(false)
-  }, [supabase, selectedOrgId])
+  }, [supabase, selectedOrgId, adminOrgs])
 
   useEffect(() => {
     fetchEvents()
@@ -124,10 +204,13 @@ export function EventScheduler({ selectedOrgId }: Props) {
     }
   }, [selectedOrgId])
 
-  // Collect all occurrences with event info
+  // Collect all occurrences with event info for the calendar. Include ended (completed / past)
+  // occurrences — not just upcoming — so the organizer can reach Attendance for events that
+  // already ran. Cancelled occurrences are hidden HERE to keep the calendar clean; they remain
+  // reachable for Attendance in the dedicated "Past & cancelled" section below (K5b).
   const allOccurrences = events.flatMap((event) =>
     (event.occurrences ?? [])
-      .filter((occ) => occ.status === 'upcoming')
+      .filter((occ) => occ.status !== 'cancelled')
       .map((occ) => ({
         ...occ,
         event_title: event.title,
@@ -135,6 +218,30 @@ export function EventScheduler({ selectedOrgId }: Props) {
         org_name: event.org?.name ?? '',
       }))
   )
+
+  // K5a: an occurrence has ENDED once it is completed or past its end time. Cancel is offered
+  // ONLY on a not-yet-ended, not-already-cancelled occurrence — an ended occurrence's attendance
+  // history is permanent (D2) and the DB refuses to cancel it, so the UI must not present Cancel.
+  const nowTs = Date.now()
+  const isEnded = (occ: { status: string; ends_at: string }) =>
+    occ.status === 'completed' || new Date(occ.ends_at).getTime() < nowTs
+  const canCancel = (occ: { status: string; ends_at: string }) =>
+    occ.status !== 'cancelled' && !isEnded(occ)
+
+  // K5b: cancelled AND past occurrences stay reachable for Attendance review in a dedicated
+  // "Past & cancelled" section (the week/day calendar above hides cancelled ones to stay clean).
+  const pastAndCancelled = events
+    .flatMap((event) =>
+      (event.occurrences ?? [])
+        .filter((occ) => occ.status === 'cancelled' || isEnded(occ))
+        .map((occ) => ({
+          ...occ,
+          event_title: event.title,
+          event_type: event.event_type,
+          org_name: event.org?.name ?? '',
+        }))
+    )
+    .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
 
@@ -163,20 +270,34 @@ export function EventScheduler({ selectedOrgId }: Props) {
     if (!createTitle.trim() || !createOrgId.trim()) return
     setCreating(true)
     setCreateError(null)
+    setCreateInfo(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data, error } = await supabase
-        .from('assistance_events')
-        .insert({
-          title: createTitle.trim(),
-          org_id: createOrgId.trim(),
-          event_type: createEventType,
-          location_name: createLocationName.trim() || null,
-          rrule: createRrule,
-          created_by: user?.id ?? null,
-        })
-        .select('id')
-        .single()
+      // Resolve a geocode for the address. Prefer the classified match from a chosen
+      // autocomplete suggestion; else forward-geocode the typed address on save. The
+      // server writes a location ONLY for a strong (precise-tier) match (I5).
+      let match: GeocodeMatch | null = selectedMatch
+      const fullAddress = [createAddress, createCity, createState, createZip].filter(Boolean).join(', ')
+      if (!match && createAddress.trim()) {
+        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
+      }
+      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
+
+      const { data, error } = await supabase.rpc('admin_create_event', {
+        p_org_id: createOrgId.trim(),
+        p_title: createTitle.trim(),
+        p_event_type: createEventType,
+        p_location_name: createLocationName.trim() || undefined,
+        p_address: createAddress.trim() || undefined,
+        p_city: createCity.trim() || undefined,
+        p_state: createState.trim() || undefined,
+        p_zip_code: createZip.trim() || undefined,
+        p_rrule: createRrule ?? undefined,
+        p_requires_registration: false,
+        p_lat: match?.lat,
+        p_lng: match?.lng,
+        p_geocode_accuracy: match?.accuracy,
+        p_geocode_confidence: match?.confidence,
+      })
 
       if (error) {
         setCreateError(error.message)
@@ -184,20 +305,70 @@ export function EventScheduler({ selectedOrgId }: Props) {
       }
 
       logger.info('admin.event.created', {
-        event_id: data?.id,
+        event_id: typeof data === 'string' ? data : null,
         org_id: createOrgId,
         rrule: createRrule,
         event_type: createEventType,
+        geocode_accuracy: match?.accuracy ?? 'none',
       })
+
+      // Surface the geocode outcome so the organizer knows whether the venue is mapped.
+      if (createAddress.trim()) {
+        setCreateInfo(isStrong
+          ? `Event created and located on the map (${match!.accuracy}).`
+          : 'Event created. The address did not resolve precisely, so it will show as an unknown location until edited.')
+      }
 
       setShowCreateModal(false)
       setCreateTitle('')
       setCreateEventType('distribution')
       setCreateLocationName('')
       setCreateRrule(null)
+      setCreateAddress('')
+      setCreateCity('')
+      setCreateState('')
+      setCreateZip('')
+      setSelectedMatch(null)
       await fetchEvents()
     } finally {
       setCreating(false)
+    }
+  }
+
+  function applySuggestion(s: AddressSuggestion) {
+    setCreateAddress(s.address_line1 || s.label)
+    if (s.city) setCreateCity(s.city)
+    if (s.state) setCreateState(s.state)
+    if (s.zip) setCreateZip(s.zip)
+    setSelectedMatch(s.match)
+  }
+
+  // F5: an occurrence with check-ins can never be DELETED (the DB guard refuses); cancelling
+  // is the correct action — it preserves the attendance history and drops the occurrence from
+  // the member feed + active accounting. We expose Cancel (never Delete) so the UI can only
+  // reach the allowed path. Cancellation is always permitted, even once people have checked in.
+  async function handleCancelOccurrence(occ: { id: string; event_title: string }) {
+    if (!confirm(`Cancel this occurrence of "${occ.event_title}"? It will be removed from the schedule and members will no longer see it. Attendance already recorded is kept.`)) return
+    const { error } = await supabase
+      .from('event_occurrences')
+      .update({ status: 'cancelled' })
+      .eq('id', occ.id)
+    if (error) {
+      logger.error('admin.occurrence.cancel_failed', { occurrence_id: occ.id, error: error.message })
+      alert(error.message)
+      return
+    }
+    logger.info('admin.occurrence.cancelled', { occurrence_id: occ.id })
+    await fetchEvents()
+  }
+
+  async function openAttendance(occ: { id: string; event_title: string; starts_at: string }) {
+    setAttendance({ occurrence: occ, data: null, loading: true, error: null })
+    const { data, error } = await supabase.rpc('event_attendance', { p_occurrence: occ.id })
+    if (error) {
+      setAttendance({ occurrence: occ, data: null, loading: false, error: error.message })
+    } else {
+      setAttendance({ occurrence: occ, data: (data as AttendanceView['data']) ?? null, loading: false, error: null })
     }
   }
 
@@ -237,6 +408,104 @@ export function EventScheduler({ selectedOrgId }: Props) {
     }
   }
 
+  async function handleEditEvent() {
+    if (!editEventId || !editTitle.trim()) return
+    setSavingEdit(true)
+    setEditError(null)
+    setEditInfo(null)
+    try {
+      const fullAddress = [editAddress, editCity, editState, editZip].filter(Boolean).join(', ')
+      const addressChanged = fullAddress !== editOriginalAddress
+      // Re-geocode only when the address actually changed. The server writes location ONLY
+      // from a strong (precise-tier) match (I5); a weak/failed re-geocode clears location
+      // and tags 'approximate'.
+      let match: GeocodeMatch | null = editSelectedMatch
+      if (addressChanged && !match && editAddress.trim()) {
+        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
+      }
+      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
+
+      // Explicit-clear semantics: a blanked optional text field is nulled via p_clear (a
+      // NULL argument alone would only be COALESCE'd back to the stored value). Clearing an
+      // already-empty field is a harmless no-op.
+      const clear: string[] = []
+      if (!editLocationName.trim()) clear.push('location_name')
+      if (!editAddress.trim()) clear.push('address')
+      if (!editCity.trim()) clear.push('city')
+      if (!editState.trim()) clear.push('state')
+      if (!editZip.trim()) clear.push('zip_code')
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)('admin_update_event', {
+        p_event_id: editEventId,
+        p_title: editTitle.trim(),
+        p_event_type: editEventType,
+        p_location_name: editLocationName.trim() || undefined,
+        p_address: editAddress.trim() || undefined,
+        p_city: editCity.trim() || undefined,
+        p_state: editState.trim() || undefined,
+        p_zip_code: editZip.trim() || undefined,
+        p_lat: addressChanged ? match?.lat : undefined,
+        p_lng: addressChanged ? match?.lng : undefined,
+        p_geocode_accuracy: addressChanged ? match?.accuracy : undefined,
+        p_geocode_confidence: addressChanged ? match?.confidence : undefined,
+        p_regeocode: addressChanged,
+        p_clear: clear,
+      })
+
+      if (error) {
+        setEditError(error.message)
+        return
+      }
+
+      logger.info('admin.event.updated', {
+        event_id: editEventId,
+        regeocode: addressChanged,
+        geocode_accuracy: addressChanged ? (match?.accuracy ?? 'none') : 'unchanged',
+      })
+
+      if (addressChanged) {
+        setEditInfo(isStrong
+          ? `Saved and re-located on the map (${match!.accuracy}).`
+          : 'Saved. The new address did not resolve precisely, so it will show as an unknown location until edited.')
+      }
+
+      setEditEventId(null)
+      await fetchEvents()
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleRetireEvent() {
+    if (!editEventId) return
+    // Retire = set is_active=false. The event drops off the member feed for its NOT-YET-STARTED
+    // occurrences. D1: only not-yet-started occurrences are cancelled; an occurrence already in
+    // progress continues to its end (members there can still confirm and still see it in their
+    // Events list) and ended occurrences keep their attendance history — both stay reachable to the
+    // org admin here in the scheduler/kiosk/Attendance (G1). Reversible from the DB.
+    if (!confirm('Retire this event? Upcoming (not-yet-started) occurrences will be cancelled. Any occurrence already in progress finishes normally, and past attendance is kept.')) return
+    setSavingEdit(true)
+    setEditError(null)
+    setEditInfo(null)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)('admin_update_event', {
+        p_event_id: editEventId,
+        p_is_active: false,
+      })
+      if (error) {
+        setEditError(error.message)
+        return
+      }
+      logger.info('admin.event.retired', { event_id: editEventId })
+      setEditEventId(null)
+      await fetchEvents()
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   // Occurrence chip
   function OccurrenceChip({ occ }: { occ: (typeof allOccurrences)[0] }) {
     const colorClass = EVENT_TYPE_COLORS[occ.event_type] ?? EVENT_TYPE_COLORS.other
@@ -252,6 +521,22 @@ export function EventScheduler({ selectedOrgId }: Props) {
         >
           Sign-In
         </button>
+        <button
+          type="button"
+          onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+          className="mt-1 w-full text-center text-[10px] font-semibold bg-white/40 hover:bg-white/80 rounded px-1 py-0.5 transition-colors"
+        >
+          Attendance
+        </button>
+        {canCancel(occ) && (
+          <button
+            type="button"
+            onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
+            className="mt-1 w-full text-center text-[10px] font-semibold bg-white/30 hover:bg-red-50 text-red-700 rounded px-1 py-0.5 transition-colors"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     )
   }
@@ -384,13 +669,31 @@ export function EventScheduler({ selectedOrgId }: Props) {
                         {format(parseISO(occ.starts_at), 'h:mm a')} – {format(parseISO(occ.ends_at), 'h:mm a')}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openKiosk(occ)}
-                      className="shrink-0 rounded-lg bg-white/60 hover:bg-white/90 px-3 py-1.5 text-xs font-semibold transition-colors"
-                    >
-                      Sign-In
-                    </button>
+                    <div className="shrink-0 flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openKiosk(occ)}
+                        className="rounded-lg bg-white/60 hover:bg-white/90 px-3 py-1.5 text-xs font-semibold transition-colors"
+                      >
+                        Sign-In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+                        className="rounded-lg bg-white/40 hover:bg-white/80 px-3 py-1.5 text-xs font-semibold transition-colors"
+                      >
+                        Attendance
+                      </button>
+                      {canCancel(occ) && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
+                          className="rounded-lg bg-white/30 hover:bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -412,24 +715,63 @@ export function EventScheduler({ selectedOrgId }: Props) {
                   <p className="text-sm font-medium text-stone-800">{event.title}</p>
                   <p className="text-xs text-stone-400">{event.event_type} · {event.org?.name ?? ''}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddOccurrenceEventId(event.id)
-                    const today = format(new Date(), "yyyy-MM-dd'T'09:00")
-                    const todayEnd = format(new Date(), "yyyy-MM-dd'T'11:00")
-                    setAddStartsAt(today)
-                    setAddEndsAt(todayEnd)
-                  }}
-                  className="shrink-0 text-xs text-[#4a5d23] hover:underline font-medium"
-                >
-                  + Occurrence
-                </button>
+                <div className="shrink-0 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => openEditEvent(event)}
+                    className="text-xs text-stone-500 hover:text-[#4a5d23] hover:underline font-medium"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddOccurrenceEventId(event.id)
+                      const today = format(new Date(), "yyyy-MM-dd'T'09:00")
+                      const todayEnd = format(new Date(), "yyyy-MM-dd'T'11:00")
+                      setAddStartsAt(today)
+                      setAddEndsAt(todayEnd)
+                    }}
+                    className="text-xs text-[#4a5d23] hover:underline font-medium"
+                  >
+                    + Occurrence
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* K5b: Past & cancelled occurrences — Attendance stays reachable (history is permanent, D2). */}
+      {pastAndCancelled.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-4">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Past &amp; cancelled ({pastAndCancelled.length})</h3>
+          <div className="divide-y divide-stone-50">
+            {pastAndCancelled.map((occ) => (
+              <div key={occ.id} className="py-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{occ.event_title}</p>
+                  <p className="text-xs text-stone-400">
+                    {format(parseISO(occ.starts_at), 'MMM d, yyyy · h:mm a')}
+                    {' · '}
+                    <span className={occ.status === 'cancelled' ? 'text-red-600' : 'text-stone-500'}>
+                      {occ.status === 'cancelled' ? 'Cancelled' : 'Ended'}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+                  className="shrink-0 text-xs font-semibold text-[#4a5d23] hover:underline"
+                >
+                  Attendance
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Create Event Modal */}
       {showCreateModal && (
@@ -482,15 +824,43 @@ export function EventScheduler({ selectedOrgId }: Props) {
                 />
               </div>
 
+              {/* Address — autocompleted + geocoded on save (strong-match-only) */}
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Address</Label>
+                <AddressAutocomplete
+                  value={createAddress}
+                  onChange={(v) => { setCreateAddress(v); setSelectedMatch(null) }}
+                  onSelect={applySuggestion}
+                />
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                <div className="col-span-3 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">City</Label>
+                  <Input value={createCity} onChange={(e) => setCreateCity(e.target.value)} className="text-stone-900" />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">State</Label>
+                  <Input value={createState} onChange={(e) => setCreateState(e.target.value)} className="text-stone-900" maxLength={2} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">ZIP</Label>
+                  <Input value={createZip} onChange={(e) => setCreateZip(e.target.value)} className="text-stone-900" />
+                </div>
+              </div>
+
               {selectedOrgId === 'all' && (
                 <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-sm">Organization ID</Label>
-                  <Input
-                    value={createOrgId}
-                    onChange={(e) => setCreateOrgId(e.target.value)}
-                    placeholder="Paste org UUID"
-                    className="text-stone-900 placeholder:text-stone-400 font-mono text-sm"
-                  />
+                  <Label className="text-stone-700 text-sm">Organization</Label>
+                  <Select value={createOrgId} onValueChange={setCreateOrgId}>
+                    <SelectTrigger className="text-stone-900">
+                      <SelectValue placeholder="Select an organization you manage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {adminOrgs.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -500,6 +870,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
               </div>
 
               {createError && <p className="text-red-600 text-sm">{createError}</p>}
+              {createInfo && <p className="text-lime-700 text-sm">{createInfo}</p>}
 
               <Button
                 onClick={handleCreateEvent}
@@ -583,6 +954,114 @@ export function EventScheduler({ selectedOrgId }: Props) {
         </div>
       )}
 
+      {/* Edit Event Modal — wires admin_update_event (re-geocodes on address change) */}
+      {editEventId && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-stone-800">Edit Event</h3>
+              <button
+                type="button"
+                onClick={() => setEditEventId(null)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Title</Label>
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Event title"
+                  className="text-stone-900 placeholder:text-stone-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Event type</Label>
+                <Select value={editEventType} onValueChange={setEditEventType}>
+                  <SelectTrigger className="text-stone-900">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="distribution">Distribution</SelectItem>
+                    <SelectItem value="meal">Meal</SelectItem>
+                    <SelectItem value="pantry">Pantry</SelectItem>
+                    <SelectItem value="clinic">Clinic</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Location name</Label>
+                <Input
+                  value={editLocationName}
+                  onChange={(e) => setEditLocationName(e.target.value)}
+                  placeholder="Community Center, Church Hall…"
+                  className="text-stone-900 placeholder:text-stone-400"
+                />
+              </div>
+
+              {/* Address — editing it re-geocodes on save (strong-match-only) */}
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Address</Label>
+                <AddressAutocomplete
+                  value={editAddress}
+                  onChange={(v) => { setEditAddress(v); setEditSelectedMatch(null) }}
+                  onSelect={(s) => {
+                    setEditAddress(s.address_line1 || s.label)
+                    if (s.city) setEditCity(s.city)
+                    if (s.state) setEditState(s.state)
+                    if (s.zip) setEditZip(s.zip)
+                    setEditSelectedMatch(s.match)
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                <div className="col-span-3 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">City</Label>
+                  <Input value={editCity} onChange={(e) => { setEditCity(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">State</Label>
+                  <Input value={editState} onChange={(e) => { setEditState(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" maxLength={2} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">ZIP</Label>
+                  <Input value={editZip} onChange={(e) => { setEditZip(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
+                </div>
+              </div>
+
+              {editError && <p className="text-red-600 text-sm">{editError}</p>}
+              {editInfo && <p className="text-lime-700 text-sm">{editInfo}</p>}
+
+              <Button
+                onClick={handleEditEvent}
+                disabled={savingEdit || !editTitle.trim()}
+                className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
+              >
+                {savingEdit ? 'Saving…' : 'Save changes'}
+              </Button>
+              {/* G1: a retired event stays reachable here for its in-progress/ended occurrences,
+                  but Retire is a dead action on it — offer it only while the event is active. */}
+              {editIsActive && (
+                <button
+                  type="button"
+                  onClick={handleRetireEvent}
+                  disabled={savingEdit}
+                  className="w-full text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 py-1"
+                >
+                  Retire event
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Organizer kiosk */}
       {kioskTarget && (
         <OrganizerCheckinDisplay
@@ -593,6 +1072,77 @@ export function EventScheduler({ selectedOrgId }: Props) {
             if (!open) setKioskTarget(null)
           }}
         />
+      )}
+
+      {/* Attendance view (per occurrence) */}
+      {attendance && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setAttendance(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+              <div>
+                <h3 className="font-bold text-stone-800">Attendance</h3>
+                <p className="text-xs text-stone-400">{attendance.occurrence.event_title} · {format(parseISO(attendance.occurrence.starts_at), 'MMM d, h:mm a')}</p>
+              </div>
+              <button type="button" onClick={() => setAttendance(null)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              {attendance.loading ? (
+                <p className="text-sm text-stone-400">Loading attendance…</p>
+              ) : attendance.error ? (
+                <p className="text-sm text-red-600">{attendance.error}</p>
+              ) : !attendance.data ? (
+                <p className="text-sm text-stone-500">You do not have access to this event&rsquo;s attendance.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.confirmed}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Confirmed</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.early}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Early</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.no_show}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">No-show</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-[#4a5d23]">{formatRatePct(attendance.data.show_rate)}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Show rate</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-stone-400 mb-2">
+                    {attendance.data.people_confirmed} people confirmed · {attendance.data.anonymous_confirmed} anonymous
+                    {attendance.data.ended ? '' : ' · in progress'}
+                  </p>
+                  {attendance.data.attendees.length === 0 ? (
+                    <p className="text-sm text-stone-400">No identified check-ins yet.</p>
+                  ) : (
+                    <div className="divide-y divide-stone-50">
+                      {attendance.data.attendees.map((att) => (
+                        <div key={att.user_id} className="py-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-stone-800 truncate">{att.name}</p>
+                            <p className="text-xs text-stone-400">Household {att.household_size}</p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${att.status === 'confirmed' ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-500'}`}>
+                              {att.status === 'confirmed' ? 'Attended' : 'Early'}
+                            </span>
+                            <span className="text-xs text-stone-500 w-10 text-right">{formatRatePct(att.attendance_rate)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

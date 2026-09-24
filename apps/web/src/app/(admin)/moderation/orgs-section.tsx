@@ -44,6 +44,9 @@ export function OrgsSection() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [members, setMembers] = useState<OrgMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
+  // Surfaced when a roster remove/role-change affects 0 rows or errors (H1): a platform admin
+  // is authorised, so a 0-row result means a real failure — never a silent "success".
+  const [rosterError, setRosterError] = useState<string | null>(null)
 
   // Create org form
   const [createName, setCreateName] = useState('')
@@ -83,6 +86,7 @@ export function OrgsSection() {
   }, [fetchOrgs])
 
   const handleSelectOrg = useCallback((orgId: string) => {
+    setRosterError(null)
     if (selectedOrgId === orgId) {
       setSelectedOrgId(null)
       setMembers([])
@@ -146,13 +150,42 @@ export function OrgsSection() {
   }, [supabase, selectedOrgId, addUserId, addRole, fetchMembers])
 
   const handleRemoveMember = useCallback(async (memberId: string) => {
-    const { error } = await supabase
+    setRosterError(null)
+    // .select() returns the removed rows: a 0-row result under RLS means the delete was not
+    // authorised (or the row is gone) — report it instead of silently "succeeding" (H1).
+    const { data, error } = await supabase
       .from('organization_members')
       .delete()
       .eq('id', memberId)
-    if (!error && selectedOrgId) {
-      await fetchMembers(selectedOrgId)
+      .select('id')
+    if (error) {
+      setRosterError(error.message)
+      return
     }
+    if (!data || data.length === 0) {
+      setRosterError('Could not remove that member — you may not have permission, or they were already removed.')
+      return
+    }
+    if (selectedOrgId) await fetchMembers(selectedOrgId)
+  }, [supabase, selectedOrgId, fetchMembers])
+
+  const handleChangeRole = useCallback(async (memberId: string, nextRole: MemberRole) => {
+    setRosterError(null)
+    // Same 0-row honesty as remove: an unauthorised role change affects no rows under RLS.
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update({ role: nextRole })
+      .eq('id', memberId)
+      .select('id')
+    if (error) {
+      setRosterError(error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setRosterError('Could not change that role — you may not have permission.')
+      return
+    }
+    if (selectedOrgId) await fetchMembers(selectedOrgId)
   }, [supabase, selectedOrgId, fetchMembers])
 
   return (
@@ -287,6 +320,9 @@ export function OrgsSection() {
                     {addMemberError && (
                       <p className="text-red-600 text-xs mb-2">{addMemberError}</p>
                     )}
+                    {rosterError && (
+                      <p className="text-red-600 text-xs mb-2">{rosterError}</p>
+                    )}
 
                     {/* Member list */}
                     {loadingMembers ? (
@@ -311,12 +347,18 @@ export function OrgsSection() {
                                   {m.user_id}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-xs ${m.role === 'admin' ? 'text-[#4a5d23] border-[#4a5d23]/30' : 'text-stone-500 border-stone-300'}`}
+                                  <Select
+                                    value={m.role === 'admin' ? 'admin' : 'member'}
+                                    onValueChange={(v) => handleChangeRole(m.id, v as MemberRole)}
                                   >
-                                    {m.role}
-                                  </Badge>
+                                    <SelectTrigger className="w-28 h-8 text-xs text-stone-900">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="member">Member</SelectItem>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                 </td>
                                 <td className="px-3 py-2 text-stone-500 text-xs">
                                   {new Date(m.joined_at).toLocaleDateString()}

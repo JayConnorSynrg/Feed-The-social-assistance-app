@@ -1,0 +1,1702 @@
+-- 20261007000000_w1_6a_events_hosting_checkin.sql
+-- Owner: Jelal Connor / SYNRG SCALING, LLC
+-- Wave: feed-fullfeed-w1-6a-events-hosting
+--
+-- Event hosting + two-state check-in + attendance, on top of the W2/W3/W4 event
+-- foundation and the P2.0/P2.1a/P2.1b engagement ledger.
+--
+-- USER RULINGS (verbatim intent):
+--   R1  Only platform admins create organizations + assign org admins; org admins (and
+--       platform admins) create/schedule events. No member-hosted events.
+--   R2  Check-in has two states: EARLY ("I'm coming", any time before the window opens,
+--       after the occurrence exists and is not cancelled/completed) and CONFIRMED
+--       (presence). CONFIRMED is set by the member tapping again in the window
+--       [starts_at - 30 min, ends_at], by a first check-in during the window (straight to
+--       CONFIRMED), or by the organizer confirming the attendee from the kiosk. After
+--       ends_at no new self check-ins / self-confirms; the organizer may still confirm
+--       until ends_at + 24h so a busy kiosk can catch up. Cancelled rejects everything.
+--   R3  An EARLY check-in never confirmed by ends_at is a NO-SHOW (DERIVED, no stored cron
+--       mutation): on an ended occurrence, status='early' rows are no-shows.
+--   R4  Person rate = confirmed / (early-or-confirmed check-ins on ENDED occurrences).
+--       Per event: early count, confirmed count, no-show count, show rate.
+--   R5  Org admins (+ platform admins) see per-event stats and each attendee's rate
+--       computed ONLY over that org's events. A member sees their OWN overall rate.
+--       No public / cross-org score.
+--   R6  Only CONFIRMED attendance earns the private P2.1a event_checkin credit — exactly
+--       once per (user, occurrence), at confirmation, never at early check-in. Reconcile agrees.
+--   R7  Anonymous check-ins (user_id NULL, household only) stay available for SIGNED-IN
+--       members — untracked, no credit, not part of attendance %.
+--   R8  Guests (auth.users.is_anonymous) cannot check in.
+--   D1  (round 4) Retiring an event cancels only occurrences that have NOT STARTED. An
+--       occurrence in progress continues to its end: members there can still confirm in the
+--       window, the organizer can confirm during the 24h grace, and it counts toward
+--       attendance normally.
+--   D2  (round 4) Attendance history of an ENDED occurrence is permanent: an ended occurrence
+--       (ends_at < now, or status completed) cannot be cancelled; rates + per-event stats
+--       count every occurrence that actually ran (not cancelled before it ended), regardless
+--       of whether its event is later retired or its org later deactivated. Organizers cannot
+--       erase no-shows; members never lose the attendance they earned.
+--
+-- ROUND-4 FIX INVARIANTS (K1–K5):
+--   K1  A cancelled occurrence stays cancelled once any check-in/claim exists — no
+--       cancelled->upcoming and no cancelled->completed (covers retire->reactivate->complete).
+--   K2  Deactivating an org cancels its not-yet-ended occurrences (not-started AND in-progress)
+--       and refuses all check-ins to an inactive org; ended occurrences are untouched. Refused
+--       members never become no-shows.
+--   K3  Consistent rule: an event RETIRE leaves in-progress occurrences live (org still
+--       operating, members may still confirm); an ORG DEACTIVATION cancels them (org suspended,
+--       no check-ins). Derived from the check-in permission difference; documented here + spec.
+--   K4  "ran" semantics: rate + event_attendance + my_attendance_rate + dashboards count every
+--       occurrence that ran regardless of later event/org is_active. Confirmed history never
+--       disappears from rates. (The round-3 "exclude inactive event/org" rate filters removed.)
+--   K5  Cancel offered on desktop + mobile only for not-yet-ended occurrences; cancelled+past
+--       occurrences' attendance reachable in the scheduler; get_occurrence_checkin_summary
+--       removed from generated types; platform org delete with history refused (F5 cascade),
+--       documented in the spec.
+--
+-- ROUND-4 FOLLOW-UP FIXES (G1, G2) — make D1/D2 reachable + never drop confirmed presence:
+--   G1  (D1 reachability) The people D1 says can still act can now REACH an in-progress
+--       occurrence of a RETIRED event in the UI. Two extra permissive SELECT policies (TO
+--       authenticated, backed by SECDEF helpers w1_6a_event_authed_reachable /
+--       w1_6a_occ_authed_reachable) add exactly: a signed-in MEMBER sees an in-progress
+--       occurrence of a retired event (org active) + its parent event (→ Events list "I'm here");
+--       an ORG ADMIN of an active org sees ALL their org's events + occurrences regardless of the
+--       event's is_active (→ scheduler/kiosk + permanent D2 attendance history). No one sees a
+--       retired event's future (cancelled) occurrences as check-in-able; anon/guest read exposure
+--       is unchanged (the new policies are authenticated-only). This SUPERSEDES the round-4 note
+--       that an org admin "cannot even reach" a retired event's row — they now reach it and hit
+--       the explicit D2 ended-cancel guard (same as a platform admin), instead of a silent no-op.
+--   G2  (D2 confirmed-never-drops) Org deactivation STILL cancels in-progress occurrences (K2/K3
+--       unchanged — a suspended org refuses every check-in, so the occurrence cannot be served and
+--       its early intents must not rot into no-shows; relaxing check_in for a suspended org is the
+--       concrete reason it can't follow the D1 retire rule). The accounting is fixed instead: a
+--       CONFIRMED row on a since-voided (cancelled) occurrence that had already STARTED counts as
+--       ATTENDED in w1_6a_user_org_rate + my_attendance_rate, and early rows of a cancelled
+--       occurrence are never no-shows — so a member's confirmed presence never drops out of their
+--       rate. (A confirmed row only exists on an occurrence that had started, so a not-started
+--       cancelled occurrence is never counted.)
+--
+-- INVARIANTS (this migration is the site that satisfies each):
+--   I1  Every check-in write goes through a SECDEF RPC (check_in / organizer_confirm).
+--       Clients hold NO INSERT/UPDATE/DELETE on event_checkins (grants revoked; write
+--       policies dropped). SELECT stays (own + admin + org-admin). The P2.0 RESTRICTIVE
+--       guest-INSERT block is kept (defence in depth; smoke 25 counts it).
+--   I2  (user, occurrence) has at most one row (existing partial UNIQUE); state only moves
+--       early -> confirmed (RPCs never set 'early' over 'confirmed'); confirm is idempotent
+--       (the ledger's UNIQUE(actor,kind,target) makes the credit exactly-once).
+--   I3  organizer_confirm records the ATTENDEE (p_user, or NULL for an anonymous household)
+--       as user_id; confirmed_by = the organizer (auth.uid()); the P2.0 force trigger sets
+--       checked_in_by = the caller. The organizer is never stored as the attendee.
+--   I4  event_attendance is org-scoped (authorised to that org's admins only) and every
+--       attendee rate it returns is computed ONLY over that event's org. my_attendance_rate
+--       returns ONLY the caller's own overall rate. Neither leaks another person's cross-org
+--       history: arguments cannot address another org/user's numbers.
+--   I5  admin_create_event / admin_update_event store address fields + a geocoded location
+--       ONLY from a strong (precise-tier) match; a weak/failed match leaves location NULL
+--       and tags geocode_accuracy='approximate' (feed shows "unknown" distance).
+--   I6  P2.0/P2.1a/P2.1b invariants still hold: the P2.0 force trigger + guest block are
+--       untouched; enforce_opt_in_transition is untouched (its md5 is unchanged); the
+--       P2.1a 16 source triggers still exist (trg_engagement_event_checkin still fires on
+--       INSERT, now also on UPDATE); reconcile stays service_role-only; account deletion of
+--       an attendee or organizer still succeeds (all new FKs are ON DELETE SET NULL/CASCADE).
+--   I7  Every UI element activates a real capability (no placeholders).
+--
+--   I8  Anonymous check-ins are unlinkable + capped, event writes are RPC-only, org-admin
+--       roster writes are platform-admin-only, and org admins can reach the events surface:
+--       - R7 (finding #2): an anonymous row carries NO member identity — user_id,
+--         checked_in_by (P2.0 force trigger leaves NULL for user_id-NULL rows) and
+--         confirmed_by are all NULL. The member↔occurrence link lives only in the private,
+--         server-only event_anonymous_claims table (RLS on, no policies, all grants revoked).
+--       - finding #7: at most ONE anonymous check-in per (member, occurrence), enforced by
+--         that table's PK; finding #8: an anonymous check-in is refused when the member
+--         already holds a tracked row for the occurrence (so an early row never silently
+--         decays into a no-show).
+--       - finding #1/#5: organizer_confirm acts ONLY on an attendee with an existing row
+--         (no INSERT for arbitrary ids → no FK/existence oracle; a real never-checked-in
+--         user and a random UUID hit the same uniform error), never the caller themselves,
+--         only within [starts_at−30m, ends_at+24h] on a live, active, non-cancelled
+--         occurrence; event_attendance returns only client-readable identity (first_name,
+--         avatar_url — never full_name) and treats status='completed' as ended.
+--       - finding #6: assistance_events location/address is written ONLY through
+--         admin_create_event / admin_update_event (direct client writes + write policies
+--         revoked); the RPCs reject null-island / out-of-range coords and unknown tiers.
+--         Trust boundary: organizers remain trusted to STATE a real venue; the server
+--         refuses only physically impossible inputs.
+--       - finding #3 (R1): only platform admins grant/change/remove org memberships.
+--       - finding #4: a non-platform-admin org admin reaches an events-only admin surface
+--         (is_org_admin_any gate; get_admin_org_list returns only their admin orgs).
+--       - finding #8: check_in rejects inactive events/orgs and treats completed as ended.
+--
+--   I9  Fix-round 2 additions (this revision):
+--       - H1: a platform admin manages ANY org's roster (org_members_select_platform_admin
+--         gives roster visibility so read + DELETE/UPDATE...RETURNING work); org admins still
+--         cannot change admin membership (writes stay platform-admin-only).
+--       - M2 (R7 both directions): a member is counted AT MOST ONCE per occurrence — the
+--         identified check_in path now refuses when the member already holds an anonymous
+--         claim for the occurrence (finding #7 already covered the reverse). my_anonymous_
+--         claims(uuid[]) (SECDEF, own-only) lets the member — and no one else — learn their
+--         own anonymous-claim occurrences so the UI can show "Counted anonymously ✓".
+--       - M3: once any check-in (tracked row OR anonymous claim) exists for an occurrence, a
+--         CLIENT can no longer change its starts_at/ends_at nor reopen it from cancelled/
+--         completed (trg_event_occurrences_guard_checkin_bounds). Cancellation + creating new
+--         occurrences still work; server-side writers bypass.
+--       - is_anonymous column: the authoritative anonymous marker. Attendance counts anonymous
+--         by is_anonymous (never user_id IS NULL), so a deleted attendee's identified row
+--         (user_id nulled by the FK) is not miscounted as anonymous.
+--       - admin_update_event gains p_is_active (retire/reactivate) + p_clear[] (explicit clear
+--         of optional text fields; COALESCE can only set, never blank). is_org_admin_any +
+--         admin_create_event reject inactive orgs. Anonymous rows' checked_in_at/confirmed_at
+--         are coarsened to the minute (defeats second-precision kiosk timestamp-matching).
+--       - Known + OUT OF SCOPE (documented, unchanged): orgs_update_org_admin still lets an
+--         org admin rename/deactivate their OWN org. R1 assigns org creation/retirement to
+--         platform admins; tightening that policy is deferred.
+--
+--   I10 Fix-round 3 additions (this revision) — truthful no-show accounting + integrity:
+--       - F1 (no-show only from a real ended run): an early ("I'm coming") row becomes a
+--         no-show ONLY when the occurrence actually ran and ended normally. Two organizer
+--         paths that stop an event from happening no longer forge no-shows: (a) the M3 guard
+--         now REFUSES marking an occurrence 'completed' before its starts_at while check-ins
+--         exist (cancel instead); (b) admin_update_event(p_is_active=false) CANCELS every
+--         not-yet-ended occurrence of the retired event (in-progress included). Belt-and-
+--         suspenders: my_attendance_rate + w1_6a_user_org_rate count ONLY occurrences whose
+--         event AND org are active, so a retired-org occurrence never counts as a no-show.
+--       - F2: once any check-in / anonymous claim exists, an occurrence's event_id can no
+--         longer change (same-org or cross-org) — added to the M3 guard alongside times/reopen.
+--       - F3: platform dashboards count CONFIRMED presence only — dashboard_event_stats +
+--         community_people_fed are redefined (W5 bodies verbatim + a status='confirmed' filter
+--         on the check-in aggregates) so "check-ins" / "people fed" equal confirmed truth.
+--       - F4: check_in takes a per-(occurrence,member) pg_advisory_xact_lock at entry, so a
+--         concurrent anonymous + identified check-in by the same member serializes and the
+--         member is counted at most once (proved with a local race harness, both orderings).
+--       - F5: a BEFORE DELETE guard refuses a CLIENT delete of an occurrence that has any
+--         check-in/claim (cancel instead); an occurrence with none is still freely deletable.
+--         Server-side writers (auth.uid() NULL) bypass, so account-deletion cascades work.
+--       - F6: smoke-28 att_uses_is_anon_marker now matches the ACTUAL FILTER expression, not a
+--         word that also appears in comments, so it is mutation-provable.
+--       - F7: an admin of an INACTIVE org has NO organizer powers — admin_update_event,
+--         event_attendance, and the org-admin occurrence INSERT/UPDATE policies all require the
+--         owning org active; members no longer see an inactive org's events (events_select_
+--         active + occurrences_select_active_event require the org active). is_org_admin itself
+--         is untouched (keeps orgs_update_org_admin out of scope).
+--       - F8: clearing the address via p_clear ALWAYS drops the location pin + accuracy tag,
+--         whether or not p_regeocode was passed.
+--       - F9: the legacy, buggy (42702), caller-less get_occurrence_checkin_summary is dropped;
+--         event_attendance supersedes it. Anonymous rows already carry minute-coarsened
+--         timestamps and are excluded from the identified attendees list, so no default ordering
+--         reveals their relative order beyond minute precision.
+--
+-- Backfill-safe: prod has 0 event_checkins / 0 assistance_events / 0 organizations at apply
+-- time, so the new NOT NULL status column (DEFAULT 'confirmed'), the new NOT NULL is_anonymous
+-- column (DEFAULT false), and the new nullable columns add cleanly with no data migration.
+
+BEGIN;
+
+-- ============================================================================
+-- 1. SCHEMA — two-state check-in + event geocode tagging
+-- ============================================================================
+
+-- event_checkins: EARLY vs CONFIRMED state + confirmation attestation.
+--   is_anonymous: an EXPLICIT marker set true ONLY by the check-in RPCs when the row was
+--   created as an anonymous household count (user_id NULL by intent). It is the authoritative
+--   "this row is anonymous" signal — never inferred from user_id IS NULL, because a deleted
+--   attendee's identified row also has user_id NULL (FK ON DELETE SET NULL) yet is NOT
+--   anonymous. Attendance counts anonymous by is_anonymous and identified by user_id IS NOT
+--   NULL, so a deleted user's row falls out of BOTH buckets (people_confirmed still counts it
+--   as a household fed). Backfill-safe: prod has 0 rows at apply time (DEFAULT false).
+ALTER TABLE public.event_checkins
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'confirmed'
+    CHECK (status IN ('early','confirmed')),
+  ADD COLUMN IF NOT EXISTS confirmed_at  timestamptz,
+  ADD COLUMN IF NOT EXISTS confirmed_by  uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS is_anonymous  boolean NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_checkins_status
+  ON public.event_checkins (occurrence_id, status);
+
+-- assistance_events: geocode accuracy tagging (mirrors resources.geocode_accuracy).
+ALTER TABLE public.assistance_events
+  ADD COLUMN IF NOT EXISTS geocode_accuracy   text,
+  ADD COLUMN IF NOT EXISTS geocode_confidence text;
+
+-- event_anonymous_claims (R7 / finding #7): a PRIVATE, server-only record that a given
+-- member has spent their one anonymous check-in on an occurrence. It exists ONLY to cap a
+-- member at one anonymous check-in per occurrence WITHOUT storing the member's identity on
+-- the anonymous event_checkins row itself (which stays fully unlinkable — user_id,
+-- checked_in_by, confirmed_by all NULL). No client — not even an org admin — can read or
+-- write this table: RLS is enabled with NO policies and ALL privileges are revoked, so the
+-- only code that ever touches it is the SECDEF check_in RPC (running as the table owner).
+-- The (occurrence,user) PK is the once-per-member enforcement. The link lives here, out of
+-- every client's reach; the public count in event_checkins carries no member identity.
+CREATE TABLE IF NOT EXISTS public.event_anonymous_claims (
+  occurrence_id uuid NOT NULL REFERENCES public.event_occurrences(id) ON DELETE CASCADE,
+  user_id       uuid NOT NULL REFERENCES auth.users(id)              ON DELETE CASCADE,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (occurrence_id, user_id)
+);
+ALTER TABLE public.event_anonymous_claims ENABLE ROW LEVEL SECURITY;
+-- No policies -> RLS denies every client SELECT/write. Belt-and-braces: revoke the default
+-- table grants Supabase hands anon/authenticated so even a role with RLS bypass intent has
+-- no privilege. Only the table owner (SECDEF functions) can read/write it.
+REVOKE ALL ON public.event_anonymous_claims FROM anon, authenticated, PUBLIC;
+
+-- ============================================================================
+-- 2. I1 — lock down direct writes to event_checkins (RPC-only)
+-- ============================================================================
+-- Drop the permissive client write policies (writes go only through the SECDEF
+-- RPCs below). Keep the three SELECT policies (own/admin/org-admin) and the
+-- P2.0 RESTRICTIVE guest-INSERT block (event_checkins_block_anon_insert).
+DROP POLICY IF EXISTS checkins_insert_auth  ON public.event_checkins;
+DROP POLICY IF EXISTS checkins_update_own   ON public.event_checkins;
+DROP POLICY IF EXISTS checkins_update_admin ON public.event_checkins;
+
+-- Revoke the four write privileges from clients so no direct write is possible; SELECT is
+-- left intact (the app still reads own rows + org-admin rows, RLS-scoped). REFERENCES and
+-- TRIGGER are not revoked here (the app never uses them; they carry no write capability),
+-- and SELECT is neither dropped nor re-granted — it simply stays as originally granted.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.event_checkins FROM anon, authenticated;
+
+-- ============================================================================
+-- 2b. R7 finding #2 — an anonymous row carries NO member identity
+-- ============================================================================
+-- The P2.0 force trigger stamps checked_in_by = auth.uid() on INSERT to stop a self
+-- check-in forging an organizer verification. For an ANONYMOUS check-in (user_id NULL)
+-- there is no member to protect and R7 requires the row be unlinkable to the member by
+-- anyone but the server — so for that EXACT case the trigger leaves checked_in_by NULL.
+-- Everywhere else (identified rows) the forge protection is byte-for-byte the P2.0 logic
+-- (INSERT forces the caller; UPDATE reverts any client change, allowing only the FK
+-- ON DELETE SET NULL cascade). The function still references auth.uid() (smoke 25's
+-- checkins_fn_uses_uid) and the trigger still fires BEFORE INSERT OR UPDATE (smoke 25's
+-- checkins_force_trg). The RPCs below additionally set confirmed_by = NULL on anonymous
+-- rows, so an anonymous check-in stores no direct or derivable member reference.
+CREATE OR REPLACE FUNCTION public.event_checkins_force_checked_in_by()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- Identified check-in: the attestor is always the caller. Anonymous check-in
+    -- (user_id NULL): no attestor is stored (R7 unlinkability).
+    IF NEW.user_id IS NULL THEN
+      NEW.checked_in_by := NULL;
+    ELSE
+      NEW.checked_in_by := auth.uid();
+    END IF;
+  ELSE
+    -- UPDATE: never let a client change the attestor. A NULL is accepted ONLY when it
+    -- originates from the FK ON DELETE SET NULL cascade — i.e. there is no session
+    -- (auth.uid() IS NULL) or we are running inside another statement's trigger depth
+    -- (pg_trigger_depth() > 1). Any other change is reverted to OLD.checked_in_by.
+    IF NEW.checked_in_by IS DISTINCT FROM OLD.checked_in_by THEN
+      IF NEW.checked_in_by IS NULL AND (auth.uid() IS NULL OR pg_trigger_depth() > 1) THEN
+        NULL;  -- FK cascade → allow the NULL through unchanged
+      ELSE
+        NEW.checked_in_by := OLD.checked_in_by;
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+-- Trigger definition is unchanged (already BEFORE INSERT OR UPDATE from P2.0); recreating
+-- the function alone is sufficient.
+
+-- ============================================================================
+-- 3. R6 — move the P2.1a private credit to CONFIRMATION time
+-- ============================================================================
+-- Fires AFTER INSERT OR UPDATE. Credits ONLY when the row is CONFIRMED, identified,
+-- and this statement is the confirming transition (INSERT straight to confirmed, or
+-- early -> confirmed UPDATE). record_engagement_event is idempotent on
+-- (actor,kind,target) so the credit is exactly-once per (user, occurrence).
+-- Keeping the same trigger NAME + INSERT firing preserves smoke 26's 16-trigger shape.
+CREATE OR REPLACE FUNCTION public.engagement_on_event_checkin()
+  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  BEGIN
+    IF NEW.user_id IS NOT NULL
+       AND NEW.status = 'confirmed'
+       AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'confirmed') THEN
+      PERFORM public.record_engagement_event(
+        NEW.user_id, 'event_checkin', 'event', NEW.occurrence_id,
+        'event_checkins', NEW.user_id::text || ':' || NEW.occurrence_id::text, NULL, false);
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM public.log_engagement_failure('event_checkin', SQLERRM);
+  END;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_engagement_event_checkin ON public.event_checkins;
+CREATE TRIGGER trg_engagement_event_checkin
+  AFTER INSERT OR UPDATE ON public.event_checkins
+  FOR EACH ROW EXECUTE FUNCTION public.engagement_on_event_checkin();
+
+-- The trigger function is internal-only (never client-executable).
+REVOKE EXECUTE ON FUNCTION public.engagement_on_event_checkin() FROM PUBLIC, anon, authenticated;
+
+-- ============================================================================
+-- 4. Check-in writers (SECDEF, RPC-only) — R2/R3/R7/R8, I2/I3
+-- ============================================================================
+-- Early window opens 30 minutes before starts_at.
+--   now <  starts_at - 30m           -> EARLY   ("I'm coming")
+--   starts_at - 30m <= now <= ends_at -> CONFIRMED (presence)
+--   now >  ends_at                    -> ended (self actions rejected)
+
+-- 4a. check_in — the signed-in member's own action.
+CREATE OR REPLACE FUNCTION public.check_in(
+  p_occurrence uuid,
+  p_household_size int DEFAULT 1,
+  p_anonymous boolean DEFAULT false)
+  RETURNS text
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_uid    uuid := auth.uid();
+  v_starts timestamptz;
+  v_ends   timestamptz;
+  v_status text;
+  v_now    timestamptz := now();
+  v_window_open timestamptz;
+  v_existing_status text;
+  v_ev_active  boolean;
+  v_org_active boolean;
+BEGIN
+  -- R8: only a real (non-guest) signed-in user may check in.
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Sign in to check in.' USING ERRCODE='42501'; END IF;
+  IF EXISTS (SELECT 1 FROM auth.users WHERE id = v_uid AND is_anonymous IS TRUE) THEN
+    RAISE EXCEPTION 'Create a free account to check in.' USING ERRCODE='42501';
+  END IF;
+  IF p_household_size IS NULL OR p_household_size < 1 OR p_household_size > 20 THEN
+    RAISE EXCEPTION 'Household size must be between 1 and 20.' USING ERRCODE='22003';
+  END IF;
+
+  -- F4: serialize this member's concurrent check-ins on this occurrence. Two transactions
+  -- racing an anonymous claim against an identified row for the SAME (occurrence, member)
+  -- would each pass their existence checks before the other committed and both commit,
+  -- double-counting the member. A transaction-scoped advisory lock keyed on
+  -- (occurrence, member) forces them to run one-at-a-time; the loser then re-reads and hits
+  -- the anonymous-claim / existing-row guard below, so the member is counted at most once.
+  -- The lock is released automatically at commit/rollback.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_occurrence::text || ':' || v_uid::text, 0));
+
+  SELECT eo.starts_at, eo.ends_at, eo.status, ae.is_active, o.is_active
+    INTO v_starts, v_ends, v_status, v_ev_active, v_org_active
+    FROM public.event_occurrences eo
+    JOIN public.assistance_events ae ON ae.id = eo.event_id
+    JOIN public.organizations o ON o.id = ae.org_id
+   WHERE eo.id = p_occurrence;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Event not found.' USING ERRCODE='P0002'; END IF;
+
+  -- K2 (finding #8): an inactive ORG accepts no check-ins at all — the org is suspended.
+  -- Any surviving occurrence of a deactivated org is already cancelled by the org-deactivation
+  -- cascade, so this org gate (checked FIRST) is defence in depth for a stray/future one.
+  IF v_org_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'This organization is not currently active.' USING ERRCODE='P0001';
+  END IF;
+  -- K3/D1 (finding #8): a RETIRED (inactive) event blocks only NOT-YET-STARTED participation.
+  -- An occurrence already in progress continues to its end — members there may still confirm —
+  -- so the event-inactive gate applies only before starts_at. (D1 cancels a retired event's
+  -- not-started occurrences, so in normal flow a live retired-event occurrence has now>=starts_at.)
+  IF v_ev_active IS NOT TRUE AND v_now < v_starts THEN
+    RAISE EXCEPTION 'This event is not currently active.' USING ERRCODE='P0001';
+  END IF;
+
+  IF v_status = 'cancelled' THEN RAISE EXCEPTION 'This event was cancelled.' USING ERRCODE='P0001'; END IF;
+  IF v_status = 'completed' OR v_now > v_ends THEN
+    RAISE EXCEPTION 'This event has ended.' USING ERRCODE='P0001';
+  END IF;
+
+  v_window_open := v_starts - interval '30 minutes';
+
+  -- R7: anonymous check-in is untracked (user_id NULL) and only meaningful as presence,
+  -- so it opens with the window (30 min before start). The row carries NO member identity
+  -- (user_id / confirmed_by NULL here; checked_in_by forced NULL by the P2.0 trigger) and
+  -- earns no credit. Finding #7: at most ONE anonymous check-in per member per occurrence,
+  -- enforced by the private event_anonymous_claims PK (unreadable by any client). Finding
+  -- #8: an anonymous check-in must not sit on top of the member's own tracked row (which
+  -- would leave that early row to decay into a no-show) — disallow with a clear message.
+  IF p_anonymous THEN
+    IF v_now < v_window_open THEN
+      RAISE EXCEPTION 'Anonymous check-in opens 30 minutes before the event starts.' USING ERRCODE='P0001';
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.event_checkins
+                WHERE occurrence_id = p_occurrence AND user_id = v_uid) THEN
+      RAISE EXCEPTION 'You already have a check-in for this event; you cannot also check in anonymously.'
+        USING ERRCODE='P0001';
+    END IF;
+    -- Reserve this member's single anonymous slot (private; no client can read the link).
+    BEGIN
+      INSERT INTO public.event_anonymous_claims (occurrence_id, user_id)
+      VALUES (p_occurrence, v_uid);
+    EXCEPTION WHEN unique_violation THEN
+      RAISE EXCEPTION 'You are already counted anonymously for this event.' USING ERRCODE='P0001';
+    END;
+    -- is_anonymous marks this row as an anonymous household count (never inferred from the
+    -- NULL user_id). checked_in_at + confirmed_at are coarsened to the minute so an org admin
+    -- reading the public event_checkins rows cannot second-precision-match an anonymous row
+    -- against a kiosk observation to re-identify the member (the identity itself lives only in
+    -- the private claims table). Minute precision keeps ordering/count logic intact.
+    INSERT INTO public.event_checkins
+      (occurrence_id, user_id, household_size, status, is_anonymous,
+       checked_in_at, confirmed_at, confirmed_by)
+    VALUES (p_occurrence, NULL, p_household_size, 'confirmed', true,
+       date_trunc('minute', v_now), date_trunc('minute', v_now), NULL);
+    RETURN 'confirmed_anonymous';
+  END IF;
+
+  -- Identified path. Finding #7 (reverse direction): if this member already spent their one
+  -- anonymous check-in on this occurrence, they are already counted — refuse a second,
+  -- identified, row so the member is counted AT MOST ONCE per occurrence (anonymous OR
+  -- tracked, never both). The claims table is private, so this is the only place the member's
+  -- own anonymous state can be enforced.
+  IF EXISTS (SELECT 1 FROM public.event_anonymous_claims
+              WHERE occurrence_id = p_occurrence AND user_id = v_uid) THEN
+    RAISE EXCEPTION 'You are already counted anonymously for this event; you cannot also check in with your account.'
+      USING ERRCODE='P0001';
+  END IF;
+
+  -- At most one row per (occurrence,user) — read the current state.
+  SELECT status INTO v_existing_status
+    FROM public.event_checkins
+   WHERE occurrence_id = p_occurrence AND user_id = v_uid;
+
+  IF v_existing_status IS NULL THEN
+    -- No row yet: EARLY before the window, CONFIRMED once it is open.
+    IF v_now < v_window_open THEN
+      INSERT INTO public.event_checkins
+        (occurrence_id, user_id, household_size, status)
+      VALUES (p_occurrence, v_uid, p_household_size, 'early');
+      RETURN 'early';
+    ELSE
+      INSERT INTO public.event_checkins
+        (occurrence_id, user_id, household_size, status, confirmed_at, confirmed_by)
+      VALUES (p_occurrence, v_uid, p_household_size, 'confirmed', v_now, v_uid);
+      RETURN 'confirmed';
+    END IF;
+  ELSIF v_existing_status = 'confirmed' THEN
+    -- Idempotent: never move back; keep the latest household size.
+    UPDATE public.event_checkins
+       SET household_size = p_household_size
+     WHERE occurrence_id = p_occurrence AND user_id = v_uid;
+    RETURN 'already_confirmed';
+  ELSE
+    -- Existing EARLY. Confirm it iff the window is open (the "I'm here" tap); otherwise
+    -- it stays EARLY (idempotent) with the latest household size.
+    IF v_now >= v_window_open THEN
+      UPDATE public.event_checkins
+         SET status = 'confirmed', confirmed_at = v_now, confirmed_by = v_uid,
+             household_size = p_household_size
+       WHERE occurrence_id = p_occurrence AND user_id = v_uid;
+      RETURN 'confirmed';
+    ELSE
+      UPDATE public.event_checkins
+         SET household_size = p_household_size
+       WHERE occurrence_id = p_occurrence AND user_id = v_uid;
+      RETURN 'already_early';
+    END IF;
+  END IF;
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.check_in(uuid,int,boolean) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.check_in(uuid,int,boolean) TO authenticated;
+
+-- 4b. organizer_confirm — the kiosk action, run by an org admin of the event's org
+-- (or a platform admin). Confirms an ATTENDEE (p_user) or adds an anonymous household
+-- (p_user NULL). checked_in_by is forced to the caller by the P2.0 trigger; confirmed_by
+-- is the caller here. Allowed until ends_at + 24h so a busy kiosk can catch up.
+CREATE OR REPLACE FUNCTION public.organizer_confirm(
+  p_occurrence uuid,
+  p_user uuid DEFAULT NULL,
+  p_household_size int DEFAULT 1)
+  RETURNS text
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_uid   uuid := auth.uid();
+  v_org   uuid;
+  v_starts timestamptz;
+  v_ends  timestamptz;
+  v_status text;
+  v_ev_active  boolean;
+  v_org_active boolean;
+  v_now   timestamptz := now();
+  v_existing_status text;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Sign in to confirm attendance.' USING ERRCODE='42501'; END IF;
+  IF p_household_size IS NULL OR p_household_size < 1 OR p_household_size > 20 THEN
+    RAISE EXCEPTION 'Household size must be between 1 and 20.' USING ERRCODE='22003';
+  END IF;
+
+  SELECT ae.org_id, eo.starts_at, eo.ends_at, eo.status, ae.is_active, o.is_active
+    INTO v_org, v_starts, v_ends, v_status, v_ev_active, v_org_active
+    FROM public.event_occurrences eo
+    JOIN public.assistance_events ae ON ae.id = eo.event_id
+    JOIN public.organizations o ON o.id = ae.org_id
+   WHERE eo.id = p_occurrence;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Event not found.' USING ERRCODE='P0002'; END IF;
+
+  -- I3: only an org admin of this event's org (or a platform admin) may run the kiosk.
+  IF NOT (public.is_current_user_admin() OR public.is_org_admin(v_org)) THEN
+    RAISE EXCEPTION 'Only an organizer of this event may confirm attendance.' USING ERRCODE='42501';
+  END IF;
+
+  -- Finding #5: the occurrence must be a live, non-cancelled occurrence of an active
+  -- event + org, and confirmation is bounded to [starts_at - 30m, ends_at + 24h] — early
+  -- enough to catch the doors-open rush, late enough for a busy kiosk to catch up, never
+  -- days ahead of the event.
+  IF v_status = 'cancelled' THEN RAISE EXCEPTION 'This event was cancelled.' USING ERRCODE='P0001'; END IF;
+  -- K2: an inactive ORG blocks the kiosk entirely (org suspended).
+  IF v_org_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'This organization is not currently active.' USING ERRCODE='P0001';
+  END IF;
+  -- K3/D1: a RETIRED (inactive) event still lets the organizer confirm attendees of an
+  -- occurrence that has already started (in progress + the 24h grace); only pre-start
+  -- confirmation on a retired event is blocked.
+  IF v_ev_active IS NOT TRUE AND v_now < v_starts THEN
+    RAISE EXCEPTION 'This event is not currently active.' USING ERRCODE='P0001';
+  END IF;
+  IF v_now < v_starts - interval '30 minutes' THEN
+    RAISE EXCEPTION 'Attendance confirmation opens 30 minutes before the event starts.' USING ERRCODE='P0001';
+  END IF;
+  IF v_now > v_ends + interval '24 hours' THEN
+    RAISE EXCEPTION 'The confirmation window for this event has closed.' USING ERRCODE='P0001';
+  END IF;
+
+  -- Finding #1/#5: the organizer never confirms themselves — they check in like any other
+  -- attendee through check_in.
+  IF p_user = v_uid THEN
+    RAISE EXCEPTION 'Use your own check-in to record your attendance.' USING ERRCODE='42501';
+  END IF;
+
+  -- Anonymous household added by the organizer (never the organizer as attendee). The row
+  -- carries no attendee/attestor identity (user_id / confirmed_by NULL; checked_in_by
+  -- forced NULL by the P2.0 trigger). Organizer walk-in adds are trusted, so multiple are
+  -- allowed and the per-member anonymous cap does not apply here.
+  IF p_user IS NULL THEN
+    -- is_anonymous marks the walk-in count; timestamps coarsened to the minute (see check_in).
+    INSERT INTO public.event_checkins
+      (occurrence_id, user_id, household_size, status, is_anonymous,
+       checked_in_at, confirmed_at, confirmed_by)
+    VALUES (p_occurrence, NULL, p_household_size, 'confirmed', true,
+       date_trunc('minute', v_now), date_trunc('minute', v_now), NULL);
+    RETURN 'confirmed_anonymous';
+  END IF;
+
+  -- Finding #1: an organizer may ONLY act on an attendee who has already checked in for
+  -- this occurrence — never mint a row for an arbitrary user. The lookup runs BEFORE any
+  -- reference to auth.users, so a real member who never checked in and a random/nonexistent
+  -- UUID both hit the SAME uniform error (no FK / existence oracle). No INSERT on the
+  -- identified path, so the FK-violation oracle is gone.
+  SELECT status INTO v_existing_status
+    FROM public.event_checkins
+   WHERE occurrence_id = p_occurrence AND user_id = p_user;
+
+  IF v_existing_status IS NULL THEN
+    RAISE EXCEPTION 'That attendee has not checked in for this event.' USING ERRCODE='P0002';
+  ELSIF v_existing_status = 'confirmed' THEN
+    RETURN 'already_confirmed';  -- idempotent, no re-credit
+  ELSE
+    UPDATE public.event_checkins
+       SET status = 'confirmed', confirmed_at = v_now, confirmed_by = v_uid,
+           household_size = p_household_size
+     WHERE occurrence_id = p_occurrence AND user_id = p_user;
+    RETURN 'confirmed';
+  END IF;
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.organizer_confirm(uuid,uuid,int) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.organizer_confirm(uuid,uuid,int) TO authenticated;
+
+-- ============================================================================
+-- 5. Attendance reads (SECDEF) — R4/R5, I4
+-- ============================================================================
+-- G2 — CONFIRMED PRESENCE NEVER DROPS OUT OF A RATE (round-4 fix, user ruling G2).
+--   Deactivating an org still CANCELS its in-progress occurrences (K2/K3 unchanged): a
+--   suspended org refuses every check-in (check_in / organizer_confirm gate on org-active
+--   first), so an in-progress occurrence can no longer be served and MUST NOT be left "live"
+--   or its early intents would rot into no-shows the moment it ends — and relaxing check_in to
+--   allow confirms on a suspended org contradicts "a deactivated org refuses all check-ins".
+--   That is the concrete reason org deactivation cannot simply follow the D1 retire rule.
+--   So we KEEP the cancellation and fix the accounting instead: a member's CONFIRMED presence
+--   on a since-voided (cancelled) occurrence that had already STARTED is counted as ATTENDED,
+--   and the early rows of any cancelled occurrence are never counted as no-shows. A confirmed
+--   row only ever exists on an occurrence that had started, so this never counts a not-started
+--   cancelled occurrence. w1_6a_user_org_rate + my_attendance_rate below are the two sites;
+--   event_attendance already reports no_show=0 for a cancelled occurrence and surfaces each
+--   attendee's org-scoped rate through w1_6a_user_org_rate, so it inherits the same rule.
+--
+-- 5a. Internal helper: a user's attendance rate computed ONLY over one org's ENDED
+-- occurrences. SECDEF (reads event_checkins across users) but NOT client-executable —
+-- it is called only from event_attendance, which has already authorised the caller as
+-- an admin of exactly p_org. That gate is what makes exposing another user's number
+-- here safe; the helper itself grants EXECUTE to nobody.
+CREATE OR REPLACE FUNCTION public.w1_6a_user_org_rate(p_user uuid, p_org uuid)
+  RETURNS numeric
+  LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  -- G2 counting rule (see the CONFIRMED-NEVER-DROPS block above w1_6a_ATTENDED_ROW):
+  --   ATTENDED (numerator) = a CONFIRMED row whose occurrence ran-and-ended (D2/K4) OR was
+  --     voided (cancelled) after it had already started — a member's confirmed presence never
+  --     drops out of their rate just because the org was later deactivated mid-occurrence.
+  --   NO-SHOW  = an EARLY row ONLY on a ran-and-ended, non-cancelled occurrence; an early row on
+  --     a cancelled (never-ran or voided) occurrence is never a no-show.
+  SELECT CASE WHEN count(*) FILTER (WHERE x.attended OR x.noshow) > 0
+              THEN round(count(*) FILTER (WHERE x.attended)::numeric
+                         / count(*) FILTER (WHERE x.attended OR x.noshow), 4)
+              ELSE NULL END
+    FROM (
+      SELECT
+        (ec.status = 'confirmed'
+          AND ( (eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now()))
+                OR (eo.status = 'cancelled' AND eo.starts_at <= now()) )) AS attended,  -- w1_6a_ATTENDED_ROW
+        (ec.status = 'early'
+          AND eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now())) AS noshow
+        FROM public.event_checkins ec
+        JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
+        JOIN public.assistance_events ae ON ae.id = eo.event_id
+       WHERE ec.user_id = p_user
+         AND ae.org_id  = p_org
+    ) x;
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_user_org_rate(uuid,uuid) FROM PUBLIC, anon, authenticated;
+
+-- 5b. event_attendance — per-occurrence stats + attendee rows (each rate org-scoped).
+-- Authorised to admins of the occurrence's org (or platform admins); anyone else gets
+-- NULL. It returns ONLY client-readable identity (first_name, avatar_url) — never full_name,
+-- which stays column-private to clients — so an organizer sees who attended their event
+-- without this SECDEF path widening what a client can read.
+CREATE OR REPLACE FUNCTION public.event_attendance(p_occurrence uuid)
+  RETURNS jsonb
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_org   uuid;
+  v_ends  timestamptz;
+  v_status text;
+  v_org_active boolean;
+  v_ended boolean;
+  v_early int; v_confirmed int; v_anon int; v_people int; v_no_show int;
+  v_show_rate numeric;
+  v_attendees jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN NULL; END IF;
+
+  SELECT ae.org_id, eo.ends_at, eo.status, o.is_active
+    INTO v_org, v_ends, v_status, v_org_active
+    FROM public.event_occurrences eo
+    JOIN public.assistance_events ae ON ae.id = eo.event_id
+    JOIN public.organizations o ON o.id = ae.org_id
+   WHERE eo.id = p_occurrence;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  -- I4 / F7: org-scoped authorisation. An org admin of an INACTIVE (retired) org holds no
+  -- organizer powers, so attendance is unreadable to them; a platform admin still sees it.
+  IF NOT (public.is_current_user_admin()
+          OR (public.is_org_admin(v_org) AND v_org_active IS TRUE)) THEN
+    RETURN NULL;
+  END IF;
+
+  -- "ended" is consistent with check_in: a completed occurrence counts as ended even if
+  -- ends_at is still in the future (finding #8).
+  v_ended := (v_status <> 'cancelled' AND (v_status = 'completed' OR v_ends < now()));
+
+  -- Anonymous = rows created anonymous (is_anonymous), NOT user_id IS NULL. A deleted
+  -- attendee's identified row also has user_id NULL (FK ON DELETE SET NULL) but is_anonymous
+  -- = false, so it counts as neither identified (user_id IS NOT NULL) nor anonymous — it drops
+  -- out of both buckets while still contributing to people_confirmed (households fed).
+  SELECT
+    count(*) FILTER (WHERE status = 'early'     AND user_id IS NOT NULL),
+    count(*) FILTER (WHERE status = 'confirmed' AND user_id IS NOT NULL),
+    count(*) FILTER (WHERE is_anonymous),
+    COALESCE(SUM(household_size) FILTER (WHERE status = 'confirmed'), 0)
+    INTO v_early, v_confirmed, v_anon, v_people
+    FROM public.event_checkins
+   WHERE occurrence_id = p_occurrence;
+
+  -- R3: no-shows are early rows on an ENDED occurrence.
+  v_no_show := CASE WHEN v_ended THEN v_early ELSE 0 END;
+  -- R4 per-event show rate (only meaningful once ended): confirmed / (confirmed + no-show).
+  v_show_rate := CASE WHEN v_ended AND (v_confirmed + v_no_show) > 0
+                      THEN round(v_confirmed::numeric / (v_confirmed + v_no_show), 4)
+                      ELSE NULL END;
+
+  -- Finding #1: return ONLY identity fields an authenticated client can already read
+  -- (first_name, avatar_url) — never the private full-name column. The organizer sees who
+  -- attended without this SECDEF path leaking a field they could not otherwise read.
+  SELECT COALESCE(jsonb_agg(
+           jsonb_build_object(
+             'user_id',        ec.user_id,
+             'name',           COALESCE(NULLIF(btrim(pr.first_name), ''), 'Member'),
+             'avatar_url',     pr.avatar_url,
+             'status',         ec.status,
+             'household_size', ec.household_size,
+             'checked_in_at',  ec.checked_in_at,
+             'confirmed_at',   ec.confirmed_at,
+             'attendance_rate', public.w1_6a_user_org_rate(ec.user_id, v_org))
+           ORDER BY ec.status DESC, ec.checked_in_at), '[]'::jsonb)
+    INTO v_attendees
+    FROM public.event_checkins ec
+    LEFT JOIN public.profiles pr ON pr.id = ec.user_id
+   WHERE ec.occurrence_id = p_occurrence
+     AND ec.user_id IS NOT NULL;
+
+  RETURN jsonb_build_object(
+    'occurrence_id',      p_occurrence,
+    'ended',              v_ended,
+    'early',              v_early,
+    'confirmed',          v_confirmed,
+    'no_show',            v_no_show,
+    'anonymous_confirmed', v_anon,
+    'people_confirmed',   v_people,
+    'show_rate',          v_show_rate,
+    'attendees',          v_attendees);
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.event_attendance(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.event_attendance(uuid) TO authenticated;
+
+-- 5c. my_attendance_rate — the CALLER's own overall rate (all orgs), R5. Ended
+-- occurrences only. Never takes a user argument (cannot address another person).
+CREATE OR REPLACE FUNCTION public.my_attendance_rate()
+  RETURNS jsonb
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_uid uuid := auth.uid(); v_conf int; v_total int;
+BEGIN
+  IF v_uid IS NULL THEN RETURN NULL; END IF;
+  -- Same G2 rule as w1_6a_user_org_rate: confirmed presence on a ran-and-ended occurrence
+  -- (D2/K4) OR on a since-voided occurrence that had started counts as attended; an early row
+  -- is a no-show only on a ran-and-ended non-cancelled occurrence. Confirmed presence the
+  -- member earned can never disappear from their rate (incl. after an org deactivation).
+  SELECT
+    count(*) FILTER (WHERE x.attended),
+    count(*) FILTER (WHERE x.attended OR x.noshow)
+    INTO v_conf, v_total
+    FROM (
+      SELECT
+        (ec.status = 'confirmed'
+          AND ( (eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now()))
+                OR (eo.status = 'cancelled' AND eo.starts_at <= now()) )) AS attended,  -- w1_6a_ATTENDED_ROW_MINE
+        (ec.status = 'early'
+          AND eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now())) AS noshow
+        FROM public.event_checkins ec
+        JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
+       WHERE ec.user_id = v_uid
+    ) x;
+  RETURN jsonb_build_object(
+    'confirmed', v_conf,
+    'total',     v_total,
+    'has_data',  v_total > 0,
+    'rate',      CASE WHEN v_total > 0 THEN round(v_conf::numeric / v_total, 4) ELSE NULL END);
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.my_attendance_rate() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.my_attendance_rate() TO authenticated;
+
+-- 5d. my_anonymous_claims — the CALLER'S OWN anonymous-claim subset for a set of occurrences.
+-- The anonymous event_checkins row is unlinkable and the claims table is unreadable by any
+-- client, so the member has no other way to learn they are already counted anonymously for an
+-- occurrence (needed so the events UI can show "Counted anonymously ✓" instead of re-offering
+-- a check-in the RPC would reject). This exposes ONLY the caller's own claims (filtered by
+-- auth.uid()) and only for the occurrence ids the caller passes — it can never reveal that
+-- ANOTHER member checked in anonymously, so R7 unlinkability holds for everyone but self.
+CREATE OR REPLACE FUNCTION public.my_anonymous_claims(p_occurrence_ids uuid[])
+  RETURNS TABLE (occurrence_id uuid)
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT c.occurrence_id
+    FROM public.event_anonymous_claims c
+   WHERE c.user_id = auth.uid()
+     AND auth.uid() IS NOT NULL
+     AND c.occurrence_id = ANY(p_occurrence_ids);
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.my_anonymous_claims(uuid[]) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.my_anonymous_claims(uuid[]) TO authenticated;
+
+-- ============================================================================
+-- 6. Event hosting writers (SECDEF) — R1, I5 (geocode-on-save, strong-match only)
+-- ============================================================================
+-- The client forward-geocodes the address (Mapbox v6, resolveGeoPointV6) and passes the
+-- classified result. The server writes location ONLY for a precise tier (rooftop/parcel/
+-- point) with coords; a weak/failed match leaves location NULL and tags 'approximate'.
+
+-- Shared input validator (I5 finding #6): rejects impossible coordinates and unknown tiers.
+-- Not client-executable — called only from admin_create_event / admin_update_event (SECDEF).
+CREATE OR REPLACE FUNCTION public.w1_6a_validate_geo(
+  p_lat double precision, p_lng double precision, p_accuracy text)
+  RETURNS void LANGUAGE plpgsql IMMUTABLE SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF p_lat IS NOT NULL OR p_lng IS NOT NULL THEN
+    IF p_lat IS NULL OR p_lng IS NULL
+       OR p_lat < -90 OR p_lat > 90 OR p_lng < -180 OR p_lng > 180
+       OR (p_lat = 0 AND p_lng = 0) THEN
+      RAISE EXCEPTION 'Event coordinates are out of range or point to null island.'
+        USING ERRCODE='22023';
+    END IF;
+  END IF;
+  IF p_accuracy IS NOT NULL AND p_accuracy NOT IN
+     ('rooftop','parcel','point','interpolated','approximate','intersection','street','unlocated') THEN
+    RAISE EXCEPTION 'Unknown geocode tier: %', p_accuracy USING ERRCODE='22023';
+  END IF;
+END;
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_validate_geo(double precision,double precision,text) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.admin_create_event(
+  p_org_id uuid,
+  p_title text,
+  p_event_type text DEFAULT 'distribution',
+  p_description text DEFAULT NULL,
+  p_location_name text DEFAULT NULL,
+  p_address text DEFAULT NULL,
+  p_city text DEFAULT NULL,
+  p_state text DEFAULT NULL,
+  p_zip_code text DEFAULT NULL,
+  p_rrule text DEFAULT NULL,
+  p_default_capacity int DEFAULT NULL,
+  p_requires_registration boolean DEFAULT false,
+  p_lat double precision DEFAULT NULL,
+  p_lng double precision DEFAULT NULL,
+  p_geocode_accuracy text DEFAULT NULL,
+  p_geocode_confidence text DEFAULT NULL)
+  RETURNS uuid
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_uid uuid := auth.uid(); v_precise boolean; v_id uuid; v_org_active boolean;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Sign in required.' USING ERRCODE='42501'; END IF;
+  -- R1: only a platform admin or an admin of this org may create events for it.
+  IF NOT (public.is_current_user_admin() OR public.is_org_admin(p_org_id)) THEN
+    RAISE EXCEPTION 'Only an organizer of this organization may create events.' USING ERRCODE='42501';
+  END IF;
+  -- Consistency with is_org_admin_any + check_in/organizer_confirm: a retired (inactive) org
+  -- hosts no new events. Platform and org admins alike reactivate the org first.
+  SELECT is_active INTO v_org_active FROM public.organizations WHERE id = p_org_id;
+  IF v_org_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'This organization is not active.' USING ERRCODE='P0001';
+  END IF;
+  IF p_title IS NULL OR btrim(p_title) = '' THEN
+    RAISE EXCEPTION 'Event title is required.' USING ERRCODE='22004';
+  END IF;
+
+  -- I5 finding #6: the RPC is the ONLY writer of location/address fields (direct client
+  -- writes to assistance_events are revoked below), and it refuses physically impossible
+  -- inputs — coordinates at null island (0,0) or out of range, and unknown geocode tiers.
+  -- Organizers remain TRUSTED to state a real venue; the server rejects only inputs that
+  -- cannot describe any real place (trust boundary documented in the spec).
+  PERFORM public.w1_6a_validate_geo(p_lat, p_lng, p_geocode_accuracy);
+
+  v_precise := p_geocode_accuracy IN ('rooftop','parcel','point')
+               AND p_lat IS NOT NULL AND p_lng IS NOT NULL;
+
+  INSERT INTO public.assistance_events
+    (org_id, title, event_type, description, location_name, address, city, state, zip_code,
+     rrule, default_capacity, requires_registration, created_by,
+     location, geocode_accuracy, geocode_confidence)
+  VALUES
+    (p_org_id, btrim(p_title), p_event_type, p_description, p_location_name, p_address,
+     p_city, p_state, p_zip_code, p_rrule, p_default_capacity,
+     COALESCE(p_requires_registration, false), v_uid,
+     CASE WHEN v_precise THEN ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography ELSE NULL END,
+     CASE WHEN v_precise THEN p_geocode_accuracy
+          WHEN p_address IS NOT NULL THEN 'approximate' ELSE NULL END,
+     p_geocode_confidence)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.admin_create_event(uuid,text,text,text,text,text,text,text,text,text,int,boolean,double precision,double precision,text,text) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.admin_create_event(uuid,text,text,text,text,text,text,text,text,text,int,boolean,double precision,double precision,text,text) TO authenticated;
+
+-- admin_update_event — editing the address re-geocodes (client passes the new match);
+-- a weak/failed re-geocode clears location and tags 'approximate'. Also carries event
+-- RETIREMENT (p_is_active) and EXPLICIT clearing of optional text fields (p_clear): a
+-- COALESCE update can only SET a field, never blank it, so a clearable field is nulled ONLY
+-- when its name appears in p_clear — otherwise a NULL argument means "leave unchanged". This
+-- gives the scheduler a real "clear this field" and a "Retire event" capability.
+-- The signature changed (added p_is_active + p_clear), so the prior overload is dropped first.
+DROP FUNCTION IF EXISTS public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,int,boolean,double precision,double precision,text,text,boolean);
+
+CREATE OR REPLACE FUNCTION public.admin_update_event(
+  p_event_id uuid,
+  p_title text DEFAULT NULL,
+  p_event_type text DEFAULT NULL,
+  p_description text DEFAULT NULL,
+  p_location_name text DEFAULT NULL,
+  p_address text DEFAULT NULL,
+  p_city text DEFAULT NULL,
+  p_state text DEFAULT NULL,
+  p_zip_code text DEFAULT NULL,
+  p_rrule text DEFAULT NULL,
+  p_default_capacity int DEFAULT NULL,
+  p_requires_registration boolean DEFAULT NULL,
+  p_lat double precision DEFAULT NULL,
+  p_lng double precision DEFAULT NULL,
+  p_geocode_accuracy text DEFAULT NULL,
+  p_geocode_confidence text DEFAULT NULL,
+  p_regeocode boolean DEFAULT false,
+  p_is_active boolean DEFAULT NULL,
+  p_clear text[] DEFAULT '{}'::text[])
+  RETURNS uuid
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_org uuid;
+  v_precise boolean;
+  v_org_active boolean;
+  v_platform boolean;
+  v_clear_addr boolean;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'Sign in required.' USING ERRCODE='42501'; END IF;
+  SELECT ae.org_id, o.is_active INTO v_org, v_org_active
+    FROM public.assistance_events ae JOIN public.organizations o ON o.id = ae.org_id
+   WHERE ae.id = p_event_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Event not found.' USING ERRCODE='P0002'; END IF;
+  v_platform := public.is_current_user_admin();
+  IF NOT (v_platform OR public.is_org_admin(v_org)) THEN
+    RAISE EXCEPTION 'Only an organizer of this organization may edit this event.' USING ERRCODE='42501';
+  END IF;
+  -- F7: an admin of an INACTIVE (retired) org holds no organizer powers — edit, reactivate,
+  -- and occurrence management all refuse until the org is reactivated (by a platform admin).
+  -- A platform admin may still edit an inactive org's events (e.g. to correct data).
+  IF v_org_active IS NOT TRUE AND NOT v_platform THEN
+    RAISE EXCEPTION 'This organization is not active.' USING ERRCODE='P0001';
+  END IF;
+
+  -- Validate coordinates/tier only when a re-geocode is being applied (address changed).
+  IF p_regeocode THEN
+    PERFORM public.w1_6a_validate_geo(p_lat, p_lng, p_geocode_accuracy);
+  END IF;
+
+  v_precise := p_geocode_accuracy IN ('rooftop','parcel','point')
+               AND p_lat IS NOT NULL AND p_lng IS NOT NULL;
+
+  -- F8: clearing the street address ALWAYS drops the map pin + accuracy tag, whether or not
+  -- a re-geocode was requested. A venue with no address cannot honestly keep a located pin,
+  -- so 'address' in p_clear nulls location + geocode_accuracy + geocode_confidence too.
+  v_clear_addr := 'address' = ANY(p_clear);
+
+  UPDATE public.assistance_events SET
+    -- title is required and never cleared: a blank/NULL argument keeps the current title.
+    title       = COALESCE(NULLIF(btrim(p_title), ''), title),
+    event_type  = COALESCE(p_event_type, event_type),
+    -- Clearable text fields: named in p_clear -> NULL; else COALESCE (set-or-keep).
+    description = CASE WHEN 'description'   = ANY(p_clear) THEN NULL ELSE COALESCE(p_description, description) END,
+    location_name = CASE WHEN 'location_name' = ANY(p_clear) THEN NULL ELSE COALESCE(p_location_name, location_name) END,
+    address     = CASE WHEN 'address'       = ANY(p_clear) THEN NULL ELSE COALESCE(p_address, address) END,
+    city        = CASE WHEN 'city'          = ANY(p_clear) THEN NULL ELSE COALESCE(p_city, city) END,
+    state       = CASE WHEN 'state'         = ANY(p_clear) THEN NULL ELSE COALESCE(p_state, state) END,
+    zip_code    = CASE WHEN 'zip_code'      = ANY(p_clear) THEN NULL ELSE COALESCE(p_zip_code, zip_code) END,
+    rrule       = CASE WHEN 'rrule'         = ANY(p_clear) THEN NULL ELSE COALESCE(p_rrule, rrule) END,
+    default_capacity = COALESCE(p_default_capacity, default_capacity),
+    requires_registration = COALESCE(p_requires_registration, requires_registration),
+    -- Retirement: p_is_active=false retires the event (hidden from the feed + scheduler
+    -- default); NULL leaves it unchanged. Reactivation (true) is symmetric.
+    is_active   = COALESCE(p_is_active, is_active),
+    -- Clearing the address wins (F8: no address -> no pin); otherwise touch location/accuracy
+    -- only when a re-geocode was requested (address changed to a new value).
+    location = CASE WHEN v_clear_addr THEN NULL
+                    WHEN p_regeocode
+                    THEN CASE WHEN v_precise
+                              THEN ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
+                              ELSE NULL END
+                    ELSE location END,
+    geocode_accuracy = CASE WHEN v_clear_addr THEN NULL
+                            WHEN p_regeocode
+                            THEN CASE WHEN v_precise THEN p_geocode_accuracy ELSE 'approximate' END
+                            ELSE geocode_accuracy END,
+    geocode_confidence = CASE WHEN v_clear_addr THEN NULL
+                              WHEN p_regeocode THEN p_geocode_confidence
+                              ELSE geocode_confidence END
+  WHERE id = p_event_id;
+
+  -- D1: RETIRING an event (p_is_active=false) cancels only occurrences that have NOT yet
+  -- STARTED (starts_at > now), so their members' early ("I'm coming") intents never rot into
+  -- no-shows. An occurrence already IN PROGRESS continues to its end: members there may still
+  -- confirm in the window, the organizer keeps the 24h grace, and it counts toward attendance
+  -- normally (the event-inactive gate in check_in/organizer_confirm applies only pre-start).
+  -- ENDED occurrences are untouched — their attendance history is permanent (D2). A cancelled
+  -- occurrence never counts in rates; confirmed presence keeps its private credit regardless.
+  IF p_is_active IS FALSE THEN
+    UPDATE public.event_occurrences
+       SET status = 'cancelled'
+     WHERE event_id = p_event_id
+       AND status NOT IN ('cancelled','completed')
+       AND starts_at > now();
+  END IF;
+  RETURN p_event_id;
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,int,boolean,double precision,double precision,text,text,boolean,boolean,text[]) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,int,boolean,double precision,double precision,text,text,boolean,boolean,text[]) TO authenticated;
+
+-- ============================================================================
+-- 7. R6 parity — reconcile credits ONLY confirmed check-ins
+-- ============================================================================
+-- CREATE OR REPLACE from the LATEST body (20261006000000 P2.1b), byte-for-byte, with the
+-- SINGLE change: the event_checkin loop now filters status='confirmed' so the nightly
+-- self-heal matches the confirmation-time trigger exactly (no early row is ever credited).
+CREATE OR REPLACE FUNCTION public.reconcile_engagement(p_user uuid DEFAULT NULL)
+  RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public, pg_temp
+  SET lock_timeout = '5s'
+AS $fn$
+DECLARE r record; v_family text; v_author uuid;
+BEGIN
+  -- like (A1: liker <> post author)
+  FOR r IN SELECT pl.user_id, pl.post_id, p.user_id AS author, p.resource_id FROM public.post_likes pl
+           JOIN public.posts p ON p.id = pl.post_id
+           WHERE pl.user_id <> p.user_id AND (p_user IS NULL OR pl.user_id = p_user) LOOP
+    SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
+    PERFORM public.record_engagement_event(r.user_id,'like','post',r.post_id,'post_likes',r.user_id::text||':'||r.post_id::text,v_family,false);
+  END LOOP;
+  -- poll_vote (A1: voter <> post author)
+  FOR r IN SELECT pv.user_id, pv.poll_id, p.user_id AS author, p.resource_id FROM public.poll_votes pv
+           JOIN public.polls pl ON pl.id = pv.poll_id JOIN public.posts p ON p.id = pl.post_id
+           WHERE pv.user_id <> p.user_id AND (p_user IS NULL OR pv.user_id = p_user) LOOP
+    SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
+    PERFORM public.record_engagement_event(r.user_id,'poll_vote','poll',r.poll_id,'poll_votes',r.user_id::text||':'||r.poll_id::text,v_family,false);
+  END LOOP;
+  -- follow (A1: follower <> following)
+  FOR r IN SELECT follower_id, following_id FROM public.follows WHERE follower_id <> following_id AND (p_user IS NULL OR follower_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.follower_id,'follow','user',r.following_id,'follows',r.follower_id::text||':'||r.following_id::text,NULL,false);
+  END LOOP;
+  -- comment (A1: commenter <> post author; visible only)
+  FOR r IN SELECT DISTINCT pc.user_id, pc.post_id, p.user_id AS author, p.resource_id FROM public.post_comments pc
+           JOIN public.posts p ON p.id = pc.post_id
+           WHERE (pc.is_hidden IS NOT TRUE) AND pc.user_id <> p.user_id AND (p_user IS NULL OR pc.user_id = p_user) LOOP
+    SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
+    PERFORM public.record_engagement_event(r.user_id,'comment','post',r.post_id,'post_comments',r.user_id::text||':'||r.post_id::text,v_family,false);
+  END LOOP;
+  -- petition_signature (private; A1: signer <> petition creator)
+  FOR r IN SELECT ps.signer_id, ps.petition_id FROM public.petition_signatures ps
+           JOIN public.petitions pt ON pt.id = ps.petition_id
+           WHERE ps.signer_id IS DISTINCT FROM pt.created_by AND (p_user IS NULL OR ps.signer_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.signer_id,'petition_signature','petition',r.petition_id,'petition_signatures',r.signer_id::text||':'||r.petition_id::text,NULL,false);
+  END LOOP;
+  -- event_checkin (private) — W1.6a R6: ONLY confirmed attendance earns the credit.
+  FOR r IN SELECT user_id, occurrence_id FROM public.event_checkins WHERE user_id IS NOT NULL AND status = 'confirmed' AND (p_user IS NULL OR user_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.user_id,'event_checkin','event',r.occurrence_id,'event_checkins',r.user_id::text||':'||r.occurrence_id::text,NULL,false);
+  END LOOP;
+  -- safety_alert_vote (A1: voter <> alert creator; private)
+  FOR r IN SELECT v.voter_id, v.alert_id FROM public.safety_alert_votes v JOIN public.safety_alerts a ON a.id = v.alert_id
+           WHERE v.voter_id IS DISTINCT FROM a.created_by AND (p_user IS NULL OR v.voter_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.voter_id,'safety_alert_vote','safety_alert',r.alert_id,'safety_alert_votes',r.voter_id::text||':'||r.alert_id::text,NULL,false);
+  END LOOP;
+  -- message (private; once per conversation)
+  FOR r IN SELECT DISTINCT sender_id, conversation_id FROM public.messages WHERE p_user IS NULL OR sender_id = p_user LOOP
+    PERFORM public.record_engagement_event(r.sender_id,'message','conversation',r.conversation_id,'messages',r.sender_id::text||':'||r.conversation_id::text,NULL,false);
+  END LOOP;
+  -- resource_bookmark (A1: user <> resource submitter; private)
+  FOR r IN SELECT rb.user_id, rb.resource_id, res.category, res.submitted_by FROM public.resource_bookmarks rb
+           JOIN public.resources res ON res.id = rb.resource_id
+           WHERE rb.user_id IS DISTINCT FROM res.submitted_by AND (p_user IS NULL OR rb.user_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.user_id,'resource_bookmark','resource',r.resource_id,'resource_bookmarks',r.user_id::text||':'||r.resource_id::text,public.engagement_category_family(r.category),false);
+  END LOOP;
+  -- saved_resource (A1: user <> resource submitter; private)
+  FOR r IN SELECT sr.user_id, sr.resource_id, res.category, res.submitted_by FROM public.saved_resources sr
+           JOIN public.resources res ON res.id = sr.resource_id
+           WHERE sr.resource_id IS NOT NULL AND sr.user_id IS DISTINCT FROM res.submitted_by AND (p_user IS NULL OR sr.user_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.user_id,'saved_resource','resource',r.resource_id,'saved_resources',r.user_id::text||':'||r.resource_id::text,public.engagement_category_family(r.category),false);
+  END LOOP;
+  -- opt_in completed: provider (public) + seeker (private)
+  FOR r IN SELECT oi.id, oi.seeker_id, oi.resource_id, p.user_id AS author FROM public.resource_opt_ins oi
+           JOIN public.posts p ON p.id = oi.post_id
+           WHERE oi.status = 'completed' AND (p_user IS NULL OR oi.seeker_id = p_user OR p.user_id = p_user) LOOP
+    SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
+    PERFORM public.record_engagement_event(r.author,'opt_in_completed_provider','opt_in',r.id,'resource_opt_ins',r.id::text,v_family,false);
+    PERFORM public.record_engagement_event(r.seeker_id,'opt_in_completed_seeker','opt_in',r.id,'resource_opt_ins',r.id::text,v_family,false);
+  END LOOP;
+  -- conversation completed: volunteer (public) + requester (private)
+  FOR r IN SELECT c.id, c.volunteer_id, c.requester_id, c.resource_id FROM public.conversations c
+           WHERE c.status = 'completed' AND (p_user IS NULL OR c.volunteer_id = p_user OR c.requester_id = p_user) LOOP
+    SELECT public.engagement_category_family(res.category) INTO v_family FROM public.resources res WHERE res.id = r.resource_id;
+    PERFORM public.record_engagement_event(r.volunteer_id,'conversation_completed_volunteer','conversation',r.id,'conversations',r.id::text,v_family,false);
+    PERFORM public.record_engagement_event(r.requester_id,'conversation_completed_requester','conversation',r.id,'conversations',r.id::text,v_family,false);
+  END LOOP;
+  -- review_received (private; keyed on anchor)
+  FOR r IN SELECT id, reviewee_id, opt_in_id, conversation_id FROM public.reviews WHERE p_user IS NULL OR reviewee_id = p_user LOOP
+    v_family := NULL;
+    IF r.opt_in_id IS NOT NULL THEN
+      SELECT public.engagement_category_family(res.category) INTO v_family
+      FROM public.resource_opt_ins oi LEFT JOIN public.resources res ON res.id = oi.resource_id WHERE oi.id = r.opt_in_id;
+    ELSIF r.conversation_id IS NOT NULL THEN
+      SELECT public.engagement_category_family(res.category) INTO v_family
+      FROM public.conversations c JOIN public.resources res ON res.id = c.resource_id WHERE c.id = r.conversation_id;
+    END IF;
+    PERFORM public.record_engagement_event(r.reviewee_id,'review_received','review',COALESCE(r.opt_in_id, r.conversation_id),'reviews',COALESCE(r.opt_in_id, r.conversation_id)::text,v_family,true);
+  END LOOP;
+  -- safety_alert_verified (PRIVATE — reporter created_by has no client grant; admin; not self-verified)
+  FOR r IN SELECT id, created_by FROM public.safety_alerts
+           WHERE verified IS TRUE AND created_by IS NOT NULL AND verified_by IS NOT NULL AND verified_by <> created_by
+             AND (p_user IS NULL OR created_by = p_user) LOOP
+    PERFORM public.record_engagement_event(r.created_by,'safety_alert_verified','safety_alert',r.id,'safety_alerts',r.id::text,NULL,true);
+  END LOOP;
+  -- resource_approved (public; admin; not self-approved)
+  FOR r IN SELECT id, submitted_by, category FROM public.resources
+           WHERE status = 'approved' AND submitted_by IS NOT NULL AND moderated_by IS NOT NULL AND moderated_by <> submitted_by
+             AND (p_user IS NULL OR submitted_by = p_user) LOOP
+    PERFORM public.record_engagement_event(r.submitted_by,'resource_approved','resource',r.id,'resources',r.id::text,public.engagement_category_family(r.category),true);
+  END LOOP;
+  -- appreciation_gift (P2.1b, USER RULING) — PUBLIC badge level; edge stays private in
+  -- appreciation_gifts. Credit the RECEIVER once per DISTINCT giver (target_id = giver_id), so
+  -- the counter = number of distinct non-guest givers — byte-identical to give_appreciation's
+  -- inline write (same actor/kind/target/source_pk). DISTINCT collapses repeat gifts from one
+  -- giver to a single credit; record_engagement_event additionally skips any guest receiver.
+  -- ADDITIVE-only (ON CONFLICT DO NOTHING): a credit for a giver whose account was later
+  -- deleted (their gift rows CASCADE away) is never recreated here, but is also never removed —
+  -- the surviving ledger row keeps it (target_id has no FK). See I3a in the header.
+  FOR r IN SELECT DISTINCT receiver_id, giver_id FROM public.appreciation_gifts
+           WHERE (p_user IS NULL OR receiver_id = p_user) LOOP
+    PERFORM public.record_engagement_event(r.receiver_id,'appreciation_gift','user',r.giver_id,'appreciation_gifts',r.receiver_id::text||':'||r.giver_id::text,NULL,false);
+  END LOOP;
+  -- post_created (A2: author credited iff a QUALIFYING outside engagement exists by a
+  -- non-guest ≠ author — a like, a NON-HIDDEN comment, a POLL VOTE, or an opt-in. This must
+  -- match the live triggers exactly (poll_vote also credits post_created; hidden comments do
+  -- not). The EXISTS proves outside engagement; family is derived from the post.
+  FOR r IN SELECT p.id, p.user_id, p.resource_id, p.metadata FROM public.posts p
+           WHERE (p_user IS NULL OR p.user_id = p_user)
+             AND EXISTS (
+               SELECT 1 FROM public.post_likes pl JOIN auth.users u ON u.id = pl.user_id
+                 WHERE pl.post_id = p.id AND pl.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.post_comments pc JOIN auth.users u ON u.id = pc.user_id
+                 WHERE pc.post_id = p.id AND pc.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+                   AND pc.is_hidden IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.poll_votes pv JOIN public.polls pol ON pol.id = pv.poll_id
+                 JOIN auth.users u ON u.id = pv.user_id
+                 WHERE pol.post_id = p.id AND pv.user_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+               UNION ALL
+               SELECT 1 FROM public.resource_opt_ins oi JOIN auth.users u ON u.id = oi.seeker_id
+                 WHERE oi.post_id = p.id AND oi.seeker_id <> p.user_id AND u.is_anonymous IS NOT TRUE
+             ) LOOP
+    v_family := NULL;
+    IF r.resource_id IS NOT NULL THEN
+      SELECT public.engagement_category_family(category) INTO v_family FROM public.resources WHERE id = r.resource_id;
+    END IF;
+    IF v_family IS NULL AND r.metadata ? 'categories' AND jsonb_typeof(r.metadata->'categories') = 'array'
+       AND jsonb_array_length(r.metadata->'categories') > 0 THEN
+      v_family := public.engagement_family_from_chip(r.metadata->'categories'->>0);
+    END IF;
+    PERFORM public.record_engagement_event(r.user_id,'post_created','post',r.id,'posts',r.id::text,v_family,false);
+  END LOOP;
+END;
+$fn$;
+
+-- Reconcile stays non-client-executable (smoke 26/27 verify).
+REVOKE EXECUTE ON FUNCTION public.reconcile_engagement(uuid) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.reconcile_engagement(uuid) TO service_role;
+
+-- ============================================================================
+-- 8. I5 finding #6 — assistance_events location/address is RPC-only
+-- ============================================================================
+-- Close the direct-PostgREST bypass: an org admin (or platform admin) could UPDATE
+-- assistance_events directly (events_update_org_admin / events_admin_*), writing any
+-- location/tier the client chose and skipping the RPC's coordinate validation. Every
+-- write now goes through admin_create_event / admin_update_event (SECDEF, owner-run, so
+-- they are unaffected by these revocations). The only in-app writer is the scheduler,
+-- which already creates via admin_create_event and (this wave) edits via admin_update_event
+-- — no direct client write remains. SELECT policies (events_select_active / admin_select)
+-- and event_occurrences writes (occurrences_org_admin_* — the scheduler adds occurrences
+-- directly, no location on that table) are untouched.
+DROP POLICY IF EXISTS events_insert_org_admin ON public.assistance_events;
+DROP POLICY IF EXISTS events_update_org_admin ON public.assistance_events;
+DROP POLICY IF EXISTS events_admin_insert     ON public.assistance_events;
+DROP POLICY IF EXISTS events_admin_update     ON public.assistance_events;
+DROP POLICY IF EXISTS events_admin_delete     ON public.assistance_events;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.assistance_events FROM anon, authenticated;
+
+-- ============================================================================
+-- 9. R1 finding #3 — only platform admins grant/change/remove org memberships
+-- ============================================================================
+-- Live policy let ANY org admin insert/update/delete organization_members with any role,
+-- so an org admin could mint another org admin (privilege escalation past R1: "only
+-- platform admins assign org admins"). Non-admin membership carries no powers of its own
+-- (role gates nothing but is_org_member's own-org visibility), so the simplest correct
+-- rule is: all membership WRITES are platform-admin-only. Org admins keep every event
+-- capability (scheduling, kiosk, attendance) but cannot touch the roster. SELECT
+-- (own-or-org visibility) is unchanged.
+DROP POLICY IF EXISTS org_members_insert_admin ON public.organization_members;
+DROP POLICY IF EXISTS org_members_update_admin ON public.organization_members;
+DROP POLICY IF EXISTS org_members_delete_admin ON public.organization_members;
+
+CREATE POLICY org_members_insert_platform_admin ON public.organization_members
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_current_user_admin());
+CREATE POLICY org_members_update_platform_admin ON public.organization_members
+  FOR UPDATE TO authenticated
+  USING (public.is_current_user_admin())
+  WITH CHECK (public.is_current_user_admin());
+CREATE POLICY org_members_delete_platform_admin ON public.organization_members
+  FOR DELETE TO authenticated
+  USING (public.is_current_user_admin());
+
+-- H1: a platform admin manages ANY org's roster from the Organizations tab. The existing
+-- SELECT policy (org_members_select_own_or_org) only reveals your own rows + orgs you are a
+-- MEMBER of, so a platform admin who is not a member saw 0 rows — the roster read came back
+-- empty and every DELETE/UPDATE ... RETURNING silently affected 0 rows (RETURNING needs
+-- SELECT visibility). This additive policy gives platform admins full roster visibility; org
+-- admins are unaffected (they still cannot see other orgs, and the write policies above keep
+-- roster changes platform-admin-only, so org admins still cannot change admin membership).
+DROP POLICY IF EXISTS org_members_select_platform_admin ON public.organization_members;
+CREATE POLICY org_members_select_platform_admin ON public.organization_members
+  FOR SELECT TO authenticated
+  USING (public.is_current_user_admin());
+
+-- ============================================================================
+-- 10. Finding #4 — org-admin reachability of the admin surface (events only)
+-- ============================================================================
+-- is_org_admin_any(): a boolean the SPA uses to reveal the admin entry + route guard for
+-- a non-platform-admin who administers at least one org. SECDEF (reads memberships across
+-- rows), granted to authenticated only.
+-- Only counts memberships of ACTIVE orgs: an org admin of a since-retired (inactive) org must
+-- not keep the organizer shell/route — consistent with check_in / organizer_confirm / admin_
+-- create_event, which all reject an inactive org.
+CREATE OR REPLACE FUNCTION public.is_org_admin_any()
+  RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members om
+      JOIN public.organizations o ON o.id = om.org_id
+     WHERE om.user_id = auth.uid() AND om.role = 'admin' AND o.is_active);
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.is_org_admin_any() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.is_org_admin_any() TO authenticated;
+
+-- get_admin_org_list: for a non-platform-admin, return ONLY orgs where the caller is an
+-- ADMIN (was: any membership). The scheduler's org selector then offers exactly the orgs
+-- an org admin may create/edit events for — matching admin_create_event's is_org_admin
+-- gate. Platform-admin path (all active orgs) is unchanged.
+CREATE OR REPLACE FUNCTION public.get_admin_org_list()
+RETURNS TABLE (id uuid, name text, org_type text)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN; END IF;
+  IF (SELECT is_admin FROM public.profiles WHERE profiles.id = auth.uid()) THEN
+    RETURN QUERY
+      SELECT o.id, o.name, o.org_type
+      FROM public.organizations o
+      WHERE o.is_active = true
+      ORDER BY o.name;
+  ELSE
+    RETURN QUERY
+      SELECT o.id, o.name, o.org_type
+      FROM public.organizations o
+      JOIN public.organization_members om ON om.org_id = o.id
+      WHERE om.user_id = auth.uid() AND om.role = 'admin' AND o.is_active = true
+      ORDER BY o.name;
+  END IF;
+END;
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.get_admin_org_list() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.get_admin_org_list() TO authenticated;
+
+-- ============================================================================
+-- 11. M3 — organizer confirm bounds can't be retroactively bypassed
+-- ============================================================================
+-- organizer_confirm / check_in bound presence to [starts_at − 30m, ends_at(+grace)]. A
+-- client (org admin) who could still edit event_occurrences.starts_at/ends_at AFTER people
+-- checked in could slide the window and turn a confirmed row into a no-show (or vice versa),
+-- or reopen a cancelled/completed occurrence to accept fresh check-ins. Once ANY check-in
+-- exists for an occurrence — a tracked event_checkins row OR a private anonymous claim — a
+-- CLIENT can no longer change its times, nor reopen it from a terminal state. Cancellation
+-- (status -> cancelled) is always allowed. Creating new occurrences (INSERT) is unaffected.
+-- Server-side writers (migrations, service_role: auth.uid() IS NULL) bypass the guard, so
+-- operational time corrections remain possible off-client. SECURITY DEFINER so it can read
+-- the private claims table. Reads both check-in sources; the (occurrence_id) indexes make it
+-- cheap.
+CREATE OR REPLACE FUNCTION public.event_occurrences_guard_checkin_bounds()
+  RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_has_checkins   boolean;
+  v_time_change    boolean;
+  v_event_change   boolean;  -- F2: event reassignment once check-ins exist
+  v_reopen         boolean;  -- K1: leaving a terminal (cancelled/completed) state at all
+  v_early_complete boolean;  -- F1: marked completed BEFORE it starts (would forge a no-show)
+  v_cancel_ended   boolean;  -- D2/K4: cancelling an occurrence that has already ended
+BEGIN
+  -- Only a real client session is constrained; server-side writers (auth.uid() NULL) pass.
+  IF auth.uid() IS NULL THEN RETURN NEW; END IF;
+
+  -- D2/K4: an occurrence that has ENDED (completed, or past ends_at) can no longer be
+  -- cancelled by a client — its attendance history (confirmed presence AND no-shows) is
+  -- permanent. This holds regardless of check-ins and is checked first. Server-side writers
+  -- bypass (above), so operational correction stays possible off-client. The org-deactivation
+  -- cascade only touches not-yet-ended occurrences, so it never trips this.
+  v_cancel_ended := (NEW.status = 'cancelled' AND OLD.status <> 'cancelled'
+                     AND (OLD.status = 'completed' OR OLD.ends_at < now()));
+  IF v_cancel_ended THEN
+    RAISE EXCEPTION 'This event has ended; its attendance history is permanent and it can no longer be cancelled.'
+      USING ERRCODE='P0001';
+  END IF;
+
+  v_time_change    := (NEW.starts_at IS DISTINCT FROM OLD.starts_at
+                       OR NEW.ends_at IS DISTINCT FROM OLD.ends_at);
+  -- F2: reassigning the occurrence to another event (same-org OR cross-org) after any
+  -- check-in exists would silently migrate confirmed presence / no-show accounting onto a
+  -- different event, so it is forbidden exactly like a time change.
+  v_event_change   := (NEW.event_id IS DISTINCT FROM OLD.event_id);
+  -- K1: once cancelled or completed, a CLIENT can no longer move the occurrence OUT of that
+  -- terminal state to ANY other status (covers cancelled->upcoming, cancelled->completed —
+  -- the retire->reactivate->complete path — and completed->upcoming). A cancelled occurrence
+  -- stays cancelled; a completed one stays completed.
+  v_reopen         := (OLD.status IN ('cancelled','completed')
+                       AND NEW.status IS DISTINCT FROM OLD.status);
+  -- F1: an organizer marking an occurrence 'completed' BEFORE its starts_at, while people
+  -- hold early ("I'm coming") rows, would end it prematurely and turn every unconfirmed
+  -- early row into a no-show. Refuse. Cancellation (status -> cancelled) is always allowed;
+  -- normal completion once the occurrence has actually started (now >= starts_at) is allowed.
+  v_early_complete := (NEW.status = 'completed' AND OLD.status <> 'completed'
+                       AND now() < OLD.starts_at);
+
+  -- Nothing to guard unless a protected mutation is attempted.
+  IF NOT (v_time_change OR v_event_change OR v_reopen OR v_early_complete) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT EXISTS (SELECT 1 FROM public.event_checkins        WHERE occurrence_id = OLD.id)
+      OR EXISTS (SELECT 1 FROM public.event_anonymous_claims WHERE occurrence_id = OLD.id)
+    INTO v_has_checkins;
+  IF NOT v_has_checkins THEN RETURN NEW; END IF;
+
+  IF v_event_change THEN
+    RAISE EXCEPTION 'This event has check-ins; it can no longer be reassigned to a different event.'
+      USING ERRCODE='P0001';
+  END IF;
+  IF v_time_change THEN
+    RAISE EXCEPTION 'This event has check-ins; its start/end time can no longer be changed.'
+      USING ERRCODE='P0001';
+  END IF;
+  -- K1: leaving a terminal state (cancelled->anything / completed->anything) is reported first,
+  -- so a cancelled->completed attempt (retire->reactivate->complete) gets the accurate reopen
+  -- message rather than the early-complete one.
+  IF v_reopen THEN
+    RAISE EXCEPTION 'This event has check-ins and cannot be reopened once cancelled or completed.'
+      USING ERRCODE='P0001';
+  END IF;
+  RAISE EXCEPTION 'This event has check-ins; it cannot be marked completed before it starts (cancel it instead).'
+    USING ERRCODE='P0001';
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_event_occurrences_guard_checkin_bounds ON public.event_occurrences;
+CREATE TRIGGER trg_event_occurrences_guard_checkin_bounds
+  BEFORE UPDATE ON public.event_occurrences
+  FOR EACH ROW EXECUTE FUNCTION public.event_occurrences_guard_checkin_bounds();
+
+REVOKE EXECUTE ON FUNCTION public.event_occurrences_guard_checkin_bounds()
+  FROM PUBLIC, anon, authenticated;
+
+-- ============================================================================
+-- 12. F5 — clients cannot DELETE an occurrence that has check-ins or claims
+-- ============================================================================
+-- The FK from event_checkins -> event_occurrences is ON DELETE CASCADE, so a client
+-- (org or platform admin) deleting an occurrence would silently erase its confirmed
+-- presence + no-show history. Once ANY check-in (tracked row OR private anonymous claim)
+-- exists, a CLIENT may no longer DELETE the occurrence — they cancel it instead (which
+-- preserves the rows and drops it from active accounting). An occurrence with no check-ins
+-- is still freely deletable by org/platform admins. Server-side writers (auth.uid() NULL:
+-- migrations, service_role, and the account-deletion cascade) bypass, so operational
+-- cleanup and user deletion remain possible off-client.
+CREATE OR REPLACE FUNCTION public.event_occurrences_guard_delete()
+  RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN OLD; END IF;
+  IF EXISTS (SELECT 1 FROM public.event_checkins        WHERE occurrence_id = OLD.id)
+     OR EXISTS (SELECT 1 FROM public.event_anonymous_claims WHERE occurrence_id = OLD.id) THEN
+    RAISE EXCEPTION 'This event has check-ins and cannot be deleted; cancel it instead.'
+      USING ERRCODE='P0001';
+  END IF;
+  RETURN OLD;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_event_occurrences_guard_delete ON public.event_occurrences;
+CREATE TRIGGER trg_event_occurrences_guard_delete
+  BEFORE DELETE ON public.event_occurrences
+  FOR EACH ROW EXECUTE FUNCTION public.event_occurrences_guard_delete();
+
+REVOKE EXECUTE ON FUNCTION public.event_occurrences_guard_delete()
+  FROM PUBLIC, anon, authenticated;
+
+-- ============================================================================
+-- 13. F7 — an INACTIVE org's events are invisible to members + non-manageable by org admins
+-- ============================================================================
+-- (a) Member-facing visibility: events_select_active revealed any active event regardless of
+-- its ORG's active state, so a retired org's events stayed in the member Events list (and
+-- members could open a check-in the RPC would then reject). Require the OWNING ORG active too.
+-- occurrences_select_active_event mirrors this. Platform admins keep full visibility through
+-- the *_admin_select policies; org admins of an ACTIVE org are unaffected.
+DROP POLICY IF EXISTS events_select_active ON public.assistance_events;
+CREATE POLICY events_select_active ON public.assistance_events
+  FOR SELECT
+  USING (is_active = true
+         AND EXISTS (SELECT 1 FROM public.organizations o
+                      WHERE o.id = assistance_events.org_id AND o.is_active = true));
+
+DROP POLICY IF EXISTS occurrences_select_active_event ON public.event_occurrences;
+CREATE POLICY occurrences_select_active_event ON public.event_occurrences
+  FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.assistance_events ae
+                   JOIN public.organizations o ON o.id = ae.org_id
+                  WHERE ae.id = event_occurrences.event_id
+                    AND ae.is_active = true AND o.is_active = true));
+
+-- ----------------------------------------------------------------------------
+-- G1 — RETIRED-EVENT REACHABILITY (round-4 fix, user ruling D1).
+-- The plain, anon-safe policies above reveal ONLY active events of active orgs. D1 keeps an
+-- in-progress occurrence of a RETIRED event LIVE (members may still confirm; the organizer keeps
+-- the 24h grace) and its ended occurrences are permanent history (D2) — but the people D1 says
+-- can still act could not SEE the row: a retired event is not SELECT-visible, and because the
+-- pre-existing occurrences_org_admin_select policy joins assistance_events under RLS, hiding the
+-- retired event also hid its occurrences from the org admin (scheduler/kiosk/attendance blind).
+--
+-- These TWO extra permissive policies restore exactly the needed reachability, no wider, and are
+-- scoped TO authenticated because they call SECDEF helpers (REVOKEd from anon) and because only
+-- signed-in members can act — so anon/guest read exposure is unchanged. RLS is permissive-OR, so
+-- these only ADD visibility; active-event visibility still flows through the plain policies above.
+--   • A signed-in MEMBER additionally sees an occurrence that is IN PROGRESS right now
+--     (status not terminal, starts_at ≤ now < ends_at) of a retired event whose org is active,
+--     plus that occurrence's parent event — enough to render it in the Events list with "I'm here".
+--     Not-started (cancelled-on-retire) and ended occurrences of a retired event stay hidden from
+--     plain members: no one sees a retired event's future occurrences as check-in-able.
+--   • An ORG ADMIN of an ACTIVE org additionally sees ALL of their own org's events and their
+--     occurrences regardless of the event's is_active — so a retired event's in-progress occurrence
+--     is reachable in the scheduler/kiosk and its ENDED occurrences stay reachable for Attendance
+--     (D2 history). The org-active gate keeps F7 intact (an admin of a since-deactivated org still
+--     sees nothing here). The occurrence-bounds + D2 ended-cancel guards still refuse any illegal
+--     write, so this widens reads only.
+-- SECDEF helpers compute reachability against the base tables directly (RLS bypassed inside the
+-- definer), so they never re-trip the nested-RLS filtering that caused the blind spot.
+CREATE OR REPLACE FUNCTION public.w1_6a_event_authed_reachable(p_event uuid)
+  RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.assistance_events ae
+      JOIN public.organizations o ON o.id = ae.org_id
+     WHERE ae.id = p_event
+       AND o.is_active
+       AND ( public.is_org_admin(ae.org_id)                       -- org admin: all own-org events
+             OR ( NOT EXISTS (SELECT 1 FROM auth.users u          -- member: real (non-guest) only
+                               WHERE u.id = auth.uid() AND u.is_anonymous IS TRUE)
+                  AND EXISTS (SELECT 1 FROM public.event_occurrences eo  -- ...with an in-progress occ
+                               WHERE eo.event_id = ae.id
+                                 AND eo.status NOT IN ('cancelled','completed')
+                                 AND eo.starts_at <= now() AND now() < eo.ends_at) ) ) );  -- w1_6a_INPROGRESS_EV
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_event_authed_reachable(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.w1_6a_event_authed_reachable(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.w1_6a_occ_authed_reachable(p_occ uuid)
+  RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.event_occurrences eo
+      JOIN public.assistance_events ae ON ae.id = eo.event_id
+      JOIN public.organizations o ON o.id = ae.org_id
+     WHERE eo.id = p_occ
+       AND o.is_active
+       AND ( public.is_org_admin(ae.org_id)                       -- org admin: all own-org occurrences
+             OR ( eo.status NOT IN ('cancelled','completed')      -- member: in-progress-retired only,
+                  AND eo.starts_at <= now() AND now() < eo.ends_at  -- ...real (non-guest) member only
+                  AND NOT EXISTS (SELECT 1 FROM auth.users u
+                                   WHERE u.id = auth.uid() AND u.is_anonymous IS TRUE) ) ) );  -- w1_6a_INPROGRESS_OCC
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_occ_authed_reachable(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.w1_6a_occ_authed_reachable(uuid) TO authenticated;
+
+DROP POLICY IF EXISTS events_select_reachable_authed ON public.assistance_events;
+CREATE POLICY events_select_reachable_authed ON public.assistance_events
+  FOR SELECT TO authenticated
+  USING (public.w1_6a_event_authed_reachable(id));
+
+DROP POLICY IF EXISTS occurrences_select_reachable_authed ON public.event_occurrences;
+CREATE POLICY occurrences_select_reachable_authed ON public.event_occurrences
+  FOR SELECT TO authenticated
+  USING (public.w1_6a_occ_authed_reachable(id));
+
+-- (b) Org-admin occurrence management (INSERT/UPDATE) requires the owning ORG active — an
+-- admin of a retired org cannot add or edit occurrences. The predicate is the prior
+-- is_org_admin(ae.org_id) check plus an org-active clause; DELETE is left to the F5 guard +
+-- the existing predicate (cancellation is the intended path anyway). Platform-admin policies
+-- (occurrences_admin_*) are untouched.
+DROP POLICY IF EXISTS occurrences_org_admin_insert ON public.event_occurrences;
+CREATE POLICY occurrences_org_admin_insert ON public.event_occurrences
+  FOR INSERT TO authenticated
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assistance_events ae
+                        JOIN public.organizations o ON o.id = ae.org_id
+                       WHERE ae.id = event_occurrences.event_id
+                         AND public.is_org_admin(ae.org_id) AND o.is_active));
+DROP POLICY IF EXISTS occurrences_org_admin_update ON public.event_occurrences;
+CREATE POLICY occurrences_org_admin_update ON public.event_occurrences
+  FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.assistance_events ae
+                   JOIN public.organizations o ON o.id = ae.org_id
+                  WHERE ae.id = event_occurrences.event_id
+                    AND public.is_org_admin(ae.org_id) AND o.is_active))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assistance_events ae
+                        JOIN public.organizations o ON o.id = ae.org_id
+                       WHERE ae.id = event_occurrences.event_id
+                         AND public.is_org_admin(ae.org_id) AND o.is_active));
+
+-- ============================================================================
+-- 13b. K2 / MED-1 — deactivating an org cancels its not-yet-ended occurrences
+-- ============================================================================
+-- Deactivating an ORG is immediate: because a deactivated org refuses ALL check-ins
+-- (check_in / organizer_confirm gate on v_org_active first), an in-progress occurrence can no
+-- longer be served, and its early intents must never rot into no-shows once time passes.
+-- So org deactivation cancels EVERY occurrence of the org's events that has NOT yet ENDED
+-- (both not-started AND in-progress: status not terminal AND ends_at > now) — the same shape
+-- as a per-event D1 retire, but for the whole org and including in-progress ones. This is the
+-- consistent, D1+D2-aligned rule (K3): a single-event RETIRE leaves in-progress occurrences
+-- LIVE (its org still operates, members there can still confirm); an ORG deactivation cancels
+-- them (the org is suspended, nobody can check in), so refused members never become no-shows.
+-- ENDED occurrences are untouched — their attendance history is permanent (D2) and keeps
+-- counting in rates regardless of the org's now-inactive state (K4). Confirmed presence on a
+-- since-cancelled in-progress occurrence keeps its private engagement credit (granted at
+-- confirm, independent of occurrence status) but no longer counts toward the show-rate,
+-- because a voided (cancelled) occurrence did not run. Runs on every UPDATE path (there is no
+-- deactivation RPC — a platform/org admin toggles is_active directly through PostgREST), so a
+-- trigger is the only site that catches them all. SECURITY DEFINER so it can cancel across the
+-- events/occurrences join; the cascade sets status->cancelled on not-yet-ended rows only, which
+-- always passes the occurrence-bounds + ended-cancel guards.
+CREATE OR REPLACE FUNCTION public.organizations_cascade_deactivate()
+  RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF OLD.is_active IS TRUE AND NEW.is_active IS NOT TRUE THEN
+    UPDATE public.event_occurrences eo
+       SET status = 'cancelled'
+      FROM public.assistance_events ae
+     WHERE ae.id = eo.event_id
+       AND ae.org_id = NEW.id
+       AND eo.status NOT IN ('cancelled','completed')
+       AND eo.ends_at > now();
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_organizations_cascade_deactivate ON public.organizations;
+CREATE TRIGGER trg_organizations_cascade_deactivate
+  AFTER UPDATE OF is_active ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION public.organizations_cascade_deactivate();
+
+REVOKE EXECUTE ON FUNCTION public.organizations_cascade_deactivate()
+  FROM PUBLIC, anon, authenticated;
+
+-- ============================================================================
+-- 14. F3 — platform dashboards count CONFIRMED presence only
+-- ============================================================================
+-- dashboard_event_stats + community_people_fed aggregated EVERY event_checkins row (early
+-- intents, no-shows, and confirmed presence alike), so "check-ins" and "people fed" were
+-- inflated by unconfirmed intents. Redefine both — byte-for-byte identical to the W5 bodies
+-- except the check-in aggregates now filter status='confirmed', so the numbers equal true
+-- confirmed presence. Consumers (overview-tab.tsx, dashboard-section.tsx) read the same
+-- fields and need no change. dashboard_adoption/resource/petition stats are untouched.
+CREATE OR REPLACE FUNCTION public.community_people_fed(
+  p_start_date date DEFAULT (CURRENT_DATE - INTERVAL '30 days'),
+  p_end_date   date DEFAULT CURRENT_DATE
+)
+RETURNS TABLE (
+  period_start    date,
+  period_end      date,
+  total_visits    bigint,
+  people_fed      bigint,
+  suppressed      boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_visits bigint;
+  v_fed    bigint;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN; END IF;
+  IF NOT is_current_user_admin() THEN RETURN; END IF;
+
+  SELECT COUNT(*), COALESCE(SUM(ec.household_size), 0)
+  INTO v_visits, v_fed
+  FROM event_checkins ec
+  JOIN event_occurrences eo ON eo.id = ec.occurrence_id
+  WHERE eo.starts_at::date BETWEEN p_start_date AND p_end_date
+    AND ec.status = 'confirmed';   -- F3: confirmed presence only
+
+  IF v_visits < 20 THEN
+    RETURN QUERY SELECT p_start_date, p_end_date, v_visits, NULL::bigint, true;
+  ELSE
+    RETURN QUERY SELECT p_start_date, p_end_date, v_visits, v_fed, false;
+  END IF;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION community_people_fed(date, date) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION community_people_fed(date, date) FROM anon;
+GRANT  EXECUTE ON FUNCTION community_people_fed(date, date) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.dashboard_event_stats()
+RETURNS TABLE (
+  total_orgs          bigint,
+  active_events       bigint,
+  upcoming_30d        bigint,
+  total_checkins_30d  bigint,
+  people_fed_30d      bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT is_current_user_admin() THEN RETURN; END IF;
+  RETURN QUERY
+  SELECT
+    (SELECT COUNT(*) FROM organizations WHERE is_active = true)::bigint,
+    (SELECT COUNT(*) FROM assistance_events WHERE is_active = true)::bigint,
+    (SELECT COUNT(*) FROM event_occurrences
+       WHERE status = 'upcoming'
+         AND starts_at BETWEEN NOW() AND NOW() + INTERVAL '30 days')::bigint,
+    (SELECT COUNT(*) FROM event_checkins ec
+       JOIN event_occurrences eo ON eo.id = ec.occurrence_id
+       WHERE eo.starts_at >= NOW() - INTERVAL '30 days'
+         AND ec.status = 'confirmed')::bigint,      -- F3: confirmed presence only
+    (SELECT COALESCE(SUM(ec.household_size), 0) FROM event_checkins ec
+       JOIN event_occurrences eo ON eo.id = ec.occurrence_id
+       WHERE eo.starts_at >= NOW() - INTERVAL '30 days'
+         AND ec.status = 'confirmed')::bigint;       -- F3: confirmed presence only
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION dashboard_event_stats() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION dashboard_event_stats() FROM anon;
+GRANT  EXECUTE ON FUNCTION dashboard_event_stats() TO authenticated;
+
+-- ============================================================================
+-- 15. F9 — drop the legacy get_occurrence_checkin_summary (buggy + superseded)
+-- ============================================================================
+-- The W4 helper has a 42702 ambiguous-column bug (its RETURNS TABLE out-param occurrence_id
+-- collides with the event_checkins column in its WHERE) AND counts deleted-attendee rows
+-- (user_id nulled by the FK) as anonymous. It has ZERO callers in the app (grep of apps/ +
+-- packages/ finds only the generated types entry) and no smoke reference; event_attendance
+-- fully supersedes it with the corrected is_anonymous-based semantics. Drop it rather than
+-- carry a broken, unused SECDEF surface.
+DROP FUNCTION IF EXISTS public.get_occurrence_checkin_summary(uuid);
+
+COMMIT;

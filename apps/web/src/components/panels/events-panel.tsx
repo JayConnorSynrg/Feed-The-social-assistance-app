@@ -5,6 +5,11 @@ import { Calendar, Loader2, AlertCircle, MapPin, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { CheckinSheet, type CheckinOccurrence } from './checkin-sheet'
+import {
+  computeCheckinButton,
+  type MyCheckinStatus,
+  type OccurrenceStatus,
+} from '@/lib/event-checkin'
 
 interface OccurrenceWithEvent {
   id: string
@@ -58,20 +63,27 @@ function getDateGroup(dateStr: string): 'today' | 'week' | 'upcoming' {
   const startOfNextDay = new Date(startOfToday.getTime() + 86400000)
   const startOfNextWeek = new Date(startOfToday.getTime() + 7 * 86400000)
 
-  if (d >= startOfToday && d < startOfNextDay) return 'today'
-  if (d >= startOfNextDay && d < startOfNextWeek) return 'week'
+  if (d < startOfNextDay) return 'today'          // started earlier today OR now in progress
+  if (d < startOfNextWeek) return 'week'
   return 'upcoming'
 }
 
 export function EventsPanel() {
   const supabase = createClient()
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, isAuthenticated, isAnonymous } = useAuth()
 
   const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
+  const [myStatuses, setMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
+  // Occurrences this member has already spent their one anonymous check-in on (own-only, via
+  // the my_anonymous_claims SECDEF RPC). The anonymous event_checkins row is unlinkable, so
+  // this RPC is the only way the member learns they are already counted anonymously (M2).
+  const [anonClaims, setAnonClaims] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
+  const [checkinConfirms, setCheckinConfirms] = useState(false)
   const [checkinOpen, setCheckinOpen] = useState(false)
+  const [checkinHasTracked, setCheckinHasTracked] = useState(false)
 
   const fetchOccurrences = useCallback(async () => {
     setLoading(true)
@@ -80,6 +92,8 @@ export function EventsPanel() {
       const now = new Date().toISOString()
       const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
+      // In-progress events stay listed: gate on ends_at >= now (not starts_at), so an event
+      // that has started but not ended still appears with its "I'm here" button.
       const { data, error: fetchError } = await supabase
         .from('event_occurrences')
         .select(`
@@ -102,26 +116,56 @@ export function EventsPanel() {
           )
         `)
         .eq('status', 'upcoming')
-        .gte('starts_at', now)
+        .gte('ends_at', now)
         .lte('starts_at', thirtyDaysOut)
         .order('starts_at', { ascending: true })
         .limit(50)
 
       if (fetchError) {
         setError(fetchError.message)
+        return
+      }
+      const occs = (data as unknown as OccurrenceWithEvent[]) ?? []
+      setOccurrences(occs)
+
+      // Load this user's own check-in state for the visible occurrences (own rows only,
+      // via RLS checkins_select_own). Guests have none.
+      if (isAuthenticated && !isAnonymous && occs.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const ids = occs.map((o) => o.id)
+          const { data: mine } = await supabase
+            .from('event_checkins')
+            .select('occurrence_id, status')
+            .eq('user_id', user.id)
+            .in('occurrence_id', ids)
+          const map: Record<string, MyCheckinStatus> = {}
+          for (const row of mine ?? []) {
+            map[row.occurrence_id as string] = (row.status as MyCheckinStatus) ?? 'confirmed'
+          }
+          setMyStatuses(map)
+
+          // Own anonymous claims for the visible occurrences (unlinkable rows are invisible
+          // above; this SECDEF RPC returns only the caller's own claimed occurrence ids).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: claims } = await (supabase.rpc as any)('my_anonymous_claims', { p_occurrence_ids: ids })
+          const claimed = new Set<string>()
+          for (const row of (claims as Array<{ occurrence_id: string }> | null) ?? []) {
+            if (row?.occurrence_id) claimed.add(row.occurrence_id)
+          }
+          setAnonClaims(claimed)
+        }
       } else {
-        setOccurrences((data as unknown as OccurrenceWithEvent[]) ?? [])
+        setMyStatuses({})
+        setAnonClaims(new Set())
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events')
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, isAuthenticated, isAnonymous])
 
-  // Wait for auth to reconcile (guest OR user) before fetching so the query runs
-  // against the reconciled session, not a pre-reconciliation guest session.
-  // Gate on !authLoading only: event occurrences are guest-readable — no user required.
   useEffect(() => {
     if (!authLoading) {
       fetchOccurrences()
@@ -142,10 +186,7 @@ export function EventsPanel() {
       <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
         <AlertCircle className="w-7 h-7 text-red-400" aria-hidden="true" />
         <p className="text-sm text-stone-700">{error}</p>
-        <button
-          onClick={fetchOccurrences}
-          className="text-sm text-lime-700 underline underline-offset-2"
-        >
+        <button onClick={fetchOccurrences} className="text-sm text-lime-700 underline underline-offset-2">
           Try again
         </button>
       </div>
@@ -169,16 +210,15 @@ export function EventsPanel() {
   ]
 
   for (const occ of occurrences) {
-    const group = getDateGroup(occ.starts_at)
-    const g = groups.find((g) => g.key === group)
+    const g = groups.find((g) => g.key === getDateGroup(occ.starts_at))
     if (g) g.items.push(occ)
   }
 
   const nonEmptyGroups = groups.filter((g) => g.items.length > 0)
+  const nowMs = Date.now()
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Panel header */}
       <div className="flex items-center gap-2 pb-1">
         <Calendar className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
         <h2 className="text-lg font-bold text-stone-900">Community Events</h2>
@@ -195,6 +235,15 @@ export function EventsPanel() {
             const typeColor = EVENT_TYPE_COLORS[ev.event_type] ?? 'bg-stone-100 text-stone-700'
             const typeLabel = EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type
             const location = [ev.location_name, ev.city, ev.state].filter(Boolean).join(', ')
+
+            const btn = computeCheckinButton({
+              status: occ.status as OccurrenceStatus,
+              startsAtMs: new Date(occ.starts_at).getTime(),
+              endsAtMs: new Date(occ.ends_at).getTime(),
+              myStatus: myStatuses[occ.id] ?? 'none',
+              nowMs,
+              anonymousClaimed: anonClaims.has(occ.id),
+            })
 
             return (
               <div
@@ -243,27 +292,41 @@ export function EventsPanel() {
                   </span>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCheckinOccurrence({
-                      id: occ.id,
-                      starts_at: occ.starts_at,
-                      ends_at: occ.ends_at,
-                      event: ev
-                        ? {
-                            title: ev.title,
-                            location_name: ev.location_name ?? null,
-                            organization: ev.organization ?? null,
-                          }
-                        : null,
-                    })
-                    setCheckinOpen(true)
-                  }}
-                  className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
-                >
-                  Check In
-                </button>
+                {btn.actionable ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCheckinOccurrence({
+                        id: occ.id,
+                        starts_at: occ.starts_at,
+                        ends_at: occ.ends_at,
+                        event: {
+                          title: ev.title,
+                          location_name: ev.location_name ?? null,
+                          organization: ev.organization ?? null,
+                        },
+                      })
+                      setCheckinConfirms(btn.confirmsPresence)
+                      // Hide the anonymous option when the member already has a tracked row
+                      // (server refuses an anonymous check-in on top of one).
+                      setCheckinHasTracked((myStatuses[occ.id] ?? 'none') !== 'none')
+                      setCheckinOpen(true)
+                    }}
+                    className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
+                  >
+                    {btn.label}
+                  </button>
+                ) : (
+                  <span
+                    className={`self-start text-xs font-semibold px-3 py-1.5 rounded-xl ${
+                      btn.kind === 'attended' || btn.kind === 'checked_early' || btn.kind === 'anonymous'
+                        ? 'bg-lime-100 text-lime-800'
+                        : 'bg-stone-100 text-stone-500'
+                    }`}
+                  >
+                    {btn.label}
+                  </span>
+                )}
               </div>
             )
           })}
@@ -273,10 +336,13 @@ export function EventsPanel() {
         <CheckinSheet
           occurrence={checkinOccurrence}
           open={checkinOpen}
+          confirmsPresence={checkinConfirms}
+          hasTrackedRow={checkinHasTracked}
           onOpenChange={(open) => {
             setCheckinOpen(open)
             if (!open) setCheckinOccurrence(null)
           }}
+          onSuccess={() => { void fetchOccurrences() }}
         />
       )}
     </div>
