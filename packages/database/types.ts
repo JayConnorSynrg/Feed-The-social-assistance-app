@@ -4098,17 +4098,6 @@ export type Database = {
           username: string
         }[]
       }
-      get_occurrence_checkin_summary: {
-        Args: { p_occurrence_id: string }
-        Returns: {
-          anonymous_visits: number
-          identified_visits: number
-          occurrence_id: string
-          people_fed: number
-          total_visits: number
-          unique_households: number
-        }[]
-      }
       get_petition_signature_count: {
         Args: { p_petition_id: string }
         Returns: number

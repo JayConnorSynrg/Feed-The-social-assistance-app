@@ -31,6 +31,8 @@ After this ships:
 | R6 | Only CONFIRMED attendance earns the private P2.1a `event_checkin` credit — once per (user, occurrence), at confirmation. Reconcile agrees. |
 | R7 | Anonymous check-ins (user_id NULL, household only) stay available for signed-in members — untracked, no credit, not part of attendance %. |
 | R8 | Guests (`auth.users.is_anonymous`) cannot check in. |
+| D1 | *(round 4, user ruling)* Retiring an event cancels only occurrences that have **NOT STARTED**. An occurrence **in progress continues to its end**: members there can still confirm in the window, the organizer can confirm during the 24h grace, and it counts toward attendance normally. |
+| D2 | *(round 4, user ruling)* Attendance history of an **ENDED** occurrence is permanent: an ended occurrence (`ends_at < now`, or `status='completed'`) **cannot be cancelled**; rates + per-event stats count every occurrence that actually **ran** (not cancelled before it ended), regardless of whether its event is later retired or its org later deactivated. Organizers cannot erase no-shows; members never lose attendance they earned. |
 
 ## Entities
 
@@ -214,7 +216,11 @@ AND the legitimate one still works), via the extended harness `gen6.py` + `check
   (`admin_update_event(p_is_active:=false)`, UI **Retire event**) cancels every not-yet-ended
   occurrence (in-progress included), so its early rows drop out of accounting rather than decaying
   into no-shows. Belt-and-suspenders: `my_attendance_rate` and `w1_6a_user_org_rate` count only
-  occurrences whose **event and org are active**. Legitimate: normal completion *after* the
+  occurrences whose **event and org are active**.
+  **⚠ Superseded in fix round 4 (D1/D2/K4 — see below):** retire now cancels only *not-started*
+  occurrences (in-progress ones continue); the "event and org active" rate filter is **removed**
+  and replaced with "**ran**" semantics so ended occurrences keep counting after retire/deactivate.
+  Legitimate: normal completion *after* the
   occurrence has started is still allowed; a genuine ended-occurrence early row is still a no-show;
   grace-window organizer confirm still lands the credit.
 - **F2 — event reassignment is locked once check-ins exist.** The M3 guard now also blocks changing
@@ -254,3 +260,68 @@ Verification: `gen6.py` (both directions + earlier scenarios: legit organizer co
 once, retire → no no-show, reconcile parity `0/0`, account deletion, smoke 25/26/27/28 STATE,
 `enforce_opt_in_transition` md5 `f3bc362…` unchanged, dashboards == confirmed truth) → `check_r3.py`
 40/40; `racerun.sh` (F4, both orderings); mutation proofs killing the F1, F2, and F6 guards.
+
+## Fix round 4 — retire/deactivate lifecycle + permanent history (D1, D2, K1–K5)
+
+Round-4 adversarial review found a cancelled occurrence could be walked back to `completed`
+(retire→reactivate→complete forged a no-show), retiring/deactivating erased genuine ended history,
+and org deactivation converted refused members into no-shows. Two new user rulings (**D1**, **D2**,
+recorded in the Rulings table) resolve the lifecycle; the fixes below make them hold both
+directions, verified via `gen_r4.py` + `check_r4.py` (48/48), the preserved `gen6.py` + `check_r3.py`
+(40/40), mutation proofs (K1/K3/K4 + the earlier F1/F2/F6), and a prod dry-run (single transaction,
+trailing `RAISE` → full rollback; 48/48 against the live prod schema, `transition_md5` unchanged,
+`pre_ledger_exists=false`).
+
+**Derived consistency (K3) — retire vs deactivate.** They differ *because* their check-in
+permission differs, and the difference is intentional:
+- **Retire an event (D1):** the org is still operating, so an in-progress occurrence is left **live**
+  — members there may still confirm and the organizer keeps the 24h grace. Only **not-started**
+  occurrences are cancelled.
+- **Deactivate an org (K2):** the org is suspended, so **all** check-ins to it are refused; an
+  in-progress occurrence can no longer be served, so it is **cancelled** too (immediate treatment).
+  Only **ended** occurrences are left untouched.
+
+- **K1 — a cancelled occurrence stays cancelled.** Once any check-in/claim exists, the occurrence
+  guard refuses leaving a terminal state to *any* other status — `cancelled→upcoming` **and**
+  `cancelled→completed` (the retire→reactivate→complete path) and `completed→upcoming`. No forged
+  no-show. Legitimate: cancelling a not-yet-ended occurrence still works.
+- **K2 — deactivating an org cancels its not-yet-ended occurrences.** `trg_organizations_cascade_deactivate`
+  (AFTER UPDATE OF `is_active`) cancels every occurrence of the org's events with
+  `status NOT IN (cancelled,completed) AND ends_at > now` (not-started **and** in-progress). Ended
+  occurrences are untouched. `check_in`/`organizer_confirm` refuse an inactive org (org gate checked
+  first). A member who was refused therefore **never becomes a no-show** (the occurrence they were on
+  is cancelled → excluded). Confirmed presence keeps its private engagement credit (granted at
+  confirm, independent of occurrence status); it no longer counts toward the show-rate because a
+  voided occurrence did not run.
+- **K3 — documented above** (retire keeps in-progress live; deactivate cancels it).
+- **K4 — "ran" replaces the is_active filter.** `w1_6a_user_org_rate` and `my_attendance_rate` now
+  count every occurrence that **ran** — `status <> 'cancelled' AND (status='completed' OR ends_at < now)`
+  — with the round-3 `ae.is_active AND o.is_active` filter **removed**. Confirmed history and no-shows
+  of an ended occurrence survive a later event retire or org deactivation (D2). `event_attendance`
+  already used ran semantics for its per-event stats. A client cannot cancel an **ended** occurrence
+  (D2): the occurrence guard refuses `→ cancelled` when `OLD` is completed or past `ends_at`
+  (ungated on check-ins). For a **retired** event, an org admin cannot even reach the row (a retired
+  event is not `SELECT`-visible via `events_select_active`, so the org-admin UPDATE policy matches
+  0 rows — a silent no-op); a **platform** admin reaches the row and hits the explicit D2 guard.
+- **K5 — reachability + hygiene.**
+  - **Cancel** is offered on **both** the desktop calendar chip and the mobile day view, and **only**
+    on a not-yet-ended, not-already-cancelled occurrence (an ended occurrence's history is permanent).
+  - Cancelled **and** past occurrences' **Attendance** stays reachable in the scheduler via a
+    dedicated **"Past & cancelled"** section (the week/day calendar hides cancelled ones to stay clean).
+  - `get_occurrence_checkin_summary` is removed from `packages/database/types.ts` (the migration drops
+    the function; it had zero app callers).
+  - **F5 org delete (documented, kept refusing):** a platform admin deleting an **organization** that
+    has any check-in history is **refused** — the `organizations → assistance_events → event_occurrences`
+    cascade DELETE trips the `BEFORE DELETE` occurrence guard (`event_occurrences_guard_delete`) inside
+    the same client transaction, aborting the org delete. Cancellation (not deletion) is the intended
+    path; history is never silently erased. Server-side cascades (account deletion, auth.uid() NULL)
+    still bypass.
+
+Verification: `gen_r4.py` → `check_r4.py` 48/48 (S1 K1 no-forge; S2 D1 retire-in-progress; S3 D2
+ended-permanent + K1 cancelled-stays; S4 K2 org deactivate — refused members never no-show, ended
+still counts; S5 complete-mid-event + D2 no completed-cancel; S6 F5 both directions + org-delete
+refused; S7 F8 clear-address; S8 retire-after-end keeps both). `gen6.py` → `check_r3.py` 40/40
+preserved (retire/deactivate flows reordered so the org-deactivation cascade no longer voids
+occurrences the finale rates). Mutation proofs: disabling the reopen guard, blocking the in-progress
+retired-event confirm, and re-adding the is_active rate filter each flip their probe (K1/K3/K4);
+the earlier F1/F2/F6 mutants still die.

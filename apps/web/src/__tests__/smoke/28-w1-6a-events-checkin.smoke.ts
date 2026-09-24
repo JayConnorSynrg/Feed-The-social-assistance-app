@@ -140,7 +140,29 @@ const STATE_SQL = `
        AND t.tgname='trg_event_occurrences_guard_checkin_bounds'
        AND (t.tgtype & 2)<>0 AND (t.tgtype & 16)<>0 AND t.tgenabled<>'D')                     AS m3_guard_trigger,
     -- Retirement + explicit-clear: admin_update_event now carries p_is_active + p_clear (19 args).
-    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])','EXECUTE') AS update_event_retire_exec
+    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])','EXECUTE') AS update_event_retire_exec,
+    -- ── fix round 4 (D1/D2/K1/K2/K4) ────────────────────────────────────────────
+    -- K2: the org-deactivation cascade trigger (AFTER UPDATE OF is_active on organizations).
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relname='organizations'
+       AND t.tgname='trg_organizations_cascade_deactivate' AND (t.tgtype & 16)<>0 AND t.tgenabled<>'D') AS k2_deactivate_trigger,
+    -- K2: the cascade fn is SECDEF + pinned and cancels not-yet-ended occurrences.
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname='organizations_cascade_deactivate'
+       AND p.prosecdef AND array_to_string(p.proconfig,',') ILIKE '%search_path%'
+       AND pg_get_functiondef(p.oid) ILIKE '%ends_at > now()%') AS k2_cascade_secdef_pinned,
+    -- K1: the occurrence guard refuses leaving a terminal state to ANY other status.
+    (pg_get_functiondef('public.event_occurrences_guard_checkin_bounds()'::regprocedure)
+       ILIKE '%NEW.status IS DISTINCT FROM OLD.status%') AS k1_reopen_any_status,
+    -- D2: the occurrence guard refuses cancelling an ENDED occurrence.
+    (pg_get_functiondef('public.event_occurrences_guard_checkin_bounds()'::regprocedure)
+       ILIKE '%attendance history is permanent%') AS d2_ended_cancel_guard,
+    -- D1: retire cancels only NOT-STARTED occurrences (starts_at > now, not ends_at > now).
+    (pg_get_functiondef('public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])'::regprocedure)
+       ILIKE '%starts_at > now()%') AS d1_retire_not_started,
+    -- K4: rate math no longer filters on the event's/org's is_active ("ran" semantics).
+    ((pg_get_functiondef('public.my_attendance_rate()'::regprocedure) NOT ILIKE '%ae.is_active AND o.is_active%')
+     AND (pg_get_functiondef('public.w1_6a_user_org_rate(uuid,uuid)'::regprocedure) NOT ILIKE '%ae.is_active AND o.is_active%')) AS k4_rate_no_isactive_filter
 `
 
 maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () => {
@@ -236,5 +258,22 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     expect(Number(r.m3_guard_trigger), 'the M3 occurrence-bounds guard trigger must be present + enabled').toBe(1)
     // Retirement + explicit clear.
     expect(r.update_event_retire_exec, 'admin_update_event must expose p_is_active + p_clear (retire/clear)').toBe(true)
+  })
+
+  it('[post-deploy] fix-round 4 — D1/D2/K1/K2/K4 lifecycle + permanent history', async (ctx) => {
+    const gate = await queryProd(GATE_SQL)
+    if (gate[0]?.applied !== true) { ctx.skip(); return }
+    const r = (await queryProd(STATE_SQL))[0]
+    // K2: org-deactivation cascade trigger + SECDEF-pinned fn cancelling not-yet-ended occurrences.
+    expect(Number(r.k2_deactivate_trigger), 'the org-deactivation cascade trigger must be present + enabled').toBe(1)
+    expect(Number(r.k2_cascade_secdef_pinned), 'organizations_cascade_deactivate must be SECDEF, pinned, and cancel ends_at>now occurrences').toBe(1)
+    // K1: a cancelled/completed occurrence cannot move to ANY other status once check-ins exist.
+    expect(r.k1_reopen_any_status, 'the occurrence guard must refuse leaving a terminal state to any other status (K1)').toBe(true)
+    // D2: an ended occurrence cannot be cancelled by a client.
+    expect(r.d2_ended_cancel_guard, 'the occurrence guard must refuse cancelling an ended occurrence (D2)').toBe(true)
+    // D1: retire cancels only not-started occurrences.
+    expect(r.d1_retire_not_started, 'admin_update_event retire must cancel only not-started occurrences (starts_at>now)').toBe(true)
+    // K4: rate math counts every occurrence that ran, regardless of later is_active.
+    expect(r.k4_rate_no_isactive_filter, 'rate math must NOT filter on event/org is_active (ran semantics, K4)').toBe(true)
   })
 })

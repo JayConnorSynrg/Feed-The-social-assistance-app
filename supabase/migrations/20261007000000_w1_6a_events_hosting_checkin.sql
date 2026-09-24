@@ -27,6 +27,32 @@
 --   R7  Anonymous check-ins (user_id NULL, household only) stay available for SIGNED-IN
 --       members — untracked, no credit, not part of attendance %.
 --   R8  Guests (auth.users.is_anonymous) cannot check in.
+--   D1  (round 4) Retiring an event cancels only occurrences that have NOT STARTED. An
+--       occurrence in progress continues to its end: members there can still confirm in the
+--       window, the organizer can confirm during the 24h grace, and it counts toward
+--       attendance normally.
+--   D2  (round 4) Attendance history of an ENDED occurrence is permanent: an ended occurrence
+--       (ends_at < now, or status completed) cannot be cancelled; rates + per-event stats
+--       count every occurrence that actually ran (not cancelled before it ended), regardless
+--       of whether its event is later retired or its org later deactivated. Organizers cannot
+--       erase no-shows; members never lose the attendance they earned.
+--
+-- ROUND-4 FIX INVARIANTS (K1–K5):
+--   K1  A cancelled occurrence stays cancelled once any check-in/claim exists — no
+--       cancelled->upcoming and no cancelled->completed (covers retire->reactivate->complete).
+--   K2  Deactivating an org cancels its not-yet-ended occurrences (not-started AND in-progress)
+--       and refuses all check-ins to an inactive org; ended occurrences are untouched. Refused
+--       members never become no-shows.
+--   K3  Consistent rule: an event RETIRE leaves in-progress occurrences live (org still
+--       operating, members may still confirm); an ORG DEACTIVATION cancels them (org suspended,
+--       no check-ins). Derived from the check-in permission difference; documented here + spec.
+--   K4  "ran" semantics: rate + event_attendance + my_attendance_rate + dashboards count every
+--       occurrence that ran regardless of later event/org is_active. Confirmed history never
+--       disappears from rates. (The round-3 "exclude inactive event/org" rate filters removed.)
+--   K5  Cancel offered on desktop + mobile only for not-yet-ended occurrences; cancelled+past
+--       occurrences' attendance reachable in the scheduler; get_occurrence_checkin_summary
+--       removed from generated types; platform org delete with history refused (F5 cascade),
+--       documented in the spec.
 --
 -- INVARIANTS (this migration is the site that satisfies each):
 --   I1  Every check-in write goes through a SECDEF RPC (check_in / organizer_confirm).
@@ -341,8 +367,17 @@ BEGIN
    WHERE eo.id = p_occurrence;
   IF NOT FOUND THEN RAISE EXCEPTION 'Event not found.' USING ERRCODE='P0002'; END IF;
 
-  -- Finding #8: an inactive event or org accepts no check-ins.
-  IF v_ev_active IS NOT TRUE OR v_org_active IS NOT TRUE THEN
+  -- K2 (finding #8): an inactive ORG accepts no check-ins at all — the org is suspended.
+  -- Any surviving occurrence of a deactivated org is already cancelled by the org-deactivation
+  -- cascade, so this org gate (checked FIRST) is defence in depth for a stray/future one.
+  IF v_org_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'This organization is not currently active.' USING ERRCODE='P0001';
+  END IF;
+  -- K3/D1 (finding #8): a RETIRED (inactive) event blocks only NOT-YET-STARTED participation.
+  -- An occurrence already in progress continues to its end — members there may still confirm —
+  -- so the event-inactive gate applies only before starts_at. (D1 cancels a retired event's
+  -- not-started occurrences, so in normal flow a live retired-event occurrence has now>=starts_at.)
+  IF v_ev_active IS NOT TRUE AND v_now < v_starts THEN
     RAISE EXCEPTION 'This event is not currently active.' USING ERRCODE='P0001';
   END IF;
 
@@ -491,7 +526,14 @@ BEGIN
   -- enough to catch the doors-open rush, late enough for a busy kiosk to catch up, never
   -- days ahead of the event.
   IF v_status = 'cancelled' THEN RAISE EXCEPTION 'This event was cancelled.' USING ERRCODE='P0001'; END IF;
-  IF v_ev_active IS NOT TRUE OR v_org_active IS NOT TRUE THEN
+  -- K2: an inactive ORG blocks the kiosk entirely (org suspended).
+  IF v_org_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'This organization is not currently active.' USING ERRCODE='P0001';
+  END IF;
+  -- K3/D1: a RETIRED (inactive) event still lets the organizer confirm attendees of an
+  -- occurrence that has already started (in progress + the 24h grace); only pre-start
+  -- confirmation on a retired event is blocked.
+  IF v_ev_active IS NOT TRUE AND v_now < v_starts THEN
     RAISE EXCEPTION 'This event is not currently active.' USING ERRCODE='P0001';
   END IF;
   IF v_now < v_starts - interval '30 minutes' THEN
@@ -570,9 +612,11 @@ AS $fn$
     JOIN public.organizations o ON o.id = ae.org_id
    WHERE ec.user_id = p_user
      AND ae.org_id  = p_org
+     -- D2/K4: an occurrence that RAN (was not cancelled before it ended) counts regardless of
+     -- the event's or org's LATER is_active — attendance history is permanent. A cancelled
+     -- occurrence (incl. one cancelled by a retire/deactivate before it ended) never counts.
      AND eo.status <> 'cancelled'
-     AND ae.is_active AND o.is_active     -- F1: occurrences of a retired event/org never count
-     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ended" = completed OR past ends_at
+     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ran & ended" = completed OR past ends_at
 $fn$;
 REVOKE EXECUTE ON FUNCTION public.w1_6a_user_org_rate(uuid,uuid) FROM PUBLIC, anon, authenticated;
 
@@ -690,9 +734,10 @@ BEGIN
     JOIN public.assistance_events ae ON ae.id = eo.event_id
     JOIN public.organizations o ON o.id = ae.org_id
    WHERE ec.user_id = v_uid
+     -- D2/K4: count every occurrence that RAN regardless of the event's/org's later is_active;
+     -- confirmed attendance the member earned can never disappear from their rate.
      AND eo.status <> 'cancelled'
-     AND ae.is_active AND o.is_active     -- F1: occurrences of a retired event/org never count
-     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ended" = completed OR past ends_at
+     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ran & ended" = completed OR past ends_at
   RETURN jsonb_build_object(
     'confirmed', v_conf,
     'total',     v_total,
@@ -924,19 +969,19 @@ BEGIN
                               ELSE geocode_confidence END
   WHERE id = p_event_id;
 
-  -- F1: RETIRING an event (p_is_active=false) must not silently convert its members' early
-  -- ("I'm coming") rows into no-shows once time passes. Cancel every not-yet-ended occurrence
-  -- of the event so it drops out of no-show / attendance-rate accounting (rates count only
-  -- occurrences whose event + org were active at end; a cancelled occurrence never counts).
-  -- In-progress occurrences (started but not yet ended) are cancelled too: the event is being
-  -- pulled, so remaining early intents should not become no-shows. Already-confirmed presence
-  -- keeps its private credit (granted at confirm time, independent of occurrence status).
+  -- D1: RETIRING an event (p_is_active=false) cancels only occurrences that have NOT yet
+  -- STARTED (starts_at > now), so their members' early ("I'm coming") intents never rot into
+  -- no-shows. An occurrence already IN PROGRESS continues to its end: members there may still
+  -- confirm in the window, the organizer keeps the 24h grace, and it counts toward attendance
+  -- normally (the event-inactive gate in check_in/organizer_confirm applies only pre-start).
+  -- ENDED occurrences are untouched — their attendance history is permanent (D2). A cancelled
+  -- occurrence never counts in rates; confirmed presence keeps its private credit regardless.
   IF p_is_active IS FALSE THEN
     UPDATE public.event_occurrences
        SET status = 'cancelled'
      WHERE event_id = p_event_id
        AND status NOT IN ('cancelled','completed')
-       AND ends_at > now();
+       AND starts_at > now();
   END IF;
   RETURN p_event_id;
 END;
@@ -1230,11 +1275,24 @@ DECLARE
   v_has_checkins   boolean;
   v_time_change    boolean;
   v_event_change   boolean;  -- F2: event reassignment once check-ins exist
-  v_reopen         boolean;  -- terminal (cancelled/completed) -> open
+  v_reopen         boolean;  -- K1: leaving a terminal (cancelled/completed) state at all
   v_early_complete boolean;  -- F1: marked completed BEFORE it starts (would forge a no-show)
+  v_cancel_ended   boolean;  -- D2/K4: cancelling an occurrence that has already ended
 BEGIN
   -- Only a real client session is constrained; server-side writers (auth.uid() NULL) pass.
   IF auth.uid() IS NULL THEN RETURN NEW; END IF;
+
+  -- D2/K4: an occurrence that has ENDED (completed, or past ends_at) can no longer be
+  -- cancelled by a client — its attendance history (confirmed presence AND no-shows) is
+  -- permanent. This holds regardless of check-ins and is checked first. Server-side writers
+  -- bypass (above), so operational correction stays possible off-client. The org-deactivation
+  -- cascade only touches not-yet-ended occurrences, so it never trips this.
+  v_cancel_ended := (NEW.status = 'cancelled' AND OLD.status <> 'cancelled'
+                     AND (OLD.status = 'completed' OR OLD.ends_at < now()));
+  IF v_cancel_ended THEN
+    RAISE EXCEPTION 'This event has ended; its attendance history is permanent and it can no longer be cancelled.'
+      USING ERRCODE='P0001';
+  END IF;
 
   v_time_change    := (NEW.starts_at IS DISTINCT FROM OLD.starts_at
                        OR NEW.ends_at IS DISTINCT FROM OLD.ends_at);
@@ -1242,8 +1300,12 @@ BEGIN
   -- check-in exists would silently migrate confirmed presence / no-show accounting onto a
   -- different event, so it is forbidden exactly like a time change.
   v_event_change   := (NEW.event_id IS DISTINCT FROM OLD.event_id);
+  -- K1: once cancelled or completed, a CLIENT can no longer move the occurrence OUT of that
+  -- terminal state to ANY other status (covers cancelled->upcoming, cancelled->completed —
+  -- the retire->reactivate->complete path — and completed->upcoming). A cancelled occurrence
+  -- stays cancelled; a completed one stays completed.
   v_reopen         := (OLD.status IN ('cancelled','completed')
-                       AND NEW.status NOT IN ('cancelled','completed'));
+                       AND NEW.status IS DISTINCT FROM OLD.status);
   -- F1: an organizer marking an occurrence 'completed' BEFORE its starts_at, while people
   -- hold early ("I'm coming") rows, would end it prematurely and turn every unconfirmed
   -- early row into a no-show. Refuse. Cancellation (status -> cancelled) is always allowed;
@@ -1269,11 +1331,14 @@ BEGIN
     RAISE EXCEPTION 'This event has check-ins; its start/end time can no longer be changed.'
       USING ERRCODE='P0001';
   END IF;
-  IF v_early_complete THEN
-    RAISE EXCEPTION 'This event has check-ins; it cannot be marked completed before it starts (cancel it instead).'
+  -- K1: leaving a terminal state (cancelled->anything / completed->anything) is reported first,
+  -- so a cancelled->completed attempt (retire->reactivate->complete) gets the accurate reopen
+  -- message rather than the early-complete one.
+  IF v_reopen THEN
+    RAISE EXCEPTION 'This event has check-ins and cannot be reopened once cancelled or completed.'
       USING ERRCODE='P0001';
   END IF;
-  RAISE EXCEPTION 'This event has check-ins and cannot be reopened once cancelled or completed.'
+  RAISE EXCEPTION 'This event has check-ins; it cannot be marked completed before it starts (cancel it instead).'
     USING ERRCODE='P0001';
 END;
 $fn$;
@@ -1366,6 +1431,53 @@ CREATE POLICY occurrences_org_admin_update ON public.event_occurrences
                         JOIN public.organizations o ON o.id = ae.org_id
                        WHERE ae.id = event_occurrences.event_id
                          AND public.is_org_admin(ae.org_id) AND o.is_active));
+
+-- ============================================================================
+-- 13b. K2 / MED-1 — deactivating an org cancels its not-yet-ended occurrences
+-- ============================================================================
+-- Deactivating an ORG is immediate: because a deactivated org refuses ALL check-ins
+-- (check_in / organizer_confirm gate on v_org_active first), an in-progress occurrence can no
+-- longer be served, and its early intents must never rot into no-shows once time passes.
+-- So org deactivation cancels EVERY occurrence of the org's events that has NOT yet ENDED
+-- (both not-started AND in-progress: status not terminal AND ends_at > now) — the same shape
+-- as a per-event D1 retire, but for the whole org and including in-progress ones. This is the
+-- consistent, D1+D2-aligned rule (K3): a single-event RETIRE leaves in-progress occurrences
+-- LIVE (its org still operates, members there can still confirm); an ORG deactivation cancels
+-- them (the org is suspended, nobody can check in), so refused members never become no-shows.
+-- ENDED occurrences are untouched — their attendance history is permanent (D2) and keeps
+-- counting in rates regardless of the org's now-inactive state (K4). Confirmed presence on a
+-- since-cancelled in-progress occurrence keeps its private engagement credit (granted at
+-- confirm, independent of occurrence status) but no longer counts toward the show-rate,
+-- because a voided (cancelled) occurrence did not run. Runs on every UPDATE path (there is no
+-- deactivation RPC — a platform/org admin toggles is_active directly through PostgREST), so a
+-- trigger is the only site that catches them all. SECURITY DEFINER so it can cancel across the
+-- events/occurrences join; the cascade sets status->cancelled on not-yet-ended rows only, which
+-- always passes the occurrence-bounds + ended-cancel guards.
+CREATE OR REPLACE FUNCTION public.organizations_cascade_deactivate()
+  RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF OLD.is_active IS TRUE AND NEW.is_active IS NOT TRUE THEN
+    UPDATE public.event_occurrences eo
+       SET status = 'cancelled'
+      FROM public.assistance_events ae
+     WHERE ae.id = eo.event_id
+       AND ae.org_id = NEW.id
+       AND eo.status NOT IN ('cancelled','completed')
+       AND eo.ends_at > now();
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_organizations_cascade_deactivate ON public.organizations;
+CREATE TRIGGER trg_organizations_cascade_deactivate
+  AFTER UPDATE OF is_active ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION public.organizations_cascade_deactivate();
+
+REVOKE EXECUTE ON FUNCTION public.organizations_cascade_deactivate()
+  FROM PUBLIC, anon, authenticated;
 
 -- ============================================================================
 -- 14. F3 — platform dashboards count CONFIRMED presence only
