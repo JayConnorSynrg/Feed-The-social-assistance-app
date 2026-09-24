@@ -89,7 +89,33 @@ const STATE_SQL = `
     -- Regression: reconcile stays non-client-executable; P2.1a/b classifier undisturbed.
     has_function_privilege('authenticated','public.reconcile_engagement(uuid)','EXECUTE') AS reconcile_auth_exec,
     public.engagement_is_public('like')                                                  AS like_public,
-    public.engagement_is_public('appreciation_gift')                                     AS appr_public
+    public.engagement_is_public('appreciation_gift')                                     AS appr_public,
+    -- Finding #6: assistance_events location/address is RPC-only — no client table writes,
+    -- no client write policy; SELECT retained.
+    has_table_privilege('authenticated','public.assistance_events','INSERT')              AS ae_auth_insert,
+    has_table_privilege('authenticated','public.assistance_events','UPDATE')              AS ae_auth_update,
+    has_table_privilege('authenticated','public.assistance_events','DELETE')              AS ae_auth_delete,
+    has_table_privilege('authenticated','public.assistance_events','SELECT')              AS ae_auth_select,
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='assistance_events'
+       AND cmd IN ('INSERT','UPDATE','DELETE'))                                           AS ae_write_policies,
+    has_function_privilege('authenticated','public.w1_6a_validate_geo(double precision,double precision,text)','EXECUTE') AS validate_geo_auth_exec,
+    -- Finding #7/#2: the private anonymous-claims ledger is RLS-on and unreadable/unwritable
+    -- by any client (no policies, all privileges revoked).
+    (SELECT relrowsecurity FROM pg_class WHERE oid='public.event_anonymous_claims'::regclass) AS claims_rls,
+    has_table_privilege('authenticated','public.event_anonymous_claims','SELECT')         AS claims_auth_select,
+    has_table_privilege('authenticated','public.event_anonymous_claims','INSERT')         AS claims_auth_insert,
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='event_anonymous_claims') AS claims_policies,
+    -- Finding #3: org membership WRITES are platform-admin-only (no org-admin write policy).
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='organization_members'
+       AND cmd IN ('INSERT','UPDATE','DELETE')
+       AND coalesce(with_check,coalesce(qual,'')) ILIKE '%is_current_user_admin%'
+       AND coalesce(with_check,coalesce(qual,'')) NOT ILIKE '%is_org_admin%')             AS orgmem_platform_only,
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='organization_members'
+       AND cmd IN ('INSERT','UPDATE','DELETE')
+       AND coalesce(with_check,coalesce(qual,'')) ILIKE '%is_org_admin%')                 AS orgmem_orgadmin_write,
+    -- Finding #4: the org-admin reachability gate is client-callable (authenticated), anon denied.
+    has_function_privilege('authenticated','public.is_org_admin_any()','EXECUTE')         AS orgadminany_auth_exec,
+    has_function_privilege('anon','public.is_org_admin_any()','EXECUTE')                  AS orgadminany_anon_exec
 `
 
 maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () => {
@@ -140,5 +166,31 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     expect(r.reconcile_auth_exec, 'reconcile_engagement must stay non-client-executable').toBe(false)
     expect(r.like_public, 'like must remain public').toBe(true)
     expect(r.appr_public, 'appreciation_gift must remain public').toBe(true)
+  })
+
+  it('[post-deploy] fix-round — event writes RPC-only, private anon claims, membership + gate', async (ctx) => {
+    const gate = await queryProd(GATE_SQL)
+    if (gate[0]?.applied !== true) { ctx.skip(); return }
+    const rows = await queryProd(STATE_SQL)
+    expect(rows.length).toBe(1)
+    const r = rows[0]
+    // Finding #6: assistance_events location/address is RPC-only.
+    expect(r.ae_auth_insert, 'authenticated must NOT INSERT assistance_events directly').toBe(false)
+    expect(r.ae_auth_update, 'authenticated must NOT UPDATE assistance_events directly').toBe(false)
+    expect(r.ae_auth_delete, 'authenticated must NOT DELETE assistance_events directly').toBe(false)
+    expect(r.ae_auth_select, 'authenticated may still SELECT assistance_events').toBe(true)
+    expect(Number(r.ae_write_policies), 'no client write policy remains on assistance_events').toBe(0)
+    expect(r.validate_geo_auth_exec, 'w1_6a_validate_geo must NOT be client-executable').toBe(false)
+    // Finding #7/#2: the anonymous-claims ledger is private to the server.
+    expect(r.claims_rls, 'event_anonymous_claims must have RLS enabled').toBe(true)
+    expect(r.claims_auth_select, 'authenticated must NOT read event_anonymous_claims').toBe(false)
+    expect(r.claims_auth_insert, 'authenticated must NOT write event_anonymous_claims').toBe(false)
+    expect(Number(r.claims_policies), 'event_anonymous_claims must have no client policy').toBe(0)
+    // Finding #3: org membership writes are platform-admin-only.
+    expect(Number(r.orgmem_platform_only), 'all 3 org-member write policies must be platform-admin-only').toBe(3)
+    expect(Number(r.orgmem_orgadmin_write), 'no org-member write policy may grant org admins').toBe(0)
+    // Finding #4: org-admin reachability gate is authenticated-callable, anon denied.
+    expect(r.orgadminany_auth_exec, 'authenticated must EXECUTE is_org_admin_any').toBe(true)
+    expect(r.orgadminany_anon_exec, 'anon must NOT EXECUTE is_org_admin_any').toBe(false)
   })
 })

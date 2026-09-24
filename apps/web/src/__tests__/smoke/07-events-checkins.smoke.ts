@@ -12,8 +12,10 @@ const maybeDescribe = skip ? describe.skip : describe
 
 maybeDescribe('07 — Events & Check-ins (PROD read-only)', () => {
   it('event_checkins has unique index on (occurrence_id, user_id)', async () => {
-    // Backend: UNIQUE INDEX prevents double check-in per occurrence/user
-    // Surface: checkin-sheet.tsx:54-56 insert → :65 23505 already-checked-in branch
+    // Backend: partial UNIQUE(occurrence_id, user_id) WHERE user_id IS NOT NULL keeps at
+    // most one identified check-in per person per occurrence.
+    // Surface: checkin-sheet.tsx handleSubmit → check_in() SECDEF RPC (all writes RPC-only);
+    // the RPC enforces the early→confirmed state machine and idempotency.
     const rows = await queryProd(`
       SELECT indexname, indexdef
       FROM pg_indexes
@@ -52,7 +54,7 @@ maybeDescribe('07 — Events & Check-ins (PROD read-only)', () => {
 
   it('event_occurrences table exists with data', async () => {
     // Backend: event_occurrences — scheduled event instances
-    // Surface: events-panel.tsx:82-90 SELECT joining assistance_events
+    // Surface: events-panel.tsx fetchOccurrences() SELECT joining assistance_events
     const rows = await queryProd(`
       SELECT count(*) AS cnt FROM event_occurrences
     `)
