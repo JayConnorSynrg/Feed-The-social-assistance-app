@@ -38,13 +38,20 @@ After this ships:
   (text, mirroring `resources`); `location` is written only from a strong (precise-tier) match.
 - `event_occurrences` — scheduled instances (`starts_at`, `ends_at`, `status` upcoming|cancelled|completed).
 - `event_checkins` — one row per visit. **W1.6a adds** `status` (`early`|`confirmed`, default `confirmed`),
-  `confirmed_at`, `confirmed_by`. Partial `UNIQUE(occurrence_id, user_id) WHERE user_id IS NOT NULL`
+  `confirmed_at`, `confirmed_by`, and **(fix round 2)** `is_anonymous` (NOT NULL, default false) — the
+  authoritative anonymous marker. Partial `UNIQUE(occurrence_id, user_id) WHERE user_id IS NOT NULL`
   keeps at most one identified row per person per occurrence. Anonymous rows carry no member
-  identity: `user_id`, `checked_in_by`, `confirmed_by` are all NULL.
+  identity: `user_id`, `checked_in_by`, `confirmed_by` are all NULL, `is_anonymous=true`, and
+  `checked_in_at`/`confirmed_at` are coarsened to the minute (an org admin cannot second-precision-
+  match a public row against a kiosk observation to re-identify the member). Attendance counts
+  anonymous by `is_anonymous` (never `user_id IS NULL`), so a deleted attendee's identified row
+  (`user_id` nulled by the FK) is not miscounted as anonymous.
 - `event_anonymous_claims` — **W1.6a (fix round)** private, server-only `(occurrence_id, user_id)`
   ledger. RLS on, **no policies, all grants revoked** — no client (incl. org admins) can read or
   write it. Its sole purpose is to cap a member at one anonymous check-in per occurrence while
-  keeping the member↔occurrence link out of every client's reach.
+  keeping the member↔occurrence link out of every client's reach. **(fix round 2)** the SECDEF,
+  own-only `my_anonymous_claims(uuid[])` RPC lets the member — and no one else — learn which of a
+  set of occurrences they have already claimed anonymously (so the UI shows "Counted anonymously ✓").
 
 ## State machine (per identified member, per occurrence)
 
@@ -70,11 +77,12 @@ policies dropped; the P2.0 RESTRICTIVE guest block kept). SELECT stays (own + ad
 
 | RPC | Who | Effect |
 |-----|-----|--------|
-| `check_in(p_occurrence, p_household_size, p_anonymous)` | authenticated non-guest | member's own early/confirmed/anonymous check-in per the state machine |
+| `check_in(p_occurrence, p_household_size, p_anonymous)` | authenticated non-guest | member's own early/confirmed/anonymous check-in per the state machine; **(fix round 2)** refuses an identified check-in when the member already holds an anonymous claim, and an anonymous check-in when they already hold a tracked row (counted at most once, M2) |
+| `my_anonymous_claims(p_occurrence_ids)` → setof uuid | authenticated (own-only) | the subset of the passed occurrences the caller has claimed anonymously; cannot reveal another member's claim (M2) |
 | `organizer_confirm(p_occurrence, p_user, p_household_size)` | org admin of the event's org, or platform admin | confirm an attendee **who already has a check-in row** (never mints a row for an arbitrary id → no FK/existence oracle; uniform error), never the caller themselves, only within `[starts_at−30m, ends_at+24h]` on a live/active/non-cancelled occurrence; or add an anonymous household (`p_user` NULL, no identity stored) (I3, finding #1/#5) |
 | `event_attendance(p_occurrence)` → jsonb | org admin of that org / platform admin (else NULL) | per-event {early, confirmed, no_show, anonymous_confirmed, people_confirmed, show_rate} + attendees with each rate org-scoped (I4) |
 | `my_attendance_rate()` → jsonb | authenticated | the caller's OWN overall rate; takes no user arg (I4, R5) |
-| `admin_create_event(...)` / `admin_update_event(...)` | org admin / platform admin | create/edit event; stores address + a geocoded `location` only from a strong match (I5) |
+| `admin_create_event(...)` / `admin_update_event(...)` | org admin / platform admin | create/edit event; stores address + a geocoded `location` only from a strong match (I5). **(fix round 2)** `admin_create_event` rejects an inactive org; `admin_update_event` adds `p_is_active` (retire/reactivate) and `p_clear text[]` (explicit clear of optional text fields — COALESCE can only set, never blank) |
 | `w1_6a_user_org_rate(p_user, p_org)` | internal only (no client EXECUTE) | org-scoped rate helper used inside `event_attendance` |
 
 Credit (R6): `trg_engagement_event_checkin` (AFTER INSERT OR UPDATE) records the private
@@ -94,6 +102,7 @@ is the confirming transition; idempotent via the ledger's `UNIQUE(actor,kind,tar
 | I6 | P2.0/P2.1a/P2.1b invariants hold; account deletion still succeeds | force trigger + guest block untouched; `enforce_opt_in_transition` md5 unchanged; 16 source triggers intact; FKs SET NULL/CASCADE |
 | I7 | Every UI element activates a real capability; in-progress events stay listed with the correct button state | events-panel + checkin-sheet + kiosk + scheduler |
 | I8 | Anonymous rows are unlinkable (user_id/checked_in_by/confirmed_by NULL) and capped at one per member per occurrence; `assistance_events` location/address is RPC-only (direct client writes revoked, coords/tier validated); org **membership** writes are platform-admin-only (R1); a non-platform-admin org admin can reach an **events-only** admin surface; `check_in` rejects inactive events/orgs and treats `completed` as ended | private `event_anonymous_claims`; adjusted P2.0 force trigger; `admin_create_event`/`admin_update_event` + `w1_6a_validate_geo`; platform-admin-only membership policies; `is_org_admin_any` + events-only `AdminShell` |
+| I9 | **(fix round 2)** A member is counted at most once per occurrence (anonymous OR tracked, never both); a **platform** admin can see/change roles in/remove any org's roster (org admins still cannot touch admin membership); once any check-in exists a **client** cannot change an occurrence's start/end time nor reopen it from cancelled/completed (cancellation + new occurrences still work; server-side writers bypass); org admins of a since-retired org lose the organizer surface; events are retireable + optional fields clearable; other admin routes (`/federation/*`) redirect org admins | `check_in` anon-claim guard + `my_anonymous_claims`; `org_members_select_platform_admin`; `trg_event_occurrences_guard_checkin_bounds`; `is_org_admin_any` (active-org) + `admin_create_event` active-org guard; `admin_update_event` `p_is_active`/`p_clear`; `federation/layout.tsx` |
 
 ### Trust boundary (I5, finding #6)
 
@@ -104,6 +113,14 @@ client writes and write policies are revoked), and they reject null-island `(0,0
 `|lng|>180`, and unknown geocode tiers. A weak/failed match leaves `location` NULL and tags
 `geocode_accuracy='approximate'` (feed shows "unknown" distance).
 
+### Known + out of scope (documented)
+
+`orgs_update_org_admin` still lets an org admin **rename or deactivate their own org**. R1 assigns org
+creation/retirement to platform admins; tightening this policy is deferred (out of scope for W1.6a) and
+recorded here so it is not mistaken for a gap. Making `is_org_admin` itself active-org-aware was
+avoided for the same reason — it would change that policy's behaviour; instead `is_org_admin_any`
+(shell/route reveal) and `admin_create_event` reject inactive orgs directly.
+
 ## Click paths
 
 - **Org admin reaches the admin surface** (finding #4): Settings (SPA sidebar) → **Administration**
@@ -112,9 +129,17 @@ client writes and write policies are revoked), and they reject null-island `(0,0
   and any org admin; the shell (`AdminShell`) renders **only the Events tab** for a non-platform-admin
   org admin (Overview/Moderation/Community/Organizations/Resources/Manage/Settings are platform-only).
   The org selector lists only the orgs the caller administers (`get_admin_org_list`, role='admin').
-- **Create org + assign org admin** (platform admin only): Admin → **Organizations** tab (`OrgsSection`)
-  → "Create Organization" → expand the org → add member with role **admin**. (Org admins cannot manage
-  the roster — membership writes are platform-admin-only.)
+- **Create org + assign/manage org admins** (platform admin only): Admin → **Organizations** tab
+  (`OrgsSection`) → "Create Organization" → expand the org → add member with role **admin**, change a
+  member's role inline, or remove a member. **(fix round 2)** the roster read/remove/role-change work
+  for a platform admin against **any** org (`org_members_select_platform_admin`), and a 0-row
+  remove/change is surfaced as an error, never a silent success. (Org admins cannot manage the roster
+  — membership writes are platform-admin-only.)
+- **Retire / reactivate an event** (fix round 2): Admin/Organizer → **Events** tab → **Edit** →
+  **Retire event** (sets `is_active=false`; drops off the member feed + scheduler). Blanking an
+  optional address field on Save clears it (explicit `p_clear`).
+- **Federation is platform-only** (fix round 2): `/federation/*` has its own route guard
+  (`federation/layout.tsx`) that redirects a non-platform-admin org admin back to `/moderation`.
 - **Schedule an event**: Admin/Organizer → **Events** tab → **New Event** → title, type, location name,
   address (autocomplete + geocode on save), organization → Create Event. Add occurrences with
   **+ Occurrence**.
@@ -124,10 +149,12 @@ client writes and write policies are revoked), and they reject null-island `(0,0
 - **Organizer kiosk**: Admin → Events → occurrence **Sign-In** → confirm each waiting ("I'm coming")
   attendee or add a walk-in household.
 - **Per-event attendance**: Admin → Events → occurrence **Attendance** → early/confirmed/no-show/show-rate
-  + attendee rows with each attendee's org-scoped rate.
+  + attendee rows with each attendee's org-scoped rate. **(fix round 2)** ended/completed occurrences
+  (not just upcoming) are reachable in the calendar so their attendance can be reviewed.
 - **Member check-in**: SPA sidebar **Events** (alias → Feed → Events subtab) → event card button:
-  "Check in early" / "I'm here" / "Checked in ✓ (early)" / "Attended ✓" / "Ended" / "Cancelled".
-  Guests see the create-account prompt.
+  "Check in early" / "I'm here" / "Checked in ✓ (early)" / "Attended ✓" / "Counted anonymously ✓"
+  (fix round 2, from `my_anonymous_claims`) / "Ended" / "Cancelled". The anonymous checkbox is hidden
+  once the member already holds a tracked row. Guests see the create-account prompt.
 - **Member's own rate**: Settings → **Profile** → "Event attendance" (hidden until there is data).
 
 ## Verification
@@ -149,9 +176,27 @@ one still works:
 - Org admins can no longer mint org admins (membership writes platform-admin-only); a platform admin
   still can. `check_in` rejects inactive events/orgs.
 - Reconcile parity `0/0`, no ledger failures, account deletion of an attendee + organizer succeeds.
+- **(fix round 2)** A member is counted once per occurrence: after an anonymous check-in the member's
+  own identified check-in on the same occurrence is refused, and `event_attendance` shows
+  `anonymous_confirmed=1, confirmed=0, people_confirmed=1` (no double count). `my_anonymous_claims`
+  returns the caller's own claimed occurrence (`[occAN]`) and **empty** for a different member.
+  Anonymous `checked_in_at`/`confirmed_at` are minute-truncated and `is_anonymous=true`.
+- **(fix round 2)** A **platform** admin (not a member) reads Org One's roster (1 row) and its
+  DELETE/UPDATE…RETURNING affect 1 row; an org admin cannot change their own role or self-delete,
+  and cannot see another org's roster.
+- **(fix round 2)** Once a check-in exists, an org admin's direct `event_occurrences` time-slide is
+  **blocked**, as is reopening a cancelled/completed occurrence; cancellation still works and an
+  occurrence with **no** check-ins is still time-editable; a server-side (migration) slide bypasses
+  the guard.
+- **(fix round 2)** `admin_update_event` retires an event (`is_active=false`) and clears an optional
+  field (`p_clear`); `is_org_admin_any` returns false for an admin of a since-deactivated org and
+  `admin_create_event` on that org is rejected.
 - Smoke 25/26/27/28 STATE_SQL green on the migrated state (P2.0 force trigger fires + references
   `auth.uid()`; `enforce_opt_in_transition` md5 unchanged `f3bc362…`; 16 engagement source triggers
-  intact; secdef_pinned=7). Two guard mutations proved the new tests fail-closed.
+  intact; secdef_pinned=7; fix-round-2 fields: `is_anonymous` column, `att_uses_is_anon_marker`,
+  `my_anonymous_claims` authenticated-only, `org_members_select_platform_admin`, the M3 guard trigger,
+  and the retire/clear `admin_update_event` signature). Two guard mutations (M2 anon-claim refusal,
+  M3 occurrence-bounds lock) proved the new tests fail-closed.
 
 Smoke `28-w1-6a-events-checkin.smoke.ts` gates on ledger row `20261007000000` (applied as a separate
 post-deploy step) and asserts the state read-only.

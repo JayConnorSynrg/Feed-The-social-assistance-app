@@ -115,7 +115,29 @@ const STATE_SQL = `
        AND coalesce(with_check,coalesce(qual,'')) ILIKE '%is_org_admin%')                 AS orgmem_orgadmin_write,
     -- Finding #4: the org-admin reachability gate is client-callable (authenticated), anon denied.
     has_function_privilege('authenticated','public.is_org_admin_any()','EXECUTE')         AS orgadminany_auth_exec,
-    has_function_privilege('anon','public.is_org_admin_any()','EXECUTE')                  AS orgadminany_anon_exec
+    has_function_privilege('anon','public.is_org_admin_any()','EXECUTE')                  AS orgadminany_anon_exec,
+    -- ── Fix-round 2 (H1/M2/M3 + retire + attendance marker) ──
+    -- is_anonymous marker column (NOT NULL, default false) — the authoritative anonymous flag.
+    (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
+       AND table_name='event_checkins' AND column_name='is_anonymous' AND is_nullable='NO')  AS checkin_is_anon_col,
+    -- attendance counts anonymous by the marker, not by user_id IS NULL.
+    (SELECT pg_get_functiondef(p.oid) ILIKE '%is_anonymous%' FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname='event_attendance')                            AS att_uses_is_anon_marker,
+    -- M2: my_anonymous_claims is SECDEF + pinned, authenticated-only.
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
+       AND p.proname='my_anonymous_claims' AND p.prosecdef AND array_to_string(p.proconfig,',') ILIKE '%search_path%') AS myclaims_secdef_pinned,
+    has_function_privilege('authenticated','public.my_anonymous_claims(uuid[])','EXECUTE')    AS myclaims_auth_exec,
+    has_function_privilege('anon','public.my_anonymous_claims(uuid[])','EXECUTE')             AS myclaims_anon_exec,
+    -- H1: platform admins can read any org's roster (roster read + DELETE/UPDATE...RETURNING).
+    (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='organization_members'
+       AND cmd='SELECT' AND policyname='org_members_select_platform_admin')                   AS orgmem_select_platform,
+    -- M3: the occurrence check-in-bounds guard trigger is present, BEFORE UPDATE, enabled.
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relname='event_occurrences'
+       AND t.tgname='trg_event_occurrences_guard_checkin_bounds'
+       AND (t.tgtype & 2)<>0 AND (t.tgtype & 16)<>0 AND t.tgenabled<>'D')                     AS m3_guard_trigger,
+    -- Retirement + explicit-clear: admin_update_event now carries p_is_active + p_clear (19 args).
+    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])','EXECUTE') AS update_event_retire_exec
 `
 
 maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () => {
@@ -192,5 +214,24 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     // Finding #4: org-admin reachability gate is authenticated-callable, anon denied.
     expect(r.orgadminany_auth_exec, 'authenticated must EXECUTE is_org_admin_any').toBe(true)
     expect(r.orgadminany_anon_exec, 'anon must NOT EXECUTE is_org_admin_any').toBe(false)
+  })
+
+  it('[post-deploy] fix-round 2 — H1 roster, M2 anon-claims, M3 bounds guard, retire', async (ctx) => {
+    const gate = await queryProd(GATE_SQL)
+    if (gate[0]?.applied !== true) { ctx.skip(); return }
+    const r = (await queryProd(STATE_SQL))[0]
+    // is_anonymous marker column + attendance uses it (not user_id IS NULL).
+    expect(Number(r.checkin_is_anon_col), 'event_checkins must have a NOT NULL is_anonymous column').toBe(1)
+    expect(r.att_uses_is_anon_marker, 'event_attendance must count anonymous by the is_anonymous marker').toBe(true)
+    // M2: my_anonymous_claims — SECDEF + pinned, authenticated-only.
+    expect(Number(r.myclaims_secdef_pinned), 'my_anonymous_claims must be SECDEF with a pinned search_path').toBe(1)
+    expect(r.myclaims_auth_exec, 'authenticated must EXECUTE my_anonymous_claims').toBe(true)
+    expect(r.myclaims_anon_exec, 'anon must NOT EXECUTE my_anonymous_claims').toBe(false)
+    // H1: platform-admin roster SELECT policy present.
+    expect(Number(r.orgmem_select_platform), 'platform-admin roster SELECT policy must exist').toBe(1)
+    // M3: occurrence check-in-bounds guard trigger present (BEFORE UPDATE, enabled).
+    expect(Number(r.m3_guard_trigger), 'the M3 occurrence-bounds guard trigger must be present + enabled').toBe(1)
+    // Retirement + explicit clear.
+    expect(r.update_event_retire_exec, 'admin_update_event must expose p_is_active + p_clear (retire/clear)').toBe(true)
   })
 })
