@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks } from 'lucide-react'
+import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { logger } from '@/lib/logger'
@@ -11,6 +11,7 @@ import { ModerationTab } from './moderation-tab'
 import { CommunityTab } from './community-tab'
 import { ResourcesTab } from './resources-tab'
 import { ManageResourcesTab } from './manage-resources-tab'
+import { OrgsSection } from './orgs-section'
 
 function PlaceholderTab({ label }: { label: string }) {
   return (
@@ -84,6 +85,10 @@ export function AdminShell() {
                 <Users className="h-3.5 w-3.5" />
                 Community
               </TabsTrigger>
+              <TabsTrigger value="orgs" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                <Building2 className="h-3.5 w-3.5" />
+                Organizations
+              </TabsTrigger>
               <TabsTrigger value="resources" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
                 <Database className="h-3.5 w-3.5" />
                 Resources
@@ -110,6 +115,9 @@ export function AdminShell() {
           </TabsContent>
           <TabsContent value="community" className="mt-4">
             <CommunityTab selectedOrgId={selectedOrgId} />
+          </TabsContent>
+          <TabsContent value="orgs" className="mt-4">
+            <OrgsSection />
           </TabsContent>
           <TabsContent value="resources" className="mt-4">
             <ResourcesTab />

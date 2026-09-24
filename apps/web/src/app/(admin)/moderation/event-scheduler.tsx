@@ -19,6 +19,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RecurrencePicker } from './recurrence-picker'
 import { OrganizerCheckinDisplay } from './organizer-checkin-display'
+import { AddressAutocomplete } from './address-autocomplete'
+import { useAdminOrgs } from './use-admin-orgs'
+import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
+import { PRECISE_GEOCODE_TIERS } from '@/lib/geocode-accuracy'
+import { formatRatePct } from '@/lib/event-checkin'
 
 interface AssistanceEvent {
   id: string
@@ -64,11 +69,31 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other: 'bg-stone-100 text-stone-600 border-stone-200',
 }
 
+interface AttendanceView {
+  occurrence: { id: string; event_title: string; starts_at: string }
+  data: {
+    early: number
+    confirmed: number
+    no_show: number
+    anonymous_confirmed: number
+    people_confirmed: number
+    show_rate: number | null
+    ended: boolean
+    attendees: Array<{ user_id: string; name: string; status: string; household_size: number; attendance_rate: number | null }>
+  } | null
+  loading: boolean
+  error: string | null
+}
+
 export function EventScheduler({ selectedOrgId }: Props) {
   const supabase = createClient()
+  const { orgs: adminOrgs } = useAdminOrgs()
 
   const [events, setEvents] = useState<AssistanceEvent[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Attendance view (per occurrence)
+  const [attendance, setAttendance] = useState<AttendanceView | null>(null)
 
   // Calendar navigation
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
@@ -89,6 +114,13 @@ export function EventScheduler({ selectedOrgId }: Props) {
   const [createOrgId, setCreateOrgId] = useState(selectedOrgId === 'all' ? '' : selectedOrgId)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createInfo, setCreateInfo] = useState<string | null>(null)
+  // Address + geocode (reuses the resource-edit Mapbox v6 path; strong-match-only gate)
+  const [createAddress, setCreateAddress] = useState('')
+  const [createCity, setCreateCity] = useState('')
+  const [createState, setCreateState] = useState('')
+  const [createZip, setCreateZip] = useState('')
+  const [selectedMatch, setSelectedMatch] = useState<GeocodeMatch | null>(null)
 
   // Add occurrence modal
   const [addOccurrenceEventId, setAddOccurrenceEventId] = useState<string | null>(null)
@@ -163,20 +195,34 @@ export function EventScheduler({ selectedOrgId }: Props) {
     if (!createTitle.trim() || !createOrgId.trim()) return
     setCreating(true)
     setCreateError(null)
+    setCreateInfo(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data, error } = await supabase
-        .from('assistance_events')
-        .insert({
-          title: createTitle.trim(),
-          org_id: createOrgId.trim(),
-          event_type: createEventType,
-          location_name: createLocationName.trim() || null,
-          rrule: createRrule,
-          created_by: user?.id ?? null,
-        })
-        .select('id')
-        .single()
+      // Resolve a geocode for the address. Prefer the classified match from a chosen
+      // autocomplete suggestion; else forward-geocode the typed address on save. The
+      // server writes a location ONLY for a strong (precise-tier) match (I5).
+      let match: GeocodeMatch | null = selectedMatch
+      const fullAddress = [createAddress, createCity, createState, createZip].filter(Boolean).join(', ')
+      if (!match && createAddress.trim()) {
+        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
+      }
+      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
+
+      const { data, error } = await supabase.rpc('admin_create_event', {
+        p_org_id: createOrgId.trim(),
+        p_title: createTitle.trim(),
+        p_event_type: createEventType,
+        p_location_name: createLocationName.trim() || undefined,
+        p_address: createAddress.trim() || undefined,
+        p_city: createCity.trim() || undefined,
+        p_state: createState.trim() || undefined,
+        p_zip_code: createZip.trim() || undefined,
+        p_rrule: createRrule ?? undefined,
+        p_requires_registration: false,
+        p_lat: match?.lat,
+        p_lng: match?.lng,
+        p_geocode_accuracy: match?.accuracy,
+        p_geocode_confidence: match?.confidence,
+      })
 
       if (error) {
         setCreateError(error.message)
@@ -184,20 +230,51 @@ export function EventScheduler({ selectedOrgId }: Props) {
       }
 
       logger.info('admin.event.created', {
-        event_id: data?.id,
+        event_id: typeof data === 'string' ? data : null,
         org_id: createOrgId,
         rrule: createRrule,
         event_type: createEventType,
+        geocode_accuracy: match?.accuracy ?? 'none',
       })
+
+      // Surface the geocode outcome so the organizer knows whether the venue is mapped.
+      if (createAddress.trim()) {
+        setCreateInfo(isStrong
+          ? `Event created and located on the map (${match!.accuracy}).`
+          : 'Event created. The address did not resolve precisely, so it will show as an unknown location until edited.')
+      }
 
       setShowCreateModal(false)
       setCreateTitle('')
       setCreateEventType('distribution')
       setCreateLocationName('')
       setCreateRrule(null)
+      setCreateAddress('')
+      setCreateCity('')
+      setCreateState('')
+      setCreateZip('')
+      setSelectedMatch(null)
       await fetchEvents()
     } finally {
       setCreating(false)
+    }
+  }
+
+  function applySuggestion(s: AddressSuggestion) {
+    setCreateAddress(s.address_line1 || s.label)
+    if (s.city) setCreateCity(s.city)
+    if (s.state) setCreateState(s.state)
+    if (s.zip) setCreateZip(s.zip)
+    setSelectedMatch(s.match)
+  }
+
+  async function openAttendance(occ: { id: string; event_title: string; starts_at: string }) {
+    setAttendance({ occurrence: occ, data: null, loading: true, error: null })
+    const { data, error } = await supabase.rpc('event_attendance', { p_occurrence: occ.id })
+    if (error) {
+      setAttendance({ occurrence: occ, data: null, loading: false, error: error.message })
+    } else {
+      setAttendance({ occurrence: occ, data: (data as AttendanceView['data']) ?? null, loading: false, error: null })
     }
   }
 
@@ -251,6 +328,13 @@ export function EventScheduler({ selectedOrgId }: Props) {
           className="mt-1 w-full text-center text-[10px] font-semibold bg-white/60 hover:bg-white/90 rounded px-1 py-0.5 transition-colors"
         >
           Sign-In
+        </button>
+        <button
+          type="button"
+          onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+          className="mt-1 w-full text-center text-[10px] font-semibold bg-white/40 hover:bg-white/80 rounded px-1 py-0.5 transition-colors"
+        >
+          Attendance
         </button>
       </div>
     )
@@ -384,13 +468,22 @@ export function EventScheduler({ selectedOrgId }: Props) {
                         {format(parseISO(occ.starts_at), 'h:mm a')} – {format(parseISO(occ.ends_at), 'h:mm a')}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openKiosk(occ)}
-                      className="shrink-0 rounded-lg bg-white/60 hover:bg-white/90 px-3 py-1.5 text-xs font-semibold transition-colors"
-                    >
-                      Sign-In
-                    </button>
+                    <div className="shrink-0 flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openKiosk(occ)}
+                        className="rounded-lg bg-white/60 hover:bg-white/90 px-3 py-1.5 text-xs font-semibold transition-colors"
+                      >
+                        Sign-In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
+                        className="rounded-lg bg-white/40 hover:bg-white/80 px-3 py-1.5 text-xs font-semibold transition-colors"
+                      >
+                        Attendance
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -482,15 +575,43 @@ export function EventScheduler({ selectedOrgId }: Props) {
                 />
               </div>
 
+              {/* Address — autocompleted + geocoded on save (strong-match-only) */}
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Address</Label>
+                <AddressAutocomplete
+                  value={createAddress}
+                  onChange={(v) => { setCreateAddress(v); setSelectedMatch(null) }}
+                  onSelect={applySuggestion}
+                />
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                <div className="col-span-3 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">City</Label>
+                  <Input value={createCity} onChange={(e) => setCreateCity(e.target.value)} className="text-stone-900" />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">State</Label>
+                  <Input value={createState} onChange={(e) => setCreateState(e.target.value)} className="text-stone-900" maxLength={2} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">ZIP</Label>
+                  <Input value={createZip} onChange={(e) => setCreateZip(e.target.value)} className="text-stone-900" />
+                </div>
+              </div>
+
               {selectedOrgId === 'all' && (
                 <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-sm">Organization ID</Label>
-                  <Input
-                    value={createOrgId}
-                    onChange={(e) => setCreateOrgId(e.target.value)}
-                    placeholder="Paste org UUID"
-                    className="text-stone-900 placeholder:text-stone-400 font-mono text-sm"
-                  />
+                  <Label className="text-stone-700 text-sm">Organization</Label>
+                  <Select value={createOrgId} onValueChange={setCreateOrgId}>
+                    <SelectTrigger className="text-stone-900">
+                      <SelectValue placeholder="Select an organization you manage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {adminOrgs.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -500,6 +621,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
               </div>
 
               {createError && <p className="text-red-600 text-sm">{createError}</p>}
+              {createInfo && <p className="text-lime-700 text-sm">{createInfo}</p>}
 
               <Button
                 onClick={handleCreateEvent}
@@ -593,6 +715,77 @@ export function EventScheduler({ selectedOrgId }: Props) {
             if (!open) setKioskTarget(null)
           }}
         />
+      )}
+
+      {/* Attendance view (per occurrence) */}
+      {attendance && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setAttendance(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+              <div>
+                <h3 className="font-bold text-stone-800">Attendance</h3>
+                <p className="text-xs text-stone-400">{attendance.occurrence.event_title} · {format(parseISO(attendance.occurrence.starts_at), 'MMM d, h:mm a')}</p>
+              </div>
+              <button type="button" onClick={() => setAttendance(null)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              {attendance.loading ? (
+                <p className="text-sm text-stone-400">Loading attendance…</p>
+              ) : attendance.error ? (
+                <p className="text-sm text-red-600">{attendance.error}</p>
+              ) : !attendance.data ? (
+                <p className="text-sm text-stone-500">You do not have access to this event&rsquo;s attendance.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.confirmed}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Confirmed</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.early}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Early</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-stone-800">{attendance.data.no_show}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">No-show</p>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
+                      <p className="text-lg font-bold text-[#4a5d23]">{formatRatePct(attendance.data.show_rate)}</p>
+                      <p className="text-[10px] text-stone-500 uppercase">Show rate</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-stone-400 mb-2">
+                    {attendance.data.people_confirmed} people confirmed · {attendance.data.anonymous_confirmed} anonymous
+                    {attendance.data.ended ? '' : ' · in progress'}
+                  </p>
+                  {attendance.data.attendees.length === 0 ? (
+                    <p className="text-sm text-stone-400">No identified check-ins yet.</p>
+                  ) : (
+                    <div className="divide-y divide-stone-50">
+                      {attendance.data.attendees.map((att) => (
+                        <div key={att.user_id} className="py-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-stone-800 truncate">{att.name}</p>
+                            <p className="text-xs text-stone-400">Household {att.household_size}</p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${att.status === 'confirmed' ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-500'}`}>
+                              {att.status === 'confirmed' ? 'Attended' : 'Early'}
+                            </span>
+                            <span className="text-xs text-stone-500 w-10 text-right">{formatRatePct(att.attendance_rate)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
