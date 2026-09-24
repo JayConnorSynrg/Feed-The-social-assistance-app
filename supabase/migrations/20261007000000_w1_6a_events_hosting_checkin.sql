@@ -54,6 +54,28 @@
 --       removed from generated types; platform org delete with history refused (F5 cascade),
 --       documented in the spec.
 --
+-- ROUND-4 FOLLOW-UP FIXES (G1, G2) — make D1/D2 reachable + never drop confirmed presence:
+--   G1  (D1 reachability) The people D1 says can still act can now REACH an in-progress
+--       occurrence of a RETIRED event in the UI. Two extra permissive SELECT policies (TO
+--       authenticated, backed by SECDEF helpers w1_6a_event_authed_reachable /
+--       w1_6a_occ_authed_reachable) add exactly: a signed-in MEMBER sees an in-progress
+--       occurrence of a retired event (org active) + its parent event (→ Events list "I'm here");
+--       an ORG ADMIN of an active org sees ALL their org's events + occurrences regardless of the
+--       event's is_active (→ scheduler/kiosk + permanent D2 attendance history). No one sees a
+--       retired event's future (cancelled) occurrences as check-in-able; anon/guest read exposure
+--       is unchanged (the new policies are authenticated-only). This SUPERSEDES the round-4 note
+--       that an org admin "cannot even reach" a retired event's row — they now reach it and hit
+--       the explicit D2 ended-cancel guard (same as a platform admin), instead of a silent no-op.
+--   G2  (D2 confirmed-never-drops) Org deactivation STILL cancels in-progress occurrences (K2/K3
+--       unchanged — a suspended org refuses every check-in, so the occurrence cannot be served and
+--       its early intents must not rot into no-shows; relaxing check_in for a suspended org is the
+--       concrete reason it can't follow the D1 retire rule). The accounting is fixed instead: a
+--       CONFIRMED row on a since-voided (cancelled) occurrence that had already STARTED counts as
+--       ATTENDED in w1_6a_user_org_rate + my_attendance_rate, and early rows of a cancelled
+--       occurrence are never no-shows — so a member's confirmed presence never drops out of their
+--       rate. (A confirmed row only exists on an occurrence that had started, so a not-started
+--       cancelled occurrence is never counted.)
+--
 -- INVARIANTS (this migration is the site that satisfies each):
 --   I1  Every check-in write goes through a SECDEF RPC (check_in / organizer_confirm).
 --       Clients hold NO INSERT/UPDATE/DELETE on event_checkins (grants revoked; write
@@ -592,6 +614,21 @@ GRANT  EXECUTE ON FUNCTION public.organizer_confirm(uuid,uuid,int) TO authentica
 -- ============================================================================
 -- 5. Attendance reads (SECDEF) — R4/R5, I4
 -- ============================================================================
+-- G2 — CONFIRMED PRESENCE NEVER DROPS OUT OF A RATE (round-4 fix, user ruling G2).
+--   Deactivating an org still CANCELS its in-progress occurrences (K2/K3 unchanged): a
+--   suspended org refuses every check-in (check_in / organizer_confirm gate on org-active
+--   first), so an in-progress occurrence can no longer be served and MUST NOT be left "live"
+--   or its early intents would rot into no-shows the moment it ends — and relaxing check_in to
+--   allow confirms on a suspended org contradicts "a deactivated org refuses all check-ins".
+--   That is the concrete reason org deactivation cannot simply follow the D1 retire rule.
+--   So we KEEP the cancellation and fix the accounting instead: a member's CONFIRMED presence
+--   on a since-voided (cancelled) occurrence that had already STARTED is counted as ATTENDED,
+--   and the early rows of any cancelled occurrence are never counted as no-shows. A confirmed
+--   row only ever exists on an occurrence that had started, so this never counts a not-started
+--   cancelled occurrence. w1_6a_user_org_rate + my_attendance_rate below are the two sites;
+--   event_attendance already reports no_show=0 for a cancelled occurrence and surfaces each
+--   attendee's org-scoped rate through w1_6a_user_org_rate, so it inherits the same rule.
+--
 -- 5a. Internal helper: a user's attendance rate computed ONLY over one org's ENDED
 -- occurrences. SECDEF (reads event_checkins across users) but NOT client-executable —
 -- it is called only from event_attendance, which has already authorised the caller as
@@ -601,22 +638,29 @@ CREATE OR REPLACE FUNCTION public.w1_6a_user_org_rate(p_user uuid, p_org uuid)
   RETURNS numeric
   LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
-  SELECT CASE WHEN count(*) FILTER (WHERE ec.status IN ('early','confirmed')) > 0
-              THEN round(
-                     count(*) FILTER (WHERE ec.status = 'confirmed')::numeric
-                     / count(*) FILTER (WHERE ec.status IN ('early','confirmed')), 4)
+  -- G2 counting rule (see the CONFIRMED-NEVER-DROPS block above w1_6a_ATTENDED_ROW):
+  --   ATTENDED (numerator) = a CONFIRMED row whose occurrence ran-and-ended (D2/K4) OR was
+  --     voided (cancelled) after it had already started — a member's confirmed presence never
+  --     drops out of their rate just because the org was later deactivated mid-occurrence.
+  --   NO-SHOW  = an EARLY row ONLY on a ran-and-ended, non-cancelled occurrence; an early row on
+  --     a cancelled (never-ran or voided) occurrence is never a no-show.
+  SELECT CASE WHEN count(*) FILTER (WHERE x.attended OR x.noshow) > 0
+              THEN round(count(*) FILTER (WHERE x.attended)::numeric
+                         / count(*) FILTER (WHERE x.attended OR x.noshow), 4)
               ELSE NULL END
-    FROM public.event_checkins ec
-    JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
-    JOIN public.assistance_events ae ON ae.id = eo.event_id
-    JOIN public.organizations o ON o.id = ae.org_id
-   WHERE ec.user_id = p_user
-     AND ae.org_id  = p_org
-     -- D2/K4: an occurrence that RAN (was not cancelled before it ended) counts regardless of
-     -- the event's or org's LATER is_active — attendance history is permanent. A cancelled
-     -- occurrence (incl. one cancelled by a retire/deactivate before it ended) never counts.
-     AND eo.status <> 'cancelled'
-     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ran & ended" = completed OR past ends_at
+    FROM (
+      SELECT
+        (ec.status = 'confirmed'
+          AND ( (eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now()))
+                OR (eo.status = 'cancelled' AND eo.starts_at <= now()) )) AS attended,  -- w1_6a_ATTENDED_ROW
+        (ec.status = 'early'
+          AND eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now())) AS noshow
+        FROM public.event_checkins ec
+        JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
+        JOIN public.assistance_events ae ON ae.id = eo.event_id
+       WHERE ec.user_id = p_user
+         AND ae.org_id  = p_org
+    ) x;
 $fn$;
 REVOKE EXECUTE ON FUNCTION public.w1_6a_user_org_rate(uuid,uuid) FROM PUBLIC, anon, authenticated;
 
@@ -725,19 +769,25 @@ AS $fn$
 DECLARE v_uid uuid := auth.uid(); v_conf int; v_total int;
 BEGIN
   IF v_uid IS NULL THEN RETURN NULL; END IF;
+  -- Same G2 rule as w1_6a_user_org_rate: confirmed presence on a ran-and-ended occurrence
+  -- (D2/K4) OR on a since-voided occurrence that had started counts as attended; an early row
+  -- is a no-show only on a ran-and-ended non-cancelled occurrence. Confirmed presence the
+  -- member earned can never disappear from their rate (incl. after an org deactivation).
   SELECT
-    count(*) FILTER (WHERE ec.status = 'confirmed'),
-    count(*) FILTER (WHERE ec.status IN ('early','confirmed'))
+    count(*) FILTER (WHERE x.attended),
+    count(*) FILTER (WHERE x.attended OR x.noshow)
     INTO v_conf, v_total
-    FROM public.event_checkins ec
-    JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
-    JOIN public.assistance_events ae ON ae.id = eo.event_id
-    JOIN public.organizations o ON o.id = ae.org_id
-   WHERE ec.user_id = v_uid
-     -- D2/K4: count every occurrence that RAN regardless of the event's/org's later is_active;
-     -- confirmed attendance the member earned can never disappear from their rate.
-     AND eo.status <> 'cancelled'
-     AND (eo.status = 'completed' OR eo.ends_at < now());  -- "ran & ended" = completed OR past ends_at
+    FROM (
+      SELECT
+        (ec.status = 'confirmed'
+          AND ( (eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now()))
+                OR (eo.status = 'cancelled' AND eo.starts_at <= now()) )) AS attended,  -- w1_6a_ATTENDED_ROW_MINE
+        (ec.status = 'early'
+          AND eo.status <> 'cancelled' AND (eo.status = 'completed' OR eo.ends_at < now())) AS noshow
+        FROM public.event_checkins ec
+        JOIN public.event_occurrences eo ON eo.id = ec.occurrence_id
+       WHERE ec.user_id = v_uid
+    ) x;
   RETURN jsonb_build_object(
     'confirmed', v_conf,
     'total',     v_total,
@@ -1407,6 +1457,81 @@ CREATE POLICY occurrences_select_active_event ON public.event_occurrences
                    JOIN public.organizations o ON o.id = ae.org_id
                   WHERE ae.id = event_occurrences.event_id
                     AND ae.is_active = true AND o.is_active = true));
+
+-- ----------------------------------------------------------------------------
+-- G1 — RETIRED-EVENT REACHABILITY (round-4 fix, user ruling D1).
+-- The plain, anon-safe policies above reveal ONLY active events of active orgs. D1 keeps an
+-- in-progress occurrence of a RETIRED event LIVE (members may still confirm; the organizer keeps
+-- the 24h grace) and its ended occurrences are permanent history (D2) — but the people D1 says
+-- can still act could not SEE the row: a retired event is not SELECT-visible, and because the
+-- pre-existing occurrences_org_admin_select policy joins assistance_events under RLS, hiding the
+-- retired event also hid its occurrences from the org admin (scheduler/kiosk/attendance blind).
+--
+-- These TWO extra permissive policies restore exactly the needed reachability, no wider, and are
+-- scoped TO authenticated because they call SECDEF helpers (REVOKEd from anon) and because only
+-- signed-in members can act — so anon/guest read exposure is unchanged. RLS is permissive-OR, so
+-- these only ADD visibility; active-event visibility still flows through the plain policies above.
+--   • A signed-in MEMBER additionally sees an occurrence that is IN PROGRESS right now
+--     (status not terminal, starts_at ≤ now < ends_at) of a retired event whose org is active,
+--     plus that occurrence's parent event — enough to render it in the Events list with "I'm here".
+--     Not-started (cancelled-on-retire) and ended occurrences of a retired event stay hidden from
+--     plain members: no one sees a retired event's future occurrences as check-in-able.
+--   • An ORG ADMIN of an ACTIVE org additionally sees ALL of their own org's events and their
+--     occurrences regardless of the event's is_active — so a retired event's in-progress occurrence
+--     is reachable in the scheduler/kiosk and its ENDED occurrences stay reachable for Attendance
+--     (D2 history). The org-active gate keeps F7 intact (an admin of a since-deactivated org still
+--     sees nothing here). The occurrence-bounds + D2 ended-cancel guards still refuse any illegal
+--     write, so this widens reads only.
+-- SECDEF helpers compute reachability against the base tables directly (RLS bypassed inside the
+-- definer), so they never re-trip the nested-RLS filtering that caused the blind spot.
+CREATE OR REPLACE FUNCTION public.w1_6a_event_authed_reachable(p_event uuid)
+  RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.assistance_events ae
+      JOIN public.organizations o ON o.id = ae.org_id
+     WHERE ae.id = p_event
+       AND o.is_active
+       AND ( public.is_org_admin(ae.org_id)                       -- org admin: all own-org events
+             OR ( NOT EXISTS (SELECT 1 FROM auth.users u          -- member: real (non-guest) only
+                               WHERE u.id = auth.uid() AND u.is_anonymous IS TRUE)
+                  AND EXISTS (SELECT 1 FROM public.event_occurrences eo  -- ...with an in-progress occ
+                               WHERE eo.event_id = ae.id
+                                 AND eo.status NOT IN ('cancelled','completed')
+                                 AND eo.starts_at <= now() AND now() < eo.ends_at) ) ) );  -- w1_6a_INPROGRESS_EV
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_event_authed_reachable(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.w1_6a_event_authed_reachable(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.w1_6a_occ_authed_reachable(p_occ uuid)
+  RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.event_occurrences eo
+      JOIN public.assistance_events ae ON ae.id = eo.event_id
+      JOIN public.organizations o ON o.id = ae.org_id
+     WHERE eo.id = p_occ
+       AND o.is_active
+       AND ( public.is_org_admin(ae.org_id)                       -- org admin: all own-org occurrences
+             OR ( eo.status NOT IN ('cancelled','completed')      -- member: in-progress-retired only,
+                  AND eo.starts_at <= now() AND now() < eo.ends_at  -- ...real (non-guest) member only
+                  AND NOT EXISTS (SELECT 1 FROM auth.users u
+                                   WHERE u.id = auth.uid() AND u.is_anonymous IS TRUE) ) ) );  -- w1_6a_INPROGRESS_OCC
+$fn$;
+REVOKE EXECUTE ON FUNCTION public.w1_6a_occ_authed_reachable(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.w1_6a_occ_authed_reachable(uuid) TO authenticated;
+
+DROP POLICY IF EXISTS events_select_reachable_authed ON public.assistance_events;
+CREATE POLICY events_select_reachable_authed ON public.assistance_events
+  FOR SELECT TO authenticated
+  USING (public.w1_6a_event_authed_reachable(id));
+
+DROP POLICY IF EXISTS occurrences_select_reachable_authed ON public.event_occurrences;
+CREATE POLICY occurrences_select_reachable_authed ON public.event_occurrences
+  FOR SELECT TO authenticated
+  USING (public.w1_6a_occ_authed_reachable(id));
 
 -- (b) Org-admin occurrence management (INSERT/UPDATE) requires the owning ORG active — an
 -- admin of a retired org cannot add or edit occurrences. The predicate is the prior

@@ -300,9 +300,8 @@ permission differs, and the difference is intentional:
   of an ended occurrence survive a later event retire or org deactivation (D2). `event_attendance`
   already used ran semantics for its per-event stats. A client cannot cancel an **ended** occurrence
   (D2): the occurrence guard refuses `→ cancelled` when `OLD` is completed or past `ends_at`
-  (ungated on check-ins). For a **retired** event, an org admin cannot even reach the row (a retired
-  event is not `SELECT`-visible via `events_select_active`, so the org-admin UPDATE policy matches
-  0 rows — a silent no-op); a **platform** admin reaches the row and hits the explicit D2 guard.
+  (ungated on check-ins). Both a **platform** admin and (since G1 below) the **org admin** reach the
+  row and hit the explicit D2 guard.
 - **K5 — reachability + hygiene.**
   - **Cancel** is offered on **both** the desktop calendar chip and the mobile day view, and **only**
     on a not-yet-ended, not-already-cancelled occurrence (an ended occurrence's history is permanent).
@@ -325,3 +324,54 @@ preserved (retire/deactivate flows reordered so the org-deactivation cascade no 
 occurrences the finale rates). Mutation proofs: disabling the reopen guard, blocking the in-progress
 retired-event confirm, and re-adding the is_active rate filter each flip their probe (K1/K3/K4);
 the earlier F1/F2/F6 mutants still die.
+
+## Fix round 4 follow-up — reachability (G1) + confirmed-never-drops (G2)
+
+Round-4 review found two ways D1/D2 were satisfied server-side but not honoured end-to-end.
+
+- **G1 — reachability of a retired event's live/ended occurrences.** D1 keeps an in-progress
+  occurrence of a *retired* event live, but the people D1 says can still act could not **see** it:
+  `events_select_active` / `occurrences_select_active_event` require the event active, and because
+  the pre-existing `occurrences_org_admin_select` joins `assistance_events` under RLS, hiding the
+  retired event also hid its occurrences from the org admin (scheduler/kiosk/attendance went blind).
+  Fix: two extra **permissive** `SELECT` policies (`events_select_reachable_authed`,
+  `occurrences_select_reachable_authed`), `TO authenticated`, backed by SECDEF helpers
+  (`w1_6a_event_authed_reachable` / `w1_6a_occ_authed_reachable`, which compute reachability against
+  the base tables so they never re-trip the nested-RLS filtering). They add exactly: a signed-in,
+  **non-guest** member sees an *in-progress* occurrence of a retired event (org active) **and** its
+  parent event — enough to render the Events list "I'm here"; an **org admin of an active org** sees
+  **all** of their org's events + occurrences regardless of the event's `is_active`, so a retired
+  event's in-progress occurrence is reachable in the scheduler/kiosk and its **ended** occurrences
+  stay reachable for Attendance (D2 history). No one sees a retired event's **future (cancelled)**
+  occurrences as check-in-able; anon/guest read exposure is unchanged (authenticated-only, guest
+  excluded via the `auth.users.is_anonymous` guard). The org admin now **reaches** a retired event's
+  ended occurrence and hits the explicit D2 guard (supersedes the round-4 "silent no-op" note). UI:
+  `event-scheduler.tsx` drops its `.eq('is_active', true)` filter (RLS scopes it) so retired events
+  with a reachable occurrence surface in the calendar/Past-&-cancelled; the events-panel needs no
+  change (it already lists `status='upcoming' AND ends_at>=now`, gated only by RLS). Retire is hidden
+  in the edit modal for an already-retired event (dead action).
+- **G2 — a member's confirmed presence never drops out of their rate.** Deactivating an org **still
+  cancels** its in-progress occurrences (K2/K3 unchanged): a suspended org refuses every check-in,
+  so an in-progress occurrence can no longer be served and must not be left live (its early intents
+  would rot into no-shows), and relaxing `check_in` for a suspended org contradicts "a deactivated
+  org refuses all check-ins" — that is the concrete reason org deactivation cannot follow the D1
+  retire rule. **Rule chosen:** keep the cancellation and fix the accounting — a **confirmed** row on
+  a since-voided (cancelled) occurrence that had already **started** counts as **attended** in
+  `w1_6a_user_org_rate` + `my_attendance_rate`, and an early row on any cancelled occurrence is never
+  a no-show. So confirmed presence the member earned survives an org deactivation mid-occurrence
+  (previously it was dropped — the "confirmed-on-voided" bug). A confirmed row exists only on an
+  occurrence that had started, so a not-started cancelled occurrence is never counted.
+
+Verification: `gen_r4.py` → `check_r4.py` **69/69** (adds S9 G1 reachability — member sees + checks
+in the in-progress retired occ, future occ hidden + refused, guest sees none, org admin reaches it in
+the scheduler query + Attendance for both the in-progress and the ended occ, ended occ hidden from
+plain members; S10 G2 — confirmed presence on a voided in-progress occ still counts, early-only member
+never a no-show, credit idempotent, no forged no-show, and an occ that already ran survives a later
+deactivate). `gen6.py` → `check_r3.py` 40/40 preserved. F4 race test passes (member counted once).
+Mutation proofs: nulling the voided-confirmed branch of `my_attendance_rate` drops S10_X_rate to
+`confirmed=0` (G2); forcing the member in-progress reachability window false hides S9_M_see_inprog
+(G1). Prod dry-run (single rolled-back tx via the Management API SQL endpoint, trailing `RAISE`):
+**69/69** against the live prod schema, `pre_ledger_exists=false`, `transition_md5` unchanged
+(`f3bc362…`), backfill-safe (0 orgs/events/occ/checkins), anon = member = guest reads (no broadened
+exposure). Smoke 07/25/26/27/28 STATE clean on migrated state; P2.0 `enforce_opt_in_transition`
+`prosrc` md5 unchanged; tsc 0, eslint 0 on changed files; non-smoke vitest green.

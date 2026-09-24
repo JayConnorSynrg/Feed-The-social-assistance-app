@@ -136,6 +136,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
 
   // Edit event modal state (wires admin_update_event; re-geocodes when the address changes)
   const [editEventId, setEditEventId] = useState<string | null>(null)
+  const [editIsActive, setEditIsActive] = useState<boolean>(true)
   const [editTitle, setEditTitle] = useState('')
   const [editEventType, setEditEventType] = useState('distribution')
   const [editLocationName, setEditLocationName] = useState('')
@@ -151,6 +152,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
 
   function openEditEvent(ev: AssistanceEvent) {
     setEditEventId(ev.id)
+    setEditIsActive(ev.is_active)
     setEditTitle(ev.title)
     setEditEventType(ev.event_type)
     setEditLocationName(ev.location_name ?? '')
@@ -166,10 +168,16 @@ export function EventScheduler({ selectedOrgId }: Props) {
 
   const fetchEvents = useCallback(async () => {
     setLoading(true)
+    // G1 (D1 reachability): do NOT filter on is_active here. A RETIRED event whose org is still
+    // active keeps an in-progress occurrence LIVE (D1) and its ENDED occurrences are permanent
+    // history (D2), and the org admin must reach both (kiosk + Attendance). RLS scopes this to the
+    // org admin's own active org (events_select_reachable_authed / occurrences_select_reachable_authed
+    // + occurrences_org_admin_select), so a retired event surfaces only when it still has a
+    // reachable occurrence; the calendar hides cancelled ones and the "Past & cancelled" section
+    // carries the ended history. Platform admins see everything via the *_admin_select policies.
     const query = supabase
       .from('assistance_events')
       .select('id, title, event_type, description, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
-      .eq('is_active', true)
 
     if (selectedOrgId !== 'all') {
       query.eq('org_id', selectedOrgId)
@@ -471,10 +479,11 @@ export function EventScheduler({ selectedOrgId }: Props) {
 
   async function handleRetireEvent() {
     if (!editEventId) return
-    // Retire = set is_active=false. The event drops off the member feed and the scheduler
-    // default. D1: only NOT-YET-STARTED occurrences are cancelled; an occurrence already in
-    // progress continues to its end (members there can still confirm) and ended occurrences keep
-    // their attendance history. Reversible from the DB.
+    // Retire = set is_active=false. The event drops off the member feed for its NOT-YET-STARTED
+    // occurrences. D1: only not-yet-started occurrences are cancelled; an occurrence already in
+    // progress continues to its end (members there can still confirm and still see it in their
+    // Events list) and ended occurrences keep their attendance history — both stay reachable to the
+    // org admin here in the scheduler/kiosk/Attendance (G1). Reversible from the DB.
     if (!confirm('Retire this event? Upcoming (not-yet-started) occurrences will be cancelled. Any occurrence already in progress finishes normally, and past attendance is kept.')) return
     setSavingEdit(true)
     setEditError(null)
@@ -1036,14 +1045,18 @@ export function EventScheduler({ selectedOrgId }: Props) {
               >
                 {savingEdit ? 'Saving…' : 'Save changes'}
               </Button>
-              <button
-                type="button"
-                onClick={handleRetireEvent}
-                disabled={savingEdit}
-                className="w-full text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 py-1"
-              >
-                Retire event
-              </button>
+              {/* G1: a retired event stays reachable here for its in-progress/ended occurrences,
+                  but Retire is a dead action on it — offer it only while the event is active. */}
+              {editIsActive && (
+                <button
+                  type="button"
+                  onClick={handleRetireEvent}
+                  disabled={savingEdit}
+                  className="w-full text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 py-1"
+                >
+                  Retire event
+                </button>
+              )}
             </div>
           </div>
         </div>
