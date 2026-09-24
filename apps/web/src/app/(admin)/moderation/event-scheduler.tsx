@@ -30,6 +30,10 @@ interface AssistanceEvent {
   title: string
   event_type: string
   location_name: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
   org_id: string
   rrule: string | null
   is_active: boolean
@@ -129,11 +133,41 @@ export function EventScheduler({ selectedOrgId }: Props) {
   const [addingOccurrence, setAddingOccurrence] = useState(false)
   const [addOccurrenceError, setAddOccurrenceError] = useState<string | null>(null)
 
+  // Edit event modal state (wires admin_update_event; re-geocodes when the address changes)
+  const [editEventId, setEditEventId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editEventType, setEditEventType] = useState('distribution')
+  const [editLocationName, setEditLocationName] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [editCity, setEditCity] = useState('')
+  const [editState, setEditState] = useState('')
+  const [editZip, setEditZip] = useState('')
+  const [editOriginalAddress, setEditOriginalAddress] = useState('')
+  const [editSelectedMatch, setEditSelectedMatch] = useState<GeocodeMatch | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editInfo, setEditInfo] = useState<string | null>(null)
+
+  function openEditEvent(ev: AssistanceEvent) {
+    setEditEventId(ev.id)
+    setEditTitle(ev.title)
+    setEditEventType(ev.event_type)
+    setEditLocationName(ev.location_name ?? '')
+    setEditAddress(ev.address ?? '')
+    setEditCity(ev.city ?? '')
+    setEditState(ev.state ?? '')
+    setEditZip(ev.zip_code ?? '')
+    setEditOriginalAddress([ev.address, ev.city, ev.state, ev.zip_code].filter(Boolean).join(', '))
+    setEditSelectedMatch(null)
+    setEditError(null)
+    setEditInfo(null)
+  }
+
   const fetchEvents = useCallback(async () => {
     setLoading(true)
     const query = supabase
       .from('assistance_events')
-      .select('id, title, event_type, location_name, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
+      .select('id, title, event_type, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
       .eq('is_active', true)
 
     if (selectedOrgId !== 'all') {
@@ -311,6 +345,63 @@ export function EventScheduler({ selectedOrgId }: Props) {
       await fetchEvents()
     } finally {
       setAddingOccurrence(false)
+    }
+  }
+
+  async function handleEditEvent() {
+    if (!editEventId || !editTitle.trim()) return
+    setSavingEdit(true)
+    setEditError(null)
+    setEditInfo(null)
+    try {
+      const fullAddress = [editAddress, editCity, editState, editZip].filter(Boolean).join(', ')
+      const addressChanged = fullAddress !== editOriginalAddress
+      // Re-geocode only when the address actually changed. The server writes location ONLY
+      // from a strong (precise-tier) match (I5); a weak/failed re-geocode clears location
+      // and tags 'approximate'.
+      let match: GeocodeMatch | null = editSelectedMatch
+      if (addressChanged && !match && editAddress.trim()) {
+        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
+      }
+      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
+
+      const { error } = await supabase.rpc('admin_update_event', {
+        p_event_id: editEventId,
+        p_title: editTitle.trim(),
+        p_event_type: editEventType,
+        p_location_name: editLocationName.trim() || undefined,
+        p_address: editAddress.trim() || undefined,
+        p_city: editCity.trim() || undefined,
+        p_state: editState.trim() || undefined,
+        p_zip_code: editZip.trim() || undefined,
+        p_lat: addressChanged ? match?.lat : undefined,
+        p_lng: addressChanged ? match?.lng : undefined,
+        p_geocode_accuracy: addressChanged ? match?.accuracy : undefined,
+        p_geocode_confidence: addressChanged ? match?.confidence : undefined,
+        p_regeocode: addressChanged,
+      })
+
+      if (error) {
+        setEditError(error.message)
+        return
+      }
+
+      logger.info('admin.event.updated', {
+        event_id: editEventId,
+        regeocode: addressChanged,
+        geocode_accuracy: addressChanged ? (match?.accuracy ?? 'none') : 'unchanged',
+      })
+
+      if (addressChanged) {
+        setEditInfo(isStrong
+          ? `Saved and re-located on the map (${match!.accuracy}).`
+          : 'Saved. The new address did not resolve precisely, so it will show as an unknown location until edited.')
+      }
+
+      setEditEventId(null)
+      await fetchEvents()
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -505,19 +596,28 @@ export function EventScheduler({ selectedOrgId }: Props) {
                   <p className="text-sm font-medium text-stone-800">{event.title}</p>
                   <p className="text-xs text-stone-400">{event.event_type} · {event.org?.name ?? ''}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddOccurrenceEventId(event.id)
-                    const today = format(new Date(), "yyyy-MM-dd'T'09:00")
-                    const todayEnd = format(new Date(), "yyyy-MM-dd'T'11:00")
-                    setAddStartsAt(today)
-                    setAddEndsAt(todayEnd)
-                  }}
-                  className="shrink-0 text-xs text-[#4a5d23] hover:underline font-medium"
-                >
-                  + Occurrence
-                </button>
+                <div className="shrink-0 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => openEditEvent(event)}
+                    className="text-xs text-stone-500 hover:text-[#4a5d23] hover:underline font-medium"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddOccurrenceEventId(event.id)
+                      const today = format(new Date(), "yyyy-MM-dd'T'09:00")
+                      const todayEnd = format(new Date(), "yyyy-MM-dd'T'11:00")
+                      setAddStartsAt(today)
+                      setAddEndsAt(todayEnd)
+                    }}
+                    className="text-xs text-[#4a5d23] hover:underline font-medium"
+                  >
+                    + Occurrence
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -699,6 +799,102 @@ export function EventScheduler({ selectedOrgId }: Props) {
                 className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
               >
                 {addingOccurrence ? 'Adding…' : 'Add Occurrence'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Event Modal — wires admin_update_event (re-geocodes on address change) */}
+      {editEventId && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-stone-800">Edit Event</h3>
+              <button
+                type="button"
+                onClick={() => setEditEventId(null)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Title</Label>
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Event title"
+                  className="text-stone-900 placeholder:text-stone-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Event type</Label>
+                <Select value={editEventType} onValueChange={setEditEventType}>
+                  <SelectTrigger className="text-stone-900">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="distribution">Distribution</SelectItem>
+                    <SelectItem value="meal">Meal</SelectItem>
+                    <SelectItem value="pantry">Pantry</SelectItem>
+                    <SelectItem value="clinic">Clinic</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Location name</Label>
+                <Input
+                  value={editLocationName}
+                  onChange={(e) => setEditLocationName(e.target.value)}
+                  placeholder="Community Center, Church Hall…"
+                  className="text-stone-900 placeholder:text-stone-400"
+                />
+              </div>
+
+              {/* Address — editing it re-geocodes on save (strong-match-only) */}
+              <div className="space-y-1.5">
+                <Label className="text-stone-700 text-sm">Address</Label>
+                <AddressAutocomplete
+                  value={editAddress}
+                  onChange={(v) => { setEditAddress(v); setEditSelectedMatch(null) }}
+                  onSelect={(s) => {
+                    setEditAddress(s.address_line1 || s.label)
+                    if (s.city) setEditCity(s.city)
+                    if (s.state) setEditState(s.state)
+                    if (s.zip) setEditZip(s.zip)
+                    setEditSelectedMatch(s.match)
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                <div className="col-span-3 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">City</Label>
+                  <Input value={editCity} onChange={(e) => { setEditCity(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">State</Label>
+                  <Input value={editState} onChange={(e) => { setEditState(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" maxLength={2} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-stone-700 text-sm">ZIP</Label>
+                  <Input value={editZip} onChange={(e) => { setEditZip(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
+                </div>
+              </div>
+
+              {editError && <p className="text-red-600 text-sm">{editError}</p>}
+              {editInfo && <p className="text-lime-700 text-sm">{editInfo}</p>}
+
+              <Button
+                onClick={handleEditEvent}
+                disabled={savingEdit || !editTitle.trim()}
+                className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
+              >
+                {savingEdit ? 'Saving…' : 'Save changes'}
               </Button>
             </div>
           </div>

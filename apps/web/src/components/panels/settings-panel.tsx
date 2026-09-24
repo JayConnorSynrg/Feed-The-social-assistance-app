@@ -36,6 +36,7 @@ import { GiftsReceivedShelf } from '@/components/appreciation/gifts-received-she
 import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsAdmin } from '@/hooks/use-is-admin'
+import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
@@ -790,11 +791,17 @@ function getRelativeTime(date: Date): string {
 // ============================================
 // ADMIN SECTION (visible only to admins)
 // ============================================
-function AdminSection() {
+function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
+  // A platform admin gets the full moderation dashboard; an org admin (non-platform-admin)
+  // gets organizer tools — schedule events, run the check-in kiosk, and view attendance for
+  // the organizations they manage. Both open the same route; the shell shows only what the
+  // caller may use.
   return (
     <SettingsSection
       title="Administration"
-      description="Tools for reviewing community submissions, reports, and safety alerts."
+      description={isPlatformAdmin
+        ? 'Tools for reviewing community submissions, reports, and safety alerts.'
+        : 'Tools for scheduling your organization’s events and running check-in.'}
     >
       <div className="p-5 bg-[#faf9f6] rounded-xl border border-stone-200">
         <div className="flex items-start gap-3 mb-4">
@@ -802,10 +809,13 @@ function AdminSection() {
             <ShieldAlert className="w-5 h-5 text-[#4a5d23]" />
           </div>
           <div>
-            <p className="font-medium text-sm text-stone-800">Moderation dashboard</p>
+            <p className="font-medium text-sm text-stone-800">
+              {isPlatformAdmin ? 'Moderation dashboard' : 'Organizer tools'}
+            </p>
             <p className="text-xs text-stone-600 mt-0.5">
-              Review pending resources, content reports, safety alerts, and petition
-              signatures.
+              {isPlatformAdmin
+                ? 'Review pending resources, content reports, safety alerts, and petition signatures.'
+                : 'Schedule events and occurrences, run the check-in kiosk, and view attendance for your organization.'}
             </p>
           </div>
         </div>
@@ -814,7 +824,7 @@ function AdminSection() {
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4d1c] transition-colors"
         >
           <ShieldAlert className="w-4 h-4" />
-          Open Moderation Dashboard
+          {isPlatformAdmin ? 'Open Moderation Dashboard' : 'Open Organizer Tools'}
         </Link>
       </div>
     </SettingsSection>
@@ -1208,6 +1218,10 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
   const { user, profile, refreshSession, isAnonymous } = useAuth()
   const isAdmin = useIsAdmin()
+  const isOrgAdmin = useIsOrgAdmin()
+  // The admin entry appears for platform admins AND for org admins (who get an
+  // events-only shell). Platform-admin status still decides what the shell renders.
+  const showAdminEntry = isAdmin || isOrgAdmin
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1325,7 +1339,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
       {/* Left Navigation */}
       <div className="w-12 sm:w-48 flex-shrink-0">
         <div className="space-y-1">
-          {(isAdmin ? [...SETTINGS_NAV, ADMIN_SETTINGS_NAV] : SETTINGS_NAV).map((nav) => (
+          {(showAdminEntry ? [...SETTINGS_NAV, ADMIN_SETTINGS_NAV] : SETTINGS_NAV).map((nav) => (
             <SettingsNavItem
               key={nav.id}
               {...nav}
@@ -1368,8 +1382,8 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
           {activeSection === 'accessibility' && (
             <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
           )}
-          {activeSection === 'admin' && isAdmin && (
-            <AdminSection />
+          {activeSection === 'admin' && showAdminEntry && (
+            <AdminSection isPlatformAdmin={isAdmin} />
           )}
         </div>
       </div>

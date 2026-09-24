@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
+import { useIsAdmin } from '@/hooks/use-is-admin'
 import { logger } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
@@ -23,8 +24,13 @@ function PlaceholderTab({ label }: { label: string }) {
 
 export function AdminShell() {
   const { orgs, loading: orgsLoading } = useAdminOrgs()
+  // A platform admin sees every section; a non-platform-admin org admin (route-allowed by
+  // is_org_admin_any) sees ONLY the Events section, scoped to the orgs they administer.
+  const isPlatformAdmin = useIsAdmin()
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
   const [activeTab, setActiveTab] = useState('overview')
+  // Org admins are pinned to the Events tab regardless of activeTab state.
+  const effectiveTab = isPlatformAdmin ? activeTab : 'events'
 
   function handleTabChange(tab: string) {
     logger.info('admin.shell.tab_switch', { to_tab: tab, from_tab: activeTab, org_id: selectedOrgId })
@@ -42,7 +48,9 @@ export function AdminShell() {
       <div className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10"
            style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
         <LayoutDashboard className="h-5 w-5 text-lime-600 shrink-0" />
-        <h1 className="font-semibold text-stone-900 text-sm sm:text-base shrink-0">Admin</h1>
+        <h1 className="font-semibold text-stone-900 text-sm sm:text-base shrink-0">
+          {isPlatformAdmin ? 'Admin' : 'Organizer'}
+        </h1>
 
         {/* Org selector */}
         <div className="flex-1 min-w-0">
@@ -65,69 +73,79 @@ export function AdminShell() {
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4">
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <Tabs value={effectiveTab} onValueChange={handleTabChange}>
           {/* Tab bar — horizontally scrollable on mobile */}
           <div className="overflow-x-auto -mx-2 px-2 pb-1">
             <TabsList className="flex-nowrap inline-flex w-auto min-w-full bg-white border border-stone-200 rounded-xl p-1 gap-1">
-              <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <LayoutDashboard className="h-3.5 w-3.5" />
-                Overview
-              </TabsTrigger>
+              {isPlatformAdmin && (
+                <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                  <LayoutDashboard className="h-3.5 w-3.5" />
+                  Overview
+                </TabsTrigger>
+              )}
               <TabsTrigger value="events" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
                 <Calendar className="h-3.5 w-3.5" />
                 Events
               </TabsTrigger>
-              <TabsTrigger value="moderation" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <ShieldAlert className="h-3.5 w-3.5" />
-                Moderation
-              </TabsTrigger>
-              <TabsTrigger value="community" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <Users className="h-3.5 w-3.5" />
-                Community
-              </TabsTrigger>
-              <TabsTrigger value="orgs" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <Building2 className="h-3.5 w-3.5" />
-                Organizations
-              </TabsTrigger>
-              <TabsTrigger value="resources" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <Database className="h-3.5 w-3.5" />
-                Resources
-              </TabsTrigger>
-              <TabsTrigger value="manage" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <ListChecks className="h-3.5 w-3.5" />
-                Manage
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
-                <Settings className="h-3.5 w-3.5" />
-                Settings
-              </TabsTrigger>
+              {isPlatformAdmin && (
+                <>
+                  <TabsTrigger value="moderation" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    Moderation
+                  </TabsTrigger>
+                  <TabsTrigger value="community" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <Users className="h-3.5 w-3.5" />
+                    Community
+                  </TabsTrigger>
+                  <TabsTrigger value="orgs" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <Building2 className="h-3.5 w-3.5" />
+                    Organizations
+                  </TabsTrigger>
+                  <TabsTrigger value="resources" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <Database className="h-3.5 w-3.5" />
+                    Resources
+                  </TabsTrigger>
+                  <TabsTrigger value="manage" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <ListChecks className="h-3.5 w-3.5" />
+                    Manage
+                  </TabsTrigger>
+                  <TabsTrigger value="settings" className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white">
+                    <Settings className="h-3.5 w-3.5" />
+                    Settings
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
           </div>
 
-          <TabsContent value="overview" className="mt-4">
-            <OverviewTab selectedOrgId={selectedOrgId} />
-          </TabsContent>
           <TabsContent value="events" className="mt-4">
             <EventScheduler selectedOrgId={selectedOrgId} />
           </TabsContent>
-          <TabsContent value="moderation" className="mt-4">
-            <ModerationTab selectedOrgId={selectedOrgId} />
-          </TabsContent>
-          <TabsContent value="community" className="mt-4">
-            <CommunityTab selectedOrgId={selectedOrgId} />
-          </TabsContent>
-          <TabsContent value="orgs" className="mt-4">
-            <OrgsSection />
-          </TabsContent>
-          <TabsContent value="resources" className="mt-4">
-            <ResourcesTab />
-          </TabsContent>
-          <TabsContent value="manage" className="mt-4">
-            <ManageResourcesTab />
-          </TabsContent>
-          <TabsContent value="settings" className="mt-4">
-            <PlaceholderTab label="Settings" />
-          </TabsContent>
+          {isPlatformAdmin && (
+            <>
+              <TabsContent value="overview" className="mt-4">
+                <OverviewTab selectedOrgId={selectedOrgId} />
+              </TabsContent>
+              <TabsContent value="moderation" className="mt-4">
+                <ModerationTab selectedOrgId={selectedOrgId} />
+              </TabsContent>
+              <TabsContent value="community" className="mt-4">
+                <CommunityTab selectedOrgId={selectedOrgId} />
+              </TabsContent>
+              <TabsContent value="orgs" className="mt-4">
+                <OrgsSection />
+              </TabsContent>
+              <TabsContent value="resources" className="mt-4">
+                <ResourcesTab />
+              </TabsContent>
+              <TabsContent value="manage" className="mt-4">
+                <ManageResourcesTab />
+              </TabsContent>
+              <TabsContent value="settings" className="mt-4">
+                <PlaceholderTab label="Settings" />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </div>

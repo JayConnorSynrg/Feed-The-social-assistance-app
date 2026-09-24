@@ -103,6 +103,7 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
 
   const ev = occurrence.event
   const isEarly = resultKind === 'early' || (resultKind === 'already_early')
+  const isAnon = resultKind === 'confirmed_anonymous'
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -135,7 +136,16 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
             </div>
           ) : success ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-              {isEarly ? (
+              {isAnon ? (
+                <>
+                  <CheckCircle2 className="w-12 h-12 text-lime-600" aria-hidden="true" />
+                  <p className="text-base font-semibold text-stone-800">Counted anonymously ✓</p>
+                  <p className="text-sm text-stone-500">
+                    Your visit was added to the event count, not linked to your account — so it
+                    won&rsquo;t appear in your attendance or badges.
+                  </p>
+                </>
+              ) : isEarly ? (
                 <>
                   <CalendarCheck className="w-12 h-12 text-lime-600" aria-hidden="true" />
                   <p className="text-base font-semibold text-stone-800">You&rsquo;re on the list!</p>
@@ -187,25 +197,30 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
                 </div>
               </div>
 
-              {/* Anonymous checkbox — opt-in, and it does not count toward attendance/badges */}
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="anon-checkin"
-                  checked={anonymous}
-                  onChange={(e) => setAnonymous(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-stone-300 text-lime-600 focus:ring-lime-500"
-                />
-                <div className="space-y-0.5">
-                  <label htmlFor="anon-checkin" className="text-sm font-medium text-stone-700 cursor-pointer">
-                    Check in anonymously
-                  </label>
-                  <p className="text-xs text-stone-400">
-                    Your visit is counted for the event, but not linked to your account — it won&rsquo;t
-                    count toward your attendance or badges.
-                  </p>
+              {/* Anonymous checkbox — opt-in, and it does not count toward attendance/badges.
+                  Only offered in the window (confirmsPresence): the server accepts an
+                  anonymous check-in only from 30 min before start, so before the window we
+                  never present an action it would reject. An "early" tap is always tracked. */}
+              {confirmsPresence && (
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="anon-checkin"
+                    checked={anonymous}
+                    onChange={(e) => setAnonymous(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-stone-300 text-lime-600 focus:ring-lime-500"
+                  />
+                  <div className="space-y-0.5">
+                    <label htmlFor="anon-checkin" className="text-sm font-medium text-stone-700 cursor-pointer">
+                      Check in anonymously
+                    </label>
+                    <p className="text-xs text-stone-400">
+                      Your visit is counted for the event, but not linked to your account — it won&rsquo;t
+                      count toward your attendance or badges.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {error && (
                 <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3">
