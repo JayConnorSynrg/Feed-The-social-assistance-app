@@ -1,17 +1,21 @@
 # MISSION 7 — Events & Check-ins   | owner: feed-programs-expert | tier: P1
-> One-line: a member browses upcoming assistance-event occurrences and checks in to one (recorded once per occurrence per user); an admin can view projected turnout.
+> One-line: a member browses in-progress/upcoming assistance-event occurrences and checks in with a two-state flow — EARLY ("I'm coming") then CONFIRMED (presence) — recorded once per occurrence per user; org admins host events, run an organizer kiosk, and view attendance; an admin can view projected turnout. See `specs/fullfeed-w1-6-events-model.md` (W1.6a).
 
 ## 1. Backend surface
-- RPCs:
-  - `projected_turnout(...)` — AI/forecast turnout estimate for an occurrence/event — SECDEF — `supabase/migrations/20260615100000_w6_forecast_ai.sql:8` (SECDEF at :22)
-  - `is_org_admin(org_id)` — org-admin gate — used by check-in/admin SELECT policies
-  - `is_org_member(org_id)` — org-membership gate
-- Edge functions: none in the browse/check-in path (turnout RPC is SQL-side; any AI forecast model is invoked inside the SECDEF function, not a browser edge fn).
+- RPCs (W1.6a — all check-in writes are SECDEF RPC-only; clients hold NO INSERT/UPDATE/DELETE on `event_checkins`):
+  - `check_in(p_occurrence, p_household_size, p_anonymous)` — member's own early/confirmed/anonymous check-in — SECDEF — `20261007000000_w1_6a_events_hosting_checkin.sql`
+  - `organizer_confirm(p_occurrence, p_user, p_household_size)` — org admin confirms an attendee or adds an anonymous household; attendee=`p_user`, confirmed_by/checked_in_by=organizer — SECDEF
+  - `event_attendance(p_occurrence)` → jsonb — org-scoped per-event stats + attendees with org-scoped rate — SECDEF
+  - `my_attendance_rate()` → jsonb — the caller's OWN overall rate (no user arg) — SECDEF
+  - `admin_create_event(...)` / `admin_update_event(...)` — org-admin event create/edit with geocode-on-save (strong-match only) — SECDEF
+  - `projected_turnout(...)` — AI/forecast turnout estimate — SECDEF — `supabase/migrations/20260615100000_w6_forecast_ai.sql:8` (SECDEF at :22)
+  - `is_org_admin(org_id)` / `is_org_member(org_id)` — org gates
+- Edge functions: none in the browse/check-in path.
 - Tables:
   - `organizations` / `organization_members` — org + membership for gating
-  - `assistance_events` — the event definition (title, org, category)
-  - `event_occurrences` — scheduled instances of an event (date/time window)
-  - `event_checkins` — one check-in row; UNIQUE(occurrence_id, user_id) prevents double check-in; RLS yes — table `supabase/migrations/20260614140000_w4_checkin_capture.sql:8`, unique index `:20-21`, RLS ENABLE `:79`, policies `:81+` (select_own / select_admin / select_org_admin)
+  - `assistance_events` — event definition; W1.6a adds `geocode_accuracy`/`geocode_confidence`, `location` written only from a strong match
+  - `event_occurrences` — scheduled instances (date/time window, status)
+  - `event_checkins` — one check-in row; W1.6a adds `status` (early|confirmed), `confirmed_at`, `confirmed_by`. UNIQUE(occurrence_id, user_id) WHERE user_id IS NOT NULL; RLS SELECT own/admin/org-admin; writes revoked (RPC-only) — `20260614140000_w4_checkin_capture.sql:8` + `20261007000000_w1_6a_events_hosting_checkin.sql`
 
 ## 2. User-facing surfaces + interaction points
 - `EventsPanel` (`apps/web/src/components/panels/events-panel.tsx`) — reached as a subtab of FeedPanel via PANEL_ALIASES `events → feed#events`. Interaction points: occurrences list, "Check in" button (opens sheet).
@@ -19,9 +23,11 @@
 - Admin `EventScheduler` tab in AdminShell — schedule events; surfaces `projected_turnout` per occurrence.
 
 ## 3. Backend→Surface binding map
-- Events list load → `supabase.from('event_occurrences').select('*, event:assistance_events(...)')` (`apps/web/src/components/panels/events-panel.tsx:82-90`)
-- "Check in" button → opens CheckinSheet with the selected occurrence (`events-panel.tsx:71-72`, `:265-268`)
-- Confirm check-in → `supabase.from('event_checkins').insert({ occurrence_id, user_id, ... })` (`apps/web/src/components/panels/checkin-sheet.tsx:54-56`); `23505` handled as already-checked-in (`checkin-sheet.tsx:65`)
+- Events list load → `supabase.from('event_occurrences').select('*, event:assistance_events(...)')` filtered `status='upcoming'` AND `ends_at >= now` (in-progress events stay listed) (`apps/web/src/components/panels/events-panel.tsx`); own check-in status loaded via `event_checkins` SELECT (own rows) to drive button state (`@/lib/event-checkin` computeCheckinButton)
+- Check-in button (state per `computeCheckinButton`) → opens CheckinSheet with `confirmsPresence` → `supabase.rpc('check_in', { p_occurrence, p_household_size, p_anonymous })` (`apps/web/src/components/panels/checkin-sheet.tsx`); guests → `CreateAccountPrompt`
+- Organizer kiosk → `supabase.rpc('event_attendance')` (list) + `supabase.rpc('organizer_confirm', { p_occurrence, p_user, p_household_size })` (`apps/web/src/app/(admin)/moderation/organizer-checkin-display.tsx`)
+- Admin event create → `supabase.rpc('admin_create_event', {...geocode})`; attendance view → `supabase.rpc('event_attendance')` (`apps/web/src/app/(admin)/moderation/event-scheduler.tsx`)
+- Member own rate → `supabase.rpc('my_attendance_rate')` (Settings → Profile, `settings-panel.tsx`)
 - Admin turnout → `supabase.rpc('projected_turnout', {...})` (AdminShell EventScheduler tab)
 
 ## 4. Dependencies
