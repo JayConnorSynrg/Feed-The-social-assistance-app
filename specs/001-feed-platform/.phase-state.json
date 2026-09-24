@@ -689,6 +689,13 @@
       "squash": "215d033",
       "note": "Org event hosting + two-state (early/confirmed) check-in + attendance. SECDEF RPCs check_in / organizer_confirm / event_attendance / my_attendance_rate / admin_create_event / admin_update_event / w1_6a_user_org_rate; event_checkins write-revoked (RPC-only); confirmation-time engagement credit + reconcile parity. Fix rounds 3/4: truthful no-show accounting, ended-permanent (D2/K4), org-deactivate cancels in-progress but confirmed presence counts as attended once starts_at passes and early rows never become no-shows (G2), retired-event reachability (G1). Migration 20261007000000 applied in prod as a separate post-deploy step. Merged to develop as PR #212 (squash 215d033).",
       "recordedAt": "2026-09-24"
+    },
+    "feed-fullfeed-w1-6b-events-in-feed": {
+      "status": "BUILT_PENDING_DEPLOY",
+      "migration": "20261008000000_w1_6b_events_in_feed",
+      "branch": "feature/feed-fullfeed-w1-6b-events-in-feed",
+      "note": "Community events mixed into the ranked feed. New ranked_feed_v2(...) RETURNS (id,kind,score,distance_bucket) = W1.3 posts branch BYTE-IDENTICAL to ranked_feed UNION ALL an events branch (one row per eligible event = next non-cancelled/not-ended occurrence within 30d; engagement term 1, age_h=|now-starts_at|, quantized distance bucket, no oracle; visibility replicates the 4 occurrence SELECT policies with an auth.uid()-IS-NOT-NULL gate on the reachable path). Single cross-kind keyset (score DESC,id DESC). ranked_feed v1 LEFT UNTOUCHED (schema-first, md5 2cca92d907df… unchanged). Client: feed-panel calls v2, partitions+hydrates posts (FEED_POST_SELECT) and events (occurrence select), merges via mergeRankedFeedItems; EventFeedCard reuses computeCheckinButton + CheckinSheet + check_in (guest→prompt). Events only in ranked mode under All; Recent posts-only; author-scoped filters exclude events. Verified: prod BEGIN…RAISE→ROLLBACK harness 17/17 (I1 posts byte-identical, I2 event set/visibility across anon/member/org-admin/platform-admin + anti-oracle + one-per-event, I3 cross-kind keyset paging, I5 v1 md5 unchanged); tsc 0; eslint 0 errors changed files; event-feed.test.ts 12/12 (2 mutation proofs). Smoke 29 ledger-gated on 20261008000000. Migration applies as a SEPARATE post-deploy step. Pushed; PR not opened per brief.",
+      "recordedAt": "2026-09-24"
     }
   }
 }

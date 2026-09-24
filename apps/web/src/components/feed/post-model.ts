@@ -178,6 +178,13 @@ export interface Post {
    * chronological feed and in the single-row realtime hydration path.
    */
   distanceBucket?: string
+  /**
+   * The ranked_feed_v2 score for this post (W1.6b). Present ONLY in ranked mode;
+   * used to interleave events at their true rank position (mergeRankedFeedItems).
+   * Undefined for a live realtime-inserted post (kept ahead of scored rows) and in
+   * the chronological feed.
+   */
+  score?: number
 }
 
 /**
@@ -309,9 +316,152 @@ export function orderByRankAndAttachBucket(
   const out: Post[] = []
   for (const r of ranked) {
     const p = byId.get(r.id)
-    if (p) out.push({ ...p, distanceBucket: r.distance_bucket })
+    if (p) out.push({ ...p, distanceBucket: r.distance_bucket, score: r.score })
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Events in the ranked feed (W1.6b)
+// ---------------------------------------------------------------------------
+
+/** One row from the ranked_feed_v2 RPC. Adds `kind` to distinguish a post row
+ *  (id = post id) from an event row (id = the event's next occurrence id). Like
+ *  RankedFeedRow, it carries no coordinate/distance — only the coarse bucket. */
+export interface RankedFeedV2Row {
+  id: string
+  kind: 'post' | 'event'
+  score: number
+  distance_bucket: string
+}
+
+/** A hydrated event occurrence rendered as one feed row (W1.6b). The occurrence
+ *  id is the feed-row id; the check-in button reuses the W1.6a event-checkin logic. */
+export interface EventFeedItem {
+  /** Occurrence id — the feed-row id and the id the check-in RPC acts on. */
+  occurrenceId: string
+  eventId: string
+  title: string
+  eventType: string
+  orgName: string | null
+  startsAt: string
+  endsAt: string
+  locationName: string | null
+  city: string | null
+  state: string | null
+  status: string
+  requiresRegistration: boolean
+  /** ranked_feed_v2 score — used to interleave among posts. */
+  score: number
+  /** Coarse distance bucket from the RPC ('<2km'…'>50km'|'unknown'). */
+  distanceBucket: string
+}
+
+/** A single rendered feed row: a post card or an event card. Discriminated so the
+ *  render loop switches exhaustively (no field is shared across the two shapes). */
+export type FeedItem =
+  | { kind: 'post'; post: Post }
+  | { kind: 'event'; event: EventFeedItem }
+
+/** Split the ranked_feed_v2 rows into the post ids and event (occurrence) ids to
+ *  hydrate on their own tables. Pure — order within each list preserves the RPC's
+ *  rank order so the caller can attach scores back by id. */
+export function partitionRankedRows(rows: readonly RankedFeedV2Row[]): {
+  postIds: string[]
+  eventIds: string[]
+} {
+  const postIds: string[] = []
+  const eventIds: string[] = []
+  for (const r of rows) {
+    if (r.kind === 'event') eventIds.push(r.id)
+    else postIds.push(r.id)
+  }
+  return { postIds, eventIds }
+}
+
+/**
+ * Whether events are mixed into the feed for this view (W1.6b ruling): events
+ * appear ONLY in ranked mode under the "All" filter — never in the chronological
+ * "Recent" mode, and never under Following / My Posts / Announcements (those are
+ * author-scoped and events have no post author).
+ */
+export function feedIncludesEvents(
+  rankMode: 'ranked' | 'recent',
+  activeFilter: string
+): boolean {
+  return rankMode === 'ranked' && activeFilter === 'all'
+}
+
+/**
+ * Merge already-rank-ordered posts and events into one rendered list in global
+ * (score DESC, id DESC) order — a two-pointer merge of two pre-sorted inputs, so
+ * it reproduces the RPC's cross-kind keyset order exactly (INV I4: every ranked
+ * row renders once, in rank order).
+ *
+ * A post whose `score` is undefined (a live realtime insert not part of the ranked
+ * page, or the chronological feed) sorts BEFORE every scored row — preserving the
+ * current "new post appears on top" behaviour. Events always carry a score, so a
+ * scoreless post never sinks below an event. Stable within equal keys (input order
+ * kept), and the two inputs are consumed in order so post order is never disturbed.
+ */
+export function mergeRankedFeedItems(
+  posts: readonly Post[],
+  events: readonly EventFeedItem[]
+): FeedItem[] {
+  // key compare: returns true when `a` should come BEFORE `b`.
+  // Undefined post score = +∞ (always first). Otherwise (score DESC, id DESC).
+  const postBefore = (p: Post, e: EventFeedItem): boolean => {
+    if (p.score === undefined) return true
+    if (p.score !== e.score) return p.score > e.score
+    // id DESC tiebreak: the RPC's row id for an event is its occurrence id.
+    return p.id > e.occurrenceId
+  }
+  const out: FeedItem[] = []
+  let i = 0
+  let j = 0
+  while (i < posts.length && j < events.length) {
+    if (postBefore(posts[i], events[j])) {
+      out.push({ kind: 'post', post: posts[i] })
+      i++
+    } else {
+      out.push({ kind: 'event', event: events[j] })
+      j++
+    }
+  }
+  while (i < posts.length) { out.push({ kind: 'post', post: posts[i] }); i++ }
+  while (j < events.length) { out.push({ kind: 'event', event: events[j] }); j++ }
+  return out
+}
+
+/**
+ * Coarse timing label for an event feed card, derived from now vs the occurrence's
+ * start/end (the "age" the ranking peaks on). Pure + unit-testable. `isLive` marks
+ * an in-progress occurrence (start passed, not yet ended) so the card can flag it.
+ */
+export function eventTimingLabel(
+  nowMs: number,
+  startsAtMs: number,
+  endsAtMs: number
+): { label: string; isLive: boolean } {
+  if (nowMs >= startsAtMs && nowMs <= endsAtMs) return { label: 'Happening now', isLive: true }
+  if (nowMs > endsAtMs) return { label: 'Ended', isLive: false }
+  const mins = Math.round((startsAtMs - nowMs) / 60000)
+  if (mins <= 60) return { label: `Starts in ${Math.max(1, mins)} min`, isLive: false }
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return { label: `Starts in ${hours} h`, isLive: false }
+  const days = Math.round(hours / 24)
+  return { label: `In ${days} day${days === 1 ? '' : 's'}`, isLive: false }
+}
+
+/** Human distance-bucket label for an event card; null hides the row when unknown. */
+export function distanceBucketLabel(bucket: string | null | undefined): string | null {
+  switch (bucket) {
+    case '<2km':    return 'Within 2 km'
+    case '2-10km':  return '2–10 km away'
+    case '10-50km': return '10–50 km away'
+    case '>50km':   return 'Over 50 km away'
+    default:        return null // 'unknown' or absent → no distance shown
+  }
 }
 
 // ---------------------------------------------------------------------------
