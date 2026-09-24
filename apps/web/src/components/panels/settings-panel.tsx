@@ -22,6 +22,7 @@ import {
   CheckCircle,
   Loader2,
   Globe,
+  CalendarCheck,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,7 @@ import { useIsAdmin } from '@/hooks/use-is-admin'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
+import { formatRatePct } from '@/lib/event-checkin'
 import { LANGUAGES, languageLabel, GUEST_LANGUAGE_KEY, detectBrowserLanguage } from '@/lib/languages'
 import { logger } from '@/lib/logger'
 import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
@@ -253,6 +255,60 @@ interface ProfileSectionProps {
   avatarUrl?: string | null
 }
 
+/**
+ * The signed-in user's OWN overall event-attendance rate (confirmed ÷ early-or-confirmed
+ * on ended occurrences), read from the my_attendance_rate() SECDEF RPC. Owner-only by
+ * construction — the RPC takes no user argument. Renders nothing until there is data
+ * (no ended check-ins yet), so it never shows a bare "0%" for a brand-new member.
+ */
+function EventAttendanceLine() {
+  const [rate, setRate] = useState<number | null>(null)
+  const [confirmed, setConfirmed] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [hasData, setHasData] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const supabase = createClient()
+    ;(async () => {
+      try {
+        const { data, error } = await supabase.rpc('my_attendance_rate')
+        if (!active || error || !data || typeof data !== 'object') return
+        const d = data as { rate: number | null; confirmed: number; total: number; has_data: boolean }
+        setHasData(Boolean(d.has_data))
+        setRate(d.rate)
+        setConfirmed(d.confirmed ?? 0)
+        setTotal(d.total ?? 0)
+      } catch {
+        // A failed read simply hides the line; attendance is non-critical UI.
+      }
+    })()
+    return () => { active = false }
+  }, [])
+
+  if (!hasData) return null
+
+  return (
+    <div
+      className="rounded-xl border border-stone-200 bg-stone-50/95 p-4 text-stone-900"
+      data-testid="settings-attendance-line"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarCheck className="w-4 h-4 text-[#4a5d23]" aria-hidden="true" />
+          <span className="text-sm font-medium text-stone-700">Event attendance</span>
+        </div>
+        <span className="text-sm font-semibold text-[#4a5d23]" data-testid="attendance-rate">
+          {formatRatePct(rate)}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-stone-500">
+        You confirmed attendance at {confirmed} of {total} event{total === 1 ? '' : 's'} you checked in for.
+      </p>
+    </div>
+  )
+}
+
 function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: ProfileSectionProps) {
   const [editMode, setEditMode] = useState(false)
   const [localProfile, setLocalProfile] = useState(profile)
@@ -400,6 +456,9 @@ function ProfileSection({ profile, onUpdate, saving, userId, avatarUrl }: Profil
           />
         )}
       </div>
+
+      {/* Own event-attendance rate (W1.6a) — hidden until there is data. Owner-only. */}
+      <EventAttendanceLine />
 
       {/* Gifts received — the appreciation this user has been sent (P2.1b). Owner-only. */}
       <GiftsReceivedShelf userId={userId} />
