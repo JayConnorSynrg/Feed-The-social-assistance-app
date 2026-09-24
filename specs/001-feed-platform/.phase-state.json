@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-09-24T00:00:00.000Z",
+  "lastUpdated": "2026-09-24T22:30:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -680,6 +680,15 @@
       "branch": "feature/feed-fullfeed-p2-1b-appreciation",
       "note": "Peer appreciation gifts. USER RULING: public 'Appreciated' level counts DISTINCT PEOPLE (one credit per giver); all 12 items still giftable + shelf-visible. Round-2 fixes: guest Follow routes to CreateAccountPrompt via shared resolveFollowGate on both surfaces, no anon insert attempted (MEDIUM); post-context visibility check uses is_hidden = false to match the posts SELECT policy (LOW-1); restored the P2.1a watcher-privacy comment + added an appreciation_gift note in engagement_is_public (LOW-2). Migration 20261006000000_p2_1b_appreciation is a separate post-deploy step; pending orchestrator merge.",
       "recordedAt": "2026-09-23"
+    },
+    "feed-fullfeed-w1-6a-events-hosting": {
+      "status": "COMPLETE",
+      "migration": "20261007000000_w1_6a_events_hosting_checkin",
+      "branch": "feature/feed-fullfeed-w1-6a-events-hosting",
+      "pr": "#212",
+      "squash": "215d033",
+      "note": "Org event hosting + two-state (early/confirmed) check-in + attendance. SECDEF RPCs check_in / organizer_confirm / event_attendance / my_attendance_rate / admin_create_event / admin_update_event / w1_6a_user_org_rate; event_checkins write-revoked (RPC-only); confirmation-time engagement credit + reconcile parity. Fix rounds 3/4: truthful no-show accounting, ended-permanent (D2/K4), org-deactivate cancels in-progress but confirmed presence counts as attended once starts_at passes and early rows never become no-shows (G2), retired-event reachability (G1). Migration 20261007000000 applied in prod as a separate post-deploy step. Merged to develop as PR #212 (squash 215d033).",
+      "recordedAt": "2026-09-24"
     }
   }
 }

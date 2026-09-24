@@ -49,6 +49,7 @@ import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
+import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -1462,19 +1463,16 @@ export function FeedPanel() {
   const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
   const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
-  // Resolve active subtab from panelParams (set by alias routing in feed-shell)
-  const activeSubtab: 'feed' | 'events' | 'petitions' | 'messages' =
-    panelParams?.subtab === 'messages' ? 'messages'
-    : panelParams?.subtab === 'events' ? 'events'
-    : panelParams?.subtab === 'petitions' ? 'petitions'
-    : 'feed'
+  // Resolve active subtab from panelParams (set by alias routing in feed-shell).
+  // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
+  const activeSubtab: FeedSubtab = resolveFeedSubtab(panelParams?.subtab)
 
   // Sync subtab when panelParams.subtab changes (e.g. back-button hash navigation)
   // No local state needed — activeSubtab is derived directly from panelParams.
 
   // Tab switch handler: drives via setActivePanel alias path so hash + state
   // stay in sync through one code path. replaceState — no back-button spam.
-  const handleSubtabSwitch = useCallback((tab: 'feed' | 'events' | 'petitions' | 'messages') => {
+  const handleSubtabSwitch = useCallback((tab: FeedSubtab) => {
     logger.info('nav.subtab.switch', { panel: 'feed', subtab: tab })
     track('nav_subtab', { panel: 'feed', subtab: tab })
     if (tab === 'messages') {
@@ -1486,16 +1484,18 @@ export function FeedPanel() {
       // petitions resolves via PANEL_ALIAS to feed+subtab='petitions'
       setActivePanel('petitions')
     } else {
+      // setActivePanel('feed') is a base panel — the shell clears any stale
+      // subtab, so activeSubtab derives back to 'feed'.
       setActivePanel('feed')
     }
-  }, [setActivePanel, setPanelParams])
+  }, [setActivePanel])
 
   // ARIA roving tabindex keyboard handler for the Feed tablist
   const handleFeedTabKeyDown = useCallback((
     e: React.KeyboardEvent<HTMLButtonElement>,
     currentIdx: number
   ) => {
-    const tabs: Array<'feed' | 'events' | 'petitions' | 'messages'> = ['feed', 'events', 'petitions', 'messages']
+    const tabs: FeedSubtab[] = ['feed', 'events', 'petitions', 'messages']
     let next = currentIdx
     if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
@@ -2396,10 +2396,16 @@ export function FeedPanel() {
       {/* Top-level tablist: Feed | Messages
           Styled DISTINCT from FeedHeader's rounded-full filter pills:
           py-2.5 font-semibold border-b — per NN/g 2-level tab differentiation */}
+      {/* shrink-0 is load-bearing: `overflow-x-auto` sets this flex item's
+          automatic minimum height to 0 (instead of min-content), which let the
+          sibling flex-1 tabpanel collapse the tablist to its 1px border. Its tab
+          buttons then overflowed under the feed header, which intercepted the
+          clicks (only #events/#petitions hashes reached the subtabs). Never
+          shrinking keeps the full tab-row height and its own hit area. */}
       <div
         role="tablist"
         aria-label="Community sections"
-        className="flex border-b border-stone-200 mb-0 overflow-x-auto"
+        className="flex shrink-0 border-b border-stone-200 mb-0 overflow-x-auto"
       >
         <button
           role="tab"

@@ -291,8 +291,12 @@ permission differs, and the difference is intentional:
   occurrences are untouched. `check_in`/`organizer_confirm` refuse an inactive org (org gate checked
   first). A member who was refused therefore **never becomes a no-show** (the occurrence they were on
   is cancelled → excluded). Confirmed presence keeps its private engagement credit (granted at
-  confirm, independent of occurrence status); it no longer counts toward the show-rate because a
-  voided occurrence did not run.
+  confirm, independent of occurrence status). **Show-rate accounting (superseded by G2 below):** the
+  round-3 rule that a voided occurrence's confirmed row "no longer counts toward the show-rate" was
+  corrected in fix round 4 — a confirmed row on a cancelled occurrence that had **already started**
+  (`starts_at <= now()`) counts as **attended**, and an early row on a cancelled occurrence is never a
+  no-show. Only a confirmation voided **before** its start slips out of the rate. See G2 for the exact
+  rule and predicate.
 - **K3 — documented above** (retire keeps in-progress live; deactivate cancels it).
 - **K4 — "ran" replaces the is_active filter.** `w1_6a_user_org_rate` and `my_attendance_rate` now
   count every occurrence that **ran** — `status <> 'cancelled' AND (status='completed' OR ends_at < now)`
@@ -349,7 +353,12 @@ Round-4 review found two ways D1/D2 were satisfied server-side but not honoured 
   `event-scheduler.tsx` drops its `.eq('is_active', true)` filter (RLS scopes it) so retired events
   with a reachable occurrence surface in the calendar/Past-&-cancelled; the events-panel needs no
   change (it already lists `status='upcoming' AND ends_at>=now`, gated only by RLS). Retire is hidden
-  in the edit modal for an already-retired event (dead action).
+  in the edit modal for an already-retired event (dead action). **Known behaviour:** an org admin can
+  still **add occurrences to a retired event** — the occurrence-create path is not gated on the parent
+  event's `is_active`. This is intentional and equivalent to the reactivation power the org admin
+  already holds (they can flip `is_active` back on via Edit), so it grants no capability beyond what
+  they can already do; a retired event with a future occurrence simply becomes reachable again for
+  that occurrence.
 - **G2 — a member's confirmed presence never drops out of their rate.** Deactivating an org **still
   cancels** its in-progress occurrences (K2/K3 unchanged): a suspended org refuses every check-in,
   so an in-progress occurrence can no longer be served and must not be left live (its early intents
@@ -359,8 +368,15 @@ Round-4 review found two ways D1/D2 were satisfied server-side but not honoured 
   a since-voided (cancelled) occurrence that had already **started** counts as **attended** in
   `w1_6a_user_org_rate` + `my_attendance_rate`, and an early row on any cancelled occurrence is never
   a no-show. So confirmed presence the member earned survives an org deactivation mid-occurrence
-  (previously it was dropped — the "confirmed-on-voided" bug). A confirmed row exists only on an
-  occurrence that had started, so a not-started cancelled occurrence is never counted.
+  (previously it was dropped — the "confirmed-on-voided" bug). **Actual predicate** — the `attended`
+  branch for a cancelled occurrence is `eo.status = 'cancelled' AND eo.starts_at <= now()`, i.e. the
+  gate is *"has the start time passed"*, not the row's own timing. Note a **confirmed row can exist
+  before `starts_at`**: the confirmation window opens at `starts_at − 30 min`, so a member (or an
+  organizer) can hold a `confirmed` row during `[starts_at − 30m, starts_at)`. Such a **pre-start
+  confirmation counts only once `starts_at` passes** — if the event is retired or the org deactivated
+  and the occurrence is voided **before** `starts_at`, that pre-start confirmed row does **not** count
+  (a not-started cancelled occurrence is never counted); the same confirmation counts as attended the
+  moment `starts_at` is reached even though the occurrence was voided.
 
 Verification: `gen_r4.py` → `check_r4.py` **69/69** (adds S9 G1 reachability — member sees + checks
 in the in-progress retired occ, future occ hidden + refused, guest sees none, org admin reaches it in

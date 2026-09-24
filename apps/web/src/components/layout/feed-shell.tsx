@@ -562,9 +562,10 @@ export function FeedShell({
     // available after mount, so setState in effect is the correct idiom here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePanelState(resolved.panel)
-    if (resolved.subtab) {
-      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
-    }
+    // subtab is a pure function of the resolved hash — set it when the hash
+    // resolves one (alias hashes), clear it otherwise so a direct #feed load
+    // shows the base feed rather than a stale subtab.
+    setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
     setIsInitialized(true)
   }, [])
 
@@ -588,6 +589,11 @@ export function FeedShell({
       }
     } else {
       setActivePanelState(panel)
+      // A base (non-alias) panel carries no subtab. Clear any stale subtab so a
+      // return to e.g. 'feed' after visiting the events/petitions subtabs lands
+      // on the base view instead of re-deriving the old subtab. Other params
+      // (openConversationId, formsTarget, …) are preserved.
+      setPanelParams((prev) => ({ ...prev, subtab: undefined }))
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -604,9 +610,10 @@ export function FeedShell({
       const hash = window.location.hash.slice(1)
       const resolved = resolveHashToPanel(hash)
       setActivePanelState(resolved.panel)
-      if (resolved.subtab) {
-        setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
-      }
+      // Mirror the init/setActivePanel paths: subtab tracks the resolved hash and
+      // is cleared when the hash carries none, so browser back/forward to #feed
+      // returns to the base feed instead of a stale events/petitions subtab.
+      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
     }
 
     window.addEventListener('hashchange', handleHashChange)
