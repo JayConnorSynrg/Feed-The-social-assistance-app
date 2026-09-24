@@ -391,3 +391,102 @@ Mutation proofs: nulling the voided-confirmed branch of `my_attendance_rate` dro
 (`f3bc362…`), backfill-safe (0 orgs/events/occ/checkins), anon = member = guest reads (no broadened
 exposure). Smoke 07/25/26/27/28 STATE clean on migrated state; P2.0 `enforce_opt_in_transition`
 `prosrc` md5 unchanged; tsc 0, eslint 0 on changed files; non-smoke vitest green.
+
+---
+
+# FULL-FEED W1.6b — Events mixed into the ranked community feed
+
+Wave: `feed-fullfeed-w1-6b-events-in-feed`
+Migration: `supabase/migrations/20261008000000_w1_6b_events_in_feed.sql`
+Builds on W1.3 (`ranked_feed`, `20260929000000`) and W1.6a (this file, above).
+
+## Capability delivered
+
+After this ships, anyone browsing **Community → Feed** (guests included, read-only)
+sees upcoming and in-progress community events ranked in among posts, and signed-in
+members can check in right from the event card ("Check in early" / "I'm here").
+
+## Backend — `ranked_feed_v2`
+
+New `public.ranked_feed_v2(p_lat, p_lng, p_limit=25, p_cursor_score, p_cursor_id)
+RETURNS TABLE(id uuid, kind text, score real, distance_bucket text)`, STABLE
+SECURITY DEFINER, `search_path=public,pg_temp`, EXECUTE revoked from PUBLIC and
+granted to anon/authenticated/service_role (identical grants to `ranked_feed`).
+
+- **Posts branch** is **byte-identical** to the deployed `ranked_feed` (the `cfg /
+  caller / origin / visible / base / scored` CTEs + the bucket `CASE` are pasted
+  verbatim), tagged `kind='post'`. **I5:** `ranked_feed` (v1) is left untouched
+  (prosrc md5 `2cca92d907df6b60fbc840214a9df485`) — the deployed client keeps
+  calling v1 until the W1.6b client deploys (schema-first).
+- **Events branch** emits one row per eligible event = its **next** occurrence
+  (`DISTINCT ON (event_id) … ORDER BY starts_at ASC`) where the occurrence is
+  `status='upcoming' AND ends_at>=now() AND starts_at<=now()+30d` — matching the
+  events-panel horizon. `kind='event'`, row `id = occurrence id`.
+  - Ranking (LOCKED rulings): engagement term = `1.0` (events have no
+    likes/comments); `age_h = |now - starts_at|` in hours (peaks around the start,
+    same half-life fading before **and** after); the **same** quantized distance
+    bucket factor as posts, from `assistance_events.location` (representative km
+    1/6/30/75; `unknown` when null); **never pinned**.
+  - **Anti-oracle:** the exact `dist_km` is computed once per row but NEVER
+    returned; the distance factor is the discrete per-bucket step, so two events in
+    the same bucket at different exact distances score identically — no
+    multilateration (same guarantee as W1.3, re-proved for events in smoke 29).
+  - **Visibility (caller-could-SELECT):** the RPC reproduces the union of the four
+    `event_occurrences` SELECT policies — `is_current_user_admin()` OR
+    `is_org_admin(org_id)` OR `(event active AND org active)` OR
+    `(auth.uid() IS NOT NULL AND w1_6a_occ_authed_reachable(occ))`. The
+    `auth.uid() IS NOT NULL` gate is load-bearing: the reachable policies are
+    `TO authenticated`, and the helper's guest-exclusion is vacuously true for a
+    null uid, so without the gate a true anon would wrongly gain the in-progress-
+    retired path.
+- **Single cross-kind keyset:** `posts_ranked UNION ALL events_ranked`, then
+  `WHERE p_cursor_score IS NULL OR (score, id) < (p_cursor_score, p_cursor_id)
+  ORDER BY score DESC, id DESC LIMIT …` — one page across both kinds; post/occ
+  UUIDs are distinct so the `(score, id)` key is unique.
+
+## Client
+
+- `feed-panel.tsx` ranked path calls `ranked_feed_v2`, partitions the page into post
+  ids / event (occurrence) ids, hydrates posts via `FEED_POST_SELECT` (unchanged) and
+  events via the events-panel occurrence select (joined `assistance_events` +
+  `organizations(name)`), and loads the member's own check-in status + anonymous
+  claims for the event occurrences (RLS `checkins_select_own` + `my_anonymous_claims`).
+- Pure model (`post-model.ts`): `Post.score?`, `RankedFeedV2Row`, `EventFeedItem`,
+  `FeedItem` union, `partitionRankedRows`, `feedIncludesEvents`, `mergeRankedFeedItems`
+  (two-pointer merge; a score-less live-inserted post stays on top; post order never
+  regresses — I4), `eventTimingLabel`, `distanceBucketLabel`.
+- `EventFeedCard` reuses `computeCheckinButton` + `CheckinSheet` + `check_in` exactly
+  as the Events panel; guests get the create-account prompt from the sheet.
+- **Filter rules:** events appear ONLY in **ranked** mode under the **All** filter.
+  **Recent mode shows posts only** (decision: the chronological keyset is over
+  `posts.created_at`; events have no place in it — recommended and adopted).
+  Following / My Posts / Announcements are author-scoped, so events are excluded.
+- **Realtime unaffected:** events are not in the realtime publication; a post insert/
+  update patches only the posts list, and the next feed refresh picks up event changes.
+  Motion follows W1.5 (enter/exit + whileTap only; no `layout`).
+
+## Invariants
+
+| # | Invariant | Proof |
+|---|-----------|-------|
+| I1 | Posts rank byte-identically to `ranked_feed` (same id/score/bucket sequence for post rows) | prod rolled-back harness compares v1 vs v2 post rows |
+| I2 | One event row per eligible event; correct status/horizon filtering; only what the caller could SELECT (anon vs member vs org admin vs platform admin); event score per ruling; bucket quantized; no distance oracle | harness across 4 roles + anti-oracle probe; smoke 29 |
+| I3 | Cross-kind keyset paging — no duplicates or gaps | harness pages `p_limit=2` == single full call |
+| I4 | Every ranked row renders once in rank order; events only under All; Recent posts-only; card check-in works; no regression to posts/filters/realtime/optimistic/W1.5 motion/P2.1b badges | `mergeRankedFeedItems` unit tests (post subsequence + drop-none) + reused Events-panel logic |
+| I5 | `ranked_feed` v1 unchanged (prosrc md5 equal) | harness + smoke 29 assert md5 `2cca92d907df…` |
+
+## Verification
+
+Prod dry-run (single Management-API request, DO block seeding org/events/occurrences/
+posts + users, RAISE → full rollback, net-zero writes) on 2026-09-24 (PG 17.6):
+**17/17** checks — I5 (v1 md5 unchanged), I1 (post rows byte-identical to v1),
+anti-oracle (A.score==B.score, `<2km`, geo/no-geo ratio == `exp(-1/decay)`),
+one-row-per-event, event visibility for anon (active only) / member (+ in-progress
+retired, not future-retired, not inactive-org) / org admin (+ own-org future retired,
+not other org) / platform admin (+ inactive-org), and I3 cross-kind keyset paging ==
+single call. tsc 0; eslint 0 errors on changed files; `event-feed.test.ts` 12/12
+(incl. 2 mutation proofs: live-post-stays-on-top, id-DESC tiebreak). Smoke 29 is
+ledger-gated on `20261008000000` (skips pre-deploy; asserts signature/grants/v1-present-
+and-unchanged/live-call/events-anti-oracle once applied). Prod currently has 0
+orgs/events, so the feed UI could not be browser-verified with live event data; it is
+covered by the unit tests + the rolled-back role-scoped harness instead.

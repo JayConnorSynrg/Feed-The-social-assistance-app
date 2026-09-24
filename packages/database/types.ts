@@ -4389,6 +4389,21 @@ export type Database = {
           score: number
         }[]
       }
+      ranked_feed_v2: {
+        Args: {
+          p_cursor_id?: string
+          p_cursor_score?: number
+          p_lat?: number
+          p_limit?: number
+          p_lng?: number
+        }
+        Returns: {
+          distance_bucket: string
+          id: string
+          kind: string
+          score: number
+        }[]
+      }
       recompute_all_badge_summaries: { Args: never; Returns: undefined }
       recompute_badge_summary: { Args: { p_user: string }; Returns: undefined }
       recompute_private_badge_summary: {

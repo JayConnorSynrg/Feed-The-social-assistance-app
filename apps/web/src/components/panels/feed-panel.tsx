@@ -50,7 +50,9 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, type Post, type FeedPostRow, type RankedFeedRow } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { EventFeedCard } from '@/components/feed/event-feed-card'
+import type { MyCheckinStatus } from '@/lib/event-checkin'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
@@ -1411,6 +1413,13 @@ export function FeedPanel() {
   // Ranked feed (W1.3): default 'ranked'. rankCursor is the keyset for ranked pages.
   const [feedRankMode, setFeedRankMode] = useState<FeedRankMode>('ranked')
   const [rankCursor, setRankCursor] = useState<{ score: number; id: string } | null>(null)
+  // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
+  // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
+  // (own rows only, exactly as the Events panel loads them). All three are empty in
+  // Recent mode and clear when the ranked page has no event rows.
+  const [eventItems, setEventItems] = useState<EventFeedItem[]>([])
+  const [eventMyStatuses, setEventMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
+  const [eventAnonClaims, setEventAnonClaims] = useState<Set<string>>(new Set())
   // Cached caller geo (undefined = not yet read; null = unavailable/denied). Read at
   // most once per mount and never triggers a permission prompt.
   const geoRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined)
@@ -1588,6 +1597,11 @@ export function FeedPanel() {
   const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null) => {
     if (cursor === null) {
       setLoading(true)
+      // Recent (chronological) mode shows posts only (W1.6b): drop any events held
+      // from a prior ranked page so nothing stale lingers behind the render gate.
+      setEventItems([])
+      setEventMyStatuses({})
+      setEventAnonClaims(new Set())
     } else {
       setLoadingMore(true)
     }
@@ -1799,7 +1813,8 @@ export function FeedPanel() {
           'feed.load',
           { mode: 'ranked', has_geo: hasGeo, page_size: PAGE_SIZE },
           async () =>
-            supabase.rpc('ranked_feed', {
+            supabase.rpc('ranked_feed_v2', {
+              // W1.6b: ranked_feed_v2 returns posts + events in one cross-kind keyset.
               // Omit (→ undefined) rather than null so the RPC's own DEFAULT NULL
               // applies; the generated Args type treats every param as optional.
               p_lat: geo?.lat ?? undefined,
@@ -1811,23 +1826,31 @@ export function FeedPanel() {
         )
         if (rankErr) throw rankErr
 
-        const ranked = (rankedData ?? []) as unknown as RankedFeedRow[]
+        const ranked = (rankedData ?? []) as unknown as RankedFeedV2Row[]
         logger.info('feed.rank', { mode: 'ranked', has_geo: hasGeo, returned_count: ranked.length })
 
-        const ids = ranked.map((r) => r.id)
-        if (ids.length === 0) {
-          if (cursor === null) setPosts([])
+        // W1.6b: split the cross-kind page into post ids and event (occurrence) ids.
+        const { postIds, eventIds } = partitionRankedRows(ranked)
+        if (ranked.length === 0) {
+          if (cursor === null) {
+            setPosts([])
+            setEventItems([])
+            setEventMyStatuses({})
+            setEventAnonClaims(new Set())
+          }
           setRankCursor(null)
           setHasMore(false)
           return
         }
+        // The post-kind ranked rows carry the score+bucket for orderByRankAndAttachBucket.
+        const postRankRows = ranked.filter((r) => r.kind === 'post') as unknown as RankedFeedRow[]
 
-        // Hydrate the ranked ids with the SAME explicit select as the chronological
+        // Hydrate the ranked POST ids with the SAME explicit select as the chronological
         // feed (omits location). RLS still applies to this SECURITY INVOKER read.
         const { data: rowData, error: rowErr } = await supabase
           .from('posts')
           .select(FEED_POST_SELECT)
-          .in('id', ids)
+          .in('id', postIds)
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rowErr) throw rowErr
         const rows = (rowData ?? []) as unknown as FeedPostRow[]
@@ -1839,11 +1862,11 @@ export function FeedPanel() {
         type QueryResult = { data: PostIdRow[] | null }
         const secondarySignal = AbortSignal.timeout(QUERY_TIMEOUT_MS)
         const [myLikesResult, optInResult] = await Promise.all([
-          user
+          user && postIds.length > 0
             ? supabase
                 .from('post_likes')
                 .select('post_id')
-                .in('post_id', ids)
+                .in('post_id', postIds)
                 .eq('user_id', user.id)
                 .abortSignal(secondarySignal) as unknown as Promise<QueryResult>
             : Promise.resolve({ data: [] as PostIdRow[] }),
@@ -1867,19 +1890,98 @@ export function FeedPanel() {
         }
 
         // Transform via the shared rowToPost, then re-order to the RPC's score order
-        // and attach each row's distance bucket by id. The RPC already places pinned
-        // posts first (via the score boost), so NO client-side pinned re-sort here.
+        // and attach each row's distance bucket + score by id. The RPC already places
+        // pinned posts first (via the score boost), so NO client-side pinned re-sort.
         const transformed = rows.map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
-        const ordered = orderByRankAndAttachBucket(ranked, transformed)
+        const ordered = orderByRankAndAttachBucket(postRankRows, transformed)
+
+        // W1.6b: hydrate the event (occurrence) rows and build EventFeedItems in RPC
+        // rank order, dropping any occurrence the RLS read did not surface (I4 — the
+        // same drop-unhydrated rule the posts path uses). The check-in button state
+        // comes from the member's OWN rows only (RLS checkins_select_own) + own
+        // anonymous claims (my_anonymous_claims), exactly as the Events panel loads it.
+        const events: EventFeedItem[] = []
+        const eventStatuses: Record<string, MyCheckinStatus> = {}
+        const eventClaims = new Set<string>()
+        if (eventIds.length > 0) {
+          const { data: occData, error: occErr } = await supabase
+            .from('event_occurrences')
+            .select(`
+              id, starts_at, ends_at, status,
+              event:assistance_events(
+                id, title, event_type, location_name, city, state, requires_registration,
+                organization:organizations(name)
+              )
+            `)
+            .in('id', eventIds)
+            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          if (occErr) throw occErr
+          type OccRow = {
+            id: string; starts_at: string; ends_at: string; status: string
+            event: {
+              id: string; title: string; event_type: string
+              location_name: string | null; city: string | null; state: string | null
+              requires_registration: boolean | null
+              organization: { name: string } | null
+            } | null
+          }
+          const occById = new Map(((occData as unknown as OccRow[]) ?? []).map((o) => [o.id, o]))
+          for (const r of ranked) {
+            if (r.kind !== 'event') continue
+            const o = occById.get(r.id)
+            if (!o || !o.event) continue // dropped by RLS / no parent event → skip (I4)
+            events.push({
+              occurrenceId: o.id,
+              eventId: o.event.id,
+              title: o.event.title,
+              eventType: o.event.event_type,
+              orgName: o.event.organization?.name ?? null,
+              startsAt: o.starts_at,
+              endsAt: o.ends_at,
+              locationName: o.event.location_name ?? null,
+              city: o.event.city ?? null,
+              state: o.event.state ?? null,
+              status: o.status,
+              requiresRegistration: o.event.requires_registration ?? false,
+              score: r.score,
+              distanceBucket: r.distance_bucket,
+            })
+          }
+          if (user && !isAnonymous) {
+            const { data: mine } = await supabase
+              .from('event_checkins')
+              .select('occurrence_id, status')
+              .eq('user_id', user.id)
+              .in('occurrence_id', eventIds)
+            for (const row of mine ?? []) {
+              eventStatuses[row.occurrence_id as string] = (row.status as MyCheckinStatus) ?? 'confirmed'
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: claims } = await (supabase.rpc as any)('my_anonymous_claims', { p_occurrence_ids: eventIds })
+            for (const row of (claims as Array<{ occurrence_id: string }> | null) ?? []) {
+              if (row?.occurrence_id) eventClaims.add(row.occurrence_id)
+            }
+          }
+        }
 
         if (cursor === null) {
           setPosts(ordered)
+          setEventItems(events)
+          setEventMyStatuses(eventStatuses)
+          setEventAnonClaims(eventClaims)
         } else {
           setPosts((prev) => {
             const existingIds = new Set(prev.map((p) => p.id))
             const fresh = ordered.filter((p) => !existingIds.has(p.id))
             return [...prev, ...fresh]
           })
+          setEventItems((prev) => {
+            const existing = new Set(prev.map((e) => e.occurrenceId))
+            const fresh = events.filter((e) => !existing.has(e.occurrenceId))
+            return [...prev, ...fresh]
+          })
+          setEventMyStatuses((prev) => ({ ...prev, ...eventStatuses }))
+          setEventAnonClaims((prev) => new Set([...prev, ...eventClaims]))
         }
 
         if (ranked.length === PAGE_SIZE) {
@@ -1892,7 +1994,7 @@ export function FeedPanel() {
         }
 
         // Opt-in / seeker / review side-data — shared with the chronological path.
-        loadPostSideData(ids)
+        loadPostSideData(postIds)
       })()])
     } catch (err: unknown) {
       const isTimeout = isQueryTimeout(err) || (err instanceof DOMException && err.name === 'TimeoutError')
@@ -1918,7 +2020,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, loadPostSideData])
+  }, [supabase, user, isAnonymous, loadPostSideData])
 
   // Refresh the feed in the CURRENT ordering mode — used by the initial load, the
   // mode toggle, the retry button, and realtime UPDATE/DELETE reconciliation.
@@ -2374,6 +2476,15 @@ export function FeedPanel() {
     return true
   })
 
+  // W1.6b: interleave community events among posts by their ranked_feed_v2 score,
+  // but ONLY in ranked mode under the "All" filter (feedIncludesEvents). Following /
+  // My Posts / Announcements are author-scoped (events have no post author) and the
+  // chronological "Recent" mode is posts-only — those render posts alone. Each ranked
+  // row renders exactly once, in global rank order (I4).
+  const feedItems: FeedItem[] = feedIncludesEvents(feedRankMode, activeFilter)
+    ? mergeRankedFeedItems(filteredPosts, eventItems)
+    : filteredPosts.map((post) => ({ kind: 'post', post }))
+
   return (
     <>
     {/* Review modal — rendered at panel root so it can overlay everything */}
@@ -2580,7 +2691,7 @@ export function FeedPanel() {
                 <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
                 <p className="text-sm">Loading posts...</p>
               </div>
-            ) : filteredPosts.length === 0 ? (
+            ) : feedItems.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p className="text-sm">No posts to show</p>
                 <p className="text-xs mt-1">Be the first to share something!</p>
@@ -2591,7 +2702,23 @@ export function FeedPanel() {
               // `layout` prop anywhere — positions are never animated (that would
               // reshuffle on W1.4 count patches). Enter/exit is opacity+transform only.
               <AnimatePresence initial={false}>
-              {filteredPosts.map((post) => {
+              {feedItems.map((item) => {
+                // W1.6b: an event row renders the EventFeedCard (same enter/exit
+                // motion, no `layout`); check-in reuses the W1.6a logic + sheet.
+                if (item.kind === 'event') {
+                  const ev = item.event
+                  return (
+                    <m.div key={`event-${ev.occurrenceId}`} data-testid={`event-${ev.occurrenceId}`} {...postEnterExit(reduce)}>
+                      <EventFeedCard
+                        event={ev}
+                        myStatus={eventMyStatuses[ev.occurrenceId] ?? 'none'}
+                        anonymousClaimed={eventAnonClaims.has(ev.occurrenceId)}
+                        onCheckedIn={refreshFeed}
+                      />
+                    </m.div>
+                  )
+                }
+                const post = item.post
                 const seekerOptInId = seekerOptInIds[post.id] ?? null
                 const seekerHasReviewed =
                   seekerOptInId != null && myReviewMap.has(seekerOptInId)
