@@ -30,6 +30,12 @@ interface CheckinSheetProps {
   onOpenChange: (open: boolean) => void
   /** True when a check-in NOW records confirmed presence ("I'm here"); false for an early "I'm coming". */
   confirmsPresence: boolean
+  /**
+   * True when the member already holds a tracked (early/confirmed) row for this occurrence.
+   * The anonymous option is then hidden — the server refuses an anonymous check-in on top of
+   * an existing tracked row (a member is counted at most once per occurrence, M2).
+   */
+  hasTrackedRow?: boolean
   onSuccess?: () => void
 }
 
@@ -41,7 +47,7 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
-export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence, onSuccess }: CheckinSheetProps) {
+export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence, hasTrackedRow = false, onSuccess }: CheckinSheetProps) {
   const supabase = createClient()
   const { isAnonymous } = useAuth()
 
@@ -200,8 +206,10 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
               {/* Anonymous checkbox — opt-in, and it does not count toward attendance/badges.
                   Only offered in the window (confirmsPresence): the server accepts an
                   anonymous check-in only from 30 min before start, so before the window we
-                  never present an action it would reject. An "early" tap is always tracked. */}
-              {confirmsPresence && (
+                  never present an action it would reject. An "early" tap is always tracked.
+                  Hidden once the member already holds a tracked row (M2: a second anonymous
+                  check-in on top of it is refused). */}
+              {confirmsPresence && !hasTrackedRow && (
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"

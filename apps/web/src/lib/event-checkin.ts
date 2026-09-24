@@ -30,6 +30,7 @@ export type CheckinButtonKind =
   | 'in_window'
   | 'checked_early'
   | 'attended'
+  | 'anonymous'
 
 export interface CheckinButtonModel {
   kind: CheckinButtonKind
@@ -61,6 +62,12 @@ export interface CheckinButtonInput {
   endsAtMs: number
   myStatus: MyCheckinStatus
   nowMs: number
+  /**
+   * True when the member already spent their one anonymous check-in on this occurrence
+   * (from my_anonymous_claims). They are already counted; the server refuses a second,
+   * identified, check-in (M2), so the UI shows a terminal "Counted anonymously" state.
+   */
+  anonymousClaimed?: boolean
 }
 
 /**
@@ -69,10 +76,14 @@ export interface CheckinButtonInput {
  * UI never invites an action the RPC will reject.
  */
 export function computeCheckinButton(input: CheckinButtonInput): CheckinButtonModel {
-  const { status, startsAtMs, endsAtMs, myStatus, nowMs } = input
+  const { status, startsAtMs, endsAtMs, myStatus, nowMs, anonymousClaimed } = input
 
   if (status === 'cancelled') {
     return { kind: 'cancelled', label: 'Cancelled', actionable: false, confirmsPresence: false }
+  }
+  // Already counted anonymously (M2): terminal, non-actionable — a second check-in is refused.
+  if (anonymousClaimed) {
+    return { kind: 'anonymous', label: 'Counted anonymously ✓', actionable: false, confirmsPresence: false }
   }
   // Confirmed is terminal for the member: state never moves back.
   if (myStatus === 'confirmed') {

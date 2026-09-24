@@ -82,6 +82,14 @@ describe('computeCheckinButton', () => {
   })
 
   it('cancelled overrides everything', () => {
+    // M2: an anonymous claim is terminal + non-actionable, and wins even inside the window
+    // (a second, identified, check-in would be refused by the server).
+    const anon = computeCheckinButton({ status: 'upcoming', startsAtMs: start, endsAtMs: end, myStatus: 'none', nowMs: start + 5 * MIN, anonymousClaimed: true })
+    expect(anon.kind).toBe('anonymous')
+    expect(anon.actionable).toBe(false)
+    // A cancelled occurrence still reads "Cancelled" even if anonymously claimed.
+    expect(computeCheckinButton({ status: 'cancelled', startsAtMs: start, endsAtMs: end, myStatus: 'none', nowMs: start + 5 * MIN, anonymousClaimed: true }).kind).toBe('cancelled')
+
     const m = computeCheckinButton({ status: 'cancelled', startsAtMs: start, endsAtMs: end, myStatus: 'early', nowMs: start + 5 * MIN })
     expect(m.kind).toBe('cancelled')
     expect(m.actionable).toBe(false)

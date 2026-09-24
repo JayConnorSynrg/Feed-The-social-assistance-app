@@ -74,11 +74,16 @@ export function EventsPanel() {
 
   const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
   const [myStatuses, setMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
+  // Occurrences this member has already spent their one anonymous check-in on (own-only, via
+  // the my_anonymous_claims SECDEF RPC). The anonymous event_checkins row is unlinkable, so
+  // this RPC is the only way the member learns they are already counted anonymously (M2).
+  const [anonClaims, setAnonClaims] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
   const [checkinConfirms, setCheckinConfirms] = useState(false)
   const [checkinOpen, setCheckinOpen] = useState(false)
+  const [checkinHasTracked, setCheckinHasTracked] = useState(false)
 
   const fetchOccurrences = useCallback(async () => {
     setLoading(true)
@@ -139,9 +144,20 @@ export function EventsPanel() {
             map[row.occurrence_id as string] = (row.status as MyCheckinStatus) ?? 'confirmed'
           }
           setMyStatuses(map)
+
+          // Own anonymous claims for the visible occurrences (unlinkable rows are invisible
+          // above; this SECDEF RPC returns only the caller's own claimed occurrence ids).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: claims } = await (supabase.rpc as any)('my_anonymous_claims', { p_occurrence_ids: ids })
+          const claimed = new Set<string>()
+          for (const row of (claims as Array<{ occurrence_id: string }> | null) ?? []) {
+            if (row?.occurrence_id) claimed.add(row.occurrence_id)
+          }
+          setAnonClaims(claimed)
         }
       } else {
         setMyStatuses({})
+        setAnonClaims(new Set())
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events')
@@ -226,6 +242,7 @@ export function EventsPanel() {
               endsAtMs: new Date(occ.ends_at).getTime(),
               myStatus: myStatuses[occ.id] ?? 'none',
               nowMs,
+              anonymousClaimed: anonClaims.has(occ.id),
             })
 
             return (
@@ -290,6 +307,9 @@ export function EventsPanel() {
                         },
                       })
                       setCheckinConfirms(btn.confirmsPresence)
+                      // Hide the anonymous option when the member already has a tracked row
+                      // (server refuses an anonymous check-in on top of one).
+                      setCheckinHasTracked((myStatuses[occ.id] ?? 'none') !== 'none')
                       setCheckinOpen(true)
                     }}
                     className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
@@ -299,7 +319,7 @@ export function EventsPanel() {
                 ) : (
                   <span
                     className={`self-start text-xs font-semibold px-3 py-1.5 rounded-xl ${
-                      btn.kind === 'attended' || btn.kind === 'checked_early'
+                      btn.kind === 'attended' || btn.kind === 'checked_early' || btn.kind === 'anonymous'
                         ? 'bg-lime-100 text-lime-800'
                         : 'bg-stone-100 text-stone-500'
                     }`}
@@ -317,6 +337,7 @@ export function EventsPanel() {
           occurrence={checkinOccurrence}
           open={checkinOpen}
           confirmsPresence={checkinConfirms}
+          hasTrackedRow={checkinHasTracked}
           onOpenChange={(open) => {
             setCheckinOpen(open)
             if (!open) setCheckinOccurrence(null)

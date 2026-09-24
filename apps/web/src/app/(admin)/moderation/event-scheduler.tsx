@@ -29,6 +29,7 @@ interface AssistanceEvent {
   id: string
   title: string
   event_type: string
+  description: string | null
   location_name: string | null
   address: string | null
   city: string | null
@@ -167,17 +168,22 @@ export function EventScheduler({ selectedOrgId }: Props) {
     setLoading(true)
     const query = supabase
       .from('assistance_events')
-      .select('id, title, event_type, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
+      .select('id, title, event_type, description, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
       .eq('is_active', true)
 
     if (selectedOrgId !== 'all') {
       query.eq('org_id', selectedOrgId)
+    } else {
+      // M4: the "All Organizations" default must not leak other orgs' events. A non-platform
+      // org admin's adminOrgs are exactly the orgs they administer; a platform admin's
+      // adminOrgs are all active orgs, so this filter is a no-op for them (unchanged).
+      query.in('org_id', adminOrgs.map((o) => o.id))
     }
 
     const { data } = await query
     setEvents((data as AssistanceEvent[]) ?? [])
     setLoading(false)
-  }, [supabase, selectedOrgId])
+  }, [supabase, selectedOrgId, adminOrgs])
 
   useEffect(() => {
     fetchEvents()
@@ -190,10 +196,12 @@ export function EventScheduler({ selectedOrgId }: Props) {
     }
   }, [selectedOrgId])
 
-  // Collect all occurrences with event info
+  // Collect all occurrences with event info. Include ended (completed / past) occurrences —
+  // not just upcoming — so the organizer can reach Attendance for events that already ran.
+  // Cancelled occurrences are excluded (no attendance to review).
   const allOccurrences = events.flatMap((event) =>
     (event.occurrences ?? [])
-      .filter((occ) => occ.status === 'upcoming')
+      .filter((occ) => occ.status !== 'cancelled')
       .map((occ) => ({
         ...occ,
         event_title: event.title,
@@ -365,7 +373,18 @@ export function EventScheduler({ selectedOrgId }: Props) {
       }
       const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
 
-      const { error } = await supabase.rpc('admin_update_event', {
+      // Explicit-clear semantics: a blanked optional text field is nulled via p_clear (a
+      // NULL argument alone would only be COALESCE'd back to the stored value). Clearing an
+      // already-empty field is a harmless no-op.
+      const clear: string[] = []
+      if (!editLocationName.trim()) clear.push('location_name')
+      if (!editAddress.trim()) clear.push('address')
+      if (!editCity.trim()) clear.push('city')
+      if (!editState.trim()) clear.push('state')
+      if (!editZip.trim()) clear.push('zip_code')
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)('admin_update_event', {
         p_event_id: editEventId,
         p_title: editTitle.trim(),
         p_event_type: editEventType,
@@ -379,6 +398,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
         p_geocode_accuracy: addressChanged ? match?.accuracy : undefined,
         p_geocode_confidence: addressChanged ? match?.confidence : undefined,
         p_regeocode: addressChanged,
+        p_clear: clear,
       })
 
       if (error) {
@@ -398,6 +418,32 @@ export function EventScheduler({ selectedOrgId }: Props) {
           : 'Saved. The new address did not resolve precisely, so it will show as an unknown location until edited.')
       }
 
+      setEditEventId(null)
+      await fetchEvents()
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleRetireEvent() {
+    if (!editEventId) return
+    // Retire = set is_active=false. The event drops off the member feed and the scheduler
+    // default; occurrences with check-ins keep their history. Reversible from the DB.
+    if (!confirm('Retire this event? It will no longer appear to members or in the scheduler.')) return
+    setSavingEdit(true)
+    setEditError(null)
+    setEditInfo(null)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)('admin_update_event', {
+        p_event_id: editEventId,
+        p_is_active: false,
+      })
+      if (error) {
+        setEditError(error.message)
+        return
+      }
+      logger.info('admin.event.retired', { event_id: editEventId })
       setEditEventId(null)
       await fetchEvents()
     } finally {
@@ -896,6 +942,14 @@ export function EventScheduler({ selectedOrgId }: Props) {
               >
                 {savingEdit ? 'Saving…' : 'Save changes'}
               </Button>
+              <button
+                type="button"
+                onClick={handleRetireEvent}
+                disabled={savingEdit}
+                className="w-full text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 py-1"
+              >
+                Retire event
+              </button>
             </div>
           </div>
         </div>

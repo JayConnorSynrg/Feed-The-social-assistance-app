@@ -17,6 +17,8 @@ export default async function AdminLayout({
   // revoked direct is_admin column reads, these RPCs are the only supported gate. A
   // platform admin reaches the full shell; a non-platform-admin who administers at least
   // one org reaches it too (the shell then shows only the Events tab, scoped to their orgs).
+  // This group layout admits both; the platform-only surfaces tighten the gate in their own
+  // nested layouts (see federation/layout.tsx), redirecting org admins back to /moderation.
   const { data: isAdmin } = await supabase.rpc('is_current_user_admin')
   let allowed = isAdmin === true
   if (!allowed) {
