@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   actorTier: 'platform_admin' as string | null,
   targetTier: 'community_moderator' as string | null,
   updateErr: null as null | { message: string },
+  targetErr: null as null | { message: string },
   recordCalls: [] as Array<Record<string, unknown>>,
   updateCalls: 0,
 }))
@@ -26,7 +27,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single: async () => ({ data: { admin_tier: state.targetTier }, error: null }) }),
+        eq: () => ({ single: async () => ({ data: state.targetErr ? null : { admin_tier: state.targetTier }, error: state.targetErr }) }),
       }),
     }),
     rpc: async (_name: string, args: Record<string, unknown>) => {
@@ -59,6 +60,7 @@ beforeEach(() => {
   state.actorTier = 'platform_admin'
   state.targetTier = 'community_moderator'
   state.updateErr = null
+  state.targetErr = null
   state.recordCalls = []
   state.updateCalls = 0
 })
@@ -107,5 +109,13 @@ describe('ban route (T3 + audit)', () => {
     const res = await call('target-cm', 'none')
     expect(res.status).toBe(200)
     expect(state.recordCalls[0].p_action).toBe('user.unban')
+  })
+  it('fails CLOSED (500) with exactly one error row when the target-tier lookup errors', async () => {
+    state.targetErr = { message: 'db down' }
+    const res = await call('target-cm')
+    expect(res.status).toBe(500)
+    expect(state.updateCalls).toBe(0)
+    expect(state.recordCalls).toHaveLength(1)
+    expect(state.recordCalls[0].p_outcome).toBe('error')
   })
 })

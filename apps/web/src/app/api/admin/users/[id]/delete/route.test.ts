@@ -22,7 +22,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single: async () => ({ data: { admin_tier: state.targetTier }, error: null }) }),
+        eq: () => ({ single: async () => ({ data: state.targetErr ? null : { admin_tier: state.targetTier }, error: state.targetErr }) }),
       }),
     }),
     rpc: async (_name: string, args: Record<string, unknown>) => {
@@ -43,6 +43,7 @@ beforeEach(() => {
   state.actorTier = 'platform_admin'
   state.targetTier = 'community_moderator'
   state.deleteErr = null
+  state.targetErr = null
   state.recordCalls = []
   state.deleteCalls = 0
 })
@@ -71,6 +72,14 @@ describe('delete route (T3 + audit, D7)', () => {
     state.deleteErr = { message: 'boom' }
     const res = await call('target-cm')
     expect(res.status).toBe(500)
+    expect(state.recordCalls).toHaveLength(1)
+    expect(state.recordCalls[0].p_outcome).toBe('error')
+  })
+  it('fails CLOSED (500) with exactly one error row when the target-tier lookup errors', async () => {
+    state.targetErr = { message: 'db down' }
+    const res = await call('target-cm')
+    expect(res.status).toBe(500)
+    expect(state.deleteCalls).toBe(0)
     expect(state.recordCalls).toHaveLength(1)
     expect(state.recordCalls[0].p_outcome).toBe('error')
   })

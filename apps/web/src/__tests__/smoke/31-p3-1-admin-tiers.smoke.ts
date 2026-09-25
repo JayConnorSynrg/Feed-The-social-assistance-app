@@ -34,6 +34,11 @@ const STATE_SQL = `
     -- 3. no drift: is_admin / is_staff derived from admin_tier
     (SELECT count(*) FROM public.profiles
        WHERE (admin_tier='platform_admin') <> is_admin OR (admin_tier IS NOT NULL) <> is_staff)   AS derivation_drift,
+    -- fix 2: is_admin / is_staff are NEVER NULL (COALESCE in sync_tier_flags)
+    (SELECT count(*) FROM public.profiles WHERE is_admin IS NULL OR is_staff IS NULL)              AS null_flags,
+    -- nit: sync_tier_flags trigger fn is not client-executable
+    has_function_privilege('authenticated','public.sync_tier_flags()','EXECUTE')                   AS sync_auth_exec,
+    has_function_privilege('anon','public.sync_tier_flags()','EXECUTE')                             AS sync_anon_exec,
     -- 4. exactly 2 PA; founder singleton points at a PA
     (SELECT count(*) FROM public.profiles WHERE admin_tier='platform_admin')                       AS pa_count,
     (SELECT count(*) FROM public.platform_founder)                                                 AS founder_rows,
@@ -68,9 +73,11 @@ const STATE_SQL = `
          AND p.proname IN ('admin_list_pending_resources','admin_list_resources','approve_resource',
                            'reject_resource','admin_update_resource','set_resource_location_by_id')
          AND p.prosrc LIKE '%current_user_tier_at_least(''resource_admin'')%')                     AS ra_fns_gated,
+    -- approve_resource legitimately references is_current_user_admin in its form-type PA guard
+    -- (forms stay PA-only), so it is excluded; the other RA fns must not gate on ICUA at all.
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public'
-         AND p.proname IN ('admin_list_pending_resources','admin_list_resources','approve_resource',
+         AND p.proname IN ('admin_list_pending_resources','admin_list_resources',
                            'reject_resource','admin_update_resource','set_resource_location_by_id')
          AND p.prosrc LIKE '%is_current_user_admin%')                                              AS ra_fns_still_icua,
     -- the 6 CM RPCs carry the CM gate (semantically = is_staff) and write an audit row
@@ -114,8 +121,11 @@ maybeDescribe('P3.1 — three admin tiers (prod, read-only)', () => {
     expect(r.marker_auth_upd).toBe(false)
     expect(r.marker_auth_ins).toBe(false)
   })
-  gated('3. is_admin/is_staff derived from admin_tier (no drift)', (r) => {
+  gated('3. is_admin/is_staff derived from admin_tier (no drift, never NULL)', (r) => {
     expect(Number(r.derivation_drift)).toBe(0)
+    expect(Number(r.null_flags)).toBe(0)
+    expect(r.sync_auth_exec).toBe(false)
+    expect(r.sync_anon_exec).toBe(false)
   })
   gated('4. exactly 2 PA; founder singleton is a PA', (r) => {
     expect(Number(r.pa_count)).toBe(2)
