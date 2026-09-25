@@ -73,12 +73,12 @@ const STATE_SQL = `
          AND p.proname IN ('admin_list_pending_resources','admin_list_resources','approve_resource',
                            'reject_resource','admin_update_resource','set_resource_location_by_id')
          AND p.prosrc LIKE '%current_user_tier_at_least(''resource_admin'')%')                     AS ra_fns_gated,
-    -- approve_resource legitimately references is_current_user_admin in its form-type PA guard
-    -- (forms stay PA-only), so it is excluded; the other RA fns must not gate on ICUA at all.
+    -- The three form-write fns (approve/reject/update) legitimately reference is_current_user_admin
+    -- in their form-type PA guard (forms stay PA-only), so they are excluded; the pure-RA fns
+    -- (list + set-location) must not gate on ICUA at all.
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public'
-         AND p.proname IN ('admin_list_pending_resources','admin_list_resources',
-                           'reject_resource','admin_update_resource','set_resource_location_by_id')
+         AND p.proname IN ('admin_list_pending_resources','admin_list_resources','set_resource_location_by_id')
          AND p.prosrc LIKE '%is_current_user_admin%')                                              AS ra_fns_still_icua,
     -- the 6 CM RPCs carry the CM gate (semantically = is_staff) and write an audit row
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -87,6 +87,13 @@ const STATE_SQL = `
                            'admin_resolve_report','admin_verify_safety_alert','admin_remove_safety_alert')
          AND p.prosrc LIKE '%current_user_tier_at_least(''community_moderator'')%'
          AND p.prosrc LIKE '%record_admin_action%')                                                AS cm_fns_gated_audited,
+    -- every form-type state-change path (approve/reject/update) is Platform-Admin-guarded
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname IN ('approve_resource','reject_resource','admin_update_resource')
+         AND p.prosrc LIKE '%form_requires_platform_admin%')                                        AS form_guarded_fns,
+    -- approve_form_template is audited
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname='approve_form_template' AND p.prosrc LIKE '%record_admin_action%') AS form_tpl_audited,
     -- 9/10. facilitator retired
     (to_regclass('public.admin_code_redemptions') IS NULL)                                          AS facilitator_table_gone,
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -154,10 +161,12 @@ maybeDescribe('P3.1 — three admin tiers (prod, read-only)', () => {
     expect(r.auth_can_set_tier).toBe(true)
     expect(r.auth_can_list_people).toBe(true)
   })
-  gated('8. RA fns re-gated; CM fns gated + audited', (r) => {
+  gated('8. RA fns re-gated; CM fns gated + audited; form paths PA-guarded', (r) => {
     expect(Number(r.ra_fns_gated)).toBe(6)
     expect(Number(r.ra_fns_still_icua)).toBe(0)
     expect(Number(r.cm_fns_gated_audited)).toBe(6)
+    expect(Number(r.form_guarded_fns)).toBe(3)   // approve + reject + update all guard form rows
+    expect(Number(r.form_tpl_audited)).toBe(1)   // approve_form_template writes an audit row
   })
   gated('9/10. facilitator code retired', (r) => {
     expect(r.facilitator_table_gone).toBe(true)

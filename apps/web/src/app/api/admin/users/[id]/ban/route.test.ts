@@ -88,13 +88,12 @@ describe('ban route (T3 + audit)', () => {
     expect(state.recordCalls[0].p_request_id).toBe('rid-test')
   })
 
-  it('a non-PA actor is denied (insufficient_tier)', async () => {
+  it('a non-PA actor is refused 403 BEFORE any lookup or audit write', async () => {
     state.actorTier = 'resource_admin'
     const res = await call('target-cm')
     expect(res.status).toBe(403)
     await expect(res.json()).resolves.toMatchObject({ code: 'insufficient_tier' })
-    expect(state.recordCalls).toHaveLength(1)
-    expect(state.recordCalls[0].p_outcome).toBe('denied')
+    expect(state.recordCalls).toHaveLength(0)   // nothing written
     expect(state.updateCalls).toBe(0)
   })
 
@@ -111,11 +110,21 @@ describe('ban route (T3 + audit)', () => {
     expect(state.recordCalls[0].p_action).toBe('user.unban')
   })
   it('fails CLOSED (500) with exactly one error row when the target-tier lookup errors', async () => {
-    state.targetErr = { message: 'db down' }
+    state.targetErr = { code: 'XX000', message: 'db down' }
     const res = await call('target-cm')
     expect(res.status).toBe(500)
     expect(state.updateCalls).toBe(0)
     expect(state.recordCalls).toHaveLength(1)
     expect(state.recordCalls[0].p_outcome).toBe('error')
+  })
+
+  it('a PA acting on a nonexistent target gets 404 with one error row', async () => {
+    state.targetErr = { code: 'PGRST116', message: 'no rows' }
+    const res = await call('ghost')
+    expect(res.status).toBe(404)
+    expect(state.updateCalls).toBe(0)
+    expect(state.recordCalls).toHaveLength(1)
+    expect(state.recordCalls[0].p_outcome).toBe('error')
+    expect(state.recordCalls[0].p_reason).toBe('not_found')
   })
 })

@@ -1,83 +1,127 @@
 // privileged-action.test.ts
-// CONTROL: privilegedRpc mints one id, sends it as x-request-id, and shares it with withMetric.
-// GUARD: no audited privileged RPC is called bare (bypassing the helper) anywhere in src.
+// CONTROL: privilegedRpc/privilegedFetch mint one id, send x-request-id, share it with withMetric,
+//          and record a denied/failed call as a FAILURE exactly once (finding 2).
+// GUARD:   no privileged call bypasses the helper, however it is written (finding 3).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-// --- withMetric mock captures the correlation plumbing ------------------------------------------
-const metricCalls: Array<{ op: string; attrs: Record<string, unknown>; rid?: string }> = []
+// withMetric mock mirrors runWithMetric's contract: fn resolves -> exactly one info row (ok:true);
+// fn throws -> exactly one error row (ok:false) then rethrows. (runWithMetric's one-row-per-outcome
+// invariant is proven separately in with-metric-core's own tests.)
+type Rec = { op: string; level: 'info' | 'error'; ok: boolean; rid?: string; request_id?: unknown }
+const records: Rec[] = []
 vi.mock('@/lib/logger', () => ({
   withMetric: vi.fn(async (op: string, attrs: Record<string, unknown>, fn: () => Promise<unknown>, rid?: string) => {
-    metricCalls.push({ op, attrs, rid })
-    return fn()
+    try {
+      const r = await fn()
+      records.push({ op, level: 'info', ok: true, rid, request_id: attrs.request_id })
+      return r
+    } catch (e) {
+      records.push({ op, level: 'error', ok: false, rid, request_id: attrs.request_id })
+      throw e
+    }
   }),
 }))
 
 import { privilegedRpc, privilegedFetch, newRequestId } from './privileged-action'
+import { scanForBypasses, AUDITED_PRIVILEGED } from './privileged-action-guard'
 
 beforeEach(() => {
-  metricCalls.length = 0
+  records.length = 0
 })
 
-describe('privilegedRpc (control — proves the guard targets real plumbing)', () => {
-  it('mints one id, sets it as x-request-id, and passes the SAME id to withMetric', async () => {
-    const header: Array<[string, string]> = []
-    const fakeSupabase = {
-      rpc: (_n: string, _a: Record<string, unknown>) => ({
-        setHeader: (k: string, v: string) => {
-          header.push([k, v])
-          return Promise.resolve({ data: { ok: true }, error: null })
-        },
-      }),
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await privilegedRpc(fakeSupabase as any, 'admin.post.remove', 'admin_remove_post', { p_post_id: '1' }, { target_id: '1' })
+// ── CONTROL: request-id plumbing + telemetry outcome (finding 1 request-id, finding 2) ──────────
+describe('privilegedRpc', () => {
+  const okSupabase = (result: { data?: unknown; error?: unknown }) => ({
+    rpc: () => ({ setHeader: (_k: string, _v: string) => Promise.resolve(result) }),
+  })
 
-    expect(header).toHaveLength(1)
+  it('SUCCESS: one info record, x-request-id set, same id shared with withMetric', async () => {
+    const header: Array<[string, string]> = []
+    const supa = { rpc: () => ({ setHeader: (k: string, v: string) => { header.push([k, v]); return Promise.resolve({ data: { ok: true }, error: null }) } }) }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await privilegedRpc(supa as any, 'admin.post.remove', 'admin_remove_post', { p_post_id: '1' })
     expect(header[0][0]).toBe('x-request-id')
-    const rid = header[0][1]
-    expect(metricCalls).toHaveLength(1)
-    expect(metricCalls[0].op).toBe('admin.post.remove')
-    expect(metricCalls[0].rid).toBe(rid)
-    expect(metricCalls[0].attrs.request_id).toBe(rid)
-    expect(res.requestId).toBe(rid)
-    expect(res.data).toEqual({ ok: true })
+    expect(records).toEqual([{ op: 'admin.post.remove', level: 'info', ok: true, rid: header[0][1], request_id: header[0][1] }])
+    expect(res).toMatchObject({ data: { ok: true }, error: null, requestId: header[0][1] })
+  })
+
+  it('SUPABASE ERROR: one error record, caller still gets {data:null,error}', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await privilegedRpc(okSupabase({ data: null, error: { code: '42501', message: 'denied' } }) as any, 'admin.tier.set', 'admin_set_tier', {})
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ level: 'error', ok: false })
+    expect(res.error).toEqual({ code: '42501', message: 'denied' })
+    expect(res.data).toBeNull()
+  })
+
+  it('THROWN EXCEPTION: one error record, caller gets an error result', async () => {
+    const supa = { rpc: () => ({ setHeader: () => { throw new Error('boom') } }) }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await privilegedRpc(supa as any, 'admin.post.hold', 'admin_hold_post', {})
+    expect(records).toHaveLength(1)
+    expect(records[0].ok).toBe(false)
+    expect(res.error?.message).toBe('boom')
   })
 })
 
-describe('privilegedFetch (control)', () => {
-  it('sends x-request-id and shares it with withMetric', async () => {
+describe('privilegedFetch', () => {
+  it('SUCCESS (200): one info record, x-request-id sent', async () => {
     const seen: Record<string, string> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(globalThis as any).fetch = vi.fn(async (_url: string, init: RequestInit) => {
-      Object.assign(seen, init.headers)
-      return new Response('{}', { status: 200 })
-    })
-    const { requestId } = await privilegedFetch('admin.user.ban', '/api/admin/users/x/ban', { method: 'POST' }, { target_id: 'x' })
+    ;(globalThis as any).fetch = vi.fn(async (_u: string, init: RequestInit) => { Object.assign(seen, init.headers); return new Response('{}', { status: 200 }) })
+    const { requestId, response } = await privilegedFetch('admin.user.ban', '/api/admin/users/x/ban', { method: 'POST' })
     expect(seen['x-request-id']).toBe(requestId)
-    expect(metricCalls[0].rid).toBe(requestId)
+    expect(response.status).toBe(200)
+    expect(records).toEqual([{ op: 'admin.user.ban', level: 'info', ok: true, rid: requestId, request_id: requestId }])
+  })
+
+  it('FETCH 403: one error record, caller still gets the response', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).fetch = vi.fn(async () => new Response('forbidden', { status: 403 }))
+    const { response } = await privilegedFetch('admin.user.delete', '/api/admin/users/x/delete', { method: 'DELETE' })
+    expect(response.status).toBe(403)
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ level: 'error', ok: false })
   })
 })
 
 describe('newRequestId', () => {
-  it('produces a bounded token that request_id() will accept (<=64, [A-Za-z0-9_-])', () => {
+  it('is a bounded token request_id() accepts (<=64, [A-Za-z0-9_-])', () => {
     const id = newRequestId()
     expect(id.length).toBeLessThanOrEqual(64)
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/)
   })
 })
 
-// --- source guard -------------------------------------------------------------------------------
-// Every AUDITED privileged RPC (writes an admin_actions row) must go through privilegedRpc. Bare
-// supabase.rpc('<name>') for these outside the helper + tests is a T5 bypass. Read-only list RPCs
-// (admin_list_*, current_user_tier, is_founder) are intentionally excluded.
-const AUDITED = [
-  'admin_remove_post', 'admin_hold_post', 'admin_authorize_post', 'admin_resolve_report',
-  'admin_verify_safety_alert', 'admin_remove_safety_alert', 'approve_resource', 'reject_resource',
-  'admin_update_resource', 'approve_form_template', 'admin_set_tier',
-]
+// ── GUARD (finding 3): catches every bypass form; leaves legit privilegedRpc calls alone ────────
+describe('scanForBypasses — catches every bypass form', () => {
+  const legit = `await privilegedRpc(supabase, 'admin.resource.approve', 'approve_resource', { p_resource_id: id })`
+  it('is clean for a legit privilegedRpc call', () => {
+    expect(scanForBypasses(legit)).toEqual([])
+  })
+  const forms: Record<string, string> = {
+    'plain dot .rpc': `await supabase.rpc('admin_remove_post', {})`,
+    'V1 bound alias': `const rpc = supabase.rpc.bind(supabase); await rpc('admin_remove_post', {})`,
+    'V2 template literal': 'await supabase.rpc(`admin_hold_post`, {})',
+    'V3 variable': `const n = 'admin_authorize_post'; await supabase.rpc(n, {})`,
+    'V4 audited unlisted': `await supabase.rpc('set_resource_location_by_id', {})`,
+    'V5 bracket access': `await supabase['rpc']('admin_resolve_report', {})`,
+    'V6 bare route fetch': `await fetch('/api/admin/users/x/ban', { method: 'POST' })`,
+  }
+  for (const [name, src] of Object.entries(forms)) {
+    it(`flags: ${name}`, () => {
+      expect(scanForBypasses(src).length).toBeGreaterThan(0)
+    })
+  }
+  it('AUDITED list includes set_resource_location_by_id and approve_form_template', () => {
+    expect(AUDITED_PRIVILEGED).toContain('set_resource_location_by_id')
+    expect(AUDITED_PRIVILEGED).toContain('approve_form_template')
+  })
+})
 
+// ── GUARD applied to the real tree ──────────────────────────────────────────────────────────────
 function walk(dir: string, acc: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name)
@@ -91,19 +135,17 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-describe('T5 source guard — no audited privileged RPC bypasses privilegedRpc', () => {
-  it('finds zero bare supabase.rpc calls to an audited privileged fn', () => {
+describe('T5 source guard — no privileged call bypasses the helper', () => {
+  it('finds zero bypasses across apps/web/src', () => {
     const srcRoot = path.resolve(__dirname, '..')
     const offenders: string[] = []
-    const rpcRe = /\.rpc\(\s*['"]([a-z_]+)['"]/g
     for (const file of walk(srcRoot)) {
-      if (file.endsWith(path.join('lib', 'privileged-action.ts'))) continue // the helper itself
-      const text = fs.readFileSync(file, 'utf8')
-      let m: RegExpExecArray | null
-      while ((m = rpcRe.exec(text)) !== null) {
-        if (AUDITED.includes(m[1])) offenders.push(`${path.relative(srcRoot, file)} -> ${m[1]}`)
-      }
+      // the helper + its guard module are the sanctioned home of these names
+      if (file.endsWith(path.join('lib', 'privileged-action.ts'))) continue
+      if (file.endsWith(path.join('lib', 'privileged-action-guard.ts'))) continue
+      const hits = scanForBypasses(fs.readFileSync(file, 'utf8'))
+      for (const h of hits) offenders.push(`${path.relative(srcRoot, file)} -> ${h}`)
     }
-    expect(offenders, `bare privileged rpc calls found:\n${offenders.join('\n')}`).toEqual([])
+    expect(offenders, `bypasses found:\n${offenders.join('\n')}`).toEqual([])
   })
 })
