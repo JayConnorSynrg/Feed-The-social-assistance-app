@@ -792,16 +792,22 @@ function getRelativeTime(date: Date): string {
 // ADMIN SECTION (visible only to admins)
 // ============================================
 function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
-  // A platform admin gets the full moderation dashboard; an org admin (non-platform-admin)
-  // gets organizer tools — schedule events, run the check-in kiosk, and view attendance for
-  // the organizations they manage. Both open the same route; the shell shows only what the
-  // caller may use.
+  // Copy describes ONLY what THIS caller's tier can do. A tier-holder sees the moderation
+  // dashboard (scoped by tier); an org admin with no tier sees organizer tools. Both open the
+  // same route; the shell shows only the tabs the caller may use.
+  const { tier } = useAdminTier()
+  const desc =
+    tier === 'platform_admin'
+      ? 'Full administration: reports, safety alerts, the resource queue, people and tiers, users, and community tools.'
+      : tier === 'resource_admin'
+      ? 'Review reports and safety alerts, and manage the resource review queue.'
+      : tier === 'community_moderator'
+      ? 'Review reports and moderate posts and safety alerts.'
+      : 'Schedule your organization’s events and run the check-in kiosk.'
   return (
     <SettingsSection
       title="Administration"
-      description={isPlatformAdmin
-        ? 'Tools for reviewing community submissions, reports, and safety alerts.'
-        : 'Tools for scheduling your organization’s events and running check-in.'}
+      description={desc}
     >
       <div className="p-5 bg-[#faf9f6] rounded-xl border border-stone-200">
         <div className="flex items-start gap-3 mb-4">
@@ -810,13 +816,12 @@ function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
           </div>
           <div>
             <p className="font-medium text-sm text-stone-800">
-              {isPlatformAdmin ? 'Moderation dashboard' : 'Organizer tools'}
+              {tier === 'platform_admin' ? 'Admin dashboard'
+                : tier === 'resource_admin' ? 'Resource Admin dashboard'
+                : tier === 'community_moderator' ? 'Moderation dashboard'
+                : 'Organizer tools'}
             </p>
-            <p className="text-xs text-stone-600 mt-0.5">
-              {isPlatformAdmin
-                ? 'Review pending resources, content reports, safety alerts, and petition signatures.'
-                : 'Schedule events and occurrences, run the check-in kiosk, and view attendance for your organization.'}
-            </p>
+            <p className="text-xs text-stone-600 mt-0.5">{desc}</p>
           </div>
         </div>
         <Link

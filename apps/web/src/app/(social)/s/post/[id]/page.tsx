@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Heart, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
+import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -76,7 +77,7 @@ export default async function SharedPostPage({ params }: Props) {
   // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, image_url, user:profiles(id, first_name, username, avatar_url)')
+    .select('id, content, image_url, user:profiles(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -88,6 +89,7 @@ export default async function SharedPostPage({ params }: Props) {
     first_name: string | null
     username: string | null
     avatar_url: string | null
+    admin_tier: AdminTier | null
   } | null
 
   // Fetch donation handles via SECURITY DEFINER RPC — isolated column access
@@ -142,7 +144,14 @@ export default async function SharedPostPage({ params }: Props) {
             </div>
           )}
           <div>
-            <p className="font-semibold text-stone-800">{displayName}</p>
+            <p className="font-semibold text-stone-800">
+              {displayName}
+              {tierLabel(user?.admin_tier) && (
+                <span className="ml-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
+                  {tierLabel(user?.admin_tier)}
+                </span>
+              )}
+            </p>
             {user?.username && (
               <p className="text-sm text-stone-500">@{user.username}</p>
             )}

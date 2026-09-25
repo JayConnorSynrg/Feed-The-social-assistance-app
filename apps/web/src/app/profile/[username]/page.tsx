@@ -100,7 +100,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     .from('posts')
     .select(
       'id, user_id, content, image_url, is_pinned, is_hidden, created_at, updated_at, ' +
-      'user:profiles(id, username, first_name, avatar_url)'
+      'user:profiles(id, username, first_name, avatar_url, admin_tier)'
     )
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })

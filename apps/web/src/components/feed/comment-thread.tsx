@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useComments, type Comment } from '@/hooks/use-comments'
+import { tierLabel } from '@/lib/admin-tier'
 import { useRealtimeComments } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
 import { formatDistanceToNow } from 'date-fns'
@@ -99,6 +100,11 @@ function CommentRow({ comment, depth = 0, onReply, submitting, isAuthenticated, 
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-0.5">
             <span className="text-xs font-semibold text-stone-800">{authorName}</span>
+            {tierLabel(comment.user?.admin_tier) && (
+              <span className="text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5">
+                {tierLabel(comment.user?.admin_tier)}
+              </span>
+            )}
             <span className="text-[10px] text-stone-400">
               {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
             </span>

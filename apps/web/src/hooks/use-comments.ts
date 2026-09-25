@@ -10,6 +10,7 @@
 
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { AdminTier } from '@/lib/admin-tier'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 
@@ -21,6 +22,7 @@ export interface CommentAuthor {
   id: string
   first_name: string | null
   avatar_url: string | null
+  admin_tier: AdminTier | null
 }
 
 export interface Comment {
@@ -101,7 +103,7 @@ export function useComments(postId: string) {
     try {
       const { data, error: fetchError } = await supabase
         .from('post_comments')
-        .select('*, user:profiles(id, first_name, avatar_url)')
+        .select('*, user:profiles(id, first_name, avatar_url, admin_tier)')
         .eq('post_id', postId)
         .eq('is_hidden', false)
         .order('created_at', { ascending: true })
