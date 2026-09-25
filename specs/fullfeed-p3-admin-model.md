@@ -1,8 +1,8 @@
 # FULL-FEED P3 — Admin Model & Moderation Guards
 
-Status: **P3.0 BUILT_PENDING_DEPLOY** (guards; migration applies as a separate post-deploy
-step, before merge) · **P3.1 BUILT_PENDING_DEPLOY** (three admin tiers, nomination only — §6;
-migration `20261010000000`, applies before merge). The P3.1 ladder scoped in §2 is now built.
+Status: **P3.0 SHIPPED** (guards; PR #215, squash `1028506`, migration `20261009000000` applied
+in prod) · **P3.1 SHIPPED** (three admin tiers, nomination only — §6; PR #217, squash `92c3003`,
+migration `20261010000000` applied in prod). The P3.1 ladder scoped in §2 is live.
 Backend for P3.0: `supabase/migrations/20261009000000_p3_0_moderation_guards.sql`.
 Prod: `ndtpovonpadugthmcntl`. Code baseline: `origin/develop` @ `05f0293`.
 
