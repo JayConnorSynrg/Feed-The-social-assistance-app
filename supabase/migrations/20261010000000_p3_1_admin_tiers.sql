@@ -13,6 +13,10 @@
 -- (20261009000000). SECDEF hardening per pattern-security-definer-hardening. Column grants read
 -- from pg_attribute.attacl. No ALTER PUBLICATION ... SET TABLE anywhere.
 
+-- Bound how long this migration will wait on a lock before failing, so a stray lock cannot
+-- hang the deploy. (statement_timeout is set by the deploy harness per transaction.)
+SET LOCAL lock_timeout = '5s';
+
 -- ============================================================================
 -- 1. Tier storage + public marker
 -- ============================================================================
@@ -48,11 +52,15 @@ BEGIN
      AND COALESCE(current_setting('feed.tier_write', true), '') <> 'on' THEN
     NEW.admin_tier := NULL;
   END IF;
-  NEW.is_admin := (NEW.admin_tier = 'platform_admin');
-  NEW.is_staff := (NEW.admin_tier IS NOT NULL);
+  -- COALESCE: is_admin/is_staff are NEVER NULL. (NEW.admin_tier = 'platform_admin') is NULL when
+  -- admin_tier IS NULL, so without COALESCE a tier-less signup or a revoked user would get NULL.
+  NEW.is_admin := COALESCE(NEW.admin_tier = 'platform_admin', false);
+  NEW.is_staff := COALESCE(NEW.admin_tier IS NOT NULL, false);
   RETURN NEW;
 END;
 $$;
+-- Trigger functions are invoked by the trigger, never called directly.
+REVOKE EXECUTE ON FUNCTION public.sync_tier_flags() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS sync_is_staff_trigger ON public.profiles;
 DROP FUNCTION IF EXISTS public.sync_is_staff();
@@ -81,13 +89,15 @@ REVOKE ALL ON public.platform_founder FROM anon, authenticated, service_role;
 -- in prod this session). Hard-coded per D6 — no PII (email) in the repo.
 INSERT INTO public.platform_founder (user_id) VALUES ('ae6e0953-6425-4531-89fe-57feab106a24');
 
-CREATE FUNCTION public.is_founder(p uuid DEFAULT auth.uid())
+-- is_founder answers ONLY for the caller (auth.uid()); it never reveals whether an arbitrary
+-- user is the founder. service_set_tier checks a target against platform_founder directly.
+CREATE FUNCTION public.is_founder()
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
   SET search_path = public, pg_temp
-AS $$ SELECT EXISTS (SELECT 1 FROM public.platform_founder WHERE user_id = p) $$;
-REVOKE EXECUTE ON FUNCTION public.is_founder(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.is_founder(uuid) TO authenticated, service_role;
+AS $$ SELECT EXISTS (SELECT 1 FROM public.platform_founder WHERE user_id = auth.uid()) $$;
+REVOKE EXECUTE ON FUNCTION public.is_founder() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_founder() TO authenticated, service_role;
 
 -- ============================================================================
 -- 4. Tier helpers
@@ -119,11 +129,16 @@ GRANT EXECUTE ON FUNCTION public.tier_of(uuid) TO service_role;
 
 -- request_id: the client-minted x-request-id, so the durable audit row and the app_logs
 -- latency/error telemetry share one id. NULL under direct SQL (no request.headers).
+-- request_id: the client-minted x-request-id. Capped at 64 chars and validated to a uuid/simple
+-- token pattern; anything else stores NULL (no unbounded/garbage ids in the audit trail).
 CREATE FUNCTION public.request_id()
   RETURNS text
   LANGUAGE sql STABLE
   SET search_path = public, pg_temp
-AS $$ SELECT NULLIF(current_setting('request.headers', true), '')::json ->> 'x-request-id' $$;
+AS $$
+  SELECT CASE WHEN v ~ '^[A-Za-z0-9_-]{1,64}$' THEN v END
+  FROM (SELECT NULLIF(current_setting('request.headers', true), '')::json ->> 'x-request-id' AS v) s
+$$;
 REVOKE EXECUTE ON FUNCTION public.request_id() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.request_id() TO authenticated, service_role;
 
@@ -175,6 +190,10 @@ AS $$
 DECLARE
   v_target_tier public.admin_tier;
 BEGIN
+  -- Caps (fix: bound audit inputs, applies to every caller incl. the API routes):
+  --   request_id -> uuid/simple-token pattern, <=64 chars, else NULL; reason -> <=500 chars.
+  p_request_id := CASE WHEN p_request_id ~ '^[A-Za-z0-9_-]{1,64}$' THEN p_request_id ELSE NULL END;
+  p_reason     := left(p_reason, 500);
   -- target_tier is meaningful only when the target is a user (ban/delete/tier.set).
   IF p_target_type IN ('user', 'tier') AND p_target_id IS NOT NULL THEN
     BEGIN
@@ -213,11 +232,15 @@ DECLARE
   v_old   public.admin_tier;
   v_rid   text := COALESCE(p_request_id, public.request_id());
 BEGIN
-  -- 1. authenticated, non-anonymous actor
+  -- Callers with NO tier (guests, anonymous, plain users) get a structured denial with NO durable
+  -- row — the RAISE lands in postgres_logs so the attempt is still observable, but the append-only
+  -- admin_actions table is not writable by every anonymous probe. Only tier-holders (whose denials
+  -- are meaningful moderation-authority events) produce durable rows below.
   IF v_actor IS NULL OR COALESCE((auth.jwt() ->> 'is_anonymous')::boolean, false) THEN
-    PERFORM public.record_admin_action(v_actor, 'tier.set', 'tier', p_target::text, 'denied', 'auth',
-      jsonb_build_object('to', p_tier), v_rid);
-    RETURN jsonb_build_object('ok', false, 'code', 'auth');
+    RAISE EXCEPTION 'p3_denied:auth' USING ERRCODE = '42501';
+  END IF;
+  IF public.current_user_tier() IS NULL THEN
+    RAISE EXCEPTION 'p3_denied:insufficient_tier' USING ERRCODE = '42501';
   END IF;
 
   -- 2. no self-target
@@ -239,7 +262,7 @@ BEGIN
   -- 4/5. authority: anything touching PA is founder-only; otherwise the actor must outrank both
   --      the old and the new tier (NULL treated as lowest).
   IF 'platform_admin' IN (v_old, p_tier) THEN
-    IF NOT public.is_founder(v_actor) THEN
+    IF NOT public.is_founder() THEN
       PERFORM public.record_admin_action(v_actor, 'tier.set', 'tier', p_target::text, 'denied', 'founder_only',
         jsonb_build_object('from', v_old, 'to', p_tier), v_rid);
       RETURN jsonb_build_object('ok', false, 'code', 'founder_only');
@@ -289,6 +312,29 @@ BEGIN
     RAISE EXCEPTION 'service_set_tier requires a reason' USING ERRCODE = '22004';
   END IF;
   v_old := public.tier_of(p_target);
+
+  -- Founder-only is ABSOLUTE: the break-glass path may NOT create/remove/alter a Platform Admin,
+  -- may NOT touch the founder, and may only target a real (non-anonymous) user. Each refusal is a
+  -- durable audit row (system actor) so the attempt is recorded.
+  IF p_tier = 'platform_admin' OR v_old = 'platform_admin' THEN
+    PERFORM public.record_admin_action(NULL, 'tier.set', 'tier', p_target::text, 'denied', 'platform_admin_forbidden',
+      jsonb_build_object('from', v_old, 'to', p_tier, 'service', true), NULL);
+    RETURN jsonb_build_object('ok', false, 'code', 'platform_admin_forbidden');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.platform_founder WHERE user_id = p_target) THEN
+    PERFORM public.record_admin_action(NULL, 'tier.set', 'tier', p_target::text, 'denied', 'founder_immutable',
+      jsonb_build_object('from', v_old, 'to', p_tier, 'service', true), NULL);
+    RETURN jsonb_build_object('ok', false, 'code', 'founder_immutable');
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles p JOIN auth.users u ON u.id = p.id
+    WHERE p.id = p_target AND (u.is_anonymous = false OR u.is_anonymous IS NULL)
+  ) THEN
+    PERFORM public.record_admin_action(NULL, 'tier.set', 'tier', p_target::text, 'denied', 'target_invalid',
+      jsonb_build_object('from', v_old, 'to', p_tier, 'service', true), NULL);
+    RETURN jsonb_build_object('ok', false, 'code', 'target_invalid');
+  END IF;
+
   PERFORM set_config('feed.tier_write', 'on', true);
   UPDATE public.profiles SET admin_tier = p_tier WHERE id = p_target;
   PERFORM set_config('feed.tier_write', 'off', true);
@@ -319,7 +365,7 @@ BEGIN
          OR p.first_name ilike '%' || p_search || '%'
          OR p.username  ilike '%' || p_search || '%')
   ORDER BY (p.admin_tier IS NULL), p.admin_tier DESC, p.created_at DESC
-  LIMIT greatest(coalesce(p_limit, 50), 1);
+  LIMIT LEAST(greatest(coalesce(p_limit, 50), 1), 200);  -- hard cap 200
 END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.admin_list_people(text, integer) FROM PUBLIC, anon;
@@ -377,6 +423,12 @@ AS $function$
 begin
   if not public.current_user_tier_at_least('resource_admin') then
     raise exception 'p3_denied:insufficient_tier' using errcode = '42501';
+  end if;
+  -- Form-template rows (discovery_metadata.content_type='form') are approved ONLY by a Platform
+  -- Admin, through approve_form_template. An RA cannot approve a form via the resource path.
+  if not public.is_current_user_admin()
+     and (select r.discovery_metadata->>'content_type' from public.resources r where r.id = p_resource_id) = 'form' then
+    raise exception 'p3_denied:form_requires_platform_admin' using errcode = '42501';
   end if;
   update public.resources
      set status = 'approved', moderated_by = auth.uid(), moderated_at = now(), updated_at = now()
@@ -462,36 +514,54 @@ $function$;
 
 -- set_resource_location_by_id: owner OR service (uid NULL) OR RA+. AUD only when the admin branch
 -- authorized (not owner, not service).
+-- Carries P3.0 (20261009000000)'s owner path forward VERBATIM (own resource while pending OR own
+-- volunteer listing; resets geocode_accuracy). P3.1 only re-gates the admin branch from
+-- is_current_user_admin() (PA) to current_user_tier_at_least('resource_admin') (RA+) and audits it.
+-- The server path (auth.uid() IS NULL) stays a system actor with no audit row.
 CREATE OR REPLACE FUNCTION public.set_resource_location_by_id(p_id uuid, p_lat double precision, p_lng double precision)
  RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
-DECLARE
-  v_is_owner boolean;
-  v_via_admin boolean := false;
 BEGIN
+  -- Anonymous guard: guests may not perform write actions.
   IF COALESCE((SELECT (auth.jwt()->>'is_anonymous')::boolean), false) THEN
-    RAISE EXCEPTION 'Account required for this action' USING ERRCODE='42501';
+    RAISE EXCEPTION 'Account required for this action' USING ERRCODE = '42501';
   END IF;
 
-  IF auth.uid() IS NOT NULL THEN
-    v_is_owner := EXISTS (SELECT 1 FROM public.resources r WHERE r.id = p_id AND r.submitted_by = auth.uid());
-    IF NOT v_is_owner THEN
-      IF NOT public.current_user_tier_at_least('resource_admin') THEN
-        RAISE EXCEPTION 'not authorized to set location for this resource' USING ERRCODE = '42501';
-      END IF;
-      v_via_admin := true;
-    END IF;
+  -- Server path (P3.0): set location, leave geocode_accuracy as-is, no audit (system actor).
+  IF auth.uid() IS NULL THEN
+    UPDATE public.resources
+      SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
+      WHERE id = p_id;
+    RETURN;
+  END IF;
+
+  -- Resource-admin path (P3.1: RA+, was PA): set location, leave accuracy as-is, audit the action.
+  IF public.current_user_tier_at_least('resource_admin') THEN
+    UPDATE public.resources
+      SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
+      WHERE id = p_id;
+    PERFORM public.record_admin_action(auth.uid(), 'resource.set_location', 'resource', p_id::text,
+      'ok', null, jsonb_build_object('lat', p_lat, 'lng', p_lng), public.request_id());
+    RETURN;
+  END IF;
+
+  -- Owner path (P3.0 verbatim): only the caller's OWN resource, while pending OR their own
+  -- volunteer listing. Reset geocode_accuracy so a moderator's rooftop tag never stays on
+  -- coordinates the user picked.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.resources r
+    WHERE r.id = p_id
+      AND r.submitted_by = auth.uid()
+      AND (r.status = 'pending' OR r.is_volunteer_resource = true)
+  ) THEN
+    RAISE EXCEPTION 'not authorized to set location for this resource' USING ERRCODE = '42501';
   END IF;
 
   UPDATE public.resources
-  SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
-  WHERE id = p_id;
-
-  IF v_via_admin THEN
-    PERFORM public.record_admin_action(auth.uid(), 'resource.set_location', 'resource', p_id::text,
-      'ok', null, jsonb_build_object('lat', p_lat, 'lng', p_lng), public.request_id());
-  END IF;
+    SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography,
+        geocode_accuracy = NULL
+    WHERE id = p_id;
 END;
 $function$;
 

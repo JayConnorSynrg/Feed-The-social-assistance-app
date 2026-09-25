@@ -3603,7 +3603,7 @@ export type Database = {
         Args: { p: Database["public"]["Enums"]["admin_tier"] }
         Returns: boolean
       }
-      is_founder: { Args: { p?: string }; Returns: boolean }
+      is_founder: { Args: never; Returns: boolean }
       record_admin_action: {
         Args: {
           p_action: string
