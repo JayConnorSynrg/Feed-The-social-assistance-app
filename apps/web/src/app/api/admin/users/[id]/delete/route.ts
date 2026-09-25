@@ -15,10 +15,10 @@ function getAdminClient() {
 
 // DELETE /api/admin/users/[id]/delete — permanently deletes a user (auth + profiles cascade).
 //
-// P3.1: platform-admin only; T3 (cannot delete an equal/higher tier or self); exactly one
-// admin_actions row per attempt carrying the client's x-request-id. D7: on success one 'ok' row is
-// written AFTER the delete (target_id has no FK, survives the cascade); one 'error' row on failure.
-// Fails CLOSED (500) if the target-tier lookup errors.
+// P3.1: platform-admin only; T3 (cannot delete an equal/higher tier or self). A caller below
+// Platform Admin gets 403 BEFORE any target lookup or audit write. A PA acting on a nonexistent
+// target gets 404. D7: on success one 'ok' row is written AFTER the delete (target_id has no FK, so
+// it survives the cascade); one 'error' row on failure; one 'denied' row on a T3 refusal.
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -29,8 +29,13 @@ export async function DELETE(
 
   const rid = (await headers()).get('x-request-id') ?? undefined
   const target = (await params).id
-  const actorTierRes = await supabase.rpc('current_user_tier')
-  const actorTier = (actorTierRes.data as AdminTier | null) ?? null
+  const actorTier = ((await supabase.rpc('current_user_tier')).data as AdminTier | null) ?? null
+
+  // Actor gate FIRST — refuse a non-PA before any lookup or audit write.
+  if (actorTier !== 'platform_admin') {
+    logger.warn('admin.user.delete.denied', { actor_tier: actorTier, outcome: 'denied', code: 'insufficient_tier', request_id: rid ?? null })
+    return NextResponse.json({ error: 'Forbidden', code: 'insufficient_tier' }, { status: 403 })
+  }
 
   const adminClient = getAdminClient()
 
@@ -39,30 +44,23 @@ export async function DELETE(
       p_actor: user.id, p_action: 'user.delete', p_target_type: 'user', p_target_id: target,
       p_outcome: outcome, p_reason: reason, p_details: {}, p_request_id: rid ?? null,
     })
-    if (auditErr) {
-      logger.error('admin.audit.write_failed', {
-        action: 'user.delete', outcome, target_id: target, error: auditErr.message, request_id: rid ?? null,
-      })
-    }
+    if (auditErr) logger.error('admin.audit.write_failed', { action: 'user.delete', outcome, target_id: target, error: auditErr.message, request_id: rid ?? null })
   }
 
   const { data: targetRow, error: targetErr } = await adminClient
     .from('profiles').select('admin_tier').eq('id', target).single()
   if (targetErr) {
-    await audit('error', `target_lookup:${targetErr.message}`)
-    logger.error('admin.user.delete.target_lookup_failed', {
-      target_id: target, error: targetErr.message, request_id: rid ?? null,
-    })
-    return NextResponse.json({ error: 'Could not verify target account' }, { status: 500 })
+    const notFound = targetErr.code === 'PGRST116'
+    await audit('error', notFound ? 'not_found' : `target_lookup:${targetErr.message}`)
+    logger.warn('admin.user.delete.target_lookup', { target_id: target, not_found: notFound, error: targetErr.message, request_id: rid ?? null })
+    return NextResponse.json({ error: notFound ? 'User not found' : 'Could not verify target account' }, { status: notFound ? 404 : 500 })
   }
   const targetTier = (targetRow?.admin_tier as AdminTier | null) ?? null
 
   const decision = decideUserAction(actorTier, targetTier, user.id, target)
   if (!decision.allowed) {
     await audit('denied', decision.code ?? 'denied')
-    logger.warn('admin.user.delete.denied', {
-      actor_tier: actorTier, target_id: target, outcome: 'denied', code: decision.code ?? 'denied', request_id: rid ?? null,
-    })
+    logger.warn('admin.user.delete.denied', { actor_tier: actorTier, target_id: target, outcome: 'denied', code: decision.code ?? 'denied', request_id: rid ?? null })
     return NextResponse.json({ error: 'Forbidden', code: decision.code }, { status: decision.code === 'self' ? 400 : 403 })
   }
 

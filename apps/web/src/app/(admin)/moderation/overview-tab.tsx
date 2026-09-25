@@ -14,7 +14,7 @@ import type { ChartConfig } from '@/components/ui/chart'
 import { logger } from '@/lib/logger'
 import { tierLabel, decideUserAction, type AdminTier } from '@/lib/admin-tier'
 import { useAdminTier } from '@/hooks/use-admin-tier'
-import { privilegedFetch } from '@/lib/privileged-action'
+import { privilegedFetch, privilegedRpc } from '@/lib/privileged-action'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -332,9 +332,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
     setUserNotes([])
     setNewNote('')
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rpc = supabase.rpc.bind(supabase) as (fn: string, args?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>
-    const { data } = await rpc('admin_get_user_notes', { p_user_id: user.id })
+    const { data } = await privilegedRpc(supabase, 'admin.notes.get', 'admin_get_user_notes', { p_user_id: user.id }, { target_id: user.id })
     const rows = data as NoteRow[] | null
     setUserNotes(rows ?? [])
     logger.info('[admin:overview] admin_get_user_notes', { userId: user.id, count: rows?.length ?? 0 })
@@ -343,12 +341,10 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
   const handleAddNote = async () => {
     if (!notesUser || !newNote.trim()) return
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rpc = supabase.rpc.bind(supabase) as (fn: string, args?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>
-    const { data: rawNoteId } = await rpc('admin_add_user_note', {
+    const { data: rawNoteId } = await privilegedRpc(supabase, 'admin.notes.add', 'admin_add_user_note', {
       p_user_id: notesUser.id,
       p_note: newNote.trim(),
-    })
+    }, { target_id: notesUser.id })
     const noteId = rawNoteId as string | null
     if (noteId) {
       const newNoteRow: NoteRow = { id: noteId, note: newNote.trim(), created_by: null, created_at: new Date().toISOString() }
@@ -360,9 +356,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
 
   const handleDeleteNote = async (noteId: string) => {
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rpc = supabase.rpc.bind(supabase) as (fn: string, args?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>
-    await rpc('admin_delete_user_note', { p_note_id: noteId })
+    await privilegedRpc(supabase, 'admin.notes.delete', 'admin_delete_user_note', { p_note_id: noteId }, { target_id: noteId })
     setUserNotes(prev => prev.filter(n => n.id !== noteId))
     logger.info('[admin:overview] admin_delete_user_note', { noteId })
   }

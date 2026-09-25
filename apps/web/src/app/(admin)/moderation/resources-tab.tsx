@@ -431,19 +431,23 @@ export function ResourcesTab() {
 
   // ── Bulk approve high-confidence ────────────────────────────
 
+  // Bulk approve operates on high-confidence items. Form-template rows are Platform-Admin only, so
+  // a non-PA (Resource Admin) never bulk-approves them — they are excluded from the set entirely.
   const highConfidenceItems = pending.filter(
-    (p) => p.discovery_metadata?.confidence === 'high'
+    (p) => p.discovery_metadata?.confidence === 'high' && (isPA || p.discovery_metadata?.content_type !== 'form')
   )
 
   const handleBulkApprove = useCallback(async () => {
     setBulkConfirm(false)
     setBulkRunning(true)
-    const items = pending.filter((p) => p.discovery_metadata?.confidence === 'high')
+    const items = pending.filter(
+      (p) => p.discovery_metadata?.confidence === 'high' && (isPA || p.discovery_metadata?.content_type !== 'form')
+    )
     for (const item of items) {
       await handleApprove(item)
     }
     setBulkRunning(false)
-  }, [pending, handleApprove])
+  }, [pending, handleApprove, isPA])
 
   // ── Filtered list ───────────────────────────────────────────
 
