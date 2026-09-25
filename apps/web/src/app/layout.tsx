@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
+import { headers } from "next/headers";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
 import { createClient } from "@/lib/supabase/server";
 import type { InitialUser } from "@/providers/auth-provider";
+import { A11Y_PREPAINT_SCRIPT } from "@/lib/accessibility-prefs";
 import "./globals.css";
 
 // metadataBase resolves relative og:image / twitter:image URLs to absolute.
@@ -99,11 +101,30 @@ export default async function RootLayout({
     }
   }
 
+  // Per-request CSP nonce (stamped by proxy.ts, forwarded as x-nonce). The
+  // pre-paint accessibility script is hand-written inline, so — unlike Next's
+  // own hydration scripts — it must carry the nonce explicitly to run under the
+  // strict CSP. On the Capacitor static build there is no request/nonce.
+  let nonce: string | undefined;
+  if (process.env.CAPACITOR_BUILD !== 'true') {
+    try {
+      nonce = (await headers()).get('x-nonce') ?? undefined;
+    } catch {
+      nonce = undefined;
+    }
+  }
+
   return (
     <html lang="en" className="light">
       <body
         className="antialiased"
       >
+        {/* Apply stored accessibility overrides before hydration to avoid a
+            flash of the un-adjusted UI. Mirrors applyA11yAttributes(). */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: A11Y_PREPAINT_SCRIPT }}
+        />
         <Providers initialUser={initialUser}>{children}</Providers>
         <SpeedInsights />
         <Analytics />

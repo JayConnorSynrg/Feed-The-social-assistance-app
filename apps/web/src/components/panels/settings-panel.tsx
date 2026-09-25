@@ -44,6 +44,10 @@ import { formatRatePct } from '@/lib/event-checkin'
 import { LANGUAGES, languageLabel, GUEST_LANGUAGE_KEY, detectBrowserLanguage } from '@/lib/languages'
 import { logger } from '@/lib/logger'
 import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
+import { applyA11yAttributes, toUserPrefs } from '@/lib/accessibility-prefs'
+import { mergeStoredPrefs } from '@/lib/settings-prefs'
+import { mapConnectedAccounts, OAUTH_PROVIDERS, PROVIDER_LABELS } from '@/lib/connected-accounts'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 // ============================================
 // TYPES
@@ -71,7 +75,6 @@ interface SettingsData {
   privacy: {
     profileVisible: boolean
     shareLocation: boolean
-    shareActivity: boolean
     allowMessages: boolean
     /** When true (default), the AI assistant greets the user by name and tailors suggestions to their city/state. */
     chatPersonalization: boolean
@@ -100,7 +103,6 @@ const DEFAULT_SETTINGS: SettingsData = {
   privacy: {
     profileVisible: true,
     shareLocation: false,
-    shareActivity: true,
     allowMessages: true,
     chatPersonalization: true,
   },
@@ -627,12 +629,6 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
         </div>
       )}
       <ToggleRow
-        label="Share Activity"
-        description="Show your activity in the community feed"
-        value={privacy.shareActivity}
-        onChange={() => handleToggle('shareActivity')}
-      />
-      <ToggleRow
         label="Allow Messages"
         description="Let other users send you messages"
         value={privacy.allowMessages}
@@ -831,7 +827,8 @@ function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
   )
 }
 
-function AccountSection() {
+function AccountSection({ identities }: { identities: SupabaseUser['identities'] }) {
+  const connected = mapConnectedAccounts(identities)
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [showMFAEnrollment, setShowMFAEnrollment] = useState(false)
   const [showMFADisable, setShowMFADisable] = useState(false)
@@ -1046,22 +1043,38 @@ function AccountSection() {
           </div>
         )}
 
-        {/* Connected Accounts */}
+        {/* Connected Accounts — reflects the user's REAL linked identities. */}
         <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200">
           <p className="font-medium text-sm mb-3">Connected Accounts</p>
           <div className="space-y-2">
-            <div className="flex items-center justify-between p-2 bg-white rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-semibold text-blue-800">G</span>
+            {OAUTH_PROVIDERS.map((provider) => {
+              const isConnected = connected[provider]
+              const label = PROVIDER_LABELS[provider]
+              return (
+                <div
+                  key={provider}
+                  className="flex items-center justify-between p-2 bg-white rounded-lg"
+                  data-testid={`connected-account-${provider}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-stone-100 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-semibold text-stone-700">{label.charAt(0)}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-stone-600">
+                        {isConnected ? 'Connected' : 'Not connected'}
+                      </p>
+                    </div>
+                  </div>
+                  {isConnected ? (
+                    <CheckCircle className="w-4 h-4 text-green-600" aria-label={`${label} connected`} />
+                  ) : (
+                    <span className="text-xs text-stone-400" aria-label={`${label} not connected`}>—</span>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm font-medium">Google</p>
-                  <p className="text-xs text-stone-600">Connected</p>
-                </div>
-              </div>
-              <CheckCircle className="w-4 h-4 text-green-600" />
-            </div>
+              )
+            })}
           </div>
         </div>
 
@@ -1136,8 +1149,20 @@ interface AccessibilitySectionProps {
 }
 
 function AccessibilitySection({ accessibility, onUpdate }: AccessibilitySectionProps) {
+  // Reconcile the live document with the persisted prefs when the section
+  // mounts (the pre-paint script in layout.tsx handles the very first paint).
+  useEffect(() => {
+    applyA11yAttributes(toUserPrefs(accessibility))
+  }, [accessibility])
+
   const handleToggle = (key: keyof SettingsData['accessibility']) => {
-    onUpdate({ ...accessibility, [key]: !accessibility[key] })
+    const enabled = !accessibility[key]
+    const next = { ...accessibility, [key]: enabled }
+    onUpdate(next)
+    // Apply immediately so the screen changes on toggle (an ON pref sets its
+    // data-* attribute; OFF removes it and reverts to the OS baseline).
+    applyA11yAttributes(toUserPrefs(next))
+    logger.info('a11y.pref.changed', { pref: key, enabled })
   }
 
   return (
@@ -1190,12 +1215,20 @@ function loadLocalPrefs(): Omit<SettingsData, 'profile'> {
     const stored = localStorage.getItem(PREFS_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
-      // Overlay the authoritative chatPersonalization value so the UI
-      // always reflects the dedicated key, even if PREFS_KEY is stale.
-      return {
-        ...parsed,
-        privacy: { ...DEFAULT_SETTINGS.privacy, ...parsed.privacy, chatPersonalization },
-      }
+      // Defensively merge each group over its defaults so a legacy blob missing
+      // a key (e.g. no `accessibility` before Wave A) never yields undefined —
+      // the toggle handlers read `!group[key]`, which would throw on undefined.
+      // The helper also overlays the authoritative chatPersonalization value so
+      // the UI always reflects the dedicated key, even if PREFS_KEY is stale.
+      return mergeStoredPrefs(
+        parsed,
+        {
+          notifications: DEFAULT_SETTINGS.notifications,
+          privacy: DEFAULT_SETTINGS.privacy,
+          accessibility: DEFAULT_SETTINGS.accessibility,
+        },
+        chatPersonalization,
+      )
     }
   } catch {}
   return {
@@ -1377,7 +1410,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
             />
           )}
           {activeSection === 'account' && (
-            <AccountSection />
+            <AccountSection identities={user?.identities} />
           )}
           {activeSection === 'accessibility' && (
             <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
