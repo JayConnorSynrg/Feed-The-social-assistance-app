@@ -87,6 +87,7 @@ async function loginAs(page: Page, email: string, password: string) {
 
 let admin: SupabaseClient
 let adminId: string
+let paProfileSnapshot: Record<string, unknown> | null = null
 let nonAdminId: string
 
 // Console capture — surfaces page errors in the test output for clean-console assertions.
@@ -119,6 +120,10 @@ test.beforeAll(async () => {
 
   // Pre-provisioned platform_admin (never minted here). Refresh its display name for the assertions.
   adminId = PA_USER_ID!
+  // fix 5: snapshot the pre-provisioned PA's profile fields; restore them in afterAll so the run
+  // leaves the shared account unchanged.
+  const { data: paSnap } = await admin.from('profiles').select('full_name, first_name, onboarding_completed').eq('id', adminId).single()
+  paProfileSnapshot = paSnap ?? null
   await admin
     .from('profiles')
     .update({ full_name: ADMIN_FULL_NAME, first_name: 'Reviewer', onboarding_completed: true })
@@ -140,6 +145,9 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  if (paProfileSnapshot && adminId) {
+    try { await admin.from('profiles').update(paProfileSnapshot).eq('id', adminId) } catch { /* non-fatal */ }
+  }
   try {
     // Never delete the pre-provisioned platform_admin (adminId = E2E_PA_USER_ID); only the
     // throwaway non-admin created by this suite.

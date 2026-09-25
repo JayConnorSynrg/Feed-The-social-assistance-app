@@ -63,8 +63,13 @@ The two existing platform admins were migrated to `platform_admin` with zero beh
 
 Ban, delete and role changes cannot target a user of **equal or higher** tier, nor the actor
 themselves. Content moderation and the resource queue do **not** carry this guard — a moderator may
-moderate any post, including a Platform Admin's. Ban/delete stay Platform-Admin only and enforce T3
-in `lib/admin-tier.ts` (`decideUserAction`) plus a durable audit row.
+moderate any post, including a Platform Admin's. Ban/delete stay Platform-Admin only and enforce T3 in `lib/admin-tier.ts` (`decideUserAction`)
+plus a durable audit row. A caller below Platform Admin is refused 403 before any target lookup or
+audit write (nothing written, nothing revealed); a PA acting on a nonexistent target gets 404.
+
+Form-template rows (`discovery_metadata.content_type='form'`) are Platform-Admin-only on every
+state-change path — approve_resource, reject_resource, admin_update_resource all refuse them for a
+non-PA, and approve_form_template (PA-only) is the audited approval path.
 
 ## Audit (`public.admin_actions`)
 
