@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react'
 import {
   Plus, Utensils, Home, Briefcase, Car, Scale, Heart,
-  Calculator, Gavel, Baby, Trash2, Tent, Gift, X,
+  Calculator, Gavel, Baby, Trash2, Tent, Gift, X, Settings2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -69,7 +69,6 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
     hasLocation,
     myResources,
     withdrawResource,
-    isLoading,
   } = useVolunteerResource()
 
   const [isOpenInternal, setIsOpenInternal] = useState(false)
@@ -85,6 +84,9 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
   // from THIS withdraw attempt only (local, cleared on open/cancel — never a stale one).
   const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; label: string } | null>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  // Reflects THIS withdraw being in flight (drives the confirm buttons — not the hook's shared
+  // isLoading, which is also true during background refetches).
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
   // Single-flight gate (PR #203 pattern): flips synchronously before the first await so a
   // double-click cannot fire two withdraws.
   const withdrawingRef = useRef(false)
@@ -150,6 +152,7 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
   const confirmWithdraw = async () => {
     if (!withdrawTarget || withdrawingRef.current) return
     withdrawingRef.current = true // synchronous, before the first await — single-flight gate
+    setIsWithdrawing(true)
     try {
       const outcome = await withdrawResource(withdrawTarget.id)
       if (outcome.ok) {
@@ -162,6 +165,7 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
       }
     } finally {
       withdrawingRef.current = false
+      setIsWithdrawing(false)
     }
   }
 
@@ -228,16 +232,18 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
           </div>
         ))}
 
-        {/* Main FAB Button */}
+        {/* Main FAB Button — a provider adds/manages (a "+" that rotates to a close on open);
+            a non-provider who only manages an existing listing sees a manage (gear) icon that
+            matches its aria-label. */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isProvider ? 'Add or manage volunteer resources' : 'Manage your volunteer listings'}
           aria-expanded={isOpen}
           className={`w-14 h-14 rounded-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white shadow-lg flex items-center justify-center transition-all duration-200 ${
-            isOpen ? 'rotate-45' : 'rotate-0'
+            isProvider && isOpen ? 'rotate-45' : 'rotate-0'
           }`}
         >
-          <Plus className="w-6 h-6" />
+          {isProvider ? <Plus className="w-6 h-6" /> : <Settings2 className="w-6 h-6" />}
         </button>
       </div>
 
@@ -379,17 +385,17 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
               type="button"
               variant="outline"
               onClick={cancelWithdraw}
-              disabled={isLoading}
+              disabled={isWithdrawing}
             >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={confirmWithdraw}
-              disabled={isLoading}
+              disabled={isWithdrawing}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {isLoading ? 'Removing…' : 'Remove listing'}
+              {isWithdrawing ? 'Removing…' : 'Remove listing'}
             </Button>
           </DialogFooter>
         </DialogContent>

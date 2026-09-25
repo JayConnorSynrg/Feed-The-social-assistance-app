@@ -138,8 +138,10 @@ register and suggest-resource location flows still work.
 ### I6 — comment visibility · `guard_post_comments_is_hidden`
 `post_comments.is_hidden` is set/cleared only by staff (`profiles.is_staff`) or a server path.
 Users keep inserting and replying to comments exactly as before (their payloads never carry
-`is_hidden`). *Note:* there is no staff comment-moderation RPC yet — after P3.0, only
-`service_role`/`postgres` or a future staff RPC can hide a comment; building that RPC is a P3.1
+`is_hidden`). A staff member can set/clear `is_hidden` on **their own** comment (RLS
+`post_comments_update_own` admits the own-row write and the staff bypass permits the flag change).
+*Note:* there is no staff comment-moderation RPC yet, so hiding/un-hiding **another** user's
+comment still needs `service_role`/`postgres` or a future staff RPC; building that RPC is a P3.1
 capability item.
 
 ### I3 — organization ownership · `guard_organizations_org_admin_update`
@@ -179,15 +181,20 @@ resources unchanged, migration not recorded):
   it goes RED if the guard's behaviour is removed. A mutation runner mutated the migration and
   re-ran the smoke's SQL through the Mgmt API. Of nine mutations, **seven are KILLED** by a smoke
   check: drop the admin bypass (→ ADMIN_DIRECT_UPDATE), drop the org inactive-edit check
-  (→ INACTIVE_ORG_EDIT), drop the org is_active-change check (→ ORG_DEACTIVATE_ACTIVE), drop the
-  withdraw volunteer check (→ NONVOL_ARCHIVE), drop the `is_verified`/`moderated_at` UPDATE check
-  (→ OWNER_SET_MODERATION), allow any owner status change (→ VOL_STATUS_NONARCHIVE), and drop the
-  `is_volunteer_resource` UPDATE clause (→ VOLUNTEER_FLIP + NONVOL_ARCHIVE). The two survivors are
-  **defense-in-depth, not smoke guarantees**: dropping the withdraw *owner* check is still covered
-  by the RLS withdraw policy (`USING (select auth.uid()) = submitted_by`), and dropping the comment
-  *staff bypass* is inert because no staff table-UPDATE policy exists (a staff member cannot
-  direct-update another user's comment; the bypass is forward-looking for a P3.1 staff RPC). Both
-  are additionally exercised by the full dry-run matrix.
+  (→ INACTIVE_ORG_EDIT), drop the org is_active-change check (→ ORG_DEACTIVATE_UNFILTERED, run while
+  the org admin administers only the active org so it is the is_active-change check — not the
+  inactive-edit check or RLS — that blocks it), drop the withdraw volunteer check (→ NONVOL_ARCHIVE),
+  drop the `is_verified`/`moderated_at` UPDATE check (→ OWNER_SET_MODERATION), allow any owner status
+  change (→ VOL_STATUS_NONARCHIVE), and drop the `is_volunteer_resource` UPDATE clause
+  (→ VOLUNTEER_FLIP + NONVOL_ARCHIVE). The two survivors are **defense-in-depth or uncovered by a
+  smoke probe, not gaps**: dropping the withdraw *owner* check is still covered by the RLS withdraw
+  policy (`USING (select auth.uid()) = submitted_by`); dropping the comment *staff bypass* is not
+  inert — its live effect is that a staff member can un-hide **their own** comment via an unfiltered
+  update (RLS `post_comments_update_own` admits the own-row write and the bypass permits the
+  `is_hidden` change; it does not let staff touch another user's comment) — but the smoke has no
+  probe for that path, so this mutation survives the smoke. Both survivors are exercised by the full
+  dry-run matrix (the staff-un-hide-own case is the `Y09` probe: staff un-hides own hidden comment,
+  unfiltered → OK).
 - **Unit**: `withdraw-result.ts` `interpretWithdrawResult` (the real logic the hook runs) is
   covered by `__tests__/withdraw-result.test.ts`; deleting the zero-row branch fails the test.
 

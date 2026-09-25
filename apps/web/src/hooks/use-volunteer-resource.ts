@@ -33,7 +33,6 @@ export function useVolunteerResource() {
   const [myResources, setMyResources] = useState<VolunteerResource[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const fetchMyResources = useCallback(async () => {
     if (!user?.id) return
@@ -49,8 +48,9 @@ export function useVolunteerResource() {
 
       if (fetchError) throw new Error(fetchError.message)
       setMyResources(data ?? [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch resources')
+    } catch {
+      // A background refetch failure leaves the previously fetched list in place; the FAB
+      // surfaces write failures from registerResource/withdrawResource directly.
     } finally {
       setIsLoading(false)
     }
@@ -62,12 +62,10 @@ export function useVolunteerResource() {
 
   const registerResource = useCallback(async (formData: VolunteerResourceFormData) => {
     if (!user?.id) {
-      setError('Please sign in to register as a volunteer resource')
       return null
     }
 
     setIsRegistering(true)
-    setError(null)
 
     try {
       const resourceName = profile?.full_name || 'Volunteer'
@@ -103,8 +101,7 @@ export function useVolunteerResource() {
 
       await fetchMyResources()
       return data as { id: string }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register resource')
+    } catch {
       return null
     } finally {
       setIsRegistering(false)
@@ -114,7 +111,6 @@ export function useVolunteerResource() {
   const withdrawResource = useCallback(async (resourceId: string): Promise<WithdrawOutcome> => {
     if (!user?.id) return { ok: false, error: 'Please sign in to manage your listings' }
     setIsLoading(true)
-    setError(null)
     try {
       // Archive the owner's own volunteer listing. `.select('id')` is load-bearing:
       // it makes PostgREST report the affected rows so a zero-row outcome (the listing
@@ -133,14 +129,12 @@ export function useVolunteerResource() {
 
       const outcome = interpretWithdrawResult({ data, error: updateError })
       if (!outcome.ok) {
-        setError(outcome.error)
         return outcome
       }
       await fetchMyResources()
       return outcome
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to withdraw resource'
-      setError(message)
       return { ok: false, error: message }
     } finally {
       setIsLoading(false)
@@ -151,7 +145,6 @@ export function useVolunteerResource() {
     myResources,
     isLoading,
     isRegistering,
-    error,
     registerResource,
     withdrawResource,
     hasLocation: !!(profile?.latitude && profile?.longitude),

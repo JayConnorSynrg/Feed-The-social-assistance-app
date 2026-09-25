@@ -61,8 +61,15 @@ BEGIN
   EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R4}','R4','pending','${U}',false,'user_submitted') $q$;
   EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R5}','R5','pending','${U}',true,'user_submitted') $q$;
   EXECUTE $q$ insert into public.organizations(id,name,is_active,created_by) values ('${O1}','O1',true,'${A}') $q$;
-  EXECUTE $q$ insert into public.organizations(id,name,is_active,created_by) values ('${O2}','O2',false,'${A}') $q$;
   EXECUTE $q$ insert into public.organization_members(org_id,user_id,role) values ('${O1}','${U}','admin') $q$;
+END $f$;
+
+-- Seeded LATER (after the unfiltered-deactivate probe) so U administers only the active org O1
+-- at that point — otherwise this inactive org would mask the is_active-change guard (an
+-- unfiltered deactivate would raise via the inactive-edit check instead of the is_active check).
+CREATE FUNCTION pg_temp.seed_inactive_org() RETURNS void LANGUAGE plpgsql AS $f$
+BEGIN
+  EXECUTE $q$ insert into public.organizations(id,name,is_active,created_by) values ('${O2}','O2',false,'${A}') $q$;
   EXECUTE $q$ insert into public.organization_members(org_id,user_id,role) values ('${O2}','${U}','admin') $q$;
 END $f$;
 
@@ -97,7 +104,7 @@ BEGIN
   res := res || 'ORG_CREATED_BY=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set created_by='${U}' where id='${O1}' $$) || E'\n';
   res := res || 'ADMIN_DIRECT_UPDATE=' || pg_temp.probe('authenticated','${A}',false,$$ update public.resources set is_verified=true where id='${R3}' $$) || E'\n';
   res := res || 'ORG_DEACTIVATE_UNFILTERED=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set is_active=false $$) || E'\n';
-  res := res || 'ORG_DEACTIVATE_ACTIVE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set is_active=false where id='${O1}' $$) || E'\n';
+  PERFORM pg_temp.seed_inactive_org();
   res := res || 'OWNER_SET_MODERATION=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set is_verified=true, moderated_at=now() where id='${R4}' $$) || E'\n';
   res := res || 'VOLUNTEER_FLIP=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set is_volunteer_resource=true where id='${R4}' $$) || E'\n';
   res := res || 'NONVOL_ARCHIVE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set status='archived' where id='${R4}' $$) || E'\n';
@@ -162,10 +169,10 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
     expect(r.ORG_CREATED_BY, 'an org admin must NOT change created_by').toMatch(
       /^ERR 42501 guard:organizations_admin_fields/
     )
-    expect(r.ORG_DEACTIVATE_UNFILTERED, 'an org admin must NOT deactivate via an unfiltered UPDATE').toMatch(
-      /^ERR 42501 guard:organizations_admin_fields/
-    )
-    expect(r.ORG_DEACTIVATE_ACTIVE, 'an org admin must NOT set is_active=false on their active org').toMatch(
+    // The unfiltered deactivate runs while U administers only the active org, so it is the guard's
+    // is_active-change check (not the inactive-edit check) that blocks it — the probe that
+    // actually exercises that check.
+    expect(r.ORG_DEACTIVATE_UNFILTERED, 'an org admin must NOT deactivate their active org via an unfiltered UPDATE').toMatch(
       /^ERR 42501 guard:organizations_admin_fields/
     )
     // A platform admin's direct resource UPDATE succeeds (the admin bypass is load-bearing).
