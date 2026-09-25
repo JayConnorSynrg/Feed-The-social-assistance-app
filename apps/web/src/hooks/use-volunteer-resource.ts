@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { interpretWithdrawResult } from '@/hooks/withdraw-result'
 
 // All volunteer-offerable categories (expanded to include Phase 8 additions).
 // Sourced from lib/resource-categories.ts VOLUNTEER_CATEGORIES — kept as string here
@@ -110,8 +111,8 @@ export function useVolunteerResource() {
     }
   }, [supabase, user?.id, profile, fetchMyResources])
 
-  const withdrawResource = useCallback(async (resourceId: string) => {
-    if (!user?.id) return
+  const withdrawResource = useCallback(async (resourceId: string): Promise<boolean> => {
+    if (!user?.id) return false
     setIsLoading(true)
     setError(null)
     try {
@@ -121,8 +122,8 @@ export function useVolunteerResource() {
       // silent success. Before P3.0 the update policy matched only pending rows, so
       // withdrawing an approved listing hit zero rows and reported success while doing
       // nothing; the P3.0 "Volunteers can withdraw their own listing" policy now allows
-      // the approved -> archived transition, and the moderation guard forbids any
-      // moderation-field write on the same statement.
+      // the pending/approved -> archived transition, and the moderation guard forbids
+      // any moderation-field write on the same statement.
       const { data, error: updateError } = await supabase
         .from('resources')
         .update({ status: 'archived' })
@@ -130,15 +131,16 @@ export function useVolunteerResource() {
         .eq('submitted_by', user.id)
         .select('id')
 
-      if (updateError) throw new Error(updateError.message)
-      if (!data || data.length === 0) {
-        throw new Error(
-          'Could not withdraw this listing — it may already be withdrawn, or you are not its owner.'
-        )
+      const outcome = interpretWithdrawResult({ data, error: updateError })
+      if (!outcome.ok) {
+        setError(outcome.error)
+        return false
       }
       await fetchMyResources()
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw resource')
+      return false
     } finally {
       setIsLoading(false)
     }

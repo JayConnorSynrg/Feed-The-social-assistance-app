@@ -1,5 +1,6 @@
 -- P3.0 — Close security gaps: moderation-authority guards on resources (I1),
--- post_comments (I6) and organizations (I3), plus the volunteer-withdraw fix (I1b).
+-- post_comments (I6) and organizations (I3), the volunteer-withdraw fix (I1b), and
+-- moderated-pin integrity on set_resource_location_by_id.
 --
 -- WHY TRIGGERS (SECURITY INVOKER), NOT GRANTS OR RLS-CHECKS:
 --   * A column GRANT cannot tell a platform admin apart from an ordinary user, cannot
@@ -31,12 +32,13 @@
 -- version in supabase_migrations.schema_migrations (ledger discipline).
 
 -- ─── I1: resources — status / moderation fields are set by moderators only ───────────────
--- Client INSERT lands as pending with every moderation field empty; the ONE exception is a
--- volunteer listing (is_volunteer_resource = true), which its own submitter may insert as
--- approved, still with every moderation field empty (today's shipped feature). Client UPDATE
--- may not touch any moderation field, and may not change status except for the single
--- legitimate client transition: a volunteer withdrawing their own listing (approved →
--- archived). Everything else is a moderator/service/SECDEF action.
+-- A client INSERT lands EXACTLY pending (a NULL status is a violation — never let a NULL slip
+-- past as "not pending"), with every moderation field empty; the ONE exception is a volunteer
+-- listing (is_volunteer_resource = true), which its own submitter may insert approved, still
+-- with every moderation field empty. A client UPDATE may touch no moderation field and may not
+-- change status EXCEPT the one legitimate client transition: a volunteer withdrawing their own
+-- listing (pending OR approved -> archived). Moderation fields:
+-- moderated_by, moderated_at, is_verified, last_verified_at, rejection_reason.
 CREATE OR REPLACE FUNCTION public.guard_resources_moderation_fields()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
 BEGIN
@@ -44,8 +46,9 @@ BEGIN
   IF current_user = 'authenticated' AND public.is_current_user_admin() THEN RETURN NEW; END IF;
 
   IF TG_OP = 'INSERT' THEN
-    IF NOT (NEW.status = 'pending'
-            OR (NEW.status = 'approved' AND COALESCE(NEW.is_volunteer_resource, false))) THEN
+    -- IS NOT DISTINCT FROM so a NULL status fails both arms and is rejected.
+    IF NOT (NEW.status IS NOT DISTINCT FROM 'pending'
+            OR (NEW.status IS NOT DISTINCT FROM 'approved' AND COALESCE(NEW.is_volunteer_resource, false))) THEN
       RAISE EXCEPTION USING ERRCODE = '42501',
         MESSAGE = 'guard:resources_moderation_fields: status is set by moderators only',
         DETAIL  = format('attempted status=%s is_volunteer_resource=%s', NEW.status, NEW.is_volunteer_resource),
@@ -54,12 +57,13 @@ BEGIN
     IF NEW.moderated_by IS NOT NULL
        OR NEW.moderated_at IS NOT NULL
        OR COALESCE(NEW.is_verified, false)
-       OR NEW.last_verified_at IS NOT NULL THEN
+       OR NEW.last_verified_at IS NOT NULL
+       OR NEW.rejection_reason IS NOT NULL THEN
       RAISE EXCEPTION USING ERRCODE = '42501',
         MESSAGE = 'guard:resources_moderation_fields: moderation fields are set by moderators only',
-        DETAIL  = format('moderated_by=%s moderated_at=%s is_verified=%s last_verified_at=%s',
-                         NEW.moderated_by, NEW.moderated_at, NEW.is_verified, NEW.last_verified_at),
-        HINT    = 'Leave moderated_by / moderated_at / is_verified / last_verified_at unset; a moderator sets them.';
+        DETAIL  = format('moderated_by=%s moderated_at=%s is_verified=%s last_verified_at=%s rejection_reason=%s',
+                         NEW.moderated_by, NEW.moderated_at, NEW.is_verified, NEW.last_verified_at, NEW.rejection_reason),
+        HINT    = 'Leave moderated_by / moderated_at / is_verified / last_verified_at / rejection_reason unset; a moderator sets them.';
     END IF;
     RETURN NEW;
   END IF;
@@ -68,22 +72,24 @@ BEGIN
   IF NEW.moderated_by     IS DISTINCT FROM OLD.moderated_by
   OR NEW.moderated_at     IS DISTINCT FROM OLD.moderated_at
   OR NEW.is_verified      IS DISTINCT FROM OLD.is_verified
-  OR NEW.last_verified_at IS DISTINCT FROM OLD.last_verified_at THEN
+  OR NEW.last_verified_at IS DISTINCT FROM OLD.last_verified_at
+  OR NEW.rejection_reason IS DISTINCT FROM OLD.rejection_reason THEN
     RAISE EXCEPTION USING ERRCODE = '42501',
       MESSAGE = 'guard:resources_moderation_fields: moderation fields are set by moderators only',
-      HINT    = 'Only a moderator changes moderated_by / moderated_at / is_verified / last_verified_at.';
+      HINT    = 'Only a moderator changes moderated_by / moderated_at / is_verified / last_verified_at / rejection_reason.';
   END IF;
 
   IF NEW.status IS DISTINCT FROM OLD.status THEN
-    -- The only client-legitimate status change is a volunteer withdrawing their OWN listing.
-    IF NOT (OLD.status = 'approved'
+    -- The only client-legitimate status change is a volunteer withdrawing their OWN listing,
+    -- whether it is still pending or already approved. A rejected listing stays rejected.
+    IF NOT (OLD.status IN ('pending', 'approved')
             AND NEW.status = 'archived'
             AND COALESCE(OLD.is_volunteer_resource, false)
             AND auth.uid() = OLD.submitted_by) THEN
       RAISE EXCEPTION USING ERRCODE = '42501',
         MESSAGE = 'guard:resources_moderation_fields: status is set by moderators only',
         DETAIL  = format('attempted %s -> %s', OLD.status, NEW.status),
-        HINT    = 'Only a moderator changes status; a volunteer may withdraw their own listing (approved -> archived).';
+        HINT    = 'Only a moderator changes status; a volunteer may withdraw their own listing (pending/approved -> archived).';
     END IF;
   END IF;
 
@@ -94,22 +100,62 @@ CREATE TRIGGER trg_resources_guard_moderation
   BEFORE INSERT OR UPDATE ON public.resources
   FOR EACH ROW EXECUTE FUNCTION public.guard_resources_moderation_fields();
 
--- I1b: give the volunteer owner an RLS path to withdraw an APPROVED listing. Today the only
--- client UPDATE policy ("Users can update their pending submissions") matches status='pending'
--- only, so archiving an approved volunteer row matches zero rows and PostgREST reports success
--- with no error — a silent no-op. This permissive policy matches the owner's own approved
--- volunteer row (USING) and permits it to become archived (WITH CHECK) and nothing else. The
--- guard above still forbids any moderation-field write on the same statement.
+-- I1b: give the volunteer owner an RLS path to withdraw their own listing (pending or
+-- approved) by archiving it. Today the only client UPDATE policy ("Users can update their
+-- pending submissions") holds the new row at status='pending', so archiving matches zero rows
+-- and PostgREST reports success with no error — a silent no-op. This permissive policy matches
+-- the owner's own volunteer row (USING) and permits it to become archived (WITH CHECK) and
+-- nothing else. The guard above still forbids any moderation-field write on the same statement.
 CREATE POLICY "Volunteers can withdraw their own listing" ON public.resources
   FOR UPDATE TO authenticated
-  USING (auth.uid() = submitted_by AND is_volunteer_resource = true AND status = 'approved')
-  WITH CHECK (auth.uid() = submitted_by AND is_volunteer_resource = true AND status = 'archived');
+  USING ((select auth.uid()) = submitted_by AND is_volunteer_resource = true AND status IN ('pending', 'approved'))
+  WITH CHECK ((select auth.uid()) = submitted_by AND is_volunteer_resource = true AND status = 'archived');
+
+-- ─── Moderated-pin integrity: set_resource_location_by_id ────────────────────────────────
+-- A moderated resource's coordinates must not be moved by its submitter after moderation. The
+-- owner path applies only while the row is still pending, or when it is the owner's own
+-- volunteer listing, and it resets geocode_accuracy to NULL so a rooftop tag never lingers on
+-- coordinates the user chose. Admin and server (auth.uid() IS NULL) paths are unchanged.
+CREATE OR REPLACE FUNCTION public.set_resource_location_by_id(p_id uuid, p_lat double precision, p_lng double precision)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+BEGIN
+  -- Anonymous guard: guests may not perform write actions.
+  IF COALESCE((SELECT (auth.jwt()->>'is_anonymous')::boolean), false) THEN
+    RAISE EXCEPTION 'Account required for this action' USING ERRCODE = '42501';
+  END IF;
+
+  -- Admin and server paths unchanged: set location, leave geocode_accuracy as-is.
+  IF auth.uid() IS NULL OR public.is_current_user_admin() THEN
+    UPDATE public.resources
+      SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
+      WHERE id = p_id;
+    RETURN;
+  END IF;
+
+  -- Owner path: only the caller's OWN resource, and only while it is still pending or is their
+  -- own volunteer listing. Reset geocode_accuracy so a moderator's rooftop tag never stays on
+  -- coordinates the user picked.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.resources r
+    WHERE r.id = p_id
+      AND r.submitted_by = auth.uid()
+      AND (r.status = 'pending' OR r.is_volunteer_resource = true)
+  ) THEN
+    RAISE EXCEPTION 'not authorized to set location for this resource'
+      USING ERRCODE = '42501';
+  END IF;
+
+  UPDATE public.resources
+    SET location = ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography,
+        geocode_accuracy = NULL
+    WHERE id = p_id;
+END $$;
 
 -- ─── I6: post_comments — is_hidden is set / cleared by staff (or the server) only ────────
 -- Users keep inserting and replying to comments exactly as today (their payloads never carry
--- is_hidden). Only staff (profiles.is_staff) — read inline, exactly as every content-moderation
--- RPC does, so this guard tracks is_staff semantics automatically as P3 tiers extend them —
--- or a server role (service_role / postgres) may set or clear is_hidden.
+-- is_hidden). Only staff (profiles.is_staff, read inline exactly as every content-moderation
+-- RPC does, so this guard tracks is_staff semantics automatically as P3 tiers extend them) or
+-- a server role (service_role / postgres) may set or clear is_hidden.
 CREATE OR REPLACE FUNCTION public.guard_post_comments_is_hidden()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
 BEGIN
@@ -122,7 +168,7 @@ BEGIN
   OR (TG_OP = 'UPDATE' AND NEW.is_hidden IS DISTINCT FROM OLD.is_hidden) THEN
     RAISE EXCEPTION USING ERRCODE = '42501',
       MESSAGE = 'guard:post_comments_is_hidden: comment visibility is set by moderators only',
-      HINT    = 'Delete your own comment to remove it; only staff hide or unhide comments.';
+      HINT    = 'Only moderators can hide or show comments.';
   END IF;
   RETURN NEW;
 END $$;

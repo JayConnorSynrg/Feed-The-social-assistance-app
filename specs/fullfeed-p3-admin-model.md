@@ -1,6 +1,7 @@
 # FULL-FEED P3 — Admin Model & Moderation Guards
 
-Status: **P3.0 shipped** (guards). P3.1+ (tiered roles) is scoped here but not yet built.
+Status: **P3.0 BUILT_PENDING_DEPLOY** (guards; migration applies as a separate post-deploy
+step, before merge). P3.1+ (tiered roles) is scoped here but not yet built.
 Backend for P3.0: `supabase/migrations/20261009000000_p3_0_moderation_guards.sql`.
 Prod: `ndtpovonpadugthmcntl`. Code baseline: `origin/develop` @ `05f0293`.
 
@@ -90,24 +91,39 @@ Every rejection is `SQLSTATE 42501` with a stable, greppable message prefix per 
 `source='postgres_logs' AND position('guard:resources_moderation_fields' IN event_message) > 0`.
 
 ### I1 — resources moderation authority · `guard_resources_moderation_fields`
-`status`, `moderated_by`, `moderated_at`, `is_verified`, `last_verified_at` are set only by an
-admin, `service_role`, or an authority-checking SECDEF function (`approve_resource`,
-`reject_resource`, `admin_update_resource`, geocode). A client INSERT lands `pending` with every
-moderation field empty. **One carve-out** (today's shipped feature): a volunteer listing
-(`is_volunteer_resource = true`) may be inserted `approved` by its own submitter, still with
-every moderation field empty — this cannot mint a verified `resource_approved` because that
-requires a non-null `moderated_by`. A client UPDATE may change no moderation field and no status,
-**except** the volunteer self-withdraw (`approved → archived`) on the owner's own row.
+`status`, `moderated_by`, `moderated_at`, `is_verified`, `last_verified_at` and `rejection_reason`
+are set only by an admin, `service_role`, or an authority-checking SECDEF function
+(`approve_resource`, `reject_resource`, `admin_update_resource`, geocode). A client INSERT lands
+**exactly** `pending` (a NULL status is a violation — checked with `IS NOT DISTINCT FROM` so a NULL
+cannot slip past as "not pending") with every moderation field empty. **One carve-out** (today's
+shipped feature): a volunteer listing (`is_volunteer_resource = true`) may be inserted `approved`
+by its own submitter, still with every moderation field empty — this cannot mint a verified
+`resource_approved` because that requires a non-null `moderated_by`. A client UPDATE may change no
+moderation field and no status, **except** the volunteer self-withdraw (`pending` OR `approved →
+archived`) on the owner's own row.
 
-### I1b — volunteer withdraw (live-bug fix)
+### I1b — volunteer withdraw (live-bug fix, wired to the FAB)
 The pre-P3.0 only client UPDATE policy matched `status='pending'`, so archiving an *approved*
-volunteer listing matched zero rows and PostgREST reported success while doing nothing. P3.0 adds
-the RLS policy **"Volunteers can withdraw their own listing"** (`USING` own approved volunteer
-row, `WITH CHECK` own archived volunteer row) and the I1 guard permits that one transition. The
-hook (`use-volunteer-resource.ts` `withdrawResource`) now `.select('id')`s the affected rows and
-surfaces a zero-row result as a user-facing error instead of a false success. After withdrawal
-the listing is `archived`, so it drops off the map and lists; only the submitter (or an admin) can
-withdraw it; no moderation field is written.
+volunteer listing matched zero rows and PostgREST reported success while doing nothing — and the
+listing had no removal affordance anywhere in the UI. P3.0 adds the RLS policy
+**"Volunteers can withdraw their own listing"** (`USING (select auth.uid()) = submitted_by AND
+is_volunteer_resource AND status IN ('pending','approved')`, `WITH CHECK ... status='archived'`)
+and the I1 guard permits that one transition (pending or approved → archived). The hook
+(`use-volunteer-resource.ts` `withdrawResource`) interprets the result through the pure helper
+`withdraw-result.ts` `interpretWithdrawResult` — `.select('id')` makes PostgREST report affected
+rows, and a zero-row result surfaces as a user-facing error instead of a false success. The
+volunteer FAB (`components/volunteer/volunteer-resource-fab.tsx`) now lists the signed-in
+volunteer's active listings with a Remove button; removal takes one explicit confirm, on success
+the listing is gone from the map and lists and the FAB returns to the register state, and on
+failure (including zero rows) the confirm dialog shows the error. Only the submitter (or an
+admin) can withdraw; no moderation field is written; a **rejected** listing stays rejected.
+
+### Moderated-pin integrity — `set_resource_location_by_id`
+The owner path applies only while the row is still `pending` or is the owner's own volunteer
+listing, and it resets `geocode_accuracy` to NULL so a moderator's rooftop tag never lingers on
+coordinates the user chose. A moderated/approved non-volunteer pin can be relocated by moderators
+only. The admin path and the server (`auth.uid() IS NULL`) path are unchanged; the volunteer
+register and suggest-resource location flows still work.
 
 ### I6 — comment visibility · `guard_post_comments_is_hidden`
 `post_comments.is_hidden` is set/cleared only by staff (`profiles.is_staff`) or a server path.
@@ -137,17 +153,27 @@ dropped the guard and watched the forge succeed).
 
 ## 5. Verification (P3.0)
 
-Proven against prod inside `BEGIN … RAISE → ROLLBACK` transactions (nothing persisted):
-- **14 forbidden writes** each rejected with `42501` and the correct `guard:` prefix.
-- **11 legitimate writes** each succeeded: suggest-pending, volunteer-approved, volunteer
-  withdraw, `approve_resource` + its `resource_approved` ledger credit, reject, admin direct
-  edit, a `service_role` upsert (`ON CONFLICT (external_id,source)`), comment insert + reply,
-  org-admin descriptive edits, and a platform-admin `is_active` toggle.
-- **9 mutation checks** all KILLED: dropping each trigger, removing the volunteer carve-out,
-  removing the admin bypass, and flipping the resources guard to `SECURITY DEFINER` each flipped
-  its probe — proving every element is load-bearing.
-- Smoke suite `30-p3-0-moderation-guards.smoke.ts` (ledger-gated on `20261009000000`) asserts the
-  structural facts post-apply.
+Proven against prod inside `BEGIN … RAISE → ROLLBACK` transactions (nothing persisted; 19,146
+resources unchanged, migration not recorded):
+- **Full dry-run matrix**: every forbidden write rejected with `42501` and the correct `guard:`
+  prefix (incl. NULL status, client `rejection_reason` on insert/update, and an owner relocate of
+  an approved non-volunteer pin → `not authorized`); every legitimate write succeeded — suggest
+  pending, volunteer approved, owner withdraw of a **pending** and an **approved** volunteer
+  listing, owner `set_resource_location_by_id` on a pending row and on a volunteer row (with
+  `geocode_accuracy` reset to NULL), `approve_resource` + its `resource_approved` ledger credit,
+  reject, admin direct edit, `admin_update_resource`, a `service_role` upsert
+  (`ON CONFLICT (external_id,source)`), comment insert/delete, org-admin descriptive + `org_type`
+  edits, and a platform-admin `is_active`+`created_by` toggle.
+- **Behavioural smoke** `30-p3-0-moderation-guards.smoke.ts` (ledger-gated on `20261009000000`):
+  each guarantee is an actual write executed as the relevant role in a rolled-back transaction, so
+  it goes RED if the guard's behaviour is removed. Proven by a mutation runner that mutated the
+  migration and re-ran the smoke's SQL through the Mgmt API: dropping each guard trigger, removing
+  the volunteer carve-out, removing the withdraw carve-out, flipping the resources guard to
+  `SECURITY DEFINER`, reverting the NULL-status/`rejection_reason` handling, reverting the
+  `set_resource_location_by_id` owner gate, and removing the org `created_by` check — **all
+  KILLED** (every targeted check flipped).
+- **Unit**: `withdraw-result.ts` `interpretWithdrawResult` (the real logic the hook runs) is
+  covered by `__tests__/withdraw-result.test.ts`; deleting the zero-row branch fails the test.
 
-App gates: `tsc` 0 errors; `eslint` 0 errors; `test:unit` 66/66 (incl.
-`use-volunteer-resource.withdraw.test.mjs` 5/5); `next build` ✓.
+App gates: `tsc` 0 errors; `eslint` 0 errors; `test:unit` 61/61; targeted `vitest`
+`withdraw-result.test.ts` 6/6; `next build` ✓.

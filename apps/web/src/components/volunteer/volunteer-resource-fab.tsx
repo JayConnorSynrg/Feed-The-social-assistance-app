@@ -63,7 +63,15 @@ interface VolunteerResourceFABProps {
 export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: VolunteerResourceFABProps = {}) {
   const { profile } = useAuth()
   const { setActivePanel } = usePanelContext()
-  const { registerResource, isRegistering, hasLocation } = useVolunteerResource()
+  const {
+    registerResource,
+    isRegistering,
+    hasLocation,
+    myResources,
+    withdrawResource,
+    isLoading,
+    error,
+  } = useVolunteerResource()
 
   const [isOpenInternal, setIsOpenInternal] = useState(false)
   const isOpen = externalOpen ?? isOpenInternal
@@ -74,6 +82,8 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
   const [selectedCategory, setSelectedCategory] = useState<ResourceCategory | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [success, setSuccess] = useState(false)
+  // The listing the user has asked to remove (drives the confirm dialog).
+  const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; label: string } | null>(null)
 
   const {
     register,
@@ -114,12 +124,48 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
     }
   }
 
+  const confirmWithdraw = async () => {
+    if (!withdrawTarget) return
+    const ok = await withdrawResource(withdrawTarget.id)
+    // On success the hook refetches myResources; close the confirm. On failure the
+    // hook sets `error`, which the confirm dialog surfaces (it stays open).
+    if (ok) setWithdrawTarget(null)
+  }
+
   const categoryLabel = selectedCategory ? getCategoryLabel(selectedCategory) : ''
 
   return (
     <>
       {/* Speed Dial Container */}
       <div className="absolute bottom-4 right-4 z-40 flex flex-col items-end gap-3">
+        {/* Your active listings — visible when the dial is open, so a volunteer can
+            remove a listing they created without leaving the map. */}
+        {myResources.map((res) => {
+          const label = getCategoryLabel(res.category as VolunteerCategory)
+          return (
+            <div
+              key={res.id}
+              className={`flex items-center gap-3 transition-all duration-200 ease-out ${
+                isOpen
+                  ? 'opacity-100 translate-y-0 pointer-events-auto'
+                  : 'opacity-0 translate-y-4 pointer-events-none'
+              }`}
+            >
+              <span className="text-sm font-medium text-stone-700 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap max-w-[220px] truncate">
+                Your {label.toLowerCase()} listing
+              </span>
+              <button
+                type="button"
+                onClick={() => setWithdrawTarget({ id: res.id, label })}
+                aria-label={`Remove your ${label} listing`}
+                className="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors border border-stone-200/50"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          )
+        })}
+
         {/* Speed Dial Items */}
         {CATEGORIES.map((cat, index) => (
           <div
@@ -267,6 +313,45 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
               </form>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdraw confirmation — one explicit confirm; failure surfaces a visible error. */}
+      <Dialog
+        open={withdrawTarget !== null}
+        onOpenChange={(open) => { if (!open) setWithdrawTarget(null) }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Remove this listing?</DialogTitle>
+            <DialogDescription>
+              Your {withdrawTarget?.label.toLowerCase()} listing will be removed from the map and
+              lists. You can add a new one any time.
+            </DialogDescription>
+          </DialogHeader>
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWithdrawTarget(null)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmWithdraw}
+              disabled={isLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isLoading ? 'Removing…' : 'Remove listing'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
