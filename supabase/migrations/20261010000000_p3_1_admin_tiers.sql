@@ -321,11 +321,8 @@ BEGIN
       jsonb_build_object('from', v_old, 'to', p_tier, 'service', true), NULL);
     RETURN jsonb_build_object('ok', false, 'code', 'platform_admin_forbidden');
   END IF;
-  IF EXISTS (SELECT 1 FROM public.platform_founder WHERE user_id = p_target) THEN
-    PERFORM public.record_admin_action(NULL, 'tier.set', 'tier', p_target::text, 'denied', 'founder_immutable',
-      jsonb_build_object('from', v_old, 'to', p_tier, 'service', true), NULL);
-    RETURN jsonb_build_object('ok', false, 'code', 'founder_immutable');
-  END IF;
+  -- (The founder is always a platform_admin, so the platform_admin_forbidden guard above already
+  -- refuses any change to the founder — no separate founder branch is reachable.)
   IF NOT EXISTS (
     SELECT 1 FROM public.profiles p JOIN auth.users u ON u.id = p.id
     WHERE p.id = p_target AND (u.is_anonymous = false OR u.is_anonymous IS NULL)
@@ -446,6 +443,11 @@ begin
   if not public.current_user_tier_at_least('resource_admin') then
     raise exception 'p3_denied:insufficient_tier' using errcode = '42501';
   end if;
+  -- Form-template rows are managed only by a Platform Admin (approve/reject/any status change).
+  if not public.is_current_user_admin()
+     and (select r.discovery_metadata->>'content_type' from public.resources r where r.id = p_resource_id) = 'form' then
+    raise exception 'p3_denied:form_requires_platform_admin' using errcode = '42501';
+  end if;
   update public.resources
      set status = 'rejected', rejection_reason = p_reason, moderated_by = auth.uid(), moderated_at = now(), updated_at = now()
    where id = p_resource_id;
@@ -454,6 +456,25 @@ begin
     'ok', p_reason, '{}'::jsonb, public.request_id());
 end; $function$;
 
+-- approve_form_template stays Platform-Admin only; P3.1 adds an audit row so form approval is a
+-- recorded privileged action (form state changes are PA-only across every path).
+CREATE OR REPLACE FUNCTION public.approve_form_template(p_id text)
+ RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_current_user_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  update public.form_templates
+     set is_active = true, moderated_by = auth.uid(), moderated_at = now(), updated_at = now()
+   where id = p_id;
+  if not found then raise exception 'form_template % not found', p_id using errcode = 'P0002'; end if;
+  perform public.record_admin_action(auth.uid(), 'form_template.approve', 'form_template', p_id,
+    'ok', null, '{}'::jsonb, public.request_id());
+end;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.admin_update_resource(p_id uuid, p_name text DEFAULT NULL::text, p_description text DEFAULT NULL::text, p_category text DEFAULT NULL::text, p_address_line1 text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_state text DEFAULT NULL::text, p_zip_code text DEFAULT NULL::text, p_phone text DEFAULT NULL::text, p_email text DEFAULT NULL::text, p_website text DEFAULT NULL::text, p_status text DEFAULT NULL::text, p_service_mode text DEFAULT NULL::text, p_lat double precision DEFAULT NULL::double precision, p_lng double precision DEFAULT NULL::double precision, p_geocode_accuracy text DEFAULT NULL::text, p_geocode_confidence text DEFAULT NULL::text, p_mark_unlocated boolean DEFAULT false)
  RETURNS TABLE(id uuid, name text, description text, category text, address_line1 text, city text, state text, zip_code text, phone text, email text, website text, status text, source text, is_verified boolean, moderated_at timestamp with time zone, lat double precision, lng double precision, service_mode text, geocode_accuracy text, geocode_confidence text)
  LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'extensions'
@@ -461,6 +482,12 @@ AS $function$
 begin
   if not public.current_user_tier_at_least('resource_admin') then
     raise exception 'p3_denied:insufficient_tier' using errcode = '42501';
+  end if;
+  -- Form-template rows are managed only by a Platform Admin (any status/field change), so an RA
+  -- cannot flip a form row to approved via the generic update path.
+  if not public.is_current_user_admin()
+     and (select r.discovery_metadata->>'content_type' from public.resources r where r.id = p_id) = 'form' then
+    raise exception 'p3_denied:form_requires_platform_admin' using errcode = '42501';
   end if;
 
   update public.resources r
