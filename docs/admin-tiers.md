@@ -26,6 +26,11 @@ for their own active org only, regardless of tier.
 This is why all ~48 `is_current_user_admin()` policies/RPCs become PA and all `is_staff` moderation
 RPCs become CM+ with no predicate edits.
 
+The public tier marker (T4) renders wherever a post author or a profile is shown: feed cards, the
+appreciation sheet, the profile page and its post list (`post-card`), comment authors in the
+comment thread, the shared post page, and the admin user lists. Messages and the opt-in seeker list
+are person-to-person surfaces outside that ruling and are left unmarked (possible follow-up).
+
 ## Nomination: who may grant/revoke whom
 
 Grants and revokes go through `admin_set_tier(p_target, p_tier, p_reason, p_request_id)` (returns
@@ -40,7 +45,17 @@ is the only actor who can create or remove a Platform Admin. The founder can nev
 banned or deleted through the app (they are PA — top tier — and self-targeting is refused).
 
 `service_set_tier(p_target, p_tier, p_reason)` is a service-role-only break-glass path (audited,
-actor NULL, reason required) for operators and e2e fixtures. It is not a nomination path.
+actor NULL, reason required) for operators and CM/RA e2e fixtures. It is **not** a nomination path
+and founder-only stays absolute: it refuses any change that touches Platform Admin (grant, or a
+target that is already PA), any change to the founder, and anonymous/nonexistent targets — each
+returns `{ok:false, code}` and writes an audit row. Because Platform Admin cannot be minted this
+way, e2e specs that drive PA-only surfaces use a **pre-provisioned** PA account passed via
+`E2E_PA_EMAIL` / `E2E_PA_PASSWORD` / `E2E_PA_USER_ID` and skip with a clear message when it is absent.
+
+A caller with **no tier** (a guest, an anonymous session, or a plain user) that invokes
+`admin_set_tier` gets a `p3_denied:*` RAISE (observable in `postgres_logs`) and **no** durable audit
+row — only tier-holders' denials are recorded. Every stored `request_id` is validated to a
+uuid/simple-token shape and capped at 64 chars (else NULL); `reason` is capped at 500 chars.
 
 The two existing platform admins were migrated to `platform_admin` with zero behavior change.
 
