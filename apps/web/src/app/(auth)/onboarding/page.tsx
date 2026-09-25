@@ -3,13 +3,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { FunctionsHttpError } from '@supabase/supabase-js'
 import { useAuthContext } from '@/providers/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useGeolocation } from '@/hooks/use-geolocation'
-import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Settings2, Globe } from 'lucide-react'
+import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Globe } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { normalizeState } from '@/lib/us-states'
@@ -79,13 +78,6 @@ const ROLE_OPTIONS = [
     color: 'border-green-500 bg-green-50',
   },
   {
-    id: 'facilitator',
-    label: 'Administrator',
-    description: 'Operate and maintain FEED — requires an administrator code',
-    icon: Settings2,
-    color: 'border-amber-500 bg-amber-50',
-  },
-  {
     id: 'both',
     label: 'Both',
     description: 'I need help in some areas and can offer help in others',
@@ -105,7 +97,7 @@ const NEEDS_OPTIONS = [
   { id: 'education', label: 'Education', emoji: '📚' },
 ] as const
 
-type UserRole = 'seeking' | 'providing' | 'facilitator' | 'both'
+type UserRole = 'seeking' | 'providing' | 'both'
 type Step = 1 | 2 | 3 | 4 | 5
 
 export default function OnboardingPage() {
@@ -115,7 +107,6 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>(1)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
-  const [adminCode, setAdminCode] = useState('')
   const [zipCode, setZipCode] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
@@ -212,11 +203,6 @@ export default function OnboardingPage() {
   const markCompleteAndNavigate = useCallback(
     async (userId: string): Promise<void> => {
       logger.info('onboarding.skip.start', { userId })
-      // Facilitators must complete the full flow including code validation.
-      // This function handles skip/bypass — not permitted for facilitator role.
-      // The facilitator path goes through handleComplete.
-      if (userRole === 'facilitator') return
-
       const doWrite = async () => {
         const result = await supabase
           .from('profiles')
@@ -306,97 +292,6 @@ export default function OnboardingPage() {
         } finally {
           clearTimeout(geocodeTimer)
         }
-      }
-
-      // ── FACILITATOR PATH — code verified server-side via edge function ──
-      if (userRole === 'facilitator') {
-        // N1: bound the invoke so a hung network resets submitting instead of infinite spinner
-        const INVOKE_TIMEOUT_MS = 15_000
-        let fnData: { success?: boolean; error?: string } | null = null
-        let fnError: Error | null = null
-        try {
-          // Wrap in a typed helper to avoid Promise.race<T | never> inference collapsing to never
-          type InvokeResult = { data: { success?: boolean; error?: string } | null; error: Error | null }
-          const timedInvoke = (): Promise<InvokeResult> => {
-            const invokePromise = supabase.functions.invoke('claim-facilitator-admin', {
-              body: { code: adminCode.trim() },
-            }).then((r): InvokeResult => ({ data: r.data as InvokeResult['data'], error: r.error as Error | null }))
-            const timeoutPromise: Promise<InvokeResult> = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('invoke_timeout')), INVOKE_TIMEOUT_MS)
-            )
-            return Promise.race([invokePromise, timeoutPromise])
-          }
-          const invokeResult = await timedInvoke()
-          fnData = invokeResult.data
-          fnError = invokeResult.error
-        } catch (invokeErr: unknown) {
-          fnError = invokeErr instanceof Error ? invokeErr : new Error(String(invokeErr))
-        }
-
-        if (fnError || !fnData?.success) {
-          // M2: FunctionsHttpError carries the JSON body — read it for the structured error code.
-          // supabase-js v2 wraps non-2xx responses as FunctionsHttpError with data=null,
-          // so fnData?.error is always undefined on HTTP errors. Parse the body instead.
-          let errCode = fnData?.error ?? 'unknown'
-          if (fnError instanceof FunctionsHttpError) {
-            try {
-              const body = await fnError.context.json().catch(() => ({})) as { error?: string }
-              errCode = body?.error ?? 'unknown'
-            } catch {
-              errCode = 'unknown'
-            }
-          } else if (fnError?.message === 'invoke_timeout') {
-            errCode = 'invoke_timeout'
-          }
-
-          let errorMsg = 'Invalid administrator code. Please try again.'
-          if (errCode === 'rate_limited') {
-            errorMsg = 'Too many attempts — please wait and try again.'
-          } else if (errCode === 'not_configured') {
-            errorMsg = "Administrator onboarding isn’t configured yet — contact the project owner."
-          } else if (errCode === 'invalid_code') {
-            errorMsg = 'Invalid administrator code. Please check and try again.'
-          } else if (errCode === 'invoke_timeout') {
-            errorMsg = 'Request timed out. Please check your connection and try again.'
-          }
-          setError(errorMsg)
-          setSubmitting(false)
-          return
-        }
-
-        // Edge fn already set is_admin + user_role — write remaining profile fields only.
-        const facilitatorUpdate = {
-          zip_code: zipCode || null,
-          location_city: resolvedCity || null,
-          location_state: normalizeState(resolvedState) || normalizeState(state) || null,
-          latitude: latitude,
-          longitude: longitude,
-          needs: selectedNeeds,
-          phone: phone || null,
-          preferred_language: preferredLanguage || 'en',
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        }
-        const { error: profErr } = await supabase
-          .from('profiles')
-          .update(facilitatorUpdate)
-          .eq('id', userId)
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-        if (profErr) {
-          logger.error('onboarding.facilitator.profile_write_failed', profErr as Error, {
-            userId,
-            code: profErr.code,
-            message: profErr.message,
-          })
-          setError(`Could not save profile: ${profErr.message}`)
-          setShowContinueAnyway(true)
-          return
-        }
-
-        logger.warn('onboarding.save.ok', { userId, path: 'facilitator' })
-        router.push('/')
-        router.refresh()
-        return
       }
 
       // Build update payload WITHOUT id — id is excluded from the column-scoped
@@ -557,12 +452,10 @@ export default function OnboardingPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [authUser, authLoading, phone, userRole, adminCode, zipCode, city, state, latitude, longitude, selectedNeeds, preferredLanguage, router, supabase])
+  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, preferredLanguage, router, supabase])
 
   const handleSkip = useCallback(async () => {
     const userId = userIdRef.current ?? authUser?.id ?? null
-    // Facilitators must complete location — do not allow skip.
-    if (userRole === 'facilitator') return
     if (!userId) {
       // No user — redirect immediately; skip the write entirely.
       logger.warn('onboarding.skip.no_user', { authLoading })
@@ -578,7 +471,7 @@ export default function OnboardingPage() {
     }
   }, [authUser, authLoading, markCompleteAndNavigate, router])
 
-  const canProceedStep1 = userRole !== null && (userRole !== 'facilitator' || adminCode.trim().length > 0)
+  const canProceedStep1 = userRole !== null
   const canProceedStep2 = zipCode.length >= 5 || (latitude !== null && longitude !== null)
   const canProceedStep3 = selectedNeeds.length > 0
   const canProceedStep5 = preferredLanguage.length > 0
@@ -599,7 +492,7 @@ export default function OnboardingPage() {
           <CardTitle className="text-2xl font-bold text-lime-800">
             {step === 1 && "I'm here to..."}
             {step === 2 && 'Where are you located?'}
-            {step === 3 && (userRole === 'providing' || userRole === 'facilitator' ? 'What can you help with?' : 'What do you need help with?')}
+            {step === 3 && (userRole === 'providing' ? 'What can you help with?' : 'What do you need help with?')}
             {step === 4 && 'How can we reach you?'}
             {step === 5 && 'What language do you prefer?'}
           </CardTitle>
@@ -680,25 +573,6 @@ export default function OnboardingPage() {
                 )
               })}
 
-              {userRole === 'facilitator' && (
-                <div className="mt-4">
-                  <label className="text-sm font-medium text-stone-700 mb-1 block">
-                    Administrator code <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    type="password"
-                    value={adminCode}
-                    onChange={(e) => setAdminCode(e.target.value)}
-                    placeholder="Enter administrator code"
-                    className="bg-white/90 border-amber-300 text-stone-900 placeholder:text-stone-400"
-                    autoComplete="off"
-                  />
-                  <p className="text-xs text-stone-500 mt-1">
-                    Contact your system administrator for the code.
-                  </p>
-                </div>
-              )}
-
               <Button
                 className="w-full bg-green-600 hover:bg-green-700 text-white mt-4"
                 disabled={!canProceedStep1}
@@ -707,15 +581,13 @@ export default function OnboardingPage() {
                 Continue <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
 
-              {userRole !== 'facilitator' && (
-                <button
-                  onClick={handleSkip}
-                  disabled={submitting}
-                  className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors disabled:opacity-50"
-                >
-                  Find out how to help Feed.
-                </button>
-              )}
+              <button
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors disabled:opacity-50"
+              >
+                Find out how to help Feed.
+              </button>
             </div>
           )}
 
@@ -887,15 +759,13 @@ export default function OnboardingPage() {
                 </Button>
               </div>
 
-              {userRole !== 'facilitator' && (
-                <button
-                  onClick={handleSkip}
-                  disabled={submitting}
-                  className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
-                >
-                  Skip for now
-                </button>
-              )}
+              <button
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
+              >
+                Skip for now
+              </button>
             </div>
           )}
 
@@ -938,15 +808,13 @@ export default function OnboardingPage() {
                 </Button>
               </div>
 
-              {userRole !== 'facilitator' && (
-                <button
-                  onClick={handleSkip}
-                  disabled={submitting}
-                  className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
-                >
-                  Skip for now
-                </button>
-              )}
+              <button
+                onClick={handleSkip}
+                disabled={submitting}
+                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
+              >
+                Skip for now
+              </button>
             </div>
           )}
         </CardContent>
