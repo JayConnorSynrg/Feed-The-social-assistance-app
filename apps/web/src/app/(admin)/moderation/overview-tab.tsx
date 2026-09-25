@@ -12,6 +12,7 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import type { ChartConfig } from '@/components/ui/chart'
 import { logger } from '@/lib/logger'
+import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -88,6 +89,7 @@ type UserRow = {
   email: string | null
   user_role: string | null
   is_staff: boolean
+  admin_tier: AdminTier | null
   joined_at: string | null
   last_sign_in_at: string | null
   provider: string | null
@@ -707,8 +709,8 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
                         <TableCell className="px-4 py-3">
                           {isBanned ? (
                             <Badge className="bg-red-100 text-red-700 border-0 text-xs rounded-full px-2.5">Paused</Badge>
-                          ) : user.is_staff ? (
-                            <Badge className="bg-lime-100 text-lime-800 border-0 text-xs rounded-full px-2.5">Staff</Badge>
+                          ) : user.admin_tier ? (
+                            <Badge className="bg-lime-100 text-lime-800 border-0 text-xs rounded-full px-2.5">{tierLabel(user.admin_tier)}</Badge>
                           ) : (
                             <Badge className="bg-stone-100 text-stone-600 border-0 text-xs rounded-full px-2.5">Active</Badge>
                           )}

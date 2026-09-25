@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { track } from '@vercel/analytics'
-import { useIsAdmin } from '@/hooks/use-is-admin'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -156,10 +156,10 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { activePanel, setActivePanel } = useShellContext()
   const router = useRouter()
-  const isAdmin = useIsAdmin()
+  const { tier } = useAdminTier()
 
-  // Admin entry is appended only when the verified admin signal is true.
-  const navItems = isAdmin ? [...TOP_NAV_ITEMS, ADMIN_TOP_NAV_ITEM] : TOP_NAV_ITEMS
+  // Admin entry appears for any tier (P3.1: >= Community Moderator).
+  const navItems = tier != null ? [...TOP_NAV_ITEMS, ADMIN_TOP_NAV_ITEM] : TOP_NAV_ITEMS
 
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-stone-200/50 bg-white flex-shrink-0">
@@ -292,7 +292,8 @@ function TopNav({ isAuthenticated = false, userName, onSignOut }: TopNavProps) {
 // ============================================
 function IconSidebar() {
   const { activePanel, setActivePanel, userRole } = useShellContext()
-  const isAdmin = useIsAdmin()
+  const { tier } = useAdminTier()
+  const isAdmin = tier != null
 
   // Filter icons based on user role, then append the admin entry for admins.
   const visibleIcons = SIDEBAR_ICONS.filter(

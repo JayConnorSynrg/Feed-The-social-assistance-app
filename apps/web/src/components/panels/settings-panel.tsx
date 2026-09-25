@@ -35,7 +35,7 @@ import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { GiftsReceivedShelf } from '@/components/appreciation/gifts-received-shelf'
 import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
-import { useIsAdmin } from '@/hooks/use-is-admin'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
@@ -1217,11 +1217,12 @@ function saveLocalPrefs(prefs: Omit<SettingsData, 'profile'>) {
 export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
   const { user, profile, refreshSession, isAnonymous } = useAuth()
-  const isAdmin = useIsAdmin()
+  const { tier } = useAdminTier()
   const isOrgAdmin = useIsOrgAdmin()
-  // The admin entry appears for platform admins AND for org admins (who get an
-  // events-only shell). Platform-admin status still decides what the shell renders.
-  const showAdminEntry = isAdmin || isOrgAdmin
+  // The admin entry appears for any tier (P3.1: ≥ Community Moderator) AND for org admins (who
+  // get an events-only shell). Having a tier decides whether it reads "Moderation" or "Organizer".
+  const hasTier = tier != null
+  const showAdminEntry = hasTier || isOrgAdmin
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1383,7 +1384,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
             <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
           )}
           {activeSection === 'admin' && showAdminEntry && (
-            <AdminSection isPlatformAdmin={isAdmin} />
+            <AdminSection isPlatformAdmin={hasTier} />
           )}
         </div>
       </div>

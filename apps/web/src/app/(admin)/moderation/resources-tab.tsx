@@ -15,6 +15,7 @@ import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
 import { DiscoverProgress } from '@/components/ui/discover-progress'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 import {
   ResourceEditDialog,
   type ResourceEditDialogInput,
@@ -157,6 +158,10 @@ async function resolveGeoLabel(): Promise<{ label: string; lat: number; lng: num
 export function ResourcesTab() {
   const supabase = createClient()
   const mapRef = useRef<MapViewHandle>(null)
+  // P3.1: RA sees the review queue (approve/reject/update resources), but Discover (paid
+  // Firecrawl) and form-template approval stay platform-admin only.
+  const { tier } = useAdminTier()
+  const isPA = tier === 'platform_admin'
 
   const [query, setQuery] = useState('')
   const [discovering, setDiscovering] = useState(false)
@@ -442,7 +447,8 @@ export function ResourcesTab() {
   return (
     <div className="space-y-4">
 
-      {/* ── Discovery input ── */}
+      {/* ── Discovery input (platform admin only — paid external spend) ── */}
+      {isPA && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Discover Resources</CardTitle>
@@ -514,6 +520,7 @@ export function ResourcesTab() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* ── Queue header ── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -742,6 +749,9 @@ export function ResourcesTab() {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2 border-t border-stone-100 mt-auto">
+                    {/* Form-template approval stays platform-admin only (P3.1). A Resource Admin
+                        sees the form item but not the approve control. */}
+                    {(contentType !== 'form' || isPA) ? (
                     <Button
                       size="sm"
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
@@ -759,6 +769,9 @@ export function ResourcesTab() {
                         <><Check className="h-3.5 w-3.5 mr-1" />Approve</>
                       )}
                     </Button>
+                    ) : (
+                      <span className="flex-1 text-xs text-stone-500 self-center">Platform admin approval required</span>
+                    )}
                     {contentType !== 'form' && (
                       <Button
                         size="sm"

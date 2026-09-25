@@ -9,6 +9,7 @@ import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { Calendar, ExternalLink } from 'lucide-react'
 import type { Profile } from '@feed/database'
 import type { BadgeSummary } from '@/lib/engagement-badges'
+import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
 interface ProfilePageProps {
   params: Promise<{ username: string }>
@@ -69,7 +70,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     .from('profiles')
     .select(
       'id, username, first_name, avatar_url, bio, ' +
-      'is_verified, created_at, is_staff, badge_summary'
+      'is_verified, created_at, is_staff, admin_tier, badge_summary'
     )
     .eq('username', username)
     .single()
@@ -81,7 +82,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const profile = profileData as unknown as Pick<Profile,
     'id' | 'username' | 'avatar_url' | 'bio' |
     'is_verified' | 'created_at'
-  > & { is_staff: boolean; first_name: string | null; badge_summary: BadgeSummary | null }
+  > & { is_staff: boolean; admin_tier: AdminTier | null; first_name: string | null; badge_summary: BadgeSummary | null }
+
+  // Public tier marker (T4): 'Moderator' | 'Resource Admin' | 'Admin', or null for a plain member.
+  const markerLabel = tierLabel(profile.admin_tier)
 
   // Fetch payment handles via SECURITY DEFINER RPC — isolated column access
   const { data: donationHandles } = await supabase
@@ -156,6 +160,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               </h1>
               {profile.username && (
                 <p className="text-muted-foreground">@{profile.username}</p>
+              )}
+
+              {markerLabel && (
+                <span className="mt-2 inline-flex items-center rounded-full bg-stone-800 px-2.5 py-0.5 text-xs font-medium text-stone-50">
+                  {markerLabel}
+                </span>
               )}
 
               {profile.bio && (
