@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { privilegedRpc } from '@/lib/privileged-action'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -90,12 +91,19 @@ export function SafetyAlertsReview() {
       setApprovingId(alertId)
       setError(null)
       try {
-        const { error: rpcErr } = await supabase.rpc('admin_verify_safety_alert', {
-          p_alert_id: alertId,
-        })
-        if (rpcErr) throw rpcErr
+        const { error: rpcErr, requestId } = await privilegedRpc(
+          supabase,
+          'admin.safety_alert.verify',
+          'admin_verify_safety_alert',
+          { p_alert_id: alertId },
+          { action: 'safety_alert.verify', target_id: alertId },
+        )
+        if (rpcErr) {
+          logger.warn('admin.denied', { action: 'safety_alert.verify', target_id: alertId, code: rpcErr.code ?? rpcErr.message, request_id: requestId })
+          throw rpcErr
+        }
         setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, verified: true } : a))
-        logger.info('pin.verified', { alertId })
+        logger.info('pin.verified', { alertId, request_id: requestId })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Approve failed')
       } finally {
@@ -111,12 +119,19 @@ export function SafetyAlertsReview() {
       setRemovingId(alertId)
       setError(null)
       try {
-        const { error: rpcErr } = await supabase.rpc('admin_remove_safety_alert', {
-          p_alert_id: alertId,
-        })
-        if (rpcErr) throw rpcErr
+        const { error: rpcErr, requestId } = await privilegedRpc(
+          supabase,
+          'admin.safety_alert.remove',
+          'admin_remove_safety_alert',
+          { p_alert_id: alertId },
+          { action: 'safety_alert.remove', target_id: alertId },
+        )
+        if (rpcErr) {
+          logger.warn('admin.denied', { action: 'safety_alert.remove', target_id: alertId, code: rpcErr.code ?? rpcErr.message, request_id: requestId })
+          throw rpcErr
+        }
         setAlerts((prev) => prev.filter((a) => a.id !== alertId))
-        logger.info('pin.removed', { alertId })
+        logger.info('pin.removed', { alertId, request_id: requestId })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Remove failed')
       } finally {

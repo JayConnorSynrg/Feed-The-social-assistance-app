@@ -11,7 +11,11 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { privilegedRpc } from '@/lib/privileged-action'
+import type { Database } from '@feed/database'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+
+type AdminUpdateResourceRows = Database['public']['Functions']['admin_update_resource']['Returns']
 import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { AddressAutocomplete } from './address-autocomplete'
@@ -288,7 +292,16 @@ export function ResourceEditDialog({
           changedFields,
         },
         {
-          rpc: (payload) => supabase.rpc('admin_update_resource', payload),
+          // Routed through privilegedRpc: one request id sent as x-request-id, shared with the
+          // withMetric wide-event and the durable admin_actions row written by admin_update_resource.
+          rpc: (payload) =>
+            privilegedRpc<AdminUpdateResourceRows>(
+              supabase,
+              'admin.resource.update',
+              'admin_update_resource',
+              payload,
+              { action: 'resource.update', target_id: resource.id },
+            ),
           onConfirm: mode === 'approve' ? onConfirm : undefined,
           logger,
         },

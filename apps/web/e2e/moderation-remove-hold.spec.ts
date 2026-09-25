@@ -83,7 +83,7 @@ async function createUser(
   const uid = data.user.id
   const { error: profErr } = await admin
     .from('profiles')
-    .update({ full_name: fullName, onboarding_completed: true, user_role: 'seeking', is_staff: isStaff })
+    .update({ full_name: fullName, onboarding_completed: true, user_role: 'seeking' })
     .eq('id', uid)
   if (profErr) throw new Error(`profile update failed: ${profErr.message}`)
   return uid
@@ -132,8 +132,10 @@ test.beforeAll(async () => {
   authorId   = await createUser(AUTHOR_EMAIL,   'Modh Author User')
   reporterId = await createUser(REPORTER_EMAIL, 'Modh Reporter User')
 
-  // Grant staff user is_admin so they can navigate to /moderation UI
-  await mgmtQuery(`UPDATE public.profiles SET is_admin = true WHERE id = '${staffId}';`)
+  // Grant the staff user the community_moderator tier: post-P3.1 that is enough to reach the
+  // /moderation UI (route admits tier >= CM) and to run the moderation RPCs (is_staff, derived).
+  // service_set_tier refuses platform_admin (founder-only), so a moderation fixture uses CM.
+  await mgmtQuery(`SELECT public.service_set_tier('${staffId}'::uuid, 'community_moderator', 'e2e moderation fixture');`)
 
   // Seed post
   const { data: postData, error: postErr } = await admin

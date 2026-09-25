@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { generateShareUrl } from '@/lib/utils/url'
+import { tierLabel } from '@/lib/admin-tier'
 import type { Post, Profile } from '@feed/database'
 
 interface PostCardProps {
@@ -94,6 +95,11 @@ export function PostCard({
           >
             {post.user?.first_name || 'Anonymous'}
           </Link>
+          {tierLabel(post.user?.admin_tier) && (
+            <span className="ml-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
+              {tierLabel(post.user?.admin_tier)}
+            </span>
+          )}
           {post.user?.username && (
             <Link
               href={`/profile/${post.user.username}`}

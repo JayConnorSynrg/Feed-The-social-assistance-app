@@ -974,6 +974,7 @@ function PostCard({
             harmonyScore: post.author.harmonyScore,
             harmonyReviewsCount: post.author.harmonyReviewsCount,
             badgeSummary: post.author.badgeSummary,
+            authorTier: post.author.authorTier ?? null,
           }}
           currentUserId={currentUserId}
           isGuest={currentUserIsGuest === true}

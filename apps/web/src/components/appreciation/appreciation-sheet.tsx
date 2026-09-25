@@ -34,6 +34,7 @@ import { createClient } from '@/lib/supabase/client'
 import { resolveFollowGate } from '@/lib/follow-gate'
 import { APPRECIATION_ITEMS, giveAppreciation, listSentTo } from '@/lib/appreciation'
 import type { BadgeSummary } from '@/lib/engagement-badges'
+import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
 export interface AppreciationAuthor {
   id: string
@@ -42,6 +43,8 @@ export interface AppreciationAuthor {
   harmonyScore: number | null
   harmonyReviewsCount: number
   badgeSummary: BadgeSummary | null
+  /** Public tier marker (T4). null/undefined = plain member. */
+  authorTier?: AdminTier | null
 }
 
 interface AppreciationSheetProps {
@@ -236,6 +239,11 @@ export function AppreciationSheet({
             </div>
             <div className="min-w-0">
               <SheetTitle className="truncate">{author.name}</SheetTitle>
+              {tierLabel(author.authorTier) && (
+                <span className="mt-1 inline-flex items-center rounded-full bg-stone-800 px-2 py-0.5 text-xs font-medium text-stone-50">
+                  {tierLabel(author.authorTier)}
+                </span>
+              )}
               <div className="mt-1">
                 <HarmonyBadge
                   score={author.harmonyScore}

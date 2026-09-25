@@ -35,7 +35,7 @@ import { EngagementBadges } from '@/components/profile/engagement-badges'
 import { GiftsReceivedShelf } from '@/components/appreciation/gifts-received-shelf'
 import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
-import { useIsAdmin } from '@/hooks/use-is-admin'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
@@ -788,16 +788,22 @@ function getRelativeTime(date: Date): string {
 // ADMIN SECTION (visible only to admins)
 // ============================================
 function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
-  // A platform admin gets the full moderation dashboard; an org admin (non-platform-admin)
-  // gets organizer tools — schedule events, run the check-in kiosk, and view attendance for
-  // the organizations they manage. Both open the same route; the shell shows only what the
-  // caller may use.
+  // Copy describes ONLY what THIS caller's tier can do. A tier-holder sees the moderation
+  // dashboard (scoped by tier); an org admin with no tier sees organizer tools. Both open the
+  // same route; the shell shows only the tabs the caller may use.
+  const { tier } = useAdminTier()
+  const desc =
+    tier === 'platform_admin'
+      ? 'Full administration: reports, safety alerts, the resource queue, people and tiers, users, and community tools.'
+      : tier === 'resource_admin'
+      ? 'Review reports and safety alerts, and manage the resource review queue.'
+      : tier === 'community_moderator'
+      ? 'Review reports and moderate posts and safety alerts.'
+      : 'Schedule your organization’s events and run the check-in kiosk.'
   return (
     <SettingsSection
       title="Administration"
-      description={isPlatformAdmin
-        ? 'Tools for reviewing community submissions, reports, and safety alerts.'
-        : 'Tools for scheduling your organization’s events and running check-in.'}
+      description={desc}
     >
       <div className="p-5 bg-[#faf9f6] rounded-xl border border-stone-200">
         <div className="flex items-start gap-3 mb-4">
@@ -806,13 +812,12 @@ function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
           </div>
           <div>
             <p className="font-medium text-sm text-stone-800">
-              {isPlatformAdmin ? 'Moderation dashboard' : 'Organizer tools'}
+              {tier === 'platform_admin' ? 'Admin dashboard'
+                : tier === 'resource_admin' ? 'Resource Admin dashboard'
+                : tier === 'community_moderator' ? 'Moderation dashboard'
+                : 'Organizer tools'}
             </p>
-            <p className="text-xs text-stone-600 mt-0.5">
-              {isPlatformAdmin
-                ? 'Review pending resources, content reports, safety alerts, and petition signatures.'
-                : 'Schedule events and occurrences, run the check-in kiosk, and view attendance for your organization.'}
-            </p>
+            <p className="text-xs text-stone-600 mt-0.5">{desc}</p>
           </div>
         </div>
         <Link
@@ -1250,11 +1255,12 @@ function saveLocalPrefs(prefs: Omit<SettingsData, 'profile'>) {
 export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile')
   const { user, profile, refreshSession, isAnonymous } = useAuth()
-  const isAdmin = useIsAdmin()
+  const { tier } = useAdminTier()
   const isOrgAdmin = useIsOrgAdmin()
-  // The admin entry appears for platform admins AND for org admins (who get an
-  // events-only shell). Platform-admin status still decides what the shell renders.
-  const showAdminEntry = isAdmin || isOrgAdmin
+  // The admin entry appears for any tier (P3.1: ≥ Community Moderator) AND for org admins (who
+  // get an events-only shell). Having a tier decides whether it reads "Moderation" or "Organizer".
+  const hasTier = tier != null
+  const showAdminEntry = hasTier || isOrgAdmin
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -1416,7 +1422,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
             <AccessibilitySection accessibility={localPrefs.accessibility} onUpdate={updateAccessibility} />
           )}
           {activeSection === 'admin' && showAdminEntry && (
-            <AdminSection isPlatformAdmin={isAdmin} />
+            <AdminSection isPlatformAdmin={hasTier} />
           )}
         </div>
       </div>

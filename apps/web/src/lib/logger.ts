@@ -256,13 +256,18 @@ export async function withTiming<T>(
 export async function withMetric<T>(
   operation: string,
   attrs: Record<string, string | number | boolean | null>,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  // Optional caller-supplied correlation id. When a privileged client call mints one request id
+  // and sends it as x-request-id (so the durable admin_actions row and this app_logs row share
+  // it), pass the same id here. Omitted -> preserve prior behavior (mint on client, undefined on
+  // server so sinkToSupabase reads the proxy-stamped header).
+  explicitRequestId?: string
 ): Promise<T> {
   // Client operations have no server request scope, so mint a per-op
   // correlation id that ties this operation's persisted wide-event row back to
   // the op (I5). On the server, request_id stays undefined so sinkToSupabase
   // reads the proxy-stamped x-request-id (I4) — server correlation is unchanged.
-  const requestId = typeof window !== 'undefined' ? createOpId() : undefined
+  const requestId = explicitRequestId ?? (typeof window !== 'undefined' ? createOpId() : undefined)
   // The guarded body lives in with-metric-core.mjs so the shipped path and the
   // node:test suite exercise the SAME code. Real emit/sink/track wired here.
   return runWithMetric(

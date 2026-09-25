@@ -66,33 +66,46 @@ export type Database = {
         }
         Relationships: []
       }
-      admin_code_redemptions: {
+      admin_actions: {
         Row: {
+          action: string
+          actor_id: string | null
+          actor_tier: Database["public"]["Enums"]["admin_tier"] | null
           created_at: string
-          failure_reason: string | null
-          id: string
-          ip_address: unknown
-          success: boolean
-          user_agent: string | null
-          user_id: string
+          details: Json
+          id: number
+          outcome: string
+          reason: string | null
+          request_id: string | null
+          target_id: string | null
+          target_tier: Database["public"]["Enums"]["admin_tier"] | null
+          target_type: string
         }
         Insert: {
+          action: string
+          actor_id?: string | null
+          actor_tier?: Database["public"]["Enums"]["admin_tier"] | null
           created_at?: string
-          failure_reason?: string | null
-          id?: string
-          ip_address?: unknown
-          success: boolean
-          user_agent?: string | null
-          user_id: string
+          details?: Json
+          outcome: string
+          reason?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_tier?: Database["public"]["Enums"]["admin_tier"] | null
+          target_type: string
         }
         Update: {
+          action?: string
+          actor_id?: string | null
+          actor_tier?: Database["public"]["Enums"]["admin_tier"] | null
           created_at?: string
-          failure_reason?: string | null
-          id?: string
-          ip_address?: unknown
-          success?: boolean
-          user_agent?: string | null
-          user_id?: string
+          details?: Json
+          outcome?: string
+          reason?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_tier?: Database["public"]["Enums"]["admin_tier"] | null
+          target_type?: string
         }
         Relationships: []
       }
@@ -2054,8 +2067,24 @@ export type Database = {
           },
         ]
       }
+      platform_founder: {
+        Row: {
+          singleton: boolean
+          user_id: string
+        }
+        Insert: {
+          singleton?: boolean
+          user_id: string
+        }
+        Update: {
+          singleton?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          admin_tier: Database["public"]["Enums"]["admin_tier"] | null
           avatar_url: string | null
           badge_summary: Json | null
           bio: string | null
@@ -2086,6 +2115,7 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          admin_tier?: Database["public"]["Enums"]["admin_tier"] | null
           avatar_url?: string | null
           badge_summary?: Json | null
           bio?: string | null
@@ -2116,6 +2146,7 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          admin_tier?: Database["public"]["Enums"]["admin_tier"] | null
           avatar_url?: string | null
           badge_summary?: Json | null
           bio?: string | null
@@ -3544,6 +3575,61 @@ export type Database = {
         Returns: string
       }
       admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_list_people: {
+        Args: { p_limit?: number; p_search?: string }
+        Returns: {
+          admin_tier: Database["public"]["Enums"]["admin_tier"] | null
+          avatar_url: string
+          first_name: string
+          id: string
+          joined_at: string
+          username: string
+        }[]
+      }
+      admin_set_tier: {
+        Args: {
+          p_reason?: string
+          p_request_id?: string
+          p_target: string
+          p_tier: Database["public"]["Enums"]["admin_tier"] | null
+        }
+        Returns: Json
+      }
+      current_user_tier: {
+        Args: never
+        Returns: Database["public"]["Enums"]["admin_tier"] | null
+      }
+      current_user_tier_at_least: {
+        Args: { p: Database["public"]["Enums"]["admin_tier"] }
+        Returns: boolean
+      }
+      is_founder: { Args: never; Returns: boolean }
+      record_admin_action: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_details?: Json
+          p_outcome: string
+          p_reason?: string
+          p_request_id?: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: undefined
+      }
+      request_id: { Args: never; Returns: string }
+      service_set_tier: {
+        Args: {
+          p_reason: string
+          p_target: string
+          p_tier: Database["public"]["Enums"]["admin_tier"] | null
+        }
+        Returns: Json
+      }
+      tier_of: {
+        Args: { p_user: string }
+        Returns: Database["public"]["Enums"]["admin_tier"] | null
+      }
       admin_delete_user_note: {
         Args: { p_note_id: string }
         Returns: undefined
@@ -3614,6 +3700,7 @@ export type Database = {
       admin_list_users: {
         Args: never
         Returns: {
+          admin_tier: Database["public"]["Enums"]["admin_tier"] | null
           banned_until: string
           email: string
           email_confirmed: boolean
@@ -5240,6 +5327,7 @@ export type Database = {
       }
     }
     Enums: {
+      admin_tier: "community_moderator" | "resource_admin" | "platform_admin"
       conversation_status:
         | "pending"
         | "active"

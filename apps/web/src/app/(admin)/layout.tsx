@@ -14,13 +14,14 @@ export default async function AdminLayout({
   }
 
   // Use SECURITY DEFINER RPCs — enforce access at the Postgres layer. After PII hardening
-  // revoked direct is_admin column reads, these RPCs are the only supported gate. A
-  // platform admin reaches the full shell; a non-platform-admin who administers at least
-  // one org reaches it too (the shell then shows only the Events tab, scoped to their orgs).
-  // This group layout admits both; the platform-only surfaces tighten the gate in their own
-  // nested layouts (see federation/layout.tsx), redirecting org admins back to /moderation.
-  const { data: isAdmin } = await supabase.rpc('is_current_user_admin')
-  let allowed = isAdmin === true
+  // revoked direct is_admin column reads, these RPCs are the only supported gate. Any tier
+  // (P3.1: Community Moderator, Resource Admin, or Platform Admin) reaches the shell; a
+  // non-tier user who administers at least one org reaches it too (the shell then shows only
+  // the Events tab, scoped to their orgs). This group layout admits both; the platform-only
+  // surfaces tighten the gate in their own nested layouts (see federation/layout.tsx),
+  // redirecting lower tiers / org admins back to /moderation.
+  const { data: tier } = await supabase.rpc('current_user_tier')
+  let allowed = tier != null
   if (!allowed) {
     const { data: isOrgAdmin } = await supabase.rpc('is_org_admin_any')
     allowed = isOrgAdmin === true

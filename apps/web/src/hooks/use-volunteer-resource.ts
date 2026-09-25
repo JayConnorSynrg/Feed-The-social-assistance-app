@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { privilegedRpc } from '@/lib/privileged-action'
 import { useAuth } from '@/hooks/use-auth'
 import { interpretWithdrawResult, type WithdrawOutcome } from '@/hooks/withdraw-result'
 
@@ -92,11 +93,11 @@ export function useVolunteerResource() {
 
       // Set PostGIS location from profile coordinates
       if (profile?.latitude && profile?.longitude && data?.id) {
-        await supabase.rpc('set_resource_location_by_id', {
+        await privilegedRpc(supabase, 'resource.set_location', 'set_resource_location_by_id', {
           p_id: data.id,
           p_lat: profile.latitude,
           p_lng: profile.longitude,
-        })
+        }, { action: 'resource.set_location', target_id: data.id })
       }
 
       await fetchMyResources()

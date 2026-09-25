@@ -99,10 +99,17 @@ async function createUser(
     .update({
       onboarding_completed: true,
       user_role: 'seeking',
-      is_staff: isStaff,
     })
     .eq('id', uid)
   if (profErr) throw new Error(`profile update failed: ${profErr.message}`)
+
+  // P3.1: is_staff is derived from admin_tier by the sync_tier_flags trigger and can no longer be
+  // written directly. Grant the moderator tier through the audited service-role break-glass path.
+  if (isStaff) {
+    await mgmtQuery(
+      `SELECT public.service_set_tier('${uid}'::uuid, 'community_moderator', 'e2e content-reports fixture')`
+    )
+  }
 
   return uid
 }

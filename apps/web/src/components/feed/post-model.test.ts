@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowToPost,
+  FEED_POST_SELECT,
   parseEventMeta,
   parseCategories,
   derivePollView,
@@ -54,6 +55,7 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
       first_name: 'Ada',
       avatar_url: null,
       is_staff: false,
+      admin_tier: null,
       harmony_score: null,
       harmony_reviews_count: 0,
       badge_summary: null,
@@ -62,6 +64,22 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
     ...overrides,
   }
 }
+
+describe('rowToPost — public tier marker (P3.1 T4)', () => {
+  it('FEED_POST_SELECT embeds admin_tier on the author join', () => {
+    expect(FEED_POST_SELECT).toContain('admin_tier')
+  })
+  it('maps a moderator/resource-admin/platform-admin tier to the public label', () => {
+    expect(rowToPost(makeRow({ user: { ...makeRow().user!, admin_tier: 'community_moderator' } }), { isLiked: false }).author.role).toBe('Moderator')
+    expect(rowToPost(makeRow({ user: { ...makeRow().user!, admin_tier: 'resource_admin' } }), { isLiked: false }).author.role).toBe('Resource Admin')
+    expect(rowToPost(makeRow({ user: { ...makeRow().user!, admin_tier: 'platform_admin' } }), { isLiked: false }).author.role).toBe('Admin')
+  })
+  it('a plain author (no tier) is Community Member, never Admin', () => {
+    const post = rowToPost(makeRow(), { isLiked: false })
+    expect(post.author.role).toBe('Community Member')
+    expect(post.author.authorTier).toBeNull()
+  })
+})
 
 describe('rowToPost — discriminant fidelity (INV1/INV2)', () => {
   it('(c) a poll row keeps postType "poll" (not coerced to feed)', () => {

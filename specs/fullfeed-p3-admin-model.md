@@ -1,7 +1,8 @@
 # FULL-FEED P3 — Admin Model & Moderation Guards
 
 Status: **P3.0 BUILT_PENDING_DEPLOY** (guards; migration applies as a separate post-deploy
-step, before merge). P3.1+ (tiered roles) is scoped here but not yet built.
+step, before merge) · **P3.1 BUILT_PENDING_DEPLOY** (three admin tiers, nomination only — §6;
+migration `20261010000000`, applies before merge). The P3.1 ladder scoped in §2 is now built.
 Backend for P3.0: `supabase/migrations/20261009000000_p3_0_moderation_guards.sql`.
 Prod: `ndtpovonpadugthmcntl`. Code baseline: `origin/develop` @ `05f0293`.
 
@@ -200,3 +201,74 @@ resources unchanged, migration not recorded):
 
 App gates: `tsc` 0 errors; `eslint` 0 errors; `test:unit` 61/61; targeted `vitest`
 `withdraw-result.test.ts` 6/6; `next build` ✓.
+
+---
+
+## 6. P3.1 — three admin tiers, nomination only (built)
+
+Backend: `supabase/migrations/20261010000000_p3_1_admin_tiers.sql` (applies as a separate
+post-deploy step, before merge). Branch `feature/feed-fullfeed-p3-1-admin-tiers`. Docs:
+`docs/admin-tiers.md` (replaces `docs/administrator-code.md`). Smoke:
+`31-p3-1-admin-tiers.smoke.ts` (ledger-gated on `20261010000000`).
+
+### Model
+Community Moderator (CM) < Resource Admin (RA) < Platform Admin (PA), stored in
+`profiles.admin_tier` (enum, NULL = no tier). Org admin (`organization_members.role='admin'`) stays
+an orthogonal, org-scoped axis (Events tab, own active org). `admin_tier` is the single source of
+truth; the `sync_tier_flags` BEFORE trigger derives `is_admin = COALESCE(tier=platform_admin,false)`
+and `is_staff = COALESCE(tier IS NOT NULL,false)` and refuses any direct client write to
+`admin_tier`/`is_admin`/`is_staff`. This turns all ~48 `is_current_user_admin()` policies/RPCs into
+PA and all `is_staff` moderation readers into CM+ with zero predicate edits — exactly the "if
+`is_staff` becomes tier ≥ CM" hook §2 anticipated.
+
+### Capabilities by tier
+- **CM:** post moderation (remove/hold/authorize), report handling, safety-alert verify+remove, sees hidden posts.
+- **RA:** CM + resource review queue (list pending, approve, reject, update, set location, list resources).
+- **PA:** everything else — discovery, form templates, SNAP, dashboards, notes, cross-org events, AI summary, users (ban/delete), federation, orgs, and tier grants/revokes.
+
+### Invariants (verified by rolled-back prod probes + unit tests)
+- **T1** every capability reaches exactly the ruled tiers; the two existing admins became PA with zero behavior change; org-admins keep Events only; a plain user gains nothing.
+- **T2** a tier changes only via `admin_set_tier` (a strictly higher tier; the founder for anything touching PA) or the audited service-role `service_set_tier`. No self-target; no direct column write; `is_admin`/`is_staff` always derived; exactly one `admin_actions` row per tier-holder grant/revoke (allowed or denied). A no-tier/guest caller gets a `p3_denied:*` RAISE with **no** durable row.
+- **T3** ban, delete and role changes cannot target an equal-or-higher tier or self (**D2**: this does NOT apply to content moderation or the resource queue). Form-type resource state changes (approve/reject/update) are PA-only on every path.
+- **T4** every post-author / profile surface shows the public tier marker ("Moderator"/"Resource Admin"/"Admin"): feed card, appreciation sheet, profile page + its post list (`post-card`), comment authors, the shared post page, and the admin user lists. `profiles.admin_tier` is anon+authenticated SELECT, no client write. No other private field is exposed.
+- **T5** every privileged action writes exactly one append-only `admin_actions` row (actor, actor tier, action, target, target tier, outcome, reason, request_id, timestamp); clients cannot write, only PA reads, even service_role is append-only. Every privileged client call routes through `lib/privileged-action.ts` (`privilegedRpc`/`privilegedFetch`) which mints one request id, sends it as `x-request-id`, and shares it with `withMetric` — so the durable audit row and the `app_logs` telemetry join on one id, and a denied/failed call is recorded as exactly one error-level (ok:false) telemetry row. A source-guard test flags any bypass (dot/bracket/alias/template/variable call, or a bare `fetch()` to `/api/admin`). `record_admin_action` caps `request_id` (uuid/token, ≤64) and `reason` (≤500).
+
+### Founder
+`platform_founder` singleton (founder profile id hard-coded — no PII in the repo, **D6**). Only the
+founder grants/revokes PA; `service_set_tier` refuses any platform_admin touch, the founder, and
+invalid targets. The founder cannot be demoted/banned/deleted through the app (top tier + self-target
+refusal).
+
+### Ban / delete
+Platform-Admin only. A caller below PA is refused 403 **before** any target lookup or audit write
+(writes nothing, reveals nothing). A PA acting on a nonexistent target gets 404. T3 self/equal-tier
+refusals and the final outcome each write exactly one audit row (**D7**: delete writes one row after
+success, or one error row on failure).
+
+### Rulings resolved
+D2 (T3 scope = ban/delete/role only) · D3 (`service_set_tier` break-glass + CM/RA e2e fixtures;
+PA-surface e2e specs use a pre-provisioned PA via `E2E_PA_EMAIL`/`E2E_PA_PASSWORD`/`E2E_PA_USER_ID`
+and skip when absent) · D4 (re-gated RPCs RAISE `p3_denied:*`; new RPCs return `{ok,code}` + durable
+denial rows) · D5 (`user_role='facilitator'` label kept, unreachable from onboarding) · D6 · D7.
+
+### Facilitator code retired
+`claim-facilitator-admin` edge fn + onboarding "Administrator" option/code input + `.gitignore`
+reference + `admin_code_redemptions` table (0 rows) removed. The deployed function and its secrets
+(`FACILITATOR_ADMIN_CODE_HASH`, `FACILITATOR_ADMIN_CODE_PEPPER`) are removed post-merge by the
+operator (commands in the PR body).
+
+### Verification (P3.1)
+Rolled-back prod dry-run (P3.1 on live prod, which already has P3.0): full tier matrix across
+plain/CM/RA/PA/founder/org-admin, founder-only, audit exactly-once per request id, form-path gates
+(RA reject/update/approve of a form row → 42501; PA → ok), `set_resource_location_by_id` owner path
+(own pending/volunteer → ok + geocode reset; other's approved → 42501), and both current admins
+keeping a capability sample. Mutation runners killed every guard (RA-on-ICUA, `>=`-vs-`>` tier,
+founder check, self check, column-grant, trigger-derive, audit-skip, `admin_actions` INSERT grant,
+form guards on reject/update, helper throw-on-error, bypass-guard quote coverage, ban gate-first +
+404). App gates: `tsc` 0 · `eslint` 0 errors · `vitest` (non-smoke) all green · `next build` ✓.
+
+### Follow-ups (deferred, not built in P3.1)
+- **Comment moderation** (D1): `admin_remove_comment` / `admin_restore_comment`, CM+, audited — not built (new scope; 0 comments in prod).
+- **Tier markers on person-to-person surfaces**: messages and the opt-in seeker list are left unmarked by ruling (outside the "posts and profiles" T4 scope).
+- **Volunteer registration failing silently** (pre-existing): the volunteer register path can fail without surfacing an error to the user; withdraw was fixed in P3.0, register is still to do.
+- **Guest 406 from `apps/web/src/lib/vault.ts:294`**: a guest hits a `.single()` lookup that returns 406/PGRST116 (no row); pre-existing benign noise, to be quieted with `.maybeSingle()` or a guest guard.

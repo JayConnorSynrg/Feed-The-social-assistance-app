@@ -9,12 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
-import { logger, withMetric } from '@/lib/logger'
+import { logger } from '@/lib/logger'
+import { privilegedRpc } from '@/lib/privileged-action'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
 import type { Resource as ResourceMarkerResource } from '@/components/map/resource-marker'
 import { DiscoverProgress } from '@/components/ui/discover-progress'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 import {
   ResourceEditDialog,
   type ResourceEditDialogInput,
@@ -157,6 +159,10 @@ async function resolveGeoLabel(): Promise<{ label: string; lat: number; lng: num
 export function ResourcesTab() {
   const supabase = createClient()
   const mapRef = useRef<MapViewHandle>(null)
+  // P3.1: RA sees the review queue (approve/reject/update resources), but Discover (paid
+  // Firecrawl) and form-template approval stay platform-admin only.
+  const { tier } = useAdminTier()
+  const isPA = tier === 'platform_admin'
 
   const [query, setQuery] = useState('')
   const [discovering, setDiscovering] = useState(false)
@@ -342,13 +348,22 @@ export function ResourcesTab() {
       const contentType = item.discovery_metadata?.content_type ?? 'resource'
 
       if (contentType === 'form') {
-        const { error } = await supabase.rpc('approve_form_template', { p_id: item.id })
+        const { error } = await privilegedRpc(
+          supabase,
+          'admin.form_template.approve',
+          'approve_form_template',
+          { p_id: item.id },
+          { action: 'form_template.approve', target_id: item.id },
+        )
         if (error) throw error
       } else {
-        const { error } = await supabase.rpc('approve_resource', {
-          p_resource_id: item.id,
-          p_reason: 'Admin approved from discovery queue',
-        })
+        const { error } = await privilegedRpc(
+          supabase,
+          'admin.resource.approve',
+          'approve_resource',
+          { p_resource_id: item.id, p_reason: 'Admin approved from discovery queue' },
+          { action: 'resource.approve', target_id: item.id },
+        )
         if (error) throw error
       }
 
@@ -372,16 +387,16 @@ export function ResourcesTab() {
   // has persisted the edited fields. Guarded against double-fire by the
   // dialog's own `saving` state (the Confirm button disables while in flight).
   const handleConfirmApprove = useCallback(async (resourceId: string) => {
-    // W2: one admin.resource.approve_confirm event carrying latency + outcome;
-    // withMetric emits logger.error → app_logs on failure (a previously
-    // unlogged throw) and re-throws so the dialog surfaces it and stays open.
-    await withMetric('admin.resource.approve_confirm', { resource_id: resourceId }, async () => {
-      const { error } = await supabase.rpc('approve_resource', {
-        p_resource_id: resourceId,
-        p_reason: 'Admin approved from discovery queue',
-      })
-      if (error) throw error
-    })
+    // Routed through privilegedRpc: one request id sent as x-request-id, shared with the withMetric
+    // wide-event and the durable admin_actions row. Re-throws on failure so the dialog surfaces it.
+    const { error } = await privilegedRpc(
+      supabase,
+      'admin.resource.approve',
+      'approve_resource',
+      { p_resource_id: resourceId, p_reason: 'Admin approved from discovery queue' },
+      { action: 'resource.approve', target_id: resourceId },
+    )
+    if (error) throw error
   }, [supabase])
 
   // Called once both admin_update_resource and approve_resource succeed —
@@ -394,10 +409,13 @@ export function ResourcesTab() {
   const handleReject = useCallback(async (item: PendingItem) => {
     setProcessingId(item.id)
     try {
-      const { error } = await supabase.rpc('reject_resource', {
-        p_resource_id: item.id,
-        p_reason: 'Admin rejected from discovery queue',
-      })
+      const { error } = await privilegedRpc(
+        supabase,
+        'admin.resource.reject',
+        'reject_resource',
+        { p_resource_id: item.id, p_reason: 'Admin rejected from discovery queue' },
+        { action: 'resource.reject', target_id: item.id },
+      )
       if (error) throw error
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
@@ -413,19 +431,23 @@ export function ResourcesTab() {
 
   // ── Bulk approve high-confidence ────────────────────────────
 
+  // Bulk approve operates on high-confidence items. Form-template rows are Platform-Admin only, so
+  // a non-PA (Resource Admin) never bulk-approves them — they are excluded from the set entirely.
   const highConfidenceItems = pending.filter(
-    (p) => p.discovery_metadata?.confidence === 'high'
+    (p) => p.discovery_metadata?.confidence === 'high' && (isPA || p.discovery_metadata?.content_type !== 'form')
   )
 
   const handleBulkApprove = useCallback(async () => {
     setBulkConfirm(false)
     setBulkRunning(true)
-    const items = pending.filter((p) => p.discovery_metadata?.confidence === 'high')
+    const items = pending.filter(
+      (p) => p.discovery_metadata?.confidence === 'high' && (isPA || p.discovery_metadata?.content_type !== 'form')
+    )
     for (const item of items) {
       await handleApprove(item)
     }
     setBulkRunning(false)
-  }, [pending, handleApprove])
+  }, [pending, handleApprove, isPA])
 
   // ── Filtered list ───────────────────────────────────────────
 
@@ -442,7 +464,8 @@ export function ResourcesTab() {
   return (
     <div className="space-y-4">
 
-      {/* ── Discovery input ── */}
+      {/* ── Discovery input (platform admin only — paid external spend) ── */}
+      {isPA && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Discover Resources</CardTitle>
@@ -514,6 +537,7 @@ export function ResourcesTab() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* ── Queue header ── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -742,6 +766,9 @@ export function ResourcesTab() {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2 border-t border-stone-100 mt-auto">
+                    {/* Form-template approval stays platform-admin only (P3.1). A Resource Admin
+                        sees the form item but not the approve control. */}
+                    {(contentType !== 'form' || isPA) ? (
                     <Button
                       size="sm"
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
@@ -759,6 +786,9 @@ export function ResourcesTab() {
                         <><Check className="h-3.5 w-3.5 mr-1" />Approve</>
                       )}
                     </Button>
+                    ) : (
+                      <span className="flex-1 text-xs text-stone-500 self-center">Platform admin approval required</span>
+                    )}
                     {contentType !== 'form' && (
                       <Button
                         size="sm"

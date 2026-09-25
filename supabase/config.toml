@@ -103,8 +103,5 @@ verify_jwt = false
 [functions.resource-discover]
 verify_jwt = false
 
-[functions.claim-facilitator-admin]
-verify_jwt = false
-
 [functions.geocode-backfill]
 verify_jwt = false

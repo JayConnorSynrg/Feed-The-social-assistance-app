@@ -27,6 +27,14 @@ const NONADMIN_EMAIL = `e2e+adminw1-plain-${RUN_TAG}@feed.local`
 const ADMIN_FULL_NAME = 'AdminW1 Reviewer'
 const NONADMIN_FULL_NAME = 'AdminW1 Plain User'
 
+// P3.1: Platform Admin is founder-only and CANNOT be minted in a test (service_set_tier refuses
+// platform_admin). This suite drives PA-only surfaces, so it uses a PRE-PROVISIONED platform_admin
+// test account supplied via env and SKIPS with a clear message when absent.
+const PA_EMAIL = process.env.E2E_PA_EMAIL
+const PA_PASSWORD = process.env.E2E_PA_PASSWORD
+const PA_USER_ID = process.env.E2E_PA_USER_ID
+const PA_MISSING = !PA_EMAIL || !PA_PASSWORD || !PA_USER_ID
+
 const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 const MGMT_SQL_URL =
   'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
@@ -79,6 +87,7 @@ async function loginAs(page: Page, email: string, password: string) {
 
 let admin: SupabaseClient
 let adminId: string
+let paProfileSnapshot: Record<string, unknown> | null = null
 let nonAdminId: string
 
 // Console capture — surfaces page errors in the test output for clean-console assertions.
@@ -100,25 +109,25 @@ function isBenignConsoleError(text: string): boolean {
 }
 
 test.beforeAll(async () => {
+  test.skip(
+    PA_MISSING,
+    'Requires a pre-provisioned platform_admin test account (E2E_PA_EMAIL / E2E_PA_PASSWORD / E2E_PA_USER_ID). ' +
+      'P3.1 makes Platform Admin founder-only, so a test may not mint one.'
+  )
   admin = makeAdminClient()
 
-  await deleteUserByEmail(admin, ADMIN_EMAIL)
   await deleteUserByEmail(admin, NONADMIN_EMAIL)
 
-  // Admin user (is_admin=true via Mgmt-API — is_admin column write is privileged)
-  const { data: a, error: aErr } = await admin.auth.admin.createUser({
-    email: ADMIN_EMAIL,
-    password: PASSWORD,
-    email_confirm: true,
-    user_metadata: { full_name: ADMIN_FULL_NAME },
-  })
-  if (aErr || !a.user) throw new Error(`admin create failed: ${aErr?.message}`)
-  adminId = a.user.id
+  // Pre-provisioned platform_admin (never minted here). Refresh its display name for the assertions.
+  adminId = PA_USER_ID!
+  // fix 5: snapshot the pre-provisioned PA's profile fields; restore them in afterAll so the run
+  // leaves the shared account unchanged.
+  const { data: paSnap } = await admin.from('profiles').select('full_name, first_name, onboarding_completed').eq('id', adminId).single()
+  paProfileSnapshot = paSnap ?? null
   await admin
     .from('profiles')
     .update({ full_name: ADMIN_FULL_NAME, first_name: 'Reviewer', onboarding_completed: true })
     .eq('id', adminId)
-  await mgmtSql(`UPDATE public.profiles SET is_admin = true WHERE id = '${adminId}';`)
 
   // Non-admin user (is_admin defaults false)
   const { data: n, error: nErr } = await admin.auth.admin.createUser({
@@ -136,8 +145,12 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  if (paProfileSnapshot && adminId) {
+    try { await admin.from('profiles').update(paProfileSnapshot).eq('id', adminId) } catch { /* non-fatal */ }
+  }
   try {
-    if (adminId) await admin.auth.admin.deleteUser(adminId)
+    // Never delete the pre-provisioned platform_admin (adminId = E2E_PA_USER_ID); only the
+    // throwaway non-admin created by this suite.
     if (nonAdminId) await admin.auth.admin.deleteUser(nonAdminId)
   } catch {
     /* non-fatal */
@@ -158,7 +171,7 @@ test.beforeEach(({ page }) => {
 })
 
 test('(a) admin sees Admin tab in nav + Settings; tab → restyled /moderation with all sections', async ({ page }) => {
-  await loginAs(page, ADMIN_EMAIL, PASSWORD)
+  await loginAs(page, PA_EMAIL!, PA_PASSWORD!)
 
   // Admin tab present in top-center nav (scoped to the desktop <nav> to avoid
   // strict-mode collision with the sidebar admin link, which also renders).

@@ -20,6 +20,7 @@
 
 import type { Database } from '@feed/database'
 import type { BadgeSummary } from '@/lib/engagement-badges'
+import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
 // ---------------------------------------------------------------------------
 // Discriminant
@@ -139,7 +140,10 @@ export interface PostAuthor {
   id: string
   name: string
   avatar?: string
+  /** Public tier marker label ('Moderator' | 'Resource Admin' | 'Admin'), or 'Community Member'. */
   role: string
+  /** Raw tier for threading to profile surfaces (appreciation sheet). null/undefined = plain user. */
+  authorTier?: AdminTier | null
   harmonyScore: number | null
   harmonyReviewsCount: number
   /** Public engagement badges (levels only) for the compact author-row strip + profile
@@ -200,7 +204,7 @@ export const FEED_POST_SELECT =
   'id, user_id, content, created_at, is_pinned, is_hidden, image_url, ' +
   'max_seekers, slots_remaining, post_type, petition_id, resource_id, ' +
   'metadata, like_count, comment_count, ' +
-  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, harmony_score, harmony_reviews_count, badge_summary), ' +
+  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, admin_tier, harmony_score, harmony_reviews_count, badge_summary), ' +
   'resource:resources(id, name, category)'
 
 /** The joined row shape returned by FEED_POST_SELECT. */
@@ -224,6 +228,7 @@ export interface FeedPostRow {
     first_name: string | null
     avatar_url: string | null
     is_staff: boolean | null
+    admin_tier: AdminTier | null
     harmony_score: number | null
     harmony_reviews_count: number | null
     badge_summary: BadgeSummary | null
@@ -260,7 +265,8 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
       id: row.user?.id || '',
       name: row.user?.first_name || 'Anonymous',
       avatar: row.user?.avatar_url || undefined,
-      role: row.user?.is_staff ? 'Admin' : 'Community Member',
+      role: tierLabel(row.user?.admin_tier) ?? 'Community Member',
+      authorTier: row.user?.admin_tier ?? null,
       harmonyScore: row.user?.harmony_score ?? null,
       harmonyReviewsCount: row.user?.harmony_reviews_count ?? 0,
       badgeSummary: (row.user?.badge_summary as BadgeSummary | null) ?? null,
