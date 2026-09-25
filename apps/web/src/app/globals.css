@@ -126,3 +126,69 @@ body {
   color: hsl(var(--foreground));
   font-family: var(--font-sans);
 }
+
+/* ============================================================
+ * ACCESSIBILITY OVERRIDES (Settings → Accessibility)
+ * Driven by data-* attributes on <html> written by
+ * src/lib/accessibility-prefs.ts (and the pre-paint script in
+ * layout.tsx). An explicit user setting wins over the OS media query;
+ * an absent attribute lets the OS media query below govern.
+ * ============================================================ */
+
+/* --- High Contrast --------------------------------------------------- */
+/* User ON: maximize text/border contrast against the surface. */
+:root[data-contrast="more"] {
+  --foreground: 0 0% 0%;
+  --muted-foreground: 0 0% 12%;
+  --border: 0 0% 0%;
+  --ring: 0 0% 0%;
+}
+:root[data-contrast="more"] body {
+  color: #000;
+}
+:root[data-contrast="more"] a {
+  text-decoration: underline;
+}
+/* OS baseline: applies whenever the user has not turned high-contrast ON. */
+@media (prefers-contrast: more) {
+  :root {
+    --foreground: 0 0% 0%;
+    --muted-foreground: 0 0% 12%;
+    --border: 0 0% 0%;
+    --ring: 0 0% 0%;
+  }
+  a {
+    text-decoration: underline;
+  }
+}
+
+/* --- Large Text ------------------------------------------------------ */
+/* Scale the root font size so all rem-based type (Tailwind text-*) grows.
+ * No OS baseline exists for text size, so this is user-only. */
+:root[data-text-size="large"] {
+  font-size: 118.75%; /* 16px -> 19px */
+}
+
+/* --- Reduce Motion --------------------------------------------------- */
+/* User ON: near-instant animations/transitions app-wide. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+/* OS baseline: applies whenever the user has not turned reduce-motion ON.
+ * Preserves the existing framework-level reduced-motion behavior when the
+ * user has set nothing (INV-A11Y-MOTION-NOREG). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

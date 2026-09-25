@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   Plus, Utensils, Home, Briefcase, Car, Scale, Heart,
-  Calculator, Gavel, Baby, Trash2, Tent, Gift,
+  Calculator, Gavel, Baby, Trash2, Tent, Gift, X, Settings2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -63,7 +63,13 @@ interface VolunteerResourceFABProps {
 export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: VolunteerResourceFABProps = {}) {
   const { profile } = useAuth()
   const { setActivePanel } = usePanelContext()
-  const { registerResource, isRegistering, hasLocation } = useVolunteerResource()
+  const {
+    registerResource,
+    isRegistering,
+    hasLocation,
+    myResources,
+    withdrawResource,
+  } = useVolunteerResource()
 
   const [isOpenInternal, setIsOpenInternal] = useState(false)
   const isOpen = externalOpen ?? isOpenInternal
@@ -74,6 +80,23 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
   const [selectedCategory, setSelectedCategory] = useState<ResourceCategory | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [success, setSuccess] = useState(false)
+  // The listing the user has asked to remove (drives the confirm dialog), and the error
+  // from THIS withdraw attempt only (local, cleared on open/cancel — never a stale one).
+  const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; label: string } | null>(null)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  // Reflects THIS withdraw being in flight (drives the confirm buttons — not the hook's shared
+  // isLoading, which is also true during background refetches).
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
+  // Single-flight gate (PR #203 pattern): flips synchronously before the first await so a
+  // double-click cannot fire two withdraws.
+  const withdrawingRef = useRef(false)
+
+  // Only pending/approved listings are withdrawable; a rejected listing is a moderation
+  // outcome the user cannot archive, so it is omitted from the Remove affordance.
+  const withdrawable = myResources.filter(
+    (r) => r.status === 'pending' || r.status === 'approved'
+  )
+  const hasWithdrawable = withdrawable.length > 0
 
   const {
     register,
@@ -85,7 +108,9 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
   })
 
   const isProvider = ['providing', 'facilitator', 'both'].includes(profile?.user_role ?? '')
-  if (!isProvider) return null
+  // A user who still owns an active listing can always reach Remove, even if their role has
+  // changed. With neither a provider role nor an active listing, the FAB stays hidden.
+  if (!isProvider && !hasWithdrawable) return null
 
   const handleCategoryClick = (category: ResourceCategory) => {
     setSelectedCategory(category)
@@ -114,16 +139,79 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
     }
   }
 
+  const openWithdraw = (target: { id: string; label: string }) => {
+    setWithdrawError(null) // this attempt only — never show a prior attempt's error
+    setWithdrawTarget(target)
+  }
+
+  const cancelWithdraw = () => {
+    setWithdrawError(null)
+    setWithdrawTarget(null)
+  }
+
+  const confirmWithdraw = async () => {
+    if (!withdrawTarget || withdrawingRef.current) return
+    withdrawingRef.current = true // synchronous, before the first await — single-flight gate
+    setIsWithdrawing(true)
+    try {
+      const outcome = await withdrawResource(withdrawTarget.id)
+      if (outcome.ok) {
+        // The hook refetched myResources; if it was the last listing the FAB returns to the
+        // register state automatically.
+        setWithdrawTarget(null)
+        setWithdrawError(null)
+      } else {
+        setWithdrawError(outcome.error)
+      }
+    } finally {
+      withdrawingRef.current = false
+      setIsWithdrawing(false)
+    }
+  }
+
   const categoryLabel = selectedCategory ? getCategoryLabel(selectedCategory) : ''
 
   return (
     <>
       {/* Speed Dial Container */}
       <div className="absolute bottom-4 right-4 z-40 flex flex-col items-end gap-3">
-        {/* Speed Dial Items */}
-        {CATEGORIES.map((cat, index) => (
+        {/* Your active listings — revealed when the dial is open, so a volunteer can remove a
+            listing they created without leaving the map. When the dial is closed these controls
+            are removed from the tab order and hidden from assistive tech. Only withdrawable
+            (pending/approved) listings appear. */}
+        {withdrawable.map((res) => {
+          const label = getCategoryLabel(res.category as VolunteerCategory)
+          return (
+            <div
+              key={res.id}
+              aria-hidden={!isOpen}
+              className={`flex items-center gap-3 transition-all duration-200 ease-out ${
+                isOpen
+                  ? 'opacity-100 translate-y-0 pointer-events-auto'
+                  : 'opacity-0 translate-y-4 pointer-events-none'
+              }`}
+            >
+              <span className="text-sm font-medium text-stone-700 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap max-w-[220px] truncate">
+                Your {label.toLowerCase()} listing
+              </span>
+              <button
+                type="button"
+                tabIndex={isOpen ? 0 : -1}
+                onClick={() => openWithdraw({ id: res.id, label })}
+                aria-label={`Remove your ${label} listing`}
+                className="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors border border-stone-200/50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          )
+        })}
+
+        {/* Speed Dial Items — registration categories, only for a current provider role. */}
+        {isProvider && CATEGORIES.map((cat, index) => (
           <div
             key={cat.value}
+            aria-hidden={!isOpen}
             className={`flex items-center gap-3 transition-all duration-200 ease-out ${
               isOpen
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
@@ -135,6 +223,7 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
               {getCategoryLabel(cat.value)}
             </span>
             <button
+              tabIndex={isOpen ? 0 : -1}
               onClick={() => handleCategoryClick(cat.value)}
               className="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center text-[#4a5d23] hover:bg-stone-50 transition-colors border border-stone-200/50"
             >
@@ -143,16 +232,18 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
           </div>
         ))}
 
-        {/* Main FAB Button */}
+        {/* Main FAB Button — a provider adds/manages (a "+" that rotates to a close on open);
+            a non-provider who only manages an existing listing sees a manage (gear) icon that
+            matches its aria-label. */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          aria-label="Add volunteer resource"
+          aria-label={isProvider ? 'Add or manage volunteer resources' : 'Manage your volunteer listings'}
           aria-expanded={isOpen}
           className={`w-14 h-14 rounded-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white shadow-lg flex items-center justify-center transition-all duration-200 ${
-            isOpen ? 'rotate-45' : 'rotate-0'
+            isProvider && isOpen ? 'rotate-45' : 'rotate-0'
           }`}
         >
-          <Plus className="w-6 h-6" />
+          {isProvider ? <Plus className="w-6 h-6" /> : <Settings2 className="w-6 h-6" />}
         </button>
       </div>
 
@@ -267,6 +358,46 @@ export function VolunteerResourceFAB({ externalOpen, onExternalOpenChange }: Vol
               </form>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdraw confirmation — one explicit confirm; failure surfaces a visible, announced
+          error scoped to this attempt (cleared on open and on cancel). */}
+      <Dialog
+        open={withdrawTarget !== null}
+        onOpenChange={(open) => { if (!open) cancelWithdraw() }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Remove this listing?</DialogTitle>
+            <DialogDescription>
+              Your {withdrawTarget?.label.toLowerCase()} listing will be removed from the map and
+              lists. You can add a new one any time.
+            </DialogDescription>
+          </DialogHeader>
+          {withdrawError && (
+            <div role="alert" aria-live="assertive" className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700">{withdrawError}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelWithdraw}
+              disabled={isWithdrawing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmWithdraw}
+              disabled={isWithdrawing}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isWithdrawing ? 'Removing…' : 'Remove listing'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

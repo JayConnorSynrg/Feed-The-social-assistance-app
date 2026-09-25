@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { useAuth } from '@/hooks/use-auth'
+import { interpretWithdrawResult, type WithdrawOutcome } from '@/hooks/withdraw-result'
 
 // All volunteer-offerable categories (expanded to include Phase 8 additions).
 // Sourced from lib/resource-categories.ts VOLUNTEER_CATEGORIES — kept as string here
@@ -33,7 +34,6 @@ export function useVolunteerResource() {
   const [myResources, setMyResources] = useState<VolunteerResource[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const fetchMyResources = useCallback(async () => {
     if (!user?.id) return
@@ -49,8 +49,9 @@ export function useVolunteerResource() {
 
       if (fetchError) throw new Error(fetchError.message)
       setMyResources(data ?? [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch resources')
+    } catch {
+      // A background refetch failure leaves the previously fetched list in place; the FAB
+      // surfaces write failures from registerResource/withdrawResource directly.
     } finally {
       setIsLoading(false)
     }
@@ -62,12 +63,10 @@ export function useVolunteerResource() {
 
   const registerResource = useCallback(async (formData: VolunteerResourceFormData) => {
     if (!user?.id) {
-      setError('Please sign in to register as a volunteer resource')
       return null
     }
 
     setIsRegistering(true)
-    setError(null)
 
     try {
       const resourceName = profile?.full_name || 'Volunteer'
@@ -103,28 +102,41 @@ export function useVolunteerResource() {
 
       await fetchMyResources()
       return data as { id: string }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register resource')
+    } catch {
       return null
     } finally {
       setIsRegistering(false)
     }
   }, [supabase, user?.id, profile, fetchMyResources])
 
-  const withdrawResource = useCallback(async (resourceId: string) => {
-    if (!user?.id) return
+  const withdrawResource = useCallback(async (resourceId: string): Promise<WithdrawOutcome> => {
+    if (!user?.id) return { ok: false, error: 'Please sign in to manage your listings' }
     setIsLoading(true)
     try {
-      const { error: updateError } = await supabase
+      // Archive the owner's own volunteer listing. `.select('id')` is load-bearing:
+      // it makes PostgREST report the affected rows so a zero-row outcome (the listing
+      // is already withdrawn, or is not this user's) surfaces as an error instead of a
+      // silent success. Before P3.0 the update policy matched only pending rows, so
+      // withdrawing an approved listing hit zero rows and reported success while doing
+      // nothing; the P3.0 "Volunteers can withdraw their own listing" policy now allows
+      // the pending/approved -> archived transition, and the moderation guard forbids
+      // any moderation-field write on the same statement.
+      const { data, error: updateError } = await supabase
         .from('resources')
         .update({ status: 'archived' })
         .eq('id', resourceId)
         .eq('submitted_by', user.id)
+        .select('id')
 
-      if (updateError) throw new Error(updateError.message)
+      const outcome = interpretWithdrawResult({ data, error: updateError })
+      if (!outcome.ok) {
+        return outcome
+      }
       await fetchMyResources()
+      return outcome
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to withdraw resource')
+      const message = err instanceof Error ? err.message : 'Failed to withdraw resource'
+      return { ok: false, error: message }
     } finally {
       setIsLoading(false)
     }
@@ -134,7 +146,6 @@ export function useVolunteerResource() {
     myResources,
     isLoading,
     isRegistering,
-    error,
     registerResource,
     withdrawResource,
     hasLocation: !!(profile?.latitude && profile?.longitude),
