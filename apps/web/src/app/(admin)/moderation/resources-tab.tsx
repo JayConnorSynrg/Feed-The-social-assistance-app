@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
-import { logger, withMetric } from '@/lib/logger'
+import { logger } from '@/lib/logger'
+import { privilegedRpc } from '@/lib/privileged-action'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
 import { ResourceMarker } from '@/components/map/resource-marker'
@@ -347,13 +348,22 @@ export function ResourcesTab() {
       const contentType = item.discovery_metadata?.content_type ?? 'resource'
 
       if (contentType === 'form') {
-        const { error } = await supabase.rpc('approve_form_template', { p_id: item.id })
+        const { error } = await privilegedRpc(
+          supabase,
+          'admin.form_template.approve',
+          'approve_form_template',
+          { p_id: item.id },
+          { action: 'form_template.approve', target_id: item.id },
+        )
         if (error) throw error
       } else {
-        const { error } = await supabase.rpc('approve_resource', {
-          p_resource_id: item.id,
-          p_reason: 'Admin approved from discovery queue',
-        })
+        const { error } = await privilegedRpc(
+          supabase,
+          'admin.resource.approve',
+          'approve_resource',
+          { p_resource_id: item.id, p_reason: 'Admin approved from discovery queue' },
+          { action: 'resource.approve', target_id: item.id },
+        )
         if (error) throw error
       }
 
@@ -377,16 +387,16 @@ export function ResourcesTab() {
   // has persisted the edited fields. Guarded against double-fire by the
   // dialog's own `saving` state (the Confirm button disables while in flight).
   const handleConfirmApprove = useCallback(async (resourceId: string) => {
-    // W2: one admin.resource.approve_confirm event carrying latency + outcome;
-    // withMetric emits logger.error → app_logs on failure (a previously
-    // unlogged throw) and re-throws so the dialog surfaces it and stays open.
-    await withMetric('admin.resource.approve_confirm', { resource_id: resourceId }, async () => {
-      const { error } = await supabase.rpc('approve_resource', {
-        p_resource_id: resourceId,
-        p_reason: 'Admin approved from discovery queue',
-      })
-      if (error) throw error
-    })
+    // Routed through privilegedRpc: one request id sent as x-request-id, shared with the withMetric
+    // wide-event and the durable admin_actions row. Re-throws on failure so the dialog surfaces it.
+    const { error } = await privilegedRpc(
+      supabase,
+      'admin.resource.approve',
+      'approve_resource',
+      { p_resource_id: resourceId, p_reason: 'Admin approved from discovery queue' },
+      { action: 'resource.approve', target_id: resourceId },
+    )
+    if (error) throw error
   }, [supabase])
 
   // Called once both admin_update_resource and approve_resource succeed —
@@ -399,10 +409,13 @@ export function ResourcesTab() {
   const handleReject = useCallback(async (item: PendingItem) => {
     setProcessingId(item.id)
     try {
-      const { error } = await supabase.rpc('reject_resource', {
-        p_resource_id: item.id,
-        p_reason: 'Admin rejected from discovery queue',
-      })
+      const { error } = await privilegedRpc(
+        supabase,
+        'admin.resource.reject',
+        'reject_resource',
+        { p_resource_id: item.id, p_reason: 'Admin rejected from discovery queue' },
+        { action: 'resource.reject', target_id: item.id },
+      )
       if (error) throw error
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {

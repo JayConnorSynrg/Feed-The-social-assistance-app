@@ -5,6 +5,8 @@ import { Flag, ChevronDown, ChevronUp, Loader2, CheckCircle2, XCircle } from 'lu
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
+import { privilegedRpc } from '@/lib/privileged-action'
+import { logger } from '@/lib/logger'
 
 const REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
@@ -133,11 +135,17 @@ export function ReportsQueue() {
       setProcessingId(reportId)
       setError(null)
       try {
-        const { error: rpcError } = await supabase.rpc('admin_resolve_report', {
-          p_report_id: reportId,
-          p_action: action,
-        })
-        if (rpcError) throw rpcError
+        const { error: rpcError, requestId } = await privilegedRpc(
+          supabase,
+          'admin.report.resolve',
+          'admin_resolve_report',
+          { p_report_id: reportId, p_action: action },
+          { action: `report.${action}`, target_id: reportId },
+        )
+        if (rpcError) {
+          logger.warn('admin.denied', { action: `report.${action}`, target_id: reportId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          throw rpcError
+        }
 
         // Remove the resolved report; if group is now empty remove the group
         setGroups((prev) =>
@@ -163,10 +171,13 @@ export function ReportsQueue() {
       setProcessingId(postId)
       setError(null)
       try {
-        const { error: rpcError } = await supabase.rpc('admin_remove_post', {
-          p_post_id: postId,
-        })
-        if (rpcError) throw rpcError
+        const { error: rpcError, requestId } = await privilegedRpc(
+          supabase, 'admin.post.remove', 'admin_remove_post', { p_post_id: postId }, { action: 'post.remove', target_id: postId },
+        )
+        if (rpcError) {
+          logger.warn('admin.denied', { action: 'post.remove', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          throw rpcError
+        }
         setGroups((prev) => prev.filter((g) => g.content_id !== postId))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
@@ -183,10 +194,13 @@ export function ReportsQueue() {
       setProcessingId(postId)
       setError(null)
       try {
-        const { error: rpcError } = await supabase.rpc('admin_hold_post', {
-          p_post_id: postId,
-        })
-        if (rpcError) throw rpcError
+        const { error: rpcError, requestId } = await privilegedRpc(
+          supabase, 'admin.post.hold', 'admin_hold_post', { p_post_id: postId }, { action: 'post.hold', target_id: postId },
+        )
+        if (rpcError) {
+          logger.warn('admin.denied', { action: 'post.hold', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          throw rpcError
+        }
         setGroups((prev) => prev.filter((g) => g.content_id !== postId))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
@@ -203,10 +217,13 @@ export function ReportsQueue() {
       setProcessingId(postId)
       setError(null)
       try {
-        const { error: rpcError } = await supabase.rpc('admin_authorize_post', {
-          p_post_id: postId,
-        })
-        if (rpcError) throw rpcError
+        const { error: rpcError, requestId } = await privilegedRpc(
+          supabase, 'admin.post.authorize', 'admin_authorize_post', { p_post_id: postId }, { action: 'post.authorize', target_id: postId },
+        )
+        if (rpcError) {
+          logger.warn('admin.denied', { action: 'post.authorize', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          throw rpcError
+        }
         setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')

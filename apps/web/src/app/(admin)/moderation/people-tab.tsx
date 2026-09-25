@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { logger } from '@/lib/logger'
+import { privilegedRpc } from '@/lib/privileged-action'
 import { grantableTiers, tierLabel, type AdminTier, type GrantOption } from '@/lib/admin-tier'
 
 type Person = {
@@ -69,38 +70,38 @@ export function PeopleTab({ viewerTier, isFounder }: { viewerTier: AdminTier | n
     setIsActioning(true)
     setRowError(null)
     const supabase = createClient()
-    const rid = crypto.randomUUID()
     const targetId = pending.person.id
     try {
-      const { data, error } = await supabase
-        .rpc('admin_set_tier', {
-          p_target: targetId,
-          p_tier: pending.option.value,
-          p_reason: reason.trim(),
-          p_request_id: rid,
-        })
-        .setHeader('x-request-id', rid)
+      // Routed through privilegedRpc: one request id sent as x-request-id (admin_set_tier COALESCEs
+      // it into the durable admin_actions row) and shared with the withMetric telemetry.
+      const { data, error, requestId } = await privilegedRpc<{ ok?: boolean; code?: string }>(
+        supabase,
+        'admin.tier.set',
+        'admin_set_tier',
+        { p_target: targetId, p_tier: pending.option.value, p_reason: reason.trim() },
+        { action: 'tier.set', target_id: targetId },
+      )
 
       const result = (data ?? {}) as { ok?: boolean; code?: string }
       if (error) {
-        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: error.code, request_id: rid })
+        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: error.code ?? error.message, request_id: requestId })
         setRowError({ id: targetId, message: 'The tier change failed — please retry.' })
       } else if (!result.ok) {
         const code = result.code ?? 'unknown'
-        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code, request_id: rid })
+        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code, request_id: requestId })
         setRowError({ id: targetId, message: DENIAL_MESSAGES[code] ?? `Denied (${code}).` })
       } else {
         logger.info('admin.tier.set', {
           target_id: targetId,
           to: pending.option.value,
-          request_id: rid,
+          request_id: requestId,
         })
         setPending(null)
         setReason('')
         await load(search)
       }
     } catch {
-      logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: 'exception', request_id: rid })
+      logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: 'exception' })
       setRowError({ id: targetId, message: 'The tier change failed — please retry.' })
     } finally {
       setIsActioning(false)

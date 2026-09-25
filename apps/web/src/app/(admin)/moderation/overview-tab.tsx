@@ -12,7 +12,9 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import type { ChartConfig } from '@/components/ui/chart'
 import { logger } from '@/lib/logger'
-import { tierLabel, type AdminTier } from '@/lib/admin-tier'
+import { tierLabel, decideUserAction, type AdminTier } from '@/lib/admin-tier'
+import { useAdminTier } from '@/hooks/use-admin-tier'
+import { privilegedFetch } from '@/lib/privileged-action'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -234,20 +236,40 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
   const [newNote, setNewNote] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
   const [isActioning, setIsActioning] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const { tier: viewerTier } = useAdminTier()
+  const [viewerId, setViewerId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => setViewerId(data.user?.id ?? null))
+  }, [])
+
   const handleBanToggle = async (user: UserRow) => {
+    // T3 (client mirror of the route/DB gate): a PA cannot pause self or an equal/higher tier.
+    const decision = decideUserAction(viewerTier, user.admin_tier, viewerId ?? '', user.id)
+    if (!decision.allowed) {
+      setActionError(
+        decision.code === 'self' ? "You can't pause your own account."
+          : decision.code === 'target_tier' ? "You can't act on an equal or higher tier."
+          : 'Only a platform admin can pause accounts.'
+      )
+      return
+    }
+    setActionError(null)
     setIsActioning(user.id)
     const isBanned = user.banned_until && new Date(user.banned_until) > new Date()
     const ban_duration = isBanned ? 'none' : '876000h'
     try {
-      const res = await fetch(`/api/admin/users/${user.id}/ban`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ban_duration }),
-      })
+      const { response: res } = await privilegedFetch(
+        isBanned ? 'admin.user.unban' : 'admin.user.ban',
+        `/api/admin/users/${user.id}/ban`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ban_duration }) },
+        { target_id: user.id },
+      )
       if (res.ok) {
         setUsers(prev => prev.map(u => u.id === user.id
           ? { ...u, banned_until: isBanned ? null : new Date(Date.now() + 1e13).toISOString() }
@@ -255,10 +277,12 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         ))
         logger.info('[admin:overview] ban_toggle success', { userId: user.id, action: isBanned ? 'unban' : 'ban' })
       } else {
-        const err = await res.json()
-        logger.error('[admin:overview] ban_toggle failed', { userId: user.id, error: err.error })
+        const err = await res.json().catch(() => ({}))
+        setActionError(err.error || `Could not ${isBanned ? 'unban' : 'pause'} this account.`)
+        logger.error('[admin:overview] ban_toggle failed', { userId: user.id, error: err.error, code: err.code })
       }
-    } catch (e) {
+    } catch {
+      setActionError('Network error — the account was not changed.')
       logger.error('[admin:overview] ban_toggle error', { userId: user.id })
     } finally {
       setIsActioning(null)
@@ -267,17 +291,35 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
 
   const handleDeleteConfirmed = async () => {
     if (!deleteTarget) return
+    const decision = decideUserAction(viewerTier, deleteTarget.admin_tier, viewerId ?? '', deleteTarget.id)
+    if (!decision.allowed) {
+      setActionError(
+        decision.code === 'self' ? "You can't delete your own account."
+          : decision.code === 'target_tier' ? "You can't act on an equal or higher tier."
+          : 'Only a platform admin can delete accounts.'
+      )
+      setDeleteTarget(null)
+      return
+    }
+    setActionError(null)
     setIsActioning(deleteTarget.id)
     try {
-      const res = await fetch(`/api/admin/users/${deleteTarget.id}/delete`, { method: 'DELETE' })
+      const { response: res } = await privilegedFetch(
+        'admin.user.delete',
+        `/api/admin/users/${deleteTarget.id}/delete`,
+        { method: 'DELETE' },
+        { target_id: deleteTarget.id },
+      )
       if (res.ok) {
         setUsers(prev => prev.filter(u => u.id !== deleteTarget.id))
         logger.info('[admin:overview] delete_user success', { userId: deleteTarget.id })
       } else {
-        const err = await res.json()
-        logger.error('[admin:overview] delete_user failed', { userId: deleteTarget.id, error: err.error })
+        const err = await res.json().catch(() => ({}))
+        setActionError(err.error || 'Could not delete this account.')
+        logger.error('[admin:overview] delete_user failed', { userId: deleteTarget.id, error: err.error, code: err.code })
       }
-    } catch (e) {
+    } catch {
+      setActionError('Network error — the account was not deleted.')
       logger.error('[admin:overview] delete_user error', { userId: deleteTarget?.id })
     } finally {
       setIsActioning(null)
@@ -643,6 +685,13 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         </div>
       )}
 
+      {actionError && (
+        <div role="alert" className="py-3 px-4 text-sm text-red-700 bg-red-50 rounded-xl border border-red-200 flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-500 hover:text-red-700 text-xs font-medium">Dismiss</button>
+        </div>
+      )}
+
       {!usersError && users.length > 0 && (
         <>
           <div>
@@ -667,6 +716,10 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
                 <TableBody>
                   {users.map((user) => {
                     const isBanned = !!(user.banned_until && new Date(user.banned_until) > new Date())
+                    const canAct = decideUserAction(viewerTier, user.admin_tier, viewerId ?? '', user.id).allowed
+                    const actReason = user.id === viewerId
+                      ? 'You cannot act on your own account'
+                      : 'You cannot act on an equal or higher tier'
                     const providerLabel = user.provider === 'google' ? 'Google'
                       : user.provider === 'apple' ? 'Apple'
                       : user.provider === 'email' || !user.provider ? 'Email'
@@ -730,11 +783,17 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
                               <DropdownMenuItem onClick={() => handleOpenNotes(user)}>
                                 View Notes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleBanToggle(user)}>
+                              <DropdownMenuItem
+                                onClick={() => handleBanToggle(user)}
+                                disabled={!canAct}
+                                title={canAct ? undefined : actReason}
+                              >
                                 {isBanned ? 'Unban Account' : 'Pause Account'}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => setDeleteTarget(user)}
+                                disabled={!canAct}
+                                title={canAct ? undefined : actReason}
                                 className="text-red-600 focus:text-red-600"
                               >
                                 Delete Account
