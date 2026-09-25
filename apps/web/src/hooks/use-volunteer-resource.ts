@@ -113,14 +113,29 @@ export function useVolunteerResource() {
   const withdrawResource = useCallback(async (resourceId: string) => {
     if (!user?.id) return
     setIsLoading(true)
+    setError(null)
     try {
-      const { error: updateError } = await supabase
+      // Archive the owner's own volunteer listing. `.select('id')` is load-bearing:
+      // it makes PostgREST report the affected rows so a zero-row outcome (the listing
+      // is already withdrawn, or is not this user's) surfaces as an error instead of a
+      // silent success. Before P3.0 the update policy matched only pending rows, so
+      // withdrawing an approved listing hit zero rows and reported success while doing
+      // nothing; the P3.0 "Volunteers can withdraw their own listing" policy now allows
+      // the approved -> archived transition, and the moderation guard forbids any
+      // moderation-field write on the same statement.
+      const { data, error: updateError } = await supabase
         .from('resources')
         .update({ status: 'archived' })
         .eq('id', resourceId)
         .eq('submitted_by', user.id)
+        .select('id')
 
       if (updateError) throw new Error(updateError.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Could not withdraw this listing — it may already be withdrawn, or you are not its owner.'
+        )
+      }
       await fetchMyResources()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw resource')
