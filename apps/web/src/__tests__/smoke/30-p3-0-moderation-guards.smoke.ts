@@ -37,7 +37,10 @@ const POST = '00000000-0000-4000-e000-000000000010'
 const CHID = '00000000-0000-4000-e000-000000000012'
 const R2 = '00000000-0000-4000-e000-000000000002' // approved volunteer, owned by U
 const R3 = '00000000-0000-4000-e000-000000000003' // approved non-volunteer, owned by U
+const R4 = '00000000-0000-4000-e000-000000000004' // pending non-volunteer, owned by U
+const R5 = '00000000-0000-4000-e000-000000000005' // pending volunteer, owned by U
 const O1 = '00000000-0000-4000-e000-000000000020' // active org, created_by A, U is org admin
+const O2 = '00000000-0000-4000-e000-000000000021' // inactive org, created_by A, U is org admin
 
 const GATE_SQL = `
   SELECT EXISTS (
@@ -55,8 +58,12 @@ BEGIN
   EXECUTE $q$ insert into public.post_comments(id,post_id,user_id,content,is_hidden) values ('${CHID}','${POST}','${U}','h',true) $q$;
   EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R2}','R2','approved','${U}',true,'user_submitted') $q$;
   EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R3}','R3','approved','${U}',false,'user_submitted') $q$;
+  EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R4}','R4','pending','${U}',false,'user_submitted') $q$;
+  EXECUTE $q$ insert into public.resources(id,name,status,submitted_by,is_volunteer_resource,source) values ('${R5}','R5','pending','${U}',true,'user_submitted') $q$;
   EXECUTE $q$ insert into public.organizations(id,name,is_active,created_by) values ('${O1}','O1',true,'${A}') $q$;
+  EXECUTE $q$ insert into public.organizations(id,name,is_active,created_by) values ('${O2}','O2',false,'${A}') $q$;
   EXECUTE $q$ insert into public.organization_members(org_id,user_id,role) values ('${O1}','${U}','admin') $q$;
+  EXECUTE $q$ insert into public.organization_members(org_id,user_id,role) values ('${O2}','${U}','admin') $q$;
 END $f$;
 
 CREATE FUNCTION pg_temp.probe(rol text, uid uuid, is_anon boolean, stmt text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -88,6 +95,14 @@ BEGIN
   res := res || 'COMMENT_HIDDEN_INSERT=' || pg_temp.probe('authenticated','${U}',false,$$ insert into public.post_comments(post_id,user_id,content,is_hidden) values ('${POST}','${U}','x',true) $$) || E'\n';
   res := res || 'UNFILTERED_UNHIDE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.post_comments set is_hidden=false $$) || E'\n';
   res := res || 'ORG_CREATED_BY=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set created_by='${U}' where id='${O1}' $$) || E'\n';
+  res := res || 'ADMIN_DIRECT_UPDATE=' || pg_temp.probe('authenticated','${A}',false,$$ update public.resources set is_verified=true where id='${R3}' $$) || E'\n';
+  res := res || 'ORG_DEACTIVATE_UNFILTERED=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set is_active=false $$) || E'\n';
+  res := res || 'ORG_DEACTIVATE_ACTIVE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set is_active=false where id='${O1}' $$) || E'\n';
+  res := res || 'OWNER_SET_MODERATION=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set is_verified=true, moderated_at=now() where id='${R4}' $$) || E'\n';
+  res := res || 'VOLUNTEER_FLIP=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set is_volunteer_resource=true where id='${R4}' $$) || E'\n';
+  res := res || 'NONVOL_ARCHIVE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set status='archived' where id='${R4}' $$) || E'\n';
+  res := res || 'VOL_STATUS_NONARCHIVE=' || pg_temp.probe('authenticated','${U}',false,$$ update public.resources set status='approved' where id='${R5}' $$) || E'\n';
+  res := res || 'INACTIVE_ORG_EDIT=' || pg_temp.probe('authenticated','${U}',false,$$ update public.organizations set name='z' $$) || E'\n';
   RAISE EXCEPTION 'RESULTS=%', E'\n' || res;
 END $z$;
 `
@@ -142,8 +157,37 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
     expect(r.UNFILTERED_UNHIDE, 'an unfiltered un-hide of a hidden comment must be rejected').toMatch(
       /^ERR 42501 guard:post_comments_is_hidden/
     )
-    // I3 organizations — an org admin cannot change created_by.
+    // I3 organizations — an org admin cannot change created_by, and an UNFILTERED deactivate
+    // (which bypasses the SELECT-visibility filter) is still blocked by the guard.
     expect(r.ORG_CREATED_BY, 'an org admin must NOT change created_by').toMatch(
+      /^ERR 42501 guard:organizations_admin_fields/
+    )
+    expect(r.ORG_DEACTIVATE_UNFILTERED, 'an org admin must NOT deactivate via an unfiltered UPDATE').toMatch(
+      /^ERR 42501 guard:organizations_admin_fields/
+    )
+    expect(r.ORG_DEACTIVATE_ACTIVE, 'an org admin must NOT set is_active=false on their active org').toMatch(
+      /^ERR 42501 guard:organizations_admin_fields/
+    )
+    // A platform admin's direct resource UPDATE succeeds (the admin bypass is load-bearing).
+    expect(r.ADMIN_DIRECT_UPDATE, 'a platform admin direct resource UPDATE must succeed').toMatch(/^OK rows=1/)
+    // An owner cannot set moderation fields on their own pending row.
+    expect(r.OWNER_SET_MODERATION, 'an owner must NOT set is_verified/moderated_at on their pending row').toMatch(
+      /^ERR 42501 guard:resources_moderation_fields/
+    )
+    // An owner cannot flip is_volunteer_resource on an existing row (pin-integrity finding).
+    expect(r.VOLUNTEER_FLIP, 'an owner must NOT flip is_volunteer_resource on an existing row').toMatch(
+      /^ERR 42501 guard:resources_moderation_fields/
+    )
+    // An owner cannot archive a non-volunteer pin (only the volunteer self-withdraw is allowed).
+    expect(r.NONVOL_ARCHIVE, 'an owner must NOT archive a non-volunteer resource').toMatch(
+      /^ERR 42501 guard:resources_moderation_fields/
+    )
+    // A volunteer owner may ONLY archive (withdraw) — not move their listing to another status.
+    expect(r.VOL_STATUS_NONARCHIVE, 'a volunteer owner must NOT set a non-archived status').toMatch(
+      /^ERR 42501 guard:resources_moderation_fields/
+    )
+    // An org admin cannot edit an inactive org (unfiltered UPDATE reaches the inactive row).
+    expect(r.INACTIVE_ORG_EDIT, 'an org admin must NOT edit an inactive org').toMatch(
       /^ERR 42501 guard:organizations_admin_fields/
     )
   })

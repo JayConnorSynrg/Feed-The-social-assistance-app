@@ -79,6 +79,16 @@ BEGIN
       HINT    = 'Only a moderator changes moderated_by / moderated_at / is_verified / last_verified_at / rejection_reason.';
   END IF;
 
+  -- is_volunteer_resource is fixed at creation. Flipping it on an existing row would otherwise
+  -- unlock the volunteer-only carve-outs (self-withdraw here, and the owner path of
+  -- set_resource_location_by_id), letting a non-volunteer pending pin be archived or, once a
+  -- moderator approves it, relocated by its submitter.
+  IF NEW.is_volunteer_resource IS DISTINCT FROM OLD.is_volunteer_resource THEN
+    RAISE EXCEPTION USING ERRCODE = '42501',
+      MESSAGE = 'guard:resources_moderation_fields: is_volunteer_resource is set only when the listing is created',
+      HINT    = 'Whether a resource is a volunteer listing is fixed when it is created.';
+  END IF;
+
   IF NEW.status IS DISTINCT FROM OLD.status THEN
     -- The only client-legitimate status change is a volunteer withdrawing their OWN listing,
     -- whether it is still pending or already approved. A rejected listing stays rejected.

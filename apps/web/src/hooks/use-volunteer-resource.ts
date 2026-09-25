@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { interpretWithdrawResult } from '@/hooks/withdraw-result'
+import { interpretWithdrawResult, type WithdrawOutcome } from '@/hooks/withdraw-result'
 
 // All volunteer-offerable categories (expanded to include Phase 8 additions).
 // Sourced from lib/resource-categories.ts VOLUNTEER_CATEGORIES — kept as string here
@@ -111,8 +111,8 @@ export function useVolunteerResource() {
     }
   }, [supabase, user?.id, profile, fetchMyResources])
 
-  const withdrawResource = useCallback(async (resourceId: string): Promise<boolean> => {
-    if (!user?.id) return false
+  const withdrawResource = useCallback(async (resourceId: string): Promise<WithdrawOutcome> => {
+    if (!user?.id) return { ok: false, error: 'Please sign in to manage your listings' }
     setIsLoading(true)
     setError(null)
     try {
@@ -134,13 +134,14 @@ export function useVolunteerResource() {
       const outcome = interpretWithdrawResult({ data, error: updateError })
       if (!outcome.ok) {
         setError(outcome.error)
-        return false
+        return outcome
       }
       await fetchMyResources()
-      return true
+      return outcome
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to withdraw resource')
-      return false
+      const message = err instanceof Error ? err.message : 'Failed to withdraw resource'
+      setError(message)
+      return { ok: false, error: message }
     } finally {
       setIsLoading(false)
     }

@@ -100,7 +100,10 @@ shipped feature): a volunteer listing (`is_volunteer_resource = true`) may be in
 by its own submitter, still with every moderation field empty — this cannot mint a verified
 `resource_approved` because that requires a non-null `moderated_by`. A client UPDATE may change no
 moderation field and no status, **except** the volunteer self-withdraw (`pending` OR `approved →
-archived`) on the owner's own row.
+archived`) on the owner's own row. It also may not change `is_volunteer_resource` on an existing
+row — that is fixed at creation. (Flipping it would otherwise unlock the volunteer-only carve-outs:
+a non-volunteer pending pin could be flipped to volunteer and then archived, or — once a moderator
+approved it — relocated by its submitter through `set_resource_location_by_id`'s owner path.)
 
 ### I1b — volunteer withdraw (live-bug fix, wired to the FAB)
 The pre-P3.0 only client UPDATE policy matched `status='pending'`, so archiving an *approved*
@@ -113,10 +116,17 @@ and the I1 guard permits that one transition (pending or approved → archived).
 `withdraw-result.ts` `interpretWithdrawResult` — `.select('id')` makes PostgREST report affected
 rows, and a zero-row result surfaces as a user-facing error instead of a false success. The
 volunteer FAB (`components/volunteer/volunteer-resource-fab.tsx`) now lists the signed-in
-volunteer's active listings with a Remove button; removal takes one explicit confirm, on success
-the listing is gone from the map and lists and the FAB returns to the register state, and on
-failure (including zero rows) the confirm dialog shows the error. Only the submitter (or an
-admin) can withdraw; no moderation field is written; a **rejected** listing stays rejected.
+volunteer's **withdrawable** (pending/approved) listings with a Remove button; a rejected listing
+is omitted (it is a moderation outcome the user cannot archive). Removal takes one explicit
+confirm, guarded by a single-flight `useRef` (flipped synchronously before the first await, PR #203
+pattern) so a double-click cannot fire twice; on success the listing is gone from the map and lists
+and the FAB returns to the register state, and on failure (including zero rows) the confirm dialog
+shows this attempt's error only (cleared on open and cancel) in an `role="alert"`/`aria-live`
+region. While the dial is closed the Remove buttons are out of the tab order (`tabIndex=-1`) and
+hidden from assistive tech (`aria-hidden`). A user who still owns an active listing can reach
+Remove even if their `user_role` has changed; with neither a provider role nor an active listing
+the FAB stays hidden. Only the submitter (or an admin) can withdraw; no moderation field is
+written; a rejected listing stays rejected.
 
 ### Moderated-pin integrity — `set_resource_location_by_id`
 The owner path applies only while the row is still `pending` or is the owner's own volunteer
@@ -166,12 +176,18 @@ resources unchanged, migration not recorded):
   edits, and a platform-admin `is_active`+`created_by` toggle.
 - **Behavioural smoke** `30-p3-0-moderation-guards.smoke.ts` (ledger-gated on `20261009000000`):
   each guarantee is an actual write executed as the relevant role in a rolled-back transaction, so
-  it goes RED if the guard's behaviour is removed. Proven by a mutation runner that mutated the
-  migration and re-ran the smoke's SQL through the Mgmt API: dropping each guard trigger, removing
-  the volunteer carve-out, removing the withdraw carve-out, flipping the resources guard to
-  `SECURITY DEFINER`, reverting the NULL-status/`rejection_reason` handling, reverting the
-  `set_resource_location_by_id` owner gate, and removing the org `created_by` check — **all
-  KILLED** (every targeted check flipped).
+  it goes RED if the guard's behaviour is removed. A mutation runner mutated the migration and
+  re-ran the smoke's SQL through the Mgmt API. Of nine mutations, **seven are KILLED** by a smoke
+  check: drop the admin bypass (→ ADMIN_DIRECT_UPDATE), drop the org inactive-edit check
+  (→ INACTIVE_ORG_EDIT), drop the org is_active-change check (→ ORG_DEACTIVATE_ACTIVE), drop the
+  withdraw volunteer check (→ NONVOL_ARCHIVE), drop the `is_verified`/`moderated_at` UPDATE check
+  (→ OWNER_SET_MODERATION), allow any owner status change (→ VOL_STATUS_NONARCHIVE), and drop the
+  `is_volunteer_resource` UPDATE clause (→ VOLUNTEER_FLIP + NONVOL_ARCHIVE). The two survivors are
+  **defense-in-depth, not smoke guarantees**: dropping the withdraw *owner* check is still covered
+  by the RLS withdraw policy (`USING (select auth.uid()) = submitted_by`), and dropping the comment
+  *staff bypass* is inert because no staff table-UPDATE policy exists (a staff member cannot
+  direct-update another user's comment; the bypass is forward-looking for a P3.1 staff RPC). Both
+  are additionally exercised by the full dry-run matrix.
 - **Unit**: `withdraw-result.ts` `interpretWithdrawResult` (the real logic the hook runs) is
   covered by `__tests__/withdraw-result.test.ts`; deleting the zero-row branch fails the test.
 
