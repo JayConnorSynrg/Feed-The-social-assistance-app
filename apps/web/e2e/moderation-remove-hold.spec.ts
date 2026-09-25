@@ -83,7 +83,7 @@ async function createUser(
   const uid = data.user.id
   const { error: profErr } = await admin
     .from('profiles')
-    .update({ full_name: fullName, onboarding_completed: true, user_role: 'seeking', is_staff: isStaff })
+    .update({ full_name: fullName, onboarding_completed: true, user_role: 'seeking' })
     .eq('id', uid)
   if (profErr) throw new Error(`profile update failed: ${profErr.message}`)
   return uid
@@ -132,8 +132,10 @@ test.beforeAll(async () => {
   authorId   = await createUser(AUTHOR_EMAIL,   'Modh Author User')
   reporterId = await createUser(REPORTER_EMAIL, 'Modh Reporter User')
 
-  // Grant staff user is_admin so they can navigate to /moderation UI
-  await mgmtQuery(`UPDATE public.profiles SET is_admin = true WHERE id = '${staffId}';`)
+  // Grant the staff user the platform_admin tier so they can navigate to /moderation UI and hold
+  // moderator (is_staff) rights. P3.1: is_admin/is_staff are derived from admin_tier by the
+  // sync_tier_flags trigger, so tiers are granted through the audited service-role break-glass path.
+  await mgmtQuery(`SELECT public.service_set_tier('${staffId}'::uuid, 'platform_admin', 'e2e moderation fixture');`)
 
   // Seed post
   const { data: postData, error: postErr } = await admin

@@ -118,7 +118,7 @@ test.beforeAll(async () => {
     .from('profiles')
     .update({ full_name: ADMIN_FULL_NAME, first_name: 'Reviewer', onboarding_completed: true })
     .eq('id', adminId)
-  await mgmtSql(`UPDATE public.profiles SET is_admin = true WHERE id = '${adminId}';`)
+  await mgmtSql(`SELECT public.service_set_tier('${adminId}'::uuid, 'platform_admin', 'e2e admin fixture');`) /* P3.1: is_admin derived from admin_tier */
 
   // Non-admin user (is_admin defaults false)
   const { data: n, error: nErr } = await admin.auth.admin.createUser({
