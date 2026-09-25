@@ -34,6 +34,14 @@ const SIGNER_FULL_NAME = 'Petition Signer FullLegal'
 const ADMIN_FULL_NAME = 'Petition Admin Reviewer'
 const PETITION_TITLE = `${RUN_TAG}-test-petition`
 
+// P3.1: Platform Admin is founder-only and cannot be minted in a test (service_set_tier refuses
+// platform_admin). This suite needs a PA (export_petition_signatures is ICUA/PA), so it uses a
+// PRE-PROVISIONED platform_admin test account via env and SKIPS with a clear message when absent.
+const PA_EMAIL = process.env.E2E_PA_EMAIL
+const PA_PASSWORD = process.env.E2E_PA_PASSWORD
+const PA_USER_ID = process.env.E2E_PA_USER_ID
+const PA_MISSING = !PA_EMAIL || !PA_PASSWORD || !PA_USER_ID
+
 const SUPABASE_ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 const MGMT_SQL_URL =
   'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
@@ -113,11 +121,15 @@ let petitionId: string
 // ---------------------------------------------------------------------------
 
 test.beforeAll(async () => {
+  test.skip(
+    PA_MISSING,
+    'Requires a pre-provisioned platform_admin test account (E2E_PA_EMAIL / E2E_PA_PASSWORD / E2E_PA_USER_ID). ' +
+      'P3.1 makes Platform Admin founder-only, so a test may not mint one.'
+  )
   admin = makeAdminClient()
 
-  // Clean up any prior run
+  // Clean up any prior run (never the pre-provisioned platform_admin).
   await deleteUserByEmail(admin, SIGNER_EMAIL)
-  await deleteUserByEmail(admin, ADMIN_EMAIL)
   await mgmtSql(
     `DELETE FROM public.petition_signatures WHERE petition_id IN (SELECT id FROM public.petitions WHERE title = '${PETITION_TITLE}');
      DELETE FROM public.petitions WHERE title = '${PETITION_TITLE}';`
@@ -137,20 +149,12 @@ test.beforeAll(async () => {
     .update({ full_name: SIGNER_FULL_NAME, first_name: 'Petition', onboarding_completed: true })
     .eq('id', signerId)
 
-  // Admin user (is_admin=true via Mgmt-API — is_admin column write is privileged)
-  const { data: a, error: aErr } = await admin.auth.admin.createUser({
-    email: ADMIN_EMAIL,
-    password: PASSWORD,
-    email_confirm: true,
-    user_metadata: { full_name: ADMIN_FULL_NAME },
-  })
-  if (aErr || !a.user) throw new Error(`admin create failed: ${aErr?.message}`)
-  adminId = a.user.id
+  // Pre-provisioned platform_admin (never minted here — founder-only). Refresh its display name.
+  adminId = PA_USER_ID!
   await admin
     .from('profiles')
     .update({ full_name: ADMIN_FULL_NAME, first_name: 'Reviewer', onboarding_completed: true })
     .eq('id', adminId)
-  await mgmtSql(`SELECT public.service_set_tier('${adminId}'::uuid, 'platform_admin', 'e2e admin fixture');`) /* P3.1: is_admin derived from admin_tier */
 
   // Create an approved test petition via Mgmt-API
   const insert = (await mgmtSql(
@@ -173,7 +177,7 @@ test.afterAll(async () => {
   }
   try {
     if (signerId) await admin.auth.admin.deleteUser(signerId)
-    if (adminId) await admin.auth.admin.deleteUser(adminId)
+    // Never delete the pre-provisioned platform_admin (adminId = E2E_PA_USER_ID).
   } catch {
     /* non-fatal */
   }
@@ -322,7 +326,7 @@ test('(c) admin re-signs as signer, then views FULL name + Export CSV sets expor
 
   // New context as admin → /moderation
   const adminPage = await context.browser()!.newContext().then((c) => c.newPage())
-  await loginAs(adminPage, ADMIN_EMAIL, PASSWORD)
+  await loginAs(adminPage, PA_EMAIL!, PA_PASSWORD!)
   await adminPage.goto('/moderation')
 
   const exportSection = adminPage.locator('[data-testid="petition-signatures-export"]')

@@ -132,10 +132,10 @@ test.beforeAll(async () => {
   authorId   = await createUser(AUTHOR_EMAIL,   'Modh Author User')
   reporterId = await createUser(REPORTER_EMAIL, 'Modh Reporter User')
 
-  // Grant the staff user the platform_admin tier so they can navigate to /moderation UI and hold
-  // moderator (is_staff) rights. P3.1: is_admin/is_staff are derived from admin_tier by the
-  // sync_tier_flags trigger, so tiers are granted through the audited service-role break-glass path.
-  await mgmtQuery(`SELECT public.service_set_tier('${staffId}'::uuid, 'platform_admin', 'e2e moderation fixture');`)
+  // Grant the staff user the community_moderator tier: post-P3.1 that is enough to reach the
+  // /moderation UI (route admits tier >= CM) and to run the moderation RPCs (is_staff, derived).
+  // service_set_tier refuses platform_admin (founder-only), so a moderation fixture uses CM.
+  await mgmtQuery(`SELECT public.service_set_tier('${staffId}'::uuid, 'community_moderator', 'e2e moderation fixture');`)
 
   // Seed post
   const { data: postData, error: postErr } = await admin
