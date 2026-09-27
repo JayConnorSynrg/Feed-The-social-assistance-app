@@ -47,6 +47,7 @@ import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
 import { applyA11yAttributes, toUserPrefs } from '@/lib/accessibility-prefs'
 import { mergeStoredPrefs } from '@/lib/settings-prefs'
 import { mapConnectedAccounts, OAUTH_PROVIDERS, PROVIDER_LABELS } from '@/lib/connected-accounts'
+import { readNotificationPrefs, writeNotificationPrefs } from '@/lib/notification-prefs'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 // ============================================
@@ -1293,6 +1294,28 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   // Local preferences (notifications, privacy, accessibility)
   const [localPrefs, setLocalPrefs] = useState(loadLocalPrefs)
 
+  // Wave B: for authed users, load the account-backed notification TOPIC prefs
+  // (Resource alerts / Application updates / Community posts) so the toggles
+  // reflect the account, not just this device's localStorage. Guests keep the
+  // localStorage view (they never reach NotificationSection anyway).
+  useEffect(() => {
+    if (!user || isAnonymous) return
+    let cancelled = false
+    readNotificationPrefs(supabase, false).then((topics) => {
+      if (cancelled) return
+      setLocalPrefs((prev) => ({
+        ...prev,
+        notifications: {
+          ...prev.notifications,
+          resourceAlerts: topics.resourceAlerts,
+          applicationUpdates: topics.applicationUpdates,
+          communityPosts: topics.communityPosts,
+        },
+      }))
+    })
+    return () => { cancelled = true }
+  }, [user, isAnonymous, supabase])
+
   const updateProfile = useCallback(async (newProfile: SettingsData['profile']) => {
     if (!user) return
     setSaving(true)
@@ -1332,7 +1355,14 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   const updateNotifications = (notifications: SettingsData['notifications']) => {
     const updated = { ...localPrefs, notifications }
     setLocalPrefs(updated)
-    saveLocalPrefs(updated)
+    saveLocalPrefs(updated) // keeps email/push + on-device UI state
+    // Persist the 3 DB-backed topic toggles to the account (authed) or
+    // localStorage (guest). email/push stay local-only (Wave D/E owns them).
+    void writeNotificationPrefs(supabase, isAnonymous, user?.id ?? null, {
+      resourceAlerts: notifications.resourceAlerts,
+      applicationUpdates: notifications.applicationUpdates,
+      communityPosts: notifications.communityPosts,
+    })
   }
 
   const updatePrivacy = (privacy: SettingsData['privacy']) => {
