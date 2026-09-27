@@ -38,6 +38,11 @@ export const SnapRetailerMarker = dynamic(
   { ssr: false }
 )
 
+export const BusinessMarker = dynamic(
+  () => import('./business-marker').then((mod) => mod.BusinessMarker),
+  { ssr: false }
+)
+
 // Re-export types
 export type { ViewState, MapViewHandle, Resource }
 

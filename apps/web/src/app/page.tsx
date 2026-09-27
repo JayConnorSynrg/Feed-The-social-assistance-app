@@ -14,6 +14,7 @@ import { SettingsPanel } from '@/components/panels/settings-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
 import { ProgramsPanel } from '@/components/panels/programs-panel'
+import { BusinessesPanel } from '@/components/panels/businesses-panel'
 // PetitionsPanel, EventsPanel are now rendered as subtabs inside
 // DocumentsPanel (applications) and FeedPanel (events, petitions) — not top-level panels.
 import { useAuth } from '@/hooks/use-auth'
@@ -108,6 +109,9 @@ function PanelRenderer() {
 
     case 'feed':
       return <FeedPanel />
+
+    case 'businesses':
+      return <BusinessesPanel />
 
     case 'settings':
       return <SettingsPanel />
