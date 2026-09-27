@@ -47,6 +47,7 @@ import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
 import { applyA11yAttributes, toUserPrefs } from '@/lib/accessibility-prefs'
 import { mergeStoredPrefs } from '@/lib/settings-prefs'
 import { mapConnectedAccounts, OAUTH_PROVIDERS, PROVIDER_LABELS } from '@/lib/connected-accounts'
+import { readNotificationPrefs, writeNotificationPrefs } from '@/lib/notification-prefs'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 // ============================================
@@ -1293,6 +1294,28 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   // Local preferences (notifications, privacy, accessibility)
   const [localPrefs, setLocalPrefs] = useState(loadLocalPrefs)
 
+  // Wave B: for authed users, load the account-backed notification TOPIC prefs
+  // (Resource alerts / Application updates / Community posts) so the toggles
+  // reflect the account, not just this device's localStorage. Guests keep the
+  // localStorage view (they never reach NotificationSection anyway).
+  useEffect(() => {
+    if (!user || isAnonymous) return
+    let cancelled = false
+    readNotificationPrefs(supabase).then((topics) => {
+      if (cancelled) return
+      setLocalPrefs((prev) => ({
+        ...prev,
+        notifications: {
+          ...prev.notifications,
+          resourceAlerts: topics.resourceAlerts,
+          applicationUpdates: topics.applicationUpdates,
+          communityPosts: topics.communityPosts,
+        },
+      }))
+    })
+    return () => { cancelled = true }
+  }, [user, isAnonymous, supabase])
+
   const updateProfile = useCallback(async (newProfile: SettingsData['profile']) => {
     if (!user) return
     setSaving(true)
@@ -1329,10 +1352,28 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
     }
   }, [user, supabase, refreshSession])
 
-  const updateNotifications = (notifications: SettingsData['notifications']) => {
+  const updateNotifications = async (notifications: SettingsData['notifications']) => {
+    // Optimistic: reflect the toggle immediately (email/push + on-device UI state).
+    const prev = localPrefs
     const updated = { ...localPrefs, notifications }
     setLocalPrefs(updated)
     saveLocalPrefs(updated)
+    // Persist the 3 DB-backed topic toggles to the account. email/push stay
+    // local-only (Wave D/E owns them).
+    const ok = await writeNotificationPrefs(supabase, user?.id ?? null, {
+      resourceAlerts: notifications.resourceAlerts,
+      applicationUpdates: notifications.applicationUpdates,
+      communityPosts: notifications.communityPosts,
+    })
+    if (!ok) {
+      // Truthful toggle: the write did NOT persist, so revert the optimistic
+      // state to the last-persisted value AND surface the failure. The toggle
+      // must never show a value that did not persist.
+      setLocalPrefs(prev)
+      saveLocalPrefs(prev)
+      setSaveMessage('Failed to save changes')
+      setTimeout(() => setSaveMessage(null), 3000)
+    }
   }
 
   const updatePrivacy = (privacy: SettingsData['privacy']) => {
