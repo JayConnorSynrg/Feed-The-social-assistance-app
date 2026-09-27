@@ -6,15 +6,15 @@
 // Community posts. These gate the three server-side producers in
 // supabase/migrations/20261011000000_notification_preferences_and_producers.sql.
 //
-// Storage cascade:
-//   - Authed user  → notification_preferences row (own-row RLS). Read via the
-//                    get_my_notification_prefs() SECDEF accessor (returns an
-//                    all-true row when absent); write via upsert.
-//   - Guest        → localStorage key `feed-notification-prefs`.
+// Authenticated-only: the only caller (settings-panel.tsx → NotificationSection)
+// renders for signed-in users, so there is no guest path here.
+//   - Read  → get_my_notification_prefs() SECDEF accessor (all-true row when absent).
+//   - Write → own-row upsert into notification_preferences.
 //
-// Absent / malformed / SSR / any failure → all-true defaults (a topic is ON
-// until the user turns it OFF — matches the DB COALESCE(...,true) gate, I2).
-// Pure and framework-agnostic; see notification-prefs.test.ts.
+// Absent / malformed / any read failure → all-true defaults (a topic is ON until
+// the user turns it OFF — matches the DB COALESCE(...,true) gate, I2). A write
+// returns a success boolean so the UI can revert/annotate on failure (never show
+// a value that did not persist).
 //
 // NOTE ON TYPES: the notification_preferences table and get_my_notification_prefs
 // RPC are added by the Wave B migration; packages/database/types.ts is
@@ -39,9 +39,6 @@ export const DEFAULT_TOPIC_PREFS: NotificationTopicPrefs = {
   applicationUpdates: true,
   communityPosts: true,
 }
-
-/** localStorage key for the guest path (dedicated; distinct from the panel blob). */
-export const NOTIFICATION_PREFS_KEY = 'feed-notification-prefs'
 
 // The DB row shape (snake_case) for the columns this lib reads/writes.
 interface NotificationPrefsRow {
@@ -78,54 +75,14 @@ function topicPrefsToRow(prefs: NotificationTopicPrefs): NotificationPrefsRow {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Guest path — localStorage
-// ---------------------------------------------------------------------------
-
-/** SSR-safe read of the guest preferences; malformed / absent → all-true. */
-export function readGuestTopicPrefs(): NotificationTopicPrefs {
-  if (typeof window === 'undefined') return { ...DEFAULT_TOPIC_PREFS }
-  try {
-    const stored = window.localStorage.getItem(NOTIFICATION_PREFS_KEY)
-    if (!stored) return { ...DEFAULT_TOPIC_PREFS }
-    const parsed = JSON.parse(stored) as Partial<Record<keyof NotificationTopicPrefs, unknown>>
-    return {
-      resourceAlerts: parsed?.resourceAlerts !== false,
-      applicationUpdates: parsed?.applicationUpdates !== false,
-      communityPosts: parsed?.communityPosts !== false,
-    }
-  } catch {
-    return { ...DEFAULT_TOPIC_PREFS }
-  }
-}
-
-/** SSR-safe write of the guest preferences; failures are swallowed. */
-export function writeGuestTopicPrefs(prefs: NotificationTopicPrefs): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs))
-  } catch {
-    // best-effort; per-device convenience only
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Read / write — resolves the authed vs guest path
-// ---------------------------------------------------------------------------
-
 /**
- * Read the caller's topic preferences.
- * - Guest (isGuest true or no client) → localStorage.
- * - Authed → get_my_notification_prefs() RPC (all-true row when absent).
- * Any failure resolves to all-true defaults so a topic is never silently OFF.
+ * Read the signed-in caller's topic preferences via the get_my_notification_prefs()
+ * RPC (which returns an all-true row when none exists). Any failure resolves to
+ * all-true defaults so a topic is never silently OFF.
  */
 export async function readNotificationPrefs(
-  supabase: SupabaseClient<Database> | null,
-  isGuest: boolean
+  supabase: SupabaseClient<Database>
 ): Promise<NotificationTopicPrefs> {
-  if (isGuest || !supabase) {
-    return readGuestTopicPrefs()
-  }
   try {
     const { data, error } = await (supabase as unknown as PrefsRpcClient).rpc('get_my_notification_prefs')
     if (error) throw error
@@ -141,27 +98,25 @@ export async function readNotificationPrefs(
 }
 
 /**
- * Persist the caller's topic preferences.
- * - Guest (isGuest true or no client) → localStorage.
- * - Authed → upsert the own-row notification_preferences record.
- * Returns whether the write succeeded (guest writes are best-effort → true).
+ * Persist the signed-in caller's topic preferences by upserting the own-row
+ * notification_preferences record. Returns whether the write succeeded so the
+ * caller can revert/annotate the toggle on failure (never showing a value that
+ * did not persist).
  */
 export async function writeNotificationPrefs(
-  supabase: SupabaseClient<Database> | null,
-  isGuest: boolean,
+  supabase: SupabaseClient<Database>,
   userId: string | null,
   prefs: NotificationTopicPrefs
 ): Promise<boolean> {
   logger.info('notif.pref.changed', {
-    is_guest: isGuest,
     resource_alerts: prefs.resourceAlerts,
     application_updates: prefs.applicationUpdates,
     community_posts: prefs.communityPosts,
   })
 
-  if (isGuest || !supabase || !userId) {
-    writeGuestTopicPrefs(prefs)
-    return true
+  if (!userId) {
+    logger.error('notif.pref.write_failed', new Error('missing user id'), { user_present: false })
+    return false
   }
   try {
     const { error } = await (supabase as unknown as PrefsUpsertClient)

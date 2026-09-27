@@ -1301,7 +1301,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   useEffect(() => {
     if (!user || isAnonymous) return
     let cancelled = false
-    readNotificationPrefs(supabase, false).then((topics) => {
+    readNotificationPrefs(supabase).then((topics) => {
       if (cancelled) return
       setLocalPrefs((prev) => ({
         ...prev,
@@ -1352,17 +1352,28 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
     }
   }, [user, supabase, refreshSession])
 
-  const updateNotifications = (notifications: SettingsData['notifications']) => {
+  const updateNotifications = async (notifications: SettingsData['notifications']) => {
+    // Optimistic: reflect the toggle immediately (email/push + on-device UI state).
+    const prev = localPrefs
     const updated = { ...localPrefs, notifications }
     setLocalPrefs(updated)
-    saveLocalPrefs(updated) // keeps email/push + on-device UI state
-    // Persist the 3 DB-backed topic toggles to the account (authed) or
-    // localStorage (guest). email/push stay local-only (Wave D/E owns them).
-    void writeNotificationPrefs(supabase, isAnonymous, user?.id ?? null, {
+    saveLocalPrefs(updated)
+    // Persist the 3 DB-backed topic toggles to the account. email/push stay
+    // local-only (Wave D/E owns them).
+    const ok = await writeNotificationPrefs(supabase, user?.id ?? null, {
       resourceAlerts: notifications.resourceAlerts,
       applicationUpdates: notifications.applicationUpdates,
       communityPosts: notifications.communityPosts,
     })
+    if (!ok) {
+      // Truthful toggle: the write did NOT persist, so revert the optimistic
+      // state to the last-persisted value AND surface the failure. The toggle
+      // must never show a value that did not persist.
+      setLocalPrefs(prev)
+      saveLocalPrefs(prev)
+      setSaveMessage('Failed to save changes')
+      setTimeout(() => setSaveMessage(null), 3000)
+    }
   }
 
   const updatePrivacy = (privacy: SettingsData['privacy']) => {
