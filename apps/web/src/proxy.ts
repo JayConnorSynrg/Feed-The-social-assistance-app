@@ -144,6 +144,7 @@ export async function proxy(request: NextRequest) {
     '/s/post',
     '/s/donate',
     '/s/resource',
+    '/s/business',
     '/s/embed',
   ]
 
