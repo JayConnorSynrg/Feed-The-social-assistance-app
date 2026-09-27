@@ -16,17 +16,17 @@ describe('visibleTabs', () => {
   it('CM + org admin adds Events', () => {
     expect(set(visibleTabs(CM, true))).toEqual(set(['events', 'moderation']))
   })
-  it('RA adds the resource queue, manage and people (Discover/forms stay PA, inside Resources)', () => {
-    expect(set(visibleTabs(RA, false))).toEqual(set(['moderation', 'resources', 'manage', 'people']))
+  it('RA adds the resource queue, businesses, manage and people (Discover/forms stay PA, inside Resources)', () => {
+    expect(set(visibleTabs(RA, false))).toEqual(set(['moderation', 'resources', 'businesses', 'manage', 'people']))
   })
   it('RA + org admin also sees Events', () => {
     expect(set(visibleTabs(RA, true))).toEqual(
-      set(['events', 'moderation', 'resources', 'manage', 'people']),
+      set(['events', 'moderation', 'resources', 'businesses', 'manage', 'people']),
     )
   })
   it('PA sees every tab', () => {
     expect(set(visibleTabs(PA, false))).toEqual(
-      set(['overview', 'events', 'moderation', 'community', 'organizations', 'resources', 'manage', 'people', 'settings']),
+      set(['overview', 'events', 'moderation', 'community', 'organizations', 'resources', 'businesses', 'manage', 'people', 'settings']),
     )
   })
   it('an org-admin with no tier sees Events only', () => {

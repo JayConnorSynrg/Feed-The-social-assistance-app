@@ -26,11 +26,13 @@ import { track } from '@vercel/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
-import { ResourceMarker, ClusterMarker, SnapRetailerMarker, type ViewState, type Resource } from '@/components/map'
+import { ResourceMarker, ClusterMarker, SnapRetailerMarker, BusinessMarker, type ViewState, type Resource } from '@/components/map'
 import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
 import { useViewportResources } from '@/hooks/use-viewport-resources'
+import { useViewportBusinesses } from '@/hooks/use-viewport-businesses'
+import { dedupeResourcesForBusinesses } from '@/lib/business'
 import { useResourceSearch, type SearchResourceRow } from '@/hooks/use-resource-search'
 import { useSnapRetailers } from '@/hooks/use-snap-retailers'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
@@ -584,6 +586,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && !authLoading,
   })
 
+  // P4a business leaf layer — approved local businesses in the viewport (SECDEF reader).
+  // Independent of the resource cluster pipeline; each result draws exactly one unclustered
+  // leaf pin (CINV2). resources_in_bounds and the resource marker path are untouched.
+  const { businesses: viewportBusinesses } = useViewportBusinesses({
+    bounds,
+    enabled: !!bounds && !authLoading,
+  })
+
   // Exhaustive server-side search — fires only when searchQuery is non-empty.
   // Not viewport-gated: returns every approved resource of every source
   // (including ungeocoded ones) that matches the query.
@@ -701,9 +711,16 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     [filteredResources]
   )
 
+  // CINV2 (ONE PIN): drop any resource a business already renders as its leaf, so a
+  // resource-linked business shows only its leaf — never also the underlying resource pin.
+  const dedupedMappableResources = useMemo(
+    () => dedupeResourcesForBusinesses(mappableResources, viewportBusinesses),
+    [mappableResources, viewportBusinesses]
+  )
+
   // Use clustering for map markers
   const clusters = useCluster({
-    resources: mappableResources,
+    resources: dedupedMappableResources,
     zoom: viewState.zoom,
     bounds: bounds ? [bounds.west, bounds.south, bounds.east, bounds.north] : null,
   })
@@ -997,6 +1014,11 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             snapRetailers.map((retailer) => (
               <SnapRetailerMarker key={`snap-${retailer.id}`} retailer={retailer} />
             ))}
+          {/* P4a local-business leaf layer — one unclustered leaf per approved business
+              (CINV2), independent of the resource cluster pipeline. */}
+          {viewportBusinesses.map((business) => (
+            <BusinessMarker key={`business-${business.id}`} business={business} />
+          ))}
           {/* Safety alert markers — rendered on top of resource markers */}
           {safetyAlerts.map((alert) => (
             <SafetyAlertMarker

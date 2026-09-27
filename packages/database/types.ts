@@ -87,6 +87,7 @@ export type Database = {
           actor_tier?: Database["public"]["Enums"]["admin_tier"] | null
           created_at?: string
           details?: Json
+          id?: never
           outcome: string
           reason?: string | null
           request_id?: string | null
@@ -100,6 +101,7 @@ export type Database = {
           actor_tier?: Database["public"]["Enums"]["admin_tier"] | null
           created_at?: string
           details?: Json
+          id?: never
           outcome?: string
           reason?: string | null
           request_id?: string | null
@@ -229,10 +231,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "appreciation_gifts_receiver_fk"
-            columns: ["receiver_id"]
+            foreignKeyName: "appreciation_gifts_giver_fk"
+            columns: ["giver_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -240,6 +242,20 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appreciation_gifts_receiver_fk"
+            columns: ["receiver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appreciation_gifts_receiver_fk"
+            columns: ["receiver_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -639,6 +655,32 @@ export type Database = {
         }
         Relationships: []
       }
+      event_anonymous_claims: {
+        Row: {
+          created_at: string
+          occurrence_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          occurrence_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          occurrence_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_anonymous_claims_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "event_occurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_checkins: {
         Row: {
           checked_in_at: string
@@ -648,6 +690,7 @@ export type Database = {
           household_key: string | null
           household_size: number
           id: string
+          is_anonymous: boolean
           notes: string | null
           occurrence_id: string
           status: string
@@ -661,6 +704,7 @@ export type Database = {
           household_key?: string | null
           household_size?: number
           id?: string
+          is_anonymous?: boolean
           notes?: string | null
           occurrence_id: string
           status?: string
@@ -674,6 +718,7 @@ export type Database = {
           household_key?: string | null
           household_size?: number
           id?: string
+          is_anonymous?: boolean
           notes?: string | null
           occurrence_id?: string
           status?: string
@@ -1486,6 +1531,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          application_updates: boolean
+          community_posts: boolean
+          email_updates: boolean
+          push_notifications: boolean
+          resource_alerts: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          application_updates?: boolean
+          community_posts?: boolean
+          email_updates?: boolean
+          push_notifications?: boolean
+          resource_alerts?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          application_updates?: boolean
+          community_posts?: boolean
+          email_updates?: boolean
+          push_notifications?: boolean
+          resource_alerts?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           application_id: string | null
@@ -1591,11 +1666,17 @@ export type Database = {
           id: string
           is_active: boolean
           location: unknown
+          moderated_at: string | null
+          moderated_by: string | null
           name: string
           org_type: string
           phone: string | null
+          rejection_reason: string | null
+          resource_id: string | null
           service_radius_miles: number | null
           state: string | null
+          status: string
+          submitted_by: string | null
           updated_at: string
           website: string | null
           zip_code: string | null
@@ -1609,11 +1690,17 @@ export type Database = {
           id?: string
           is_active?: boolean
           location?: unknown
+          moderated_at?: string | null
+          moderated_by?: string | null
           name: string
           org_type?: string
           phone?: string | null
+          rejection_reason?: string | null
+          resource_id?: string | null
           service_radius_miles?: number | null
           state?: string | null
+          status?: string
+          submitted_by?: string | null
           updated_at?: string
           website?: string | null
           zip_code?: string | null
@@ -1627,16 +1714,30 @@ export type Database = {
           id?: string
           is_active?: boolean
           location?: unknown
+          moderated_at?: string | null
+          moderated_by?: string | null
           name?: string
           org_type?: string
           phone?: string | null
+          rejection_reason?: string | null
+          resource_id?: string | null
           service_radius_miles?: number | null
           state?: string | null
+          status?: string
+          submitted_by?: string | null
           updated_at?: string
           website?: string | null
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: true
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       password_history: {
         Row: {
@@ -1799,6 +1900,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      platform_founder: {
+        Row: {
+          singleton: boolean
+          user_id: string
+        }
+        Insert: {
+          singleton?: boolean
+          user_id: string
+        }
+        Update: {
+          singleton?: boolean
+          user_id?: string
+        }
+        Relationships: []
       }
       poll_votes: {
         Row: {
@@ -2066,21 +2182,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      platform_founder: {
-        Row: {
-          singleton: boolean
-          user_id: string
-        }
-        Insert: {
-          singleton?: boolean
-          user_id: string
-        }
-        Update: {
-          singleton?: boolean
-          user_id?: string
-        }
-        Relationships: []
       }
       profiles: {
         Row: {
@@ -3394,59 +3495,6 @@ export type Database = {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
       }
-      admin_create_event: {
-        Args: {
-          p_org_id: string
-          p_title: string
-          p_event_type?: string
-          p_description?: string
-          p_location_name?: string
-          p_address?: string
-          p_city?: string
-          p_state?: string
-          p_zip_code?: string
-          p_rrule?: string
-          p_default_capacity?: number
-          p_requires_registration?: boolean
-          p_lat?: number
-          p_lng?: number
-          p_geocode_accuracy?: string
-          p_geocode_confidence?: string
-        }
-        Returns: string
-      }
-      admin_update_event: {
-        Args: {
-          p_event_id: string
-          p_title?: string
-          p_event_type?: string
-          p_description?: string
-          p_location_name?: string
-          p_address?: string
-          p_city?: string
-          p_state?: string
-          p_zip_code?: string
-          p_rrule?: string
-          p_default_capacity?: number
-          p_requires_registration?: boolean
-          p_lat?: number
-          p_lng?: number
-          p_geocode_accuracy?: string
-          p_geocode_confidence?: string
-          p_regeocode?: boolean
-        }
-        Returns: string
-      }
-      check_in: {
-        Args: { p_occurrence: string; p_household_size?: number; p_anonymous?: boolean }
-        Returns: string
-      }
-      event_attendance: { Args: { p_occurrence: string }; Returns: Json }
-      my_attendance_rate: { Args: never; Returns: Json }
-      organizer_confirm: {
-        Args: { p_occurrence: string; p_user?: string; p_household_size?: number }
-        Returns: string
-      }
       _postgis_index_extent: {
         Args: { col: string; tbl: unknown }
         Returns: unknown
@@ -3575,60 +3623,26 @@ export type Database = {
         Returns: string
       }
       admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
-      admin_list_people: {
-        Args: { p_limit?: number; p_search?: string }
-        Returns: {
-          admin_tier: Database["public"]["Enums"]["admin_tier"] | null
-          avatar_url: string
-          first_name: string
-          id: string
-          joined_at: string
-          username: string
-        }[]
-      }
-      admin_set_tier: {
+      admin_create_event: {
         Args: {
-          p_reason?: string
-          p_request_id?: string
-          p_target: string
-          p_tier: Database["public"]["Enums"]["admin_tier"] | null
+          p_address?: string
+          p_city?: string
+          p_default_capacity?: number
+          p_description?: string
+          p_event_type?: string
+          p_geocode_accuracy?: string
+          p_geocode_confidence?: string
+          p_lat?: number
+          p_lng?: number
+          p_location_name?: string
+          p_org_id: string
+          p_requires_registration?: boolean
+          p_rrule?: string
+          p_state?: string
+          p_title: string
+          p_zip_code?: string
         }
-        Returns: Json
-      }
-      current_user_tier: {
-        Args: never
-        Returns: Database["public"]["Enums"]["admin_tier"] | null
-      }
-      current_user_tier_at_least: {
-        Args: { p: Database["public"]["Enums"]["admin_tier"] }
-        Returns: boolean
-      }
-      is_founder: { Args: never; Returns: boolean }
-      record_admin_action: {
-        Args: {
-          p_action: string
-          p_actor: string
-          p_details?: Json
-          p_outcome: string
-          p_reason?: string
-          p_request_id?: string
-          p_target_id: string
-          p_target_type: string
-        }
-        Returns: undefined
-      }
-      request_id: { Args: never; Returns: string }
-      service_set_tier: {
-        Args: {
-          p_reason: string
-          p_target: string
-          p_tier: Database["public"]["Enums"]["admin_tier"] | null
-        }
-        Returns: Json
-      }
-      tier_of: {
-        Args: { p_user: string }
-        Returns: Database["public"]["Enums"]["admin_tier"] | null
+        Returns: string
       }
       admin_delete_user_note: {
         Args: { p_note_id: string }
@@ -3666,6 +3680,17 @@ export type Database = {
           zip_code: string
         }[]
       }
+      admin_list_people: {
+        Args: { p_limit?: number; p_search?: string }
+        Returns: {
+          admin_tier: Database["public"]["Enums"]["admin_tier"]
+          avatar_url: string
+          first_name: string
+          id: string
+          joined_at: string
+          username: string
+        }[]
+      }
       admin_list_resources: {
         Args: {
           p_city?: string
@@ -3700,7 +3725,7 @@ export type Database = {
       admin_list_users: {
         Args: never
         Returns: {
-          admin_tier: Database["public"]["Enums"]["admin_tier"] | null
+          admin_tier: Database["public"]["Enums"]["admin_tier"]
           banned_until: string
           email: string
           email_confirmed: boolean
@@ -3745,6 +3770,39 @@ export type Database = {
       admin_resolve_report: {
         Args: { p_action: string; p_report_id: string }
         Returns: Json
+      }
+      admin_set_tier: {
+        Args: {
+          p_reason?: string
+          p_request_id?: string
+          p_target: string
+          p_tier: Database["public"]["Enums"]["admin_tier"]
+        }
+        Returns: Json
+      }
+      admin_update_event: {
+        Args: {
+          p_address?: string
+          p_city?: string
+          p_clear?: string[]
+          p_default_capacity?: number
+          p_description?: string
+          p_event_id: string
+          p_event_type?: string
+          p_geocode_accuracy?: string
+          p_geocode_confidence?: string
+          p_is_active?: boolean
+          p_lat?: number
+          p_lng?: number
+          p_location_name?: string
+          p_regeocode?: boolean
+          p_requires_registration?: boolean
+          p_rrule?: string
+          p_state?: string
+          p_title?: string
+          p_zip_code?: string
+        }
+        Returns: string
       }
       admin_update_resource: {
         Args: {
@@ -3841,10 +3899,36 @@ export type Database = {
           ratio: number
         }[]
       }
+      approve_business: {
+        Args: { p_org_id: string; p_reason?: string }
+        Returns: undefined
+      }
       approve_form_template: { Args: { p_id: string }; Returns: undefined }
       approve_resource: {
         Args: { p_reason?: string; p_resource_id: string }
         Returns: undefined
+      }
+      businesses_in_bounds: {
+        Args: {
+          max_lat: number
+          max_lng: number
+          max_results?: number
+          min_lat: number
+          min_lng: number
+        }
+        Returns: {
+          address: string
+          city: string
+          description: string
+          id: string
+          location: unknown
+          name: string
+          org_type: string
+          phone: string
+          resource_id: string
+          state: string
+          website: string
+        }[]
       }
       calculate_trust_score: {
         Args: {
@@ -3858,6 +3942,14 @@ export type Database = {
       }
       category_label: {
         Args: { p_category: Database["public"]["Enums"]["resource_category"] }
+        Returns: string
+      }
+      check_in: {
+        Args: {
+          p_anonymous?: boolean
+          p_household_size?: number
+          p_occurrence: string
+        }
         Returns: string
       }
       cleanup_expired_lockouts: { Args: never; Returns: undefined }
@@ -3877,6 +3969,14 @@ export type Database = {
       credit_post_created: {
         Args: { p_engager: string; p_post_id: string }
         Returns: undefined
+      }
+      current_user_tier: {
+        Args: never
+        Returns: Database["public"]["Enums"]["admin_tier"]
+      }
+      current_user_tier_at_least: {
+        Args: { p: Database["public"]["Enums"]["admin_tier"] }
+        Returns: boolean
       }
       dashboard_adoption_stats: {
         Args: never
@@ -3967,6 +4067,7 @@ export type Database = {
       }
       engagement_weight: { Args: { p_kind: string }; Returns: number }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      event_attendance: { Args: { p_occurrence: string }; Returns: Json }
       expand_state: { Args: { p_state: string }; Returns: string }
       export_petition_signatures: {
         Args: { p_petition_id: string }
@@ -4157,6 +4258,24 @@ export type Database = {
           longitude: number
         }[]
       }
+      get_my_notification_prefs: {
+        Args: never
+        Returns: {
+          application_updates: boolean
+          community_posts: boolean
+          email_updates: boolean
+          push_notifications: boolean
+          resource_alerts: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notification_preferences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_my_private_profile: {
         Args: never
         Returns: {
@@ -4233,7 +4352,7 @@ export type Database = {
       }
       gettransactionid: { Args: never; Returns: unknown }
       give_appreciation: {
-        Args: { p_receiver: string; p_item: string; p_post_id?: string }
+        Args: { p_item: string; p_post_id?: string; p_receiver: string }
         Returns: Json
       }
       has_signed_petition: { Args: { p_petition_id: string }; Returns: boolean }
@@ -4246,6 +4365,7 @@ export type Database = {
         }[]
       }
       is_current_user_admin: { Args: never; Returns: boolean }
+      is_founder: { Args: never; Returns: boolean }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_org_admin_any: { Args: never; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
@@ -4274,6 +4394,13 @@ export type Database = {
         Returns: undefined
       }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      my_anonymous_claims: {
+        Args: { p_occurrence_ids: string[] }
+        Returns: {
+          occurrence_id: string
+        }[]
+      }
+      my_attendance_rate: { Args: never; Returns: Json }
       nearby_federated_resources: {
         Args: {
           radius_miles?: number
@@ -4378,6 +4505,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      organizer_confirm: {
+        Args: {
+          p_household_size?: number
+          p_occurrence: string
+          p_user?: string
+        }
+        Returns: string
       }
       place_safety_alert: {
         Args: {
@@ -4502,6 +4637,19 @@ export type Database = {
         Returns: undefined
       }
       reconcile_engagement: { Args: { p_user?: string }; Returns: undefined }
+      record_admin_action: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_details?: Json
+          p_outcome: string
+          p_reason?: string
+          p_request_id?: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: undefined
+      }
       record_engagement_event: {
         Args: {
           p_actor: string
@@ -4517,10 +4665,15 @@ export type Database = {
       }
       refresh_community_stats: { Args: never; Returns: undefined }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }
+      reject_business: {
+        Args: { p_org_id: string; p_reason?: string }
+        Returns: undefined
+      }
       reject_resource: {
         Args: { p_reason: string; p_resource_id: string }
         Returns: undefined
       }
+      request_id: { Args: never; Returns: string }
       resources_in_bounds: {
         Args: {
           east: number
@@ -4593,6 +4746,14 @@ export type Database = {
       seekers_within_radius: {
         Args: { p_radius_miles: number; p_resource_id: string }
         Returns: number
+      }
+      service_set_tier: {
+        Args: {
+          p_reason: string
+          p_target: string
+          p_tier: Database["public"]["Enums"]["admin_tier"]
+        }
+        Returns: Json
       }
       set_resource_geocode: {
         Args: {
@@ -5258,6 +5419,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      tier_of: {
+        Args: { p_user: string }
+        Returns: Database["public"]["Enums"]["admin_tier"]
+      }
       trust_score_to_level: { Args: { score: number }; Returns: string }
       unblock_opt_in: { Args: { p_opt_in_id: string }; Returns: boolean }
       unlockrows: { Args: { "": string }; Returns: number }
@@ -5319,6 +5484,19 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      w1_6a_event_authed_reachable: {
+        Args: { p_event: string }
+        Returns: boolean
+      }
+      w1_6a_occ_authed_reachable: { Args: { p_occ: string }; Returns: boolean }
+      w1_6a_user_org_rate: {
+        Args: { p_org: string; p_user: string }
+        Returns: number
+      }
+      w1_6a_validate_geo: {
+        Args: { p_accuracy: string; p_lat: number; p_lng: number }
+        Returns: undefined
       }
       withdraw_opt_in: { Args: { p_post_id: string }; Returns: boolean }
       withdraw_petition_signature: {
@@ -6060,6 +6238,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      admin_tier: ["community_moderator", "resource_admin", "platform_admin"],
       conversation_status: [
         "pending",
         "active",

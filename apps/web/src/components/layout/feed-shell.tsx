@@ -56,7 +56,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events'
+type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events' | 'businesses'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -118,6 +118,7 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'map', icon: Map, label: 'Resource Map' },
   { panel: 'programs', icon: Search, label: 'Browse Programs' },
   { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
+  { panel: 'businesses', icon: Building2, label: 'Local Businesses' },
   // applications, events, petitions are now subtabs of documents/feed respectively
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
@@ -141,6 +142,8 @@ const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string }> = {
   applications: { panel: 'documents', subtab: 'applications' },
   petitions: { panel: 'feed', subtab: 'petitions' },
   events: { panel: 'feed', subtab: 'events' },
+  // Deep-link that lands on the Businesses panel with the submit form open.
+  'add-business': { panel: 'businesses', subtab: 'submit' },
 }
 
 // ============================================
@@ -513,7 +516,7 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing (aliases included for deep-link init)
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events', 'businesses']
 
 // Resolve a hash value to a panel + optional subtab.
 // Alias hashes (#forms, #messages) map to their parent panel + subtab.

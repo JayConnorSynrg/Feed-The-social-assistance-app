@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2, UserCog } from 'lucide-react'
+import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2, UserCog, Leaf } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { useAdminTier } from '@/hooks/use-admin-tier'
@@ -14,6 +14,7 @@ import { EventScheduler } from './event-scheduler'
 import { ModerationTab } from './moderation-tab'
 import { CommunityTab } from './community-tab'
 import { ResourcesTab } from './resources-tab'
+import { BusinessesTab } from './businesses-tab'
 import { ManageResourcesTab } from './manage-resources-tab'
 import { OrgsSection } from './orgs-section'
 import { PeopleTab } from './people-tab'
@@ -125,6 +126,12 @@ export function AdminShell() {
                   Resources
                 </TabsTrigger>
               )}
+              {tabs.includes('businesses') && (
+                <TabsTrigger value="businesses" className={TRIGGER_CLASS}>
+                  <Leaf className="h-3.5 w-3.5" />
+                  Businesses
+                </TabsTrigger>
+              )}
               {tabs.includes('manage') && (
                 <TabsTrigger value="manage" className={TRIGGER_CLASS}>
                   <ListChecks className="h-3.5 w-3.5" />
@@ -174,6 +181,11 @@ export function AdminShell() {
           {tabs.includes('resources') && (
             <TabsContent value="resources" className="mt-4">
               <ResourcesTab />
+            </TabsContent>
+          )}
+          {tabs.includes('businesses') && (
+            <TabsContent value="businesses" className="mt-4">
+              <BusinessesTab />
             </TabsContent>
           )}
           {tabs.includes('manage') && (
