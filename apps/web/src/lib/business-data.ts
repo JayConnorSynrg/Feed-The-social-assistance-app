@@ -17,6 +17,26 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import type { Business, NewBusinessInput, SubmitOutcome } from './business'
+import { withMetric } from './logger'
+import { normalizeUrl } from './utils/url'
+
+/**
+ * Typed errors so the withMetric error_code label buckets by kind (BusinessReadError vs
+ * BusinessWriteError) instead of the generic "Error". No PII in the name; the raw Supabase
+ * message rides in withMetric's error_message field, never in a bounded label.
+ */
+export class BusinessReadError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BusinessReadError'
+  }
+}
+export class BusinessWriteError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BusinessWriteError'
+  }
+}
 
 const BUSINESS_COLUMNS =
   'id, name, description, org_type, address, city, state, phone, website, location, resource_id'
@@ -85,15 +105,22 @@ export async function businessesInBounds(
 export async function fetchApprovedBusinesses(
   supabase: SupabaseClient<Database>
 ): Promise<Business[]> {
-  const { data, error } = await loose(supabase)
-    .from('organizations')
-    .select(BUSINESS_COLUMNS)
-    .eq('org_type', 'business')
-    .eq('status', 'approved')
-    .order('name', { ascending: true })
-    .then((r) => r)
-  if (error) throw new Error(error.message)
-  return (data ?? []) as Business[]
+  // Bounded, PII-free label. with-metric-core spreads `attrs` AFTER fn() resolves, so mutating
+  // result_count in place before returning lands the real count on the .complete wide-event.
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('business.list.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(BUSINESS_COLUMNS)
+      .eq('org_type', 'business')
+      .eq('status', 'approved')
+      .order('name', { ascending: true })
+      .then((r) => r)
+    if (error) throw new BusinessReadError(error.message)
+    const rows = (data ?? []) as Business[]
+    attrs.result_count = rows.length
+    return rows
+  })
 }
 
 /**
@@ -125,15 +152,20 @@ export async function fetchApprovedBusinessById(
 export async function fetchPendingBusinesses(
   supabase: SupabaseClient<Database>
 ): Promise<PendingBusiness[]> {
-  const { data, error } = await loose(supabase)
-    .from('organizations')
-    .select(PENDING_COLUMNS)
-    .eq('org_type', 'business')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .then((r) => r)
-  if (error) throw new Error(error.message)
-  return (data ?? []) as PendingBusiness[]
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('business.pending.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(PENDING_COLUMNS)
+      .eq('org_type', 'business')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .then((r) => r)
+    if (error) throw new BusinessReadError(error.message)
+    const rows = (data ?? []) as PendingBusiness[]
+    attrs.result_count = rows.length
+    return rows
+  })
 }
 
 /**
@@ -148,22 +180,39 @@ export async function submitBusiness(
   input: NewBusinessInput,
   createdBy: string | null
 ): Promise<SubmitOutcome> {
-  const { data, error } = await loose(supabase)
-    .from('organizations')
-    .insert({
-      name: input.name.trim(),
-      org_type: 'business',
-      description: input.description?.trim() || null,
-      address: input.address?.trim() || null,
-      city: input.city?.trim() || null,
-      state: input.state?.trim() || null,
-      phone: input.phone?.trim() || null,
-      website: input.website?.trim() || null,
-      created_by: createdBy,
+  // Normalize-at-write (INV2): store a scheme-prefixed absolute URL or null — never a bare domain
+  // that would later resolve app-relative. The SAME helper feeds the display href so they can't
+  // diverge.
+  const website = normalizeUrl(input.website)
+  // Bounded, PII-free label — a boolean, never the URL/name/address itself.
+  const attrs = { has_website: website !== null }
+  try {
+    // withMetric emits exactly one wide event: .complete (outcome=pending) on success, .error
+    // (error_code=BusinessWriteError) on failure. We throw inside so the failure is recorded, then
+    // catch OUTSIDE to keep the non-throwing SubmitOutcome contract the truthful revert needs
+    // (CINV4) — the component keys on outcome.ok === false, never on an exception.
+    return await withMetric('business.submit', attrs, async () => {
+      const { data, error } = await loose(supabase)
+        .from('organizations')
+        .insert({
+          name: input.name.trim(),
+          org_type: 'business',
+          description: input.description?.trim() || null,
+          address: input.address?.trim() || null,
+          city: input.city?.trim() || null,
+          state: input.state?.trim() || null,
+          phone: input.phone?.trim() || null,
+          website,
+          created_by: createdBy,
+        })
+        .select('id')
+        .single()
+      if (error) throw new BusinessWriteError(error.message)
+      if (!data?.id) throw new BusinessWriteError('Submission did not persist')
+      return { ok: true, id: data.id } as SubmitOutcome
     })
-    .select('id')
-    .single()
-  if (error) return { ok: false, error: error.message }
-  if (!data?.id) return { ok: false, error: 'Submission did not persist' }
-  return { ok: true, id: data.id }
+  } catch (err) {
+    if (err instanceof BusinessWriteError) return { ok: false, error: err.message }
+    throw err
+  }
 }

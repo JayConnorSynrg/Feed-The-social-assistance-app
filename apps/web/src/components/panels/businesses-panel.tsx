@@ -283,6 +283,7 @@ export function BusinessesPanel() {
                     </label>
                     <input
                       id="biz-website"
+                      type="url"
                       value={form.website ?? ''}
                       onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
                       className={INPUT_CLASS}

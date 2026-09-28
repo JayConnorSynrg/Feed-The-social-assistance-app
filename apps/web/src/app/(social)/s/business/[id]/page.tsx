@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { MapPin, Phone, Globe, Leaf } from 'lucide-react'
+import { MapPin, Phone, Leaf, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
+import { normalizeUrl } from '@/lib/utils/url'
 import { fetchApprovedBusinessById } from '@/lib/business-data'
 import { parseGeographyPoint } from '@/lib/business'
 
@@ -70,6 +71,8 @@ export default async function SharedBusinessPage({ params }: Props) {
 
   const address = [business.address, business.city, business.state].filter(Boolean).join(', ')
   const mapUrl = staticMapUrl(business.location)
+  // Same helper as the submit-time write, so the CTA href is always absolute + external (INV1).
+  const websiteHref = normalizeUrl(business.website)
 
   return (
     <div className="space-y-6">
@@ -127,20 +130,21 @@ export default async function SharedBusinessPage({ params }: Props) {
                 </a>
               </div>
             )}
-            {business.website && (
-              <div className="flex items-center gap-3 text-stone-600">
-                <Globe className="h-5 w-5 shrink-0 text-stone-400" />
-                <a
-                  href={business.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:underline text-lime-700 truncate"
-                >
-                  {business.website.replace(/^https?:\/\//, '')}
-                </a>
-              </div>
-            )}
           </div>
+
+          {/* Prominent external-website CTA — opens the business's OWN site in a new tab (INV1).
+              Rendered only when a website is present, so there is never a broken/empty href. */}
+          {websiteHref && (
+            <a
+              href={websiteHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-lime-600 px-6 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+            >
+              Visit website
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          )}
         </div>
       </div>
 
