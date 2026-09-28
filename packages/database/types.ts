@@ -2186,6 +2186,7 @@ export type Database = {
       profiles: {
         Row: {
           admin_tier: Database["public"]["Enums"]["admin_tier"] | null
+          allow_messages: boolean
           avatar_url: string | null
           badge_summary: Json | null
           bio: string | null
@@ -2217,6 +2218,7 @@ export type Database = {
         }
         Insert: {
           admin_tier?: Database["public"]["Enums"]["admin_tier"] | null
+          allow_messages?: boolean
           avatar_url?: string | null
           badge_summary?: Json | null
           bio?: string | null
@@ -2248,6 +2250,7 @@ export type Database = {
         }
         Update: {
           admin_tier?: Database["public"]["Enums"]["admin_tier"] | null
+          allow_messages?: boolean
           avatar_url?: string | null
           badge_summary?: Json | null
           bio?: string | null
@@ -4220,6 +4223,7 @@ export type Database = {
         }[]
       }
       get_instance_uptime: { Args: { p_instance_id: string }; Returns: number }
+      get_my_allow_messages: { Args: never; Returns: boolean }
       get_my_conversation_counterparties: {
         Args: never
         Returns: {
