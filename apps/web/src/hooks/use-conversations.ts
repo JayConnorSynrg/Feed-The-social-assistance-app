@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { withMetric } from '@/lib/logger'
+import { withMetric, logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
 interface ConversationProfile {
@@ -274,21 +274,35 @@ export function useConversations() {
       setIsSending(true)
       setError(null)
       try {
-        // Insert the conversation (pending status)
-        const { data: convData, error: convError } = await supabase
-          .from('conversations')
-          .insert({
-            resource_id: resourceId,
-            volunteer_id: volunteerId,
-            requester_id: user.id,
-            status: 'pending',
-          })
-          .select('id')
-          .single()
+        // Insert the conversation (pending status). Wrapped in withMetric so the request
+        // path emits a wide-event with duration; the closed-vocabulary outcome
+        // 'message_request_blocked_by_pref' is logged below when the server gate rejects.
+        const { data: convData, error: convError } = await withMetric(
+          'conversations.request',
+          { has_initial_message: initialMessage.length > 0 },
+          async () => await supabase
+            .from('conversations')
+            .insert({
+              resource_id: resourceId,
+              volunteer_id: volunteerId,
+              requester_id: user.id,
+              status: 'pending',
+            })
+            .select('id')
+            .single()
+        )
 
         if (convError) {
           if (convError.code === '23505') {
             setError('This volunteer already has a pending request. Please try again later.')
+          } else if (convError.code === '42501' && /not accepting/i.test(convError.message ?? '')) {
+            // Recipient's allow_messages gate (enforce_conversation_transition raises with the
+            // "not accepting" text). The same trigger also raises 42501 for volunteer-ownership
+            // and self-request causes — only the allow_messages RAISE carries "not accepting",
+            // so match on it and let every other 42501 fall through to the generic throw. Do NOT
+            // pre-read the recipient's flag (that would leak it) — rely on the server RAISE.
+            logger.info('conversations.request.blocked', { outcome: 'message_request_blocked_by_pref' })
+            setError("This member isn't accepting new messages right now.")
           } else {
             throw new Error(convError.message)
           }

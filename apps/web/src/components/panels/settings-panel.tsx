@@ -48,6 +48,7 @@ import { applyA11yAttributes, toUserPrefs } from '@/lib/accessibility-prefs'
 import { mergeStoredPrefs } from '@/lib/settings-prefs'
 import { mapConnectedAccounts, OAUTH_PROVIDERS, PROVIDER_LABELS } from '@/lib/connected-accounts'
 import { readNotificationPrefs, writeNotificationPrefs } from '@/lib/notification-prefs'
+import { readAllowMessages, writeAllowMessages } from '@/lib/allow-messages-prefs'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 // ============================================
@@ -1301,7 +1302,13 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
   useEffect(() => {
     if (!user || isAnonymous) return
     let cancelled = false
-    readNotificationPrefs(supabase).then((topics) => {
+    // Wave C1: also hydrate the account-authoritative allow_messages flag so the
+    // "Allow Messages" toggle reflects server truth (falling back to the localStorage
+    // view on any read failure — readAllowMessages resolves default-ON, never OFF).
+    Promise.all([
+      readNotificationPrefs(supabase),
+      readAllowMessages(supabase),
+    ]).then(([topics, allowMessages]) => {
       if (cancelled) return
       setLocalPrefs((prev) => ({
         ...prev,
@@ -1310,6 +1317,10 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
           resourceAlerts: topics.resourceAlerts,
           applicationUpdates: topics.applicationUpdates,
           communityPosts: topics.communityPosts,
+        },
+        privacy: {
+          ...prev.privacy,
+          allowMessages,
         },
       }))
     })
@@ -1376,10 +1387,24 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
     }
   }
 
-  const updatePrivacy = (privacy: SettingsData['privacy']) => {
+  const updatePrivacy = async (privacy: SettingsData['privacy']) => {
+    // Optimistic: reflect the toggle immediately and keep localStorage as the guest/fallback view.
+    const prev = localPrefs
     const updated = { ...localPrefs, privacy }
     setLocalPrefs(updated)
     saveLocalPrefs(updated)
+    // Wave C1: allow_messages is account-authoritative for authed users — persist it with the
+    // truthful-optimistic contract (await the write; revert + banner on failure so the toggle
+    // never shows a value that did not persist). The other privacy toggles stay localStorage-only.
+    if (user && !isAnonymous && privacy.allowMessages !== prev.privacy.allowMessages) {
+      const ok = await writeAllowMessages(supabase, user.id, privacy.allowMessages)
+      if (!ok) {
+        setLocalPrefs(prev)
+        saveLocalPrefs(prev)
+        setSaveMessage('Failed to save changes')
+        setTimeout(() => setSaveMessage(null), 3000)
+      }
+    }
   }
 
   const updateAccessibility = (accessibility: SettingsData['accessibility']) => {
