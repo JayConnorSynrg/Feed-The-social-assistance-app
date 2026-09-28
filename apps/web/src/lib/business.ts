@@ -69,6 +69,10 @@ export interface Business {
   // PostgREST serialises PostGIS GEOGRAPHY as an EWKB hex string; tests may pass GeoJSON.
   location: string | { coordinates?: [number, number] } | null
   resource_id: string | null
+  // Populated ONLY by the showcase list reader (fetchApprovedBusinesses), which embeds the org's
+  // single logo photo in the same query (no N+1). null when the business has no logo. Other readers
+  // (map bbox, single-business page) leave it undefined — the card falls back to an initial/placeholder.
+  logo_url?: string | null
 }
 
 /** Fields a member fills in on the submit-a-business form. org_type is fixed to 'business'. */
@@ -178,23 +182,40 @@ export function sortByDistanceKm<T>(
     .map((x) => x.item)
 }
 
-/** Result of persisting a business submission. */
-export type SubmitOutcome = { ok: true; id: string } | { ok: false; error: string }
+/**
+ * Result of persisting a business submission (CINV4 — truthful, three-valued).
+ *  - { ok:true, id }               the org row AND every provided child row persisted.
+ *  - { ok:true, id, partial }      the org row persisted (business is pending review) but one or
+ *                                  more child inserts (photos/hours/services) failed. `partial` is a
+ *                                  bounded, PII-free human message naming the child kinds that failed.
+ *                                  The submit MUST NOT be reported as full success — the business was
+ *                                  created, some profile detail was not saved.
+ *  - { ok:false, error }           the org insert itself failed; nothing persisted.
+ */
+export type SubmitOutcome =
+  | { ok: true; id: string; partial?: string }
+  | { ok: false; error: string }
 
 /** Truthful UI phase for the submit surface. Note: NO 'live'/'approved' phase exists. */
 export type SubmitPhase =
   | { kind: 'idle' }
   | { kind: 'submitting' }
-  | { kind: 'pending'; id: string }
+  // `warning` is set ONLY when the business was created but some child profile data failed to save
+  // (partial success); the pending panel shows it alongside the pending-review confirmation.
+  | { kind: 'pending'; id: string; warning?: string }
   | { kind: 'error'; message: string }
 
 /**
- * CINV4 (TRUTHFUL SUBMIT): translate a persist OUTCOME into the UI phase. A successful insert
- * becomes 'pending' review (never shown as already-live); a failure becomes 'error' carrying
- * the message so the component can revert and surface a banner. If a caller ever swallowed the
- * error (returned ok:true on failure), this would still refuse to fabricate a 'pending' — the
- * outcome discriminant is the single source of truth.
+ * CINV4 (TRUTHFUL SUBMIT): translate a persist OUTCOME into the UI phase. A successful org insert
+ * becomes 'pending' review (never shown as already-live); a partial success carries the warning so
+ * the panel can tell the user their business was created but some detail failed; a failure becomes
+ * 'error' carrying the message so the component can revert and surface a banner. If a caller ever
+ * swallowed the error (returned ok:true on failure), this would still refuse to fabricate a
+ * 'pending' — the outcome discriminant is the single source of truth.
  */
 export function nextSubmitPhase(outcome: SubmitOutcome): SubmitPhase {
-  return outcome.ok ? { kind: 'pending', id: outcome.id } : { kind: 'error', message: outcome.error }
+  if (!outcome.ok) return { kind: 'error', message: outcome.error }
+  return outcome.partial
+    ? { kind: 'pending', id: outcome.id, warning: outcome.partial }
+    : { kind: 'pending', id: outcome.id }
 }

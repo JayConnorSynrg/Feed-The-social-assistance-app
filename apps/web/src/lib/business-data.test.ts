@@ -198,7 +198,159 @@ function makeReadClient(result: { data: unknown; error: { message: string } | nu
   return client as unknown as SupabaseClient<Database>
 }
 
+// ---- orchestration client (org insert + per-table child inserts) --------------------------------
+// from('organizations') -> insert -> select -> single ; from('business_*') -> insert -> then.
+// Records every table's inserted payload and lets a per-table child error be injected.
+function makeOrchestrationClient(opts: {
+  orgResult?: { data: { id: string } | null; error: { message: string } | null }
+  childErrors?: Partial<Record<'business_photos' | 'business_hours' | 'business_services', string>>
+}) {
+  const inserts: Record<string, unknown> = {}
+  const orgBuilder: Record<string, unknown> = {}
+  Object.assign(orgBuilder, {
+    insert(row: unknown) {
+      inserts['organizations'] = row
+      return orgBuilder
+    },
+    select() {
+      return orgBuilder
+    },
+    single() {
+      return Promise.resolve(opts.orgResult ?? { data: { id: 'org-new' }, error: null })
+    },
+  })
+  function childBuilder(table: string) {
+    const b: Record<string, unknown> = {}
+    Object.assign(b, {
+      insert(rows: unknown) {
+        inserts[table] = rows
+        return b
+      },
+      then: (cb: (r: { data: unknown; error: { message: string } | null }) => unknown) => {
+        const message = opts.childErrors?.[table as keyof typeof opts.childErrors]
+        return Promise.resolve(cb({ data: null, error: message ? { message } : null }))
+      },
+    })
+    return b
+  }
+  const client = {
+    inserts,
+    from(table: string) {
+      return table === 'organizations' ? orgBuilder : childBuilder(table)
+    },
+  }
+  return client as unknown as SupabaseClient<Database> & { inserts: typeof inserts }
+}
+
+// ---- logo-embed read client (counts from() calls; returns embedded business_photos) --------------
+function makeLogoEmbedClient(rows: unknown[]) {
+  const state = { fromCount: 0, selected: '', eqCalls: [] as Array<[string, unknown]> }
+  const builder: Record<string, unknown> = {}
+  Object.assign(builder, {
+    select: (cols: string) => {
+      state.selected = cols
+      return builder
+    },
+    eq: (col: string, val: unknown) => {
+      state.eqCalls.push([col, val])
+      return builder
+    },
+    order: () => builder,
+    then: (cb: (r: { data: unknown; error: null }) => unknown) =>
+      Promise.resolve(cb({ data: rows, error: null })),
+  })
+  const client = {
+    state,
+    from() {
+      state.fromCount += 1
+      return builder
+    },
+  }
+  return client as unknown as SupabaseClient<Database> & { state: typeof state }
+}
+
 const input = { name: '  Corner Cafe  ', description: 'Coffee', city: 'Burlington' }
+
+const richChildren = {
+  photos: [
+    { kind: 'logo' as const, url: 'https://x/l.png', storage_path: 'org/l.png', sort_order: 0, caption: null },
+  ],
+  hours: [{ day_of_week: 1, open_time: '09:00', close_time: '17:00' }],
+  services: [{ name: 'Haircut', description: null, sort_order: 0 }],
+}
+
+describe('submitBusiness orchestration — org insert then child writers (CINV4, three-valued)', () => {
+  it('org-ok + children-ok: returns ok:true with no partial and stamps every child with the new org id', async () => {
+    const client = makeOrchestrationClient({ orgResult: { data: { id: 'org-77' }, error: null } })
+    const out = await submitBusiness(client, { ...input, ...richChildren }, 'user-1')
+    expect(out).toEqual({ ok: true, id: 'org-77' })
+    expect(client.inserts['business_photos']).toEqual([
+      { org_id: 'org-77', kind: 'logo', url: 'https://x/l.png', storage_path: 'org/l.png', sort_order: 0, caption: null },
+    ])
+    expect(client.inserts['business_hours']).toEqual([
+      { org_id: 'org-77', day_of_week: 1, open_time: '09:00', close_time: '17:00' },
+    ])
+    expect(client.inserts['business_services']).toEqual([
+      { org_id: 'org-77', name: 'Haircut', description: null, sort_order: 0 },
+    ])
+    // Exactly one business.submit event, and it is .complete (never an error) even with children.
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.submit.complete' })
+  })
+
+  it('org-ok + one-child-fail: returns ok:true WITH partial (never full success, never ok:false), other children still persist', async () => {
+    const client = makeOrchestrationClient({
+      orgResult: { data: { id: 'org-77' }, error: null },
+      childErrors: { business_hours: 'rls denied' },
+    })
+    const out = await submitBusiness(client, { ...input, ...richChildren }, 'user-1')
+    expect(out.ok).toBe(true)
+    if (!out.ok) throw new Error('unreachable')
+    expect(out.id).toBe('org-77')
+    expect(typeof out.partial).toBe('string')
+    expect(out.partial).toMatch(/hours/)
+    // The non-failing children were still written.
+    expect(client.inserts['business_photos']).toBeDefined()
+    expect(client.inserts['business_services']).toBeDefined()
+    // A child failure does NOT flip the single submit event to error — the submission itself succeeded.
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.submit.complete' })
+  })
+
+  it('org-fail: returns ok:false and NEVER attempts any child insert', async () => {
+    const client = makeOrchestrationClient({
+      orgResult: { data: null, error: { message: 'permission denied' } },
+    })
+    const out = await submitBusiness(client, { ...input, ...richChildren }, 'user-1')
+    expect(out).toEqual({ ok: false, error: 'permission denied' })
+    expect(client.inserts['business_photos']).toBeUndefined()
+    expect(client.inserts['business_hours']).toBeUndefined()
+    expect(client.inserts['business_services']).toBeUndefined()
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.submit.error' })
+  })
+})
+
+describe('fetchApprovedBusinesses — logo embed (no N+1)', () => {
+  it('issues ONE query embedding business_photos filtered to the logo kind, and flattens logo_url', async () => {
+    const client = makeLogoEmbedClient([
+      { id: 'a', name: 'A', business_photos: [{ url: 'https://x/logo-a.png' }] },
+      { id: 'b', name: 'B', business_photos: [] },
+    ])
+    const rows = await fetchApprovedBusinesses(client)
+    // ONE from() for the whole list — never a per-row logo fetch.
+    expect(client.state.fromCount).toBe(1)
+    expect(client.state.selected).toContain('business_photos(url)')
+    expect(client.state.eqCalls).toContainEqual(['business_photos.kind', 'logo'])
+    // logo_url flattened; the embedded array is not leaked to the card shape.
+    expect(rows[0]).toMatchObject({ id: 'a', logo_url: 'https://x/logo-a.png' })
+    expect(rows[0]).not.toHaveProperty('business_photos')
+    // Logo-less business falls back to null (card renders an initial/placeholder).
+    expect(rows[1]).toMatchObject({ id: 'b', logo_url: null })
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0].attrs).toEqual({ result_count: 2 })
+  })
+})
 
 describe('submitBusiness (CINV4 — never swallows the error)', () => {
   it('returns ok:false with the message when the insert errors', async () => {

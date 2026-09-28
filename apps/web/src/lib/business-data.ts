@@ -121,6 +121,17 @@ export function photoSizeBucket(bytes: number): PhotoSizeBucket {
 export type PhotoImageType = 'jpeg' | 'png' | 'webp'
 
 /**
+ * Map a browser File MIME type to the bounded PhotoImageType vocabulary the upload metric reports.
+ * The picker only admits jpeg/png/webp; anything else falls back to 'jpeg' so the label never leaks
+ * an unbounded MIME string. Used by the form to label each withPhotoUploadMetric call.
+ */
+export function photoImageType(mime: string | null | undefined): PhotoImageType {
+  if (mime === 'image/png') return 'png'
+  if (mime === 'image/webp') return 'webp'
+  return 'jpeg'
+}
+
+/**
  * Wrap a single photo upload in a business.photo.upload wide-event. The form calls this around each
  * upload attempt; withMetric emits EXACTLY ONE event per call — `.complete` on success (outcome=ok)
  * and `.error` on a thrown failure (outcome=error) — so the ok|error outcome dimension rides on the
@@ -180,15 +191,30 @@ export async function fetchApprovedBusinesses(
   // result_count in place before returning lands the real count on the .complete wide-event.
   const attrs: Record<string, number> = { result_count: 0 }
   return withMetric('business.list.fetch', attrs, async () => {
+    // ONE query, no N+1: embed the org's logo photo (PostgREST detects the business_photos→
+    // organizations FK). The embedded-resource filter `business_photos.kind = logo` narrows the
+    // nested rows to at most one (the DB partial-unique index guarantees ≤1 logo) WITHOUT dropping
+    // logo-less businesses — it is a left embed, not an inner join. RLS admits a child row only when
+    // its parent is an approved active business, which every row here already is.
     const { data, error } = await loose(supabase)
       .from('organizations')
-      .select(BUSINESS_COLUMNS)
+      .select(`${BUSINESS_COLUMNS}, business_photos(url)`)
       .eq('org_type', 'business')
       .eq('status', 'approved')
+      .eq('business_photos.kind', 'logo')
       .order('name', { ascending: true })
       .then((r) => r)
     if (error) throw new BusinessReadError(error.message)
-    const rows = (data ?? []) as Business[]
+    const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const photos = row.business_photos
+      const logoUrl =
+        Array.isArray(photos) && photos[0] && typeof (photos[0] as { url?: unknown }).url === 'string'
+          ? (photos[0] as { url: string }).url
+          : null
+      // Drop the embedded array from the returned shape; expose only the flat logo_url the card reads.
+      const { business_photos: _embedded, ...rest } = row
+      return { ...(rest as unknown as Business), logo_url: logoUrl }
+    })
     attrs.result_count = rows.length
     return rows
   })
@@ -274,12 +300,14 @@ export async function submitBusiness(
     attribute_count: Object.values(attributes).filter(Boolean).length,
     has_social: Object.keys(socialLinks).length > 0,
   }
+  // Step 1 — the ORG insert, wrapped in the single business.submit wide event: .complete
+  // (outcome=pending) on success, .error (error_code=BusinessWriteError) on failure. We throw
+  // inside so the failure is recorded, then catch OUTSIDE to keep the non-throwing SubmitOutcome
+  // contract the truthful revert needs (CINV4). The child inserts (step 2) run AFTER this wrap
+  // resolves, so a child failure never flips this event to .error — the submission itself succeeded.
+  let orgId: string
   try {
-    // withMetric emits exactly one wide event: .complete (outcome=pending) on success, .error
-    // (error_code=BusinessWriteError) on failure. We throw inside so the failure is recorded, then
-    // catch OUTSIDE to keep the non-throwing SubmitOutcome contract the truthful revert needs
-    // (CINV4) — the component keys on outcome.ok === false, never on an exception.
-    return await withMetric('business.submit', attrs, async () => {
+    orgId = await withMetric('business.submit', attrs, async () => {
       const { data, error } = await loose(supabase)
         .from('organizations')
         .insert({
@@ -304,12 +332,45 @@ export async function submitBusiness(
         .single()
       if (error) throw new BusinessWriteError(error.message)
       if (!data?.id) throw new BusinessWriteError('Submission did not persist')
-      return { ok: true, id: data.id } as SubmitOutcome
+      return data.id
     })
   } catch (err) {
+    // Org insert failed — nothing persisted. Never fabricate a success.
     if (err instanceof BusinessWriteError) return { ok: false, error: err.message }
     throw err
   }
+
+  // Step 2 — child rows for the now-created (pending) org. Each writer is best-effort and no-ops on
+  // an empty array. A child failure does NOT undo the pending business, so we DON'T flip the outcome
+  // to ok:false; we record which kinds failed and surface them as a truthful `partial` so the user is
+  // told the business was created but some profile data did not save (never a silent swallow, never a
+  // claim of full success). Each is caught independently so one failing kind still lets the others
+  // persist. The raw error rode the writer's own typed throw; here we keep only a bounded kind label.
+  const failed: string[] = []
+  try {
+    await insertBusinessPhotos(supabase, orgId, photos)
+  } catch {
+    failed.push('photos')
+  }
+  try {
+    await insertBusinessHours(supabase, orgId, hours)
+  } catch {
+    failed.push('hours')
+  }
+  try {
+    await insertBusinessServices(supabase, orgId, services)
+  } catch {
+    failed.push('services')
+  }
+
+  if (failed.length > 0) {
+    return {
+      ok: true,
+      id: orgId,
+      partial: `Your business was submitted, but some details could not be saved (${failed.join(', ')}). You can add them later.`,
+    }
+  }
+  return { ok: true, id: orgId }
 }
 
 // ---------------------------------------------------------------------------
