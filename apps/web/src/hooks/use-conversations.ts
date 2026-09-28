@@ -295,10 +295,12 @@ export function useConversations() {
         if (convError) {
           if (convError.code === '23505') {
             setError('This volunteer already has a pending request. Please try again later.')
-          } else if (convError.code === '42501') {
-            // Recipient's allow_messages gate (enforce_conversation_transition). Map to a
-            // friendly message exactly like the duplicate case; do NOT pre-read the recipient's
-            // flag (that would leak it) — rely on the server RAISE.
+          } else if (convError.code === '42501' && /not accepting/i.test(convError.message ?? '')) {
+            // Recipient's allow_messages gate (enforce_conversation_transition raises with the
+            // "not accepting" text). The same trigger also raises 42501 for volunteer-ownership
+            // and self-request causes — only the allow_messages RAISE carries "not accepting",
+            // so match on it and let every other 42501 fall through to the generic throw. Do NOT
+            // pre-read the recipient's flag (that would leak it) — rely on the server RAISE.
             logger.info('conversations.request.blocked', { outcome: 'message_request_blocked_by_pref' })
             setError("This member isn't accepting new messages right now.")
           } else {
