@@ -439,6 +439,117 @@ export type Database = {
         }
         Relationships: []
       }
+      business_hours: {
+        Row: {
+          close_time: string
+          created_at: string
+          day_of_week: number
+          id: string
+          open_time: string
+          org_id: string
+        }
+        Insert: {
+          close_time: string
+          created_at?: string
+          day_of_week: number
+          id?: string
+          open_time: string
+          org_id: string
+        }
+        Update: {
+          close_time?: string
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          open_time?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+          sort_order: number
+          storage_path: string
+          url: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+          sort_order?: number
+          storage_path: string
+          url: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          sort_order?: number
+          storage_path?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_photos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_services: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          org_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          org_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_services_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_stats: {
         Row: {
           active_users: number
@@ -1659,10 +1770,14 @@ export type Database = {
       organizations: {
         Row: {
           address: string | null
+          attributes: Json
+          business_category: string | null
           city: string | null
+          cost_model: string | null
           created_at: string
           created_by: string | null
           description: string | null
+          email: string | null
           id: string
           is_active: boolean
           location: unknown
@@ -1674,6 +1789,7 @@ export type Database = {
           rejection_reason: string | null
           resource_id: string | null
           service_radius_miles: number | null
+          social_links: Json
           state: string | null
           status: string
           submitted_by: string | null
@@ -1683,10 +1799,14 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          attributes?: Json
+          business_category?: string | null
           city?: string | null
+          cost_model?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          email?: string | null
           id?: string
           is_active?: boolean
           location?: unknown
@@ -1698,6 +1818,7 @@ export type Database = {
           rejection_reason?: string | null
           resource_id?: string | null
           service_radius_miles?: number | null
+          social_links?: Json
           state?: string | null
           status?: string
           submitted_by?: string | null
@@ -1707,10 +1828,14 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          attributes?: Json
+          business_category?: string | null
           city?: string | null
+          cost_model?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          email?: string | null
           id?: string
           is_active?: boolean
           location?: unknown
@@ -1722,6 +1847,7 @@ export type Database = {
           rejection_reason?: string | null
           resource_id?: string | null
           service_radius_miles?: number | null
+          social_links?: Json
           state?: string | null
           status?: string
           submitted_by?: string | null
