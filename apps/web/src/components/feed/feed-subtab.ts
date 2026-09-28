@@ -17,16 +17,17 @@
  * "Feed" from Events/Petitions land back on the feed.
  */
 
-export type FeedSubtab = 'feed' | 'events' | 'petitions' | 'messages'
+export type FeedSubtab = 'feed' | 'events' | 'businesses' | 'petitions' | 'messages'
 
 /**
  * Resolve the active Community subtab from an untyped `panelParams.subtab` value.
- * Only the three explicit non-default subtabs are recognized; everything else
+ * Only the explicit non-default subtabs are recognized; everything else
  * (including undefined/null/unknown strings) resolves to the 'feed' default.
  */
 export function resolveFeedSubtab(subtab: unknown): FeedSubtab {
   if (subtab === 'messages') return 'messages'
   if (subtab === 'events') return 'events'
+  if (subtab === 'businesses') return 'businesses'
   if (subtab === 'petitions') return 'petitions'
   return 'feed'
 }
