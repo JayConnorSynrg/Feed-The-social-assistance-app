@@ -335,9 +335,13 @@ export async function submitBusiness(
       return data.id
     })
   } catch (err) {
-    // Org insert failed — nothing persisted. Never fabricate a success.
-    if (err instanceof BusinessWriteError) return { ok: false, error: err.message }
-    throw err
+    // Org insert failed — nothing persisted. Never fabricate a success, and NEVER re-throw: the
+    // withMetric wrap already observed the throw and emitted business.submit.error exactly once, so
+    // here (OUTSIDE the wrap) we honor the non-throwing SubmitOutcome contract for ANY failure — a
+    // Supabase-returned {error} (BusinessWriteError) OR a raw network/promise rejection — so the
+    // caller's truthful revert always runs and the submit surface can never hang (CINV4).
+    const message = err instanceof Error ? err.message : 'Submission failed'
+    return { ok: false, error: message }
   }
 
   // Step 2 — child rows for the now-created (pending) org. Each writer is best-effort and no-ops on

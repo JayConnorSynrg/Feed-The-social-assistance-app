@@ -317,6 +317,27 @@ describe('submitBusiness orchestration — org insert then child writers (CINV4,
     expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.submit.complete' })
   })
 
+  it('org insert REJECTS (raw network/promise rejection, not a returned {error}): returns ok:false, NEVER throws, and emits exactly one .error', async () => {
+    // A client whose org single() REJECTS — the rare edge the truthful-contract must also cover.
+    const rejectingClient = {
+      from() {
+        const b: Record<string, unknown> = {}
+        Object.assign(b, {
+          insert: () => b,
+          select: () => b,
+          single: () => Promise.reject(new Error('network down')),
+        })
+        return b
+      },
+    } as unknown as SupabaseClient<Database>
+    // Must NOT throw — the non-throwing SubmitOutcome contract holds for a raw rejection too.
+    const out = await submitBusiness(rejectingClient, { ...input, ...richChildren }, 'user-1')
+    expect(out).toEqual({ ok: false, error: 'network down' })
+    // withMetric still observed the throw: exactly one business.submit.error, no double-emit.
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.submit.error' })
+  })
+
   it('org-fail: returns ok:false and NEVER attempts any child insert', async () => {
     const client = makeOrchestrationClient({
       orgResult: { data: null, error: { message: 'permission denied' } },

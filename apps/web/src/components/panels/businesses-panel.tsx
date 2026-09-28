@@ -339,6 +339,11 @@ export function BusinessesPanel() {
         } else if (next.kind === 'error') {
           logger.error('business.submit.failed', new Error(next.message), { outcome: 'error' })
         }
+      } catch (err) {
+        // Defense-in-depth: submitBusiness honors a non-throwing contract, but should any future
+        // code path here throw, settle to a truthful error phase so the form can never hang on
+        // "Submitting…" with no banner.
+        setPhase({ kind: 'error', message: err instanceof Error ? err.message : 'Submission failed' })
       } finally {
         submittingRef.current = false
       }
