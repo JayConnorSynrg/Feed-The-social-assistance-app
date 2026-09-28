@@ -12,7 +12,13 @@ import {
   parseGeographyPoint,
   sortByDistanceKm,
   nextSubmitPhase,
+  timeToMinutes,
+  minuteToClock,
+  formatHoursInterval,
+  computeOpenNow,
+  formatOpenNow,
   type Business,
+  type BusinessHours,
 } from './business'
 
 function biz(id: string, resource_id: string | null): Business {
@@ -121,6 +127,78 @@ describe('sortByDistanceKm', () => {
     ]
     const out = sortByDistanceKm(items, (x) => x.km).map((x) => x.id)
     expect(out).toEqual(['c', 'd', 'a', 'b'])
+  })
+})
+
+function hrs(day: number, open: string, close: string): BusinessHours {
+  return { day_of_week: day, open_time: open, close_time: close }
+}
+// Minute-of-week for a local day/hour/minute (0 = Sunday).
+function mow(day: number, hour: number, minute = 0): number {
+  return day * 1440 + hour * 60 + minute
+}
+
+describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
+  it('parses HH:MM and HH:MM:SS, rejecting malformed / out-of-range', () => {
+    expect(timeToMinutes('09:00')).toBe(540)
+    expect(timeToMinutes('17:30')).toBe(1050)
+    expect(timeToMinutes('09:00:00')).toBe(540)
+    expect(timeToMinutes('24:00')).toBeNull()
+    expect(timeToMinutes('09:60')).toBeNull()
+    expect(timeToMinutes('nope')).toBeNull()
+    expect(timeToMinutes(null)).toBeNull()
+  })
+  it('formats a 12-hour clock with AM/PM and midday/midnight edges', () => {
+    expect(minuteToClock(540)).toBe('9:00 AM')
+    expect(minuteToClock(1020)).toBe('5:00 PM')
+    expect(minuteToClock(0)).toBe('12:00 AM')
+    expect(minuteToClock(720)).toBe('12:00 PM')
+  })
+  it('formats an interval label and omits a malformed row', () => {
+    expect(formatHoursInterval(hrs(1, '09:00', '17:00'))).toBe('9:00 AM – 5:00 PM')
+    expect(formatHoursInterval(hrs(1, '09:00', 'bad'))).toBeNull()
+  })
+})
+
+describe('computeOpenNow / formatOpenNow (W3 open-now, viewer-local minute-of-week)', () => {
+  it('no hours → null (pill renders nothing)', () => {
+    expect(computeOpenNow([], mow(1, 12))).toBeNull()
+    expect(formatOpenNow(null)).toBeNull()
+  })
+
+  it('open inside a same-day interval reports the close time', () => {
+    const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 12))
+    expect(state).toEqual({ open: true, closeDay: 1, closeMinute: 1020 })
+    expect(formatOpenNow(state)).toBe('Open now · closes 5:00 PM')
+  })
+
+  it('closed before opening reports the next open on the same day', () => {
+    const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 8))
+    expect(state).toEqual({ open: false, openDay: 1, openMinute: 540 })
+    expect(formatOpenNow(state)).toBe('Closed · opens Mon 9:00 AM')
+  })
+
+  it('closed after the last interval wraps to next week', () => {
+    const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 18))
+    expect(state).toEqual({ open: false, openDay: 1, openMinute: 540 })
+    expect(formatOpenNow(state)).toBe('Closed · opens Mon 9:00 AM')
+  })
+
+  it('an interval crossing midnight keeps the business open past 00:00', () => {
+    // Friday 22:00 → 02:00; now is Saturday 01:00 → still open, closes 2:00 AM.
+    const state = computeOpenNow([hrs(5, '22:00', '02:00')], mow(6, 1))
+    expect(state).toEqual({ open: true, closeDay: 6, closeMinute: 120 })
+    expect(formatOpenNow(state)).toBe('Open now · closes 2:00 AM')
+  })
+
+  it('a Saturday→Sunday interval covers the earliest minutes of Sunday (week wrap)', () => {
+    // Removing the +MINUTES_PER_WEEK probe makes this case report Closed instead of Open.
+    const state = computeOpenNow([hrs(6, '22:00', '02:00')], mow(0, 1))
+    expect(state).toEqual({ open: true, closeDay: 0, closeMinute: 120 })
+  })
+
+  it('a zero-length interval (open === close) contributes nothing', () => {
+    expect(computeOpenNow([hrs(1, '09:00', '09:00')], mow(1, 12))).toBeNull()
   })
 })
 
