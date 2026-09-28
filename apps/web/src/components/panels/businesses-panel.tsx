@@ -56,7 +56,12 @@ export function BusinessesPanel() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [showForm, setShowForm] = useState(panelParams?.subtab === 'submit')
+  const [showForm, setShowForm] = useState(false)
+  // Open the submit form when reached via the add-business deep link, which sets
+  // panelParams.businessSubmit through the feed-shell alias routing.
+  useEffect(() => {
+    if (panelParams?.businessSubmit) setShowForm(true)
+  }, [panelParams?.businessSubmit])
   const [form, setForm] = useState<NewBusinessInput>(EMPTY_FORM)
   const [phase, setPhase] = useState<SubmitPhase>({ kind: 'idle' })
 

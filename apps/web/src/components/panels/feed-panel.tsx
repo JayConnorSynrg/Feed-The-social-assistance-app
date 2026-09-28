@@ -36,6 +36,7 @@ import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
 import { useFollows } from '@/hooks/use-follows'
 import { MessagesPanel } from './messages-panel'
 import { EventsPanel } from './events-panel'
+import { BusinessesPanel } from './businesses-panel'
 import { PetitionsPanel } from './petitions-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logger, withMetric } from '@/lib/logger'
@@ -1490,6 +1491,9 @@ export function FeedPanel() {
     } else if (tab === 'events') {
       // events resolves via PANEL_ALIAS to feed+subtab='events'
       setActivePanel('events')
+    } else if (tab === 'businesses') {
+      // businesses resolves via PANEL_ALIAS to feed+subtab='businesses'
+      setActivePanel('businesses')
     } else if (tab === 'petitions') {
       // petitions resolves via PANEL_ALIAS to feed+subtab='petitions'
       setActivePanel('petitions')
@@ -1505,7 +1509,7 @@ export function FeedPanel() {
     e: React.KeyboardEvent<HTMLButtonElement>,
     currentIdx: number
   ) => {
-    const tabs: FeedSubtab[] = ['feed', 'events', 'petitions', 'messages']
+    const tabs: FeedSubtab[] = ['feed', 'events', 'businesses', 'petitions', 'messages']
     let next = currentIdx
     if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
@@ -2553,12 +2557,28 @@ export function FeedPanel() {
         </button>
         <button
           role="tab"
+          id="feed-tab-businesses"
+          aria-selected={activeSubtab === 'businesses'}
+          aria-controls="feed-panel-businesses"
+          tabIndex={activeSubtab === 'businesses' ? 0 : -1}
+          onClick={() => handleSubtabSwitch('businesses')}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 2)}
+          className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
+            activeSubtab === 'businesses'
+              ? 'border-[#4a5d23] text-[#4a5d23]'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          Businesses
+        </button>
+        <button
+          role="tab"
           id="feed-tab-petitions"
           aria-selected={activeSubtab === 'petitions'}
           aria-controls="feed-panel-petitions"
           tabIndex={activeSubtab === 'petitions' ? 0 : -1}
           onClick={() => handleSubtabSwitch('petitions')}
-          onKeyDown={(e) => handleFeedTabKeyDown(e, 2)}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 3)}
           className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
             activeSubtab === 'petitions'
               ? 'border-[#4a5d23] text-[#4a5d23]'
@@ -2576,7 +2596,7 @@ export function FeedPanel() {
           aria-controls="feed-panel-messages"
           tabIndex={activeSubtab === 'messages' ? 0 : -1}
           onClick={() => handleSubtabSwitch('messages')}
-          onKeyDown={(e) => handleFeedTabKeyDown(e, 3)}
+          onKeyDown={(e) => handleFeedTabKeyDown(e, 4)}
           className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
             activeSubtab === 'messages'
               ? 'border-[#4a5d23] text-[#4a5d23]'
@@ -2607,6 +2627,16 @@ export function FeedPanel() {
           className="flex-1 overflow-y-auto p-1"
         >
           <EventsPanel />
+        </div>
+      ) : activeSubtab === 'businesses' ? (
+        <div
+          role="tabpanel"
+          id="feed-panel-businesses"
+          aria-labelledby="feed-tab-businesses"
+          tabIndex={0}
+          className="flex-1 min-h-0"
+        >
+          <BusinessesPanel />
         </div>
       ) : activeSubtab === 'petitions' ? (
         <div

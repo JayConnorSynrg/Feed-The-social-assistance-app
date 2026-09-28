@@ -24,7 +24,6 @@ import {
   TrendingUp,
   Heart,
   Package,
-  Building2,
   Leaf,
   ExternalLink,
   Compass,
@@ -118,8 +117,7 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'map', icon: Map, label: 'Resource Map' },
   { panel: 'programs', icon: Search, label: 'Browse Programs' },
   { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
-  { panel: 'businesses', icon: Building2, label: 'Local Businesses' },
-  // applications, events, petitions are now subtabs of documents/feed respectively
+  // applications, events, petitions, businesses are now subtabs of documents/feed respectively
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
@@ -136,14 +134,15 @@ const ADMIN_SIDEBAR_ICON: SidebarIconItem = {
 // Panel aliases: these are deep-link inputs that resolve to a parent panel + subtab.
 // They remain valid PanelType inputs to setActivePanel but never become the resolved
 // activePanel value (the parent panel carries the resolved state).
-const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string }> = {
+const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string; params?: Record<string, unknown> }> = {
   forms: { panel: 'documents', subtab: 'applications' },
   messages: { panel: 'feed', subtab: 'messages' },
   applications: { panel: 'documents', subtab: 'applications' },
   petitions: { panel: 'feed', subtab: 'petitions' },
   events: { panel: 'feed', subtab: 'events' },
-  // Deep-link that lands on the Businesses panel with the submit form open.
-  'add-business': { panel: 'businesses', subtab: 'submit' },
+  businesses: { panel: 'feed', subtab: 'businesses' },
+  // Deep-link that lands on the Businesses subtab with the submit form open.
+  'add-business': { panel: 'feed', subtab: 'businesses', params: { businessSubmit: true } },
 }
 
 // ============================================
@@ -516,11 +515,12 @@ interface FeedShellProps {
 }
 
 // Valid panel names for URL hash routing (aliases included for deep-link init)
-const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events', 'businesses']
+const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
 
-// Resolve a hash value to a panel + optional subtab.
-// Alias hashes (#forms, #messages) map to their parent panel + subtab.
-function resolveHashToPanel(hash: string): { panel: PanelType; subtab?: string } {
+// Resolve a hash value to a panel + optional subtab (+ optional deep-link params).
+// Alias hashes (#forms, #messages, #businesses, #add-business) map to their parent
+// panel + subtab, and may carry params (e.g. add-business opens the submit form).
+function resolveHashToPanel(hash: string): { panel: PanelType; subtab?: string; params?: Record<string, unknown> } {
   if (hash in PANEL_ALIASES) {
     return PANEL_ALIASES[hash]
   }
@@ -568,8 +568,10 @@ export function FeedShell({
     setActivePanelState(resolved.panel)
     // subtab is a pure function of the resolved hash — set it when the hash
     // resolves one (alias hashes), clear it otherwise so a direct #feed load
-    // shows the base feed rather than a stale subtab.
-    setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
+    // shows the base feed rather than a stale subtab. Deep-link params (e.g.
+    // #add-business → businessSubmit) are merged through so the target subtab
+    // can open in the requested state.
+    setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab, ...(resolved.params ?? {}) }))
     setIsInitialized(true)
   }, [])
 
@@ -580,11 +582,12 @@ export function FeedShell({
   // - For non-alias panels, sets activePanel directly and pushes hash.
   const setActivePanel = useCallback((panel: PanelType) => {
     if (panel in PANEL_ALIASES) {
-      const { panel: parent, subtab } = PANEL_ALIASES[panel]
+      const { panel: parent, subtab, params } = PANEL_ALIASES[panel]
       logger.info('nav.alias.resolve', { input: panel, panel: parent, subtab })
       setActivePanelState(parent)
       // Functional update merges — preserves any existing params (e.g. openConversationId)
-      setPanelParams((prev) => ({ ...prev, subtab }))
+      // and layers this alias's deep-link params (e.g. add-business → businessSubmit).
+      setPanelParams((prev) => ({ ...prev, subtab, ...(params ?? {}) }))
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -595,9 +598,10 @@ export function FeedShell({
       setActivePanelState(panel)
       // A base (non-alias) panel carries no subtab. Clear any stale subtab so a
       // return to e.g. 'feed' after visiting the events/petitions subtabs lands
-      // on the base view instead of re-deriving the old subtab. Other params
-      // (openConversationId, formsTarget, …) are preserved.
-      setPanelParams((prev) => ({ ...prev, subtab: undefined }))
+      // on the base view instead of re-deriving the old subtab. Also clear the
+      // add-business deep-link flag so it can't re-open the submit form on a
+      // later return. Other params (openConversationId, formsTarget, …) are preserved.
+      setPanelParams((prev) => ({ ...prev, subtab: undefined, businessSubmit: undefined }))
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -617,7 +621,11 @@ export function FeedShell({
       // Mirror the init/setActivePanel paths: subtab tracks the resolved hash and
       // is cleared when the hash carries none, so browser back/forward to #feed
       // returns to the base feed instead of a stale events/petitions subtab.
-      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab }))
+      // Clear the add-business deep-link flag first (mirrors the setActivePanel
+      // base branch) so a Back to a base hash cannot leave businessSubmit=true to
+      // auto-open the form on a later Businesses-tab visit; the resolved params
+      // spread comes AFTER, so #add-business still wins and opens the form.
+      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab, businessSubmit: undefined, ...(resolved.params ?? {}) }))
     }
 
     window.addEventListener('hashchange', handleHashChange)

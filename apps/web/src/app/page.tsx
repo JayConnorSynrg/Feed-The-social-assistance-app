@@ -14,9 +14,8 @@ import { SettingsPanel } from '@/components/panels/settings-panel'
 import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { WizardPanel } from '@/components/panels/wizard-panel'
 import { ProgramsPanel } from '@/components/panels/programs-panel'
-import { BusinessesPanel } from '@/components/panels/businesses-panel'
-// PetitionsPanel, EventsPanel are now rendered as subtabs inside
-// DocumentsPanel (applications) and FeedPanel (events, petitions) — not top-level panels.
+// PetitionsPanel, EventsPanel, BusinessesPanel are now rendered as subtabs inside
+// DocumentsPanel (applications) and FeedPanel (events, businesses, petitions) — not top-level panels.
 import { useAuth } from '@/hooks/use-auth'
 
 // MapPanel pulls supercluster + react-map-gl into its chunk. Map is not the
@@ -110,9 +109,6 @@ function PanelRenderer() {
     case 'feed':
       return <FeedPanel />
 
-    case 'businesses':
-      return <BusinessesPanel />
-
     case 'settings':
       return <SettingsPanel />
 
@@ -120,7 +116,7 @@ function PanelRenderer() {
     case 'documents':
       return <DocumentsPanel />
 
-    // 'forms', 'messages', 'applications', 'petitions', 'events' are alias inputs —
+    // 'forms', 'messages', 'applications', 'petitions', 'events', 'businesses' are alias inputs —
     // setActivePanel resolves them to their parent panel + subtab before they reach
     // the switch. They never appear as activePanel, so these cases are intentionally absent.
 
