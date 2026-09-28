@@ -13,6 +13,39 @@
 //     success => 'pending' (never 'live'/'approved'), failure => 'error'. The revert path is
 //     therefore a pure, testable transition rather than an ad-hoc branch in the component.
 
+/** Cost model for a business, mirroring the DB CHECK on organizations.cost_model. */
+export type CostModel = 'free' | 'sliding_scale' | 'paid'
+
+/**
+ * One row of business_hours. `open_time`/`close_time` are Postgres `time` values serialised as
+ * 'HH:MM' / 'HH:MM:SS' strings; `day_of_week` is 0 (Sunday) through 6 (Saturday).
+ */
+export interface BusinessHours {
+  day_of_week: number
+  open_time: string
+  close_time: string
+}
+
+/** One row of business_services. `sort_order` fixes display order (ascending). */
+export interface BusinessService {
+  name: string
+  description: string | null
+  sort_order: number
+}
+
+/**
+ * One row of business_photos. `kind` is logo | cover | gallery (the DB enforces at most one logo
+ * and one cover per org via partial-unique indexes). `storage_path` is the object path in the
+ * public bucket; `url` is its resolved public URL.
+ */
+export interface BusinessPhoto {
+  kind: 'logo' | 'cover' | 'gallery'
+  url: string
+  storage_path: string
+  sort_order: number
+  caption: string | null
+}
+
 /** A business org as returned by businesses_in_bounds OR a direct approved-business select. */
 export interface Business {
   id: string
@@ -22,8 +55,17 @@ export interface Business {
   address: string | null
   city: string | null
   state: string | null
+  zip_code: string | null
   phone: string | null
+  email: string | null
   website: string | null
+  business_category: string | null
+  cost_model: CostModel | null
+  service_radius_miles: number | null
+  // jsonb columns. `attributes` maps a BUSINESS_ATTRIBUTES key to a boolean; `social_links` maps a
+  // SOCIAL_PLATFORMS key to an absolute (already-normalized) URL.
+  attributes: Record<string, boolean>
+  social_links: Record<string, string>
   // PostgREST serialises PostGIS GEOGRAPHY as an EWKB hex string; tests may pass GeoJSON.
   location: string | { coordinates?: [number, number] } | null
   resource_id: string | null
@@ -36,8 +78,20 @@ export interface NewBusinessInput {
   address?: string | null
   city?: string | null
   state?: string | null
+  zip_code?: string | null
   phone?: string | null
+  email?: string | null
   website?: string | null
+  business_category?: string | null
+  cost_model?: CostModel | null
+  service_radius_miles?: number | null
+  attributes?: Record<string, boolean>
+  social_links?: Record<string, string>
+  // Repeating rich-profile rows the submit flow writes into the child tables AFTER the org insert
+  // returns its id (via insertBusinessHours / insertBusinessServices / insertBusinessPhotos).
+  hours?: BusinessHours[]
+  services?: BusinessService[]
+  photos?: BusinessPhoto[]
 }
 
 /**
