@@ -39,4 +39,28 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl('mailto:hello@example.com')).toBe('mailto:hello@example.com')
     expect(normalizeUrl('tel:+18025550100')).toBe('tel:+18025550100')
   })
+
+  it('neutralizes dangerous schemes — never preserves javascript:/data:/vbscript: verbatim', () => {
+    // Allowlist hardening (defense-in-depth for the anon-facing /s/business CTA): a dangerous
+    // scheme must NOT survive as an executable href. It gets https://-prefixed into a harmless
+    // broken link, so the rendered href never starts with the dangerous scheme.
+    const js = normalizeUrl('javascript:alert(1)')
+    expect(js).not.toMatch(/^javascript:/i)
+    expect(js).toBe('https://javascript:alert(1)')
+
+    const data = normalizeUrl('data:text/html,x')
+    expect(data).not.toMatch(/^data:/i)
+    expect(data).toBe('https://data:text/html,x')
+
+    const vb = normalizeUrl('vbscript:x')
+    expect(vb).not.toMatch(/^vbscript:/i)
+    expect(vb).toBe('https://vbscript:x')
+  })
+
+  it('preserves ONLY the allowlisted schemes verbatim (http/https/mailto/tel)', () => {
+    expect(normalizeUrl('https://x.com')).toBe('https://x.com')
+    expect(normalizeUrl('http://x.com')).toBe('http://x.com')
+    expect(normalizeUrl('mailto:a@b.com')).toBe('mailto:a@b.com')
+    expect(normalizeUrl('tel:+18025550100')).toBe('tel:+18025550100')
+  })
 })
