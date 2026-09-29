@@ -1732,6 +1732,42 @@ export type Database = {
         }
         Relationships: []
       }
+      org_resources: {
+        Row: {
+          created_at: string
+          org_id: string
+          resource_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          org_id: string
+          resource_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          org_id?: string
+          resource_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_resources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           id: string
@@ -4635,6 +4671,28 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      organizations_in_bounds: {
+        Args: {
+          max_lat: number
+          max_lng: number
+          max_results?: number
+          min_lat: number
+          min_lng: number
+        }
+        Returns: {
+          address: string
+          city: string
+          description: string
+          id: string
+          location: unknown
+          name: string
+          org_type: string
+          phone: string
+          resource_id: string
+          state: string
+          website: string
+        }[]
       }
       organizer_confirm: {
         Args: {
