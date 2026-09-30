@@ -26,12 +26,13 @@ import { track } from '@vercel/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
-import { ResourceMarker, ClusterMarker, SnapRetailerMarker, BusinessMarker, type ViewState, type Resource } from '@/components/map'
+import { ResourceMarker, ClusterMarker, SnapRetailerMarker, BusinessMarker, OrgMarker, type ViewState, type Resource } from '@/components/map'
 import { VolunteerMarker } from '@/components/map/volunteer-marker'
 import { VolunteerResourceDetail } from '@/components/map/volunteer-resource-detail'
 import { useCluster } from '@/hooks/use-cluster'
 import { useViewportResources } from '@/hooks/use-viewport-resources'
 import { useViewportBusinesses } from '@/hooks/use-viewport-businesses'
+import { useViewportOrganizations } from '@/hooks/use-viewport-organizations'
 import { dedupeResourcesForBusinesses } from '@/lib/business'
 import { useResourceSearch, type SearchResourceRow } from '@/hooks/use-resource-search'
 import { useSnapRetailers } from '@/hooks/use-snap-retailers'
@@ -594,6 +595,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && !authLoading,
   })
 
+  // Org leaf layer — active, located, non-business orgs in the viewport (SECDEF reader). Independent
+  // of the resource cluster pipeline and the business layer; each result draws exactly one unclustered
+  // leaf pin. resources_in_bounds and businesses_in_bounds paths are untouched.
+  const { organizations: viewportOrganizations } = useViewportOrganizations({
+    bounds,
+    enabled: !!bounds && !authLoading,
+  })
+
   // Exhaustive server-side search — fires only when searchQuery is non-empty.
   // Not viewport-gated: returns every approved resource of every source
   // (including ungeocoded ones) that matches the query.
@@ -1018,6 +1027,11 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               (CINV2), independent of the resource cluster pipeline. */}
           {viewportBusinesses.map((business) => (
             <BusinessMarker key={`business-${business.id}`} business={business} />
+          ))}
+          {/* Org leaf layer — one unclustered indigo pin per active located non-business org,
+              independent of the resource cluster pipeline and the business layer. */}
+          {viewportOrganizations.map((organization) => (
+            <OrgMarker key={`org-${organization.id}`} organization={organization} />
           ))}
           {/* Safety alert markers — rendered on top of resource markers */}
           {safetyAlerts.map((alert) => (

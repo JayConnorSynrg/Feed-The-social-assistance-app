@@ -16,6 +16,10 @@ describe('resolveFeedSubtab', () => {
     expect(resolveFeedSubtab('businesses')).toBe('businesses')
   })
 
+  it('resolves "organizations"', () => {
+    expect(resolveFeedSubtab('organizations')).toBe('organizations')
+  })
+
   it('resolves "petitions"', () => {
     expect(resolveFeedSubtab('petitions')).toBe('petitions')
   })
