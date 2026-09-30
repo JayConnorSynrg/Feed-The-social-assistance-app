@@ -329,6 +329,47 @@ export async function fetchApprovedOrganizations(
   })
 }
 
+/** The admin-roster projection of an organization — the exact fields the platform-admin moderation
+ *  Organizations tab renders (name + org_type badge + inactive marker + expandable description). */
+export interface AdminOrgRosterRow {
+  id: string
+  name: string
+  org_type: string
+  is_active: boolean
+  description: string | null
+}
+
+// Admin-roster projection — name/type/active/description only (explicit, never *). No contact/location
+// columns: the moderation roster shows the type badge, an inactive marker, and an expandable description.
+const ADMIN_ROSTER_COLUMNS = 'id, name, org_type, is_active, description'
+
+/**
+ * Admin roster reader — EVERY NON-business org, active OR inactive, ordered by name. This is the
+ * platform-admin sibling of fetchApprovedOrganizations: it drops the is_active gate (an admin manages
+ * inactive orgs too, shown with an "Inactive" marker) but keeps the SAME disjointness guard — the
+ * .in() filter to the nine non-business org_types (INV-1). A 'business' row can never satisfy that
+ * filter, so the moderation Organizations tab lists EXACTLY non-business orgs and a business never
+ * appears there (RLS orgs_admin_select is the DB-side backstop). Selects explicit columns, never *.
+ * Throws OrgReadError so the caller can surface a load failure.
+ */
+export async function fetchAdminOrgRoster(
+  supabase: SupabaseClient<Database>,
+): Promise<AdminOrgRosterRow[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('organization.roster.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(ADMIN_ROSTER_COLUMNS)
+      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
+      .order('name', { ascending: true })
+      .then((r) => r)
+    if (error) throw new OrgReadError(error.message)
+    const rows = (data ?? []) as AdminOrgRosterRow[]
+    attrs.result_count = rows.length
+    return rows
+  })
+}
+
 /**
  * Map bbox reader — active, located, NON-business orgs via the organizations_in_bounds SECDEF RPC
  * (the sole reader the migration exposes for the org map layer). The RPC predicate is_active=true AND

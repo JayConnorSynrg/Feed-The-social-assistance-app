@@ -9,10 +9,15 @@
 // confined HERE — exactly like privileged-action.ts and notification-prefs' PrefsUpsertClient —
 // so every caller stays fully typed against the shapes in ./business.
 //
-// Writes/approvals do NOT live here: approve_business/reject_business go through
-// privileged-action.ts (privilegedRpc) so they carry x-request-id + withMetric telemetry
-// (CINV3). This module only reads (public showcase, map bbox, RA pending queue) and performs
-// the member INSERT (whose safe shape is forced by the DB BEFORE-INSERT trigger).
+// Writes/approvals: the moderation TRANSITIONS approve_business/reject_business go through
+// privileged-action.ts (privilegedRpc) so they carry x-request-id + withMetric telemetry (CINV3) —
+// they are SECDEF RPCs and are NOT defined here. This module reads (public showcase, map bbox, RA
+// pending queue), performs the member INSERT (whose safe shape is forced by the DB BEFORE-INSERT
+// trigger), the admin list reader (fetchAdminBusinessList — approved business rows WITH is_active
+// projected, read under orgs_admin_select so an admin sees inactive rows the public reader never
+// returns), and — at the bottom — the two admin direct-UPDATE writers (set-active toggle / edit) the
+// moderation Businesses tab uses, authorized live by the orgs_admin_update policy (the same
+// direct-UPDATE shape org-data.ts uses for the admin org location write), each wrapped in withMetric.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
@@ -69,6 +74,7 @@ type LooseResult<T> = Promise<{ data: T | null; error: { message: string } | nul
 interface LooseBuilder {
   select: (cols: string) => LooseBuilder
   insert: (rows: Record<string, unknown> | Record<string, unknown>[]) => LooseBuilder
+  update: (patch: Record<string, unknown>) => LooseBuilder
   eq: (col: string, val: unknown) => LooseBuilder
   order: (col: string, opts?: { ascending?: boolean }) => LooseBuilder
   single: () => LooseResult<{ id: string }>
@@ -214,6 +220,54 @@ export async function fetchApprovedBusinesses(
       // Drop the embedded array from the returned shape; expose only the flat logo_url the card reads.
       const { business_photos: _embedded, ...rest } = row
       return { ...(rest as unknown as Business), logo_url: logoUrl }
+    })
+    attrs.result_count = rows.length
+    return rows
+  })
+}
+
+/** An approved business as the admin management list sees it — every showcase field PLUS is_active,
+ *  which governs whether the business is live on the public surfaces. Only fetchAdminBusinessList (read
+ *  under orgs_admin_select) projects is_active; the public readers never do. */
+export interface AdminBusiness extends Business {
+  is_active: boolean
+}
+
+/**
+ * Admin management reader — EVERY approved business, active OR inactive, with is_active projected so
+ * the moderation Businesses tab can show live/retired state and drive a coherent Deactivate↔Reactivate
+ * toggle. Distinct from the public fetchApprovedBusinesses (which is unchanged and omits is_active):
+ * this reader is reached only by a platform admin, for whom orgs_admin_select admits business rows at
+ * ANY is_active, so an inactive (retired) business the public showcase/map/page hide via
+ * orgs_select_active still appears here. Same single logo-embed query shape (no N+1), same org_type=
+ * business AND status=approved gate (INV-2). Throws BusinessReadError so the caller can surface it.
+ */
+export async function fetchAdminBusinessList(
+  supabase: SupabaseClient<Database>
+): Promise<AdminBusiness[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('business.admin.list.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(`${BUSINESS_COLUMNS}, is_active, business_photos(url)`)
+      .eq('org_type', 'business')
+      .eq('status', 'approved')
+      .eq('business_photos.kind', 'logo')
+      .order('name', { ascending: true })
+      .then((r) => r)
+    if (error) throw new BusinessReadError(error.message)
+    // Flatten the embedded logo like fetchApprovedBusinesses; is_active rides through in `rest`. The
+    // embed is dropped from a shallow copy (rather than a destructured discard) so no unused binding is
+    // introduced — the flat card/list shape exposes only logo_url, never the raw business_photos array.
+    const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const photos = row.business_photos
+      const logoUrl =
+        Array.isArray(photos) && photos[0] && typeof (photos[0] as { url?: unknown }).url === 'string'
+          ? (photos[0] as { url: string }).url
+          : null
+      const rest: Record<string, unknown> = { ...row }
+      delete rest.business_photos
+      return { ...(rest as unknown as AdminBusiness), logo_url: logoUrl }
     })
     attrs.result_count = rows.length
     return rows
@@ -500,5 +554,86 @@ export async function fetchBusinessPhotos(
     const rows = (data ?? []) as BusinessPhoto[]
     attrs.result_count = rows.length
     return rows
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin direct-UPDATE writers — authorized LIVE by the orgs_admin_update policy (USING + WITH CHECK
+// is_current_user_admin()). The BEFORE-UPDATE guard guard_organizations_org_admin_update RETURNs NEW
+// for a platform admin, so an admin may edit descriptive/contact fields and toggle is_active. These
+// back the deactivate / edit actions of the moderation Businesses tab. Unlike approve_business /
+// reject_business (SECDEF RPCs routed through privilegedRpc), these are plain admin table UPDATEs —
+// the same direct-UPDATE shape org-data.ts uses for the admin org location write — so they live at
+// this controlled boundary and each is wrapped in withMetric with a bounded, PII-free label set.
+// ---------------------------------------------------------------------------
+
+/** The business's own editable descriptive + contact fields, as the admin edit form submits them. */
+export interface AdminBusinessEdit {
+  name: string
+  description: string | null
+  phone: string | null
+  email: string | null
+  website: string | null
+}
+
+/**
+ * Set an approved business's is_active flag — the coherent Deactivate↔Reactivate toggle behind the
+ * admin Businesses tab. active=false retires it: every public surface gates on is_active=true
+ * (orgs_select_active tightened for business rows; businesses_in_bounds; the /s/business page read),
+ * so it vanishes from the showcase, map, and page WITHOUT deletion or any change to its approved
+ * status; active=true restores it to exactly those surfaces. Authorized by orgs_admin_update (the
+ * BEFORE-UPDATE guard RETURNs NEW for a platform admin, so the is_active change is permitted).
+ * Wrapped in business.admin.set_active with ONE closed-vocab boolean label `active` (the direction) —
+ * never the target id, which is the eq filter. Throws BusinessWriteError on failure so the caller can
+ * revert its optimistic toggle rather than claim a false success.
+ */
+export async function adminSetBusinessActive(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  active: boolean
+): Promise<void> {
+  await withMetric('business.admin.set_active', { active }, async () => {
+    const { error } = await loose(supabase)
+      .from('organizations')
+      .update({ is_active: active })
+      .eq('id', orgId)
+      .then((r) => r)
+    if (error) throw new BusinessWriteError(error.message)
+  })
+}
+
+/**
+ * Edit an approved business's own descriptive + contact fields. The website runs through the SAME
+ * normalizeUrl helper the member submit uses (INV2 — one source of truth for stored href safety): a
+ * scheme-less domain is https-prefixed, an empty value is stored as null. Authorized by
+ * orgs_admin_update. Wrapped in business.admin.update with bounded, PII-free SHAPE labels only
+ * (has_* booleans describing which optional fields are set — never the name/email/url/address value).
+ * Throws BusinessWriteError on failure so the caller can surface it rather than claim a false success.
+ */
+export async function adminUpdateBusiness(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  fields: AdminBusinessEdit
+): Promise<void> {
+  const website = normalizeUrl(fields.website)
+  const attrs = {
+    has_description: (fields.description?.trim() ?? '') !== '',
+    has_phone: (fields.phone?.trim() ?? '') !== '',
+    has_email: (fields.email?.trim() ?? '') !== '',
+    has_website: website !== null,
+  }
+  await withMetric('business.admin.update', attrs, async () => {
+    const { error } = await loose(supabase)
+      .from('organizations')
+      .update({
+        name: fields.name.trim(),
+        description: fields.description?.trim() || null,
+        phone: fields.phone?.trim() || null,
+        email: fields.email?.trim() || null,
+        website,
+      })
+      .eq('id', orgId)
+      .then((r) => r)
+    if (error) throw new BusinessWriteError(error.message)
   })
 }
