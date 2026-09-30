@@ -61,6 +61,9 @@ import {
   normalizeSocialLinks,
   photoSizeBucket,
   withPhotoUploadMetric,
+  fetchAdminBusinessList,
+  adminSetBusinessActive,
+  adminUpdateBusiness,
 } from './business-data'
 
 beforeEach(() => {
@@ -370,6 +373,19 @@ describe('fetchApprovedBusinesses — logo embed (no N+1)', () => {
     expect(rows[1]).toMatchObject({ id: 'b', logo_url: null })
     expect(sinks).toHaveLength(1)
     expect(sinks[0].attrs).toEqual({ result_count: 2 })
+  })
+
+  it('INV-2: filters EXACTLY org_type=business AND status=approved (excludes non-business + unapproved)', async () => {
+    // The approved-list reader the Businesses tab reuses. Removing the org_type filter would let a
+    // NON-business org leak into the Businesses tab; removing the status filter would list pending/
+    // rejected business rows in the "approved" section. Either deletion turns these assertions RED —
+    // this is INV-2's forward guard (every row shown is an approved business) at the query boundary.
+    const client = makeLogoEmbedClient([{ id: 'a', name: 'A', business_photos: [] }])
+    await fetchApprovedBusinesses(client)
+    expect(client.state.eqCalls).toContainEqual(['org_type', 'business'])
+    expect(client.state.eqCalls).toContainEqual(['status', 'approved'])
+    // Never widens to a non-business type.
+    expect(client.state.eqCalls.map(([, v]) => v)).not.toContain('pantry')
   })
 })
 
@@ -765,5 +781,153 @@ describe('photoSizeBucket + withPhotoUploadMetric', () => {
     expect(sinks).toHaveLength(1)
     expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.photo.upload.error' })
     assertBoundedPhotoLabels(sinks[0].attrs)
+  })
+})
+
+// ---- update-recording client (update -> eq -> then) for the admin direct-UPDATE writers -----------
+function makeUpdateClient(result: { data: unknown; error: { message: string } | null } = {
+  data: null,
+  error: null,
+}) {
+  const state = { table: '', patch: null as Record<string, unknown> | null, eqCol: '', eqVal: undefined as unknown }
+  const builder: Record<string, unknown> = {}
+  Object.assign(builder, {
+    update(patch: Record<string, unknown>) {
+      state.patch = patch
+      return builder
+    },
+    eq(col: string, val: unknown) {
+      state.eqCol = col
+      state.eqVal = val
+      return builder
+    },
+    then: (cb: (r: typeof result) => unknown) => Promise.resolve(cb(result)),
+  })
+  const client = {
+    state,
+    from(table: string) {
+      state.table = table
+      return builder
+    },
+  }
+  return client as unknown as SupabaseClient<Database> & { state: typeof state }
+}
+
+describe('adminSetBusinessActive — Deactivate↔Reactivate toggle, orgs_admin_update (INV-3)', () => {
+  it('active=false UPDATEs is_active=false keyed by id; label carries the direction, one .complete', async () => {
+    const client = makeUpdateClient()
+    await adminSetBusinessActive(client, 'org-77', false)
+    expect(client.state.table).toBe('organizations')
+    // Deactivate direction: the write is EXACTLY is_active=false — the property that removes the
+    // business from every public surface. Flipping the payload bool fails this (mutation-proof direction).
+    expect(client.state.patch).toEqual({ is_active: false })
+    expect(client.state.eqCol).toBe('id')
+    expect(client.state.eqVal).toBe('org-77')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.admin.set_active.complete' })
+    // Closed-vocab, PII-free: exactly one boolean `active` label, never the target id.
+    expect(sinks[0].attrs).toEqual({ active: false })
+    expect(typeof sinks[0].attrs.active).toBe('boolean')
+  })
+
+  it('active=true UPDATEs is_active=true keyed by id (the Reactivate direction), one .complete', async () => {
+    const client = makeUpdateClient()
+    await adminSetBusinessActive(client, 'org-77', true)
+    // Reactivate direction: restores the business to the public surfaces. The payload bool follows the
+    // argument — if adminSetBusinessActive hard-coded false, this assertion turns RED.
+    expect(client.state.patch).toEqual({ is_active: true })
+    expect(client.state.eqCol).toBe('id')
+    expect(client.state.eqVal).toBe('org-77')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.admin.set_active.complete' })
+    expect(sinks[0].attrs).toEqual({ active: true })
+  })
+
+  it('throws BusinessWriteError and emits EXACTLY ONE .error on a Supabase failure', async () => {
+    const client = makeUpdateClient({ data: null, error: { message: 'rls denied' } })
+    await expect(adminSetBusinessActive(client, 'org-77', false)).rejects.toThrow('rls denied')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.set_active.error' })
+  })
+})
+
+describe('fetchAdminBusinessList — admin reader PROJECTS is_active (INV-2 + toggle state)', () => {
+  it('selects is_active, filters org_type=business AND status=approved, returns is_active per row', async () => {
+    const client = makeLogoEmbedClient([
+      { id: 'a', name: 'A', is_active: true, business_photos: [{ url: 'https://x/a.png' }] },
+      { id: 'b', name: 'B', is_active: false, business_photos: [] },
+    ])
+    const rows = await fetchAdminBusinessList(client)
+    // The projection MUST include is_active — without it the tab cannot show live/retired state or
+    // drive the toggle. Dropping is_active from the select turns this RED.
+    expect(client.state.selected).toContain('is_active')
+    // INV-2 for the actual tab source: exactly approved business rows (no non-business, no unapproved).
+    expect(client.state.eqCalls).toContainEqual(['org_type', 'business'])
+    expect(client.state.eqCalls).toContainEqual(['status', 'approved'])
+    // is_active flows through to the row shape (active AND inactive rows both surface to the admin),
+    // and logo_url is flattened like the public reader.
+    expect(rows[0]).toMatchObject({ id: 'a', is_active: true, logo_url: 'https://x/a.png' })
+    expect(rows[1]).toMatchObject({ id: 'b', is_active: false, logo_url: null })
+    expect(rows[1]).not.toHaveProperty('business_photos')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.admin.list.fetch.complete' })
+    expect(sinks[0].attrs).toEqual({ result_count: 2 })
+  })
+
+  it('EXACTLY ONE .error and throws on a Supabase error', async () => {
+    const client = makeReadClient({ data: null, error: { message: 'boom' } })
+    await expect(fetchAdminBusinessList(client)).rejects.toThrow('boom')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.list.fetch.error' })
+  })
+})
+
+describe('adminUpdateBusiness — descriptive/contact edit, normalized website (INV-3)', () => {
+  it('UPDATEs the editable fields keyed by id: trims name, normalizes website, nulls blanks', async () => {
+    const client = makeUpdateClient()
+    await adminUpdateBusiness(client, 'org-77', {
+      name: '  Corner Cafe  ',
+      description: '   ',
+      phone: ' 802-555-0100 ',
+      email: '   ',
+      website: 'corner.example.com',
+    })
+    expect(client.state.table).toBe('organizations')
+    expect(client.state.patch).toEqual({
+      name: 'Corner Cafe',
+      description: null, // blank -> null
+      phone: '802-555-0100',
+      email: null, // blank -> null
+      website: 'https://corner.example.com', // scheme-less -> https-prefixed (INV2 one source of truth)
+    })
+    expect(client.state.eqCol).toBe('id')
+    expect(client.state.eqVal).toBe('org-77')
+    // Bounded, PII-free SHAPE labels only (booleans) — never the name/email/url value itself.
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'info', event: 'business.admin.update.complete' })
+    expect(sinks[0].attrs).toEqual({
+      has_description: false,
+      has_phone: true,
+      has_email: false,
+      has_website: true,
+    })
+    for (const [, value] of Object.entries(sinks[0].attrs)) {
+      expect(typeof value).toBe('boolean')
+    }
+  })
+
+  it('throws BusinessWriteError and emits EXACTLY ONE .error on a Supabase failure', async () => {
+    const client = makeUpdateClient({ data: null, error: { message: 'permission denied' } })
+    await expect(
+      adminUpdateBusiness(client, 'org-77', {
+        name: 'X',
+        description: null,
+        phone: null,
+        email: null,
+        website: null,
+      })
+    ).rejects.toThrow('permission denied')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.update.error' })
   })
 })

@@ -33,10 +33,9 @@ import type { BusinessHours, BusinessPhoto } from '@/lib/business'
 import {
   ORG_TYPE_OPTIONS,
   ORG_TYPE_LABELS,
-  NON_BUSINESS_ORG_TYPES,
   type NonBusinessOrgType,
 } from '@/lib/org-vocab'
-import { adminCreateOrganization, attachOrgResources, ewktPoint } from '@/lib/org-data'
+import { adminCreateOrganization, attachOrgResources, ewktPoint, fetchAdminOrgRoster } from '@/lib/org-data'
 
 type MemberRole = 'admin' | 'member'
 
@@ -135,14 +134,18 @@ export function OrgsSection() {
     [],
   )
 
+  // Non-business ONLY (INV-1): the roster read lives in org-data.fetchAdminOrgRoster, which applies
+  // `.in('org_type', NON_BUSINESS_ORG_TYPES)` so a business row can never enter this tab — it belongs
+  // to the Businesses tab. A load failure leaves an empty roster rather than crashing the panel.
   const fetchOrgs = useCallback(async () => {
     setLoadingOrgs(true)
-    const { data } = await supabase
-      .from('organizations')
-      .select('id, name, org_type, is_active, description')
-      .order('name')
-    setOrgs(data ?? [])
-    setLoadingOrgs(false)
+    try {
+      setOrgs(await fetchAdminOrgRoster(supabase))
+    } catch {
+      setOrgs([])
+    } finally {
+      setLoadingOrgs(false)
+    }
   }, [supabase])
 
   const fetchMembers = useCallback(async (orgId: string) => {
@@ -642,9 +645,9 @@ export function OrgsSection() {
                   <div className="flex items-center gap-3">
                     <span className="font-medium text-stone-800">{org.name}</span>
                     <Badge variant="outline" className="text-xs text-[#4a5d23] border-[#4a5d23]/30">
-                      {(NON_BUSINESS_ORG_TYPES as readonly string[]).includes(org.org_type)
-                        ? ORG_TYPE_LABELS[org.org_type as NonBusinessOrgType]
-                        : org.org_type}
+                      {/* The roster is filtered to the nine non-business types (INV-1), so org_type
+                          is always one of them — the label lookup is total, no business fallback. */}
+                      {ORG_TYPE_LABELS[org.org_type as NonBusinessOrgType]}
                     </Badge>
                     {!org.is_active && (
                       <Badge variant="outline" className="text-xs text-stone-500 border-stone-300">

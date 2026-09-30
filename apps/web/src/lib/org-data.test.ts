@@ -50,6 +50,7 @@ import {
   fetchOrganizationById,
   fetchOrgResources,
   fetchApprovedOrganizations,
+  fetchAdminOrgRoster,
 } from './org-data'
 import { NON_BUSINESS_ORG_TYPES } from './org-vocab'
 
@@ -301,6 +302,48 @@ describe('INV-J — Organizations subtab lists ONLY active non-business orgs (di
   it('an empty directory renders no rows (empty state, never a dangling section)', async () => {
     const client = makeListClient({ data: [], error: null })
     expect(await fetchApprovedOrganizations(client)).toEqual([])
+  })
+})
+
+describe('INV-1 — admin Organizations roster lists ONLY non-business orgs (business EXCLUDED)', () => {
+  it('filters org_type to the nine non-business types and NEVER gates is_active (admin sees inactive)', async () => {
+    const client = makeListClient({
+      data: [
+        { id: 'org-1', name: 'Alpha Pantry', org_type: 'pantry', is_active: true, description: null },
+        { id: 'org-2', name: 'Beta Shelter', org_type: 'shelter', is_active: false, description: 'x' },
+      ],
+      error: null,
+    })
+    const rows = await fetchAdminOrgRoster(client)
+
+    expect(client.state.table).toBe('organizations')
+    // INV-1 mutation guard (forward): the org_type filter is EXACTLY the non-business vocabulary and
+    // NEVER 'business'. Deleting this .in() filter from fetchAdminOrgRoster (so a business row could
+    // enter the Organizations tab) — or adding 'business' to NON_BUSINESS_ORG_TYPES — turns these RED.
+    expect(client.state.inCol).toBe('org_type')
+    expect(client.state.inVals).toEqual([...NON_BUSINESS_ORG_TYPES])
+    expect(client.state.inVals).not.toContain('business')
+    // The admin roster does NOT filter is_active (an admin manages inactive orgs too) — distinct from
+    // the public fetchApprovedOrganizations which DOES gate is_active=true. Adding an is_active eq here
+    // would hide inactive orgs from the admin and turns this RED.
+    expect(client.state.eqs).not.toContainEqual(['is_active', true])
+    expect(client.state.orderCol).toBe('name')
+    expect(client.state.selected).not.toContain('*')
+    expect(rows.map((r) => r.id)).toEqual(['org-1', 'org-2'])
+    // Exactly one wide event on success (removing the withMetric wrap drops the sink count -> RED).
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({
+      level: 'info',
+      event: 'organization.roster.fetch.complete',
+      attrs: { result_count: 2 },
+    })
+  })
+
+  it('surfaces a load failure as a throw (never a silent empty roster masking an error)', async () => {
+    const client = makeListClient({ data: null, error: { message: 'boom' } })
+    await expect(fetchAdminOrgRoster(client)).rejects.toThrow('boom')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'organization.roster.fetch.error' })
   })
 })
 
