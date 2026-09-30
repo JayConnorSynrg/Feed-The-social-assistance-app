@@ -43,6 +43,11 @@ export const BusinessMarker = dynamic(
   { ssr: false }
 )
 
+export const OrgMarker = dynamic(
+  () => import('./org-marker').then((mod) => mod.OrgMarker),
+  { ssr: false }
+)
+
 // Re-export types
 export type { ViewState, MapViewHandle, Resource }
 

@@ -55,7 +55,7 @@ export type UserFocus =
   | 'community'      // General community
   | 'donations'      // Donating/giving
 
-type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events' | 'businesses'
+type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events' | 'businesses' | 'organizations'
 
 interface ShellContextType {
   activePanel: PanelType
@@ -117,7 +117,7 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'map', icon: Map, label: 'Resource Map' },
   { panel: 'programs', icon: Search, label: 'Browse Programs' },
   { panel: 'feed', icon: Newspaper, label: 'Community & Messages' },
-  // applications, events, petitions, businesses are now subtabs of documents/feed respectively
+  // applications, events, petitions, businesses, organizations are now subtabs of documents/feed respectively
   { panel: 'documents', icon: FolderOpen, label: 'Documents & Forms', roles: ['recipient', 'agency', 'program'] },
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
@@ -141,6 +141,7 @@ const PANEL_ALIASES: Record<string, { panel: PanelType; subtab: string; params?:
   petitions: { panel: 'feed', subtab: 'petitions' },
   events: { panel: 'feed', subtab: 'events' },
   businesses: { panel: 'feed', subtab: 'businesses' },
+  organizations: { panel: 'feed', subtab: 'organizations' },
   // Deep-link that lands on the Businesses subtab with the submit form open.
   'add-business': { panel: 'feed', subtab: 'businesses', params: { businessSubmit: true } },
 }
@@ -518,7 +519,7 @@ interface FeedShellProps {
 const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
 
 // Resolve a hash value to a panel + optional subtab (+ optional deep-link params).
-// Alias hashes (#forms, #messages, #businesses, #add-business) map to their parent
+// Alias hashes (#forms, #messages, #businesses, #organizations, #add-business) map to their parent
 // panel + subtab, and may carry params (e.g. add-business opens the submit form).
 function resolveHashToPanel(hash: string): { panel: PanelType; subtab?: string; params?: Record<string, unknown> } {
   if (hash in PANEL_ALIASES) {

@@ -49,6 +49,7 @@ import {
   OrgWriteError,
   fetchOrganizationById,
   fetchOrgResources,
+  fetchApprovedOrganizations,
 } from './org-data'
 import { NON_BUSINESS_ORG_TYPES } from './org-vocab'
 
@@ -219,6 +220,87 @@ describe('INV-F — fetchOrganizationById gates to active non-business rows (bus
     const client = makeByIdClient({ data: null, error: { message: 'PGRST116: 0 rows' } })
     const org = await fetchOrganizationById(client, 'business-id')
     expect(org).toBeNull()
+  })
+})
+
+// ---- recording read client for fetchApprovedOrganizations (select -> in -> eq -> order -> then) ----
+function makeListClient(result: { data: unknown; error: { message: string } | null }) {
+  const state = {
+    table: '',
+    selected: '',
+    inCol: '',
+    inVals: [] as unknown[],
+    eqs: [] as Array<[string, unknown]>,
+    orderCol: '',
+  }
+  const builder: Record<string, unknown> = {}
+  Object.assign(builder, {
+    select: (cols: string) => {
+      state.selected = cols
+      return builder
+    },
+    in: (col: string, vals: readonly unknown[]) => {
+      state.inCol = col
+      state.inVals = [...vals]
+      return builder
+    },
+    eq: (col: string, val: unknown) => {
+      state.eqs.push([col, val])
+      return builder
+    },
+    order: (col: string) => {
+      state.orderCol = col
+      return builder
+    },
+    then: (cb: (r: typeof result) => unknown) => Promise.resolve(cb(result)),
+  })
+  const client = {
+    state,
+    from(table: string) {
+      state.table = table
+      return builder
+    },
+  }
+  return client as unknown as SupabaseClient<Database> & { state: typeof state }
+}
+
+describe('INV-J — Organizations subtab lists ONLY active non-business orgs (disjoint from Businesses)', () => {
+  it('filters org_type to the nine non-business types (business EXCLUDED) and requires is_active=true', async () => {
+    // Two non-business rows returned; the reader passes them through in name order.
+    const client = makeListClient({
+      data: [
+        { ...ORG_ROW, id: 'org-1', name: 'Alpha Pantry', org_type: 'pantry' },
+        { ...ORG_ROW, id: 'org-2', name: 'Beta Shelter', org_type: 'shelter' },
+      ],
+      error: null,
+    })
+    const rows = await fetchApprovedOrganizations(client)
+
+    expect(client.state.table).toBe('organizations')
+    // The disjointness guard: the org_type filter is EXACTLY the non-business vocabulary and NEVER
+    // 'business'. Removing this .in() filter (so a business row could enter the org list) — or adding
+    // 'business' to NON_BUSINESS_ORG_TYPES — turns these assertions RED. This is INV-J both directions:
+    // orgs never carry a business, and (via the shared vocab) businesses never carry a non-business.
+    expect(client.state.inCol).toBe('org_type')
+    expect(client.state.inVals).toEqual([...NON_BUSINESS_ORG_TYPES])
+    expect(client.state.inVals).not.toContain('business')
+    // Active gate applied; ordered by name; explicit columns (never a bare '*').
+    expect(client.state.eqs).toContainEqual(['is_active', true])
+    expect(client.state.orderCol).toBe('name')
+    expect(client.state.selected).not.toContain('*')
+    expect(rows.map((r) => r.id)).toEqual(['org-1', 'org-2'])
+    // Exactly one wide event on success, count reflecting the returned rows.
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({
+      level: 'info',
+      event: 'organization.list.fetch.complete',
+      attrs: { result_count: 2 },
+    })
+  })
+
+  it('an empty directory renders no rows (empty state, never a dangling section)', async () => {
+    const client = makeListClient({ data: [], error: null })
+    expect(await fetchApprovedOrganizations(client)).toEqual([])
   })
 })
 

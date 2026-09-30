@@ -13,10 +13,10 @@
 //   * each write is wrapped in withMetric with a bounded, PII-free label set (closed vocabulary:
 //     only counts, booleans, and the closed-vocab org_type value — never a name/email/address/url/uid).
 //
-// The public-page READERS now live here: fetchOrganizationById + fetchOrgResources back the anon SSR
+// The public-page READERS live here: fetchOrganizationById + fetchOrgResources back the anon SSR
 // /s/organization/[id] page (the anon read path for email/phone/website is grant-verified). The map/
-// list readers (organizationsInBounds, fetchApprovedOrganizations) are still deferred to W5 alongside
-// their map/subtab consumers, so they live nowhere until then.
+// list readers (fetchApprovedOrganizations, organizationsInBounds) also live here now that their
+// consumers exist — the Organizations feed subtab and the org map marker layer.
 //
 // Two invariants live here as pure, unit-testable functions:
 //   * INV-B (never business): buildOrgInsertPayload throws for org_type='business' or any value
@@ -83,6 +83,29 @@ export interface Organization {
   is_active: boolean
 }
 
+/** A row returned by the organizations_in_bounds SECDEF RPC (its TABLE result shape). */
+export interface OrgInBoundsRow {
+  id: string
+  name: string
+  description: string | null
+  org_type: string
+  address: string | null
+  city: string | null
+  state: string | null
+  phone: string | null
+  website: string | null
+  location: string | { coordinates?: [number, number] } | null
+  resource_id: string | null
+}
+
+/** Map viewport bounds (west/south/east/north), matching business-data.ts's Bounds. */
+export interface Bounds {
+  west: number
+  south: number
+  east: number
+  north: number
+}
+
 /** A catalog resource linked to an org (the join target of org_resources → resources). */
 export interface OrgLinkedResource {
   id: string
@@ -113,6 +136,7 @@ interface LooseBuilder {
 }
 interface LooseClient {
   from: (table: string) => LooseBuilder
+  rpc: (name: string, args: Record<string, unknown>) => LooseResult<unknown[]>
 }
 
 function loose(supabase: SupabaseClient<Database>): LooseClient {
@@ -273,6 +297,60 @@ export async function fetchOrgResources(
     const rows = ((data ?? []) as Array<{ resource: OrgLinkedResource | null }>)
       .map((r) => r.resource)
       .filter((r): r is OrgLinkedResource => r != null)
+    attrs.result_count = rows.length
+    return rows
+  })
+}
+
+/**
+ * Public directory reader — every ACTIVE NON-business org, ordered by name. is_active alone gates
+ * visibility (orgs_select_active admits a non-business row whenever is_active=true, with no approval
+ * step), so this is the public "approved" set the Organizations subtab renders. The .in() filter to
+ * the nine non-business org_types is INV-J's disjointness guard at the app layer: a 'business' row can
+ * never satisfy it, so businesses never appear in the org list (RLS is the DB-side backstop). Selects
+ * explicit columns (ORG_COLUMNS), never *. Throws OrgReadError so the caller can surface load failure.
+ */
+export async function fetchApprovedOrganizations(
+  supabase: SupabaseClient<Database>,
+): Promise<Organization[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('organization.list.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(ORG_COLUMNS)
+      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .then((r) => r)
+    if (error) throw new OrgReadError(error.message)
+    const rows = (data ?? []) as Organization[]
+    attrs.result_count = rows.length
+    return rows
+  })
+}
+
+/**
+ * Map bbox reader — active, located, NON-business orgs via the organizations_in_bounds SECDEF RPC
+ * (the sole reader the migration exposes for the org map layer). The RPC predicate is_active=true AND
+ * org_type<>'business' AND location IS NOT NULL AND bbox is authoritative (INV-K): a business, an
+ * inactive org, or a located-but-inactive org is never returned. Arg names are the RPC's own.
+ */
+export async function organizationsInBounds(
+  supabase: SupabaseClient<Database>,
+  bounds: Bounds,
+  maxResults = 500,
+): Promise<OrgInBoundsRow[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('map.orgs_in_bounds', attrs, async () => {
+    const { data, error } = await loose(supabase).rpc('organizations_in_bounds', {
+      min_lng: bounds.west,
+      min_lat: bounds.south,
+      max_lng: bounds.east,
+      max_lat: bounds.north,
+      max_results: maxResults,
+    })
+    if (error) throw new OrgReadError(error.message)
+    const rows = (data ?? []) as OrgInBoundsRow[]
     attrs.result_count = rows.length
     return rows
   })
