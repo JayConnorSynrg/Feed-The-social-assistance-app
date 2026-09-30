@@ -13,8 +13,10 @@
 //   * each write is wrapped in withMetric with a bounded, PII-free label set (closed vocabulary:
 //     only counts, booleans, and the closed-vocab org_type value — never a name/email/address/url/uid).
 //
-// The org directory READERS (public /s/organization page + map/subtab) are added in W4/W5 alongside
-// their consumers (and the email/phone anon-read-path review), so they live nowhere until then.
+// The public-page READERS now live here: fetchOrganizationById + fetchOrgResources back the anon SSR
+// /s/organization/[id] page (the anon read path for email/phone/website is grant-verified). The map/
+// list readers (organizationsInBounds, fetchApprovedOrganizations) are still deferred to W5 alongside
+// their map/subtab consumers, so they live nowhere until then.
 //
 // Two invariants live here as pure, unit-testable functions:
 //   * INV-B (never business): buildOrgInsertPayload throws for org_type='business' or any value
@@ -26,7 +28,19 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { withMetric } from './logger'
 import { normalizeUrl } from './utils/url'
-import { isNonBusinessOrgType } from './org-vocab'
+import { NON_BUSINESS_ORG_TYPES, isNonBusinessOrgType } from './org-vocab'
+
+/**
+ * Typed read error so the withMetric error_code label buckets by kind (OrgReadError) instead of the
+ * generic "Error". No PII in the name; the raw Supabase message rides in withMetric's error_message
+ * field, never in a bounded label. Mirrors business-data.ts's BusinessReadError.
+ */
+export class OrgReadError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'OrgReadError'
+  }
+}
 
 /**
  * Typed write error so the withMetric error_code label buckets by kind (OrgWriteError) instead of the
@@ -40,6 +54,50 @@ export class OrgWriteError extends Error {
   }
 }
 
+// Column projection for a directory org — the exact columns the public /s/organization page renders
+// (explicit, never *). status is intentionally omitted: a non-business org has no approval gate, so
+// is_active alone governs public visibility (orgs_select_active).
+const ORG_COLUMNS =
+  'id, name, description, org_type, address, city, state, zip_code, phone, email, website, location, resource_id, is_active'
+
+// The catalog fields a linked resource exposes on an org profile. Bounded, display-facing projection
+// via the org_resources → resources embed; sort_order fixes the curator-set display order.
+const ORG_RESOURCE_COLUMNS =
+  'sort_order, resource:resources(id, name, category, description, address_line1, city, state, phone, website, service_mode, status)'
+
+/** A directory organization (non-business). location is the PostGIS GEOGRAPHY (EWKB hex or GeoJSON). */
+export interface Organization {
+  id: string
+  name: string
+  description: string | null
+  org_type: string
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  phone: string | null
+  email: string | null
+  website: string | null
+  location: string | { coordinates?: [number, number] } | null
+  resource_id: string | null
+  is_active: boolean
+}
+
+/** A catalog resource linked to an org (the join target of org_resources → resources). */
+export interface OrgLinkedResource {
+  id: string
+  name: string
+  category: string
+  description: string | null
+  address_line1: string | null
+  city: string | null
+  state: string | null
+  phone: string | null
+  website: string | null
+  service_mode: string
+  status: string
+}
+
 // Minimal structural view of the query builder for the geography write not yet in the generated
 // types. Confined to this module; callers never see it (same discipline as business-data.ts's loose()).
 type LooseResult<T> = Promise<{ data: T | null; error: { message: string } | null }>
@@ -48,6 +106,8 @@ interface LooseBuilder {
   insert: (rows: Record<string, unknown> | Record<string, unknown>[]) => LooseBuilder
   update: (patch: Record<string, unknown>) => LooseBuilder
   eq: (col: string, val: unknown) => LooseBuilder
+  in: (col: string, vals: readonly unknown[]) => LooseBuilder
+  order: (col: string, opts?: { ascending?: boolean }) => LooseBuilder
   single: () => LooseResult<Record<string, unknown>>
   then: <R>(cb: (r: { data: unknown; error: { message: string } | null }) => R) => Promise<R>
 }
@@ -156,6 +216,66 @@ export function buildOrgResourceRows(orgId: string, resourceIds: readonly string
 /** Build the EWKT geography literal PostgREST accepts for organizations.location. */
 export function ewktPoint(lng: number, lat: number): string {
   return `SRID=4326;POINT(${lng} ${lat})`
+}
+
+// ---------------------------------------------------------------------------
+// Public readers — anon-safe SSR reads for the public /s/organization page. Each is wrapped in a lean
+// wide-event carrying only bounded, PII-free labels (a result_count). The anon role holds column-level
+// SELECT on every projected organizations column (email/phone/website included) and table SELECT on
+// org_resources + resources, so a logged-out visitor's read returns the full rendered shape.
+// ---------------------------------------------------------------------------
+
+/**
+ * Public single-org reader by id — active NON-business only. Filtering to the nine non-business
+ * org_types AND is_active=true means a business id, an inactive org, or a missing id resolves to null,
+ * so the page can notFound() (INV-F). RLS (orgs_select_active) enforces the same gate at the DB, so
+ * this filter is the app-layer mirror of the policy, not the sole guard. Selects explicit columns
+ * (ORG_COLUMNS), never *. Returns null on any error/miss so the caller never renders a partial page.
+ */
+export async function fetchOrganizationById(
+  supabase: SupabaseClient<Database>,
+  id: string,
+): Promise<Organization | null> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('org.read.by_id', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(ORG_COLUMNS)
+      .eq('id', id)
+      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
+      .eq('is_active', true)
+      .single()
+    if (error || !data) return null
+    attrs.result_count = 1
+    return data as unknown as Organization
+  })
+}
+
+/**
+ * Read the catalog resources linked to an org, ordered by the curator-set sort_order (INV-H). RLS
+ * (org_resources_public_select + resources' own public select) admits only visible rows, so a
+ * logged-out visitor sees exactly the org's linked, publicly-visible resources. A null embed (a linked
+ * resource RLS hides) is dropped so the list never carries a dangling entry.
+ */
+export async function fetchOrgResources(
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+): Promise<OrgLinkedResource[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('org.resources.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('org_resources')
+      .select(ORG_RESOURCE_COLUMNS)
+      .eq('org_id', orgId)
+      .order('sort_order', { ascending: true })
+      .then((r) => r)
+    if (error) throw new OrgReadError(error.message)
+    const rows = ((data ?? []) as Array<{ resource: OrgLinkedResource | null }>)
+      .map((r) => r.resource)
+      .filter((r): r is OrgLinkedResource => r != null)
+    attrs.result_count = rows.length
+    return rows
+  })
 }
 
 // ---------------------------------------------------------------------------
