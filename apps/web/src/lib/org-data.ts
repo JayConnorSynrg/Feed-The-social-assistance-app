@@ -1,20 +1,20 @@
 // apps/web/src/lib/org-data.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The controlled Supabase boundary for NON-business organizations — the sibling of business-data.ts
-// for the org-directory domain. An organization is a row in the same `organizations` table with a
-// non-'business' org_type (see org-vocab.ts); it is public as soon as is_active=true (the
-// orgs_select_active RLS predicate has no approval gate for non-business rows), so "approved" here
-// means simply active.
+// The controlled Supabase WRITE boundary for NON-business organizations — the admin-intake sibling of
+// business-data.ts. An organization is a row in the same `organizations` table with a non-'business'
+// org_type (see org-vocab.ts); it is public as soon as is_active=true (the orgs_select_active RLS
+// predicate has no approval gate for non-business rows).
 //
 // This module follows business-data.ts's pattern exactly:
-//   * loose() confines the generic-erasure escape hatch HERE (organizations_in_bounds and the
-//     status/resource_id columns are not yet in the generated types.ts — the regen is deferred to a
-//     prod-apply), so callers stay fully typed against the shapes exported below and never touch `as
-//     any` at the call site.
-//   * every read is wrapped in withMetric with a bounded, PII-free label set (closed vocabulary,
-//     PII-free: only counts, booleans, and the closed-vocab org_type value — never a name/email/
-//     address/url/user_id).
+//   * loose() confines the generic-erasure escape hatch HERE (the geography location column write is
+//     not yet in the generated types.ts — that regen is deferred to a prod-apply), so callers stay
+//     fully typed and never touch `as any` at the call site.
+//   * each write is wrapped in withMetric with a bounded, PII-free label set (closed vocabulary:
+//     only counts, booleans, and the closed-vocab org_type value — never a name/email/address/url/uid).
+//
+// The org directory READERS (public /s/organization page + map/subtab) are added in W4/W5 alongside
+// their consumers (and the email/phone anon-read-path review), so they live nowhere until then.
 //
 // Two invariants live here as pure, unit-testable functions:
 //   * INV-B (never business): buildOrgInsertPayload throws for org_type='business' or any value
@@ -26,19 +26,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { withMetric } from './logger'
 import { normalizeUrl } from './utils/url'
-import { NON_BUSINESS_ORG_TYPES, isNonBusinessOrgType } from './org-vocab'
+import { isNonBusinessOrgType } from './org-vocab'
 
 /**
- * Typed errors so the withMetric error_code label buckets by kind (OrgReadError vs OrgWriteError)
- * instead of the generic "Error". No PII in the name; the raw Supabase message rides in withMetric's
- * error_message field, never in a bounded label. Mirrors business-data.ts's Business*Error.
+ * Typed write error so the withMetric error_code label buckets by kind (OrgWriteError) instead of the
+ * generic "Error". No PII in the name; the raw Supabase message rides in withMetric's error_message
+ * field, never in a bounded label. Mirrors business-data.ts's BusinessWriteError.
  */
-export class OrgReadError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'OrgReadError'
-  }
-}
 export class OrgWriteError extends Error {
   constructor(message: string) {
     super(message)
@@ -46,87 +40,19 @@ export class OrgWriteError extends Error {
   }
 }
 
-// Column projection for a directory org. status is intentionally omitted — a non-business org has no
-// approval gate, so is_active alone governs public visibility.
-const ORG_COLUMNS =
-  'id, name, description, org_type, address, city, state, zip_code, phone, email, website, location, resource_id, is_active'
-
-// The catalog fields a linked resource exposes on an org profile. Bounded, display-facing projection.
-const ORG_RESOURCE_COLUMNS =
-  'sort_order, resource:resources(id, name, category, description, address_line1, city, state, phone, website, service_mode, status)'
-
-/** A directory organization (non-business). location is the PostGIS GEOGRAPHY (EWKB hex or GeoJSON). */
-export interface Organization {
-  id: string
-  name: string
-  description: string | null
-  org_type: string
-  address: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  location: string | { coordinates?: [number, number] } | null
-  resource_id: string | null
-  is_active: boolean
-}
-
-/** A catalog resource linked to an org (the join target of org_resources → resources). */
-export interface OrgLinkedResource {
-  id: string
-  name: string
-  category: string
-  description: string | null
-  address_line1: string | null
-  city: string | null
-  state: string | null
-  phone: string | null
-  website: string | null
-  service_mode: string
-  status: string
-}
-
-/** A row returned by the organizations_in_bounds SECDEF RPC (its TABLE result shape). */
-export interface OrgInBoundsRow {
-  id: string
-  name: string
-  description: string | null
-  org_type: string
-  address: string | null
-  city: string | null
-  state: string | null
-  phone: string | null
-  website: string | null
-  location: string | { coordinates?: [number, number] } | null
-  resource_id: string | null
-}
-
-/** Map viewport bounds (west/south/east/north), matching business-data.ts's Bounds. */
-export interface Bounds {
-  west: number
-  south: number
-  east: number
-  north: number
-}
-
-// Minimal structural view of the query builder for the columns/RPCs not yet in the generated types.
-// Confined to this module; callers never see it (same discipline as business-data.ts's loose()).
+// Minimal structural view of the query builder for the geography write not yet in the generated
+// types. Confined to this module; callers never see it (same discipline as business-data.ts's loose()).
 type LooseResult<T> = Promise<{ data: T | null; error: { message: string } | null }>
 interface LooseBuilder {
   select: (cols: string) => LooseBuilder
   insert: (rows: Record<string, unknown> | Record<string, unknown>[]) => LooseBuilder
   update: (patch: Record<string, unknown>) => LooseBuilder
   eq: (col: string, val: unknown) => LooseBuilder
-  in: (col: string, vals: readonly unknown[]) => LooseBuilder
-  order: (col: string, opts?: { ascending?: boolean }) => LooseBuilder
   single: () => LooseResult<Record<string, unknown>>
   then: <R>(cb: (r: { data: unknown; error: { message: string } | null }) => R) => Promise<R>
 }
 interface LooseClient {
   from: (table: string) => LooseBuilder
-  rpc: (name: string, args: Record<string, unknown>) => LooseResult<unknown[]>
 }
 
 function loose(supabase: SupabaseClient<Database>): LooseClient {
@@ -230,107 +156,6 @@ export function buildOrgResourceRows(orgId: string, resourceIds: readonly string
 /** Build the EWKT geography literal PostgREST accepts for organizations.location. */
 export function ewktPoint(lng: number, lat: number): string {
   return `SRID=4326;POINT(${lng} ${lat})`
-}
-
-// ---------------------------------------------------------------------------
-// Readers — every one wrapped in a lean wide-event carrying only bounded, PII-free labels.
-// ---------------------------------------------------------------------------
-
-/**
- * Public directory reader — every active non-business org, ordered by name. is_active alone gates
- * visibility (orgs_select_active has no approval step for non-business rows), so this is the
- * "approved" set the public/map waves consume.
- */
-export async function fetchApprovedOrganizations(
-  supabase: SupabaseClient<Database>,
-): Promise<Organization[]> {
-  const attrs: Record<string, number> = { result_count: 0 }
-  return withMetric('organization.list.fetch', attrs, async () => {
-    const { data, error } = await loose(supabase)
-      .from('organizations')
-      .select(ORG_COLUMNS)
-      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
-      .eq('is_active', true)
-      .order('name', { ascending: true })
-      .then((r) => r)
-    if (error) throw new OrgReadError(error.message)
-    const rows = (data ?? []) as Organization[]
-    attrs.result_count = rows.length
-    return rows
-  })
-}
-
-/**
- * Public single-org reader by id — active non-business only, so a caller can notFound() when the id
- * is missing / a business / inactive. RLS (orgs_select_active) also enforces the gate.
- */
-export async function fetchOrganizationById(
-  supabase: SupabaseClient<Database>,
-  id: string,
-): Promise<Organization | null> {
-  const attrs: Record<string, number> = { result_count: 0 }
-  return withMetric('org.read.by_id', attrs, async () => {
-    const { data, error } = await loose(supabase)
-      .from('organizations')
-      .select(ORG_COLUMNS)
-      .eq('id', id)
-      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
-      .eq('is_active', true)
-      .single()
-    if (error || !data) return null
-    attrs.result_count = 1
-    return data as unknown as Organization
-  })
-}
-
-/**
- * Read the catalog resources linked to an org, ordered by the curator-set sort_order. RLS
- * (org_resources_public_select + resources' own public select) admits only visible rows.
- */
-export async function fetchOrgResources(
-  supabase: SupabaseClient<Database>,
-  orgId: string,
-): Promise<OrgLinkedResource[]> {
-  const attrs: Record<string, number> = { result_count: 0 }
-  return withMetric('org.resources.fetch', attrs, async () => {
-    const { data, error } = await loose(supabase)
-      .from('org_resources')
-      .select(ORG_RESOURCE_COLUMNS)
-      .eq('org_id', orgId)
-      .order('sort_order', { ascending: true })
-      .then((r) => r)
-    if (error) throw new OrgReadError(error.message)
-    const rows = ((data ?? []) as Array<{ resource: OrgLinkedResource | null }>)
-      .map((r) => r.resource)
-      .filter((r): r is OrgLinkedResource => r != null)
-    attrs.result_count = rows.length
-    return rows
-  })
-}
-
-/**
- * Map bbox reader — active, located, non-business orgs via the organizations_in_bounds SECDEF RPC
- * (the sole reader the migration exposes for the org map layer). Arg names are the RPC's own.
- */
-export async function organizationsInBounds(
-  supabase: SupabaseClient<Database>,
-  bounds: Bounds,
-  maxResults = 500,
-): Promise<OrgInBoundsRow[]> {
-  const attrs: Record<string, number> = { result_count: 0 }
-  return withMetric('map.orgs_in_bounds', attrs, async () => {
-    const { data, error } = await loose(supabase).rpc('organizations_in_bounds', {
-      min_lng: bounds.west,
-      min_lat: bounds.south,
-      max_lng: bounds.east,
-      max_lat: bounds.north,
-      max_results: maxResults,
-    })
-    if (error) throw new OrgReadError(error.message)
-    const rows = (data ?? []) as OrgInBoundsRow[]
-    attrs.result_count = rows.length
-    return rows
-  })
 }
 
 // ---------------------------------------------------------------------------

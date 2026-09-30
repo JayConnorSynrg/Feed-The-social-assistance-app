@@ -231,14 +231,12 @@ export function OrgsSection() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      // Geocode the address (INV-C): a match yields an EWKT point; a present-but-unresolvable address
-      // creates the org with NULL location and warns — never a silently-wrong point.
-      const hasAddress = Boolean(
-        form.address.trim() && (form.city.trim() || form.state.trim() || form.zip_code.trim()),
-      )
+      // Geocode the address (INV-C): whenever an address is present we attempt the geocode; a match
+      // yields an EWKT point, a present-but-unresolvable address creates the org with NULL location
+      // and warns — never a silently-wrong point.
       let location: string | null = null
       let geocodeFailed = false
-      if (hasAddress) {
+      if (form.address.trim()) {
         const query = [
           form.address.trim(),
           form.city.trim(),

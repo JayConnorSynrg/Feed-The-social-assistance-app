@@ -33,7 +33,7 @@ export const NON_BUSINESS_ORG_TYPES = [
 export type NonBusinessOrgType = (typeof NON_BUSINESS_ORG_TYPES)[number]
 
 /** O(1) membership set over the nine values. 'business' is not a member — that is INV-B's floor. */
-export const NON_BUSINESS_ORG_TYPE_SET: ReadonlySet<string> = new Set(NON_BUSINESS_ORG_TYPES)
+const NON_BUSINESS_ORG_TYPE_SET: ReadonlySet<string> = new Set(NON_BUSINESS_ORG_TYPES)
 
 /** Type-guard: true only for one of the nine non-business org types (never 'business'/unknown). */
 export function isNonBusinessOrgType(value: string): value is NonBusinessOrgType {
