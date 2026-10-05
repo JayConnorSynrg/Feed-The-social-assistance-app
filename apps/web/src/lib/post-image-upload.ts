@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import { validateFileUpload } from '@/lib/security'
 import { reencodeImageToWebp } from '@/lib/image-reencode'
 import { logger } from '@/lib/logger'
+import { newRequestId } from '@/lib/privileged-action'
 
 /** The public storage bucket feed photos live in. */
 export const POST_IMAGE_BUCKET = 'post-images'
@@ -78,15 +79,18 @@ export async function uploadPostImage(file: File): Promise<PostImageUploadResult
   // 3. Upload via the validating edge function (authoritative gate).
   try {
     const supabase = createClient()
+    // One correlation id per upload, sent as x-request-id (allowed by the edge fn's CORS
+    // ALLOW_HEADERS) so the edge function's log lines and this client's error row share it.
+    const requestId = newRequestId()
     const { data, error } = await supabase.functions.invoke<{ url?: string; path?: string; error?: string }>(
       'post-image-upload',
       {
         body: webp,
-        headers: { 'Content-Type': 'image/webp' },
+        headers: { 'Content-Type': 'image/webp', 'x-request-id': requestId },
       }
     )
     if (error) {
-      logger.error('post.image.upload.invoke', error)
+      logger.error('post.image.upload.invoke', error, undefined, { requestId })
       // Surface the edge fn's tailored message (size / type / guest-block) when present.
       const tailored = await extractEdgeErrorMessage(error)
       return { url: null, path: null, error: tailored ?? 'Upload failed. Please try again.' }

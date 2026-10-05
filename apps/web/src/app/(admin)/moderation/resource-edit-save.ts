@@ -220,7 +220,7 @@ export function buildAutocompleteEvent(fields: {
   suggestLatencyMs?: number
   selectedIndex?: number
   outcome: 'suggest' | 'select'
-}): Record<string, unknown> {
+}): Record<string, string | number | null> {
   return {
     query_len: fields.queryLen,
     result_count: fields.resultCount,

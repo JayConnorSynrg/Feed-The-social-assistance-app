@@ -179,7 +179,7 @@ export async function fillAcroFormFields(
       filled++
       logger.info('pdf.autofill.field', { field: rawName, target })
     } catch (err) {
-      logger.warn('pdf.autofill.field.skip', { field: rawName, reason: err instanceof Error ? err.message : 'unknown' })
+      logger.warn('pdf.autofill.field.skip', { field: rawName, reason: err instanceof Error ? err.name : 'unknown' })
     }
   }
 

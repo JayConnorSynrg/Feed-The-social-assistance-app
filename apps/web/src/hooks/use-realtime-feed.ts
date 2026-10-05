@@ -122,11 +122,11 @@ export function useRealtimeFeed({
         },
         handleChange
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           // Wrap the subscribe-to-ready latency signal — called once on successful subscribe.
           // withMetric is async; fire-and-forget here (no await needed — we just need the
-          // Vercel track() side-effect and the structured log).
+          // persisted app_logs wide-event and the structured log).
           withMetric('feed.realtime.subscribe', { channel: 'posts-realtime' }, () =>
             Promise.resolve()
           ).catch(() => {
@@ -143,15 +143,16 @@ export function useRealtimeFeed({
           hadChannelErrorRef.current = true
           reconnectCount++
           logger.info('feed.realtime.reconnect', { count: reconnectCount, status, channel: 'posts-realtime' })
-          logger.error('realtime-feed.subscribe.status', undefined, {
+          // A real failure status: persist one error row whose error_code/message is the
+          // channel error when supabase-js supplies one, else the status string itself.
+          logger.error('realtime-feed.subscribe.status', err ?? { code: status, message: status }, {
             channel: 'posts-realtime',
             status,
           })
-        } else if (status === 'CLOSED') {
-          logger.error('realtime-feed.subscribe.status', undefined, {
-            channel: 'posts-realtime',
-            status,
-          })
+        } else {
+          // CLOSED (removeChannel on unmount / auth change) is a normal lifecycle
+          // transition, not a failure — console-only info with the real status.
+          logger.info('realtime-feed.subscribe.status', { channel: 'posts-realtime', status: String(status) })
         }
       })
 

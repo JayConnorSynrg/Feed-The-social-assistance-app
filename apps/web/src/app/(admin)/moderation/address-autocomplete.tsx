@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Loader2, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { logger } from '@/lib/logger'
+import { logger, logEvent } from '@/lib/logger'
 import { suggestAddressesV6, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
 import { buildAutocompleteEvent } from './resource-edit-save'
 import { createDebouncedRunner, type DebouncedRunner } from './debounced-runner'
@@ -65,7 +65,7 @@ export function AddressAutocomplete({
       if (seq !== reqSeq.current) return // a newer query superseded this one
       // W2: one admin.resource.autocomplete event per completed suggest —
       // query LENGTH + result count + latency only (never the typed text).
-      logger.info('admin.resource.autocomplete', buildAutocompleteEvent({
+      logEvent('admin.resource.autocomplete', buildAutocompleteEvent({
         queryLen: q.length,
         resultCount: results.length,
         suggestLatencyMs: Math.round(performance.now() - startedAt),
@@ -119,7 +119,7 @@ export function AddressAutocomplete({
     runnerRef.current?.cancel()
     reqSeq.current++ // invalidate any in-flight request so it can't reopen the list
     // W2: the 'select' outcome carries which suggestion index was chosen.
-    logger.info('admin.resource.autocomplete', buildAutocompleteEvent({
+    logEvent('admin.resource.autocomplete', buildAutocompleteEvent({
       queryLen: value.trim().length,
       resultCount: suggestions.length,
       selectedIndex: index,

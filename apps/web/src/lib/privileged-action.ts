@@ -61,8 +61,14 @@ export async function privilegedRpc<T = unknown>(
         const res = (await withHeader) as RpcResult<T>
         if (res.error) {
           // Throw so withMetric records this as a failure; carry the result to recover it below.
-          const e = new Error(res.error.message || 'privileged rpc failed') as Error & { __result?: RpcResult<T> }
+          // `code` carries the SQLSTATE / PostgREST code so the persisted row's error_code is the
+          // database's own code (e.g. 42501) rather than the wrapper's class name.
+          const e = new Error(res.error.message || 'privileged rpc failed') as Error & {
+            __result?: RpcResult<T>
+            code?: string
+          }
           e.name = 'PrivilegedRpcError'
+          if (res.error.code) e.code = res.error.code
           e.__result = res
           throw e
         }

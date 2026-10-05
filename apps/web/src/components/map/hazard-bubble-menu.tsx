@@ -35,7 +35,6 @@ import { CATEGORY_META } from '@/lib/resource-categories'
 import type { PlaceAlertInput } from '@/hooks/use-safety-alerts'
 import type { Database } from '@feed/database'
 import { logger } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 import { cn } from '@/lib/utils'
 import { resolveGeoPointV6 } from '@/lib/mapbox-geocode-v6'
 import { planHazardGeocode } from './hazard-geocode'
@@ -410,7 +409,6 @@ export function HazardBubbleMenu({
     setGeocodeError(null)
     setGeocodeSuccess(false)
     setPlaceError(null)
-    track('safety_alert_menu_open', { type: entry.type })
     logger.info('hazard.menu.open', { type: entry.type })
     onWizardOpen(entry.type, viewCenter)
   }
@@ -434,10 +432,6 @@ export function HazardBubbleMenu({
         lat: stagingCoords.lat,
       })
       logger.info('hazard.pin.placed', { type: activeEntry.type, severity: parseInt(severity, 10) })
-      track('safety_alert_placed', {
-        type: activeEntry.type,
-        severity: String(parseInt(severity, 10)),
-      })
       setView('menu')
       setActiveEntry(null)
       setPanelOpen(false)
@@ -478,7 +472,6 @@ export function HazardBubbleMenu({
         accuracy: decision.accuracy ?? null,
         confidence: decision.confidence ?? null,
       })
-      track('safety_alert_geocode', { success: String(decision.move), ms: String(ms) })
     } catch {
       setGeocodeError('Could not geocode — drag the pin to set location')
     } finally {

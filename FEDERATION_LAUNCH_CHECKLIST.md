@@ -216,7 +216,7 @@
 ## 5. Monitoring & Observability
 
 ### Error Tracking
-- [ ] Error alerting configured (Sentry, Rollbar, or equivalent)
+- [ ] Error review configured on first-party `app_logs` (error rows by operation + `error_code`; see `docs/observability.md` → Weekly review). No third-party error tracker.
 - [ ] Alert channels configured (Slack, PagerDuty, email)
 - [ ] Critical error escalation path defined
 - [ ] Error rate baseline established (< 0.5% in staging)
@@ -360,8 +360,6 @@
 | `FEDERATION_CACHE_TTL` | Cache TTL in seconds | `300` (5 minutes) | No (default: 300) | No |
 | `FEDERATION_WEBHOOK_SECRET` | Secret for validating outbound webhooks | `random-secret-string` | Yes | **YES** |
 | `FIREWORKS_API_KEY` | Fireworks API key for AI chat | `fw_...` | Yes | **YES** |
-| `SENTRY_DSN` | Sentry error tracking DSN | `https://...@sentry.io/...` | No | No |
-| `SENTRY_AUTH_TOKEN` | Sentry auth token for uploading source maps | `sntrys_...` | No | **YES** |
 | `VERCEL_URL` | Auto-populated by Vercel (deployment URL) | `feed-xyz.vercel.app` | Auto | No |
 | `NODE_ENV` | Node environment | `production` | Auto | No |
 
@@ -429,7 +427,7 @@ fi
    - Vercel: Dashboard → Project Settings → Environment Variables
    - Validate with script: `bash scripts/validate-federation-env.sh`
 2. **Enable monitoring alerts**
-   - Sentry: Unmute federation project alerts
+   - `app_logs`: run the error-rate query from `docs/observability.md` → Weekly review against the launch window
    - Uptime: Enable federation endpoint monitoring
 3. **Verify partner readiness**
    - Contact Partner 1: Confirm ready to receive webhooks
@@ -469,7 +467,8 @@ fi
 3. **Verify webhook delivery**
    - Admin dashboard → Federation → Webhooks → Check recent deliveries
 4. **Check error rate**
-   - Sentry → Last 15 minutes → Error count should be 0 or minimal
+   - `app_logs` error rows in the last 15 minutes should be 0 or minimal:
+     `select regexp_replace(event, '\.error$', '') as operation, context->>'error_code' as error_code, count(*) from public.app_logs where level = 'error' and created_at >= now() - interval '15 minutes' group by 1, 2 order by 3 desc`
 
 ### T+1 Hour: Validation
 1. **Verify all partners synced successfully**
@@ -504,9 +503,9 @@ fi
 
 #### Every 1 Hour (Hours 0-24)
 - [ ] Check error rate (target: < 0.5%)
-  - Sentry dashboard → Last 1 hour
+  - `app_logs` error rows by operation + `error_code` over the last hour (`docs/observability.md` → Weekly review, query 2)
 - [ ] Check API response times (target: p95 < 200ms)
-  - Vercel Analytics → Functions → Check `api/federation/*`
+  - `select * from public.app_logs_latency_percentiles(interval '1 hour')`
 - [ ] Check database connection pool (target: < 80% utilization)
   - Supabase dashboard → Database → Connection Pooler
 - [ ] Check partner sync status (target: all synced within last hour)

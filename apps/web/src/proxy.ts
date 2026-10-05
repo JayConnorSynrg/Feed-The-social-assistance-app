@@ -1,10 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import { buildCsp, generateNonce } from '@/lib/csp'
+import { safeRequestId } from '@/lib/request-id'
 
-// Lightweight server-side logger — wraps console.* so Vercel Log Drain
-// receives structured JSON. NOT @vercel/analytics track(): that client-only
-// SDK is unavailable in the Node.js proxy runtime.
+// Lightweight server-side logger — wraps console.* with structured JSON lines
+// for the proxy runtime's console output.
 function log(level: 'info' | 'warn' | 'error', event: string, fields: Record<string, unknown> = {}) {
   const entry = JSON.stringify({ level, event, ...fields, timestamp: new Date().toISOString() })
   if (level === 'error') console.error(entry)
@@ -28,11 +28,13 @@ export async function proxy(request: NextRequest) {
   const csp = buildCsp(nonce, { embed: request.nextUrl.pathname.startsWith('/s/embed/') })
 
   // --- W0.2: per-request correlation id (I4) --------------------------------
-  // One id per server request, reused if an upstream already set it. Forwarded
+  // One id per server request. An inbound x-request-id is reused only when it is
+  // a well-formed id (1-64 chars of [A-Za-z0-9-]); anything else is caller text
+  // and is replaced by a fresh UUID, so it can never reach app_logs. Forwarded
   // on the REQUEST so server logs (logger reads x-request-id via next/headers)
-  // and Sentry (onRequestError tags it) share the SAME id, and echoed on the
+  // and the instrumentation onRequestError row share the SAME id, and echoed on the
   // RESPONSE so a request is traceable from the client/network side too.
-  const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID()
+  const requestId = safeRequestId(request.headers.get('x-request-id')) ?? crypto.randomUUID()
 
   // Forward the nonce + CSP + request id to the app via request headers. Both
   // the initial and the supabase-cookie-callback responses are built from these

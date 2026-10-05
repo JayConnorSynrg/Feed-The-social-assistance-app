@@ -22,7 +22,6 @@ import {
   MessageCircle,
   ShoppingBasket,
 } from 'lucide-react'
-import { track } from '@vercel/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -559,7 +558,6 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
       zoom: 12,
       duration: 1000,
     })
-    track('map_geolocated', { source: 'browser_gps' })
     // INV-G: coordinate-free telemetry — never log raw lat/lng. Emit a coarse
     // accuracy bucket + duration + source instead. geoRequestStartRef is set at
     // the mount effect immediately before the sole getCurrentPosition() call, so

@@ -99,7 +99,7 @@ export function SafetyAlertsReview() {
           { action: 'safety_alert.verify', target_id: alertId },
         )
         if (rpcErr) {
-          logger.warn('admin.denied', { action: 'safety_alert.verify', target_id: alertId, code: rpcErr.code ?? rpcErr.message, request_id: requestId })
+          logger.warn('admin.denied', { action: 'safety_alert.verify', code: rpcErr.code ?? 'unknown', request_id: requestId })
           throw rpcErr
         }
         setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, verified: true } : a))
@@ -127,7 +127,7 @@ export function SafetyAlertsReview() {
           { action: 'safety_alert.remove', target_id: alertId },
         )
         if (rpcErr) {
-          logger.warn('admin.denied', { action: 'safety_alert.remove', target_id: alertId, code: rpcErr.code ?? rpcErr.message, request_id: requestId })
+          logger.warn('admin.denied', { action: 'safety_alert.remove', code: rpcErr.code ?? 'unknown', request_id: requestId })
           throw rpcErr
         }
         setAlerts((prev) => prev.filter((a) => a.id !== alertId))

@@ -45,7 +45,6 @@ import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { getErrorMessage } from '@/lib/errors'
-import { track } from '@vercel/analytics'
 import { CommentThread } from '@/components/feed/comment-thread'
 import { PostTypeBody } from '@/components/feed/post-type-body'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
@@ -533,7 +532,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
           <button
             type="button"
             data-testid="post-wizard-trigger"
-            onClick={() => { setWizardOpen(true); track('wizard_open') }}
+            onClick={() => setWizardOpen(true)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-400 text-sm hover:border-[#4a5d23] hover:text-stone-600 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1"
           >
             <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
@@ -1486,7 +1485,6 @@ export function FeedPanel() {
   // stay in sync through one code path. replaceState — no back-button spam.
   const handleSubtabSwitch = useCallback((tab: FeedSubtab) => {
     logger.info('nav.subtab.switch', { panel: 'feed', subtab: tab })
-    track('nav_subtab', { panel: 'feed', subtab: tab })
     if (tab === 'messages') {
       setActivePanel('messages')
     } else if (tab === 'events') {

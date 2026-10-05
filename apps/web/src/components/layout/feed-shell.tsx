@@ -33,7 +33,6 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 
 // ============================================
@@ -122,6 +121,14 @@ const SIDEBAR_ICONS: SidebarIconItem[] = [
   { panel: 'wizard', icon: Compass, label: 'Get Help Finding Resources' },
   { panel: 'settings', icon: Settings, label: 'Settings' },
 ]
+
+/**
+ * Accessible name for the panel content region: the active panel's IconSidebar
+ * label (the same text a sighted user sees on the selected sidebar button).
+ */
+export function panelRegionLabel(panel: PanelType): string {
+  return SIDEBAR_ICONS.find((item) => item.panel === panel)?.label ?? 'Panel'
+}
 
 // Admin sidebar entry — appended only for admins. href navigates to the
 // server-gated /moderation route (no in-shell panel for admin).
@@ -690,7 +697,13 @@ export function FeedShell({
 
             {/* Interactive Content Panel */}
             <div className="flex-1 px-6 pt-6 pb-0 overflow-y-auto">
-              <div className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm h-full flex flex-col">
+              {/* Named region for the active panel. It is also the host PanelErrorBoundary
+                  moves focus to after a successful retry when the panel has no h1. */}
+              <div
+                role="region"
+                aria-label={panelRegionLabel(activePanel)}
+                className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm h-full flex flex-col"
+              >
                 {children}
               </div>
             </div>

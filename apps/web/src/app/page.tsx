@@ -4,7 +4,6 @@
 // Root page - renders the FEED app with floating card layout
 // Auth-aware: shows real user data when authenticated
 
-import React from 'react'
 import dynamic from 'next/dynamic'
 import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
 import { ChatPanel } from '@/components/panels/chat-panel'
@@ -17,6 +16,7 @@ import { ProgramsPanel } from '@/components/panels/programs-panel'
 // PetitionsPanel, EventsPanel, BusinessesPanel are now rendered as subtabs inside
 // DocumentsPanel (applications) and FeedPanel (events, businesses, petitions) — not top-level panels.
 import { useAuth } from '@/hooks/use-auth'
+import { PanelErrorBoundary } from '@/components/layout/panel-error-boundary'
 
 // MapPanel pulls supercluster + react-map-gl into its chunk. Map is not the
 // default panel, so load it on demand to keep those deps out of the initial
@@ -35,43 +35,6 @@ const MapPanel = dynamic(
     ),
   }
 )
-
-// Panel-level error boundary — shell stays mounted if a panel throws
-class PanelErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('Panel error:', error.message, info.componentStack)
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
-          <div className="text-3xl">🌾</div>
-          <p className="text-stone-600 text-sm">This panel encountered an error.</p>
-          <button
-            className="text-xs text-lime-700 underline"
-            onClick={() => this.setState({ hasError: false, error: null })}
-          >
-            Try again
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 // PanelId is the parameter type of setActivePanel, inferred from context — no
 // need to re-export PanelType from feed-shell.
