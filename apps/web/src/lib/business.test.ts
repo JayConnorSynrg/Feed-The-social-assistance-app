@@ -17,6 +17,7 @@ import {
   formatHoursInterval,
   computeOpenNow,
   formatOpenNow,
+  schemaOrgTime,
   type Business,
   type BusinessHours,
 } from './business'
@@ -143,7 +144,11 @@ describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
     expect(timeToMinutes('09:00')).toBe(540)
     expect(timeToMinutes('17:30')).toBe(1050)
     expect(timeToMinutes('09:00:00')).toBe(540)
-    expect(timeToMinutes('24:00')).toBeNull()
+    // 24:00 is the end-of-day close of an "open 24 hours" interval (00:00–24:00).
+    expect(timeToMinutes('24:00')).toBe(1440)
+    expect(timeToMinutes('24:00:00')).toBe(1440)
+    expect(timeToMinutes('24:01')).toBeNull()
+    expect(timeToMinutes('25:00')).toBeNull()
     expect(timeToMinutes('09:60')).toBeNull()
     expect(timeToMinutes('nope')).toBeNull()
     expect(timeToMinutes(null)).toBeNull()
@@ -157,6 +162,17 @@ describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
   it('formats an interval label and omits a malformed row', () => {
     expect(formatHoursInterval(hrs(1, '09:00', '17:00'))).toBe('9:00 AM – 5:00 PM')
     expect(formatHoursInterval(hrs(1, '09:00', 'bad'))).toBeNull()
+  })
+  it('00:00–24:00 reads "Open 24 hours"; an overnight interval says (next day)', () => {
+    expect(formatHoursInterval(hrs(1, '00:00', '24:00'))).toBe('Open 24 hours')
+    expect(formatHoursInterval(hrs(1, '00:00:00', '24:00:00'))).toBe('Open 24 hours')
+    expect(formatHoursInterval(hrs(5, '22:00', '02:00'))).toBe('10:00 PM – 2:00 AM (next day)')
+    expect(formatHoursInterval(hrs(2, '00:01', '00:00'))).toBe('12:01 AM – 12:00 AM (next day)')
+  })
+  it('JSON-LD times: HH:MM, with end of day emitted as 23:59', () => {
+    expect(schemaOrgTime('09:00:00')).toBe('09:00')
+    expect(schemaOrgTime('24:00')).toBe('23:59')
+    expect(schemaOrgTime('bad')).toBeNull()
   })
 })
 
@@ -195,6 +211,31 @@ describe('computeOpenNow / formatOpenNow (W3 open-now, viewer-local minute-of-we
     // Removing the +MINUTES_PER_WEEK probe makes this case report Closed instead of Open.
     const state = computeOpenNow([hrs(6, '22:00', '02:00')], mow(0, 1))
     expect(state).toEqual({ open: true, closeDay: 0, closeMinute: 120 })
+  })
+
+  it('a 24/7 org (seven 00:00–24:00 days) reads "Open 24 hours" at any minute', () => {
+    const allWeek = [0, 1, 2, 3, 4, 5, 6].map((d) => hrs(d, '00:00', '24:00'))
+    for (const now of [mow(0, 0), mow(3, 12, 30), mow(6, 23, 59)]) {
+      const state = computeOpenNow(allWeek, now)
+      expect(state).toEqual({ open: true, always: true })
+      expect(formatOpenNow(state)).toBe('Open 24 hours')
+    }
+  })
+
+  it('an open-24-hours day closes at midnight and back-to-back intervals merge', () => {
+    expect(computeOpenNow([hrs(1, '00:00', '24:00')], mow(1, 23))).toEqual({ open: true, closeDay: 2, closeMinute: 0 })
+    // Mon 09–12 + 12–17 is one span: open at 11:00 closes at 5:00 PM, not noon.
+    expect(computeOpenNow([hrs(1, '09:00', '12:00'), hrs(1, '12:00', '17:00')], mow(1, 11))).toEqual({
+      open: true,
+      closeDay: 1,
+      closeMinute: 1020,
+    })
+    // Mon + Tue all day run straight through midnight.
+    expect(computeOpenNow([hrs(1, '00:00', '24:00'), hrs(2, '00:00', '24:00')], mow(1, 20))).toEqual({
+      open: true,
+      closeDay: 3,
+      closeMinute: 0,
+    })
   })
 
   it('a zero-length interval (open === close) contributes nothing', () => {

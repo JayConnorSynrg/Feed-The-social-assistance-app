@@ -213,16 +213,26 @@ export const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /**
  * Parse a Postgres `time` string ('HH:MM' or 'HH:MM:SS') to minutes-since-midnight, or null when
- * malformed / out of range. Seconds are ignored (display granularity is the minute).
+ * malformed / out of range. '24:00' (end of day, the close of an "open 24 hours" interval) is 1440.
+ * Seconds are ignored (display granularity is the minute).
  */
 export function timeToMinutes(t: string | null | undefined): number | null {
   if (!t) return null
-  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(t.trim())
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(t.trim())
   if (!m) return null
   const h = Number(m[1])
   const min = Number(m[2])
+  if (h === 24 && min === 0 && Number(m[3] ?? 0) === 0) return MINUTES_PER_DAY
   if (h > 23 || min > 59) return null
   return h * 60 + min
+}
+
+/** schema.org opens/closes 'HH:MM' for a stored time; end of day (24:00) is emitted as '23:59'. */
+export function schemaOrgTime(t: string): string | null {
+  const min = timeToMinutes(t)
+  if (min === null) return null
+  const capped = Math.min(min, MINUTES_PER_DAY - 1)
+  return `${Math.floor(capped / 60).toString().padStart(2, '0')}:${(capped % 60).toString().padStart(2, '0')}`
 }
 
 /**
@@ -239,14 +249,17 @@ export function minuteToClock(minuteOfDay: number): string {
 }
 
 /**
- * Format one business_hours row as an interval label, e.g. "9:00 AM – 5:00 PM". Returns null when
- * either endpoint is unparseable (the row is then omitted from the table rather than shown broken).
+ * Format one business_hours row as an interval label, e.g. "9:00 AM – 5:00 PM". 00:00–24:00 reads
+ * "Open 24 hours"; an interval that closes at or before it opens ends the next day and says so.
+ * Returns null when either endpoint is unparseable (the row is omitted rather than shown broken).
  */
 export function formatHoursInterval(row: BusinessHours): string | null {
   const open = timeToMinutes(row.open_time)
   const close = timeToMinutes(row.close_time)
   if (open === null || close === null) return null
-  return `${minuteToClock(open)} – ${minuteToClock(close)}`
+  if (open === 0 && close === MINUTES_PER_DAY) return 'Open 24 hours'
+  const label = `${minuteToClock(open)} – ${minuteToClock(close)}`
+  return close <= open ? `${label} (next day)` : label
 }
 
 /**
@@ -255,7 +268,8 @@ export function formatHoursInterval(row: BusinessHours): string | null {
  *  - closed: the business is closed now; openDay/openMinute mark the next interval that opens.
  */
 export type OpenNowState =
-  | { open: true; closeDay: number; closeMinute: number }
+  | { open: true; always: true }
+  | { open: true; always?: false; closeDay: number; closeMinute: number }
   | { open: false; openDay: number; openMinute: number }
   | null
 
@@ -271,20 +285,41 @@ export function computeOpenNow(
 ): OpenNowState {
   if (!hours || hours.length === 0) return null
   const now = ((Math.trunc(nowMinuteOfWeek) % MINUTES_PER_WEEK) + MINUTES_PER_WEEK) % MINUTES_PER_WEEK
-  const intervals: { start: number; end: number }[] = []
+  const raw: { start: number; end: number }[] = []
   for (const h of hours) {
     if (h.day_of_week < 0 || h.day_of_week > 6) continue
     const open = timeToMinutes(h.open_time)
     const close = timeToMinutes(h.close_time)
-    if (open === null || close === null) continue
-    // Duration wraps at midnight: a close at or before the open time means the interval runs into
-    // the next day (e.g. 22:00 → 02:00). A zero-length interval (open === close) is skipped.
-    const duration = (((close - open) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
+    if (open === null || close === null || open === MINUTES_PER_DAY) continue
+    // A close of 24:00 ends at the end of the day. Otherwise the duration wraps at midnight: a close
+    // at or before the open time runs into the next day (e.g. 22:00 → 02:00). Zero-length is skipped.
+    const duration =
+      close === MINUTES_PER_DAY
+        ? MINUTES_PER_DAY - open
+        : (((close - open) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
     if (duration === 0) continue
     const start = h.day_of_week * MINUTES_PER_DAY + open
-    intervals.push({ start, end: start + duration })
+    raw.push({ start, end: start + duration })
   }
-  if (intervals.length === 0) return null
+  if (raw.length === 0) return null
+
+  // Merge back-to-back / overlapping intervals (Mon 09–12 + 12–17 closes at 17:00; seven 00:00–24:00
+  // days are one continuous span), including the Saturday → Sunday wrap.
+  raw.sort((a, b) => a.start - b.start)
+  const intervals: { start: number; end: number }[] = []
+  for (const iv of raw) {
+    const last = intervals[intervals.length - 1]
+    if (last && iv.start <= last.end) last.end = Math.max(last.end, iv.end)
+    else intervals.push({ ...iv })
+  }
+  while (intervals.length > 1) {
+    const first = intervals[0]
+    const last = intervals[intervals.length - 1]
+    if (last.end < first.start + MINUTES_PER_WEEK) break
+    last.end = Math.max(last.end, first.end + MINUTES_PER_WEEK)
+    intervals.shift()
+  }
+  if (intervals.some((iv) => iv.end - iv.start >= MINUTES_PER_WEEK)) return { open: true, always: true }
 
   for (const iv of intervals) {
     const inThisWeek = now >= iv.start && now < iv.end
@@ -320,6 +355,7 @@ export function computeOpenNow(
  */
 export function formatOpenNow(state: OpenNowState): string | null {
   if (!state) return null
+  if (state.open && state.always) return 'Open 24 hours'
   if (state.open) return `Open now · closes ${minuteToClock(state.closeMinute)}`
   return `Closed · opens ${DAY_NAMES_SHORT[state.openDay]} ${minuteToClock(state.openMinute)}`
 }
