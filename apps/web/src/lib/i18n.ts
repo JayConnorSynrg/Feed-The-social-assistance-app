@@ -379,14 +379,26 @@ export const messages: Record<Locale, Messages> = {
 // ---------------------------------------------------------------------------
 
 export function t(locale: Locale, key: keyof Messages): string {
-  const val = messages[locale]?.[key]
-  if (!val) {
+  return translate(messages, locale, key)
+}
+
+/**
+ * translate() — the same EN-fallback lookup as t(), for any per-feature dictionary shaped
+ * Record<Locale, M> (e.g. i18n-org-forms.ts). A missing/empty value logs the fallback and returns EN.
+ */
+export function translate<M extends object>(
+  dict: Record<Locale, M>,
+  locale: Locale,
+  key: keyof M & string
+): string {
+  const val = dict[locale]?.[key] as unknown
+  if (typeof val !== 'string' || !val) {
     try {
       logger.warn('i18n.translation_fallback', { key, locale })
     } catch {
       // guard: never throw in error context
     }
-    return messages.en[key]
+    return dict.en[key] as unknown as string
   }
   return val
 }
@@ -428,4 +440,14 @@ export function resolveLocale(): Locale {
   }
 
   return resolved
+}
+
+// ---------------------------------------------------------------------------
+// resolveUserLocale() — signed-in profile language → resolveLocale()
+// ---------------------------------------------------------------------------
+
+/** Prefers a supported profiles.preferred_language; otherwise storage → browser → 'en'. */
+export function resolveUserLocale(profileLanguage?: string | null): Locale {
+  if (profileLanguage && LOCALE_SET.has(profileLanguage)) return profileLanguage as Locale
+  return resolveLocale()
 }
