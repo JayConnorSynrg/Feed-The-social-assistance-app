@@ -19,16 +19,25 @@
 //   5. Write: the object is written via the service_role to
 //      post-images/<uid>/<uuid>.<ext> (owner-folder path). The public URL is
 //      returned to the client, which stores it in posts.image_url.
+//
+// ORGANIZATION PHOTOS (`?org_id=<uuid>`): the same function is the only write
+// path for the public `org-photos` bucket. With org_id present:
+//   - org_id must be a UUID (else 400);
+//   - the CALLER, under their own JWT, must pass
+//     rpc('can_manage_org_photos', { p_folder: org_id }) (false/error → 403);
+//   - checks 1-4 above still apply, then the service_role writes to
+//     org-photos/<org_id>/<uuid>.<ext> and returns { url, path, bucket }.
+// Without org_id the post-image behavior above is unchanged.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { edgeLog, getCorrelationId } from '../_shared/log.ts'
+import { ORG_BUCKET, buildObjectPath, parseUploadTarget, sizeBucket } from './target.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const BUCKET = 'post-images'
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB — mirrors the bucket file_size_limit
 
 type ImageType = 'jpeg' | 'png' | 'webp'
@@ -85,6 +94,18 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Missing Authorization header' }, 401, respHeaders)
   }
 
+  // Target: no org_id → post image (original behavior); org_id → org photo.
+  const target = parseUploadTarget(new URL(req.url).searchParams)
+  const isPost = target.kind === 'post'
+  // Org-path log line: outcome + bucket + size bucket only (no user ids, no paths).
+  const orgLog = (level: 'info' | 'warn' | 'error', outcome: string, size?: number, msg?: string) =>
+    edgeLog(level, `org_photo.${outcome}`, {
+      requestId,
+      bucket: ORG_BUCKET,
+      ...(size !== undefined ? { sizeBucket: sizeBucket(size) } : {}),
+      ...(msg !== undefined ? { msg } : {}),
+    })
+
   try {
     // 1. Verify the caller's JWT in-code.
     const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -92,50 +113,82 @@ Deno.serve(async (req: Request) => {
     })
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser()
     if (authError || !user) {
-      edgeLog('warn', 'post_image.auth.rejected', { requestId })
+      if (isPost) edgeLog('warn', 'post_image.auth.rejected', { requestId })
+      else orgLog('warn', 'auth.rejected')
       return json({ error: 'Unauthorized' }, 401, respHeaders)
     }
 
     // 2. Guests (anonymous auth) cannot upload (INV-M2).
     if (user.is_anonymous === true) {
-      edgeLog('warn', 'post_image.anon.blocked', { requestId, userId: user.id })
+      if (isPost) edgeLog('warn', 'post_image.anon.blocked', { requestId, userId: user.id })
+      else orgLog('warn', 'anon.blocked')
       return json({ error: 'Create a free account to attach a photo.' }, 403, respHeaders)
+    }
+
+    // 2b. Org photos: valid UUID, then the caller (own JWT, not service_role)
+    //     must be allowed to manage that org's photo folder.
+    if (target.kind === 'invalid') {
+      orgLog('warn', 'org_id.invalid')
+      return json({ error: 'Invalid org_id.' }, 400, respHeaders)
+    }
+    if (target.kind === 'org') {
+      const { data: allowed, error: rpcError } = await supabaseUser.rpc('can_manage_org_photos', {
+        p_folder: target.orgId,
+      })
+      if (rpcError || allowed !== true) {
+        orgLog('warn', 'forbidden', undefined, rpcError?.message)
+        return json({ error: 'You cannot manage photos for this organization.' }, 403, respHeaders)
+      }
     }
 
     // 3/4. Read bytes, enforce size, sniff magic bytes.
     const buf = new Uint8Array(await req.arrayBuffer())
     if (buf.byteLength === 0) {
+      if (!isPost) orgLog('warn', 'empty', 0)
       return json({ error: 'Empty upload.' }, 400, respHeaders)
     }
     if (buf.byteLength > MAX_BYTES) {
-      edgeLog('warn', 'post_image.too_large', { requestId, userId: user.id, size: buf.byteLength })
+      if (isPost) edgeLog('warn', 'post_image.too_large', { requestId, userId: user.id, size: buf.byteLength })
+      else orgLog('warn', 'too_large', buf.byteLength)
       return json({ error: 'Image exceeds the 5MB limit.' }, 413, respHeaders)
     }
     const imageType = sniffImageType(buf)
     if (!imageType) {
-      edgeLog('warn', 'post_image.not_an_image', { requestId, userId: user.id, size: buf.byteLength })
+      if (isPost) edgeLog('warn', 'post_image.not_an_image', { requestId, userId: user.id, size: buf.byteLength })
+      else orgLog('warn', 'not_an_image', buf.byteLength)
       return json({ error: 'That file is not a supported image.' }, 415, respHeaders)
     }
 
-    // 5. Write via service_role to owner-folder path.
+    // 5. Write via service_role: post-images/<uid>/… or org-photos/<org_id>/….
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    const path = `${user.id}/${crypto.randomUUID()}.${extFor(imageType)}`
+    const { bucket, path } = buildObjectPath(
+      target.kind === 'org' ? target : { kind: 'post', userId: user.id },
+      extFor(imageType),
+      crypto.randomUUID(),
+    )
     const contentType = `image/${imageType}`
     const { error: uploadError } = await admin.storage
-      .from(BUCKET)
+      .from(bucket)
       .upload(path, buf, { contentType, cacheControl: '3600', upsert: false })
     if (uploadError) {
-      edgeLog('error', 'post_image.upload_failed', { requestId, userId: user.id, msg: uploadError.message })
+      if (isPost) edgeLog('error', 'post_image.upload_failed', { requestId, userId: user.id, msg: uploadError.message })
+      else orgLog('error', 'upload_failed', buf.byteLength, uploadError.message)
       return json({ error: 'Upload failed.' }, 500, respHeaders)
     }
 
-    const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(path)
-    edgeLog('info', 'post_image.uploaded', { requestId, userId: user.id, path, type: imageType, size: buf.byteLength })
-    // `path` is returned so the client can delete the object it just created
-    // (owner-folder DELETE policy) when the user removes or replaces the photo.
-    return json({ url: publicUrl, path }, 200, respHeaders)
+    const { data: { publicUrl } } = admin.storage.from(bucket).getPublicUrl(path)
+    if (isPost) {
+      edgeLog('info', 'post_image.uploaded', { requestId, userId: user.id, path, type: imageType, size: buf.byteLength })
+      // `path` is returned so the client can delete the object it just created
+      // (owner-folder DELETE policy) when the user removes or replaces the photo.
+      return json({ url: publicUrl, path }, 200, respHeaders)
+    }
+    orgLog('info', 'uploaded', buf.byteLength)
+    return json({ url: publicUrl, path, bucket }, 200, respHeaders)
   } catch (err) {
-    edgeLog('error', 'post_image.unexpected', { requestId, msg: err instanceof Error ? err.message : 'unknown' })
+    const msg = err instanceof Error ? err.message : 'unknown'
+    if (isPost) edgeLog('error', 'post_image.unexpected', { requestId, msg })
+    else orgLog('error', 'unexpected', undefined, msg)
     return json({ error: 'Internal server error' }, 500, respHeaders)
   }
 })
