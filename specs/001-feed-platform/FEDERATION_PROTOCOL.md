@@ -1170,7 +1170,7 @@ Canonical: https://feed.social/.well-known/security.txt
    - Prometheus metrics export
    - Grafana dashboards
    - PagerDuty/Opsgenie alerts
-   - Error tracking (Sentry)
+   - Error tracking (first-party `app_logs`)
 
 5. **Compliance**:
    - GDPR compliance review

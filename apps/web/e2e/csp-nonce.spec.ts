@@ -50,11 +50,9 @@ async function deleteUserByEmail(admin: SupabaseClient, email: string) {
  *
  * Chromium emits the exact phrase "violates the following Content Security
  * Policy directive" ONLY for a real CSP block. We match that phrase precisely
- * so we do NOT misattribute unrelated console errors — e.g. the local-only
- * "Refused to execute script ... MIME type ('text/html')" 404 for Vercel's
- * platform endpoints (/_vercel/insights|speed-insights/script.js), which are
- * served by the Vercel platform in production and simply 404 under
- * `npm run start`. That MIME refusal is independent of CSP and pre-dates Wave 6b.
+ * so we do NOT misattribute unrelated console errors — e.g. a local-only
+ * "Refused to execute script ... MIME type ('text/html')" for a 404'd script
+ * under `npm run start`. A MIME refusal is independent of CSP.
  */
 function attachCspCollector(page: import('@playwright/test').Page): string[] {
   const CSP_VIOLATION = /violates the following content security policy directive/i

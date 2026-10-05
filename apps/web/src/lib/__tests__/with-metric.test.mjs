@@ -1,38 +1,32 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runWithMetric } from '../with-metric-core.mjs'
+import { runWithMetric, serializeError } from '../with-metric-core.mjs'
 
 /**
  * Exercises the REAL withMetric body. The shipped withMetric (src/lib/logger.ts)
  * delegates to `runWithMetric` in with-metric-core.mjs, wiring the real
- * emit/sink/track. This suite imports that SAME module and injects capture
+ * emit/sink. This suite imports that SAME module and injects capture
  * stubs, so a regression in the shipped persist path (a double-write or a
  * dropped sink call) turns these assertions RED. `sinks` captures the
  * app_logs wide-event rows — one call per outcome, the sole persist path (I1).
  */
 function makeStubDeps() {
-  const tracks = []
   const logs = []
   const sinks = []
   const deps = {
-    track: (name, props) => tracks.push({ name, props }),
     emit: (entry) => logs.push(entry),
     sink: (level, event, context, request_id, duration_ms) =>
       sinks.push({ level, event, context, request_id, duration_ms }),
   }
-  return { deps, tracks, logs, sinks }
+  return { deps, logs, sinks }
 }
 
-test('success path returns fn result and records duration_ms + ok:true', async () => {
-  const { deps, tracks, logs } = makeStubDeps()
+test('success path returns fn result and records duration_ms + labels', async () => {
+  const { deps, logs, sinks } = makeStubDeps()
   const result = await runWithMetric(deps, 'op.success', { category: 'all' }, async () => 42)
 
   assert.equal(result, 42)
-  assert.equal(tracks.length, 1)
-  assert.equal(tracks[0].name, 'op.success')
-  assert.equal(tracks[0].props.ok, true)
-  assert.equal(typeof tracks[0].props.duration_ms, 'number')
-  assert.equal(tracks[0].props.category, 'all')
+  assert.equal(sinks[0].context.category, 'all')
   assert.equal(logs[0].message, 'op.success.complete')
   assert.equal(typeof logs[0].duration_ms, 'number')
 })
@@ -49,8 +43,8 @@ test('I1: success persists EXACTLY ONE info wide-event row with duration_ms', as
   assert.ok(sinks[0].duration_ms >= 0)
 })
 
-test('error path re-throws and records ok:false + error_code', async () => {
-  const { deps, tracks } = makeStubDeps()
+test('error path re-throws and records error_code', async () => {
+  const { deps, sinks } = makeStubDeps()
   class BoomError extends Error {
     constructor() {
       super('boom')
@@ -65,9 +59,9 @@ test('error path re-throws and records ok:false + error_code', async () => {
     /boom/
   )
 
-  assert.equal(tracks.length, 1)
-  assert.equal(tracks[0].props.ok, false)
-  assert.equal(tracks[0].props.error_code, 'BoomError')
+  assert.equal(sinks.length, 1)
+  assert.equal(sinks[0].context.error_code, 'BoomError')
+  assert.equal(sinks[0].context.error_message, 'boom')
 })
 
 test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', async () => {
@@ -94,19 +88,24 @@ test('I1: failure persists EXACTLY ONE error wide-event row with duration_ms', a
   assert.equal(typeof sinks[0].duration_ms, 'number')
 })
 
-test('AbortError path re-throws but skips the metric event', async () => {
-  const { deps, tracks } = makeStubDeps()
-  const abort = new Error('aborted')
-  abort.name = 'AbortError'
-
+test('a Supabase/PostgREST {code,message} rejection persists its SQLSTATE as error_code', async () => {
+  const { deps, sinks } = makeStubDeps()
   await assert.rejects(
-    () => runWithMetric(deps, 'op.abort', {}, async () => {
-      throw abort
+    () => runWithMetric(deps, 'op.rpc', {}, async () => {
+      throw { code: '42501', message: 'permission denied for function current_user_tier' }
     }),
-    /aborted/
   )
+  assert.equal(sinks[0].context.error_code, '42501')
+  assert.equal(sinks[0].context.error_message, 'permission denied for function current_user_tier')
+  assert.notEqual(sinks[0].context.error_message, '[object Object]')
+})
 
-  assert.equal(tracks.length, 0)
+test('serializeError: SQLSTATE wins over name; absent error never yields "undefined"', () => {
+  const wrapped = Object.assign(new Error('x'), { name: 'PrivilegedRpcError', code: '23505' })
+  assert.equal(serializeError(wrapped).error_code, '23505')
+  assert.equal(serializeError(new TypeError('t')).error_code, 'TypeError')
+  assert.deepEqual(serializeError(undefined), { error_code: 'UnknownError' })
+  assert.equal(serializeError('x'.repeat(500)).error_message.length, 120)
 })
 
 test('I5: a supplied correlation id is threaded to the persisted row (success and failure)', async () => {

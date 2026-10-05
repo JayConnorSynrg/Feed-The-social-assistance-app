@@ -63,7 +63,6 @@ import { FormsPanel } from './forms-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { VaultUnlockModal } from '@/components/vault'
 import { logger, withMetric } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 
 // ============================================
 // TYPES
@@ -966,7 +965,6 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // viewMode !== tab guard makes it a no-op when we already set viewMode here.
   const handleTabSwitch = useCallback((tab: 'documents' | 'applications' | 'resources') => {
     logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
-    track('nav_subtab', { panel: 'documents', subtab: tab })
     setViewMode(tab)
     setPanelParams((prev) => ({ ...prev, subtab: tab }))
     if (typeof window !== 'undefined') {

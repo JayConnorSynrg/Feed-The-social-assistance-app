@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey, type PersonalizationContext } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 import { GUEST_LANGUAGE_KEY } from '@/lib/languages'
 
 export interface ChatMessage {
@@ -292,7 +291,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           if (firstChunk) {
             const ttfb_ms = Math.round(performance.now() - chatStart)
             logger.info('chat.stream.firstChunk', { opId, duration_ms: ttfb_ms })
-            track('chat.ttfb', { duration_ms: ttfb_ms })
             firstChunk = false
           }
 
@@ -312,7 +310,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                   didStream: true,
                   contentLength: accumulatedContent.length,
                 })
-                track('chat.complete', { duration_ms: complete_ms, ok: true })
                 streamDone = true
                 setMessages(prev =>
                   prev.map(m =>

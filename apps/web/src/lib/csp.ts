@@ -29,12 +29,13 @@
  * back to 'unsafe-inline'. style-src KEEPS 'unsafe-inline' (Tailwind runtime
  * utility classes; style injection cannot execute JS in compliant browsers).
  *
- * The host allowlist (va.vercel-scripts.com, challenges.cloudflare.com) is
- * retained in script-src for the same back-compat reason: 'strict-dynamic'
- * makes CSP3 browsers ignore it, while CSP2-only browsers still get the
- * allowlist. Both are loaded programmatically by already-trusted bundle code
- * (Vercel Analytics injector; @marsidev/react-turnstile script injection), so
- * 'strict-dynamic' propagates trust to them on modern browsers.
+ * The host allowlist (challenges.cloudflare.com) is retained in script-src for
+ * the same back-compat reason: 'strict-dynamic' makes CSP3 browsers ignore it,
+ * while CSP2-only browsers still get the allowlist. It is loaded
+ * programmatically by already-trusted bundle code (@marsidev/react-turnstile
+ * script injection), so 'strict-dynamic' propagates trust to it on modern
+ * browsers. No third-party analytics host is allowed: FEED telemetry is
+ * first-party only (same-origin /api/client-log).
  *
  * ACCEPTED COST: a per-request nonce forces dynamic rendering on matched
  * routes (no static optimization / ISR / PPR). This is inherent to nonce-based
@@ -86,10 +87,10 @@ export function buildCsp(nonce: string, { embed = false }: BuildCspOptions = {})
     // nonce + strict-dynamic replaces the old 'unsafe-inline'. The host
     // allowlist stays as a CSP2 back-compat fallback (ignored by CSP3 browsers
     // under strict-dynamic). 'unsafe-eval' is dev-only (React Fast Refresh).
-    `script-src 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''} https://va.vercel-scripts.com https://challenges.cloudflare.com`,
+    `script-src 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "font-src 'self'",
     // Turnstile renders its challenge in an iframe from challenges.cloudflare.com.

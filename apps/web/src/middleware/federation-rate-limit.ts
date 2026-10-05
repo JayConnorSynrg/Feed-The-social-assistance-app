@@ -15,7 +15,8 @@ export type RateLimitCategory =
   | 'instance-metadata'  // 10 req/min
   | 'resource-api'       // 100 req/min
   | 'search'             // 50 req/min
-  | 'webhooks';          // 200 req/min
+  | 'webhooks'           // 200 req/min
+  | 'client-log';        // 120 req/min, keyed by client IP only
 
 /**
  * Configuration for rate limiting per category
@@ -62,6 +63,10 @@ export const RATE_LIMIT_CONFIGS: Record<RateLimitCategory, RateLimitConfig> = {
   'webhooks': {
     category: 'webhooks',
     requestsPerMinute: 200,
+  },
+  'client-log': {
+    category: 'client-log',
+    requestsPerMinute: 120,
   },
 };
 
@@ -202,6 +207,25 @@ function extractInstanceId(request: NextRequest): string {
 }
 
 /**
+ * Extract the client IP for routes that must not trust caller-supplied identity
+ * (e.g. /api/client-log). Reads only the platform-set address headers —
+ * `x-real-ip`, then the first `x-forwarded-for` hop (Vercel overwrites both with
+ * the connecting client's address) — and never `x-federation-instance`.
+ */
+export function extractClientIp(request: NextRequest): string {
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) {
+    return realIp;
+  }
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const first = forwardedFor.split(',')[0].trim();
+    if (first) return first;
+  }
+  return 'unknown';
+}
+
+/**
  * Determine rate limit category from request path
  *
  * @param pathname - URL pathname to categorize
@@ -229,6 +253,8 @@ export function getCategoryFromPath(pathname: string): RateLimitCategory {
  *
  * @param handler - The API route handler to wrap
  * @param category - Optional explicit category (will auto-detect if not provided)
+ * @param options.keyBy - 'instance' (default: x-federation-instance, then IP) or
+ *   'client-ip' (platform-set client IP only)
  * @returns Wrapped handler with rate limiting
  *
  * @example
@@ -241,14 +267,17 @@ export function getCategoryFromPath(pathname: string): RateLimitCategory {
  */
 export function withRateLimit(
   handler: (request: NextRequest) => Promise<NextResponse>,
-  category?: RateLimitCategory
+  category?: RateLimitCategory,
+  options: { keyBy?: 'instance' | 'client-ip' } = {}
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest): Promise<NextResponse> => {
     // Determine category
     const limitCategory = category || getCategoryFromPath(request.nextUrl.pathname);
 
-    // Extract instance identifier
-    const instanceId = extractInstanceId(request);
+    // Extract the limiter key. 'client-ip' ignores x-federation-instance so a
+    // caller cannot reset its own budget by rotating that header.
+    const instanceId =
+      options.keyBy === 'client-ip' ? extractClientIp(request) : extractInstanceId(request);
 
     // Check rate limit
     const result = rateLimiter.checkLimit(instanceId, limitCategory);

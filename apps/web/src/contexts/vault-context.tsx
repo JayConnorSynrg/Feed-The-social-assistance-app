@@ -217,9 +217,10 @@ export function VaultProvider({ children }: VaultProviderProps) {
     try {
       setLoading(true)
       setError(null)
+      // No user id in the labels: app_logs.user_id is derived server-side from the session.
       const success = await withMetric(
         'vault.unlock',
-        { userId: user.id },
+        {},
         () => unlockVault(masterPassword, user.id)
       )
       setIsUnlocked(success)

@@ -2,15 +2,17 @@
  * Structured logging utility for the FEED platform.
  *
  * - Zero dependencies -- wraps the built-in console API with JSON output.
- * - Vercel Log Drain captures console.log/warn/error automatically.
  * - Works in Node.js (API routes), Edge Runtime, and the browser.
  * - Includes request timing via `logger.time()` and error serialization.
- * - Server-side sink: warn/error levels are persisted to app_logs in Supabase
- *   via service-role client (fire-and-forget, never throws, never slows caller).
+ * - First-party sink only: warn/error levels, withMetric wide-events and
+ *   logEvent() product events are persisted to FEED's own Supabase `app_logs`
+ *   table (fire-and-forget, never throws, never slows the caller). No
+ *   third-party telemetry vendor receives any of it.
+ * - Browser rows go through /api/client-log, which accepts only event names in
+ *   EVENT_REGISTRY (src/lib/event-registry.ts) and drops unknown label keys.
  */
 
-import { track } from '@vercel/analytics'
-import { runWithMetric } from './with-metric-core.mjs'
+import { runWithMetric, serializeError } from './with-metric-core.mjs'
 
 // ============================================
 // Server-side Supabase log sink
@@ -20,8 +22,8 @@ import { runWithMetric } from './with-metric-core.mjs'
  * Fire-and-forget insert into public.app_logs.
  * - On the SERVER (Node.js runtime): writes directly via service-role client.
  *   The per-request correlation id set by the proxy (`x-request-id`) is read
- *   from next/headers when a request scope is active, so a server log row and
- *   its Sentry scope share one id (I4).
+ *   from next/headers when a request scope is active, so every server log row
+ *   written during one request shares one correlation id (I4).
  * - On the CLIENT (browser): posts to /api/client-log with keepalive:true so
  *   the request survives navigation and the event is not lost on redirect. The
  *   route derives user_id server-side from the cookie session (never trusted
@@ -141,22 +143,32 @@ export const logger = {
     sinkToSupabase('warn', message, data)
   },
 
-  error: (message: string, error?: unknown, data?: Record<string, unknown>) => {
-    const entry = {
-      level: 'error' as const,
+  /**
+   * Log an error. `error` may be an Error, a Supabase/PostgREST `{ code, message }`
+   * object, a string, or absent; it is normalized by serializeError so the
+   * persisted row carries `error_code` (the SQLSTATE when present) and a capped
+   * `error_message` instead of "[object Object]". The stack goes to the console
+   * only. `opts.requestId` pins the row's correlation id when no request scope is
+   * active (e.g. instrumentation onRequestError).
+   */
+  error: (
+    message: string,
+    error?: unknown,
+    data?: Record<string, unknown>,
+    opts?: { requestId?: string }
+  ) => {
+    const errorFields = serializeError(error)
+    const stack =
+      error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    emit({
+      level: 'error',
       message,
       timestamp: new Date().toISOString(),
-      error_name: error instanceof Error ? error.name : undefined,
-      error_message: error instanceof Error ? error.message : String(error),
-      stack:
-        error instanceof Error
-          ? error.stack?.split('\n').slice(0, 5).join('\n')
-          : undefined,
+      ...errorFields,
+      stack,
       ...data,
-    }
-    emit(entry)
-    const { level: _l, message: _m, timestamp: _t, ...contextFields } = entry
-    sinkToSupabase('error', message, { ...contextFields, ...data })
+    })
+    sinkToSupabase('error', message, { ...errorFields, ...data }, opts?.requestId)
   },
 
   /**
@@ -244,18 +256,39 @@ export async function withTiming<T>(
   }
 }
 
+/** Flat, primitive label set for a persisted event. */
+export type EventAttrs = Record<string, string | number | boolean | null>
+
 /**
- * Time an async operation, emitting a structured log AND a Vercel analytics
- * event so latency/error signals are visible in production (where `debug` and
- * raw timing logs are suppressed). Re-throws on error — never swallows.
+ * Record a named product event as a persisted first-party info row in app_logs
+ * (browser: via /api/client-log; server: via the service-role sink). Unlike
+ * logger.info — which is console-only — this event is stored. `name` must be in
+ * EVENT_REGISTRY or the client-log route rejects it; labels outside the
+ * registry's key list for that event are dropped. Never throws.
+ */
+export function logEvent(name: string, attrs: EventAttrs = {}): void {
+  emit({ level: 'info', message: name, timestamp: new Date().toISOString(), ...attrs })
+  sinkToSupabase(
+    'info',
+    name,
+    { ...attrs },
+    typeof window !== 'undefined' ? createOpId() : undefined
+  )
+}
+
+/**
+ * Time an async operation, emitting a structured log AND persisting exactly one
+ * first-party wide-event row to app_logs (`<operation>.complete` with
+ * duration_ms, or `<operation>.error` with error_code/error_message), so
+ * latency/error signals are queryable in production (where `debug` and raw
+ * timing logs are suppressed). Re-throws on error — never swallows.
  *
- * `track()` accepts only flat primitive props (string | number | boolean |
- * null). AbortError outcomes are NOT failures (Next.js aborts in-flight fetch
- * on re-render), so the analytics event is skipped for them.
+ * Signature and argument order are a stable contract: (operation, attrs, fn,
+ * explicitRequestId?). `attrs` are flat primitive labels.
  */
 export async function withMetric<T>(
   operation: string,
-  attrs: Record<string, string | number | boolean | null>,
+  attrs: EventAttrs,
   fn: () => Promise<T>,
   // Optional caller-supplied correlation id. When a privileged client call mints one request id
   // and sends it as x-request-id (so the durable admin_actions row and this app_logs row share
@@ -269,12 +302,12 @@ export async function withMetric<T>(
   // reads the proxy-stamped x-request-id (I4) — server correlation is unchanged.
   const requestId = explicitRequestId ?? (typeof window !== 'undefined' ? createOpId() : undefined)
   // The guarded body lives in with-metric-core.mjs so the shipped path and the
-  // node:test suite exercise the SAME code. Real emit/sink/track wired here.
+  // node:test suite exercise the SAME code. Real emit/sink wired here.
   return runWithMetric(
     // `emit` requires a full LogEntry; the core's dep slot is intentionally
     // broader. The core only ever calls it with a valid LogEntry-shaped object,
     // so this boundary cast is safe and keeps runtime behavior unchanged.
-    { emit: emit as (entry: Record<string, unknown>) => void, sink: sinkToSupabase, track },
+    { emit: emit as (entry: Record<string, unknown>) => void, sink: sinkToSupabase },
     operation,
     attrs,
     fn,

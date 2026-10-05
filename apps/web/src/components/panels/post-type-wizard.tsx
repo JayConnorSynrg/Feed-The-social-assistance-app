@@ -6,7 +6,6 @@ import { sanitizeInput } from '@/lib/security'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { logger } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 import { createPoll } from '@/hooks/use-poll'
 import {
   Dialog,
@@ -869,18 +868,14 @@ export function PostTypeWizard({ open, onClose, onPost, resourceOptions, onSafet
       return
     }
     dispatch({ type: 'SELECT_TYPE', payload: card.key })
-    track('wizard_type_selected', { type: card.key })
   }, [onClose, onSafetyAlertClick])
 
   const handleOpenChange = useCallback((o: boolean) => {
     if (!o) {
-      if (state.step !== 'type-selection') {
-        track('wizard_abandoned', { step: state.step, type: state.selectedType ?? 'none' })
-      }
       dispatch({ type: 'RESET' })
       onClose()
     }
-  }, [onClose, state.step, state.selectedType])
+  }, [onClose])
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

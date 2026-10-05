@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { headers } from "next/headers";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
 import { createClient } from "@/lib/supabase/server";
 import type { InitialUser } from "@/providers/auth-provider";
@@ -126,8 +124,6 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: A11Y_PREPAINT_SCRIPT }}
         />
         <Providers initialUser={initialUser}>{children}</Providers>
-        <SpeedInsights />
-        <Analytics />
       </body>
     </html>
   );

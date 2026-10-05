@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { withRateLimit } from '@/middleware/federation-rate-limit'
+import { sanitizeClientEvent } from '@/lib/event-registry'
 
 // Maximum body size accepted — prevents oversized payloads from being logged.
 const MAX_BODY_BYTES = 4096
@@ -44,11 +45,18 @@ async function deriveUserId(req: NextRequest): Promise<string | null> {
 /**
  * POST /api/client-log
  *
- * Accepts client-side log events and persists them to app_logs using the
- * service-role client (server-only). No auth required — this is a write-only
- * append sink. Client input is sanitized and size-capped before insertion.
+ * Accepts client-side log events and persists them to FEED's own app_logs table
+ * using the service-role client (server-only). No auth required — this is a
+ * write-only append sink. Client input is sanitized and size-capped before
+ * insertion:
+ *   - `event` must be a name in EVENT_REGISTRY (src/lib/event-registry.ts);
+ *     anything else is rejected with 400 unknown_event.
+ *   - `context` keeps only that event's registered label keys (flat primitives);
+ *     error_code / error_name / error_message survive only on level 'error', with
+ *     error_message capped at 120 chars.
+ *   - Rate limited per client IP (platform-set address headers only).
  *
- * Body: { level: 'warn'|'error', event: string, context?: object, opId?: string }
+ * Body: { level: 'info'|'warn'|'error', event: string, context?: object, request_id?: string, duration_ms?: number }
  *
  * The optional `opId` field (also accepted as `request_id`) is a client-supplied
  * correlation id (alphanumeric + hyphens, max 64 chars) that threads a single
@@ -106,25 +114,14 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
       return NextResponse.json({ ok: false, error: 'invalid_event' }, { status: 400 })
     }
 
-    // Sanitize context — only accept plain objects; never trust nested depth
-    let sanitizedContext: Record<string, unknown> | undefined
-    if (context !== null && context !== undefined) {
-      if (typeof context === 'object' && !Array.isArray(context)) {
-        // Shallow copy; stringify/parse caps value lengths and removes functions
-        try {
-          const json = JSON.stringify(context)
-          if (json.length <= MAX_BODY_BYTES) {
-            sanitizedContext = JSON.parse(json) as Record<string, unknown>
-            // Tag as client-originated so queries can filter by source
-            sanitizedContext._source = 'client'
-          }
-        } catch {
-          // Non-serializable context — drop it; the event still gets logged
-        }
-      }
-    } else {
-      sanitizedContext = { _source: 'client' }
+    // Closed vocabulary: unknown event names are rejected; unknown label keys dropped.
+    const trimmedEvent = event.trim()
+    const checked = sanitizeClientEvent(trimmedEvent, level as 'info' | 'warn' | 'error', context)
+    if (!checked.ok) {
+      return NextResponse.json({ ok: false, error: 'unknown_event' }, { status: 400 })
     }
+    // Tag as client-originated so queries can filter by source.
+    const sanitizedContext: Record<string, unknown> = { ...checked.context, _source: 'client' }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -146,7 +143,7 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
       .from('app_logs')
       .insert({
         level: level as 'info' | 'warn' | 'error',
-        event: event.trim(),
+        event: trimmedEvent,
         context: sanitizedContext,
         duration_ms: sanitizedDurationMs,
         user_id: userId,
@@ -165,4 +162,4 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
     console.error(JSON.stringify({ level: 'error', message: 'client-log.route_error', error: msg }))
     return NextResponse.json({ ok: false, error: 'internal' }, { status: 500 })
   }
-}, 'resource-api')
+}, 'client-log', { keyBy: 'client-ip' })

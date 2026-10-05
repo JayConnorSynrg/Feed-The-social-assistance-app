@@ -157,7 +157,7 @@ Conduct a live test session with real users before any app store submission:
 - [ ] Users can complete key tasks without assistance
 
 ### Monitoring Setup
-- [ ] Error tracking (Sentry/LogRocket) configured
+- [ ] First-party error tracking live: uncaught server/client errors land in `app_logs` (`request.error`, `*.error.boundary`, `client.*`) — see `docs/observability.md`
 - [ ] Analytics configured
 - [ ] Uptime monitoring configured
 - [ ] Log aggregation configured

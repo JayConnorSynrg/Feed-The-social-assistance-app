@@ -39,10 +39,14 @@ describe('buildCsp — main app profile', () => {
     expect(styleSrc).toBe("style-src 'self' 'unsafe-inline'")
   })
 
-  it('retains the script host allowlist as CSP2 back-compat fallback', () => {
+  it('retains the Turnstile host allowlist as CSP2 back-compat fallback', () => {
     const scriptSrc = csp.split('; ').find((d) => d.startsWith('script-src '))!
-    expect(scriptSrc).toContain('https://va.vercel-scripts.com')
     expect(scriptSrc).toContain('https://challenges.cloudflare.com')
+  })
+
+  it('allows no third-party analytics host (telemetry is first-party only)', () => {
+    expect(csp).not.toContain('vercel-scripts')
+    expect(csp).not.toContain('vitals.vercel-insights')
   })
 
   it('preserves every non-script directive byte-for-byte', () => {
@@ -52,7 +56,7 @@ describe('buildCsp — main app profile', () => {
       "img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com"
     )
     expect(directives).toContain(
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://va.vercel-scripts.com https://challenges.cloudflare.com"
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.mapbox.com https://challenges.cloudflare.com"
     )
     expect(directives).toContain("worker-src 'self' blob:")
     expect(directives).toContain("font-src 'self'")

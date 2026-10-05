@@ -33,7 +33,6 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { logger } from '@/lib/logger'
-import { track } from '@vercel/analytics'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 
 // ============================================

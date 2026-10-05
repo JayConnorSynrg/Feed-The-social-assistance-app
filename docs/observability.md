@@ -2,21 +2,40 @@
 
 ## Overview
 
-Five complementary layers cover the full signal surface:
+FEED is open-source and privacy-first: application telemetry stays on FEED's own
+infrastructure. Every persisted signal lands in the project's Supabase `app_logs`
+table; no third-party telemetry vendor (error tracker, analytics or RUM SDK)
+receives app or user data, and the CSP allows no analytics host.
 
 | Layer | Mechanism | Destination |
 |---|---|---|
-| Structured logs | `logger` (console JSON) | Vercel Log Drain |
-| Latency + error analytics | `withMetric` → `@vercel/analytics track()` | Vercel Analytics custom events |
-| RUM + Core Web Vitals | `@vercel/speed-insights` + `global-error.tsx` | Vercel Speed Insights |
-| **Persisted wide events (W0.2)** | `withMetric` → `app_logs` (info+`duration_ms`+`user_id`) | Supabase — queryable p50/p95/p99 + regression alerts |
-| **Uncaught server errors (W0.2)** | `@sentry/nextjs` `onRequestError` | Sentry (DSN from env; inert without one) |
+| Structured logs | `logger.debug/info` (console JSON) | Server/browser console only |
+| Persisted failures | `logger.warn` / `logger.error` | `app_logs` (browser via `/api/client-log`, server via service role) |
+| **Persisted wide events (W0.2)** | `withMetric` → `app_logs` (`<op>.complete` / `<op>.error` + `duration_ms` + `user_id`) | Supabase — queryable p50/p95/p99 + regression alerts |
+| Named product events | `logEvent(name, attrs)` → `app_logs` (info) | Supabase |
+| Uncaught server errors | `src/instrumentation.ts` `onRequestError` → one `request.error` row | Supabase |
+| Uncaught client errors | `app/error.tsx`, `app/(admin)/error.tsx`, `global-error.tsx`, `PanelErrorBoundary`, window `error` / `unhandledrejection` capture | Supabase |
+| RPC database time | weekly `pg_stat_statements` snapshot → `app_query_stats_weekly` | Supabase |
 
-**Log Drain**: Vercel captures every `console.log/warn/error` call as a structured JSON entry in production. The `logger` utility writes JSON with `level`, `message`, `timestamp`, and optional flat fields. No external SDK required.
+**Persisted wide events**: `withMetric` writes exactly one row to `public.app_logs` per outcome — an `info` row (`${operation}.complete`) on success and an `error` row (`${operation}.error`) on failure — each carrying `duration_ms` and a server-derived `user_id`. These rows are SQL-queryable, so latency percentiles and regressions are computable in-database (see below).
 
-**Vercel Analytics custom events**: `track(eventName, props)` from `@vercel/analytics` records named events with flat primitive properties. The `withMetric` wrapper calls `track()` on every success/error outcome, giving a latency histogram and error rate for each hot path in the Vercel Analytics dashboard.
+**`logger.info` vs `logEvent`**: `logger.info` is console-only (lost in the browser). Use `logEvent(name, attrs)` for a named product event that must be stored; it writes one `info` row through the same sink.
 
-**Persisted wide events**: `withMetric` also writes exactly one row to `public.app_logs` per outcome — an `info` row (`${operation}.complete`) on success and an `error` row (`${operation}.error`) on failure — each carrying `duration_ms` and a server-derived `user_id`. Unlike `track()` (which is a Vercel dashboard), these rows are SQL-queryable, so latency percentiles and regressions are computable in-database (see below). Before W0.2 `logger.info` was console-only and `app_logs` held zero completion rows.
+## Closed event vocabulary (`/api/client-log`)
+
+`src/lib/event-registry.ts` holds `EVENT_REGISTRY`: event name → allowed label keys. The browser sink route:
+
+- rejects an event name that is not in the registry (`400 unknown_event`, nothing persisted);
+- keeps only that event's registered label keys, with flat primitive values (strings ≤ 200 chars); other keys are dropped;
+- keeps `error_code` / `error_name` / `error_message` only on `error`-level rows, with `error_message` capped at 120 characters;
+- stamps `_source: 'client'` and derives `user_id` from the cookie session;
+- rate-limits per client IP (120/min) from the platform-set `x-real-ip` / `x-forwarded-for`; caller-supplied headers such as `x-federation-instance` do not affect the budget.
+
+The registry was sourced from every static event name in `apps/web/src` (logger, withMetric `<op>.complete/.error`, privilegedRpc/privilegedFetch ops, logEvent) plus every distinct `app_logs.event` in production over the prior 30 days. Label keys exclude personal and free-text fields (user ids, emails, addresses, viewport bounds, file paths, raw query text). `src/lib/__tests__/event-registry.test.ts` re-scans the source on every test run and fails when an emitted event is missing — **add the registry entry in the same PR that first emits an event.**
+
+## Error codes
+
+`serializeError` (`src/lib/with-metric-core.mjs`) normalizes any thrown value for persisted rows: Supabase/PostgREST `{ code, message }` objects (which are not `Error` instances) become `error_code` = the SQLSTATE / PostgREST code and a capped `error_message`; an `Error` without a `code` uses its `name`. `privilegedRpc` carries the RPC's SQLSTATE on its wrapper error, so a denied admin call records `error_code: '42501'`. Stacks stay in the console.
 
 ---
 
@@ -37,15 +56,16 @@ Five complementary layers cover the full signal surface:
 
 ### Persistence path (exactly once — I1)
 - **Client** (all 20 `withMetric` call sites are `'use client'`): `withMetric` → `sinkToSupabase('info'|'error', …, duration_ms)` → `POST /api/client-log` (keepalive) → route derives `user_id` and inserts. One row per outcome; success never also writes an error row and vice-versa.
-- **Server** `logger.warn`/`logger.error`: direct service-role insert; `request_id` read from `next/headers` `x-request-id` when a request scope is active.
+- **Server** `logger.warn`/`logger.error`: direct service-role insert; `request_id` read from `next/headers` `x-request-id` when a request scope is active (or pinned via `logger.error(..., { requestId })`).
 
 ## Request correlation (I4)
 
-`apps/web/src/proxy.ts` (the Next.js 16 middleware) reads an inbound `x-request-id` or mints `crypto.randomUUID()`, forwards it on the request headers, and echoes it on every response. The logger reads it via `next/headers`; `onRequestError` (`src/instrumentation.ts`) sets it as the Sentry `request_id` tag — so one server request is traceable across `app_logs.request_id` and Sentry under the same id.
+`apps/web/src/proxy.ts` (the Next.js 16 middleware) reads an inbound `x-request-id` or mints `crypto.randomUUID()`, forwards it on the request headers, and echoes it on every response. The logger reads it via `next/headers`, and `onRequestError` (`src/instrumentation.ts`) writes it as the `request.error` row's `request_id` — so one server request is traceable across every `app_logs` row it produced. Client-side, `privilegedRpc` / `privilegedFetch` and the post-photo upload (`lib/post-image-upload.ts`) mint one id with `newRequestId()` and send it as `x-request-id` to the RPC / edge function.
 
-## Uncaught server errors (I5)
+## Uncaught errors (I5)
 
-`src/instrumentation.ts` registers `@sentry/nextjs` per runtime (`sentry.server.config.ts` / `sentry.edge.config.ts`, client via `instrumentation-client.ts`) and exports `onRequestError = Sentry.captureRequestError` (wrapped to tag `request_id`). Sentry is **disabled unless a DSN env var is set** (`SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`) — no hardcoded secret, no network or build cost until turned on. Source-map upload (via `withSentryConfig` + `SENTRY_AUTH_TOKEN`) is a later enhancement; runtime error capture works without it.
+- **Server**: `src/instrumentation.ts` exports `onRequestError`. Next.js calls it once per uncaught server error; it writes one `request.error` row with `request_id`, the route **pattern** (`/profile/[username]`, never the concrete URL), `route_type`, `method`, the Next.js `digest`, and `error_code`. The raw message is not persisted.
+- **Client**: `app/error.tsx` (`app.error.boundary`), `app/(admin)/error.tsx` (`admin.error.boundary`), `app/global-error.tsx` (`global-error.boundary`) and the panel `PanelErrorBoundary` in `app/page.tsx` (`panel.error.boundary`) each persist one error row. `src/lib/client-error-capture.ts`, installed once in `app/providers.tsx`, records window `error` (`client.window.error`) and `unhandledrejection` (`client.unhandled_rejection`), de-duplicated (same message at most once per 60 s, at most 20 per page session; `AbortError` rejections skipped).
 
 ## Retention (I6)
 
@@ -74,94 +94,141 @@ Defaults chosen so a single slow outlier or a cold-start burst cannot trip it; p
 ## `withMetric` contract
 
 ```typescript
-// apps/web/src/lib/logger.ts
+// apps/web/src/lib/logger.ts — signature and argument order are a stable contract
 export async function withMetric<T>(
   operation: string,
   attrs: Record<string, string | number | boolean | null>,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  explicitRequestId?: string
 ): Promise<T>
 ```
 
 **Behaviour:**
 
-- On success — emits `logger.info(`${operation}.complete`, { ...attrs, duration_ms })` and calls `track(operation, { ...attrs, duration_ms, ok: true })`. Returns `fn()`'s value unchanged.
-- On error — emits `logger.error(`${operation}.error`, error, { ...attrs, duration_ms, error_code })` and calls `track(operation, { ...attrs, duration_ms, ok: false, error_code })` *unless* `error_code === 'AbortError'` (Next.js aborts in-flight fetch on re-render — these are not real errors). Re-throws the error unchanged.
+- On success — console `info` entry plus exactly one persisted `info` row `${operation}.complete` with `attrs` and `duration_ms`. Returns `fn()`'s value unchanged.
+- On error — console `error` entry plus exactly one persisted `error` row `${operation}.error` with `attrs`, `error_code` (SQLSTATE when present) and a capped `error_message`. Re-throws the error unchanged.
 - `duration_ms` is `Math.round(performance.now() - start)` — integer milliseconds.
-- The function is fully transparent: same return type, same throw, zero control-flow change.
+- `explicitRequestId` pins the row's `request_id` (used by `privilegedRpc` / `privilegedFetch`); omitted, the browser mints a per-op id and the server reads the proxy-stamped header.
 
 **Supabase builder note**: Supabase query builders are `PromiseLike` (thenable) but not full `Promise` instances. Wrap them with `async () => await builder` to satisfy `withMetric`'s `() => Promise<T>` signature.
 
 **Attrs rules:**
 - All values must be flat primitives: `string | number | boolean | null`.
-- No PII. Use lengths, counts, category labels, template IDs — never content, names, or addresses.
-- Vercel Analytics prop key+value combined limit: 255 characters. Keep `operation` names short (dot-namespaced, ≤ 30 chars).
+- No PII. Use lengths, counts, category labels, template IDs — never content, names, addresses, or user ids (`app_logs.user_id` is already derived server-side).
+- Every key must be listed for the event in `EVENT_REGISTRY`, or the client-log route drops it.
 
 ---
 
 ## Naming convention
 
-Operations follow OpenTelemetry semantic-convention dot-namespacing (`namespace.verb`) and Vercel custom-event naming guidance (lowercase, dot-separated, concise). Duration is always `duration_ms` (integer). This aligns with the OTel `*_ms` suffix convention for millisecond measurements.
-
-References:
-- OpenTelemetry Semantic Conventions — General attributes: `https://opentelemetry.io/docs/specs/semconv/general/attributes/`
-- Vercel Analytics custom events: `https://vercel.com/docs/analytics/custom-events`
+Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).
 
 ---
 
-## Metric catalog
-
-| Operation | File : line | Attrs | Mechanism |
-|---|---|---|---|
-| `map.resources_in_bounds` | `apps/web/src/hooks/use-viewport-resources.ts` : L112 | `category`, `limit` | `withMetric` |
-| `vault.unlock` | `apps/web/src/contexts/vault-context.tsx` : L165 | `userId` | `withMetric` |
-| `documents.upload` | `apps/web/src/hooks/use-documents.ts` : L141 | `category`, `file_size`, `document_type` | `withMetric` |
-| `programs.query` | `apps/web/src/hooks/use-program-browser.ts` : L89 | `category`, `state`, `has_search` | `withMetric` |
-| `feed.load` | `apps/web/src/components/panels/feed-panel.tsx` : L323 | `limit` | `withMetric` |
-| `messages.send` | `apps/web/src/hooks/use-conversations.ts` : L356 | `content_length` | `withMetric` |
-| `forms.draft` | `apps/web/src/hooks/use-vault-form-submission.ts` : L262 | `template_id` | `withMetric` |
-| `forms.submit` | `apps/web/src/hooks/use-vault-form-submission.ts` : L411 | `template_id`, `has_signature` | `withMetric` |
-| `chat.ttfb` | `apps/web/src/hooks/use-chat.ts` : L194 | `duration_ms` | inline `track()` |
-| `chat.complete` | `apps/web/src/hooks/use-chat.ts` : L215 | `duration_ms`, `ok` | inline `track()` |
-| `nav_subtab` | `apps/web/src/components/panels/feed-panel.tsx` : L292; `documents-panel.tsx` : L600 | `panel`, `subtab` | inline `track()` |
-
-All `withMetric`-backed operations also emit a structured log entry (`${operation}.complete` or `${operation}.error`) visible in the Vercel Log Drain.
-
----
-
-## How to add a new metric
+## How to add a new metric or event
 
 1. Identify the single dominant async call for the hot path (network fetch, DB query, storage op).
-2. Import `withMetric` from `@/lib/logger`.
+2. Import `withMetric` (timed operation) or `logEvent` (named product event) from `@/lib/logger`.
 3. Wrap with `async () => await <existing call>` if the call returns a PromiseLike (Supabase builders).
 4. Choose flat-primitive attrs: no PII, use counts/lengths/category labels/ids.
-5. Register the operation in the catalog table above.
-6. Confirm `npm run type-check` passes — the `attrs` type enforces `string | number | boolean | null`.
+5. Add the event name(s) and label keys to `EVENT_REGISTRY` in `src/lib/event-registry.ts` (`<op>.complete` and `<op>.error` for `withMetric`).
+6. Run `npx vitest run src/lib/__tests__/event-registry.test.ts` and `npm run type-check`.
 
 ```typescript
-// Pattern for Supabase builders (PromiseLike, not full Promise):
+// Timed operation (Supabase builder):
 const { data, error } = await withMetric(
   'namespace.verb',
   { category: selectedCategory ?? null, limit: PAGE_SIZE },
   async () => await supabase.from('table').select('*').eq('col', value)
 )
 
-// Pattern for regular async functions:
-const result = await withMetric(
-  'namespace.verb',
-  { userId },
-  () => someAsyncFunction(arg1, arg2)
-)
+// Named product event:
+logEvent('admin.resource.autocomplete', { query_len: 9, result_count: 5, outcome: 'suggest' })
 ```
 
 ---
 
 ## PII policy
 
-`withMetric` attrs must never contain:
-- Names, email addresses, phone numbers, SSNs, addresses
-- Free-text content (message body, form field values)
-- IP addresses or device fingerprints
+Persisted labels must never contain:
+- Names, email addresses, phone numbers, SSNs, addresses, coordinates or viewport bounds
+- Free-text content (message body, form field values, search text)
+- User ids (use the server-derived `user_id` column), IP addresses or device fingerprints
 
 Use instead: `content_length` (character count), `file_size` (bytes), `category` (enum label), `template_id` (opaque ID), `has_signature` (boolean).
 
-The logger's `error_message` field from `withMetric` error paths captures the Error `.message` string. Ensure error messages in Supabase/crypto layers do not embed PII — this is enforced at the library level, not at call sites.
+`error_message` is capped at 120 characters and kept only on error-level rows. A Postgres constraint message can echo a column value; for writes that touch personal fields, log a scrubbed error (code + static message) as `runResourceSave` does.
+
+---
+
+## Weekly review
+
+Run with the service role (Management API SQL endpoint). All three read first-party data only.
+
+**1. p95 latency by operation, this week vs last week** (`app_logs`, 30-day retention):
+```sql
+-- operations whose p95 grew ≥ 25% week-over-week (≥ 5 samples in each week)
+select * from public.app_logs_latency_regressions(1.25, interval '7 days', interval '7 days', 5);
+
+-- full table, every operation
+with w as (
+  select event,
+         case when created_at >= now() - interval '7 days' then 'this' else 'last' end as wk,
+         duration_ms
+  from public.app_logs
+  where duration_ms is not null and created_at >= now() - interval '14 days'
+)
+select event,
+       percentile_cont(0.95) within group (order by duration_ms) filter (where wk = 'this') as p95_this_week,
+       percentile_cont(0.95) within group (order by duration_ms) filter (where wk = 'last') as p95_last_week,
+       count(*) filter (where wk = 'this') as n_this,
+       count(*) filter (where wk = 'last') as n_last
+from w group by event order by p95_this_week desc nulls last;
+```
+
+**2. Error rate by operation and error_code** (last 7 days):
+```sql
+with ops as (
+  select regexp_replace(event, '\.(complete|error)$', '') as operation,
+         event like '%.error' as failed,
+         context->>'error_code' as error_code
+  from public.app_logs
+  where created_at >= now() - interval '7 days'
+    and (event like '%.complete' or event like '%.error')
+)
+select operation,
+       count(*) as calls,
+       count(*) filter (where failed) as errors,
+       round(100.0 * count(*) filter (where failed) / count(*), 2) as error_pct
+from ops group by operation having count(*) filter (where failed) > 0
+order by error_pct desc;
+
+select regexp_replace(event, '\.error$', '') as operation, context->>'error_code' as error_code, count(*)
+from public.app_logs
+where level = 'error' and created_at >= now() - interval '7 days'
+group by 1, 2 order by 3 desc;
+```
+
+**3. RPC database-time deltas between weekly snapshots** (`app_query_stats_weekly`, 26-week retention, captured Mondays 04:23 UTC by pg_cron `app_query_stats_weekly`):
+```sql
+with s as (
+  select query_label, captured_at, calls, total_exec_time_ms, rows,
+         lag(calls)              over w as prev_calls,
+         lag(total_exec_time_ms) over w as prev_ms,
+         lag(rows)               over w as prev_rows
+  from public.app_query_stats_weekly
+  window w as (partition by query_label order by captured_at)
+), d as (
+  -- after a stats reset the counters drop, so the current value is the delta
+  select query_label, captured_at,
+         case when calls >= prev_calls then calls - prev_calls else calls end as calls_delta,
+         case when total_exec_time_ms >= prev_ms then total_exec_time_ms - prev_ms else total_exec_time_ms end as db_ms_delta,
+         case when rows >= prev_rows then rows - prev_rows else rows end as rows_delta
+  from s where prev_calls is not null
+)
+select query_label, captured_at, calls_delta, round(db_ms_delta::numeric, 1) as db_ms_delta,
+       round((db_ms_delta / nullif(calls_delta, 0))::numeric, 2) as mean_ms, rows_delta
+from d
+where captured_at = (select max(captured_at) from public.app_query_stats_weekly)
+order by db_ms_delta desc;
+```

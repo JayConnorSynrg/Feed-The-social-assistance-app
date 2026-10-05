@@ -17,6 +17,7 @@ import { ProgramsPanel } from '@/components/panels/programs-panel'
 // PetitionsPanel, EventsPanel, BusinessesPanel are now rendered as subtabs inside
 // DocumentsPanel (applications) and FeedPanel (events, businesses, petitions) — not top-level panels.
 import { useAuth } from '@/hooks/use-auth'
+import { logger } from '@/lib/logger'
 
 // MapPanel pulls supercluster + react-map-gl into its chunk. Map is not the
 // default panel, so load it on demand to keep those deps out of the initial
@@ -51,7 +52,9 @@ class PanelErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('Panel error:', error.message, info.componentStack)
+    // Persist one error row (code + capped message); the component stack stays console-only.
+    logger.error('panel.error.boundary', error, { surface: 'panel' })
+    console.error('Panel error component stack:', info.componentStack)
   }
 
   render() {

@@ -1,32 +1,35 @@
-import * as Sentry from '@sentry/nextjs'
+import type { Instrumentation } from 'next'
+import { logger } from '@/lib/logger'
+import { serializeError } from '@/lib/with-metric-core.mjs'
 
 /**
- * Next.js server/edge instrumentation entry (W0.2).
+ * Next.js server/edge instrumentation entry — first-party error capture.
  *
- * `register()` loads the runtime-specific Sentry init. `onRequestError` captures
- * uncaught server errors exactly once per request (Next.js invokes it once per
- * server-side error) and tags each event with the proxy-stamped `x-request-id`
- * so a Sentry event and its app_logs rows share one correlation id (I4/I5).
- *
- * Sentry is a no-op unless a DSN env var is set (see sentry.*.config), so this is
- * inert until observability is turned on — no network calls, no build failure.
+ * Next.js invokes `onRequestError` once per uncaught server-side error. Each one
+ * becomes exactly one `request.error` row in FEED's own `app_logs` table, written
+ * through the server logger. The row carries only PII-free fields:
+ *   - request_id: the proxy-stamped `x-request-id`, so it joins every other row
+ *     written during the same request (I4)
+ *   - route: the route PATTERN (e.g. /profile/[username]), never the concrete URL
+ *   - route_type / method, the Next.js error `digest` (the "ref" a user sees)
+ *   - error_code: the SQLSTATE / PostgREST code when present, else the error name
+ * The raw error message is not persisted (it can echo user data); Next.js itself
+ * still prints the full error to the server console.
  */
-export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    await import('./sentry.server.config')
-  }
-  if (process.env.NEXT_RUNTIME === 'edge') {
-    await import('./sentry.edge.config')
-  }
-}
-
-export const onRequestError = (
-  ...args: Parameters<typeof Sentry.captureRequestError>
-): ReturnType<typeof Sentry.captureRequestError> => {
-  const request = args[1]
-  const rid = request?.headers?.['x-request-id']
-  if (typeof rid === 'string') {
-    Sentry.setTag('request_id', rid)
-  }
-  return Sentry.captureRequestError(...args)
+export const onRequestError: Instrumentation.onRequestError = (error, request, context) => {
+  const rid = request.headers['x-request-id']
+  const requestId = typeof rid === 'string' ? rid : undefined
+  const digest = (error as { digest?: unknown } | null)?.digest
+  const { error_code } = serializeError(error)
+  logger.error(
+    'request.error',
+    { code: error_code },
+    {
+      route: context.routePath,
+      route_type: context.routeType,
+      method: request.method,
+      ...(typeof digest === 'string' ? { digest } : {}),
+    },
+    { requestId }
+  )
 }

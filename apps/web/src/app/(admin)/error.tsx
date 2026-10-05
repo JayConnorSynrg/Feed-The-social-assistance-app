@@ -1,10 +1,14 @@
 'use client'
 
+// apps/web/src/app/(admin)/error.tsx
+// Error boundary for the admin route group: renders a recovery card and persists one
+// admin.error.boundary row (error code + capped message + digest) to app_logs.
+
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
 
-export default function GlobalError({
+export default function AdminError({
   error,
   reset,
 }: {
@@ -12,7 +16,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    logger.error('app.error.boundary', error, { digest: error.digest ?? null, surface: 'app' })
+    logger.error('admin.error.boundary', error, { digest: error.digest ?? null, surface: 'admin' })
   }, [error])
 
   return (
@@ -29,7 +33,7 @@ export default function GlobalError({
         <div className="text-4xl">🌾</div>
         <h2 className="text-2xl font-bold text-stone-800">Something went wrong</h2>
         <p className="text-stone-500 text-sm">
-          An unexpected error occurred. Your data is safe — please try again.
+          This admin page hit an unexpected error. Please try again.
         </p>
         {error.digest && (
           <p className="text-xs text-stone-400 font-mono">ref: {error.digest}</p>
