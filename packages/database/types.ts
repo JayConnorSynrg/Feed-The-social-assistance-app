@@ -197,6 +197,36 @@ export type Database = {
         }
         Relationships: []
       }
+      app_query_stats_weekly: {
+        Row: {
+          calls: number
+          captured_at: string
+          id: number
+          mean_exec_time_ms: number | null
+          query_label: string
+          rows: number
+          total_exec_time_ms: number
+        }
+        Insert: {
+          calls: number
+          captured_at?: string
+          id?: never
+          mean_exec_time_ms?: number | null
+          query_label: string
+          rows: number
+          total_exec_time_ms: number
+        }
+        Update: {
+          calls?: number
+          captured_at?: string
+          id?: never
+          mean_exec_time_ms?: number | null
+          query_label?: string
+          rows?: number
+          total_exec_time_ms?: number
+        }
+        Relationships: []
+      }
       appreciation_gifts: {
         Row: {
           created_at: string
@@ -4114,6 +4144,7 @@ export type Database = {
         Returns: number
       }
       can_manage_org_photos: { Args: { p_folder: string }; Returns: boolean }
+      capture_app_query_stats_weekly: { Args: never; Returns: number }
       category_label: {
         Args: { p_category: Database["public"]["Enums"]["resource_category"] }
         Returns: string
