@@ -314,6 +314,14 @@ export async function runOrgSave(args: {
   })
 }
 
+/**
+ * The org whose Name field should take focus once its form mounts after "Edit existing". It is kept
+ * only while the panel stays open on that same target; closing or moving elsewhere drops it.
+ */
+export function keepPendingNameFocus(pendingFor: string | null, open: boolean, orgId: string | null): string | null {
+  return open && pendingFor !== null && pendingFor === orgId ? pendingFor : null
+}
+
 // ---- Duplicate-name warning -----------------------------------------------------------------
 
 /** Lowercase, strip accents/punctuation, '&' -> 'and', drop a leading 'the' and legal suffixes. */

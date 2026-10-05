@@ -152,8 +152,9 @@ export function AdminShell() {
         return
       }
       // Opened by Forward/Back, not by a control: no opener to return to (the list's Create
-      // organization is the fallback). A stale opener from an earlier open must not be reused.
-      returnFocusRef.current = null
+      // organization is the fallback). A stale opener from an earlier open must not be reused; an
+      // already-open panel keeps the control that really opened it.
+      if (!panelOpenRef.current) returnFocusRef.current = null
       pushedRef.current = true
       setActiveTab('organizations')
       showPanel(target)

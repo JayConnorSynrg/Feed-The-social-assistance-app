@@ -59,7 +59,7 @@ const SECONDARY_BUTTON =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-50 ' +
   FOCUS_RING
 const PRIMARY_BUTTON =
-  'inline-flex min-h-10 items-center justify-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:bg-brand/60 ' +
   FOCUS_RING
 const ICON_BUTTON =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-600 hover:bg-stone-200 hover:text-stone-900 disabled:opacity-30 disabled:hover:bg-transparent ' +

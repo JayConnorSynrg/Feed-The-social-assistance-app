@@ -16,3 +16,21 @@ export function finishToggle(inFlight: ReadonlySet<string>, orgId: string): Set<
   next.delete(orgId)
   return next
 }
+
+const OPEN_KEYS = new Set(['Enter', ' ', 'ArrowDown'])
+
+/**
+ * Busy guard for a row's More menu trigger: while that row's toggle is in flight the trigger stays
+ * focusable (aria-disabled) but a pointer-down or an opening key does not open the menu. Calling
+ * preventDefault stops Radix's own trigger handler (composeEventHandlers skips it).
+ */
+export function guardBusyTrigger(
+  busyIds: ReadonlySet<string>,
+  orgId: string,
+  event: { preventDefault: () => void; key?: string }
+): boolean {
+  if (!busyIds.has(orgId)) return false
+  if (event.key !== undefined && !OPEN_KEYS.has(event.key)) return false
+  event.preventDefault()
+  return true
+}

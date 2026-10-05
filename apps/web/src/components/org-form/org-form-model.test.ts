@@ -20,6 +20,7 @@ import type { OrgSavePayload } from '@/lib/org-admin-rpc'
 import {
   buildSavePayload,
   isLinkable,
+  keepPendingNameFocus,
   runOrgSave,
   type OrgSaveDeps,
   emptyFormValues,
@@ -312,6 +313,15 @@ describe('linked resources that are no longer approved', () => {
     )
     expect(parsed.success).toBe(false)
     expect(parsed.error?.issues.map((i) => i.message)).toContain('resErrNotApproved')
+  })
+})
+
+describe('pending Name focus after "Edit existing"', () => {
+  it('survives only while the panel stays open on that same target', () => {
+    expect(keepPendingNameFocus('B', true, 'B')).toBe('B')
+    expect(keepPendingNameFocus('B', true, 'C')).toBeNull()
+    expect(keepPendingNameFocus('B', false, 'B')).toBeNull()
+    expect(keepPendingNameFocus(null, true, 'B')).toBeNull()
   })
 })
 

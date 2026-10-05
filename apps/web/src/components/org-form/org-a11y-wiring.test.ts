@@ -5,10 +5,14 @@
 // every element that sets dir from the viewer locale also sets lang, the pin map offers a keyboard
 // placement path, and the directory/panel focus hand-offs stay wired.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { hidePinFromAssistiveTech } from './org-pin-a11y'
+import { orgFormMessages } from '@/lib/i18n-org-forms'
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8')
@@ -77,7 +81,7 @@ describe('org screens a11y wiring', () => {
   })
 
   it('the English-only member roster is marked lang="en"', () => {
-    expect(read('app/(admin)/moderation/orgs-section.tsx')).toMatch(/<div lang="en" className="rounded-xl border/)
+    expect(read('app/(admin)/moderation/orgs-section.tsx')).toMatch(/<div lang="en"( dir="ltr")? className="rounded-xl border/)
   })
 
   it('the pin map shows its instructions, describes itself with them, and translates Mapbox controls', () => {
@@ -88,4 +92,50 @@ describe('org screens a11y wiring', () => {
     expect(map).toMatch(/'NavigationControl\.ZoomIn': mapLocale\.zoomIn/)
     expect(map).toMatch(/'Map\.Title': mapLocale\.title/)
   })
+  it('busy buttons dim their colors, not their opacity (the focus ring keeps full contrast)', () => {
+    for (const f of [
+      'components/org-form/org-form-panel.tsx',
+      'components/org-form/resource-directory.tsx',
+      'app/(admin)/moderation/orgs-section.tsx',
+    ]) {
+      expect(read(f), f).not.toMatch(/aria-disabled:opacity-/)
+    }
+    expect(read('components/org-form/org-form-panel.tsx')).toMatch(/aria-disabled:bg-brand\/60/)
+    expect(read('components/org-form/resource-directory.tsx')).toMatch(/aria-disabled:bg-brand\/60/)
+  })
+
+  it('every Mapbox control string is translated and the pin is hidden from assistive tech', () => {
+    const map = read('components/org-form/org-pin-map.tsx')
+    expect(map).toMatch(/'AttributionControl\.ToggleAttribution': mapLocale\.attribution/)
+    expect(map).toMatch(/'LogoControl\.Title': mapLocale\.logo/)
+    expect(map).toMatch(/<Marker\s+ref=\{hidePinFromAssistiveTech\}/)
+    const setAttribute = vi.fn()
+    hidePinFromAssistiveTech({ getElement: () => ({ setAttribute }) })
+    expect(setAttribute).toHaveBeenCalledWith('aria-hidden', 'true')
+  })
+
+  it('the English roster is lang="en" dir="ltr", including its portaled role lists', () => {
+    const list = read('app/(admin)/moderation/orgs-section.tsx')
+    expect(list).toMatch(/<div lang="en" dir="ltr" className="rounded-xl border/)
+    const roster = list.slice(list.indexOf('<div lang="en" dir="ltr"'))
+    expect(roster.match(/<SelectContent lang="en">/g)).toHaveLength(2)
+    expect(roster).not.toMatch(/<SelectContent>/)
+  })
+
+  it('Back/Forward keeps the real opener while the panel is already open', () => {
+    expect(read('app/(admin)/moderation/admin-shell.tsx')).toMatch(
+      /if \(!panelOpenRef\.current\) returnFocusRef\.current = null/
+    )
+  })
+
+  it('the map instructions do not start with the word "Map" (the region is already named Map)', () => {
+    for (const [locale, m] of Object.entries(orgFormMessages)) {
+      // A leading "Map." sentence (title + full stop in any script), not a word that merely begins
+      // with the same letters (Amharic "ካርታውን" = "the map", object case).
+      const lead = m.locMapLabel.toLocaleLowerCase(locale)
+      const title = m.mapTitle.toLocaleLowerCase(locale)
+      expect(lead.startsWith(title) && /^[.。።:]/.test(lead.slice(title.length)), locale).toBe(false)
+    }
+  })
 })
+

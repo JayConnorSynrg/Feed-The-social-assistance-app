@@ -15,8 +15,10 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { useEffect, useId, useRef, useState } from 'react'
 import Map, { Marker, NavigationControl, type MapRef } from 'react-map-gl/mapbox'
 import { Crosshair, MapPin } from 'lucide-react'
+import { hidePinFromAssistiveTech } from './org-pin-a11y'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+
 const US_CENTER = { longitude: -98.5795, latitude: 39.8283, zoom: 3 }
 
 export interface OrgPinMapProps {
@@ -32,7 +34,7 @@ export interface OrgPinMapProps {
   /** Text of the "Place pin at map center" button. */
   placeCenterLabel: string
   /** Translations for Mapbox's own control names. */
-  mapLocale: { title: string; zoomIn: string; zoomOut: string }
+  mapLocale: { title: string; zoomIn: string; zoomOut: string; attribution: string; logo: string }
   /** Runs after a keyboard/button placement (the panel moves focus to "Confirm pin"). */
   onPlacedAtCenter?: () => void
   approximate?: boolean
@@ -100,11 +102,14 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, instructio
           'Map.Title': mapLocale.title,
           'NavigationControl.ZoomIn': mapLocale.zoomIn,
           'NavigationControl.ZoomOut': mapLocale.zoomOut,
+          'AttributionControl.ToggleAttribution': mapLocale.attribution,
+          'LogoControl.Title': mapLocale.logo,
         }}
       >
         <NavigationControl position="top-right" showCompass={false} />
         {shown && (
           <Marker
+            ref={hidePinFromAssistiveTech}
             longitude={shown.lng}
             latitude={shown.lat}
             anchor="bottom"

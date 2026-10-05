@@ -222,6 +222,8 @@ export interface OrgFormMessages {
   mapZoomOut: string
   orgDeactivated: string
   orgReactivated: string
+  mapAttribution: string
+  mapLogo: string
 }
 
 export const orgFormMessages: Record<Locale, OrgFormMessages> = {
@@ -365,7 +367,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Remove pin',
     locRemoved: 'The pin will be removed when you save.',
     locNoPin: 'No pin yet.',
-    locMapLabel: 'Map. Use the arrow keys to move the map, then choose “Place pin at map center”. You can also click the map to place the pin and drag it to adjust.',
+    locMapLabel: 'Use the arrow keys to move the map, then choose “Place pin at map center”. You can also click the map to place the pin and drag it to adjust.',
     locConfirmBeforeSave: 'Confirm or remove the map pin before saving.',
     // Hours editor
     hoursOpen: 'Open',
@@ -439,6 +441,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Zoom out',
     orgDeactivated: '{name} was deactivated.',
     orgReactivated: '{name} is active again.',
+    mapAttribution: 'Toggle attribution',
+    mapLogo: 'Mapbox logo',
   },
 
   // TODO: native-speaker review
@@ -582,7 +586,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Quitar marcador',
     locRemoved: 'El marcador se quitará cuando guarde.',
     locNoPin: 'Todavía no hay marcador.',
-    locMapLabel: 'Mapa. Use las flechas del teclado para mover el mapa y luego elija “Poner marcador en el centro del mapa”. También puede hacer clic en el mapa para poner el marcador y arrastrarlo para ajustarlo.',
+    locMapLabel: 'Use las flechas del teclado para mover el mapa y luego elija “Poner marcador en el centro del mapa”. También puede hacer clic en el mapa para poner el marcador y arrastrarlo para ajustarlo.',
     locConfirmBeforeSave: 'Confirme o quite el marcador del mapa antes de guardar.',
     // Hours editor
     hoursOpen: 'Abierto',
@@ -656,6 +660,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Alejar',
     orgDeactivated: '{name} se desactivó.',
     orgReactivated: '{name} está activa de nuevo.',
+    mapAttribution: 'Mostrar u ocultar atribución',
+    mapLogo: 'Logotipo de Mapbox',
   },
 
   // TODO: native-speaker review
@@ -799,7 +805,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Retire epeng lan',
     locRemoved: 'Epeng lan ap retire lè ou anrejistre.',
     locNoPin: 'Poko gen epeng.',
-    locMapLabel: 'Kat. Sèvi ak flèch klavye yo pou deplase kat la, epi chwazi “Mete epeng lan nan mitan kat la”. Ou kapab klike sou kat la tou pou mete epeng lan epi rale l pou ajiste l.',
+    locMapLabel: 'Sèvi ak flèch klavye yo pou deplase kat la, epi chwazi “Mete epeng lan nan mitan kat la”. Ou kapab klike sou kat la tou pou mete epeng lan epi rale l pou ajiste l.',
     locConfirmBeforeSave: 'Konfime oswa retire epeng sou kat la anvan ou anrejistre.',
     // Hours editor
     hoursOpen: 'Louvri',
@@ -873,6 +879,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Eloyen',
     orgDeactivated: '{name} dezaktive.',
     orgReactivated: '{name} aktif ankò.',
+    mapAttribution: 'Montre oswa kache atribisyon',
+    mapLogo: 'Logo Mapbox',
   },
 
   // TODO: native-speaker review
@@ -1016,7 +1024,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Bỏ ghim',
     locRemoved: 'Ghim sẽ bị bỏ khi bạn lưu.',
     locNoPin: 'Chưa có ghim.',
-    locMapLabel: 'Bản đồ. Dùng các phím mũi tên để di chuyển bản đồ, rồi chọn “Đặt ghim ở giữa bản đồ”. Bạn cũng có thể bấm vào bản đồ để đặt ghim và kéo ghim để điều chỉnh.',
+    locMapLabel: 'Dùng các phím mũi tên để di chuyển bản đồ, rồi chọn “Đặt ghim ở giữa bản đồ”. Bạn cũng có thể bấm vào bản đồ để đặt ghim và kéo ghim để điều chỉnh.',
     locConfirmBeforeSave: 'Hãy xác nhận hoặc bỏ ghim trên bản đồ trước khi lưu.',
     // Hours editor
     hoursOpen: 'Mở cửa',
@@ -1090,6 +1098,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Thu nhỏ',
     orgDeactivated: 'Đã ngừng kích hoạt {name}.',
     orgReactivated: '{name} đã hoạt động trở lại.',
+    mapAttribution: 'Bật/tắt thông tin ghi công',
+    mapLogo: 'Biểu trưng Mapbox',
   },
 
   // TODO: native-speaker review
@@ -1233,7 +1243,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'إزالة الدبوس',
     locRemoved: 'ستتم إزالة الدبوس عند الحفظ.',
     locNoPin: 'لا يوجد دبوس بعد.',
-    locMapLabel: 'خريطة. استخدم مفاتيح الأسهم لتحريك الخريطة، ثم اختر “ضع الدبوس في وسط الخريطة”. يمكنك أيضًا النقر على الخريطة لوضع الدبوس وسحبه لضبطه.',
+    locMapLabel: 'استخدم مفاتيح الأسهم لتحريك الخريطة، ثم اختر “ضع الدبوس في وسط الخريطة”. يمكنك أيضًا النقر على الخريطة لوضع الدبوس وسحبه لضبطه.',
     locConfirmBeforeSave: 'أكّد دبوس الخريطة أو أزله قبل الحفظ.',
     // Hours editor
     hoursOpen: 'مفتوح',
@@ -1307,6 +1317,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'تصغير',
     orgDeactivated: 'تم إلغاء تفعيل {name}.',
     orgReactivated: '{name} نشطة من جديد.',
+    mapAttribution: 'إظهار أو إخفاء الإسناد',
+    mapLogo: 'شعار Mapbox',
   },
 
   // TODO: native-speaker review
@@ -1450,7 +1462,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: '移除图钉',
     locRemoved: '保存时将移除图钉。',
     locNoPin: '尚无图钉。',
-    locMapLabel: '地图。使用方向键移动地图，然后选择“在地图中心放置图钉”。您也可以点击地图放置图钉，并拖动图钉进行调整。',
+    locMapLabel: '使用方向键移动地图，然后选择“在地图中心放置图钉”。您也可以点击地图放置图钉，并拖动图钉进行调整。',
     locConfirmBeforeSave: '保存前请确认或移除地图图钉。',
     // Hours editor
     hoursOpen: '营业',
@@ -1524,6 +1536,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: '缩小',
     orgDeactivated: '{name} 已停用。',
     orgReactivated: '{name} 已重新启用。',
+    mapAttribution: '显示或隐藏署名信息',
+    mapLogo: 'Mapbox 标志',
   },
 
   // TODO: native-speaker review
@@ -1667,7 +1681,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Ka saar biinka',
     locRemoved: 'Biinka waa la saarayaa marka aad kaydiso.',
     locNoPin: 'Weli biin ma jiro.',
-    locMapLabel: 'Khariidad. Isticmaal furayaasha fallaadhaha si aad u dhaqaajiso khariidadda, kadibna dooro “Dhig biinka bartamaha khariidadda”. Sidoo kale waad guji kartaa khariidadda si aad biinka u dhigto, waadna jiidi kartaa si aad u hagaajiso.',
+    locMapLabel: 'Isticmaal furayaasha fallaadhaha si aad u dhaqaajiso khariidadda, kadibna dooro “Dhig biinka bartamaha khariidadda”. Sidoo kale waad guji kartaa khariidadda si aad biinka u dhigto, waadna jiidi kartaa si aad u hagaajiso.',
     locConfirmBeforeSave: 'Xaqiiji ama ka saar biinka khariidadda ka hor intaadan kaydin.',
     // Hours editor
     hoursOpen: 'Furan',
@@ -1741,6 +1755,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Ka fogee',
     orgDeactivated: '{name} waa la joojiyay.',
     orgReactivated: '{name} mar kale waa firfircoon yahay.',
+    mapAttribution: 'Muuji ama qari tixraaca',
+    mapLogo: 'Astaanta Mapbox',
   },
 
   // TODO: native-speaker review
@@ -1884,7 +1900,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Retirer l’épingle',
     locRemoved: 'L’épingle sera retirée à l’enregistrement.',
     locNoPin: 'Pas encore d’épingle.',
-    locMapLabel: 'Carte. Utilisez les flèches du clavier pour déplacer la carte, puis choisissez « Placer l’épingle au centre de la carte ». Vous pouvez aussi cliquer sur la carte pour placer l’épingle et la faire glisser pour l’ajuster.',
+    locMapLabel: 'Utilisez les flèches du clavier pour déplacer la carte, puis choisissez « Placer l’épingle au centre de la carte ». Vous pouvez aussi cliquer sur la carte pour placer l’épingle et la faire glisser pour l’ajuster.',
     locConfirmBeforeSave: 'Confirmez ou retirez l’épingle de la carte avant d’enregistrer.',
     // Hours editor
     hoursOpen: 'Ouvert',
@@ -1958,6 +1974,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Zoom arrière',
     orgDeactivated: '{name} a été désactivée.',
     orgReactivated: '{name} est de nouveau active.',
+    mapAttribution: 'Afficher ou masquer l’attribution',
+    mapLogo: 'Logo Mapbox',
   },
 
   // TODO: native-speaker review
@@ -2101,7 +2119,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Remover marcador',
     locRemoved: 'O marcador será removido quando você salvar.',
     locNoPin: 'Ainda não há marcador.',
-    locMapLabel: 'Mapa. Use as teclas de seta para mover o mapa e depois escolha “Colocar marcador no centro do mapa”. Você também pode clicar no mapa para colocar o marcador e arrastá-lo para ajustar.',
+    locMapLabel: 'Use as teclas de seta para mover o mapa e depois escolha “Colocar marcador no centro do mapa”. Você também pode clicar no mapa para colocar o marcador e arrastá-lo para ajustar.',
     locConfirmBeforeSave: 'Confirme ou remova o marcador do mapa antes de salvar.',
     // Hours editor
     hoursOpen: 'Aberto',
@@ -2175,6 +2193,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Afastar',
     orgDeactivated: '{name} foi desativada.',
     orgReactivated: '{name} está ativa novamente.',
+    mapAttribution: 'Mostrar ou ocultar atribuição',
+    mapLogo: 'Logotipo do Mapbox',
   },
 
   // TODO: native-speaker review
@@ -2318,7 +2338,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Убрать метку',
     locRemoved: 'Метка будет убрана при сохранении.',
     locNoPin: 'Метки пока нет.',
-    locMapLabel: 'Карта. Перемещайте карту клавишами со стрелками, затем выберите «Поставить метку в центре карты». Также можно нажать на карту, чтобы поставить метку, и перетащить её, чтобы поправить.',
+    locMapLabel: 'Перемещайте карту клавишами со стрелками, затем выберите «Поставить метку в центре карты». Также можно нажать на карту, чтобы поставить метку, и перетащить её, чтобы поправить.',
     locConfirmBeforeSave: 'Перед сохранением подтвердите или уберите метку на карте.',
     // Hours editor
     hoursOpen: 'Открыто',
@@ -2392,6 +2412,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Отдалить',
     orgDeactivated: 'Организация «{name}» деактивирована.',
     orgReactivated: 'Организация «{name}» снова активна.',
+    mapAttribution: 'Показать или скрыть авторство',
+    mapLogo: 'Логотип Mapbox',
   },
 
   // TODO: native-speaker review
@@ -2535,7 +2557,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: '핀 제거',
     locRemoved: '저장하면 핀이 제거됩니다.',
     locNoPin: '아직 핀이 없습니다.',
-    locMapLabel: '지도. 화살표 키로 지도를 이동한 다음 “지도 중앙에 핀 놓기”를 선택하세요. 지도를 클릭해 핀을 놓고 핀을 끌어 위치를 조정할 수도 있습니다.',
+    locMapLabel: '화살표 키로 지도를 이동한 다음 “지도 중앙에 핀 놓기”를 선택하세요. 지도를 클릭해 핀을 놓고 핀을 끌어 위치를 조정할 수도 있습니다.',
     locConfirmBeforeSave: '저장하기 전에 지도 핀을 확인하거나 제거하세요.',
     // Hours editor
     hoursOpen: '영업',
@@ -2609,6 +2631,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: '축소',
     orgDeactivated: '{name}이(가) 비활성화되었습니다.',
     orgReactivated: '{name}이(가) 다시 활성화되었습니다.',
+    mapAttribution: '저작자 표시 보기/숨기기',
+    mapLogo: 'Mapbox 로고',
   },
 
   // TODO: native-speaker review
@@ -2752,7 +2776,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Alisin ang pin',
     locRemoved: 'Aalisin ang pin kapag nag-save ka.',
     locNoPin: 'Wala pang pin.',
-    locMapLabel: 'Mapa. Gamitin ang mga arrow key para igalaw ang mapa, pagkatapos ay piliin ang “Ilagay ang pin sa gitna ng mapa”. Puwede mo ring i-click ang mapa para ilagay ang pin at i-drag ito para ayusin.',
+    locMapLabel: 'Gamitin ang mga arrow key para igalaw ang mapa, pagkatapos ay piliin ang “Ilagay ang pin sa gitna ng mapa”. Puwede mo ring i-click ang mapa para ilagay ang pin at i-drag ito para ayusin.',
     locConfirmBeforeSave: 'Kumpirmahin o alisin ang pin sa mapa bago mag-save.',
     // Hours editor
     hoursOpen: 'Bukas',
@@ -2826,6 +2850,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Mag-zoom out',
     orgDeactivated: 'Na-deactivate ang {name}.',
     orgReactivated: 'Aktibo muli ang {name}.',
+    mapAttribution: 'Ipakita o itago ang atribusyon',
+    mapLogo: 'Logo ng Mapbox',
   },
 
   // TODO: native-speaker review
@@ -2969,7 +2995,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'ፒኑን አስወግድ',
     locRemoved: 'ስታስቀምጥ ፒኑ ይወገዳል።',
     locNoPin: 'እስካሁን ፒን የለም።',
-    locMapLabel: 'ካርታ። ካርታውን ለማንቀሳቀስ የቀስት ቁልፎችን ተጠቀም፣ ከዚያ “ፒኑን በካርታው መሃል አስቀምጥ”ን ምረጥ። እንዲሁም ፒኑን ለማስቀመጥ ካርታውን ጠቅ ማድረግ እና ለማስተካከል ፒኑን መጎተት ትችላለህ።',
+    locMapLabel: 'ካርታውን ለማንቀሳቀስ የቀስት ቁልፎችን ተጠቀም፣ ከዚያ “ፒኑን በካርታው መሃል አስቀምጥ”ን ምረጥ። እንዲሁም ፒኑን ለማስቀመጥ ካርታውን ጠቅ ማድረግ እና ለማስተካከል ፒኑን መጎተት ትችላለህ።',
     locConfirmBeforeSave: 'ከማስቀመጥህ በፊት የካርታውን ፒን አረጋግጥ ወይም አስወግድ።',
     // Hours editor
     hoursOpen: 'ክፍት',
@@ -3043,6 +3069,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'አርቅ',
     orgDeactivated: '{name} እንዲቦዝን ተደርጓል።',
     orgReactivated: '{name} እንደገና ንቁ ነው።',
+    mapAttribution: 'ምንጭ አሳይ ወይም ደብቅ',
+    mapLogo: 'የMapbox አርማ',
   },
 
   // TODO: native-speaker review
@@ -3186,7 +3214,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Tshem tus pin',
     locRemoved: 'Tus pin yuav raug tshem thaum koj khaws.',
     locNoPin: 'Tseem tsis tau muaj pin.',
-    locMapLabel: 'Daim ntawv qhia chaw. Siv cov yuam sij xub los txav daim ntawv qhia chaw, ces xaiv “Muab tus pin tso rau nruab nrab daim ntawv qhia chaw”. Koj kuj nias tau daim ntawv qhia chaw kom muab tus pin tso thiab rub nws kom kho.',
+    locMapLabel: 'Siv cov yuam sij xub los txav daim ntawv qhia chaw, ces xaiv “Muab tus pin tso rau nruab nrab daim ntawv qhia chaw”. Koj kuj nias tau daim ntawv qhia chaw kom muab tus pin tso thiab rub nws kom kho.',
     locConfirmBeforeSave: 'Lees paub los sis tshem tus pin saum daim ntawv qhia chaw ua ntej khaws.',
     // Hours editor
     hoursOpen: 'Qhib',
@@ -3260,6 +3288,8 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     mapZoomOut: 'Zoom me',
     orgDeactivated: '{name} raug kaw lawm.',
     orgReactivated: '{name} rov qhib lawm.',
+    mapAttribution: 'Qhia los sis zais cov ntaub ntawv qhov chaw los',
+    mapLogo: 'Lub cim Mapbox',
   },
 }
 

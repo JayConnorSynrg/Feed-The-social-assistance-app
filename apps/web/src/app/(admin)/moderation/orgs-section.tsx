@@ -31,7 +31,7 @@ import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-fo
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
 import { orgTypeKey } from '@/components/org-form/org-labels'
-import { finishToggle, startToggle } from './org-toggle-inflight'
+import { finishToggle, guardBusyTrigger, startToggle } from './org-toggle-inflight'
 
 type MemberRole = 'admin' | 'member'
 
@@ -225,16 +225,12 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                           <button
                             id={moreButtonId(org.id)}
                             type="button"
-                            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-500 bg-white text-stone-700 hover:bg-stone-100 aria-disabled:opacity-60 ${FOCUS_RING}`}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-500 bg-white text-stone-700 hover:bg-stone-100 aria-disabled:cursor-not-allowed aria-disabled:text-stone-700/60 aria-disabled:border-stone-500/60 ${FOCUS_RING}`}
                             aria-label={formatMessage(tr('actionMore'), { name: org.name })}
                             aria-disabled={busyIds.has(org.id) || undefined}
-                            onPointerDown={(e) => {
-                              // Stays focusable while the toggle runs; just does not open.
-                              if (busyIds.has(org.id)) e.preventDefault()
-                            }}
-                            onKeyDown={(e) => {
-                              if (busyIds.has(org.id) && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) e.preventDefault()
-                            }}
+                            // Stays focusable while the toggle runs; just does not open.
+                            onPointerDown={(e) => guardBusyTrigger(busyIds, org.id, e)}
+                            onKeyDown={(e) => guardBusyTrigger(busyIds, org.id, e)}
                           >
                             {busyIds.has(org.id) ? (
                               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -410,7 +406,7 @@ function OrgMembers({ orgId }: { orgId: string }) {
 
   return (
     // The roster is English-only for now; mark it so screen readers do not read it as the admin locale.
-    <div lang="en" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+    <div lang="en" dir="ltr" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
       <div className="mb-3 flex flex-wrap gap-2">
         <Input
           value={addUserId}
@@ -423,7 +419,7 @@ function OrgMembers({ orgId }: { orgId: string }) {
           <SelectTrigger className="w-28 text-sm text-stone-900" aria-label="Role">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent lang="en">
             <SelectItem value="member">Member</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
@@ -470,7 +466,7 @@ function OrgMembers({ orgId }: { orgId: string }) {
                       <SelectTrigger className="h-8 w-28 text-xs text-stone-900" aria-label="Role">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent lang="en">
                         <SelectItem value="member">Member</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>

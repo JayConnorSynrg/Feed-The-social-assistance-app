@@ -50,6 +50,7 @@ import { orgTypeKey } from './org-labels'
 import {
   emptyFormValues,
   isLinkable,
+  keepPendingNameFocus,
   findSimilarOrgs,
   formValuesFromDetail,
   orgFormSchema,
@@ -99,10 +100,10 @@ const FIELD =
 const INPUT = `h-10 ${FIELD}`
 const LABEL = 'mb-1 block text-sm font-medium text-stone-800'
 const PRIMARY =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:bg-brand/60 ' +
   FOCUS_RING
 const SECONDARY =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:text-stone-800/60 aria-disabled:border-stone-500/60 ' +
   FOCUS_RING
 // Full-screen below 640px: keep header/footer clear of the notch and the home indicator.
 const SAFE_TOP = 'pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3'
@@ -127,11 +128,11 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   const pendingRef = useRef<PendingAction | null>(null)
   // Where focus was when "Discard changes?" opened, restored on "Keep editing".
   const discardReturnRef = useRef<HTMLElement | null>(null)
-  // After "Edit existing", the newly loaded form puts focus on its Name field.
-  const focusNameAfterSwitch = useRef(false)
-  const consumeFocusName = useCallback(() => {
-    const v = focusNameAfterSwitch.current
-    focusNameAfterSwitch.current = false
+  // After "Edit existing", the form of THAT org puts focus on its Name field once it has loaded.
+  const focusNameFor = useRef<string | null>(null)
+  const consumeFocusName = useCallback((id: string) => {
+    const v = focusNameFor.current === id
+    focusNameFor.current = null
     return v
   }, [])
   const keptEditingRef = useRef(false)
@@ -149,6 +150,12 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
     if (!open) return
     metricsRef.current = { openedAt: Date.now(), saveAttempts: 0, dirtyFields: '' }
     dirtyRef.current = false
+  }, [open, mode, orgId])
+
+  // A pending "focus Name" belongs to one switch: closing the panel or moving to any other target
+  // drops it, so it can never fire on a later, unrelated mount.
+  useEffect(() => {
+    focusNameFor.current = keepPendingNameFocus(focusNameFor.current, open, orgId)
   }, [open, mode, orgId])
 
   const handleDirtyChange = useCallback((isDirty: boolean, fields: string) => {
@@ -205,7 +212,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
         return
       }
       logClose('abandoned')
-      focusNameAfterSwitch.current = true
+      focusNameFor.current = id
       onEditExisting(id)
     },
     [logClose, onEditExisting, setPending]
@@ -220,7 +227,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
     if (!action) return
     logClose('discarded')
     if (action.type === 'switch') {
-      focusNameAfterSwitch.current = true
+      focusNameFor.current = action.id
       onEditExisting?.(action.id)
     }
     else onOpenChange(false)
@@ -320,8 +327,8 @@ interface BodyProps {
   onSavingChange: (saving: boolean) => void
   onSaveAttempt: () => void
   registerBackToForm: (fn: (() => boolean) | null) => void
-  /** True once, right after "Edit existing" switched to this org. */
-  consumeFocusName: () => boolean
+  /** True once, when this org's form mounts right after "Edit existing" switched to it. */
+  consumeFocusName: (id: string) => boolean
   onSaved: (result: { id: string; created: boolean; name: string }) => void
 }
 
@@ -444,7 +451,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
   })
   const { register, control, handleSubmit, watch, setValue, getValues, setError, setFocus, formState } = form
   useEffect(() => {
-    if (props.consumeFocusName()) setFocus('name')
+    if (detail && props.consumeFocusName(detail.id)) setFocus('name')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when this org's form mounts
   }, [])
   const { errors, isDirty, dirtyFields } = formState
@@ -904,7 +911,13 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               label={tr('mapTitle')}
               instructions={tr('locMapLabel')}
               placeCenterLabel={tr('locPlaceCenter')}
-              mapLocale={{ title: tr('mapTitle'), zoomIn: tr('mapZoomIn'), zoomOut: tr('mapZoomOut') }}
+              mapLocale={{
+                title: tr('mapTitle'),
+                zoomIn: tr('mapZoomIn'),
+                zoomOut: tr('mapZoomOut'),
+                attribution: tr('mapAttribution'),
+                logo: tr('mapLogo'),
+              }}
               onPlacedAtCenter={() => {
                 focusConfirmAfterPlace.current = true
               }}
