@@ -16,7 +16,8 @@ export type RateLimitCategory =
   | 'resource-api'       // 100 req/min
   | 'search'             // 50 req/min
   | 'webhooks'           // 200 req/min
-  | 'client-log';        // 120 req/min, keyed by client IP only
+  | 'client-log'         // 120 req/min, keyed by client IP only
+  | 'geocode';           // 30 req/min per user and per client IP (/api/geocode)
 
 /**
  * Configuration for rate limiting per category
@@ -67,6 +68,10 @@ export const RATE_LIMIT_CONFIGS: Record<RateLimitCategory, RateLimitConfig> = {
   'client-log': {
     category: 'client-log',
     requestsPerMinute: 120,
+  },
+  'geocode': {
+    category: 'geocode',
+    requestsPerMinute: 30,
   },
 };
 
