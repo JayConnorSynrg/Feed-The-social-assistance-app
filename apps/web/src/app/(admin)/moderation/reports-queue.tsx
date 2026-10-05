@@ -143,7 +143,7 @@ export function ReportsQueue() {
           { action: `report.${action}`, target_id: reportId },
         )
         if (rpcError) {
-          logger.warn('admin.denied', { action: `report.${action}`, target_id: reportId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
           throw rpcError
         }
 
@@ -175,7 +175,7 @@ export function ReportsQueue() {
           supabase, 'admin.post.remove', 'admin_remove_post', { p_post_id: postId }, { action: 'post.remove', target_id: postId },
         )
         if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.remove', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          logger.warn('admin.denied', { action: 'post.remove', code: rpcError.code ?? 'unknown', request_id: requestId })
           throw rpcError
         }
         setGroups((prev) => prev.filter((g) => g.content_id !== postId))
@@ -198,7 +198,7 @@ export function ReportsQueue() {
           supabase, 'admin.post.hold', 'admin_hold_post', { p_post_id: postId }, { action: 'post.hold', target_id: postId },
         )
         if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.hold', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          logger.warn('admin.denied', { action: 'post.hold', code: rpcError.code ?? 'unknown', request_id: requestId })
           throw rpcError
         }
         setGroups((prev) => prev.filter((g) => g.content_id !== postId))
@@ -221,7 +221,7 @@ export function ReportsQueue() {
           supabase, 'admin.post.authorize', 'admin_authorize_post', { p_post_id: postId }, { action: 'post.authorize', target_id: postId },
         )
         if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.authorize', target_id: postId, code: rpcError.code ?? rpcError.message, request_id: requestId })
+          logger.warn('admin.denied', { action: 'post.authorize', code: rpcError.code ?? 'unknown', request_id: requestId })
           throw rpcError
         }
         setHeldPosts((prev) => prev.filter((p) => p.id !== postId))

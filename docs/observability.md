@@ -17,7 +17,15 @@ receives app or user data, and the CSP allows no analytics host.
 | Uncaught client errors | `app/error.tsx`, `app/(admin)/error.tsx`, `global-error.tsx`, `PanelErrorBoundary`, window `error` / `unhandledrejection` capture | Supabase |
 | RPC database time | weekly `pg_stat_statements` snapshot → `app_query_stats_weekly` | Supabase |
 
-**Map provider:** the `<Map>` in `components/map/map-view.tsx` sets `performanceMetricsCollection={false}`, so mapbox-gl sends no performance telemetry. Mapbox's billing map-load event (one per map load, to `events.mapbox.com`) still fires because Mapbox's terms of service require it for metered billing.
+**Map provider (Mapbox) — known third-party data flow.** The `<Map>` in `components/map/map-view.tsx` sets `performanceMetricsCollection={false}`, which stops mapbox-gl's performance-metrics event. mapbox-gl 3.18.0 still sends three events to `events.mapbox.com` from every browser that opens the map. Each is a POST whose URL carries FEED's public Mapbox access token, and like any request it exposes the viewer's IP address and user agent to Mapbox:
+
+| Event | When | Payload (besides `event`, `created` timestamp) | Can FEED turn it off? |
+|---|---|---|---|
+| `map.load` | once per map instance | `sdkIdentifier`, `sdkVersion`, `skuId`, `skuToken` (billing session token), `userId` = an anonymous device id | No — Mapbox's terms of service require it for metered billing (the library marks the code as not to be modified) |
+| `style.load` | each time a style loads | `mapInstanceId` (random per map instance), `eventId` (counter), `style` (the style id, e.g. `mapbox/streets-v12`), `importedStyles` | No — there is no option for it |
+| `appUserTurnstile` | at most once per day per device | `sdkIdentifier`, `sdkVersion`, `skuId`, `enabled.telemetry: false`, `userId` = the same anonymous device id | No — there is no option for it |
+
+The anonymous device id is a random UUID that mapbox-gl keeps in the browser's `localStorage` and regenerates after 24 hours. None of these events carries FEED account data, coordinates, or search text. FEED does not patch the library. Replacing Mapbox is the next objective ("remove third-party data flows"), which closes this flow entirely.
 
 **Persisted wide events**: `withMetric` writes exactly one row to `public.app_logs` per outcome — an `info` row (`${operation}.complete`) on success and an `error` row (`${operation}.error`) on failure — each carrying `duration_ms` and a server-derived `user_id`. These rows are SQL-queryable, so latency percentiles and regressions are computable in-database (see below).
 
@@ -158,12 +166,17 @@ Persisted labels must never contain:
 - Names, email addresses, phone numbers, SSNs, addresses, coordinates or viewport bounds
 - Free-text content (message body, form field values, search text)
 - User ids (use the server-derived `user_id` column), IP addresses or device fingerprints
+- The id of the person an admin acted on: `admin.user.*`, `admin.tier.set*`, `admin.notes.*`, `admin.denied` and `admin.audit.*` carry no `target_id` — their `request_id` joins to the durable `admin_actions` row, which records the target
 
 Use instead: `content_length` (character count), `file_size` (bytes), `category` (enum label), `template_id` (opaque ID), `has_signature` (boolean).
 
 `error_message` is capped at 120 characters and kept only on error-level rows. A Postgres constraint message can echo a column value; for writes that touch personal fields, log a scrubbed error (code + static message) as `runResourceSave` does.
 
 ---
+
+## Known follow-ups
+
+- `public.log_engagement_failure` (migration `20261005000000_p2_1a_engagement.sql`, lines 239-249) writes its `p_detail` argument (its callers pass the raw Postgres `SQLERRM`) into `app_logs` directly from SQL, bypassing `EVENT_REGISTRY` and the 120-character `error_message` cap. It predates the first-party logging foundation and is scheduled for the security-hardening objective.
 
 ## Weekly review
 

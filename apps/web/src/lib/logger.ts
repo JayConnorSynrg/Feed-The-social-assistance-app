@@ -13,6 +13,7 @@
  */
 
 import { runWithMetric, serializeError } from './with-metric-core.mjs'
+import { safeRequestId } from './request-id'
 
 // ============================================
 // Server-side Supabase log sink
@@ -90,6 +91,9 @@ function sinkToSupabase(
           // Not in a request scope (e.g. cron/startup) — no correlation id.
         }
       }
+      // Second check on the id itself: onRequestError reads raw request headers,
+      // so an id that did not pass through the proxy is validated here too.
+      rid = safeRequestId(rid)
       const { sanitizeClientEvent } = await import('./event-registry')
       const checked = sanitizeClientEvent(event, level, context)
       if (!checked.ok) return // unregistered event: no row
@@ -267,7 +271,7 @@ export async function withTiming<T>(
 }
 
 /** Flat, primitive label set for a persisted event. */
-export type EventAttrs = Record<string, string | number | boolean | null>
+type EventAttrs = Record<string, string | number | boolean | null>
 
 /**
  * Record a named product event as a persisted first-party info row in app_logs

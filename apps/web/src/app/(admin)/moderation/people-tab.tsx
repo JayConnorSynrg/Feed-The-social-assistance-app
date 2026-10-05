@@ -79,20 +79,19 @@ export function PeopleTab({ viewerTier, isFounder }: { viewerTier: AdminTier | n
         'admin.tier.set',
         'admin_set_tier',
         { p_target: targetId, p_tier: pending.option.value, p_reason: reason.trim() },
-        { action: 'tier.set', target_id: targetId },
+        { action: 'tier.set' },
       )
 
       const result = (data ?? {}) as { ok?: boolean; code?: string }
       if (error) {
-        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: error.code ?? error.message, request_id: requestId })
+        logger.warn('admin.denied', { action: 'tier.set', code: error.code ?? 'unknown', request_id: requestId })
         setRowError({ id: targetId, message: 'The tier change failed — please retry.' })
       } else if (!result.ok) {
         const code = result.code ?? 'unknown'
-        logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code, request_id: requestId })
+        logger.warn('admin.denied', { action: 'tier.set', code, request_id: requestId })
         setRowError({ id: targetId, message: DENIAL_MESSAGES[code] ?? `Denied (${code}).` })
       } else {
         logger.info('admin.tier.set', {
-          target_id: targetId,
           to: pending.option.value,
           request_id: requestId,
         })
@@ -101,7 +100,7 @@ export function PeopleTab({ viewerTier, isFounder }: { viewerTier: AdminTier | n
         await load(search)
       }
     } catch {
-      logger.warn('admin.denied', { action: 'tier.set', target_id: targetId, code: 'exception' })
+      logger.warn('admin.denied', { action: 'tier.set', code: 'exception' })
       setRowError({ id: targetId, message: 'The tier change failed — please retry.' })
     } finally {
       setIsActioning(false)

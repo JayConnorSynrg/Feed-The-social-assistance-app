@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
+import { retryWithFocus } from '@/lib/focus-after-reset'
 
 export default function GlobalError({
   error,
@@ -50,13 +50,17 @@ export default function GlobalError({
         )}
         <div className="flex gap-3 justify-center pt-2">
           <Button
-            onClick={() => reset()}
+            onClick={() => retryWithFocus(reset, headingRef.current, 'app-content')}
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             Try again
           </Button>
+          {/* A plain anchor: FEED is a single page at '/', and Next resets an error
+              boundary only on a path change, so a client-side Link to '/' would do
+              nothing here. A full load always recovers. */}
           <Button asChild variant="outline" className="border-lime-300">
-            <Link href="/">Go home</Link>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/">Go home</a>
           </Button>
         </div>
       </div>

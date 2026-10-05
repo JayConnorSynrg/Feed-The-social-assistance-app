@@ -123,7 +123,10 @@ export default async function RootLayout({
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: A11Y_PREPAINT_SCRIPT }}
         />
-        <Providers initialUser={initialUser}>{children}</Providers>
+        <Providers initialUser={initialUser}>
+          {/* Focus target for app/error.tsx "Try again" (see lib/focus-after-reset.ts). */}
+          <div id="app-content">{children}</div>
+        </Providers>
       </body>
     </html>
   );

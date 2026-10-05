@@ -31,5 +31,6 @@ export default async function AdminLayout({
     redirect('/')
   }
 
-  return <>{children}</>
+  // id = focus target for (admin)/error.tsx "Try again" (see lib/focus-after-reset.ts).
+  return <div id="admin-content">{children}</div>
 }

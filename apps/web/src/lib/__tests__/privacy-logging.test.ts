@@ -13,6 +13,7 @@ import { withMetric, logger, logEvent } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { loadAdminTier } from '@/hooks/use-admin-tier'
 import { installClientErrorCapture, MAX_REPORTS_PER_SESSION } from '@/lib/client-error-capture'
+import { scanMapTelemetry } from './map-telemetry-scan.mjs'
 
 type Posted = { level: string; event: string; context: Record<string, unknown>; request_id?: string; duration_ms?: number }
 let posted: Posted[] = []
@@ -191,16 +192,15 @@ describe('no third-party telemetry vendor remains', () => {
     expect(hits(TRACK)).toEqual([])
   })
 
-  it('every react-map-gl <Map> disables mapbox-gl performance telemetry', () => {
-    const mapFiles = sourceFiles.filter((f) => /from 'react-map-gl/.test(fs.readFileSync(f, 'utf8')))
-    const openings: Array<{ file: string; tag: string }> = []
-    for (const f of mapFiles) {
-      const src = fs.readFileSync(f, 'utf8')
-      for (const m of src.matchAll(/<Map\b[\s\S]*?>/g)) openings.push({ file: path.relative(WEB, f), tag: m[0] })
-    }
-    // control: the scan sees the app's map
-    expect(openings.map((o) => o.file)).toContain('src/components/map/map-view.tsx')
-    expect(openings.filter((o) => !o.tag.includes('performanceMetricsCollection={false}')).map((o) => o.file)).toEqual([])
+  it('every Mapbox map in apps/web/src disables mapbox-gl performance telemetry', () => {
+    const files = sourceFiles
+      // app source only: test fixtures deliberately contain violating shapes
+      .filter((f) => /\.(tsx?|mjs|js)$/.test(f) && !/[\\/]__tests__[\\/]|\.test\.|\.smoke\./.test(f))
+      .map((f) => ({ file: path.relative(WEB, f), src: fs.readFileSync(f, 'utf8') }))
+    const { uses, violations } = scanMapTelemetry(files)
+    // control: the scan resolves the app's map component
+    expect(uses.filter((u) => u.kind === 'jsx').map((u) => u.file)).toContain('src/components/map/map-view.tsx')
+    expect(violations.map((v) => `${v.file}: ${v.reason}`)).toEqual([])
   })
 
   it('no vendor package in apps/web/package.json, the root lockfile, or the observability doc', () => {

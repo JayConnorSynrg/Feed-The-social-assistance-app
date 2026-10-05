@@ -43,12 +43,19 @@ class PanelErrorBoundary extends React.Component<
   { hasError: boolean; error: Error | null }
 > {
   // The fallback message receives focus when it appears, so keyboard and
-  // screen-reader users land on it instead of a now-removed panel element.
+  // screen-reader users land on it instead of a now-removed panel element. Focus
+  // alone announces it; a role="alert" on top would announce it twice.
   private messageRef = React.createRef<HTMLParagraphElement>()
 
   constructor(props: { children: React.ReactNode }) {
     super(props)
     this.state = { hasError: false, error: null }
+  }
+
+  // A child that throws during the boundary's FIRST render commits the fallback
+  // via componentDidMount (componentDidUpdate does not run on mount).
+  componentDidMount() {
+    if (this.state.hasError) this.messageRef.current?.focus()
   }
 
   componentDidUpdate(_prevProps: { children: React.ReactNode }, prevState: { hasError: boolean }) {
@@ -68,7 +75,7 @@ class PanelErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div role="alert" className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
+        <div className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
           <div className="text-3xl" aria-hidden="true">🌾</div>
           <p
             ref={this.messageRef}

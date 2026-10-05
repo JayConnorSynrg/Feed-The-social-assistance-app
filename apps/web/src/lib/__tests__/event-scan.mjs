@@ -76,7 +76,7 @@ function listSourceFiles(root) {
  * Blank out // and /* *\/ comments (keeping newlines so line numbers hold) while
  * respecting string and template literals, so prose in comments is not scanned.
  */
-function stripComments(src) {
+export function stripComments(src) {
   let out = ''
   let quote = null
   for (let i = 0; i < src.length; i++) {
@@ -183,7 +183,8 @@ function literals(expr) {
 /**
  * Scan source files. Returns:
  *   sites:   [{ callee, name, file, line, persisted, attrsArg }]  one per emitted event name
- *            (attrsArg = the source text of the label/attrs argument, when present)
+ *            (attrsArg = the source text of the label/attrs argument, when present;
+ *             argsText = the source text of every argument)
  *   dynamic: [{ callee, file, line }]                   calls with no static name
  * `persisted` is true when the event can reach app_logs (warn/error, withMetric
  * rows, privileged ops, logEvent). logger.debug/info are console-only.
@@ -208,15 +209,16 @@ export function scanEvents(root) {
         dynamic.push({ callee, file: rel, line })
         continue
       }
+      const argsText = args.join(', ')
       const attrsArg = ATTRS_INDEX[callee] !== undefined ? args[ATTRS_INDEX[callee]] : undefined
       const isOp = callee === 'withMetric' || callee === 'privilegedRpc' || callee === 'privilegedFetch'
       const persisted = isOp || callee === 'logEvent' || callee === 'logger.warn' || callee === 'logger.error'
       for (const n of names) {
         if (isOp) {
-          sites.push({ callee, name: `${n}.complete`, file: rel, line, persisted, attrsArg })
-          sites.push({ callee, name: `${n}.error`, file: rel, line, persisted, attrsArg })
+          sites.push({ callee, name: `${n}.complete`, file: rel, line, persisted, attrsArg, argsText })
+          sites.push({ callee, name: `${n}.error`, file: rel, line, persisted, attrsArg, argsText })
         } else {
-          sites.push({ callee, name: n, file: rel, line, persisted, attrsArg })
+          sites.push({ callee, name: n, file: rel, line, persisted, attrsArg, argsText })
         }
       }
     }

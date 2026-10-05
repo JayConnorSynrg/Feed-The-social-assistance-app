@@ -268,7 +268,6 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         isBanned ? 'admin.user.unban' : 'admin.user.ban',
         `/api/admin/users/${user.id}/ban`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ban_duration }) },
-        { target_id: user.id },
       )
       if (res.ok) {
         setUsers(prev => prev.map(u => u.id === user.id
@@ -308,7 +307,6 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
         'admin.user.delete',
         `/api/admin/users/${deleteTarget.id}/delete`,
         { method: 'DELETE' },
-        { target_id: deleteTarget.id },
       )
       if (res.ok) {
         setUsers(prev => prev.filter(u => u.id !== deleteTarget.id))
@@ -332,7 +330,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
     setUserNotes([])
     setNewNote('')
     const supabase = createClient()
-    const { data } = await privilegedRpc(supabase, 'admin.notes.get', 'admin_get_user_notes', { p_user_id: user.id }, { target_id: user.id })
+    const { data } = await privilegedRpc(supabase, 'admin.notes.get', 'admin_get_user_notes', { p_user_id: user.id })
     const rows = data as NoteRow[] | null
     setUserNotes(rows ?? [])
     logger.info('[admin:overview] admin_get_user_notes', { userId: user.id, count: rows?.length ?? 0 })
@@ -344,7 +342,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
     const { data: rawNoteId } = await privilegedRpc(supabase, 'admin.notes.add', 'admin_add_user_note', {
       p_user_id: notesUser.id,
       p_note: newNote.trim(),
-    }, { target_id: notesUser.id })
+    })
     const noteId = rawNoteId as string | null
     if (noteId) {
       const newNoteRow: NoteRow = { id: noteId, note: newNote.trim(), created_by: null, created_at: new Date().toISOString() }
@@ -356,7 +354,7 @@ export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
 
   const handleDeleteNote = async (noteId: string) => {
     const supabase = createClient()
-    await privilegedRpc(supabase, 'admin.notes.delete', 'admin_delete_user_note', { p_note_id: noteId }, { target_id: noteId })
+    await privilegedRpc(supabase, 'admin.notes.delete', 'admin_delete_user_note', { p_note_id: noteId })
     setUserNotes(prev => prev.filter(n => n.id !== noteId))
     logger.info('[admin:overview] admin_delete_user_note', { noteId })
   }

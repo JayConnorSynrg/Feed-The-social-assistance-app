@@ -13,7 +13,7 @@ import { EVENT_REGISTRY } from '../event-registry'
 
 const SRC = fileURLToPath(new URL('../..', import.meta.url))
 const { sites, dynamic } = scanEvents(SRC) as {
-  sites: Array<{ callee: string; name: string; file: string; line: number; persisted: boolean }>
+  sites: Array<{ callee: string; name: string; file: string; line: number; persisted: boolean; argsText: string }>
   dynamic: Array<{ callee: string; file: string; line: number }>
 }
 
@@ -84,4 +84,31 @@ describe('EVENT_REGISTRY completeness', () => {
     const offenders = Object.entries(EVENT_REGISTRY).filter(([, keys]) => keys.some((k) => banned.includes(k)))
     expect(offenders).toEqual([])
   })
+
+  // Person-subject events: the request_id joins to admin_actions, which already
+  // records the target, so the subject's id is never copied into app_logs.
+  const PERSON_SUBJECT = /^(admin\.user\.|admin\.tier\.set|admin\.notes\.|admin\.denied$|admin\.audit\.)/
+
+  it('person-subject events register no target_id', () => {
+    const familyEntries = Object.keys(EVENT_REGISTRY).filter((n) => PERSON_SUBJECT.test(n))
+    expect(familyEntries.length).toBeGreaterThan(20) // control: the family is found
+    expect(familyEntries.filter((n) => EVENT_REGISTRY[n].includes('target_id'))).toEqual([])
+  })
+
+  it('no call site passes target_id for a person-subject event', () => {
+    const familySites = sites.filter((s) => PERSON_SUBJECT.test(s.name))
+    // control: the scan sees the ban route's denied log and the tier RPC
+    expect(familySites.some((s) => s.name === 'admin.user.ban.denied')).toBe(true)
+    expect(familySites.some((s) => s.name === 'admin.tier.set.complete')).toBe(true)
+    // control: the same check does find target_id where it is legitimate (an object id)
+    expect(sites.some((s) => s.name === 'admin.post.remove.complete' && s.argsText.includes('target_id'))).toBe(true)
+    expect(familySites.filter((s) => s.argsText.includes('target_id')).map((s) => `${s.name} (${s.file}:${s.line})`)).toEqual([])
+  })
+
+  it('admin.denied and pdf.autofill.field.skip never fall back to raw error text', () => {
+    const watched = sites.filter((s) => s.name === 'admin.denied' || s.name === 'pdf.autofill.field.skip')
+    expect(watched.length).toBeGreaterThan(5) // control: the call sites are found
+    expect(watched.filter((s) => /\.message\b/.test(s.argsText)).map((s) => `${s.name} (${s.file}:${s.line})`)).toEqual([])
+  })
 })
+
