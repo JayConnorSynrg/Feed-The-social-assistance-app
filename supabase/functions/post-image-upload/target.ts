@@ -62,3 +62,41 @@ export function sizeBucket(bytes: number): string {
   if (bytes <= 5 * 1024 * 1024) return '1-5MB'
   return '>5MB'
 }
+
+/** The caller as the upload gate sees it (from auth.getUser under the caller's JWT). */
+export interface UploadCaller {
+  id: string
+  is_anonymous?: boolean | null
+}
+
+export type UploadDecision =
+  | { allow: true; bucket: string; folder: string; dest: { kind: 'post'; userId: string } | { kind: 'org'; orgId: string } }
+  | { allow: false; status: 400 | 401 | 403; reason: 'auth.rejected' | 'anon.blocked' | 'org_id.invalid' | 'forbidden'; error: string }
+
+/**
+ * The authorization decision for one upload, before any byte is read or written:
+ *  - no caller -> 401; a guest (anonymous) caller -> 403;
+ *  - a malformed org_id -> 400;
+ *  - an org target needs `canManage === true` (can_manage_org_photos under the caller's own JWT),
+ *    otherwise 403 and nothing is written;
+ *  - allowed: post -> post-images/<uid>/, org -> org-photos/<org_id>/.
+ */
+export function decideUpload(input: {
+  user: UploadCaller | null
+  target: UploadTarget
+  canManage: boolean
+}): UploadDecision {
+  const { user, target, canManage } = input
+  if (!user) return { allow: false, status: 401, reason: 'auth.rejected', error: 'Unauthorized' }
+  if (user.is_anonymous === true) {
+    return { allow: false, status: 403, reason: 'anon.blocked', error: 'Create a free account to attach a photo.' }
+  }
+  if (target.kind === 'invalid') return { allow: false, status: 400, reason: 'org_id.invalid', error: 'Invalid org_id.' }
+  if (target.kind === 'org') {
+    if (canManage !== true) {
+      return { allow: false, status: 403, reason: 'forbidden', error: 'You cannot manage photos for this organization.' }
+    }
+    return { allow: true, bucket: ORG_BUCKET, folder: `${target.orgId}/`, dest: target }
+  }
+  return { allow: true, bucket: POST_BUCKET, folder: `${user.id}/`, dest: { kind: 'post', userId: user.id } }
+}

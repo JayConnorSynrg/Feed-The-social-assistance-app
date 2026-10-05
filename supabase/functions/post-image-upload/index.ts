@@ -32,7 +32,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { edgeLog, getCorrelationId } from '../_shared/log.ts'
-import { ORG_BUCKET, buildObjectPath, parseUploadTarget, sizeBucket } from './target.ts'
+import { ORG_BUCKET, buildObjectPath, decideUpload, parseUploadTarget, sizeBucket } from './target.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -111,35 +111,30 @@ Deno.serve(async (req: Request) => {
     const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     })
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser()
-    if (authError || !user) {
-      if (isPost) edgeLog('warn', 'post_image.auth.rejected', { requestId })
-      else orgLog('warn', 'auth.rejected')
-      return json({ error: 'Unauthorized' }, 401, respHeaders)
-    }
+    const { data: { user: authUser }, error: authError } = await supabaseUser.auth.getUser()
+    const user = authError ? null : authUser
 
-    // 2. Guests (anonymous auth) cannot upload (INV-M2).
-    if (user.is_anonymous === true) {
-      if (isPost) edgeLog('warn', 'post_image.anon.blocked', { requestId, userId: user.id })
-      else orgLog('warn', 'anon.blocked')
-      return json({ error: 'Create a free account to attach a photo.' }, 403, respHeaders)
-    }
-
-    // 2b. Org photos: valid UUID, then the caller (own JWT, not service_role)
-    //     must be allowed to manage that org's photo folder.
-    if (target.kind === 'invalid') {
-      orgLog('warn', 'org_id.invalid')
-      return json({ error: 'Invalid org_id.' }, 400, respHeaders)
-    }
-    if (target.kind === 'org') {
+    // 2. Org photos: the caller (own JWT, not service_role) must be allowed to manage that org's
+    //    photo folder. Asked only for a signed-in, non-guest caller with a valid org target.
+    let canManage = false
+    let rpcMessage: string | undefined
+    if (user && user.is_anonymous !== true && target.kind === 'org') {
       const { data: allowed, error: rpcError } = await supabaseUser.rpc('can_manage_org_photos', {
         p_folder: target.orgId,
       })
-      if (rpcError || allowed !== true) {
-        orgLog('warn', 'forbidden', undefined, rpcError?.message)
-        return json({ error: 'You cannot manage photos for this organization.' }, 403, respHeaders)
-      }
+      canManage = !rpcError && allowed === true
+      rpcMessage = rpcError?.message
     }
+
+    // 2b. One decision: 401 no caller, 403 guest (INV-M2), 400 bad org_id, 403 not a manager.
+    const decision = decideUpload({ user, target, canManage })
+    if (!decision.allow) {
+      if (isPost && decision.reason === 'auth.rejected') edgeLog('warn', 'post_image.auth.rejected', { requestId })
+      else if (isPost) edgeLog('warn', 'post_image.anon.blocked', { requestId, userId: user?.id })
+      else orgLog('warn', decision.reason, undefined, decision.reason === 'forbidden' ? rpcMessage : undefined)
+      return json({ error: decision.error }, decision.status, respHeaders)
+    }
+    if (!user) return json({ error: 'Unauthorized' }, 401, respHeaders)
 
     // 3/4. Read bytes, enforce size, sniff magic bytes.
     const buf = new Uint8Array(await req.arrayBuffer())
@@ -162,7 +157,7 @@ Deno.serve(async (req: Request) => {
     // 5. Write via service_role: post-images/<uid>/… or org-photos/<org_id>/….
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     const { bucket, path } = buildObjectPath(
-      target.kind === 'org' ? target : { kind: 'post', userId: user.id },
+      decision.dest,
       extFor(imageType),
       crypto.randomUUID(),
     )
