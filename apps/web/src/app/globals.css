@@ -93,6 +93,17 @@
   --radius-full: 9999px;
 }
 
+/* Brand + entity tokens (literal hex, identical in light and dark). Generates bg-brand,
+ * hover:bg-brand-hover, bg-cream, text-org, bg-business, ... The org/business marker hex values are
+ * mirrored in src/lib/map-marker-colors.ts; map-marker-colors.test.ts keeps them in parity. */
+@theme {
+  --color-brand: #4a5d23;
+  --color-brand-hover: #3d4d1c;
+  --color-cream: #faf9f6;
+  --color-org: #6b2d5c;
+  --color-business: #134e4a;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
     --background: 222.2 84% 4.9%;
