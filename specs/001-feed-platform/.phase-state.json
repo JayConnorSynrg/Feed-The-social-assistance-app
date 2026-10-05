@@ -748,7 +748,7 @@
       "status": "BUILT_PENDING_MERGE",
       "migration": null,
       "branch": "feature/feed-org-admin-panel",
-      "note": "PR-A admin Organizations redesign: list + right-side create/edit setup panel (one atomic admin_save_organization save; photos upload first into org-photos/<id>/), deactivate/reactivate via admin_set_org_active, Census-geocoded draft pins confirmed by a person (no Mapbox geocoding), shared HoursEditor (Mon-Fri 9-5 default, 24h, overnight), in-panel resource directory, URL-synced deep links, 14-locale strings. Depends on D1 migrations 017/018 (feature/feed-org-admin-db) being applied to prod. Gates: tsc 0, eslint 0 errors/121 warnings, vitest 774 passed, build ok, 27 mutation proofs. See checklist 1.6.10 and docs/admin-organizations.md.",
+      "note": "PR-A admin Organizations redesign: list + right-side create/edit setup panel (one atomic admin_save_organization save; photos upload first into org-photos/<id>/), deactivate/reactivate via admin_set_org_active, Census-geocoded draft pins confirmed by a person (no Mapbox geocoding), shared HoursEditor (Mon-Fri 9-5 default, 24h, overnight), in-panel resource directory, URL-synced deep links, 14-locale strings. Depends on D1 migrations 017/018 (feature/feed-org-admin-db) being applied to prod. Gates: tsc 0, eslint 0 errors/121 warnings, vitest 774 passed, build ok, 27 mutation proofs. Review fix round (checklist 1.6.11): guards proven RED under CI commands (decideUpload, runOrgSave, canCreateOrganizations), keyboard pin path, focus return on every close, lang on every dir, contrast + naming fixes. See checklist 1.6.10/1.6.11 and docs/admin-organizations.md.",
       "recordedAt": "2026-10-05"
     }
   }

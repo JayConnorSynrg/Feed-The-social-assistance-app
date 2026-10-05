@@ -43,6 +43,8 @@ You can link straight to the panel: `/moderation?tab=organizations&org=new` (cre
     the pin". With no match, or no street, click the map to place the pin.
   - Drag the pin to the exact spot, then click **Confirm pin**. Only a confirmed pin is saved, and the
     form will not save while a pin is waiting to be confirmed. **Remove pin** clears the location.
+  - Without a mouse: focus the map, move it with the arrow keys until the crosshair sits on the spot,
+    then press **Place pin at map center** and **Confirm pin**.
 - **Hours**: new organizations start Monday–Friday, 9 AM–5 PM, with Saturday and Sunday closed.
   - Each day has an **Open/Closed** switch. Turning a closed day on fills in 9 AM–5 PM.
   - Times move in 15-minute steps. **Add hours** adds a second interval (for example, a lunch break).
@@ -52,11 +54,30 @@ You can link straight to the panel: `/moderation?tab=organizations&org=new` (cre
   - Overlapping hours, and hours that open and close at the same minute, are flagged and block saving.
   - When saved hours of zero length are found while editing, they are cleared and a notice asks you to
     set the hours again.
-- **Photos**: a logo, a cover photo and a gallery (JPG, PNG or WebP). Photos upload when you press
-  Save. If the save fails, the photos uploaded in that attempt are removed.
+- **Photos**: a logo, a cover photo and a gallery (JPG, PNG or WebP). Originals up to 10 MB are
+  accepted; each photo must be under 5 MB after compression. Photos upload when you press Save. If
+  the save is rejected, the photos uploaded in that attempt are removed. If the connection drops
+  mid-save, they are kept (the save may have gone through) and the next Save tidies up.
 - **Linked resources**: **Browse directory** opens a searchable resource directory inside the panel.
   Filter it by state, city and category, then tick resources and use the arrows to set their order.
-  **Done** keeps your selection; **Back** discards it.
+  **Done** keeps your selection; **Back** discards it. A linked resource that is no longer approved
+  is marked **No longer approved**; remove it before saving.
+
+## Keyboard and screen readers
+
+- Closing the panel (Save, Cancel, Escape, Back) returns focus to the button that opened it, or to
+  **Create organization** when that button is gone.
+- After Deactivate/Reactivate, focus returns to the row's **More actions** button.
+- When Save finds a problem, focus moves to the first field to fix (name, email, website, the first
+  invalid hours, or **Confirm pin**).
+
+## Known follow-ups
+
+These predate the Organizations screens and are left for a separate change:
+
+- The admin header's organization selector has no visible label.
+- The admin tab icons are not marked `aria-hidden`.
+- The Open/Closed switch thumb does not mirror in right-to-left languages.
 
 ## Privacy and logging
 
