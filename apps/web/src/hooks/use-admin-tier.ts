@@ -28,7 +28,7 @@ type RpcResult = { data: unknown; error: { code?: string } | null }
 type TierRpcClient = { rpc: (fn: 'current_user_tier' | 'is_founder') => PromiseLike<RpcResult> }
 
 /** True only for a signed-in, non-anonymous user — the only callers that can hold a tier. */
-export function canHoldTier(user: TierUser): boolean {
+function canHoldTier(user: TierUser): boolean {
   return !!user && user.is_anonymous !== true
 }
 

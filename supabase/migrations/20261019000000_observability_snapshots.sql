@@ -17,6 +17,12 @@
 -- "schema"."function"( reference is the called function; that pair is the label.
 -- Query text, parameters and row data are never copied — only the label and
 -- the counters.
+--
+-- Rollback — run these four statements together in one transaction:
+--   SELECT cron.unschedule('app_query_stats_weekly');
+--   DROP FUNCTION IF EXISTS public.capture_app_query_stats_weekly();
+--   DROP TABLE IF EXISTS public.app_query_stats_weekly;
+--   DELETE FROM supabase_migrations.schema_migrations WHERE version = '20261019000000';
 
 BEGIN;
 
@@ -64,6 +70,7 @@ BEGIN
   FROM extensions.pg_stat_statements s
   CROSS JOIN LATERAL regexp_match(s.query, '"([a-z_][a-z0-9_]*)"\."([a-z_][a-z0-9_]*)"\(') AS m
   WHERE s.query LIKE 'WITH pgrst_source AS %pgrst_call%'
+    AND m IS NOT NULL -- a wrapper with no "schema"."fn"( reference is skipped, never aborts the capture
   GROUP BY m[1], m[2];
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
 

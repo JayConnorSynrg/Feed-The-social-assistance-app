@@ -55,7 +55,7 @@ const ATTRS_INDEX = {
 }
 
 /** Recursively list scannable source files (tests and smoke suites excluded). */
-export function listSourceFiles(root) {
+function listSourceFiles(root) {
   const out = []
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -76,7 +76,7 @@ export function listSourceFiles(root) {
  * Blank out // and /* *\/ comments (keeping newlines so line numbers hold) while
  * respecting string and template literals, so prose in comments is not scanned.
  */
-export function stripComments(src) {
+function stripComments(src) {
   let out = ''
   let quote = null
   for (let i = 0; i < src.length; i++) {

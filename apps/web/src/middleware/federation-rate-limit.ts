@@ -217,7 +217,7 @@ function extractInstanceId(request: NextRequest): string {
  * `x-real-ip`, then the first `x-forwarded-for` hop (Vercel overwrites both with
  * the connecting client's address) — and never `x-federation-instance`.
  */
-export function extractClientIp(request: NextRequest): string {
+function extractClientIp(request: NextRequest): string {
   const realIp = request.headers.get('x-real-ip')?.trim();
   if (realIp) {
     return realIp;

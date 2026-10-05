@@ -165,7 +165,7 @@ function LoginForm() {
         }
 
         // No MFA required or already verified
-        timer.end({ step: 'email_login', email })
+        timer.end({ step: 'email_login' })
         router.push(redirectTo)
         router.refresh()
       } catch (err) {

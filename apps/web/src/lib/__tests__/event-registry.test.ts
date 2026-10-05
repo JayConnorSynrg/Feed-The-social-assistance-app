@@ -77,7 +77,10 @@ describe('EVENT_REGISTRY completeness', () => {
   })
 
   it('registered label keys never include direct personal identifiers', () => {
-    const banned = ['userId', 'user_id', 'email', 'address', 'bounds', 'storagePath', 'path', 'query', 'signerId']
+    const banned = [
+      'userId', 'user_id', 'email', 'address', 'bounds', 'storagePath', 'path', 'query', 'signerId',
+      'stack', 'error', 'error_description', 'errorDescription', 'errorParam', 'message', 'msg',
+    ]
     const offenders = Object.entries(EVENT_REGISTRY).filter(([, keys]) => keys.some((k) => banned.includes(k)))
     expect(offenders).toEqual([])
   })
