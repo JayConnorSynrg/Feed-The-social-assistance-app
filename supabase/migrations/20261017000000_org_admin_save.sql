@@ -47,6 +47,8 @@
 -- (5) no RLS changes. ONE transaction; the ledger row is written in the SAME transaction.
 
 BEGIN;
+-- Fail fast instead of queueing behind long reads when a lock is contended.
+SET LOCAL lock_timeout = '5s';
 
 -- ---------------------------------------------------------------------------
 -- (a) admin_save_organization
