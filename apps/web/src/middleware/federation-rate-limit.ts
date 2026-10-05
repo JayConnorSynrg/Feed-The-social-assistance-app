@@ -16,7 +16,8 @@ export type RateLimitCategory =
   | 'resource-api'       // 100 req/min
   | 'search'             // 50 req/min
   | 'webhooks'           // 200 req/min
-  | 'client-log';        // 120 req/min, keyed by client IP only
+  | 'client-log'         // 120 req/min, keyed by client IP only
+  | 'geocode';           // 30 req/min per user and per client IP (/api/geocode)
 
 /**
  * Configuration for rate limiting per category
@@ -67,6 +68,10 @@ export const RATE_LIMIT_CONFIGS: Record<RateLimitCategory, RateLimitConfig> = {
   'client-log': {
     category: 'client-log',
     requestsPerMinute: 120,
+  },
+  'geocode': {
+    category: 'geocode',
+    requestsPerMinute: 30,
   },
 };
 
@@ -212,7 +217,7 @@ function extractInstanceId(request: NextRequest): string {
  * `x-real-ip`, then the first `x-forwarded-for` hop (Vercel overwrites both with
  * the connecting client's address) — and never `x-federation-instance`.
  */
-function extractClientIp(request: NextRequest): string {
+export function extractClientIp(request: NextRequest): string {
   const realIp = request.headers.get('x-real-ip')?.trim();
   if (realIp) {
     return realIp;

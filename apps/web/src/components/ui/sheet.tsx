@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { guardOutsideClose } from "@/components/ui/dialog-guards"
 
 // Sheet is a right-slide-out drawer built on @radix-ui/react-dialog.
 // Matches the existing dialog.tsx conventions (same Radix primitive, same
@@ -36,14 +37,21 @@ SheetOverlay.displayName = "SheetOverlay"
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   side?: "right"
+  /** Extra classes for the backdrop (e.g. a lighter tint so the page behind stays visible). */
+  overlayClassName?: string
+  /** When set, an outside click / pointer-down-outside does NOT dismiss the sheet. Escape and the
+   *  close button stay intentional close paths (same contract as DialogContent). */
+  disableOutsideClose?: boolean
+  /** Omit the built-in top-right close button (the caller renders its own). */
+  hideDefaultClose?: boolean
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = "right", ...props }, ref) => (
+>(({ className, children, side = "right", overlayClassName, disableOutsideClose, hideDefaultClose, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <SheetPortal>
-    <SheetOverlay />
+    <SheetOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
@@ -57,13 +65,17 @@ const SheetContent = React.forwardRef<
         ],
         className
       )}
+      onPointerDownOutside={guardOutsideClose(disableOutsideClose, onPointerDownOutside)}
+      onInteractOutside={guardOutsideClose(disableOutsideClose, onInteractOutside)}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
+      {!hideDefaultClose && (
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </SheetPortal>
 ))

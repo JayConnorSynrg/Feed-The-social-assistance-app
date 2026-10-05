@@ -13,7 +13,7 @@ import {
 import {
   parseGeographyPoint,
   formatHoursInterval,
-  timeToMinutes,
+  schemaOrgTime,
   DAY_NAMES_SHORT,
   type Business,
   type BusinessHours,
@@ -21,6 +21,7 @@ import {
   type BusinessPhoto,
 } from '@/lib/business'
 import { BUSINESS_CATEGORIES, BUSINESS_ATTRIBUTES, SOCIAL_PLATFORMS } from '@/lib/business-vocab'
+import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
 import { OpenNowPill } from '@/components/business/open-now-pill'
 
 interface Props {
@@ -32,7 +33,7 @@ function staticMapUrl(location: string | { coordinates?: [number, number] } | nu
   if (!token) return null
   const pt = parseGeographyPoint(location)
   if (!pt) return null
-  const marker = `pin-l+0f766e(${pt.lng},${pt.lat})`
+  const marker = `pin-l+${BUSINESS_MARKER_HEX.slice(1)}(${pt.lng},${pt.lat})`
   return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${marker}/${pt.lng},${pt.lat},14/600x300@2x?access_token=${token}`
 }
 
@@ -40,15 +41,6 @@ function staticMapUrl(location: string | { coordinates?: [number, number] } | nu
 function categoryLabel(value: string | null): string | null {
   if (!value) return null
   return BUSINESS_CATEGORIES.find((c) => c.value === value)?.label ?? null
-}
-
-/** Normalize a Postgres time ('HH:MM' | 'HH:MM:SS') to the "HH:MM" schema.org opens/closes form. */
-function toHHMM(t: string): string | null {
-  const min = timeToMinutes(t)
-  if (min === null) return null
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
 // schema.org day URLs indexed by day_of_week (0 = Sunday … 6 = Saturday).
@@ -127,8 +119,8 @@ function buildJsonLd(args: {
   const openingHours = hours
     .map((h) => {
       const day = SCHEMA_DAY_URLS[h.day_of_week]
-      const opens = toHHMM(h.open_time)
-      const closes = toHHMM(h.close_time)
+      const opens = schemaOrgTime(h.open_time)
+      const closes = schemaOrgTime(h.close_time)
       if (!day || !opens || !closes) return null
       return {
         '@type': 'OpeningHoursSpecification',

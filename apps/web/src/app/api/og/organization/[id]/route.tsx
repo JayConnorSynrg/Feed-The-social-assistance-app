@@ -1,10 +1,9 @@
 import { ImageResponse } from 'next/og'
 import { createClient } from '@/lib/supabase/server'
 import { fetchOrganizationById } from '@/lib/org-data'
+import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
 
 export const runtime = 'edge'
-
-const ORG_TEAL = '#0f766e'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -43,7 +42,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
               style={{
                 padding: '6px 16px',
                 borderRadius: '20px',
-                background: ORG_TEAL,
+                background: ORG_MARKER_HEX,
                 color: 'white',
                 fontSize: '16px',
                 fontWeight: 600,

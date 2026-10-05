@@ -20,6 +20,8 @@ export const AUDITED_PRIVILEGED = [
   'approve_form_template',
   'admin_set_tier',
   'set_resource_location_by_id',
+  'admin_save_organization',
+  'admin_set_org_active',
 ]
 
 const QUOTE = "[`'\"]"

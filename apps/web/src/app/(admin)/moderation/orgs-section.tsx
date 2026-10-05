@@ -3,49 +3,37 @@
 // apps/web/src/app/(admin)/moderation/orgs-section.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// Platform-admin Organizations tab. A platform admin creates a directory organization (a NON-business
-// org_type) with contact info, hours, a geocoded location, photos, and linked catalog resources — all
-// from one form — and manages each org's membership roster below.
-//
-// The org_type vocabulary and the create/location/resource writes live in the data layer (org-vocab.ts
-// + org-data.ts) so this component never touches an admissible-type list or a raw Supabase write for
-// the org itself: the Select offers only the nine non-business types (INV-B) and the writer pins
-// is_active=true so the org is public immediately (INV-A). A failed address geocode still creates the
-// org (NULL location) and tells the admin (INV-C); each selected resource becomes exactly one
-// org_resources row (INV-D); hours/photos key by the new org id via the existing child writers (INV-E).
+// Platform-admin Organizations tab: a list of every NON-business organization (active and
+// inactive). "Create organization" (top right, and in the empty state) and each row's Edit open the
+// setup panel, which the admin shell owns (it also serves the Overview quick action and deep
+// links). Each row's menu offers Deactivate / Reactivate (confirmed, truthful optimistic toggle
+// via admin_set_org_active, reverted on failure) and View public page (active orgs only). The
+// existing membership roster stays available as a row expansion.
 
-import { useState, useEffect, useCallback } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import { DropdownMenu as Menu } from 'radix-ui'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { logger } from '@/lib/logger'
-import { resolveGeoPointV6 } from '@/lib/mapbox-geocode-v6'
-import { normalizeState } from '@/lib/us-states'
-import { useResourceSearch, type SearchResourceRow } from '@/hooks/use-resource-search'
-import { uploadPostImage, deletePostImage } from '@/lib/post-image-upload'
-import { withPhotoUploadMetric, photoImageType, insertBusinessHours, insertBusinessPhotos } from '@/lib/business-data'
-import type { BusinessHours, BusinessPhoto } from '@/lib/business'
 import {
-  ORG_TYPE_OPTIONS,
-  ORG_TYPE_LABELS,
-  type NonBusinessOrgType,
-} from '@/lib/org-vocab'
-import { adminCreateOrganization, attachOrgResources, ewktPoint, fetchAdminOrgRoster } from '@/lib/org-data'
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { dir, type Locale } from '@/lib/i18n'
+import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
+import { adminSetOrgActive } from '@/lib/org-admin-rpc'
+import { orgTypeKey } from '@/components/org-form/org-labels'
+import { finishToggle, guardBusyTrigger, startToggle } from './org-toggle-inflight'
 
 type MemberRole = 'admin' | 'member'
-
-interface Org {
-  id: string
-  name: string
-  org_type: string
-  is_active: boolean
-  description: string | null
-}
 
 interface OrgMember {
   id: string
@@ -54,101 +42,293 @@ interface OrgMember {
   joined_at: string
 }
 
-// ---- Hours editor model — index 0..6 == Sun..Sat, matching BusinessHours.day_of_week -------------
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
-interface DayHours {
-  open: boolean
-  openTime: string
-  closeTime: string
+export interface OrgsSectionProps {
+  locale: Locale
+  onCreate: () => void
+  onEdit: (orgId: string) => void
+  /** Bumped by the shell after a save so the list reloads. */
+  refreshKey: number
+  /** "<name> was created/saved." after a save, announced politely. */
+  notice: string | null
 }
-function emptyHours(): DayHours[] {
-  return DAY_LABELS.map(() => ({ open: false, openTime: '', closeTime: '' }))
-}
-/** A day marked open with both endpoints set contributes one BusinessHours row; others contribute none. */
-function serializeHours(days: DayHours[]): BusinessHours[] {
-  const out: BusinessHours[] = []
-  days.forEach((day, dow) => {
-    if (day.open && day.openTime && day.closeTime) {
-      out.push({ day_of_week: dow, open_time: day.openTime, close_time: day.closeTime })
+
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
+const PRIMARY =
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 ' +
+  FOCUS_RING
+const SECONDARY =
+  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
+  FOCUS_RING
+const MENU_ITEM =
+  'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-3 text-sm text-stone-800 outline-none data-[highlighted]:bg-stone-100 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
+
+type ConfirmTarget = { org: AdminOrgListRow; next: boolean }
+
+const moreButtonId = (orgId: string) => `more-${orgId}`
+
+export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: OrgsSectionProps) {
+  const supabase = useMemo(() => createClient(), [])
+  const tr = useCallback((key: keyof OrgFormMessages) => orgFormT(locale, key), [locale])
+
+  const [orgs, setOrgs] = useState<AdminOrgListRow[]>([])
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [reload, setReload] = useState(0)
+  const [confirm, setConfirm] = useState<ConfirmTarget | null>(null)
+  const [toggleError, setToggleError] = useState<string | null>(null)
+  // A toggle result, shown until the shell posts a newer notice (e.g. after a save).
+  const [toggleNotice, setToggleNotice] = useState<{ text: string; over: string | null } | null>(null)
+  const noticeRef = useRef(notice)
+  useEffect(() => {
+    noticeRef.current = notice
+  }, [notice])
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAdminOrgList(supabase).then(
+      (rows) => {
+        if (cancelled) return
+        setOrgs(rows)
+        setLoadState('ready')
+      },
+      () => {
+        if (!cancelled) setLoadState('error')
+      }
+    )
+    return () => {
+      cancelled = true
     }
-  })
-  return out
+  }, [supabase, refreshKey, reload])
+
+  // Truthful optimistic toggle: capture -> set -> await the RPC -> revert + explain on failure.
+  const applyToggle = useCallback(
+    async ({ org, next }: ConfirmTarget) => {
+      setToggleError(null)
+      setToggleNotice(null)
+      setBusyIds((s) => startToggle(s, org.id))
+      const previous = org.is_active
+      setOrgs((rows) => rows.map((r) => (r.id === org.id ? { ...r, is_active: next } : r)))
+      const res = await adminSetOrgActive(supabase, org.id, next)
+      if (!res.ok) {
+        setOrgs((rows) => rows.map((r) => (r.id === org.id ? { ...r, is_active: previous } : r)))
+        setToggleError(formatMessage(tr('toggleFailed'), { name: org.name }))
+      } else {
+        setToggleNotice({ text: formatMessage(tr(next ? 'orgReactivated' : 'orgDeactivated'), { name: org.name }), over: noticeRef.current })
+      }
+      setBusyIds((s) => finishToggle(s, org.id))
+    },
+    [supabase, tr]
+  )
+
+  const header = (
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 className="text-xl font-bold text-stone-900">
+          {loadState === 'ready' ? formatMessage(tr('listTitle'), { count: orgs.length }) : tr('listTitleLoading')}
+        </h2>
+        <p className="mt-1 text-sm text-stone-600">{tr('listIntro')}</p>
+      </div>
+      <button type="button" className={PRIMARY} onClick={onCreate} data-org-create="">
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        {tr('createOrganization')}
+      </button>
+    </div>
+  )
+
+  return (
+    <div dir={dir(locale)} lang={locale}>
+      {header}
+      <p aria-live="polite" className="mb-3 text-sm font-medium text-brand empty:hidden">
+        {toggleNotice && toggleNotice.over === notice ? toggleNotice.text : notice}
+      </p>
+      {toggleError && (
+        <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {toggleError}
+        </p>
+      )}
+
+      <div className="rounded-2xl border border-stone-200 bg-white shadow-sm">
+        {loadState === 'loading' ? (
+          <p className="flex items-center gap-2 p-6 text-sm text-stone-600" aria-live="polite">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            {tr('listLoading')}
+          </p>
+        ) : loadState === 'error' ? (
+          <div role="alert" className="flex flex-col items-start gap-3 p-6">
+            <p className="text-sm text-red-700">{tr('listError')}</p>
+            <button
+              type="button"
+              className={SECONDARY}
+              onClick={() => {
+                setLoadState('loading')
+                setReload((n) => n + 1)
+              }}
+            >
+              {tr('listRetry')}
+            </button>
+          </div>
+        ) : orgs.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <h3 className="text-base font-semibold text-stone-900">{tr('listEmptyTitle')}</h3>
+            <p className="max-w-sm text-sm text-stone-600">{tr('listEmptyBody')}</p>
+            <button type="button" className={PRIMARY} onClick={onCreate}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {tr('createOrganization')}
+            </button>
+          </div>
+        ) : (
+          <ul className="divide-y divide-stone-100">
+            {orgs.map((org) => {
+              const where = [org.city, org.state].filter(Boolean).join(', ')
+              const expanded = expandedId === org.id
+              return (
+                <li key={org.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-stone-900">{org.name}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full bg-org/10 px-2 py-0.5 font-medium text-org">{tr(orgTypeKey(org.org_type))}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 font-medium ${
+                            org.is_active ? 'bg-lime-100 text-lime-900' : 'bg-stone-200 text-stone-700'
+                          }`}
+                        >
+                          {org.is_active ? tr('statusActive') : tr('statusInactive')}
+                        </span>
+                        {where && <span className="text-stone-600">{where}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        onClick={() => onEdit(org.id)}
+                        aria-label={formatMessage(tr('actionEditNamed'), { name: org.name })}
+                      >
+                        {tr('actionEdit')}
+                      </button>
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        aria-expanded={expanded}
+                        aria-controls={expanded ? `members-${org.id}` : undefined}
+                        aria-label={formatMessage(tr('actionMembersNamed'), { name: org.name })}
+                        onClick={() => setExpandedId(expanded ? null : org.id)}
+                      >
+                        {tr('actionMembers')}
+                        <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+                      <Menu.Root dir={dir(locale)}>
+                        <Menu.Trigger asChild>
+                          <button
+                            id={moreButtonId(org.id)}
+                            type="button"
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-500 bg-white text-stone-700 hover:bg-stone-100 aria-disabled:cursor-not-allowed aria-disabled:text-stone-700/60 aria-disabled:border-stone-500/60 ${FOCUS_RING}`}
+                            aria-label={formatMessage(tr('actionMore'), { name: org.name })}
+                            aria-disabled={busyIds.has(org.id) || undefined}
+                            // Stays focusable while the toggle runs; just does not open.
+                            onPointerDown={(e) => guardBusyTrigger(busyIds, org.id, e)}
+                            onKeyDown={(e) => guardBusyTrigger(busyIds, org.id, e)}
+                          >
+                            {busyIds.has(org.id) ? (
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                            )}
+                          </button>
+                        </Menu.Trigger>
+                        <Menu.Portal>
+                          {/* Portaled under <body>, outside the lang wrapper: set lang here. Its dir
+                              comes from Menu.Root. */}
+                          <Menu.Content
+                            lang={locale}
+                            align="end"
+                            sideOffset={4}
+                            className="z-50 min-w-[12rem] rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
+                          >
+                            <Menu.Item className={MENU_ITEM} onSelect={() => setConfirm({ org, next: !org.is_active })}>
+                              {org.is_active ? tr('actionDeactivate') : tr('actionReactivate')}
+                            </Menu.Item>
+                            {org.is_active && (
+                              <Menu.Item className={MENU_ITEM} asChild>
+                                <a href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                                  {tr('actionViewPublic')}
+                                  <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
+                                </a>
+                              </Menu.Item>
+                            )}
+                          </Menu.Content>
+                        </Menu.Portal>
+                      </Menu.Root>
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div id={`members-${org.id}`} className="mt-3">
+                      <OrgMembers orgId={org.id} />
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => (o ? undefined : setConfirm(null))}>
+        {confirm && (
+          <AlertDialogContent
+            dir={dir(locale)}
+            lang={locale}
+            onCloseAutoFocus={(e) => {
+              // Back to the row's More button (Radix would aim at the menu trigger it no longer tracks).
+              e.preventDefault()
+              document.getElementById(moreButtonId(confirm.org.id))?.focus()
+            }}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {formatMessage(tr(confirm.next ? 'reactivateTitle' : 'deactivateTitle'), { name: confirm.org.name })}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{tr(confirm.next ? 'reactivateBody' : 'deactivateBody')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{tr('confirmCancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                className={confirm.next ? undefined : 'bg-red-700 hover:bg-red-800'}
+                onClick={() => {
+                  const target = confirm
+                  setConfirm(null)
+                  void applyToggle(target)
+                }}
+              >
+                {tr(confirm.next ? 'actionReactivate' : 'actionDeactivate')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        )}
+      </AlertDialog>
+    </div>
+  )
 }
 
-type UploadedPhoto = { url: string; path: string }
-type PhotoKind = 'logo' | 'cover' | 'gallery'
-const PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp'
+// ---------------------------------------------------------------------------------------------
+// Membership roster (unchanged behavior, now a row expansion).
+// ---------------------------------------------------------------------------------------------
 
-const EMPTY_FORM = {
-  name: '',
-  org_type: 'community' as NonBusinessOrgType,
-  description: '',
-  address: '',
-  city: '',
-  state: '',
-  zip_code: '',
-  phone: '',
-  email: '',
-  website: '',
-}
-
-export function OrgsSection() {
-  const supabase = createClient()
-
-  const [orgs, setOrgs] = useState<Org[]>([])
-  const [loadingOrgs, setLoadingOrgs] = useState(true)
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+function OrgMembers({ orgId }: { orgId: string }) {
+  const supabase = useMemo(() => createClient(), [])
   const [members, setMembers] = useState<OrgMember[]>([])
-  const [loadingMembers, setLoadingMembers] = useState(false)
+  const [loadingMembers, setLoadingMembers] = useState(true)
   const [rosterError, setRosterError] = useState<string | null>(null)
-
-  // Create org form
-  const [form, setForm] = useState({ ...EMPTY_FORM })
-  const [hours, setHours] = useState<DayHours[]>(emptyHours())
-  const [logo, setLogo] = useState<UploadedPhoto | null>(null)
-  const [cover, setCover] = useState<UploadedPhoto | null>(null)
-  const [gallery, setGallery] = useState<UploadedPhoto[]>([])
-  const [photoBusy, setPhotoBusy] = useState<Record<PhotoKind, boolean>>({ logo: false, cover: false, gallery: false })
-  const [photoError, setPhotoError] = useState<string | null>(null)
-  const [selectedResources, setSelectedResources] = useState<SearchResourceRow[]>([])
-  const [resourceQuery, setResourceQuery] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [createWarning, setCreateWarning] = useState<string | null>(null)
-
-  const { results: resourceResults, loading: resourceLoading } = useResourceSearch({
-    query: resourceQuery,
-    surface: 'map',
-  })
-
-  // Add member form
   const [addUserId, setAddUserId] = useState('')
   const [addRole, setAddRole] = useState<MemberRole>('member')
   const [addingMember, setAddingMember] = useState(false)
   const [addMemberError, setAddMemberError] = useState<string | null>(null)
 
-  const setField = useCallback(
-    <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) => {
-      setForm((f) => ({ ...f, [key]: value }))
-    },
-    [],
-  )
-
-  // Non-business ONLY (INV-1): the roster read lives in org-data.fetchAdminOrgRoster, which applies
-  // `.in('org_type', NON_BUSINESS_ORG_TYPES)` so a business row can never enter this tab — it belongs
-  // to the Businesses tab. A load failure leaves an empty roster rather than crashing the panel.
-  const fetchOrgs = useCallback(async () => {
-    setLoadingOrgs(true)
-    try {
-      setOrgs(await fetchAdminOrgRoster(supabase))
-    } catch {
-      setOrgs([])
-    } finally {
-      setLoadingOrgs(false)
-    }
-  }, [supabase])
-
-  const fetchMembers = useCallback(async (orgId: string) => {
+  const fetchMembers = useCallback(async () => {
     setLoadingMembers(true)
     const { data } = await supabase
       .from('organization_members')
@@ -156,608 +336,159 @@ export function OrgsSection() {
       .eq('org_id', orgId)
     setMembers(data ?? [])
     setLoadingMembers(false)
-  }, [supabase])
+  }, [supabase, orgId])
 
   useEffect(() => {
-    fetchOrgs()
-  }, [fetchOrgs])
-
-  const handleSelectOrg = useCallback((orgId: string) => {
-    setRosterError(null)
-    if (selectedOrgId === orgId) {
-      setSelectedOrgId(null)
-      setMembers([])
-    } else {
-      setSelectedOrgId(orgId)
-      fetchMembers(orgId)
-    }
-  }, [selectedOrgId, fetchMembers])
-
-  // ---- Photo upload (reuses the validating edge uploader + business.photo.upload metric) ----------
-  const handlePhotoSelect = useCallback(async (kind: PhotoKind, file: File | undefined) => {
-    if (!file) return
-    setPhotoError(null)
-    setPhotoBusy((b) => ({ ...b, [kind]: true }))
-    try {
-      const uploaded = await withPhotoUploadMetric(photoImageType(file.type), file.size, async () => {
-        const { url, path, error } = await uploadPostImage(file)
-        if (error || !url || !path) throw new Error(error ?? 'Upload failed. Please try again.')
-        return { url, path }
-      })
-      if (kind === 'logo') setLogo(uploaded)
-      else if (kind === 'cover') setCover(uploaded)
-      else setGallery((g) => [...g, uploaded])
-    } catch (err) {
-      setPhotoError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
-    } finally {
-      setPhotoBusy((b) => ({ ...b, [kind]: false }))
-    }
-  }, [])
-
-  const removePhoto = useCallback((kind: PhotoKind, index?: number) => {
-    if (kind === 'logo' && logo) {
-      void deletePostImage(logo.path)
-      setLogo(null)
-    } else if (kind === 'cover' && cover) {
-      void deletePostImage(cover.path)
-      setCover(null)
-    } else if (kind === 'gallery' && index != null) {
-      const target = gallery[index]
-      if (target) void deletePostImage(target.path)
-      setGallery((g) => g.filter((_, i) => i !== index))
-    }
-  }, [logo, cover, gallery])
-
-  // ---- Linked-resource multi-select (INV-D: one row per distinct id; deselect removes exactly it) --
-  const toggleResource = useCallback((row: SearchResourceRow) => {
-    setSelectedResources((prev) =>
-      prev.some((r) => r.id === row.id) ? prev.filter((r) => r.id !== row.id) : [...prev, row],
-    )
-  }, [])
-
-  const resetCreateForm = useCallback(() => {
-    setForm({ ...EMPTY_FORM })
-    setHours(emptyHours())
-    setLogo(null)
-    setCover(null)
-    setGallery([])
-    setPhotoError(null)
-    setSelectedResources([])
-    setResourceQuery('')
-  }, [])
-
-  const handleCreateOrg = useCallback(async () => {
-    if (!form.name.trim() || creating) return
-    setCreating(true)
-    setCreateError(null)
-    setCreateWarning(null)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      // Geocode the address (INV-C): whenever an address is present we attempt the geocode; a match
-      // yields an EWKT point, a present-but-unresolvable address creates the org with NULL location
-      // and warns — never a silently-wrong point.
-      let location: string | null = null
-      let geocodeFailed = false
-      if (form.address.trim()) {
-        const query = [
-          form.address.trim(),
-          form.city.trim(),
-          normalizeState(form.state) ?? form.state.trim(),
-          form.zip_code.trim(),
-        ].filter(Boolean).join(', ')
-        const match = await resolveGeoPointV6(query, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
-        if (match) location = ewktPoint(match.lng, match.lat)
-        else geocodeFailed = true
-      }
-
-      const outcome = await adminCreateOrganization(supabase, {
-        name: form.name,
-        org_type: form.org_type,
-        description: form.description,
-        address: form.address,
-        city: form.city,
-        state: form.state,
-        zip_code: form.zip_code,
-        phone: form.phone,
-        email: form.email,
-        website: form.website,
-        createdBy: user?.id ?? null,
-        location,
-      })
-
-      if (!outcome.ok) {
-        setCreateError(outcome.error)
-        return
-      }
-
-      // Child rows key by the new org id (INV-E). Each is best-effort — a failure is surfaced as a
-      // truthful partial warning, never a silent swallow and never an undo of the created org.
-      const failed: string[] = []
-      const hourRows = serializeHours(hours)
-      if (hourRows.length > 0) {
-        try {
-          await insertBusinessHours(supabase, outcome.id, hourRows)
-        } catch {
-          failed.push('hours')
-        }
-      }
-      const photoRows: BusinessPhoto[] = []
-      if (logo) photoRows.push({ kind: 'logo', url: logo.url, storage_path: logo.path, sort_order: 0, caption: null })
-      if (cover) photoRows.push({ kind: 'cover', url: cover.url, storage_path: cover.path, sort_order: 0, caption: null })
-      gallery.forEach((g, i) => photoRows.push({ kind: 'gallery', url: g.url, storage_path: g.path, sort_order: i, caption: null }))
-      if (photoRows.length > 0) {
-        try {
-          await insertBusinessPhotos(supabase, outcome.id, photoRows)
-        } catch {
-          failed.push('photos')
-        }
-      }
-      if (selectedResources.length > 0) {
-        try {
-          await attachOrgResources(supabase, outcome.id, selectedResources.map((r) => r.id))
-        } catch {
-          failed.push('linked resources')
-        }
-      }
-
-      logger.info('admin.org.created', {
-        org_type: form.org_type,
-        located: outcome.locationSet,
-        hours_days: hourRows.length,
-        photo_count: photoRows.length,
-        resource_count: selectedResources.length,
-      })
-
-      const warnings: string[] = []
-      if (geocodeFailed) warnings.push('the address could not be located, so it has no map pin yet')
-      if (outcome.warning) warnings.push('the map location could not be saved')
-      if (failed.length > 0) warnings.push(`some details did not save (${failed.join(', ')})`)
-      setCreateWarning(
-        warnings.length > 0 ? `Organization created, but ${warnings.join('; ')}.` : null,
-      )
-
-      resetCreateForm()
-      await fetchOrgs()
-    } finally {
-      setCreating(false)
-    }
-  }, [supabase, form, hours, logo, cover, gallery, selectedResources, creating, resetCreateForm, fetchOrgs])
+    void fetchMembers()
+  }, [fetchMembers])
 
   const handleAddMember = useCallback(async () => {
-    if (!selectedOrgId || !addUserId.trim()) return
+    if (!addUserId.trim()) return
     setAddingMember(true)
     setAddMemberError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase
-        .from('organization_members')
-        .insert({
-          org_id: selectedOrgId,
-          user_id: addUserId.trim(),
-          role: addRole,
-          invited_by: user?.id,
-        })
+      const { error } = await supabase.from('organization_members').insert({
+        org_id: orgId,
+        user_id: addUserId.trim(),
+        role: addRole,
+        invited_by: user?.id,
+      })
       if (error) {
         setAddMemberError(error.message)
       } else {
         setAddUserId('')
         setAddRole('member')
-        await fetchMembers(selectedOrgId)
+        await fetchMembers()
       }
     } finally {
       setAddingMember(false)
     }
-  }, [supabase, selectedOrgId, addUserId, addRole, fetchMembers])
+  }, [supabase, orgId, addUserId, addRole, fetchMembers])
 
-  const handleRemoveMember = useCallback(async (memberId: string) => {
-    setRosterError(null)
-    const { data, error } = await supabase
-      .from('organization_members')
-      .delete()
-      .eq('id', memberId)
-      .select('id')
-    if (error) {
-      setRosterError(error.message)
-      return
-    }
-    if (!data || data.length === 0) {
-      setRosterError('Could not remove that member — you may not have permission, or they were already removed.')
-      return
-    }
-    if (selectedOrgId) await fetchMembers(selectedOrgId)
-  }, [supabase, selectedOrgId, fetchMembers])
+  const handleRemoveMember = useCallback(
+    async (memberId: string) => {
+      setRosterError(null)
+      const { data, error } = await supabase.from('organization_members').delete().eq('id', memberId).select('id')
+      if (error) {
+        setRosterError(error.message)
+        return
+      }
+      if (!data || data.length === 0) {
+        setRosterError('Could not remove that member — you may not have permission, or they were already removed.')
+        return
+      }
+      await fetchMembers()
+    },
+    [supabase, fetchMembers]
+  )
 
-  const handleChangeRole = useCallback(async (memberId: string, nextRole: MemberRole) => {
-    setRosterError(null)
-    const { data, error } = await supabase
-      .from('organization_members')
-      .update({ role: nextRole })
-      .eq('id', memberId)
-      .select('id')
-    if (error) {
-      setRosterError(error.message)
-      return
-    }
-    if (!data || data.length === 0) {
-      setRosterError('Could not change that role — you may not have permission.')
-      return
-    }
-    if (selectedOrgId) await fetchMembers(selectedOrgId)
-  }, [supabase, selectedOrgId, fetchMembers])
-
-  const inputClass = 'text-stone-900 placeholder:text-stone-400'
+  const handleChangeRole = useCallback(
+    async (memberId: string, nextRole: MemberRole) => {
+      setRosterError(null)
+      const { data, error } = await supabase
+        .from('organization_members')
+        .update({ role: nextRole })
+        .eq('id', memberId)
+        .select('id')
+      if (error) {
+        setRosterError(error.message)
+        return
+      }
+      if (!data || data.length === 0) {
+        setRosterError('Could not change that role — you may not have permission.')
+        return
+      }
+      await fetchMembers()
+    },
+    [supabase, fetchMembers]
+  )
 
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-[#4a5d23]">Organizations</h2>
-        <p className="text-stone-600 mt-1 text-sm">
-          Create local organizations and manage their membership rosters.
-        </p>
-      </div>
-
-      {/* Create org form */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 border border-stone-100 mb-6">
-        <h3 className="text-base font-semibold text-[#4a5d23] mb-4">Create Organization</h3>
-
-        {/* Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="org-name" className="text-stone-700 text-sm">Name</Label>
-            <Input
-              id="org-name"
-              value={form.name}
-              onChange={(e) => setField('name', e.target.value)}
-              placeholder="Organization name"
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="org-type" className="text-stone-700 text-sm">Type</Label>
-            <Select value={form.org_type} onValueChange={(v) => setField('org_type', v as NonBusinessOrgType)}>
-              <SelectTrigger id="org-type" className="text-stone-900">
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                {ORG_TYPE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="org-desc" className="text-stone-700 text-sm">Description</Label>
-            <Textarea
-              id="org-desc"
-              value={form.description}
-              onChange={(e) => setField('description', e.target.value)}
-              placeholder="Optional description"
-              rows={2}
-              className={`${inputClass} resize-none`}
-            />
-          </div>
-        </div>
-
-        {/* Contact & location */}
-        <h4 className="text-sm font-semibold text-stone-700 mt-6 mb-3">Contact & Location</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="org-address" className="text-stone-700 text-sm">Address</Label>
-            <Input
-              id="org-address"
-              value={form.address}
-              onChange={(e) => setField('address', e.target.value)}
-              placeholder="Street address"
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="org-city" className="text-stone-700 text-sm">City</Label>
-            <Input id="org-city" value={form.city} onChange={(e) => setField('city', e.target.value)} placeholder="City" className={inputClass} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-state" className="text-stone-700 text-sm">State</Label>
-              <Input id="org-state" value={form.state} onChange={(e) => setField('state', e.target.value)} placeholder="State" className={inputClass} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="org-zip" className="text-stone-700 text-sm">ZIP</Label>
-              <Input id="org-zip" value={form.zip_code} onChange={(e) => setField('zip_code', e.target.value)} placeholder="ZIP" className={inputClass} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="org-phone" className="text-stone-700 text-sm">Phone</Label>
-            <Input id="org-phone" value={form.phone} onChange={(e) => setField('phone', e.target.value)} placeholder="Phone" className={inputClass} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="org-email" className="text-stone-700 text-sm">Email</Label>
-            <Input id="org-email" value={form.email} onChange={(e) => setField('email', e.target.value)} placeholder="Email" className={inputClass} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="org-website" className="text-stone-700 text-sm">Website</Label>
-            <Input id="org-website" value={form.website} onChange={(e) => setField('website', e.target.value)} placeholder="https://…" className={inputClass} />
-          </div>
-        </div>
-
-        {/* Hours */}
-        <h4 className="text-sm font-semibold text-stone-700 mt-6 mb-3">Hours</h4>
-        <div className="space-y-2">
-          {hours.map((day, dow) => (
-            <div key={DAY_LABELS[dow]} className="flex items-center gap-3">
-              <label className="flex items-center gap-2 w-24 text-sm text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={day.open}
-                  onChange={(e) => setHours((h) => h.map((d, i) => (i === dow ? { ...d, open: e.target.checked } : d)))}
-                />
-                {DAY_LABELS[dow]}
-              </label>
-              <Input
-                type="time"
-                value={day.openTime}
-                disabled={!day.open}
-                onChange={(e) => setHours((h) => h.map((d, i) => (i === dow ? { ...d, openTime: e.target.value } : d)))}
-                className={`${inputClass} w-32`}
-                aria-label={`${DAY_LABELS[dow]} open time`}
-              />
-              <span className="text-stone-400 text-sm">to</span>
-              <Input
-                type="time"
-                value={day.closeTime}
-                disabled={!day.open}
-                onChange={(e) => setHours((h) => h.map((d, i) => (i === dow ? { ...d, closeTime: e.target.value } : d)))}
-                className={`${inputClass} w-32`}
-                aria-label={`${DAY_LABELS[dow]} close time`}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Photos */}
-        <h4 className="text-sm font-semibold text-stone-700 mt-6 mb-3">Photos</h4>
-        <div className="flex flex-wrap gap-6">
-          {(['logo', 'cover'] as const).map((kind) => {
-            const value = kind === 'logo' ? logo : cover
-            return (
-              <div key={kind} className="space-y-1.5">
-                <Label className="text-stone-700 text-sm capitalize">{kind}</Label>
-                {value ? (
-                  <div className="flex items-center gap-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={value.url} alt={`${kind} preview`} className="h-16 w-16 rounded-lg object-cover border border-stone-200" />
-                    <button type="button" onClick={() => removePhoto(kind)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>
-                  </div>
-                ) : (
-                  <Input
-                    type="file"
-                    accept={PHOTO_ACCEPT}
-                    disabled={photoBusy[kind]}
-                    onChange={(e) => handlePhotoSelect(kind, e.target.files?.[0])}
-                    className={`${inputClass} w-56`}
-                  />
-                )}
-              </div>
-            )
-          })}
-          <div className="space-y-1.5">
-            <Label className="text-stone-700 text-sm">Gallery</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {gallery.map((g, i) => (
-                <div key={g.path} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.url} alt={`gallery ${i + 1}`} className="h-16 w-16 rounded-lg object-cover border border-stone-200" />
-                  <button type="button" onClick={() => removePhoto('gallery', i)} className="absolute -top-2 -right-2 bg-white rounded-full border border-stone-200 p-0.5 text-red-500">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-              <Input
-                type="file"
-                accept={PHOTO_ACCEPT}
-                disabled={photoBusy.gallery}
-                onChange={(e) => { handlePhotoSelect('gallery', e.target.files?.[0]); e.target.value = '' }}
-                className={`${inputClass} w-56`}
-              />
-            </div>
-          </div>
-        </div>
-        {photoError && <p className="text-red-600 text-xs mt-2">{photoError}</p>}
-
-        {/* Linked resources */}
-        <h4 className="text-sm font-semibold text-stone-700 mt-6 mb-3">Linked Resources</h4>
-        {selectedResources.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {selectedResources.map((r) => (
-              <Badge key={r.id} variant="outline" className="text-xs text-[#4a5d23] border-[#4a5d23]/30 flex items-center gap-1">
-                {r.name}
-                <button type="button" onClick={() => toggleResource(r)} aria-label={`Remove ${r.name}`}>
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
+    // The roster is English-only for now; mark it so screen readers do not read it as the admin locale.
+    <div lang="en" dir="ltr" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+      <div className="mb-3 flex flex-wrap gap-2">
         <Input
-          value={resourceQuery}
-          onChange={(e) => setResourceQuery(e.target.value)}
-          placeholder="Search the resource catalog to link…"
-          className={inputClass}
+          value={addUserId}
+          onChange={(e) => setAddUserId(e.target.value)}
+          placeholder="User UUID"
+          aria-label="User UUID"
+          className="w-64 text-sm text-stone-900 placeholder:text-stone-500"
         />
-        {resourceQuery.trim() && (
-          <div className="mt-2 rounded-lg border border-stone-100 max-h-56 overflow-y-auto divide-y divide-stone-100">
-            {resourceLoading ? (
-              <p className="text-stone-500 text-sm p-3">Searching…</p>
-            ) : resourceResults.length === 0 ? (
-              <p className="text-stone-500 text-sm p-3">No matching resources.</p>
-            ) : (
-              resourceResults.map((r) => {
-                const selected = selectedResources.some((s) => s.id === r.id)
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => toggleResource(r)}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-stone-50 flex items-center justify-between ${selected ? 'bg-lime-50' : ''}`}
-                  >
-                    <span className="text-stone-800">
-                      {r.name}
-                      {(r.city || r.state) && <span className="text-stone-400"> · {[r.city, r.state].filter(Boolean).join(', ')}</span>}
-                    </span>
-                    {selected && <span className="text-[#4a5d23] text-xs">Linked</span>}
-                  </button>
-                )
-              })
-            )}
-          </div>
-        )}
-
-        {createError && <p className="text-red-600 text-sm mt-4">{createError}</p>}
-        {createWarning && <p className="text-amber-700 text-sm mt-4">{createWarning}</p>}
-        <Button
-          onClick={handleCreateOrg}
-          disabled={creating || !form.name.trim()}
-          className="mt-4 bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-        >
-          {creating ? 'Creating…' : 'Create Organization'}
-        </Button>
+        <Select value={addRole} onValueChange={(v) => setAddRole(v as MemberRole)}>
+          <SelectTrigger className="w-28 text-sm text-stone-900" aria-label="Role">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent lang="en">
+            <SelectItem value="member">Member</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+        <button type="button" onClick={handleAddMember} disabled={addingMember || !addUserId.trim()} className={PRIMARY}>
+          {addingMember ? 'Adding…' : 'Add Member'}
+        </button>
       </div>
+      {addMemberError && (
+        <p role="alert" className="mb-2 text-xs text-red-700">
+          {addMemberError}
+        </p>
+      )}
+      {rosterError && (
+        <p role="alert" className="mb-2 text-xs text-red-700">
+          {rosterError}
+        </p>
+      )}
 
-      {/* Org list */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 border border-stone-100">
-        <h3 className="text-base font-semibold text-[#4a5d23] mb-4">
-          Organizations {!loadingOrgs && `(${orgs.length})`}
-        </h3>
-
-        {loadingOrgs ? (
-          <p className="text-stone-500 text-sm">Loading…</p>
-        ) : orgs.length === 0 ? (
-          <p className="text-stone-500 text-sm">No organizations yet.</p>
-        ) : (
-          <div className="divide-y divide-stone-100">
-            {orgs.map((org) => (
-              <div key={org.id}>
-                {/* Org row — click to expand */}
-                <button
-                  onClick={() => handleSelectOrg(org.id)}
-                  className="w-full flex items-center justify-between py-3 px-1 text-left hover:bg-stone-50 rounded transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium text-stone-800">{org.name}</span>
-                    <Badge variant="outline" className="text-xs text-[#4a5d23] border-[#4a5d23]/30">
-                      {/* The roster is filtered to the nine non-business types (INV-1), so org_type
-                          is always one of them — the label lookup is total, no business fallback. */}
-                      {ORG_TYPE_LABELS[org.org_type as NonBusinessOrgType]}
-                    </Badge>
-                    {!org.is_active && (
-                      <Badge variant="outline" className="text-xs text-stone-500 border-stone-300">
-                        Inactive
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-stone-400 text-xs">{selectedOrgId === org.id ? '▲' : '▼'}</span>
-                </button>
-
-                {/* Expanded member panel */}
-                {selectedOrgId === org.id && (
-                  <div className="pb-4 px-2">
-                    {org.description && (
-                      <p className="text-stone-600 text-sm mb-3">{org.description}</p>
-                    )}
-
-                    {/* Add member form */}
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <Input
-                        value={addUserId}
-                        onChange={(e) => setAddUserId(e.target.value)}
-                        placeholder="User UUID"
-                        className="text-stone-900 placeholder:text-stone-400 w-64 text-sm"
-                      />
-                      <Select value={addRole} onValueChange={(v) => setAddRole(v as MemberRole)}>
-                        <SelectTrigger className="w-28 text-sm text-stone-900">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="member">Member</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        onClick={handleAddMember}
-                        disabled={addingMember || !addUserId.trim()}
-                        size="sm"
-                        className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-                      >
-                        {addingMember ? 'Adding…' : 'Add Member'}
-                      </Button>
-                    </div>
-                    {addMemberError && (
-                      <p className="text-red-600 text-xs mb-2">{addMemberError}</p>
-                    )}
-                    {rosterError && (
-                      <p className="text-red-600 text-xs mb-2">{rosterError}</p>
-                    )}
-
-                    {/* Member list */}
-                    {loadingMembers ? (
-                      <p className="text-stone-500 text-sm">Loading members…</p>
-                    ) : members.length === 0 ? (
-                      <p className="text-stone-500 text-sm">No members yet.</p>
-                    ) : (
-                      <div className="rounded-lg border border-stone-100 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-stone-50">
-                            <tr>
-                              <th className="text-left px-3 py-2 text-stone-600 font-medium">User ID</th>
-                              <th className="text-left px-3 py-2 text-stone-600 font-medium">Role</th>
-                              <th className="text-left px-3 py-2 text-stone-600 font-medium">Joined</th>
-                              <th className="px-3 py-2" />
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-stone-100">
-                            {members.map((m) => (
-                              <tr key={m.id} className="hover:bg-stone-50">
-                                <td className="px-3 py-2 font-mono text-xs text-stone-700 truncate max-w-[180px]">
-                                  {m.user_id}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Select
-                                    value={m.role === 'admin' ? 'admin' : 'member'}
-                                    onValueChange={(v) => handleChangeRole(m.id, v as MemberRole)}
-                                  >
-                                    <SelectTrigger className="w-28 h-8 text-xs text-stone-900">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="member">Member</SelectItem>
-                                      <SelectItem value="admin">Admin</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="px-3 py-2 text-stone-500 text-xs">
-                                  {new Date(m.joined_at).toLocaleDateString()}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    onClick={() => handleRemoveMember(m.id)}
-                                    className="text-red-500 hover:text-red-700 text-xs font-medium inline-flex items-center gap-1"
-                                  >
-                                    <Trash2 className="h-3 w-3" /> Remove
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {loadingMembers ? (
+        <p className="text-sm text-stone-600">Loading members…</p>
+      ) : members.length === 0 ? (
+        <p className="text-sm text-stone-600">No members yet.</p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50">
+              <tr>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">User ID</th>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">Role</th>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">Joined</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {members.map((m) => (
+                <tr key={m.id}>
+                  <td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs text-stone-700">{m.user_id}</td>
+                  <td className="px-3 py-2">
+                    <Select
+                      value={m.role === 'admin' ? 'admin' : 'member'}
+                      onValueChange={(v) => handleChangeRole(m.id, v as MemberRole)}
+                    >
+                      <SelectTrigger className="h-8 w-28 text-xs text-stone-900" aria-label="Role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent lang="en">
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-stone-600">{new Date(m.joined_at).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-end">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMember(m.id)}
+                      aria-label={`Remove member ${m.user_id}`}
+                      className="inline-flex min-h-6 min-w-6 items-center gap-1 rounded px-1 text-xs font-medium text-red-700 hover:text-red-800"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden="true" /> Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

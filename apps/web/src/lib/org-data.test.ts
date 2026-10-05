@@ -1,20 +1,11 @@
 // apps/web/src/lib/org-data.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// Proves the two admin-org-create invariants at the pure boundary where they live, so each test FAILS
-// if the invariant is broken (mutation-proof, both directions):
-//
-//   INV-B (never business): buildOrgInsertPayload throws for org_type='business' or any value outside
-//     org-vocab, and pins is_active=true for a valid non-business type — so no admin code path can
-//     persist a business row. Break-on-purpose: delete the isNonBusinessOrgType guard in
-//     buildOrgInsertPayload → the 'business' and 'unknown' cases stop throwing → RED.
-//
-//   INV-D (one row per linked resource): buildOrgResourceRows emits exactly one row per DISTINCT
-//     resource id, sequential sort_order, org_id stamped. Break-on-purpose: drop the `seen` dedupe (or
-//     emit two rows per id) → the duplicate/count assertions go RED.
-//
-// Also asserts INV-B at the vocabulary floor: 'business' is not a member of NON_BUSINESS_ORG_TYPES, so
-// the admin Select (which renders exactly these) can never offer it.
+// Organization READERS, each proven at the query it issues (mutation-proof, both directions): the
+// public single-org and list readers gate to ACTIVE non-business rows, the admin list and detail
+// readers keep the non-business guard but include INACTIVE orgs, linked resources keep curator order,
+// and every read emits exactly one wide event. Admin writes live in admin_save_organization
+// (org-admin-rpc.ts); there is no client-side org writer left to test here.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -44,13 +35,11 @@ vi.mock('./logger', () => ({
 }))
 
 import {
-  buildOrgInsertPayload,
-  buildOrgResourceRows,
-  OrgWriteError,
   fetchOrganizationById,
   fetchOrgResources,
   fetchApprovedOrganizations,
-  fetchAdminOrgRoster,
+  fetchAdminOrgList,
+  fetchAdminOrgDetail,
 } from './org-data'
 import { NON_BUSINESS_ORG_TYPES } from './org-vocab'
 
@@ -58,52 +47,9 @@ beforeEach(() => {
   sinks.length = 0
 })
 
-describe('INV-B — admin org create is non-business only', () => {
-  it('refuses org_type="business" (throws, nothing to insert)', () => {
-    expect(() =>
-      buildOrgInsertPayload({ name: 'X', org_type: 'business', createdBy: null }),
-    ).toThrow(OrgWriteError)
-  })
-
-  it('refuses an org_type outside the vocabulary', () => {
-    expect(() =>
-      buildOrgInsertPayload({ name: 'X', org_type: 'club', createdBy: null }),
-    ).toThrow(OrgWriteError)
-  })
-
-  it('the Select vocabulary never contains "business"', () => {
-    expect((NON_BUSINESS_ORG_TYPES as readonly string[])).not.toContain('business')
-  })
-
-  it('accepts every non-business type and pins is_active=true for public visibility (INV-A)', () => {
-    for (const t of NON_BUSINESS_ORG_TYPES) {
-      const row = buildOrgInsertPayload({ name: '  Helping Hands  ', org_type: t, createdBy: 'u1' })
-      expect(row.org_type).toBe(t)
-      expect(row.is_active).toBe(true)
-      expect(row.name).toBe('Helping Hands') // trimmed
-      expect(row.created_by).toBe('u1')
-    }
-  })
-})
-
-describe('INV-D — one org_resources row per distinct linked resource', () => {
-  it('emits exactly one row per id with sequential sort_order and the org id stamped', () => {
-    const rows = buildOrgResourceRows('org-1', ['a', 'b', 'c'])
-    expect(rows).toEqual([
-      { org_id: 'org-1', resource_id: 'a', sort_order: 0 },
-      { org_id: 'org-1', resource_id: 'b', sort_order: 1 },
-      { org_id: 'org-1', resource_id: 'c', sort_order: 2 },
-    ])
-  })
-
-  it('drops duplicates so a repeated id never produces two rows (PK backstop)', () => {
-    const rows = buildOrgResourceRows('org-1', ['a', 'a', 'b'])
-    expect(rows.map((r) => r.resource_id)).toEqual(['a', 'b'])
-    expect(rows).toHaveLength(2)
-  })
-
-  it('an empty selection produces no rows', () => {
-    expect(buildOrgResourceRows('org-1', [])).toEqual([])
+describe('vocabulary floor', () => {
+  it('the non-business vocabulary never contains "business"', () => {
+    expect(NON_BUSINESS_ORG_TYPES).not.toContain('business')
   })
 })
 
@@ -309,16 +255,16 @@ describe('INV-1 — admin Organizations roster lists ONLY non-business orgs (bus
   it('filters org_type to the nine non-business types and NEVER gates is_active (admin sees inactive)', async () => {
     const client = makeListClient({
       data: [
-        { id: 'org-1', name: 'Alpha Pantry', org_type: 'pantry', is_active: true, description: null },
-        { id: 'org-2', name: 'Beta Shelter', org_type: 'shelter', is_active: false, description: 'x' },
+        { id: 'org-1', name: 'Alpha Pantry', org_type: 'pantry', city: 'Rutland', state: 'VT', is_active: true },
+        { id: 'org-2', name: 'Beta Shelter', org_type: 'shelter', city: null, state: null, is_active: false },
       ],
       error: null,
     })
-    const rows = await fetchAdminOrgRoster(client)
+    const rows = await fetchAdminOrgList(client)
 
     expect(client.state.table).toBe('organizations')
     // INV-1 mutation guard (forward): the org_type filter is EXACTLY the non-business vocabulary and
-    // NEVER 'business'. Deleting this .in() filter from fetchAdminOrgRoster (so a business row could
+    // NEVER 'business'. Deleting this .in() filter from fetchAdminOrgList (so a business row could
     // enter the Organizations tab) — or adding 'business' to NON_BUSINESS_ORG_TYPES — turns these RED.
     expect(client.state.inCol).toBe('org_type')
     expect(client.state.inVals).toEqual([...NON_BUSINESS_ORG_TYPES])
@@ -341,7 +287,7 @@ describe('INV-1 — admin Organizations roster lists ONLY non-business orgs (bus
 
   it('surfaces a load failure as a throw (never a silent empty roster masking an error)', async () => {
     const client = makeListClient({ data: null, error: { message: 'boom' } })
-    await expect(fetchAdminOrgRoster(client)).rejects.toThrow('boom')
+    await expect(fetchAdminOrgList(client)).rejects.toThrow('boom')
     expect(sinks).toHaveLength(1)
     expect(sinks[0]).toMatchObject({ level: 'error', event: 'organization.roster.fetch.error' })
   })
@@ -372,5 +318,88 @@ describe('INV-H — fetchOrgResources lists linked resources, ordered, with null
   it('an org with no links renders no rows (empty state, never a dangling section)', async () => {
     const client = makeResourcesClient({ data: [], error: null })
     expect(await fetchOrgResources(client, 'org-42')).toEqual([])
+  })
+})
+
+// ---- admin detail reader: one client routing per table ------------------------------------------
+function makeDetailClient(results: Record<string, { data: unknown; error: { message: string } | null }>) {
+  const seen: Array<{ table: string; eqs: Array<[string, unknown]>; inVals: unknown[] }> = []
+  const client = {
+    seen,
+    from(table: string) {
+      const rec = { table, eqs: [] as Array<[string, unknown]>, inVals: [] as unknown[] }
+      seen.push(rec)
+      const result = results[table]
+      const builder: Record<string, unknown> = {}
+      Object.assign(builder, {
+        select: () => builder,
+        eq: (c: string, v: unknown) => {
+          rec.eqs.push([c, v])
+          return builder
+        },
+        in: (_c: string, v: readonly unknown[]) => {
+          rec.inVals = [...v]
+          return builder
+        },
+        order: () => builder,
+        single: () => Promise.resolve(result),
+        then: (cb: (r: typeof result) => unknown) => Promise.resolve(cb(result)),
+      })
+      return builder
+    },
+  }
+  return client as unknown as SupabaseClient<Database> & { seen: typeof seen }
+}
+
+// EWKB hex for POINT(-72.97 43.61), SRID 4326 (little endian).
+function ewkb(lng: number, lat: number): string {
+  const buf = new ArrayBuffer(25)
+  const v = new DataView(buf)
+  v.setUint8(0, 1)
+  v.setUint32(1, 0x20000001, true)
+  v.setUint32(5, 4326, true)
+  v.setFloat64(9, lng, true)
+  v.setFloat64(17, lat, true)
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+describe('fetchAdminOrgDetail — edit prefill includes INACTIVE orgs, children, parsed location', () => {
+  it('reads the org without an is_active gate, plus hours (trimmed, ordered), photos and links', async () => {
+    const client = makeDetailClient({
+      organizations: { data: { ...ORG_ROW, is_active: false, location: ewkb(-72.97, 43.61) }, error: null },
+      business_hours: {
+        data: [
+          { day_of_week: 2, open_time: '13:00:00', close_time: '17:00:00' },
+          { day_of_week: 1, open_time: '09:00:00', close_time: '17:00:00' },
+          { day_of_week: 2, open_time: '09:00:00', close_time: '12:00:00' },
+        ],
+        error: null,
+      },
+      business_photos: { data: [{ kind: 'logo', url: 'u', storage_path: 'org-42/a.webp', sort_order: 0, caption: null }], error: null },
+      org_resources: {
+        data: [{ sort_order: 0, resource: { id: 'r1', name: 'Pantry', category: 'food', city: 'Rutland', state: 'VT' } }, { sort_order: 1, resource: null }],
+        error: null,
+      },
+    })
+    const d = await fetchAdminOrgDetail(client, 'org-42')
+    expect(d).not.toBeNull()
+    expect(d!.is_active).toBe(false)
+    expect(d!.location!.lng).toBeCloseTo(-72.97)
+    expect(d!.location!.lat).toBeCloseTo(43.61)
+    expect(d!.hours).toEqual([
+      { day_of_week: 1, open_time: '09:00', close_time: '17:00' },
+      { day_of_week: 2, open_time: '09:00', close_time: '12:00' },
+      { day_of_week: 2, open_time: '13:00', close_time: '17:00' },
+    ])
+    expect(d!.photos).toHaveLength(1)
+    expect(d!.resources.map((r) => r.id)).toEqual(['r1'])
+    const orgQuery = client.seen.find((q) => q.table === 'organizations')!
+    expect(orgQuery.eqs).not.toContainEqual(['is_active', true])
+    expect(orgQuery.inVals).toEqual([...NON_BUSINESS_ORG_TYPES])
+  })
+
+  it('a missing (or business) id resolves to null', async () => {
+    const client = makeDetailClient({ organizations: { data: null, error: { message: 'no rows' } } })
+    expect(await fetchAdminOrgDetail(client, 'nope')).toBeNull()
   })
 })
