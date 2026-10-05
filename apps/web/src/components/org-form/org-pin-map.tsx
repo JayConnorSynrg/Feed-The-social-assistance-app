@@ -12,7 +12,7 @@
 'use client'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Map, { Marker, NavigationControl, type MapRef } from 'react-map-gl/mapbox'
 import { Crosshair, MapPin } from 'lucide-react'
 
@@ -25,13 +25,21 @@ export interface OrgPinMapProps {
   recenterKey: number
   /** Map click: place (or move) the pin here. */
   onPlace: (coords: { lng: number; lat: number }) => void
+  /** Short accessible name of the map region. */
   label: string
+  /** Visible instructions (arrow keys + "Place pin at map center"), referenced as the description. */
+  instructions: string
   /** Text of the "Place pin at map center" button. */
   placeCenterLabel: string
+  /** Translations for Mapbox's own control names. */
+  mapLocale: { title: string; zoomIn: string; zoomOut: string }
+  /** Runs after a keyboard/button placement (the panel moves focus to "Confirm pin"). */
+  onPlacedAtCenter?: () => void
   approximate?: boolean
 }
 
-export default function OrgPinMap({ pin, recenterKey, onPlace, label, placeCenterLabel, approximate }: OrgPinMapProps) {
+export default function OrgPinMap({ pin, recenterKey, onPlace, label, instructions, placeCenterLabel, mapLocale, onPlacedAtCenter, approximate }: OrgPinMapProps) {
+  const instructionsId = useId()
   const mapRef = useRef<MapRef>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewState, setViewState] = useState(() =>
@@ -59,12 +67,25 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, placeCente
 
   const placeAtCenter = () => {
     const center = mapRef.current?.getCenter()
-    if (center) onPlace({ lng: center.lng, lat: center.lat })
+    if (!center) return
+    onPlace({ lng: center.lng, lat: center.lat })
+    onPlacedAtCenter?.()
   }
 
   return (
     <div className="flex flex-col gap-2">
-    <div ref={containerRef} role="group" aria-label={label} className="relative h-64 w-full overflow-hidden rounded-xl border border-stone-200">
+    <p id={instructionsId} className="text-sm text-stone-700">
+      {instructions}
+    </p>
+    {/* The focus ring lives on this unclipped wrapper; the map box below clips its tiles. */}
+    <div className="rounded-xl focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2">
+    <div
+      ref={containerRef}
+      role="group"
+      aria-label={label}
+      aria-describedby={instructionsId}
+      className="relative h-64 w-full overflow-hidden rounded-xl border border-stone-200"
+    >
       <Map
         performanceMetricsCollection={false}
         ref={mapRef}
@@ -75,6 +96,11 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, placeCente
         mapStyle="mapbox://styles/mapbox/streets-v12"
         style={{ width: '100%', height: '100%' }}
         cursor="crosshair"
+        locale={{
+          'Map.Title': mapLocale.title,
+          'NavigationControl.ZoomIn': mapLocale.zoomIn,
+          'NavigationControl.ZoomOut': mapLocale.zoomOut,
+        }}
       >
         <NavigationControl position="top-right" showCompass={false} />
         {shown && (
@@ -101,6 +127,7 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, placeCente
         <span className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 bg-stone-900/70" />
         <span className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-stone-900/70" />
       </span>
+    </div>
     </div>
     <div>
       <button

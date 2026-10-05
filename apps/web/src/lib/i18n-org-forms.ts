@@ -153,7 +153,6 @@ export interface OrgFormMessages {
   // Hours editor
   hoursOpen: string
   hoursClosed: string
-  hoursDayOpen: string
   hoursOpens: string
   hoursCloses: string
   hoursAdd: string
@@ -217,6 +216,12 @@ export interface OrgFormMessages {
   opensNewTab: string
   hoursIntervalName: string
   actionMembersNamed: string
+  // Re-review round
+  mapTitle: string
+  mapZoomIn: string
+  mapZoomOut: string
+  orgDeactivated: string
+  orgReactivated: string
 }
 
 export const orgFormMessages: Record<Locale, OrgFormMessages> = {
@@ -365,7 +370,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Open',
     hoursClosed: 'Closed',
-    hoursDayOpen: '{day} open',
     hoursOpens: 'Opens',
     hoursCloses: 'Closes',
     hoursAdd: 'Add hours',
@@ -429,6 +433,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(opens in a new tab)',
     hoursIntervalName: '{day}, hours {n}',
     actionMembersNamed: 'Members of {name}',
+    // Re-review round
+    mapTitle: 'Map',
+    mapZoomIn: 'Zoom in',
+    mapZoomOut: 'Zoom out',
+    orgDeactivated: '{name} was deactivated.',
+    orgReactivated: '{name} is active again.',
   },
 
   // TODO: native-speaker review
@@ -577,7 +587,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Abierto',
     hoursClosed: 'Cerrado',
-    hoursDayOpen: '{day} abierto',
     hoursOpens: 'Abre',
     hoursCloses: 'Cierra',
     hoursAdd: 'Agregar horario',
@@ -641,6 +650,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(se abre en una pestaña nueva)',
     hoursIntervalName: '{day}, horario {n}',
     actionMembersNamed: 'Miembros de {name}',
+    // Re-review round
+    mapTitle: 'Mapa',
+    mapZoomIn: 'Acercar',
+    mapZoomOut: 'Alejar',
+    orgDeactivated: '{name} se desactivó.',
+    orgReactivated: '{name} está activa de nuevo.',
   },
 
   // TODO: native-speaker review
@@ -789,7 +804,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Louvri',
     hoursClosed: 'Fèmen',
-    hoursDayOpen: '{day} louvri',
     hoursOpens: 'Louvri a',
     hoursCloses: 'Fèmen a',
     hoursAdd: 'Ajoute lè',
@@ -853,6 +867,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(ap louvri nan yon nouvo onglè)',
     hoursIntervalName: '{day}, lè {n}',
     actionMembersNamed: 'Manm {name}',
+    // Re-review round
+    mapTitle: 'Kat',
+    mapZoomIn: 'Rapwoche',
+    mapZoomOut: 'Eloyen',
+    orgDeactivated: '{name} dezaktive.',
+    orgReactivated: '{name} aktif ankò.',
   },
 
   // TODO: native-speaker review
@@ -1001,7 +1021,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Mở cửa',
     hoursClosed: 'Đóng cửa',
-    hoursDayOpen: '{day} mở cửa',
     hoursOpens: 'Giờ mở',
     hoursCloses: 'Giờ đóng',
     hoursAdd: 'Thêm giờ',
@@ -1065,6 +1084,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(mở trong thẻ mới)',
     hoursIntervalName: '{day}, khung giờ {n}',
     actionMembersNamed: 'Thành viên của {name}',
+    // Re-review round
+    mapTitle: 'Bản đồ',
+    mapZoomIn: 'Phóng to',
+    mapZoomOut: 'Thu nhỏ',
+    orgDeactivated: 'Đã ngừng kích hoạt {name}.',
+    orgReactivated: '{name} đã hoạt động trở lại.',
   },
 
   // TODO: native-speaker review
@@ -1213,7 +1238,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'مفتوح',
     hoursClosed: 'مغلق',
-    hoursDayOpen: '{day} مفتوح',
     hoursOpens: 'يفتح',
     hoursCloses: 'يغلق',
     hoursAdd: 'إضافة ساعات',
@@ -1277,6 +1301,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(يُفتح في علامة تبويب جديدة)',
     hoursIntervalName: '{day}، فترة الساعات {n}',
     actionMembersNamed: 'أعضاء {name}',
+    // Re-review round
+    mapTitle: 'الخريطة',
+    mapZoomIn: 'تكبير',
+    mapZoomOut: 'تصغير',
+    orgDeactivated: 'تم إلغاء تفعيل {name}.',
+    orgReactivated: '{name} نشطة من جديد.',
   },
 
   // TODO: native-speaker review
@@ -1425,7 +1455,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: '营业',
     hoursClosed: '休息',
-    hoursDayOpen: '{day} 营业',
     hoursOpens: '开门',
     hoursCloses: '关门',
     hoursAdd: '添加时间',
@@ -1489,6 +1518,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '（在新标签页中打开）',
     hoursIntervalName: '{day}，时段 {n}',
     actionMembersNamed: '{name} 的成员',
+    // Re-review round
+    mapTitle: '地图',
+    mapZoomIn: '放大',
+    mapZoomOut: '缩小',
+    orgDeactivated: '{name} 已停用。',
+    orgReactivated: '{name} 已重新启用。',
   },
 
   // TODO: native-speaker review
@@ -1637,7 +1672,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Furan',
     hoursClosed: 'Xiran',
-    hoursDayOpen: '{day} furan',
     hoursOpens: 'Wuu furmaa',
     hoursCloses: 'Wuu xirmaa',
     hoursAdd: 'Ku dar saacado',
@@ -1701,6 +1735,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(waxay ka furmaysaa tab cusub)',
     hoursIntervalName: '{day}, saacadaha {n}',
     actionMembersNamed: 'Xubnaha {name}',
+    // Re-review round
+    mapTitle: 'Khariidad',
+    mapZoomIn: 'Soo dhawee',
+    mapZoomOut: 'Ka fogee',
+    orgDeactivated: '{name} waa la joojiyay.',
+    orgReactivated: '{name} mar kale waa firfircoon yahay.',
   },
 
   // TODO: native-speaker review
@@ -1849,7 +1889,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Ouvert',
     hoursClosed: 'Fermé',
-    hoursDayOpen: '{day} ouvert',
     hoursOpens: 'Ouvre à',
     hoursCloses: 'Ferme à',
     hoursAdd: 'Ajouter des horaires',
@@ -1913,6 +1952,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(s’ouvre dans un nouvel onglet)',
     hoursIntervalName: '{day}, horaires {n}',
     actionMembersNamed: 'Membres de {name}',
+    // Re-review round
+    mapTitle: 'Carte',
+    mapZoomIn: 'Zoom avant',
+    mapZoomOut: 'Zoom arrière',
+    orgDeactivated: '{name} a été désactivée.',
+    orgReactivated: '{name} est de nouveau active.',
   },
 
   // TODO: native-speaker review
@@ -2061,7 +2106,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Aberto',
     hoursClosed: 'Fechado',
-    hoursDayOpen: '{day} aberto',
     hoursOpens: 'Abre',
     hoursCloses: 'Fecha',
     hoursAdd: 'Adicionar horário',
@@ -2125,6 +2169,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(abre em uma nova aba)',
     hoursIntervalName: '{day}, horário {n}',
     actionMembersNamed: 'Membros de {name}',
+    // Re-review round
+    mapTitle: 'Mapa',
+    mapZoomIn: 'Aproximar',
+    mapZoomOut: 'Afastar',
+    orgDeactivated: '{name} foi desativada.',
+    orgReactivated: '{name} está ativa novamente.',
   },
 
   // TODO: native-speaker review
@@ -2273,7 +2323,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Открыто',
     hoursClosed: 'Закрыто',
-    hoursDayOpen: '{day}: открыто',
     hoursOpens: 'Открывается',
     hoursCloses: 'Закрывается',
     hoursAdd: 'Добавить часы',
@@ -2337,6 +2386,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(откроется в новой вкладке)',
     hoursIntervalName: '{day}, часы {n}',
     actionMembersNamed: 'Участники: {name}',
+    // Re-review round
+    mapTitle: 'Карта',
+    mapZoomIn: 'Приблизить',
+    mapZoomOut: 'Отдалить',
+    orgDeactivated: 'Организация «{name}» деактивирована.',
+    orgReactivated: 'Организация «{name}» снова активна.',
   },
 
   // TODO: native-speaker review
@@ -2485,7 +2540,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: '영업',
     hoursClosed: '휴무',
-    hoursDayOpen: '{day} 영업',
     hoursOpens: '여는 시간',
     hoursCloses: '닫는 시간',
     hoursAdd: '시간 추가',
@@ -2549,6 +2603,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(새 탭에서 열림)',
     hoursIntervalName: '{day}, 시간 {n}',
     actionMembersNamed: '{name} 구성원',
+    // Re-review round
+    mapTitle: '지도',
+    mapZoomIn: '확대',
+    mapZoomOut: '축소',
+    orgDeactivated: '{name}이(가) 비활성화되었습니다.',
+    orgReactivated: '{name}이(가) 다시 활성화되었습니다.',
   },
 
   // TODO: native-speaker review
@@ -2697,7 +2757,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Bukas',
     hoursClosed: 'Sarado',
-    hoursDayOpen: 'Bukas sa {day}',
     hoursOpens: 'Nagbubukas',
     hoursCloses: 'Nagsasara',
     hoursAdd: 'Magdagdag ng oras',
@@ -2761,6 +2820,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(magbubukas sa bagong tab)',
     hoursIntervalName: '{day}, oras {n}',
     actionMembersNamed: 'Mga miyembro ng {name}',
+    // Re-review round
+    mapTitle: 'Mapa',
+    mapZoomIn: 'Mag-zoom in',
+    mapZoomOut: 'Mag-zoom out',
+    orgDeactivated: 'Na-deactivate ang {name}.',
+    orgReactivated: 'Aktibo muli ang {name}.',
   },
 
   // TODO: native-speaker review
@@ -2909,7 +2974,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'ክፍት',
     hoursClosed: 'ዝግ',
-    hoursDayOpen: '{day} ክፍት',
     hoursOpens: 'የሚከፈትበት',
     hoursCloses: 'የሚዘጋበት',
     hoursAdd: 'ሰዓቶች አክል',
@@ -2973,6 +3037,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(በአዲስ ትር ይከፈታል)',
     hoursIntervalName: '{day}፣ ሰዓቶች {n}',
     actionMembersNamed: 'የ{name} አባላት',
+    // Re-review round
+    mapTitle: 'ካርታ',
+    mapZoomIn: 'አቅርብ',
+    mapZoomOut: 'አርቅ',
+    orgDeactivated: '{name} እንዲቦዝን ተደርጓል።',
+    orgReactivated: '{name} እንደገና ንቁ ነው።',
   },
 
   // TODO: native-speaker review
@@ -3121,7 +3191,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     // Hours editor
     hoursOpen: 'Qhib',
     hoursClosed: 'Kaw',
-    hoursDayOpen: '{day} qhib',
     hoursOpens: 'Qhib thaum',
     hoursCloses: 'Kaw thaum',
     hoursAdd: 'Ntxiv sij hawm',
@@ -3185,6 +3254,12 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     opensNewTab: '(qhib rau hauv ib lub tab tshiab)',
     hoursIntervalName: '{day}, sij hawm {n}',
     actionMembersNamed: 'Cov tswv cuab ntawm {name}',
+    // Re-review round
+    mapTitle: 'Daim ntawv qhia chaw',
+    mapZoomIn: 'Zoom loj',
+    mapZoomOut: 'Zoom me',
+    orgDeactivated: '{name} raug kaw lawm.',
+    orgReactivated: '{name} rov qhib lawm.',
   },
 }
 

@@ -99,10 +99,10 @@ const FIELD =
 const INPUT = `h-10 ${FIELD}`
 const LABEL = 'mb-1 block text-sm font-medium text-stone-800'
 const PRIMARY =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
   FOCUS_RING
 const SECONDARY =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
   FOCUS_RING
 // Full-screen below 640px: keep header/footer clear of the notch and the home indicator.
 const SAFE_TOP = 'pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3'
@@ -127,6 +127,13 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   const pendingRef = useRef<PendingAction | null>(null)
   // Where focus was when "Discard changes?" opened, restored on "Keep editing".
   const discardReturnRef = useRef<HTMLElement | null>(null)
+  // After "Edit existing", the newly loaded form puts focus on its Name field.
+  const focusNameAfterSwitch = useRef(false)
+  const consumeFocusName = useCallback(() => {
+    const v = focusNameAfterSwitch.current
+    focusNameAfterSwitch.current = false
+    return v
+  }, [])
   const keptEditingRef = useRef(false)
   const setPending = useCallback((action: PendingAction | null) => {
     if (action && !pendingRef.current) {
@@ -198,6 +205,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
         return
       }
       logClose('abandoned')
+      focusNameAfterSwitch.current = true
       onEditExisting(id)
     },
     [logClose, onEditExisting, setPending]
@@ -211,7 +219,10 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
     setPending(null)
     if (!action) return
     logClose('discarded')
-    if (action.type === 'switch') onEditExisting?.(action.id)
+    if (action.type === 'switch') {
+      focusNameAfterSwitch.current = true
+      onEditExisting?.(action.id)
+    }
     else onOpenChange(false)
   }
   const keepEditing = () => {
@@ -259,6 +270,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
               onSavingChange={handleSavingChange}
               onSaveAttempt={handleSaveAttempt}
               registerBackToForm={registerBackToForm}
+              consumeFocusName={consumeFocusName}
               onSaved={handleSaved}
             />
           )}
@@ -308,6 +320,8 @@ interface BodyProps {
   onSavingChange: (saving: boolean) => void
   onSaveAttempt: () => void
   registerBackToForm: (fn: (() => boolean) | null) => void
+  /** True once, right after "Edit existing" switched to this org. */
+  consumeFocusName: () => boolean
   onSaved: (result: { id: string; created: boolean; name: string }) => void
 }
 
@@ -428,7 +442,11 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
     mode: 'onSubmit',
     reValidateMode: 'onChange',
   })
-  const { register, control, handleSubmit, watch, setValue, getValues, setError, formState } = form
+  const { register, control, handleSubmit, watch, setValue, getValues, setError, setFocus, formState } = form
+  useEffect(() => {
+    if (props.consumeFocusName()) setFocus('name')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when this org's form mounts
+  }, [])
   const { errors, isDirty, dirtyFields } = formState
 
   // Report dirty state + the dirty field names (closed vocabulary) to the guard.
@@ -528,6 +546,13 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
     setPin({ status: 'draft', ...coords, source: pin.status === 'draft' && pin.source === 'exact' ? 'exact' : 'manual' })
     setGeo('idle')
   }
+  // After "Place pin at map center", focus moves to "Confirm pin" once it renders.
+  const focusConfirmAfterPlace = useRef(false)
+  useEffect(() => {
+    if (!focusConfirmAfterPlace.current || pin.status !== 'draft') return
+    focusConfirmAfterPlace.current = false
+    confirmPinRef.current?.focus()
+  }, [pin])
   const pinCoords = pin.status === 'none' || pin.status === 'removed' ? null : { lng: pin.lng, lat: pin.lat }
   const pinMessage = (() => {
     if (geo === 'finding') return tr('locFinding')
@@ -710,10 +735,14 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                   {nameErr}
                 </p>
               )}
-              {dupes.length > 0 && (
-                <div id={`${uid}-dupe`} role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  <p>{formatMessage(tr('dupWarning'), { name: dupes[0].name })}</p>
-                  {requestSwitch && dupes[0].org_type !== 'business' && (
+              {/* Always mounted so the polite status announces when its text appears. */}
+              <div
+                id={`${uid}-dupe`}
+                role="status"
+                className={dupes.length > 0 ? 'mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900' : 'sr-only'}
+              >
+                {dupes.length > 0 && <p>{formatMessage(tr('dupWarning'), { name: dupes[0].name })}</p>}
+                {dupes.length > 0 && requestSwitch && dupes[0].org_type !== 'business' && (
                     <button
                       type="button"
                       className={`mt-2 ${SECONDARY}`}
@@ -725,8 +754,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                       {tr('dupEditExisting')}
                     </button>
                   )}
-                </div>
-              )}
+              </div>
             </div>
             <div>
               <label htmlFor={`${uid}-type`} className={LABEL}>
@@ -826,7 +854,14 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={SECONDARY} onClick={findOnMap} disabled={geo === 'finding'}>
+              <button
+                type="button"
+                className={SECONDARY}
+                aria-disabled={geo === 'finding' || undefined}
+                onClick={() => {
+                  if (geo !== 'finding') void findOnMap()
+                }}
+              >
                 {geo === 'finding' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MapPin className="h-4 w-4" aria-hidden="true" />}
                 {tr('locFind')}
               </button>
@@ -866,8 +901,13 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               pin={pinCoords}
               recenterKey={recenterKey}
               onPlace={placePin}
-              label={tr('locMapLabel')}
+              label={tr('mapTitle')}
+              instructions={tr('locMapLabel')}
               placeCenterLabel={tr('locPlaceCenter')}
+              mapLocale={{ title: tr('mapTitle'), zoomIn: tr('mapZoomIn'), zoomOut: tr('mapZoomOut') }}
+              onPlacedAtCenter={() => {
+                focusConfirmAfterPlace.current = true
+              }}
               approximate={pin.status === 'draft' && pin.source === 'approximate'}
             />
             {pinErr && (
@@ -1011,10 +1051,27 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
           {saveError}
         </p>
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={requestClose} disabled={saving}>
+          <button
+            type="button"
+            className={SECONDARY}
+            aria-disabled={saving || undefined}
+            onClick={() => {
+              if (!saving) requestClose()
+            }}
+          >
             {tr('panelCancel')}
           </button>
-          <button type="submit" form={formId} className={PRIMARY} disabled={saving} aria-busy={saving || undefined}>
+          <button
+            type="submit"
+            form={formId}
+            className={PRIMARY}
+            aria-disabled={saving || undefined}
+            aria-busy={saving || undefined}
+            onClick={(e) => {
+              // Stays focusable while saving; a second press is ignored (and single-flighted anyway).
+              if (saving) e.preventDefault()
+            }}
+          >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {saving ? tr('panelSaving') : tr('panelSave')}
           </button>

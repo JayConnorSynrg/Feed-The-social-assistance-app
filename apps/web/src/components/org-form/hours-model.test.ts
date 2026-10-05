@@ -153,6 +153,7 @@ describe('accessible control names', () => {
     copyAll: 'Copy to all days',
     add: 'Add hours',
     open24: 'Open 24 hours',
+    setHours: 'Set hours',
     intervalName: (d: string, n: number) => `${d}, hours ${n}`,
   }
   it('one interval: names carry the day', () => {
@@ -161,6 +162,9 @@ describe('accessible control names', () => {
     expect(n.add).toBe('Monday: Add hours')
     expect(n.copyWeekdays).toBe('Monday: Copy to weekdays')
     expect(n.open24).toBe('Monday: Open 24 hours')
+    expect(n.setHours).toBe('Monday: Set hours')
+    // The switch name is the visible day label, not a state phrase that contradicts "Closed".
+    expect(n.toggle).toBe('Monday')
   })
   it('several intervals: every Opens/Closes/Remove name is unique', () => {
     const a = hoursControlNames({ day: 'Monday', index: 0, count: 2, label })

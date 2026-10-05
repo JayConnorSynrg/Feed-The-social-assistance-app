@@ -10,7 +10,7 @@
 // via admin_set_org_active, reverted on failure) and View public page (active orgs only). The
 // existing membership roster stays available as a row expansion.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { DropdownMenu as Menu } from 'radix-ui'
 import { createClient } from '@/lib/supabase/client'
@@ -31,6 +31,7 @@ import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-fo
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
 import { orgTypeKey } from '@/components/org-form/org-labels'
+import { finishToggle, startToggle } from './org-toggle-inflight'
 
 type MemberRole = 'admin' | 'member'
 
@@ -75,7 +76,13 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
   const [reload, setReload] = useState(0)
   const [confirm, setConfirm] = useState<ConfirmTarget | null>(null)
   const [toggleError, setToggleError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
+  // A toggle result, shown until the shell posts a newer notice (e.g. after a save).
+  const [toggleNotice, setToggleNotice] = useState<{ text: string; over: string | null } | null>(null)
+  const noticeRef = useRef(notice)
+  useEffect(() => {
+    noticeRef.current = notice
+  }, [notice])
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -99,15 +106,18 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
   const applyToggle = useCallback(
     async ({ org, next }: ConfirmTarget) => {
       setToggleError(null)
-      setBusyId(org.id)
+      setToggleNotice(null)
+      setBusyIds((s) => startToggle(s, org.id))
       const previous = org.is_active
       setOrgs((rows) => rows.map((r) => (r.id === org.id ? { ...r, is_active: next } : r)))
       const res = await adminSetOrgActive(supabase, org.id, next)
       if (!res.ok) {
         setOrgs((rows) => rows.map((r) => (r.id === org.id ? { ...r, is_active: previous } : r)))
         setToggleError(formatMessage(tr('toggleFailed'), { name: org.name }))
+      } else {
+        setToggleNotice({ text: formatMessage(tr(next ? 'orgReactivated' : 'orgDeactivated'), { name: org.name }), over: noticeRef.current })
       }
-      setBusyId(null)
+      setBusyIds((s) => finishToggle(s, org.id))
     },
     [supabase, tr]
   )
@@ -131,7 +141,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
     <div dir={dir(locale)} lang={locale}>
       {header}
       <p aria-live="polite" className="mb-3 text-sm font-medium text-brand empty:hidden">
-        {notice}
+        {toggleNotice && toggleNotice.over === notice ? toggleNotice.text : notice}
       </p>
       {toggleError && (
         <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -210,23 +220,23 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                         {tr('actionMembers')}
                         <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
                       </button>
-                      <Menu.Root>
+                      <Menu.Root dir={dir(locale)}>
                         <Menu.Trigger asChild>
                           <button
                             id={moreButtonId(org.id)}
                             type="button"
                             className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-500 bg-white text-stone-700 hover:bg-stone-100 aria-disabled:opacity-60 ${FOCUS_RING}`}
                             aria-label={formatMessage(tr('actionMore'), { name: org.name })}
-                            aria-disabled={busyId === org.id || undefined}
+                            aria-disabled={busyIds.has(org.id) || undefined}
                             onPointerDown={(e) => {
                               // Stays focusable while the toggle runs; just does not open.
-                              if (busyId === org.id) e.preventDefault()
+                              if (busyIds.has(org.id)) e.preventDefault()
                             }}
                             onKeyDown={(e) => {
-                              if (busyId === org.id && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) e.preventDefault()
+                              if (busyIds.has(org.id) && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) e.preventDefault()
                             }}
                           >
-                            {busyId === org.id ? (
+                            {busyIds.has(org.id) ? (
                               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                             ) : (
                               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -234,7 +244,10 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                           </button>
                         </Menu.Trigger>
                         <Menu.Portal>
+                          {/* Portaled under <body>, outside the lang wrapper: set lang here. Its dir
+                              comes from Menu.Root. */}
                           <Menu.Content
+                            lang={locale}
                             align="end"
                             sideOffset={4}
                             className="z-50 min-w-[12rem] rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
@@ -396,7 +409,8 @@ function OrgMembers({ orgId }: { orgId: string }) {
   )
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+    // The roster is English-only for now; mark it so screen readers do not read it as the admin locale.
+    <div lang="en" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
       <div className="mb-3 flex flex-wrap gap-2">
         <Input
           value={addUserId}

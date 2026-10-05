@@ -42,6 +42,8 @@ describe('org screens a11y wiring', () => {
     let seen = 0
     for (const f of FILES) {
       for (const tag of tagsWithDir(read(f))) {
+        // Menu.Root renders no element; its dir reaches the portaled Menu.Content (checked below).
+        if (tag.startsWith('<Menu.Root')) continue
         seen++
         expect(tag, f).toMatch(/\blang=\{/)
       }
@@ -67,5 +69,23 @@ describe('org screens a11y wiring', () => {
     const list = read('app/(admin)/moderation/orgs-section.tsx')
     expect(list).toMatch(/id=\{moreButtonId\(org\.id\)\}/)
     expect(list).toMatch(/document\.getElementById\(moreButtonId\(confirm\.org\.id\)\)\?\.focus\(\)/)
+  })
+  it('the portaled row menu sets lang and inherits dir from Menu.Root', () => {
+    const list = read('app/(admin)/moderation/orgs-section.tsx')
+    expect(list).toMatch(/<Menu\.Root dir=\{dir\(locale\)\}>/)
+    expect(list).toMatch(/<Menu\.Content\s+lang=\{locale\}/)
+  })
+
+  it('the English-only member roster is marked lang="en"', () => {
+    expect(read('app/(admin)/moderation/orgs-section.tsx')).toMatch(/<div lang="en" className="rounded-xl border/)
+  })
+
+  it('the pin map shows its instructions, describes itself with them, and translates Mapbox controls', () => {
+    const map = read('components/org-form/org-pin-map.tsx')
+    expect(map).toMatch(/<p id=\{instructionsId\}[^>]*>\s*\{instructions\}/)
+    expect(map).toMatch(/aria-describedby=\{instructionsId\}/)
+    expect(map).toMatch(/focus-within:ring-2 focus-within:ring-brand/)
+    expect(map).toMatch(/'NavigationControl\.ZoomIn': mapLocale\.zoomIn/)
+    expect(map).toMatch(/'Map\.Title': mapLocale\.title/)
   })
 })

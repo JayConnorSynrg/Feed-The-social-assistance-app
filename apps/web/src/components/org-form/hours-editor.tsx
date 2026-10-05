@@ -117,6 +117,7 @@ export function HoursEditor({ value, onChange, locale, notice }: HoursEditorProp
         copyAll: tr('hoursCopyAll'),
         add: tr('hoursAdd'),
         open24: tr('hours24'),
+        setHours: tr('hours24Undo'),
         intervalName: (d, n) => formatMessage(tr('hoursIntervalName'), { day: d, n }),
       },
     })
@@ -153,7 +154,7 @@ export function HoursEditor({ value, onChange, locale, notice }: HoursEditorProp
                 <Switch
                   checked={open}
                   onCheckedChange={(checked) => emit(setDayOpen(value, day, checked))}
-                  aria-label={formatMessage(tr('hoursDayOpen'), { day: name })}
+                  aria-label={dayNames.toggle}
                   className="data-[state=checked]:bg-brand data-[state=unchecked]:bg-stone-500"
                 />
                 <span aria-hidden="true">{open ? tr('hoursOpen') : tr('hoursClosed')}</span>
@@ -176,6 +177,7 @@ export function HoursEditor({ value, onChange, locale, notice }: HoursEditorProp
                 <button
                   type="button"
                   className={LINK_BUTTON}
+                  aria-label={dayNames.setHours}
                   onClick={() => emit(setDayOpen(setDayOpen(value, day, false), day, true))}
                 >
                   {tr('hours24Undo')}
