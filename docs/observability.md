@@ -17,6 +17,8 @@ receives app or user data, and the CSP allows no analytics host.
 | Uncaught client errors | `app/error.tsx`, `app/(admin)/error.tsx`, `global-error.tsx`, `PanelErrorBoundary`, window `error` / `unhandledrejection` capture | Supabase |
 | RPC database time | weekly `pg_stat_statements` snapshot → `app_query_stats_weekly` | Supabase |
 
+**Map provider:** the `<Map>` in `components/map/map-view.tsx` sets `performanceMetricsCollection={false}`, so mapbox-gl sends no performance telemetry. Mapbox's billing map-load event (one per map load, to `events.mapbox.com`) still fires because Mapbox's terms of service require it for metered billing.
+
 **Persisted wide events**: `withMetric` writes exactly one row to `public.app_logs` per outcome — an `info` row (`${operation}.complete`) on success and an `error` row (`${operation}.error`) on failure — each carrying `duration_ms` and a server-derived `user_id`. These rows are SQL-queryable, so latency percentiles and regressions are computable in-database (see below).
 
 **`logger.info` vs `logEvent`**: `logger.info` is console-only (lost in the browser). Use `logEvent(name, attrs)` for a named product event that must be stored; it writes one `info` row through the same sink.
@@ -29,7 +31,9 @@ receives app or user data, and the CSP allows no analytics host.
 - keeps only that event's registered label keys, with flat primitive values (strings ≤ 200 chars); other keys are dropped;
 - keeps `error_code` / `error_name` / `error_message` only on `error`-level rows, with `error_message` capped at 120 characters;
 - stamps `_source: 'client'` and derives `user_id` from the cookie session;
-- rate-limits per client IP (120/min) from the platform-set `x-real-ip` / `x-forwarded-for`; caller-supplied headers such as `x-federation-instance` do not affect the budget.
+- rate-limits per client IP (120/min) from the platform-set `x-real-ip` / `x-forwarded-for`; caller-supplied headers such as `x-federation-instance` do not affect the budget. **Trust assumption:** Vercel overwrites `x-real-ip` and `x-forwarded-for` with the connecting client's address, so a caller cannot choose its own key. A self-hosted deployment must put a reverse proxy in front that does the same (overwrite, never append-to, those headers); otherwise the limit is keyed on caller-supplied text.
+
+The server sink (`logger.warn` / `logger.error` / `withMetric` / `logEvent` on the server, and `request.error`) runs the same `sanitizeClientEvent` check before inserting: an unregistered event writes no row, and only registered keys survive.
 
 The registry was sourced from every static event name in `apps/web/src` (logger, withMetric `<op>.complete/.error`, privilegedRpc/privilegedFetch ops, logEvent) plus every distinct `app_logs.event` in production over the prior 30 days. Label keys exclude personal and free-text fields (user ids, emails, addresses, viewport bounds, file paths, raw query text). `src/lib/__tests__/event-registry.test.ts` re-scans the source on every test run and fails when an emitted event is missing — **add the registry entry in the same PR that first emits an event.**
 

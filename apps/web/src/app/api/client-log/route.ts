@@ -118,6 +118,8 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
     const trimmedEvent = event.trim()
     const checked = sanitizeClientEvent(trimmedEvent, level as 'info' | 'warn' | 'error', context)
     if (!checked.ok) {
+      // Console-only signal so a missing registry entry is visible in server logs.
+      console.warn(JSON.stringify({ level: 'warn', message: 'client-log.unknown_event', event: trimmedEvent.slice(0, 64) }))
       return NextResponse.json({ ok: false, error: 'unknown_event' }, { status: 400 })
     }
     // Tag as client-originated so queries can filter by source.

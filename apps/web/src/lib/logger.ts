@@ -32,6 +32,13 @@ import { runWithMetric, serializeError } from './with-metric-core.mjs'
  *
  * `duration_ms` (nullable) lands in its own column so latency is queryable per
  * operation. `level` accepts 'info' so completion wide-events persist (I1).
+ *
+ * Both paths enforce the same closed vocabulary: the browser route and the
+ * server branch below run sanitizeClientEvent (EVENT_REGISTRY), so an
+ * unregistered event writes no row and only registered label keys — flat
+ * primitives, strings capped, error_message <= 120 chars on error rows — are
+ * stored. The registry is imported lazily on the server so it stays out of the
+ * client bundle.
  */
 function sinkToSupabase(
   level: 'info' | 'warn' | 'error',
@@ -83,6 +90,9 @@ function sinkToSupabase(
           // Not in a request scope (e.g. cron/startup) — no correlation id.
         }
       }
+      const { sanitizeClientEvent } = await import('./event-registry')
+      const checked = sanitizeClientEvent(event, level, context)
+      if (!checked.ok) return // unregistered event: no row
       const { createClient } = await import('@supabase/supabase-js')
       const client = createClient(url, key, {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -90,7 +100,7 @@ function sinkToSupabase(
       await client.from('app_logs').insert({
         level,
         event,
-        context,
+        context: checked.context,
         request_id: rid,
         duration_ms: duration_ms ?? null,
       })

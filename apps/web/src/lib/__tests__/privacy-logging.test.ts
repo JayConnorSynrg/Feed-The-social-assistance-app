@@ -191,6 +191,18 @@ describe('no third-party telemetry vendor remains', () => {
     expect(hits(TRACK)).toEqual([])
   })
 
+  it('every react-map-gl <Map> disables mapbox-gl performance telemetry', () => {
+    const mapFiles = sourceFiles.filter((f) => /from 'react-map-gl/.test(fs.readFileSync(f, 'utf8')))
+    const openings: Array<{ file: string; tag: string }> = []
+    for (const f of mapFiles) {
+      const src = fs.readFileSync(f, 'utf8')
+      for (const m of src.matchAll(/<Map\b[\s\S]*?>/g)) openings.push({ file: path.relative(WEB, f), tag: m[0] })
+    }
+    // control: the scan sees the app's map
+    expect(openings.map((o) => o.file)).toContain('src/components/map/map-view.tsx')
+    expect(openings.filter((o) => !o.tag.includes('performanceMetricsCollection={false}')).map((o) => o.file)).toEqual([])
+  })
+
   it('no vendor package in apps/web/package.json, the root lockfile, or the observability doc', () => {
     const pkg = fs.readFileSync(path.join(WEB, 'package.json'), 'utf8')
     const lock = fs.readFileSync(path.join(REPO, 'package-lock.json'), 'utf8')

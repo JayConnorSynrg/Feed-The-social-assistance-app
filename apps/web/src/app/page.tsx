@@ -42,9 +42,17 @@ class PanelErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error: Error | null }
 > {
+  // The fallback message receives focus when it appears, so keyboard and
+  // screen-reader users land on it instead of a now-removed panel element.
+  private messageRef = React.createRef<HTMLParagraphElement>()
+
   constructor(props: { children: React.ReactNode }) {
     super(props)
     this.state = { hasError: false, error: null }
+  }
+
+  componentDidUpdate(_prevProps: { children: React.ReactNode }, prevState: { hasError: boolean }) {
+    if (this.state.hasError && !prevState.hasError) this.messageRef.current?.focus()
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -60,9 +68,15 @@ class PanelErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
-          <div className="text-3xl">🌾</div>
-          <p className="text-stone-600 text-sm">This panel encountered an error.</p>
+        <div role="alert" className="flex flex-col items-center justify-center h-64 gap-4 text-center p-6">
+          <div className="text-3xl" aria-hidden="true">🌾</div>
+          <p
+            ref={this.messageRef}
+            tabIndex={-1}
+            className="text-stone-600 text-sm rounded focus:outline-none focus:ring-2 focus:ring-lime-700 focus:ring-offset-2"
+          >
+            This panel encountered an error.
+          </p>
           <button
             className="text-xs text-lime-700 underline"
             onClick={() => this.setState({ hasError: false, error: null })}

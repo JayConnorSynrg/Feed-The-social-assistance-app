@@ -26,10 +26,8 @@
 
 import { MAX_ERROR_MESSAGE_LEN } from './with-metric-core.mjs'
 
-export { MAX_ERROR_MESSAGE_LEN }
-
 /** Error fields every error-level row may carry (set by logger.error / withMetric). */
-export const ERROR_LABEL_KEYS = ['error_code', 'error_name', 'error_message'] as const
+const ERROR_LABEL_KEYS = ['error_code', 'error_name', 'error_message'] as const
 
 export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   '[admin:overview] admin_add_user_note': [],
@@ -277,12 +275,12 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'notif.pref.read_failed': [],
   'notif.pref.write_failed': ['user_present'],
   'oauth.callback.cookies': [],
-  'oauth.callback.enter': ['allSearchParamKeys', 'errorParam', 'hasCode', 'hasError', 'host'],
+  'oauth.callback.enter': ['hasCode', 'hasDescription', 'hasError', 'host'],
   'oauth.callback.exchange_failed': ['code', 'status'],
   'oauth.callback.exchange_ok': ['hasSession'],
-  'oauth.callback.no_code': ['allSearchParamKeys', 'host'],
+  'oauth.callback.no_code': ['host'],
   'oauth.callback.no_session': ['hasUser'],
-  'oauth.callback.provider_error': [],
+  'oauth.callback.provider_error': ['has_description', 'provider_error'],
   'oauth.callback.session_identity': ['isAnonymous'],
   'oauth.callback.unexpected': ['host'],
   'oauth.start': ['provider'],
@@ -422,7 +420,7 @@ export type SanitizedEvent =
   | { ok: false; reason: 'unknown_event' }
 
 /**
- * Filter one client-submitted event against the registry. Unknown event -> rejected.
+ * Filter one event against the registry (used by /api/client-log AND the server sink). Unknown event -> rejected.
  * Known event -> only its registered label keys survive, values must be flat
  * primitives (strings capped at 200 chars), and the standard error fields are kept
  * only when `level` is 'error' (error_message capped at MAX_ERROR_MESSAGE_LEN).

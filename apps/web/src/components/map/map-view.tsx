@@ -196,6 +196,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         mapStyle="mapbox://styles/mapbox/streets-v12"
         style={{ width: '100%', height: '100%' }}
         attributionControl={false}
+        // First-party telemetry only: no mapbox-gl performance metrics to events.mapbox.com.
+        performanceMetricsCollection={false}
       >
         <NavigationControl position="top-right" />
         <GeolocateControl

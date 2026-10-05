@@ -13,7 +13,7 @@
 
 import { logger } from '@/lib/logger'
 
-export const DEDUP_WINDOW_MS = 60_000
+const DEDUP_WINDOW_MS = 60_000
 export const MAX_REPORTS_PER_SESSION = 20
 
 type Report = (event: 'client.window.error' | 'client.unhandled_rejection', error: unknown, kind: string) => void
