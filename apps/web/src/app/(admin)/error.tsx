@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
+import { retryWithFocus } from '@/lib/focus-after-reset'
 
 export default function AdminError({
   error,
@@ -54,7 +55,7 @@ export default function AdminError({
         )}
         <div className="flex gap-3 justify-center pt-2">
           <Button
-            onClick={() => reset()}
+            onClick={() => retryWithFocus(reset, 'admin-content')}
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             Try again

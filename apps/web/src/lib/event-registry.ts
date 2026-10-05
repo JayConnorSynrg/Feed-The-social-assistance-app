@@ -18,6 +18,9 @@
 // Label keys come from the same call sites plus the production context keys,
 // minus free-text and personal fields (user ids, emails, addresses, viewport
 // bounds, file paths, raw query text, raw error text outside error_message).
+// Events whose subject is a person (admin.user.*, admin.tier.set*, admin.notes.*,
+// admin.denied, admin.audit.*) carry no target_id: their request_id joins to the
+// durable admin_actions row, which already records the target.
 // src/lib/__tests__/event-registry.test.ts re-scans the source on every run and
 // fails when an emitted event is missing from this list.
 //
@@ -56,7 +59,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.checkin.kiosk.confirm': ['method', 'occurrence_id'],
   'admin.checkin.kiosk.walkin': ['household_size', 'occurrence_id'],
   'admin.community.tab.viewed': ['org_id'],
-  'admin.denied': ['action', 'code', 'request_id', 'target_id'],
+  'admin.denied': ['action', 'code', 'request_id'],
   'admin.error.boundary': ['digest', 'surface'],
   'admin.event.created': ['event_id', 'event_type', 'geocode_accuracy', 'org_id', 'rrule'],
   'admin.event.retired': ['event_id'],
@@ -65,12 +68,12 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.form_template.approve.complete': ['action', 'request_id', 'target_id'],
   'admin.form_template.approve.error': ['action', 'request_id', 'target_id'],
   'admin.hours.invalid': ['kind'],
-  'admin.notes.add.complete': ['request_id', 'target_id'],
-  'admin.notes.add.error': ['request_id', 'target_id'],
-  'admin.notes.delete.complete': ['request_id', 'target_id'],
-  'admin.notes.delete.error': ['request_id', 'target_id'],
-  'admin.notes.get.complete': ['request_id', 'target_id'],
-  'admin.notes.get.error': ['request_id', 'target_id'],
+  'admin.notes.add.complete': ['request_id'],
+  'admin.notes.add.error': ['request_id'],
+  'admin.notes.delete.complete': ['request_id'],
+  'admin.notes.delete.error': ['request_id'],
+  'admin.notes.get.complete': ['request_id'],
+  'admin.notes.get.error': ['request_id'],
   'admin.occurrence.cancel_failed': [],
   'admin.occurrence.cancelled': ['occurrence_id'],
   'admin.occurrence.created': ['event_id', 'occurrence_id', 'starts_at'],
@@ -113,24 +116,24 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.shell.org_switch': ['org_id'],
   'admin.shell.tab_switch': ['from_tab', 'org_id', 'to_tab'],
   'admin.tier.check_failed': ['code'],
-  'admin.tier.set': ['request_id', 'target_id', 'to'],
-  'admin.tier.set.complete': ['action', 'request_id', 'target_id'],
-  'admin.tier.set.error': ['action', 'request_id', 'target_id'],
-  'admin.user.ban': ['actor_tier', 'ban_duration', 'outcome', 'request_id', 'target_id'],
-  'admin.user.ban.complete': ['request_id', 'target_id'],
-  'admin.user.ban.denied': ['actor_tier', 'code', 'outcome', 'request_id', 'target_id'],
-  'admin.user.ban.error': ['request_id', 'target_id'],
+  'admin.tier.set': ['request_id', 'to'],
+  'admin.tier.set.complete': ['action', 'request_id'],
+  'admin.tier.set.error': ['action', 'request_id'],
+  'admin.user.ban': ['actor_tier', 'ban_duration', 'outcome', 'request_id'],
+  'admin.user.ban.complete': ['request_id'],
+  'admin.user.ban.denied': ['actor_tier', 'code', 'outcome', 'request_id'],
+  'admin.user.ban.error': ['request_id'],
   'admin.user.ban.failed': [],
-  'admin.user.ban.target_lookup': ['not_found', 'request_id', 'target_id'],
-  'admin.user.delete': ['actor_tier', 'outcome', 'request_id', 'target_id'],
-  'admin.user.delete.complete': ['request_id', 'target_id'],
-  'admin.user.delete.denied': ['actor_tier', 'code', 'outcome', 'request_id', 'target_id'],
-  'admin.user.delete.error': ['request_id', 'target_id'],
+  'admin.user.ban.target_lookup': ['not_found', 'request_id'],
+  'admin.user.delete': ['actor_tier', 'outcome', 'request_id'],
+  'admin.user.delete.complete': ['request_id'],
+  'admin.user.delete.denied': ['actor_tier', 'code', 'outcome', 'request_id'],
+  'admin.user.delete.error': ['request_id'],
   'admin.user.delete.failed': [],
-  'admin.user.delete.target_lookup': ['not_found', 'request_id', 'target_id'],
-  'admin.user.unban': ['actor_tier', 'ban_duration', 'outcome', 'request_id', 'target_id'],
-  'admin.user.unban.complete': ['request_id', 'target_id'],
-  'admin.user.unban.error': ['request_id', 'target_id'],
+  'admin.user.delete.target_lookup': ['not_found', 'request_id'],
+  'admin.user.unban': ['actor_tier', 'ban_duration', 'outcome', 'request_id'],
+  'admin.user.unban.complete': ['request_id'],
+  'admin.user.unban.error': ['request_id'],
   'allow_messages.changed': ['allow_messages'],
   'allow_messages.read_failed': [],
   'allow_messages.write_failed': ['user_present'],
@@ -427,7 +430,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'wizard.submit.error': [],
 }
 
-export type SanitizedEvent =
+type SanitizedEvent =
   | { ok: true; context: Record<string, string | number | boolean | null> }
   | { ok: false; reason: 'unknown_event' }
 

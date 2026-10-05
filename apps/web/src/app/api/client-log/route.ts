@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { withRateLimit } from '@/middleware/federation-rate-limit'
 import { sanitizeClientEvent } from '@/lib/event-registry'
+import { safeRequestId } from '@/lib/request-id'
 
 // Maximum body size accepted — prevents oversized payloads from being logged.
 const MAX_BODY_BYTES = 4096
@@ -63,8 +64,6 @@ async function deriveUserId(req: NextRequest): Promise<string | null> {
  * user operation across client logs and edge function logs. Sanitized with a
  * regex before insertion into app_logs.request_id.
  */
-/** Regex for a safe correlation id: alphanumeric characters and hyphens only. */
-const REQUEST_ID_RE = /^[a-zA-Z0-9-]+$/
 export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse> => {
   try {
     // Size-cap: reject anything over MAX_BODY_BYTES
@@ -92,8 +91,7 @@ export const POST = withRateLimit(async (req: NextRequest): Promise<NextResponse
 
     // Sanitize the optional correlation id — accept alphanumeric + hyphens, max 64 chars.
     const rawId = typeof opId === 'string' ? opId : typeof request_id === 'string' ? request_id : undefined
-    const sanitizedRequestId: string | undefined =
-      rawId && rawId.length <= 64 && REQUEST_ID_RE.test(rawId) ? rawId : undefined
+    const sanitizedRequestId = safeRequestId(rawId)
 
     // Sanitize duration_ms — accept a finite non-negative number within bounds only.
     const sanitizedDurationMs: number | null =

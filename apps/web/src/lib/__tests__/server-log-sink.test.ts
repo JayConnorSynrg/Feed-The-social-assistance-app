@@ -74,6 +74,51 @@ describe('onRequestError — one PII-free request.error row', () => {
   })
 })
 
+describe('request_id — only a well-formed id is ever stored', () => {
+  const ATTACK = '<script>alert(1)</script>' + 'a@b.org'.repeat(70) // 515 chars
+
+  it('onRequestError with an attacker x-request-id stores the row with no request_id', async () => {
+    expect(ATTACK.length).toBeGreaterThan(500)
+    await onRequestError(
+      new Error('boom'),
+      { path: '/x', method: 'GET', headers: { 'x-request-id': ATTACK } },
+      { routePath: '/x', routeType: 'render', routerKind: 'App Router', revalidateReason: undefined }
+    )
+    await settle(1)
+    expect(insertCalls.n).toBe(1)
+    expect(inserted[0].request_id).toBeUndefined()
+    expect(JSON.stringify(inserted[0])).not.toMatch(/script|a@b\.org/)
+  })
+
+  it('control: a well-formed id is kept', async () => {
+    logger.error('post.image.upload', new Error('boom'), undefined, { requestId: 'abc-123' })
+    await settle(1)
+    expect(inserted[0].request_id).toBe('abc-123')
+  })
+
+  it.each([['<b>x</b>'], ['a@b.org'], ['abc_123']])('a short id with a disallowed character is not stored: %s', async (bad) => {
+    logger.error('post.image.upload', new Error('boom'), undefined, { requestId: bad })
+    await settle(1)
+    expect(inserted[0].request_id).toBeUndefined()
+  })
+
+  it('onRequestError with a short markup x-request-id stores no request_id', async () => {
+    await onRequestError(
+      new Error('boom'),
+      { path: '/x', method: 'GET', headers: { 'x-request-id': '<b>x</b>' } },
+      { routePath: '/x', routeType: 'render', routerKind: 'App Router', revalidateReason: undefined }
+    )
+    await settle(1)
+    expect(inserted[0].request_id).toBeUndefined()
+  })
+
+  it('a 65-char id is rejected', async () => {
+    logger.error('post.image.upload', new Error('boom'), undefined, { requestId: 'a'.repeat(65) })
+    await settle(1)
+    expect(inserted[0].request_id).toBeUndefined()
+  })
+})
+
 describe('server logger.error — closed vocabulary + no stack', () => {
   it('an unregistered event writes no row', async () => {
     logger.error('x', new Error('boom'))

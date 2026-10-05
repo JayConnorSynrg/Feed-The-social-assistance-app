@@ -44,7 +44,7 @@ export async function DELETE(
       p_actor: user.id, p_action: 'user.delete', p_target_type: 'user', p_target_id: target,
       p_outcome: outcome, p_reason: reason, p_details: {}, p_request_id: rid ?? null,
     })
-    if (auditErr) logger.error('admin.audit.write_failed', { action: 'user.delete', outcome, target_id: target, error: auditErr.message, request_id: rid ?? null })
+    if (auditErr) logger.error('admin.audit.write_failed', { action: 'user.delete', outcome, error: auditErr.message, request_id: rid ?? null })
   }
 
   const { data: targetRow, error: targetErr } = await adminClient
@@ -52,7 +52,7 @@ export async function DELETE(
   if (targetErr) {
     const notFound = targetErr.code === 'PGRST116'
     await audit('error', notFound ? 'not_found' : `target_lookup:${targetErr.message}`)
-    logger.warn('admin.user.delete.target_lookup', { target_id: target, not_found: notFound, error: targetErr.message, request_id: rid ?? null })
+    logger.warn('admin.user.delete.target_lookup', { not_found: notFound, error: targetErr.message, request_id: rid ?? null })
     return NextResponse.json({ error: notFound ? 'User not found' : 'Could not verify target account' }, { status: notFound ? 404 : 500 })
   }
   const targetTier = (targetRow?.admin_tier as AdminTier | null) ?? null
@@ -60,18 +60,18 @@ export async function DELETE(
   const decision = decideUserAction(actorTier, targetTier, user.id, target)
   if (!decision.allowed) {
     await audit('denied', decision.code ?? 'denied')
-    logger.warn('admin.user.delete.denied', { actor_tier: actorTier, target_id: target, outcome: 'denied', code: decision.code ?? 'denied', request_id: rid ?? null })
+    logger.warn('admin.user.delete.denied', { actor_tier: actorTier, outcome: 'denied', code: decision.code ?? 'denied', request_id: rid ?? null })
     return NextResponse.json({ error: 'Forbidden', code: decision.code }, { status: decision.code === 'self' ? 400 : 403 })
   }
 
   const { error } = await adminClient.auth.admin.deleteUser(target)
   if (error) {
     await audit('error', error.message)
-    logger.error('admin.user.delete.failed', { target_id: target, outcome: 'error', error: error.message, request_id: rid ?? null })
+    logger.error('admin.user.delete.failed', { outcome: 'error', error: error.message, request_id: rid ?? null })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   await audit('ok', null)
-  logger.info('admin.user.delete', { actor_tier: actorTier, target_id: target, outcome: 'ok', request_id: rid ?? null })
+  logger.info('admin.user.delete', { actor_tier: actorTier, outcome: 'ok', request_id: rid ?? null })
   return NextResponse.json({ success: true })
 }
