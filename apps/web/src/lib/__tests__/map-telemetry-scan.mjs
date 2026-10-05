@@ -6,10 +6,15 @@
 // default, named, `X as Y`, `default as Y` and namespace imports, single or
 // double quotes — then checks:
 //   - every JSX opening tag of a react-map-gl Map component carries
-//     performanceMetricsCollection={false}, placed after any {...spread}. The
-//     tag is parsed brace/string-aware, so `=>` inside a prop does not end it.
-//   - every `new <mapbox-gl Map>(...)` passes performanceMetricsCollection: false.
-//   - a dynamic import() of any of these modules is reported (not statically checkable).
+//     performanceMetricsCollection={false} as a top-level attribute, placed
+//     after any {...spread}. The tag is parsed brace/string-aware, so `=>`
+//     inside a prop does not end it, and text inside a string or a nested
+//     expression never counts as the attribute.
+//   - every `new <mapbox-gl Map>(...)` passes an object literal whose top-level
+//     `performanceMetricsCollection: false` is not followed by a `...spread`.
+//   - every dynamic import() — `import(` with any spacing — is reported when its
+//     argument is not a plain string literal (not statically checkable) or when
+//     the literal names one of these modules.
 //   - so is any re-export (`export … from`, incl. `export *`) or require() of them,
 //     because the Map component would then reach JSX under a name this file
 //     cannot see.
@@ -24,7 +29,8 @@ import { stripComments } from './event-scan.mjs'
 const REACT_MAP_MODULE = /^(react-map-gl(\/[\w-]+)?|@vis\.gl\/react-mapbox|@vis\.gl\/react-maplibre)$/
 const MAPBOX_GL_MODULE = /^mapbox-gl(\/[\w-]+)?$/
 const IMPORT_RE = /import\s+(?!type\s)([\s\S]*?)\s+from\s+(['"])([^'"]+)\2/g
-const DYNAMIC_IMPORT_RE = /import\(\s*(['"`])([^'"`]+)\1\s*\)/g
+const DYNAMIC_IMPORT_RE = /(?<![\w$.])import\s*(?=\()/g
+const PLAIN_LITERAL_RE = /^(['"])([^'"\\]*)\1$|^`([^`$\\]*)`$/
 const REEXPORT_RE = /export\s+(?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*(['"])([^'"]+)\1/g
 const REQUIRE_RE = /require\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g
 
@@ -163,6 +169,76 @@ function inCodePosition(src, i) {
 const tagBefore = (src, i) => /<\/?\s*$/.test(src.slice(Math.max(0, i - 8), i))
 const newBefore = (src, i) => /(?:^|[^\w$.])new\s+$/.test(src.slice(Math.max(0, i - 12), i))
 
+/** Split `text` on commas at bracket depth 0. */
+function splitTopLevel(text) {
+  const parts = []
+  let depth = 0
+  let cur = ''
+  for (const ch of text) {
+    if ('([{'.includes(ch)) depth++
+    else if (')]}'.includes(ch)) depth--
+    if (ch === ',' && depth === 0) {
+      parts.push(cur)
+      cur = ''
+    } else cur += ch
+  }
+  if (cur.trim()) parts.push(cur)
+  return parts
+}
+
+/**
+ * The LAST top-level (brace depth 0) `name={…}` attribute of a string-blanked
+ * opening tag: { value, index } or null. Text inside an attribute expression or
+ * a nested object is at depth >= 1 and never matches.
+ */
+function topLevelJsxProp(tag, name) {
+  let depth = 0
+  let found = null
+  for (let i = 0; i < tag.length; i++) {
+    const ch = tag[i]
+    if (ch === '{') depth++
+    else if (ch === '}') depth--
+    else if (depth === 0 && tag.startsWith(name, i) && !/[\w$]/.test(tag[i - 1] ?? '')) {
+      const m = tag.slice(i).match(new RegExp(`^${name}\\s*=\\s*\\{`))
+      if (!m) continue
+      let d = 0
+      let j = i + m[0].length - 1
+      for (; j < tag.length; j++) {
+        if (tag[j] === '{') d++
+        else if (tag[j] === '}' && --d === 0) break
+      }
+      found = { value: tag.slice(i + m[0].length, j).trim(), index: i }
+      i = j
+    }
+  }
+  return found
+}
+
+/**
+ * Verdict for `new Map(<args>)` (string-blanked args incl. parens): null when the
+ * first argument is an object literal whose LAST top-level
+ * performanceMetricsCollection is `false` and no `...spread` follows it.
+ */
+function ctorOptionVerdict(args) {
+  const first = (splitTopLevel(args.slice(1, -1))[0] ?? '').trim()
+  if (!first.startsWith('{') || !first.endsWith('}')) {
+    return 'new mapbox-gl Map without an inline options object (not statically checkable)'
+  }
+  const props = splitTopLevel(first.slice(1, -1)).map((p) => p.trim())
+  let optAt = -1
+  let optValue = null
+  props.forEach((p, k) => {
+    const pm = p.match(/^['"]?performanceMetricsCollection['"]?\s*:\s*([\s\S]+)$/)
+    if (pm) {
+      optAt = k
+      optValue = pm[1].trim()
+    }
+  })
+  if (optAt < 0 || optValue !== 'false') return 'new mapbox-gl Map without performanceMetricsCollection: false'
+  if (props.slice(optAt + 1).some((p) => p.startsWith('...'))) return 'new mapbox-gl Map: a later ...spread can override performanceMetricsCollection'
+  return null
+}
+
 /**
  * @param {Array<{ file: string, src: string }>} files
  * @returns {{ uses: Array<{ file: string, kind: string, text: string }>, violations: Array<{ file: string, reason: string, text: string }> }}
@@ -203,8 +279,21 @@ export function scanMapTelemetry(files) {
     }
     code = blankStrings(code)
 
+    // Dynamic import(): matched in the string-blanked code (so `import(` inside a
+    // string is ignored), argument read from the comment-stripped source.
+    DYNAMIC_IMPORT_RE.lastIndex = 0
+    while ((m = DYNAMIC_IMPORT_RE.exec(code))) {
+      const open = code.indexOf('(', m.index)
+      const argText = readParens(src, open).slice(1, -1).trim()
+      const lit = argText.match(PLAIN_LITERAL_RE)
+      if (!lit) {
+        violations.push({ file, reason: 'dynamic import with a non-literal argument (not statically checkable)', text: `import(${argText})` })
+      } else if (isMapModule(lit[2] ?? lit[3])) {
+        violations.push({ file, reason: 'dynamic import of a map library (not statically checkable)', text: `import(${argText})` })
+      }
+    }
+
     for (const [re, reason] of [
-      [DYNAMIC_IMPORT_RE, 'dynamic import of a map library (not statically checkable)'],
       [REEXPORT_RE, 're-export of a map library (its Map would escape this check)'],
       [REQUIRE_RE, 'require() of a map library (not statically checkable)'],
     ]) {
@@ -214,21 +303,23 @@ export function scanMapTelemetry(files) {
       }
     }
 
+    // Both checks read the string-blanked `code`, so a matching text inside a
+    // string literal never counts.
     const checkTag = (name, start, matchLen) => {
-      const tag = src.slice(start, start + matchLen) + readOpeningTag(src, start + matchLen)
-      uses.push({ file, kind: 'jsx', text: tag.replace(/\s+/g, ' ').slice(0, 200) })
-      const prop = tag.match(/\bperformanceMetricsCollection\s*=\s*\{\s*(\w+)\s*\}/)
-      if (!prop) violations.push({ file, reason: 'missing performanceMetricsCollection={false}', text: tag })
-      else if (prop[1] !== 'false') violations.push({ file, reason: `performanceMetricsCollection={${prop[1]}}`, text: tag })
-      else if (lastSpreadIndex(tag) > tag.indexOf(prop[0])) violations.push({ file, reason: 'a later {...spread} can override the prop', text: tag })
+      const tag = code.slice(start, start + matchLen) + readOpeningTag(code, start + matchLen)
+      const text = src.slice(start, start + tag.length)
+      uses.push({ file, kind: 'jsx', text: text.replace(/\s+/g, ' ').slice(0, 200) })
+      const prop = topLevelJsxProp(tag, 'performanceMetricsCollection')
+      if (!prop) violations.push({ file, reason: 'missing performanceMetricsCollection={false}', text })
+      else if (prop.value !== 'false') violations.push({ file, reason: `performanceMetricsCollection={${prop.value}}`, text })
+      else if (lastSpreadIndex(tag) > prop.index) violations.push({ file, reason: 'a later {...spread} can override the prop', text })
     }
     const checkCtor = (start, matchLen) => {
-      const args = readParens(src, start + matchLen)
-      const text = src.slice(start, start + matchLen) + args
+      const args = readParens(code, start + matchLen)
+      const text = src.slice(start, start + matchLen + args.length)
       uses.push({ file, kind: 'ctor', text: text.replace(/\s+/g, ' ').slice(0, 200) })
-      if (!/\bperformanceMetricsCollection\s*:\s*false\b/.test(args)) {
-        violations.push({ file, reason: 'new mapbox-gl Map without performanceMetricsCollection: false', text })
-      }
+      const verdict = ctorOptionVerdict(args)
+      if (verdict) violations.push({ file, reason: verdict, text })
     }
     const refViolation = (text) =>
       violations.push({ file, reason: 'Map binding referenced outside a checked JSX tag / new expression', text })

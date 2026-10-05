@@ -31,6 +31,22 @@ describe('PanelErrorBoundary focus', () => {
     expect(msg.focusCalls).toHaveLength(0)
   })
 
+  it('error caught on update (no error -> error): focuses the fallback message', () => {
+    const b = boundary(true)
+    const msg = fakeEl('msg', { tabindex: '-1' })
+    setRef(b.messageRef, asEl(msg))
+    b.componentDidUpdate({ children: null }, { hasError: false, error: null })
+    expect(msg.focusCalls).toHaveLength(1)
+  })
+
+  it('update while already showing the error: does not re-focus', () => {
+    const b = boundary(true)
+    const msg = fakeEl('msg', { tabindex: '-1' })
+    setRef(b.messageRef, asEl(msg))
+    b.componentDidUpdate({ children: null }, { hasError: true, error: new Error('x') })
+    expect(msg.focusCalls).toHaveLength(0)
+  })
+
   it('retry succeeds: message gone, focus goes to the returned panel h1', () => {
     const b = boundary(true)
     const panelH1 = fakeEl('panel-h1')

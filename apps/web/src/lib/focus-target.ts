@@ -7,8 +7,10 @@
 //   3. otherwise `host` itself.
 // A target without a tabindex gets a temporary tabindex="-1" — a heading or a
 // container is not focusable otherwise — removed again on blur, so it never
-// becomes a permanent Tab or click target. Scrolling is suppressed only when the
-// whole container is the target. Returns the element focused, or null.
+// becomes a permanent Tab or click target; if focus does not take (e.g. the
+// element is hidden), that temporary tabindex is removed at once. Scrolling is
+// suppressed only when the whole container is the target. Returns the element
+// focus was moved to, or null.
 
 export function focusWithin(host: HTMLElement | null | undefined, preferred?: HTMLElement | null): HTMLElement | null {
   if (preferred?.isConnected) {
@@ -17,11 +19,16 @@ export function focusWithin(host: HTMLElement | null | undefined, preferred?: HT
   }
   if (!host?.isConnected) return null
   const target = host.querySelector<HTMLElement>('h1') ?? host
-  if (!target.hasAttribute('tabindex')) {
+  const added = !target.hasAttribute('tabindex')
+  if (added) {
     target.setAttribute('tabindex', '-1')
     target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true })
   }
   if (target === host) target.focus({ preventScroll: true })
   else target.focus()
+  if (added && typeof document !== 'undefined' && document.activeElement !== target) {
+    target.removeAttribute('tabindex') // focus did not take: leave no tabindex behind
+    return null
+  }
   return target
 }

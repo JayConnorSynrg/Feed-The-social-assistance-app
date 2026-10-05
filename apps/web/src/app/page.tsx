@@ -4,7 +4,6 @@
 // Root page - renders the FEED app with floating card layout
 // Auth-aware: shows real user data when authenticated
 
-import React from 'react'
 import dynamic from 'next/dynamic'
 import { FeedShell, usePanelContext } from '@/components/layout/feed-shell'
 import { ChatPanel } from '@/components/panels/chat-panel'

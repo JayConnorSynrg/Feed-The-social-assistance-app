@@ -15,7 +15,14 @@ export type FakeEl = {
   querySelector: (sel: string) => FakeEl | null
 }
 
-export function fakeEl(name: string, opts: { connected?: boolean; tabindex?: string; h1?: FakeEl | null } = {}): FakeEl {
+/**
+ * `takesFocus` (default true): focus() makes the element document.activeElement
+ * when a document is stubbed; false models an element focus cannot land on.
+ */
+export function fakeEl(
+  name: string,
+  opts: { connected?: boolean; tabindex?: string; h1?: FakeEl | null; takesFocus?: boolean } = {}
+): FakeEl {
   const e: FakeEl = {
     name,
     isConnected: opts.connected ?? true,
@@ -24,7 +31,11 @@ export function fakeEl(name: string, opts: { connected?: boolean; tabindex?: str
     focusCalls: [],
     h1: opts.h1 ?? null,
     blurHandlers: [],
-    focus: (o) => { e.focusCalls.push(o) },
+    focus: (o) => {
+      e.focusCalls.push(o)
+      const doc = (globalThis as { document?: { activeElement?: unknown } }).document
+      if (doc && opts.takesFocus !== false) doc.activeElement = e
+    },
     hasAttribute: (k) => e.attrs.has(k),
     setAttribute: (k, v) => { e.attrs.set(k, v) },
     removeAttribute: (k) => { e.attrs.delete(k) },
