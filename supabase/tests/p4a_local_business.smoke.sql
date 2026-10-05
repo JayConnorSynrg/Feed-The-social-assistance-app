@@ -2,7 +2,8 @@
 -- Behavioural smoke for the P4a local-business data plane. Every check is a rolled-back
 -- WRITE that asserts observed behaviour (never a text/ILIKE grep on a function body).
 --
--- Run against a database that ALREADY has migration 20261012000000 applied, e.g.:
+-- Run against a database that ALREADY has migrations 20261012000000 and 20261017000000
+-- (businesses_in_bounds is_active filter, checked by the MAP-LEAK block) applied, e.g.:
 --   psql "$DATABASE_URL" -f supabase/tests/p4a_local_business.smoke.sql
 --   -- or via the Management API SQL endpoint (single request; it wraps one txn).
 --
@@ -119,5 +120,40 @@ BEGIN
   RAISE NOTICE 'PASS p4a_local_business smoke: INV1..INV5 + INV7 audit all held';
 END
 $smoke$;
+
+-- ============ MAP-LEAK — businesses_in_bounds returns ACTIVE approved located businesses only ============
+-- (20261017000000) Seeded as superuser in a far-south test envelope; read as anon, the public map surface.
+SET LOCAL search_path TO public, extensions, pg_temp;
+
+DO $mapleak$
+DECLARE
+  v_active   uuid;
+  v_inactive uuid;
+  v_pending  uuid;
+BEGIN
+  RESET ROLE;
+  INSERT INTO public.organizations (name, org_type, status, is_active, location)
+  VALUES ('SMOKE Map Active', 'business', 'approved', true,
+          st_setsrid(st_makepoint(-179.75, -89.75), 4326)::geography) RETURNING id INTO v_active;
+  INSERT INTO public.organizations (name, org_type, status, is_active, location)
+  VALUES ('SMOKE Map Inactive', 'business', 'approved', false,
+          st_setsrid(st_makepoint(-179.75, -89.75), 4326)::geography) RETURNING id INTO v_inactive;
+  INSERT INTO public.organizations (name, org_type, status, is_active, location)
+  VALUES ('SMOKE Map Pending', 'business', 'pending', true,
+          st_setsrid(st_makepoint(-179.75, -89.75), 4326)::geography) RETURNING id INTO v_pending;
+
+  PERFORM set_config('request.jwt.claims', json_build_object('role','anon')::text, true);
+  SET LOCAL ROLE anon;
+  ASSERT EXISTS (SELECT 1 FROM public.businesses_in_bounds(-179.8, -89.8, -179.7, -89.7) WHERE id = v_active),
+    'MAP-LEAK: an active approved located business MUST appear';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.businesses_in_bounds(-179.8, -89.8, -179.7, -89.7) WHERE id = v_inactive),
+    'MAP-LEAK: an inactive (deactivated) business must NOT appear';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.businesses_in_bounds(-179.8, -89.8, -179.7, -89.7) WHERE id = v_pending),
+    'MAP-LEAK: a pending business must NOT appear';
+  RESET ROLE;
+
+  RAISE NOTICE 'PASS p4a map-leak smoke: businesses_in_bounds excludes inactive + pending, keeps active approved';
+END
+$mapleak$;
 
 ROLLBACK;
