@@ -72,6 +72,18 @@ describe('POST /api/client-log — event allowlist', () => {
   })
 })
 
+describe('POST /api/client-log — request_id', () => {
+  it('stores only well-formed ids (1-64 chars of [A-Za-z0-9-]); every other id is dropped', async () => {
+    const ids = ['<b>x</b>', 'a@b.org', 'abc_123', 'a'.repeat(65), 'ok-ID-9', 'a'.repeat(64)]
+    let n = 0
+    for (const id of ids) {
+      await POST(req({ level: 'info', event: 'feed.load.complete', context: {}, request_id: id }, { 'x-real-ip': `192.0.2.${++n}` }))
+    }
+    await POST(req({ level: 'info', event: 'feed.load.complete', context: {}, opId: '<i>' }, { 'x-real-ip': '192.0.2.50' }))
+    expect(inserted.map((r) => r.request_id ?? 'UNDEF')).toEqual(['UNDEF', 'UNDEF', 'UNDEF', 'UNDEF', 'ok-ID-9', 'a'.repeat(64), 'UNDEF'])
+  })
+})
+
 describe('POST /api/client-log — rate limit keyed by client IP only', () => {
   it('a client rotating x-federation-instance still hits its per-IP limit (120/min)', async () => {
     const statuses: number[] = []

@@ -56,4 +56,43 @@ describe('map telemetry scanner — fixtures', () => {
   it('ignores Marker-only imports and comments', () => {
     expect(scan(`import { Marker } from 'react-map-gl/mapbox'\n// <Map />\nconst A = () => <Marker />`).uses).toEqual([])
   })
+
+  // Bypass shapes from the PR-0 re-review: each must produce a violation.
+  const REF = 'Map binding referenced outside a checked JSX tag / new expression'
+  it.each([
+    ['named re-export', `export { default as AppMap } from 'react-map-gl/mapbox'`, 're-export of a map library (its Map would escape this check)'],
+    ['export *', `export * from "react-map-gl/mapbox"`, 're-export of a map library (its Map would escape this check)'],
+    ['export * as ns', `export * as gl from 'mapbox-gl'`, 're-export of a map library (its Map would escape this check)'],
+    ['require()', `const { Map } = require('react-map-gl/mapbox')\nconst A = () => <Map />`, 'require() of a map library (not statically checkable)'],
+    ['const alias of the component', `import Map from 'react-map-gl/mapbox'\nexport const AppMap = Map`, REF],
+    ['namespace member alias', `import * as ns from 'react-map-gl/mapbox'\nconst M = ns.Map\nconst A = () => <M />`, REF],
+    ['React.createElement', `import Map from 'react-map-gl/mapbox'\nconst A = () => React.createElement(Map, { mapStyle: 's' })`, REF],
+    ['local object namespace', `import Map from 'react-map-gl/mapbox'\nconst ns = { Map }\nconst A = () => <ns.Map />`, REF],
+    ['mapbox-gl class alias', `import mapboxgl from 'mapbox-gl'\nconst C = mapboxgl.Map\nnew C({ container: 'x' })`, REF],
+    ['mapbox-gl object passed on', `import mapboxgl from 'mapbox-gl'\nexport const gl = mapboxgl`, REF],
+  ])('flags %s', (_label, src, reason) => {
+    expect(reasons(src)).toContain(reason)
+  })
+
+  it('checks a spaced JSX member tag `<ns . Map />`', () => {
+    expect(reasons(`import * as ns from 'react-map-gl/mapbox'\nconst A = () => <ns . Map />`)).toEqual(['missing performanceMetricsCollection={false}'])
+    expect(reasons(`import * as ns from 'react-map-gl/mapbox'\nconst A = () => <ns . Map performanceMetricsCollection={false} />`)).toEqual([])
+  })
+
+  it('does not flag JSX text, strings, or non-Map members', () => {
+    const src = `import Map, { Marker } from 'react-map-gl/mapbox'
+import mapboxgl from 'mapbox-gl'
+mapboxgl.accessToken = 'x'
+const label = 'Map view'
+export const A = () => (
+  <div>
+    <p>Map unavailable</p>
+    <Map performanceMetricsCollection={false}>
+      <Marker />
+    </Map>
+  </div>
+)`
+    expect(reasons(src)).toEqual([])
+  })
 })
+

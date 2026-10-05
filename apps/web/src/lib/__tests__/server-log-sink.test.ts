@@ -96,6 +96,22 @@ describe('request_id — only a well-formed id is ever stored', () => {
     expect(inserted[0].request_id).toBe('abc-123')
   })
 
+  it.each([['<b>x</b>'], ['a@b.org'], ['abc_123']])('a short id with a disallowed character is not stored: %s', async (bad) => {
+    logger.error('post.image.upload', new Error('boom'), undefined, { requestId: bad })
+    await settle(1)
+    expect(inserted[0].request_id).toBeUndefined()
+  })
+
+  it('onRequestError with a short markup x-request-id stores no request_id', async () => {
+    await onRequestError(
+      new Error('boom'),
+      { path: '/x', method: 'GET', headers: { 'x-request-id': '<b>x</b>' } },
+      { routePath: '/x', routeType: 'render', routerKind: 'App Router', revalidateReason: undefined }
+    )
+    await settle(1)
+    expect(inserted[0].request_id).toBeUndefined()
+  })
+
   it('a 65-char id is rejected', async () => {
     logger.error('post.image.upload', new Error('boom'), undefined, { requestId: 'a'.repeat(65) })
     await settle(1)

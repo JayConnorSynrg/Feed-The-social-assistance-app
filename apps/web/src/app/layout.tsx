@@ -125,7 +125,7 @@ export default async function RootLayout({
         />
         <Providers initialUser={initialUser}>
           {/* Focus target for app/error.tsx "Try again" (see lib/focus-after-reset.ts). */}
-          <div id="app-content">{children}</div>
+          <div id="app-content" className="outline-none">{children}</div>
         </Providers>
       </body>
     </html>

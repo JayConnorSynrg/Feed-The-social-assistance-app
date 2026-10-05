@@ -50,7 +50,7 @@ export default function GlobalError({
         )}
         <div className="flex gap-3 justify-center pt-2">
           <Button
-            onClick={() => retryWithFocus(reset, headingRef.current, 'app-content')}
+            onClick={() => retryWithFocus(reset, 'app-content')}
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             Try again

@@ -17,15 +17,16 @@ receives app or user data, and the CSP allows no analytics host.
 | Uncaught client errors | `app/error.tsx`, `app/(admin)/error.tsx`, `global-error.tsx`, `PanelErrorBoundary`, window `error` / `unhandledrejection` capture | Supabase |
 | RPC database time | weekly `pg_stat_statements` snapshot → `app_query_stats_weekly` | Supabase |
 
-**Map provider (Mapbox) — known third-party data flow.** The `<Map>` in `components/map/map-view.tsx` sets `performanceMetricsCollection={false}`, which stops mapbox-gl's performance-metrics event. mapbox-gl 3.18.0 still sends three events to `events.mapbox.com` from every browser that opens the map. Each is a POST whose URL carries FEED's public Mapbox access token, and like any request it exposes the viewer's IP address and user agent to Mapbox:
+**Map provider (Mapbox) — known third-party data flow.** The `<Map>` in `components/map/map-view.tsx` sets `performanceMetricsCollection={false}`, which stops mapbox-gl's performance-metrics event. mapbox-gl 3.18.0 still makes one session request to `api.mapbox.com` and sends three events to `events.mapbox.com` from every browser that opens the map. Each request's URL carries FEED's public Mapbox access token, and like any request it exposes the viewer's IP address and user agent to Mapbox:
 
 | Event | When | Payload (besides `event`, `created` timestamp) | Can FEED turn it off? |
 |---|---|---|---|
+| `map.auth` (GET `api.mapbox.com/map-sessions/v1?sku=…&access_token=…`) | once per map load | no body — the URL carries the billing `sku` session token and the access token | No — protected by Mapbox's terms of service (the library marks the code as not to be modified) |
 | `map.load` | once per map instance | `sdkIdentifier`, `sdkVersion`, `skuId`, `skuToken` (billing session token), `userId` = an anonymous device id | No — Mapbox's terms of service require it for metered billing (the library marks the code as not to be modified) |
-| `style.load` | each time a style loads | `mapInstanceId` (random per map instance), `eventId` (counter), `style` (the style id, e.g. `mapbox/streets-v12`), `importedStyles` | No — there is no option for it |
+| `style.load` | each time a style loads | `mapInstanceId` (random per map instance), `eventId` (counter), `style` (the full style URL, `mapbox://styles/mapbox/streets-v12`), `importedStyles` | No — there is no option for it |
 | `appUserTurnstile` | at most once per day per device | `sdkIdentifier`, `sdkVersion`, `skuId`, `enabled.telemetry: false`, `userId` = the same anonymous device id | No — there is no option for it |
 
-The anonymous device id is a random UUID that mapbox-gl keeps in the browser's `localStorage` and regenerates after 24 hours. None of these events carries FEED account data, coordinates, or search text. FEED does not patch the library. Replacing Mapbox is the next objective ("remove third-party data flows"), which closes this flow entirely.
+The three `events.mapbox.com` events are POSTs. The anonymous device id is a random UUID that mapbox-gl keeps in the browser's `localStorage` and regenerates after 24 hours. None of these requests carries FEED account data, coordinates, or search text. FEED does not patch the library. Replacing Mapbox is the next objective ("remove third-party data flows"), which closes this flow entirely.
 
 **Persisted wide events**: `withMetric` writes exactly one row to `public.app_logs` per outcome — an `info` row (`${operation}.complete`) on success and an `error` row (`${operation}.error`) on failure — each carrying `duration_ms` and a server-derived `user_id`. These rows are SQL-queryable, so latency percentiles and regressions are computable in-database (see below).
 
@@ -176,6 +177,8 @@ Use instead: `content_length` (character count), `file_size` (bytes), `category`
 
 ## Known follow-ups
 
+- Edge functions' `getCorrelationId` (`supabase/functions/_shared/log.ts`) returns the inbound `x-request-id` header unvalidated. It only reaches the edge function's console output today (not `app_logs`); validate it with the same shape as `safeRequestId` during security hardening.
+- The SQL `public.request_id()` accepts `^[A-Za-z0-9_-]{1,64}$` (it allows `_`), while the TypeScript `safeRequestId` accepts `^[A-Za-z0-9-]{1,64}$`. An id containing `_` is kept in `admin_actions.request_id` but dropped from `app_logs.request_id`, so the two would not join. Align them during security hardening.
 - `public.log_engagement_failure` (migration `20261005000000_p2_1a_engagement.sql`, lines 239-249) writes its `p_detail` argument (its callers pass the raw Postgres `SQLERRM`) into `app_logs` directly from SQL, bypassing `EVENT_REGISTRY` and the 120-character `error_message` cap. It predates the first-party logging foundation and is scheduled for the security-hardening objective.
 
 ## Weekly review

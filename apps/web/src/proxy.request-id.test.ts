@@ -26,6 +26,12 @@ describe('proxy x-request-id', () => {
     expect(id).not.toBe(attack)
   })
 
+  it.each([['<b>x</b>'], ['a@b.org'], ['abc_123'], ['a b']])('replaces a short id with a disallowed character: %s', async (bad) => {
+    const id = await idFor(bad)
+    expect(id).toMatch(UUID)
+    expect(id).not.toBe(bad)
+  })
+
   it('replaces an over-long id (65 chars)', async () => {
     expect(await idFor('a'.repeat(65))).toMatch(UUID)
   })

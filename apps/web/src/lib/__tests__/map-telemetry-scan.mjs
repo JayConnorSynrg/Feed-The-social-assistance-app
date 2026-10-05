@@ -10,6 +10,14 @@
 //     tag is parsed brace/string-aware, so `=>` inside a prop does not end it.
 //   - every `new <mapbox-gl Map>(...)` passes performanceMetricsCollection: false.
 //   - a dynamic import() of any of these modules is reported (not statically checkable).
+//   - so is any re-export (`export … from`, incl. `export *`) or require() of them,
+//     because the Map component would then reach JSX under a name this file
+//     cannot see.
+//   - every other reference to a resolved Map binding — an alias
+//     (`const M = Map`, `const C = mapboxgl.Map`), an object (`{ Map }`),
+//     `React.createElement(Map, …)`, a passed-around namespace — is reported:
+//     the only allowed uses are a checked JSX tag and a checked `new` expression.
+//   Comments, string contents and JSX text are ignored.
 
 import { stripComments } from './event-scan.mjs'
 
@@ -17,6 +25,8 @@ const REACT_MAP_MODULE = /^(react-map-gl(\/[\w-]+)?|@vis\.gl\/react-mapbox|@vis\
 const MAPBOX_GL_MODULE = /^mapbox-gl(\/[\w-]+)?$/
 const IMPORT_RE = /import\s+(?!type\s)([\s\S]*?)\s+from\s+(['"])([^'"]+)\2/g
 const DYNAMIC_IMPORT_RE = /import\(\s*(['"`])([^'"`]+)\1\s*\)/g
+const REEXPORT_RE = /export\s+(?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*(['"])([^'"]+)\1/g
+const REQUIRE_RE = /require\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -110,6 +120,49 @@ function lastSpreadIndex(tag) {
   return last
 }
 
+/** Replace string-literal contents with spaces (quotes and length kept). */
+function blankStrings(src) {
+  let out = ''
+  let quote = null
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (quote) {
+      if (ch === '\\') {
+        out += '  '
+        i++
+        continue
+      }
+      if (ch === quote) {
+        quote = null
+        out += ch
+      } else out += ch === '\n' ? '\n' : ' '
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') quote = ch
+    out += ch
+  }
+  return out
+}
+
+const CODE_KEYWORDS = /(?:^|[^\w$])(return|export|default|typeof|await|yield|in|of|case|void|throw|extends)$/
+
+/**
+ * Is the token at `i` in a code position (not JSX text)? Code follows an
+ * operator/punctuator, an arrow, or a keyword. JSX text follows `>` (a tag end)
+ * or plain words, so "Interactive Map" inside an element is skipped.
+ */
+function inCodePosition(src, i) {
+  const before = src.slice(0, i).replace(/\s+$/, '')
+  if (before === '') return true
+  if (before.endsWith('=>')) return true
+  const last = before[before.length - 1]
+  if ('(,=[{:?&|!+-*%^~;'.includes(last)) return true
+  return CODE_KEYWORDS.test(before)
+}
+
+const tagBefore = (src, i) => /<\/?\s*$/.test(src.slice(Math.max(0, i - 8), i))
+const newBefore = (src, i) => /(?:^|[^\w$.])new\s+$/.test(src.slice(Math.max(0, i - 12), i))
+
 /**
  * @param {Array<{ file: string, src: string }>} files
  * @returns {{ uses: Array<{ file: string, kind: string, text: string }>, violations: Array<{ file: string, reason: string, text: string }> }}
@@ -119,61 +172,133 @@ export function scanMapTelemetry(files) {
   const violations = []
   for (const { file, src: raw } of files) {
     const src = stripComments(raw)
-    const jsxNames = new Set()
-    const ctorPatterns = []
+    const isMapModule = (mod) => REACT_MAP_MODULE.test(mod) || MAPBOX_GL_MODULE.test(mod)
+
+    const reactNames = new Set() // identifiers bound to the react-map-gl Map component
+    const reactNs = new Set() // namespaces of a react-map-gl module
+    const glCtors = new Set() // identifiers bound to mapbox-gl's Map class
+    const glObjects = new Set() // default/namespace bindings of mapbox-gl (their .Map)
+
+    // Code with import statements and string contents blanked, for reference scanning.
+    let code = src
 
     IMPORT_RE.lastIndex = 0
     let m
     while ((m = IMPORT_RE.exec(src))) {
       const mod = m[3]
-      const isReact = REACT_MAP_MODULE.test(mod)
-      const isGl = MAPBOX_GL_MODULE.test(mod)
-      if (!isReact && !isGl) continue
+      if (!isMapModule(mod)) continue
+      code = code.slice(0, m.index) + ' '.repeat(m[0].length) + code.slice(m.index + m[0].length)
       const { def, ns, named } = parseClause(m[1])
-      if (isReact) {
-        if (def) jsxNames.add(def)
-        if (named.has('Map')) jsxNames.add(named.get('Map'))
-        if (named.has('default')) jsxNames.add(named.get('default'))
-        if (ns) {
-          jsxNames.add(`${ns}.Map`)
-          jsxNames.add(`${ns}.default`)
-        }
+      if (REACT_MAP_MODULE.test(mod)) {
+        if (def) reactNames.add(def)
+        if (named.has('Map')) reactNames.add(named.get('Map'))
+        if (named.has('default')) reactNames.add(named.get('default'))
+        if (ns) reactNs.add(ns)
       } else {
-        if (def) ctorPatterns.push(`${def}.Map`)
-        if (named.has('Map')) ctorPatterns.push(named.get('Map'))
-        if (named.has('default')) ctorPatterns.push(`${named.get('default')}.Map`)
-        if (ns) ctorPatterns.push(`${ns}.Map`, `${ns}.default.Map`)
+        if (def) glObjects.add(def)
+        if (ns) glObjects.add(ns)
+        if (named.has('Map')) glCtors.add(named.get('Map'))
+        if (named.has('default')) glObjects.add(named.get('default'))
+      }
+    }
+    code = blankStrings(code)
+
+    for (const [re, reason] of [
+      [DYNAMIC_IMPORT_RE, 'dynamic import of a map library (not statically checkable)'],
+      [REEXPORT_RE, 're-export of a map library (its Map would escape this check)'],
+      [REQUIRE_RE, 'require() of a map library (not statically checkable)'],
+    ]) {
+      re.lastIndex = 0
+      while ((m = re.exec(src))) {
+        if (isMapModule(m[2])) violations.push({ file, reason, text: m[0] })
       }
     }
 
-    DYNAMIC_IMPORT_RE.lastIndex = 0
-    while ((m = DYNAMIC_IMPORT_RE.exec(src))) {
-      if (REACT_MAP_MODULE.test(m[2]) || MAPBOX_GL_MODULE.test(m[2])) {
-        violations.push({ file, reason: 'dynamic import of a map library (not statically checkable)', text: m[0] })
+    const checkTag = (name, start, matchLen) => {
+      const tag = src.slice(start, start + matchLen) + readOpeningTag(src, start + matchLen)
+      uses.push({ file, kind: 'jsx', text: tag.replace(/\s+/g, ' ').slice(0, 200) })
+      const prop = tag.match(/\bperformanceMetricsCollection\s*=\s*\{\s*(\w+)\s*\}/)
+      if (!prop) violations.push({ file, reason: 'missing performanceMetricsCollection={false}', text: tag })
+      else if (prop[1] !== 'false') violations.push({ file, reason: `performanceMetricsCollection={${prop[1]}}`, text: tag })
+      else if (lastSpreadIndex(tag) > tag.indexOf(prop[0])) violations.push({ file, reason: 'a later {...spread} can override the prop', text: tag })
+    }
+    const checkCtor = (start, matchLen) => {
+      const args = readParens(src, start + matchLen)
+      const text = src.slice(start, start + matchLen) + args
+      uses.push({ file, kind: 'ctor', text: text.replace(/\s+/g, ' ').slice(0, 200) })
+      if (!/\bperformanceMetricsCollection\s*:\s*false\b/.test(args)) {
+        violations.push({ file, reason: 'new mapbox-gl Map without performanceMetricsCollection: false', text })
       }
     }
+    const refViolation = (text) =>
+      violations.push({ file, reason: 'Map binding referenced outside a checked JSX tag / new expression', text })
 
-    for (const name of jsxNames) {
-      const re = new RegExp(`<${esc(name)}(?=[\\s/>])`, 'g')
+    // react-map-gl: direct bindings
+    for (const name of reactNames) {
+      const re = new RegExp(`(?<![\\w$.])${esc(name)}(?![\\w$])`, 'g')
       let t
-      while ((t = re.exec(src))) {
-        const tag = `<${name}` + readOpeningTag(src, t.index + t[0].length)
-        uses.push({ file, kind: 'jsx', text: tag })
-        const prop = tag.match(/\bperformanceMetricsCollection\s*=\s*\{\s*(\w+)\s*\}/)
-        if (!prop) violations.push({ file, reason: 'missing performanceMetricsCollection={false}', text: tag })
-        else if (prop[1] !== 'false') violations.push({ file, reason: `performanceMetricsCollection={${prop[1]}}`, text: tag })
-        else if (lastSpreadIndex(tag) > tag.indexOf(prop[0])) violations.push({ file, reason: 'a later {...spread} can override the prop', text: tag })
+      while ((t = re.exec(code))) {
+        const i = t.index
+        if (tagBefore(code, i)) {
+          if (!/<\/\s*$/.test(code.slice(Math.max(0, i - 8), i)) && /^[\s/>]/.test(code.slice(i + name.length))) {
+            const lt = code.lastIndexOf('<', i)
+            checkTag(name, lt, i + name.length - lt)
+          }
+          continue
+        }
+        const after = code.slice(i + name.length)
+        const isObjectKey = /^\s*:(?!:)/.test(after) && /[{,]\s*$/.test(code.slice(0, i))
+        if (!isObjectKey && inCodePosition(code, i)) refViolation(code.slice(Math.max(0, i - 30), i + name.length + 20).trim())
       }
     }
 
-    for (const ctor of ctorPatterns) {
-      const re = new RegExp(`new\\s+${esc(ctor)}\\s*(?=\\()`, 'g')
-      let c
-      while ((c = re.exec(src))) {
-        const args = readParens(src, c.index + c[0].length)
-        uses.push({ file, kind: 'ctor', text: c[0] + args })
-        if (!/\bperformanceMetricsCollection\s*:\s*false\b/.test(args)) {
-          violations.push({ file, reason: 'new mapbox-gl Map without performanceMetricsCollection: false', text: c[0] + args })
+    // react-map-gl: namespaces (ns.Map / ns.default, possibly spaced)
+    for (const ns of reactNs) {
+      const re = new RegExp(`(?<![\\w$.])${esc(ns)}(?![\\w$])(\\s*\\.\\s*([\\w$]+))?`, 'g')
+      let t
+      while ((t = re.exec(code))) {
+        const i = t.index
+        const member = t[2]
+        const isMapMember = member === 'Map' || member === 'default'
+        if (tagBefore(code, i)) {
+          if (isMapMember && !/<\/\s*$/.test(code.slice(Math.max(0, i - 8), i))) {
+            const lt = code.lastIndexOf('<', i)
+            checkTag(`${ns}.${member}`, lt, i + t[0].length - lt)
+          }
+          continue
+        }
+        if ((isMapMember || !member) && inCodePosition(code, i)) refViolation(t[0])
+      }
+    }
+
+    // mapbox-gl: named Map class bindings
+    for (const name of glCtors) {
+      const re = new RegExp(`(?<![\\w$.])${esc(name)}(?![\\w$])`, 'g')
+      let t
+      while ((t = re.exec(code))) {
+        if (newBefore(code, t.index) && /^\s*\(/.test(code.slice(t.index + name.length))) {
+          const start = code.lastIndexOf('new', t.index)
+          checkCtor(start, t.index + name.length - start)
+        } else if (inCodePosition(code, t.index)) refViolation(t[0])
+      }
+    }
+
+    // mapbox-gl: default / namespace objects — only `new obj.Map(...)` is allowed
+    for (const obj of glObjects) {
+      const re = new RegExp(`(?<![\\w$.])${esc(obj)}(?![\\w$])((?:\\s*\\.\\s*default)?\\s*\\.\\s*([\\w$]+)|\\s*\\[)?`, 'g')
+      let t
+      while ((t = re.exec(code))) {
+        const i = t.index
+        const member = t[2]
+        if (member === 'Map') {
+          if (newBefore(code, i) && /^\s*\(/.test(code.slice(i + t[0].length))) {
+            const start = code.lastIndexOf('new', i)
+            checkCtor(start, i + t[0].length - start)
+          } else refViolation(t[0])
+        } else if (t[1] && t[1].trim() === '[') {
+          violations.push({ file, reason: 'computed member access on mapbox-gl (not statically checkable)', text: t[0] })
+        } else if (!t[1] && inCodePosition(code, i)) {
+          refViolation(t[0]) // the whole mapbox-gl object aliased or passed on
         }
       }
     }

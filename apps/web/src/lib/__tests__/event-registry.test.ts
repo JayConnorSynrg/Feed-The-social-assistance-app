@@ -80,6 +80,7 @@ describe('EVENT_REGISTRY completeness', () => {
     const banned = [
       'userId', 'user_id', 'email', 'address', 'bounds', 'storagePath', 'path', 'query', 'signerId',
       'stack', 'error', 'error_description', 'errorDescription', 'errorParam', 'message', 'msg',
+      'actor_id', 'member_id', 'subject_id', 'target_user_id',
     ]
     const offenders = Object.entries(EVENT_REGISTRY).filter(([, keys]) => keys.some((k) => banned.includes(k)))
     expect(offenders).toEqual([])
@@ -93,6 +94,14 @@ describe('EVENT_REGISTRY completeness', () => {
     const familyEntries = Object.keys(EVENT_REGISTRY).filter((n) => PERSON_SUBJECT.test(n))
     expect(familyEntries.length).toBeGreaterThan(20) // control: the family is found
     expect(familyEntries.filter((n) => EVENT_REGISTRY[n].includes('target_id'))).toEqual([])
+  })
+
+  it('person-subject events carry only outcome-level labels (no identifier of any person)', () => {
+    const ALLOWED = new Set(['action', 'actor_tier', 'ban_duration', 'code', 'not_found', 'outcome', 'request_id', 'to'])
+    const extra = Object.entries(EVENT_REGISTRY)
+      .filter(([n]) => PERSON_SUBJECT.test(n))
+      .flatMap(([n, keys]) => keys.filter((k) => !ALLOWED.has(k)).map((k) => `${n}: ${k}`))
+    expect(extra).toEqual([])
   })
 
   it('no call site passes target_id for a person-subject event', () => {

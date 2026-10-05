@@ -55,7 +55,7 @@ export default function AdminError({
         )}
         <div className="flex gap-3 justify-center pt-2">
           <Button
-            onClick={() => retryWithFocus(reset, headingRef.current, 'admin-content')}
+            onClick={() => retryWithFocus(reset, 'admin-content')}
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             Try again
