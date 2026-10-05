@@ -124,7 +124,14 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   const backToFormRef = useRef<(() => boolean) | null>(null)
   const metricsRef = useRef({ openedAt: 0, saveAttempts: 0, dirtyFields: '' })
   const [dirty, setDirty] = useState(false)
-  const [pending, setPending] = useState<PendingAction | null>(null)
+  const [pending, setPendingState] = useState<PendingAction | null>(null)
+  // Radix calls onOpenChange(false) after an Action/Cancel click too, so the resolution is read from
+  // a ref: each pending action resolves exactly once.
+  const pendingRef = useRef<PendingAction | null>(null)
+  const setPending = useCallback((action: PendingAction | null) => {
+    pendingRef.current = action
+    setPendingState(action)
+  }, [])
 
   // A new panel session starts whenever it opens or switches target.
   useEffect(() => {
@@ -175,7 +182,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
       logClose('abandoned')
       onOpenChange(false)
     },
-    [logClose, onOpenChange]
+    [logClose, onOpenChange, setPending]
   )
   const closeFromBody = useCallback(() => requestClose(), [requestClose])
 
@@ -189,14 +196,14 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
       logClose('abandoned')
       onEditExisting(id)
     },
-    [logClose, onEditExisting]
+    [logClose, onEditExisting, setPending]
   )
 
   // Parent-requested guarded close (phone Back).
   useImperativeHandle(ref, () => ({ requestClose: () => requestClose(true) }), [requestClose])
 
   const confirmDiscard = () => {
-    const action = pending
+    const action = pendingRef.current
     setPending(null)
     if (!action) return
     logClose('discarded')
@@ -204,8 +211,10 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
     else onOpenChange(false)
   }
   const keepEditing = () => {
-    if (pending?.type === 'close' && pending.fromRequest) onCloseRequestDeclined?.()
+    const action = pendingRef.current
+    if (!action) return
     setPending(null)
+    if (action.type === 'close' && action.fromRequest) onCloseRequestDeclined?.()
   }
 
   const handleSaved = useCallback(
@@ -256,7 +265,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
             <AlertDialogDescription>{tr('discardBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={keepEditing}>{tr('discardKeep')}</AlertDialogCancel>
+            <AlertDialogCancel>{tr('discardKeep')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDiscard} className="bg-red-700 hover:bg-red-800">
               {tr('discardConfirm')}
             </AlertDialogAction>
