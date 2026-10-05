@@ -13,6 +13,8 @@
 -- runtime and SKIPs (with a loud NOTICE) if the fixtures are absent.
 
 BEGIN;
+-- Lock safety on shared databases: never wait on a lock longer than 2s.
+SET LOCAL lock_timeout = '2s';
 
 DO $smoke$
 DECLARE

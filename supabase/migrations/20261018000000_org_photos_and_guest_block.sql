@@ -22,6 +22,8 @@
 -- (5) RLS policies last. ONE transaction; ledger row in the SAME transaction.
 
 BEGIN;
+-- Fail fast instead of queueing behind long reads when a lock is contended.
+SET LOCAL lock_timeout = '5s';
 
 -- ---------------------------------------------------------------------------
 -- (a) Bucket (idempotent upsert, mirroring post-images).
