@@ -73,6 +73,8 @@ You can link straight to the panel: `/moderation?tab=organizations&org=new` (cre
 - After Deactivate/Reactivate, focus returns to the row's **More actions** button and the result is
   announced.
 - After **Edit existing**, focus moves to the Name field of the organization that opened.
+- The map's own buttons (zoom, attribution, logo) are read in the admin's language. The pin itself is
+  not announced; the status line under **Find on map** says where the pin stands.
 - When Save finds a problem, focus moves to the first field to fix (name, email, website, the first
   invalid hours, or **Confirm pin**).
 
