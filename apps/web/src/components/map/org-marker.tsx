@@ -6,7 +6,7 @@
 // Leaf marker for an active NON-business organization (food bank, pantry, shelter, clinic, mutual
 // aid, nonprofit, government, community, other). One unclustered pin per org. Structure mirrors
 // BusinessMarker: a react-map-gl <Marker> with a distinct colored badge + a click popup. The org
-// indigo is distinct from business-teal, resource-olive, volunteer-amber, SNAP-green and safety-red,
+// plum (ORG_MARKER_HEX) is distinct from business-teal, resource-olive, volunteer-amber, SNAP-green and safety-red,
 // and the Building2 icon (vs the business Leaf) reads as its own layer.
 
 import { useState, useCallback } from 'react'
@@ -15,12 +15,11 @@ import { MapPin, Building2, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import type { MappableOrg } from '@/hooks/use-viewport-organizations'
+import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
 
 interface OrgMarkerProps {
   organization: MappableOrg
 }
-
-const ORG_INDIGO = '#4338ca'
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
 function orgTypeLabel(orgType: string): string {
@@ -46,7 +45,7 @@ export function OrgMarker({ organization }: OrgMarkerProps) {
         >
           <div
             className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-white shadow-md"
-            style={{ backgroundColor: ORG_INDIGO }}
+            style={{ backgroundColor: ORG_MARKER_HEX }}
           >
             <Building2 className="h-4 w-4" />
           </div>
@@ -68,7 +67,7 @@ export function OrgMarker({ organization }: OrgMarkerProps) {
             <CardHeader className="pb-2 pt-0 px-0">
               <div
                 className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1 w-fit"
-                style={{ backgroundColor: ORG_INDIGO }}
+                style={{ backgroundColor: ORG_MARKER_HEX }}
               >
                 {orgTypeLabel(organization.org_type)}
               </div>
@@ -86,7 +85,7 @@ export function OrgMarker({ organization }: OrgMarkerProps) {
               )}
               <a
                 href={`/s/organization/${organization.id}`}
-                className="inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline pt-1"
+                className="inline-flex items-center gap-1 text-sm font-medium text-org hover:underline pt-1"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 View details

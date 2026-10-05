@@ -13,12 +13,11 @@ import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Leaf, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
+import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
 
 interface BusinessMarkerProps {
   business: MappableBusiness
 }
-
-const BUSINESS_TEAL = '#0f766e'
 
 export function BusinessMarker({ business }: BusinessMarkerProps) {
   const [showPopup, setShowPopup] = useState(false)
@@ -39,7 +38,7 @@ export function BusinessMarker({ business }: BusinessMarkerProps) {
         >
           <div
             className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-white shadow-md"
-            style={{ backgroundColor: BUSINESS_TEAL }}
+            style={{ backgroundColor: BUSINESS_MARKER_HEX }}
           >
             <Leaf className="h-4 w-4" />
           </div>
@@ -61,7 +60,7 @@ export function BusinessMarker({ business }: BusinessMarkerProps) {
             <CardHeader className="pb-2 pt-0 px-0">
               <div
                 className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1 w-fit"
-                style={{ backgroundColor: BUSINESS_TEAL }}
+                style={{ backgroundColor: BUSINESS_MARKER_HEX }}
               >
                 Local business
               </div>
