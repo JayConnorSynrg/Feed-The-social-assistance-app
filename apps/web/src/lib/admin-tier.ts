@@ -98,3 +98,12 @@ export function decideUserAction(
   if (tierRank(targetTier) >= tierRank('platform_admin')) return { allowed: false, code: 'target_tier' }
   return { allowed: true }
 }
+
+/**
+ * Who may create and edit local organizations (the setup panel, its Create buttons and the feed
+ * "Add organization" link): platform admins only. Visibility only; admin_save_organization enforces
+ * the same rule server-side (42501 otherwise).
+ */
+export function canCreateOrganizations(tier: AdminTier | null | undefined): boolean {
+  return tier === 'platform_admin'
+}

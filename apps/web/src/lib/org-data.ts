@@ -255,6 +255,8 @@ export interface AdminLinkedResource {
   category: ResourceCategory
   city: string | null
   state: string | null
+  /** The resource's moderation status — anything but 'approved' can no longer be linked. */
+  status: string
 }
 
 /** Everything the edit panel prefills: the org row (active or not), its hours, photos and links. */
@@ -279,7 +281,7 @@ export interface AdminOrgDetail {
 
 const ADMIN_DETAIL_COLUMNS =
   'id, name, org_type, description, address, city, state, zip_code, phone, email, website, location, is_active'
-const ADMIN_LINK_COLUMNS = 'sort_order, resource:resources(id, name, category, city, state)'
+const ADMIN_LINK_COLUMNS = 'sort_order, resource:resources(id, name, category, city, state, status)'
 
 /** Hours ordered by day, then opening time, with seconds trimmed (Postgres returns HH:MM:SS). */
 export function orderLoadedHours(rows: readonly BusinessHours[]): BusinessHours[] {

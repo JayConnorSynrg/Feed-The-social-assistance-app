@@ -15,6 +15,8 @@ export interface SelectedResource {
   category: ResourceCategory
   city: string | null
   state: string | null
+  /** Set for links loaded from the database; a directory pick is approved by construction. */
+  status?: string
 }
 
 export function toSelected(row: DirectoryResource): SelectedResource {

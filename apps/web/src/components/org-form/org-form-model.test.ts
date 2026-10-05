@@ -14,8 +14,14 @@ vi.mock('@/lib/logger', () => ({
 }))
 
 import type { AdminOrgDetail } from '@/lib/org-data'
+import { createSingleFlight } from '@/components/feed/composer-guards'
+import { OrgPhotoUploadError } from '@/lib/org-photo-upload'
+import type { OrgSavePayload } from '@/lib/org-admin-rpc'
 import {
   buildSavePayload,
+  isLinkable,
+  runOrgSave,
+  type OrgSaveDeps,
   emptyFormValues,
   findSimilarOrgs,
   formValuesFromDetail,
@@ -196,3 +202,116 @@ describe('duplicate-name match', () => {
     expect(findSimilarOrgs('Barre Mutual Aid', index, 'b')).toEqual([])
   })
 })
+
+// ---- Save orchestration ------------------------------------------------------------------------
+
+function harness(over: Partial<OrgSaveDeps> = {}) {
+  const calls = { uploads: 0, saves: [] as OrgSavePayload[], removed: [] as string[][] }
+  let n = 0
+  const deps: OrgSaveDeps = {
+    upload: async () => {
+      calls.uploads++
+      n++
+      return { url: `https://h/storage/v1/object/public/org-photos/${ORG}/u${n}.webp`, path: `${ORG}/u${n}.webp` }
+    },
+    save: async (payload) => {
+      calls.saves.push(payload)
+      return { ok: true, result: { id: ORG, created: true, removed_photo_paths: [`${ORG}/old.webp`, 'other/x.webp'] } }
+    },
+    remove: async (paths) => {
+      calls.removed.push(paths)
+    },
+    ...over,
+  }
+  return { deps, calls }
+}
+const withNewPhotos = () => base({ logo: newItem('L'), gallery: [newItem('G1'), newItem('G2')] })
+
+describe('runOrgSave', () => {
+  it('success: one RPC, then deletes exactly removed_photo_paths inside the org folder', async () => {
+    const { deps, calls } = harness()
+    const out = await runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps, flight: createSingleFlight() })
+    expect(out?.ok).toBe(true)
+    expect(calls.uploads).toBe(3)
+    expect(calls.saves).toHaveLength(1)
+    expect(calls.saves[0].photos.map((p) => p.storage_path)).toEqual([`${ORG}/u1.webp`, `${ORG}/u2.webp`, `${ORG}/u3.webp`])
+    // Never the just-uploaded files, never another folder.
+    expect(calls.removed).toEqual([[`${ORG}/old.webp`]])
+  })
+
+  it('definite RPC failure (SQLSTATE): deletes this attempt’s uploads and reports the mapped message', async () => {
+    const { deps, calls } = harness({
+      save: async () => ({ ok: false, code: '22023', errorKey: 'saveErrHours' }),
+    })
+    const out = await runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps, flight: createSingleFlight() })
+    expect(out).toEqual({ ok: false, stage: 'save', errorKey: 'saveErrHours', code: '22023' })
+    expect(calls.removed).toEqual([[`${ORG}/u1.webp`, `${ORG}/u2.webp`, `${ORG}/u3.webp`]])
+  })
+
+  it('ambiguous failure (no SQLSTATE / thrown): keeps the uploads — the save may have committed', async () => {
+    const noCode = harness({ save: async () => ({ ok: false, code: null, errorKey: 'saveErrNetwork' }) })
+    const a = await runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps: noCode.deps, flight: createSingleFlight() })
+    expect(a).toMatchObject({ ok: false, errorKey: 'saveErrNetwork', code: null })
+    expect(noCode.calls.removed).toEqual([])
+
+    const thrown = harness({
+      save: async () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    const b = await runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps: thrown.deps, flight: createSingleFlight() })
+    expect(b).toMatchObject({ ok: false, errorKey: 'saveErrNetwork' })
+    expect(thrown.calls.removed).toEqual([])
+  })
+
+  it('partial upload failure: deletes the uploads that succeeded, never calls the RPC', async () => {
+    let i = 0
+    const { deps, calls } = harness({
+      upload: async () => {
+        i++
+        if (i === 2) throw new OrgPhotoUploadError(413)
+        return { url: 'https://h/storage/v1/object/public/org-photos/x', path: `${ORG}/ok${i}.webp` }
+      },
+    })
+    const out = await runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps, flight: createSingleFlight() })
+    expect(out).toEqual({ ok: false, stage: 'upload', errorKey: 'saveErrUploadTooLarge', code: null })
+    expect(calls.saves).toHaveLength(0)
+    expect(calls.removed).toEqual([[`${ORG}/ok1.webp`]])
+  })
+
+  it('a concurrent second Save is single-flighted: one upload pass, one RPC', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const { deps, calls } = harness({
+      save: async (payload) => {
+        calls.saves.push(payload)
+        await gate
+        return { ok: true, result: { id: ORG, created: true, removed_photo_paths: [] } }
+      },
+    })
+    const flight = createSingleFlight()
+    const onStart = vi.fn()
+    const first = runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps, flight, onStart })
+    const second = runOrgSave({ orgId: ORG, values: withNewPhotos(), hadLocation: false, deps, flight, onStart })
+    expect(await second).toBeUndefined()
+    release()
+    expect((await first)?.ok).toBe(true)
+    expect(calls.saves).toHaveLength(1)
+    expect(calls.uploads).toBe(3)
+    expect(onStart).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('linked resources that are no longer approved', () => {
+  it('block the save with a specific message; directory picks (no status) and approved links pass', () => {
+    expect(isLinkable({})).toBe(true)
+    expect(isLinkable({ status: 'approved' })).toBe(true)
+    expect(isLinkable({ status: 'pending' })).toBe(false)
+    const parsed = orgFormSchema.safeParse(
+      base({ resources: [{ id: 'r1', name: 'Old', category: 'food', city: null, state: null, status: 'rejected' }] })
+    )
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.map((i) => i.message)).toContain('resErrNotApproved')
+  })
+})
+

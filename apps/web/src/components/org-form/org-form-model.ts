@@ -14,8 +14,9 @@ import type { BusinessHours } from '@/lib/business'
 import { NON_BUSINESS_ORG_TYPES } from '@/lib/org-vocab'
 import type { AdminOrgDetail, OrgNameIndexRow } from '@/lib/org-data'
 import type { OrgFormMessages } from '@/lib/i18n-org-forms'
-import type { OrgPhotoPayload, OrgSavePayload } from '@/lib/org-admin-rpc'
-import { pathsInOrgFolder } from '@/lib/org-photo-upload'
+import type { OrgPhotoPayload, OrgSavePayload, OrgSaveResult, RpcFailure } from '@/lib/org-admin-rpc'
+import { OrgPhotoUploadError, pathsInOrgFolder, uploadErrorKey } from '@/lib/org-photo-upload'
+import type { SingleFlight } from '@/components/feed/composer-guards'
 import type { SelectedResource } from './resource-directory-model'
 import { normalizeLoadedHours, orderRows, presetHours, validateHours } from './hours-model'
 
@@ -93,11 +94,18 @@ export const orgFormSchema = z.object({
   logo: z.custom<PhotoItem | null>(),
   cover: z.custom<PhotoItem | null>(),
   gallery: z.array(z.custom<PhotoItem>()),
-  resources: z.array(z.custom<SelectedResource>()),
+  resources: z
+    .array(z.custom<SelectedResource>())
+    .refine((rows) => rows.every(isLinkable), { message: 'resErrNotApproved' satisfies MsgKey }),
   pin: z
     .custom<PinState>()
     .refine((p) => p.status !== 'draft', { message: 'locConfirmBeforeSave' satisfies MsgKey }),
 })
+
+/** A linked resource the save will accept: still approved (directory picks carry no status). */
+export function isLinkable(r: Pick<SelectedResource, 'status'>): boolean {
+  return r.status === undefined || r.status === 'approved'
+}
 
 /** Create-mode defaults: Mon–Fri 9–5, no pin, nothing linked. */
 export function emptyFormValues(): OrgFormValues {
@@ -235,6 +243,75 @@ export function photoCleanupPaths(
   outcome: { ok: true; removed: readonly string[] } | { ok: false; uploaded: readonly string[] }
 ): string[] {
   return pathsInOrgFolder(orgId, outcome.ok ? outcome.removed : outcome.uploaded)
+}
+
+// ---- Save orchestration ----------------------------------------------------------------------
+
+export interface OrgSaveDeps {
+  /** Upload one new photo into org-photos/<orgId>/; returns the edge function's url + path. */
+  upload: (file: File) => Promise<{ url: string; path: string }>
+  /** One admin_save_organization call. */
+  save: (payload: OrgSavePayload) => Promise<{ ok: true; result: OrgSaveResult } | RpcFailure>
+  /** Best-effort delete of org-photos objects (already filtered to the org folder). */
+  remove: (paths: string[]) => Promise<void>
+}
+
+export type OrgSaveOutcome =
+  | { ok: true; result: OrgSaveResult; payload: OrgSavePayload }
+  | { ok: false; stage: 'upload' | 'save'; errorKey: keyof OrgFormMessages; code: string | null }
+
+/**
+ * The whole Save, run at most once at a time through `flight` (a second call while one is running
+ * returns undefined without uploading or calling the RPC):
+ *  1. upload every new photo into org-photos/<orgId>/;
+ *     an upload failure deletes the photos this attempt already uploaded and stops (no RPC);
+ *  2. ONE admin_save_organization call;
+ *  3. success -> delete exactly the returned removed_photo_paths (org folder only);
+ *     a definite failure (the RPC answered with a SQLSTATE) -> delete this attempt's uploads;
+ *     an ambiguous failure (no code: network / timeout, the RPC may have committed) -> keep them,
+ *     because a committed save references them. A retry re-sends and the RPC reports any replaced
+ *     photos in removed_photo_paths.
+ */
+export async function runOrgSave(args: {
+  orgId: string
+  values: OrgFormValues
+  hadLocation: boolean
+  deps: OrgSaveDeps
+  flight: SingleFlight
+  /** Runs once, inside the flight, before the first upload (not for a skipped concurrent call). */
+  onStart?: () => void
+}): Promise<OrgSaveOutcome | undefined> {
+  const { orgId, values, hadLocation, deps, flight, onStart } = args
+  return flight.run(async (): Promise<OrgSaveOutcome> => {
+    onStart?.()
+    const uploaded = new Map<string, { url: string; path: string }>()
+    const uploadedPaths: string[] = []
+    try {
+      for (const item of newPhotoItems(values)) {
+        const up = await deps.upload(item.file)
+        uploaded.set(item.key, up)
+        uploadedPaths.push(up.path)
+      }
+    } catch (err) {
+      await deps.remove(photoCleanupPaths(orgId, { ok: false, uploaded: uploadedPaths }))
+      const status = err instanceof OrgPhotoUploadError ? err.status : 0
+      return { ok: false, stage: 'upload', errorKey: uploadErrorKey(status), code: null }
+    }
+
+    const payload = buildSavePayload(values, uploaded, hadLocation)
+    let res: Awaited<ReturnType<OrgSaveDeps['save']>>
+    try {
+      res = await deps.save(payload)
+    } catch {
+      return { ok: false, stage: 'save', errorKey: 'saveErrNetwork', code: null }
+    }
+    if (!res.ok) {
+      if (res.code !== null) await deps.remove(photoCleanupPaths(orgId, { ok: false, uploaded: uploadedPaths }))
+      return { ok: false, stage: 'save', errorKey: res.errorKey, code: res.code }
+    }
+    await deps.remove(photoCleanupPaths(orgId, { ok: true, removed: res.result.removed_photo_paths }))
+    return { ok: true, result: res.result, payload }
+  })
 }
 
 // ---- Duplicate-name warning -----------------------------------------------------------------
