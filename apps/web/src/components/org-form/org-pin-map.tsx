@@ -57,13 +57,13 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, approximat
   return (
     <div ref={containerRef} role="group" aria-label={label} className="h-64 w-full overflow-hidden rounded-xl border border-stone-200">
       <Map
+        performanceMetricsCollection={false}
         ref={mapRef}
         {...viewState}
         onMove={(e) => setViewState(e.viewState)}
         onClick={(e) => onPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/streets-v12"
-        performanceMetricsCollection={false}
         style={{ width: '100%', height: '100%' }}
         cursor="crosshair"
       >
