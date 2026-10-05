@@ -6,7 +6,7 @@
 // React so resource-directory-model.test.ts exercises the exact logic the component runs.
 
 import type { DirectoryResource, ResourceCategory } from '@/lib/resource-directory'
-import { getCategoryLabel } from '@/lib/resource-categories'
+import { ALL_CATEGORIES } from './org-labels'
 
 /** A resource linked to the organization. Array order is the curator-set display order. */
 export interface SelectedResource {
@@ -78,20 +78,11 @@ export function applyClear(filters: DirectoryUiFilters, action: ClearAction): Di
 }
 
 /**
- * Category chips: the categories seen among the loaded rows of the current search/location scope,
- * plus the active category, sorted by label.
+ * Category chips: EVERY resource category, sorted by its (translated) label. A category with no
+ * matching resources still shows; choosing it simply lands on the zero-result state.
  */
-export function chipCategories(
-  seen: readonly ResourceCategory[],
-  active: ResourceCategory | null
-): ResourceCategory[] {
-  const set = new Set<ResourceCategory>(seen)
-  if (active) set.add(active)
-  return [...set].sort((a, b) => getCategoryLabel(a).localeCompare(getCategoryLabel(b)))
-}
-
-export function categoriesIn(rows: readonly DirectoryResource[]): ResourceCategory[] {
-  return [...new Set(rows.map((r) => r.category))]
+export function chipCategories(labelOf: (c: ResourceCategory) => string, locale?: string): ResourceCategory[] {
+  return [...ALL_CATEGORIES].sort((a, b) => labelOf(a).localeCompare(labelOf(b), locale))
 }
 
 /** "Rutland, VT" / "VT" / onlineLabel for an online resource with no city / "" when unknown. */

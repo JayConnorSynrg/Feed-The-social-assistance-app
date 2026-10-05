@@ -20,7 +20,9 @@ import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Plus } from 'lucide-react'
+import type { Locale } from '@/lib/i18n'
+import { orgFormT } from '@/lib/i18n-org-forms'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,7 +219,38 @@ function ForecastTile({ orgName, forecast }: { orgName: string; forecast: Foreca
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function OverviewTab({ selectedOrgId }: { selectedOrgId: string }) {
+/**
+ * Admin Overview. Quick actions render above the stats so they work while the stats load.
+ */
+export function OverviewTab({
+  selectedOrgId,
+  locale,
+  onCreateOrganization,
+}: {
+  selectedOrgId: string
+  locale: Locale
+  onCreateOrganization?: () => void
+}) {
+  return (
+    <div className="space-y-4">
+      {onCreateOrganization && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3">
+          <button
+            type="button"
+            onClick={onCreateOrganization}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {orgFormT(locale, 'createOrganization')}
+          </button>
+        </div>
+      )}
+      <OverviewStats selectedOrgId={selectedOrgId} />
+    </div>
+  )
+}
+
+function OverviewStats({ selectedOrgId }: { selectedOrgId: string }) {
   const [adoption, setAdoption] = useState<AdoptionStats | null>(null)
   const [resources, setResources] = useState<ResourceStat[]>([])
   const [petition, setPetition] = useState<PetitionMomentum | null>(null)

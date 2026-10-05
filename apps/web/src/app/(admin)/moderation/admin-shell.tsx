@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2, UserCog, Leaf } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
@@ -18,6 +18,18 @@ import { BusinessesTab } from './businesses-tab'
 import { ManageResourcesTab } from './manage-resources-tab'
 import { OrgsSection } from './orgs-section'
 import { PeopleTab } from './people-tab'
+import { useAuth } from '@/hooks/use-auth'
+import { resolveUserLocale, type Locale } from '@/lib/i18n'
+import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
+import { OrgFormPanel, type OrgFormPanelHandle } from '@/components/org-form/org-form-panel'
+import type { OrgFormKind } from '@/components/org-form/org-form-model'
+import {
+  closeUrlAction,
+  orgPanelHref,
+  readOrgPanelTarget,
+  readsOrganizationsTab,
+  type OrgPanelTarget,
+} from './org-panel-url'
 
 function PlaceholderTab({ label }: { label: string }) {
   return (
@@ -44,6 +56,120 @@ export function AdminShell() {
 
   // Header label: the tier marker, or "Organizer" for a non-tier org admin.
   const headerLabel = tierLabel(tier) ?? 'Organizer'
+
+  // Locale for the organization screens: the profile language once it loads (server render and
+  // first client render both use 'en', so hydration matches).
+  const { profile } = useAuth()
+  const locale: Locale = useMemo(
+    () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
+    [profile]
+  )
+  const canManageOrgs = tabs.includes('organizations')
+
+  // ---- Organization setup panel: owned here so the list, the Overview quick action and deep links
+  // (?tab=organizations&org=new|<id>) all open the same panel. Opening pushes a history entry;
+  // closing pops it (or strips `org` from a deep-linked URL); the phone Back button closes the panel
+  // through the panel's discard guard.
+  const [panel, setPanel] = useState<{ open: boolean; mode: 'create' | 'edit'; orgId: string | null; kind: OrgFormKind }>({
+    open: false,
+    mode: 'create',
+    orgId: null,
+    kind: 'org',
+  })
+  const panelHandle = useRef<OrgFormPanelHandle>(null)
+  const [orgListKey, setOrgListKey] = useState(0)
+  const [orgNotice, setOrgNotice] = useState<string | null>(null)
+  const pushedRef = useRef(false)
+  const panelOpenRef = useRef(false)
+  const closingViaPopRef = useRef(false)
+  const panelTargetRef = useRef<OrgPanelTarget | null>(null)
+
+  const showPanel = useCallback((target: OrgPanelTarget) => {
+    panelOpenRef.current = true
+    panelTargetRef.current = target
+    setPanel(target === 'new' ? { open: true, mode: 'create', orgId: null, kind: 'org' } : { open: true, mode: 'edit', orgId: target, kind: 'org' })
+  }, [])
+
+  const openOrgPanel = useCallback(
+    (target: OrgPanelTarget) => {
+      setActiveTab('organizations')
+      setOrgNotice(null)
+      const href = orgPanelHref(window.location, target)
+      if (panelOpenRef.current) {
+        // Switching target inside an open panel ("Edit existing") reuses its history entry.
+        window.history.replaceState(window.history.state, '', href)
+      } else {
+        window.history.pushState(window.history.state, '', href)
+        pushedRef.current = true
+      }
+      showPanel(target)
+    },
+    [showPanel]
+  )
+
+  /** Open the setup panel for a new entity. PR-B adds kind 'business'. */
+  const openCreate = useCallback((kind: OrgFormKind) => {
+    if (kind === 'org') openOrgPanel('new')
+  }, [openOrgPanel])
+
+  const closePanel = useCallback(() => {
+    const action = closeUrlAction(pushedRef.current, closingViaPopRef.current)
+    pushedRef.current = false
+    closingViaPopRef.current = false
+    panelOpenRef.current = false
+    panelTargetRef.current = null
+    setPanel((p) => ({ ...p, open: false }))
+    if (action === 'back') window.history.back()
+    else if (action === 'replace') window.history.replaceState(window.history.state, '', orgPanelHref(window.location, null))
+  }, [])
+
+  // Deep link: read ?tab / ?org once on mount. window.location exists only after mount, so
+  // setState in this effect is the correct idiom (same as feed-shell's hash routing).
+  useEffect(() => {
+    const search = window.location.search
+    const target = readOrgPanelTarget(search)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (readsOrganizationsTab(search) || target) setActiveTab('organizations')
+    if (target) showPanel(target)
+  }, [showPanel])
+
+  // Back / Forward: a URL without `org` asks the open panel to close (guarded); a URL with `org`
+  // opens it.
+  useEffect(() => {
+    const onPop = () => {
+      const target = readOrgPanelTarget(window.location.search)
+      if (target === null) {
+        if (panelOpenRef.current) {
+          closingViaPopRef.current = true
+          panelHandle.current?.requestClose()
+        }
+        return
+      }
+      pushedRef.current = true
+      setActiveTab('organizations')
+      showPanel(target)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [showPanel])
+
+  // "Keep editing" after Back: restore the entry Back removed.
+  const restorePanelEntry = useCallback(() => {
+    closingViaPopRef.current = false
+    const target = panelTargetRef.current
+    if (!target) return
+    window.history.pushState(window.history.state, '', orgPanelHref(window.location, target))
+    pushedRef.current = true
+  }, [])
+
+  const handleOrgSaved = useCallback(
+    (result: { id: string; created: boolean; name: string }) => {
+      setOrgNotice(formatMessage(orgFormT(locale, result.created ? 'savedCreated' : 'savedUpdated'), { name: result.name }))
+      setOrgListKey((n) => n + 1)
+      closePanel()
+    },
+    [locale, closePanel]
+  )
 
   function handleTabChange(tab: string) {
     logger.info('admin.shell.tab_switch', { to_tab: tab, from_tab: activeTab, org_id: selectedOrgId })
@@ -160,7 +286,11 @@ export function AdminShell() {
           )}
           {tabs.includes('overview') && (
             <TabsContent value="overview" className="mt-4">
-              <OverviewTab selectedOrgId={selectedOrgId} />
+              <OverviewTab
+                selectedOrgId={selectedOrgId}
+                locale={locale}
+                onCreateOrganization={canManageOrgs ? () => openCreate('org') : undefined}
+              />
             </TabsContent>
           )}
           {tabs.includes('moderation') && (
@@ -175,7 +305,13 @@ export function AdminShell() {
           )}
           {tabs.includes('organizations') && (
             <TabsContent value="organizations" className="mt-4">
-              <OrgsSection />
+              <OrgsSection
+                locale={locale}
+                onCreate={() => openCreate('org')}
+                onEdit={(id) => openOrgPanel(id)}
+                refreshKey={orgListKey}
+                notice={orgNotice}
+              />
             </TabsContent>
           )}
           {tabs.includes('resources') && (
@@ -205,6 +341,23 @@ export function AdminShell() {
           )}
         </Tabs>
       </div>
+
+      {canManageOrgs && (
+        <OrgFormPanel
+          open={panel.open}
+          mode={panel.mode}
+          kind={panel.kind}
+          orgId={panel.orgId}
+          locale={locale}
+          onOpenChange={(open) => {
+            if (!open) closePanel()
+          }}
+          onSaved={handleOrgSaved}
+          onEditExisting={(id) => openOrgPanel(id)}
+          ref={panelHandle}
+          onCloseRequestDeclined={restorePanelEntry}
+        />
+      )}
     </div>
   )
 }

@@ -13,14 +13,14 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { fetchDirectoryPage, type DirectoryResource, type ResourceCategory } from '@/lib/resource-directory'
-import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
+import { fetchDirectoryPage, type DirectoryResource } from '@/lib/resource-directory'
+import { getCategoryTailwind } from '@/lib/resource-categories'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { dir, type Locale } from '@/lib/i18n'
 import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { categoryKey } from './org-labels'
 import {
   applyClear,
-  categoriesIn,
   chipCategories,
   locationText,
   mergePage,
@@ -115,24 +115,10 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
   )
   const [retryNonce, setRetryNonce] = useState(0)
   const requestKey = `${JSON.stringify(query)}#${retryNonce}`
-  const scopeKey = JSON.stringify([query.q, query.state, query.city])
 
   const [result, setResult] = useState<ResultState | null>(null)
-  const [scopeCats, setScopeCats] = useState<{ key: string; cats: ResourceCategory[] }>({ key: '', cats: [] })
   const [loadingMore, setLoadingMore] = useState(false)
   const [moreError, setMoreError] = useState(false)
-
-  const recordScopeCategories = useCallback(
-    (rows: DirectoryResource[]) => {
-      if (query.category) return
-      setScopeCats((prev) =>
-        prev.key === scopeKey
-          ? { key: scopeKey, cats: [...new Set([...prev.cats, ...categoriesIn(rows)])] }
-          : { key: scopeKey, cats: categoriesIn(rows) }
-      )
-    },
-    [query.category, scopeKey]
-  )
 
   useEffect(() => {
     let cancelled = false
@@ -141,7 +127,6 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
         if (cancelled) return
         setResult({ key: requestKey, rows: page.rows, total: page.total, hasMore: page.hasMore, error: false })
         setMoreError(false)
-        recordScopeCategories(page.rows)
       },
       () => {
         if (cancelled) return
@@ -151,7 +136,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
     return () => {
       cancelled = true
     }
-  }, [supabase, query, requestKey, recordScopeCategories])
+  }, [supabase, query, requestKey])
 
   const loading = result?.key !== requestKey
   // While a new query is in flight the previous rows stay visible (dimmed, aria-busy) to avoid flicker.
@@ -171,7 +156,6 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
           ? { ...prev, rows: mergePage(prev.rows, page.rows), total: page.total, hasMore: page.hasMore }
           : prev
       )
-      recordScopeCategories(page.rows)
     } catch {
       setMoreError(true)
     } finally {
@@ -219,7 +203,8 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
     setFilters((f) => applyClear(f, action))
     searchRef.current?.focus()
   }
-  const chips = chipCategories(scopeCats.key === scopeKey ? scopeCats.cats : [], filters.category)
+  const catLabel = (c: string) => tr(categoryKey(c))
+  const chips = useMemo(() => chipCategories((c) => tr(categoryKey(c)), locale), [tr, locale])
   const clearActions = zeroResultActions(filters)
   const clearLabel: Record<ClearAction, keyof OrgFormMessages> = {
     search: 'dirClearSearch',
@@ -367,7 +352,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
                     : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
                 }`}
               >
-                {c ? getCategoryLabel(c) : tr('dirCategoryAll')}
+                {c ? catLabel(c) : tr('dirCategoryAll')}
               </button>
             )
           })}
@@ -420,7 +405,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
                         <span
                           className={`rounded-full px-2 py-0.5 font-medium ${getCategoryTailwind(row.category)}`}
                         >
-                          {getCategoryLabel(row.category)}
+                          {catLabel(row.category)}
                         </span>
                         {where && <span>{where}</span>}
                       </span>

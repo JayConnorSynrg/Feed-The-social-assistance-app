@@ -1,34 +1,28 @@
 // apps/web/src/lib/org-data.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The controlled Supabase WRITE boundary for NON-business organizations — the admin-intake sibling of
-// business-data.ts. An organization is a row in the same `organizations` table with a non-'business'
-// org_type (see org-vocab.ts); it is public as soon as is_active=true (the orgs_select_active RLS
-// predicate has no approval gate for non-business rows).
+// Supabase READERS for NON-business organizations — the sibling of business-data.ts. An
+// organization is a row in the same `organizations` table with a non-'business' org_type (see
+// org-vocab.ts); it is public as soon as is_active=true (orgs_select_active has no approval gate
+// for non-business rows). loose() confines the generic-erasure escape hatch here, and every read is
+// wrapped in withMetric with bounded, PII-free labels (result counts only).
 //
-// This module follows business-data.ts's pattern exactly:
-//   * loose() confines the generic-erasure escape hatch HERE (the geography location column write is
-//     not yet in the generated types.ts — that regen is deferred to a prod-apply), so callers stay
-//     fully typed and never touch `as any` at the call site.
-//   * each write is wrapped in withMetric with a bounded, PII-free label set (closed vocabulary:
-//     only counts, booleans, and the closed-vocab org_type value — never a name/email/address/url/uid).
+// The public-page readers (fetchOrganizationById + fetchOrgResources) back the anon SSR
+// /s/organization/[id] page; fetchApprovedOrganizations + organizationsInBounds back the
+// Organizations feed subtab and the org map layer.
 //
-// The public-page READERS live here: fetchOrganizationById + fetchOrgResources back the anon SSR
-// /s/organization/[id] page (the anon read path for email/phone/website is grant-verified). The map/
-// list readers (fetchApprovedOrganizations, organizationsInBounds) also live here now that their
-// consumers exist — the Organizations feed subtab and the org map marker layer.
-//
-// Two invariants live here as pure, unit-testable functions:
-//   * INV-B (never business): buildOrgInsertPayload throws for org_type='business' or any value
-//     outside org-vocab, so no admin-create code path can persist a business row.
-//   * INV-D (one row per linked resource): buildOrgResourceRows emits exactly one row per distinct
-//     resource id (the org_resources PK (org_id,resource_id) is the DB-side backstop).
+// Admin writes no longer live here: every create/update goes through the atomic
+// admin_save_organization RPC (org-admin-rpc.ts). This module keeps the READERS, including the
+// admin list/detail readers behind the moderation Organizations tab and its edit panel.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { withMetric } from './logger'
-import { normalizeUrl } from './utils/url'
-import { NON_BUSINESS_ORG_TYPES, isNonBusinessOrgType } from './org-vocab'
+import { NON_BUSINESS_ORG_TYPES } from './org-vocab'
+import { fetchBusinessHours, fetchBusinessPhotos } from './business-data'
+import { parseGeographyPoint, type BusinessHours, type BusinessPhoto } from './business'
+import { trimSeconds, minutesOf } from '@/components/org-form/hours-model'
+import type { ResourceCategory } from './resource-directory'
 
 /**
  * Typed read error so the withMetric error_code label buckets by kind (OrgReadError) instead of the
@@ -39,18 +33,6 @@ export class OrgReadError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'OrgReadError'
-  }
-}
-
-/**
- * Typed write error so the withMetric error_code label buckets by kind (OrgWriteError) instead of the
- * generic "Error". No PII in the name; the raw Supabase message rides in withMetric's error_message
- * field, never in a bounded label. Mirrors business-data.ts's BusinessWriteError.
- */
-export class OrgWriteError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'OrgWriteError'
   }
 }
 
@@ -121,13 +103,11 @@ export interface OrgLinkedResource {
   status: string
 }
 
-// Minimal structural view of the query builder for the geography write not yet in the generated
-// types. Confined to this module; callers never see it (same discipline as business-data.ts's loose()).
+// Minimal structural view of the query builder (the geography column and the org-admin tables are
+// not fully in the generated types). Confined to this module; callers stay fully typed.
 type LooseResult<T> = Promise<{ data: T | null; error: { message: string } | null }>
 interface LooseBuilder {
   select: (cols: string) => LooseBuilder
-  insert: (rows: Record<string, unknown> | Record<string, unknown>[]) => LooseBuilder
-  update: (patch: Record<string, unknown>) => LooseBuilder
   eq: (col: string, val: unknown) => LooseBuilder
   in: (col: string, vals: readonly unknown[]) => LooseBuilder
   order: (col: string, opts?: { ascending?: boolean }) => LooseBuilder
@@ -141,105 +121,6 @@ interface LooseClient {
 
 function loose(supabase: SupabaseClient<Database>): LooseClient {
   return supabase as unknown as LooseClient
-}
-
-// ---------------------------------------------------------------------------
-// Pure builders (unit-testable; no Supabase, no browser globals) — the two invariants live here.
-// ---------------------------------------------------------------------------
-
-/** Fields the admin intake form fills in on an org create. org_type is validated against org-vocab. */
-export interface NewOrgInput {
-  name: string
-  org_type: string
-  description?: string | null
-  address?: string | null
-  city?: string | null
-  state?: string | null
-  zip_code?: string | null
-  phone?: string | null
-  email?: string | null
-  website?: string | null
-  createdBy: string | null
-  /**
-   * Geocoded location as an EWKT string 'SRID=4326;POINT(<lng> <lat>)', or null/undefined when the
-   * org has no address or the geocode failed (INV-C — a failed geocode never fabricates a point).
-   */
-  location?: string | null
-}
-
-/** The exact row written to organizations on an admin org create. */
-export interface OrgInsertRow {
-  name: string
-  org_type: string
-  description: string | null
-  address: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  is_active: true
-  created_by: string | null
-}
-
-/**
- * Build the organizations insert row from admin intake, enforcing INV-B: the org_type MUST be one of
- * the nine non-business types (org-vocab). A 'business' value — or any value outside the vocabulary —
- * throws before any query is issued, so the admin path can never persist a business row. is_active is
- * pinned true so the created org is publicly SELECT-able immediately (INV-A); website runs through the
- * same normalizeUrl helper the rest of the app uses so a stored href is always safe/absolute.
- */
-export function buildOrgInsertPayload(input: NewOrgInput): OrgInsertRow {
-  if (!isNonBusinessOrgType(input.org_type)) {
-    throw new OrgWriteError(
-      `Admin org create is non-business only; refusing org_type "${input.org_type}"`,
-    )
-  }
-  return {
-    name: input.name.trim(),
-    org_type: input.org_type,
-    description: input.description?.trim() || null,
-    address: input.address?.trim() || null,
-    city: input.city?.trim() || null,
-    state: input.state?.trim() || null,
-    zip_code: input.zip_code?.trim() || null,
-    phone: input.phone?.trim() || null,
-    email: input.email?.trim() || null,
-    website: normalizeUrl(input.website),
-    is_active: true,
-    created_by: input.createdBy,
-  }
-}
-
-/** One org_resources row (matching the live table: org_id, resource_id, sort_order). */
-export interface OrgResourceRow {
-  org_id: string
-  resource_id: string
-  sort_order: number
-}
-
-/**
- * Build the org_resources rows for a set of selected catalog resources, enforcing INV-D: exactly one
- * row per DISTINCT resource id, sort_order assigned by first-seen position. A repeated id is dropped
- * (the org_resources PK (org_id,resource_id) is the DB-side backstop, so a duplicate would 23505
- * anyway) — so a selection of N distinct resources yields N rows, and deselecting an id removes
- * exactly that one row's contribution.
- */
-export function buildOrgResourceRows(orgId: string, resourceIds: readonly string[]): OrgResourceRow[] {
-  const seen = new Set<string>()
-  const rows: OrgResourceRow[] = []
-  for (const resourceId of resourceIds) {
-    if (seen.has(resourceId)) continue
-    seen.add(resourceId)
-    rows.push({ org_id: orgId, resource_id: resourceId, sort_order: rows.length })
-  }
-  return rows
-}
-
-/** Build the EWKT geography literal PostgREST accepts for organizations.location. */
-export function ewktPoint(lng: number, lat: number): string {
-  return `SRID=4326;POINT(${lng} ${lat})`
 }
 
 // ---------------------------------------------------------------------------
@@ -329,42 +210,151 @@ export async function fetchApprovedOrganizations(
   })
 }
 
-/** The admin-roster projection of an organization — the exact fields the platform-admin moderation
- *  Organizations tab renders (name + org_type badge + inactive marker + expandable description). */
-export interface AdminOrgRosterRow {
+/** One row of the platform-admin Organizations list. */
+export interface AdminOrgListRow {
   id: string
   name: string
   org_type: string
+  city: string | null
+  state: string | null
   is_active: boolean
-  description: string | null
 }
 
-// Admin-roster projection — name/type/active/description only (explicit, never *). No contact/location
-// columns: the moderation roster shows the type badge, an inactive marker, and an expandable description.
-const ADMIN_ROSTER_COLUMNS = 'id, name, org_type, is_active, description'
+// Admin-list projection — exactly what a list row renders (explicit, never *).
+const ADMIN_LIST_COLUMNS = 'id, name, org_type, city, state, is_active'
 
 /**
- * Admin roster reader — EVERY NON-business org, active OR inactive, ordered by name. This is the
- * platform-admin sibling of fetchApprovedOrganizations: it drops the is_active gate (an admin manages
- * inactive orgs too, shown with an "Inactive" marker) but keeps the SAME disjointness guard — the
- * .in() filter to the nine non-business org_types (INV-1). A 'business' row can never satisfy that
- * filter, so the moderation Organizations tab lists EXACTLY non-business orgs and a business never
- * appears there (RLS orgs_admin_select is the DB-side backstop). Selects explicit columns, never *.
- * Throws OrgReadError so the caller can surface a load failure.
+ * Admin list reader — EVERY NON-business org, active OR inactive, ordered by name. Drops the
+ * is_active gate (an admin manages inactive orgs too) but keeps the disjointness guard: the .in()
+ * filter to the nine non-business org_types, so a business never appears in this tab (RLS
+ * orgs_admin_select is the DB-side backstop). Throws OrgReadError so the caller renders an error
+ * state instead of an empty list.
  */
-export async function fetchAdminOrgRoster(
+export async function fetchAdminOrgList(
   supabase: SupabaseClient<Database>,
-): Promise<AdminOrgRosterRow[]> {
+): Promise<AdminOrgListRow[]> {
   const attrs: Record<string, number> = { result_count: 0 }
   return withMetric('organization.roster.fetch', attrs, async () => {
     const { data, error } = await loose(supabase)
       .from('organizations')
-      .select(ADMIN_ROSTER_COLUMNS)
+      .select(ADMIN_LIST_COLUMNS)
       .in('org_type', [...NON_BUSINESS_ORG_TYPES])
       .order('name', { ascending: true })
       .then((r) => r)
     if (error) throw new OrgReadError(error.message)
-    const rows = (data ?? []) as AdminOrgRosterRow[]
+    const rows = (data ?? []) as AdminOrgListRow[]
+    attrs.result_count = rows.length
+    return rows
+  })
+}
+
+/** A linked resource as the edit panel shows it (the ResourceDirectory selection shape). */
+export interface AdminLinkedResource {
+  id: string
+  name: string
+  category: ResourceCategory
+  city: string | null
+  state: string | null
+}
+
+/** Everything the edit panel prefills: the org row (active or not), its hours, photos and links. */
+export interface AdminOrgDetail {
+  id: string
+  name: string
+  org_type: string
+  description: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  phone: string | null
+  email: string | null
+  website: string | null
+  is_active: boolean
+  location: { lng: number; lat: number } | null
+  hours: BusinessHours[]
+  photos: BusinessPhoto[]
+  resources: AdminLinkedResource[]
+}
+
+const ADMIN_DETAIL_COLUMNS =
+  'id, name, org_type, description, address, city, state, zip_code, phone, email, website, location, is_active'
+const ADMIN_LINK_COLUMNS = 'sort_order, resource:resources(id, name, category, city, state)'
+
+/** Hours ordered by day, then opening time, with seconds trimmed (Postgres returns HH:MM:SS). */
+export function orderLoadedHours(rows: readonly BusinessHours[]): BusinessHours[] {
+  return rows
+    .map((r) => ({ day_of_week: r.day_of_week, open_time: trimSeconds(r.open_time), close_time: trimSeconds(r.close_time) }))
+    .sort((a, b) => a.day_of_week - b.day_of_week || (minutesOf(a.open_time) ?? 0) - (minutesOf(b.open_time) ?? 0))
+}
+
+/**
+ * Admin detail reader for the edit panel — one NON-business org by id, ACTIVE OR INACTIVE, plus its
+ * hours, photos and linked resources (admin RLS *_admin_all policies admit every child row). The
+ * location arrives as EWKB and is parsed to {lng,lat}. Returns null for a missing id or a business.
+ */
+export async function fetchAdminOrgDetail(
+  supabase: SupabaseClient<Database>,
+  id: string,
+): Promise<AdminOrgDetail | null> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('organization.admin_detail.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select(ADMIN_DETAIL_COLUMNS)
+      .eq('id', id)
+      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
+      .single()
+    if (error || !data) return null
+    const org = data as unknown as Omit<AdminOrgDetail, 'location' | 'hours' | 'photos' | 'resources'> & {
+      location: Organization['location']
+    }
+    const [hours, photos, links] = await Promise.all([
+      fetchBusinessHours(supabase, id),
+      fetchBusinessPhotos(supabase, id),
+      loose(supabase)
+        .from('org_resources')
+        .select(ADMIN_LINK_COLUMNS)
+        .eq('org_id', id)
+        .order('sort_order', { ascending: true })
+        .then((r) => r),
+    ])
+    if (links.error) throw new OrgReadError(links.error.message)
+    const resources = ((links.data ?? []) as Array<{ resource: AdminLinkedResource | null }>)
+      .map((r) => r.resource)
+      .filter((r): r is AdminLinkedResource => r != null)
+    attrs.result_count = 1
+    return {
+      ...org,
+      location: parseGeographyPoint(org.location),
+      hours: orderLoadedHours(hours),
+      photos,
+      resources,
+    }
+  })
+}
+
+/** One entry of the duplicate-name index (every org the admin can read, business included). */
+export interface OrgNameIndexRow {
+  id: string
+  name: string
+  org_type: string
+  status: string | null
+}
+
+/** Load every org name once per panel open, for the duplicate-name warning. */
+export async function fetchOrgNameIndex(
+  supabase: SupabaseClient<Database>,
+): Promise<OrgNameIndexRow[]> {
+  const attrs: Record<string, number> = { result_count: 0 }
+  return withMetric('organization.name_index.fetch', attrs, async () => {
+    const { data, error } = await loose(supabase)
+      .from('organizations')
+      .select('id, name, org_type, status')
+      .order('name', { ascending: true })
+      .then((r) => r)
+    if (error) throw new OrgReadError(error.message)
+    const rows = (data ?? []) as OrgNameIndexRow[]
     attrs.result_count = rows.length
     return rows
   })
@@ -394,97 +384,5 @@ export async function organizationsInBounds(
     const rows = (data ?? []) as OrgInBoundsRow[]
     attrs.result_count = rows.length
     return rows
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Admin writers — authorized by orgs_admin_insert / orgs_admin_update (is_current_user_admin()).
-// ---------------------------------------------------------------------------
-
-/**
- * Truthful outcome of an admin org create (mirrors business-data's SubmitOutcome discipline):
- *  - { ok:true, id, locationSet, warning? } — the org row persisted; locationSet says whether the
- *    geocoded point was written; warning is a bounded, PII-free message when the org was created but
- *    its location UPDATE failed (never a silent swallow, never a claim the pin was placed).
- *  - { ok:false, error } — the insert (or the INV-B guard) rejected; nothing persisted.
- */
-export type OrgCreateOutcome =
-  | { ok: true; id: string; locationSet: boolean; warning?: string }
-  | { ok: false; error: string }
-
-/**
- * Create a directory organization as a platform admin. The org insert is wrapped in the single
- * org.admin.upsert wide event (.complete on success, .error on the INV-B guard throw or an insert
- * failure). When input.location is present it is written via the direct admin UPDATE
- * (orgs_admin_update authorizes it) AFTER the insert — a location-write failure does NOT undo the
- * created org, so it is surfaced as a truthful warning rather than flipping the outcome to error
- * (INV-C keeps a failed geocode's null location distinct from a wrong point). Never throws — the
- * non-throwing outcome lets the caller's form revert/surface without hanging.
- */
-export async function adminCreateOrganization(
-  supabase: SupabaseClient<Database>,
-  input: NewOrgInput,
-): Promise<OrgCreateOutcome> {
-  // Bounded, PII-free labels only: the closed-vocab org_type value plus booleans describing the
-  // SHAPE of the submission — never the name/email/address/url/user_id.
-  const attrs = {
-    org_type: input.org_type,
-    has_address: Boolean(input.address?.trim()),
-    has_location: input.location != null,
-    has_contact: Boolean(input.phone?.trim() || input.email?.trim() || input.website?.trim()),
-  }
-  try {
-    return await withMetric('org.admin.upsert', attrs, async () => {
-      // INV-B: buildOrgInsertPayload throws for 'business'/unknown before any query is issued.
-      const payload = buildOrgInsertPayload(input)
-      const { data, error } = await loose(supabase)
-        .from('organizations')
-        .insert(payload as unknown as Record<string, unknown>)
-        .select('id')
-        .single()
-      if (error) throw new OrgWriteError(error.message)
-      const orgId = typeof data?.id === 'string' ? data.id : null
-      if (!orgId) throw new OrgWriteError('Organization did not persist')
-
-      let locationSet = false
-      let warning: string | undefined
-      if (input.location) {
-        const { error: locErr } = await loose(supabase)
-          .from('organizations')
-          .update({ location: input.location })
-          .eq('id', orgId)
-          .then((r) => r)
-        if (locErr) {
-          warning = 'The organization was created, but its map location could not be saved.'
-        } else {
-          locationSet = true
-        }
-      }
-      return { ok: true as const, id: orgId, locationSet, warning }
-    })
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Create failed' }
-  }
-}
-
-/**
- * Link a set of catalog resources to an org (INV-D). Builds exactly one row per distinct resource id
- * and batch-inserts them (org_resources_admin_all authorizes it), wrapped in org.resources.attach.
- * No-op on an empty selection. Throws OrgWriteError on a Supabase failure so the caller can surface
- * the partial-failure honestly.
- */
-export async function attachOrgResources(
-  supabase: SupabaseClient<Database>,
-  orgId: string,
-  resourceIds: readonly string[],
-): Promise<void> {
-  const rows = buildOrgResourceRows(orgId, resourceIds)
-  if (rows.length === 0) return
-  await withMetric('org.resources.attach', { resource_count: rows.length }, async () => {
-    const { error } = await loose(supabase)
-      .from('org_resources')
-      .insert(rows as unknown as Record<string, unknown>[])
-      .then((r) => r)
-    if (error) throw new OrgWriteError(error.message)
   })
 }

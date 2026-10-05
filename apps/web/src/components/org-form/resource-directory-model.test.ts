@@ -6,11 +6,12 @@
 // the category chips. The repo's vitest runs in a node environment with no DOM test setup, so the
 // component's logic is proven here at its pure boundary.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 import type { DirectoryResource } from '@/lib/resource-directory'
 import {
   applyClear,
-  categoriesIn,
   chipCategories,
   locationText,
   mergePage,
@@ -20,6 +21,8 @@ import {
   zeroResultActions,
   type DirectoryUiFilters,
 } from './resource-directory-model'
+import { ALL_CATEGORIES, CATEGORY_KEYS } from './org-labels'
+import { orgFormMessages } from '@/lib/i18n-org-forms'
 
 const row = (id: string, over: Partial<DirectoryResource> = {}): DirectoryResource => ({
   id,
@@ -93,12 +96,20 @@ describe('zero-result clear buttons', () => {
 })
 
 describe('category chips', () => {
-  it('shows the categories seen in scope plus the active one, sorted by label', () => {
-    const seen = categoriesIn([row('a', { category: 'other' }), row('b', { category: 'food' }), row('c', { category: 'food' })])
-    expect(seen.sort()).toEqual(['food', 'other'])
-    // Labels: Food, General (other), Housing
-    expect(chipCategories(seen, 'housing')).toEqual(['food', 'other', 'housing'])
-    expect(chipCategories([], null)).toEqual([])
+  it('always lists EVERY category (not only those in loaded rows), sorted by label', () => {
+    const label = (c: string) => orgFormMessages.en[CATEGORY_KEYS[c as keyof typeof CATEGORY_KEYS]]
+    const chips = chipCategories(label, 'en')
+    expect(new Set(chips)).toEqual(new Set(ALL_CATEGORIES))
+    expect(chips).toHaveLength(25)
+    const labels = chips.map(label)
+    expect(labels).toEqual([...labels].sort((x, y) => x.localeCompare(y, 'en')))
+  })
+
+  it('sorts by the translated label of the viewer locale', () => {
+    const es = chipCategories((c) => orgFormMessages.es[CATEGORY_KEYS[c]], 'es')
+    expect(es.map((c) => orgFormMessages.es[CATEGORY_KEYS[c]])).toEqual(
+      es.map((c) => orgFormMessages.es[CATEGORY_KEYS[c]]).sort((x, y) => x.localeCompare(y, 'es'))
+    )
   })
 })
 

@@ -10,9 +10,13 @@
 // calculateDistance + the server distance-bucket vocabulary — no new distance formula), but has NO
 // submit form: organizations are created through the platform-admin intake, never member-submitted, so
 // this panel only lists them. Each row links to the org's public /s/organization/[id] page.
+// Platform admins also get an "Add organization" link into the admin setup panel.
+//
+// Distance origin follows the map panel: device GPS only when the user opted in to location
+// sharing (requested once on mount), otherwise the profile's stored lat/lng.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Building2, MapPin, ExternalLink, Loader2 } from 'lucide-react'
+import { Building2, MapPin, ExternalLink, Loader2, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { logger } from '@/lib/logger'
@@ -20,6 +24,11 @@ import { distanceBucketLabel } from '@/components/feed/post-model'
 import { bucketForKm, parseGeographyPoint, sortByDistanceKm } from '@/lib/business'
 import { fetchApprovedOrganizations, type Organization } from '@/lib/org-data'
 import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
+import { readShareLocationPref } from '@/lib/privacy-prefs'
+import { useAuth } from '@/hooks/use-auth'
+import { useAdminTier } from '@/hooks/use-admin-tier'
+import { resolveUserLocale } from '@/lib/i18n'
+import { orgFormT } from '@/lib/i18n-org-forms'
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
 function orgTypeLabel(orgType: string): string {
@@ -27,8 +36,16 @@ function orgTypeLabel(orgType: string): string {
 }
 
 export function OrganizationsPanel() {
-  const { position } = useGeolocation()
+  const { position, getCurrentPosition } = useGeolocation()
+  const { profile } = useAuth()
+  const { tier } = useAdminTier()
   const supabase = createClient()
+
+  // Device GPS only with the explicit Share Location opt-in, requested once on mount.
+  useEffect(() => {
+    if (!readShareLocationPref()) return
+    getCurrentPosition()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,7 +71,15 @@ export function OrganizationsPanel() {
 
   // Sort by bucketed distance when a position is available; else keep the name order the reader
   // returned. Distance uses the existing haversine calculateDistance (same as BusinessesPanel).
-  const origin = position?.coords
+  const gpsLat = position?.coords?.latitude
+  const gpsLng = position?.coords?.longitude
+  const origin = useMemo<{ latitude: number; longitude: number } | null>(() => {
+    if (gpsLat != null && gpsLng != null) return { latitude: gpsLat, longitude: gpsLng }
+    const lat = profile?.latitude
+    const lng = profile?.longitude
+    if (lat != null && lng != null && (lat !== 0 || lng !== 0)) return { latitude: lat, longitude: lng }
+    return null
+  }, [gpsLat, gpsLng, profile?.latitude, profile?.longitude])
   const sorted = useMemo(() => {
     if (!origin) return organizations
     const kmOf = (o: Organization): number | null => {
@@ -79,14 +104,23 @@ export function OrganizationsPanel() {
     <div className="h-full overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-2xl space-y-5">
         {/* Header */}
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-org/10 text-org">
             <Building2 className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-bold text-stone-800">Local Organizations</h1>
             <p className="text-xs text-stone-500">Food banks, shelters, clinics, and community organizations near you</p>
           </div>
+          {tier === 'platform_admin' && (
+            <a
+              href="/moderation?tab=organizations&org=new"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {orgFormT(profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en', 'addOrganization')}
+            </a>
+          )}
         </div>
 
         {/* Showcase list */}
@@ -111,9 +145,9 @@ export function OrganizationsPanel() {
                 <li key={o.id}>
                   <a
                     href={`/s/organization/${o.id}`}
-                    className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40"
+                    className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4 transition-colors hover:border-org/40 hover:bg-org/5"
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white bg-indigo-700 text-sm font-semibold uppercase text-white shadow-sm">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white bg-org text-sm font-semibold uppercase text-white shadow-sm">
                       {o.name.trim().charAt(0) || <Building2 className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -125,7 +159,7 @@ export function OrganizationsPanel() {
                         <p className="mt-0.5 line-clamp-2 text-sm text-stone-600">{o.description}</p>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
-                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
+                        <span className="rounded-full bg-org/10 px-2 py-0.5 font-medium text-org">
                           {orgTypeLabel(o.org_type)}
                         </span>
                         {addr && (
