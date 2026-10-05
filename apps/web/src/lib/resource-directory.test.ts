@@ -141,6 +141,11 @@ describe('query shape', () => {
     const w = makeClient(ok(0, []))
     await fetchDirectoryPage(w.client, { city: '50%_' })
     expect(callsOf(w.calls, 'ilike')).toEqual([{ method: 'ilike', args: ['city', '50\\%\\_%'] }])
+
+    // PostgREST reads `*` as `%` in like/ilike values: a typed `*` must never become a wildcard.
+    const star = makeClient(ok(0, []))
+    await fetchDirectoryPage(star.client, { city: 'R*t*' })
+    expect(callsOf(star.calls, 'ilike')).toEqual([{ method: 'ilike', args: ['city', 'Rt%'] }])
   })
 
   it('filters category only when set', async () => {

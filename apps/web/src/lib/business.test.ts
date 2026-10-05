@@ -168,6 +168,9 @@ describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
     expect(formatHoursInterval(hrs(1, '00:00:00', '24:00:00'))).toBe('Open 24 hours')
     expect(formatHoursInterval(hrs(5, '22:00', '02:00'))).toBe('10:00 PM – 2:00 AM (next day)')
     expect(formatHoursInterval(hrs(2, '00:01', '00:00'))).toBe('12:01 AM – 12:00 AM (next day)')
+    // Zero-length rows (FEED org has six 00:00–00:00 rows) render nothing — never "(next day)".
+    expect(formatHoursInterval(hrs(1, '00:00:00', '00:00:00'))).toBeNull()
+    expect(formatHoursInterval(hrs(3, '09:00', '09:00'))).toBeNull()
   })
   it('JSON-LD times: HH:MM, with end of day emitted as 23:59', () => {
     expect(schemaOrgTime('09:00:00')).toBe('09:00')

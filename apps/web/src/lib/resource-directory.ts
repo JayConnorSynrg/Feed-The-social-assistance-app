@@ -103,9 +103,12 @@ export function queryLenBucket(len: number): '0' | '1-3' | '4-10' | '11+' {
   return '11+'
 }
 
-/** Escapes LIKE wildcards so a typed city is matched literally as a prefix. */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (m) => `\\${m}`)
+/**
+ * Escapes LIKE wildcards so a typed city is matched literally as a prefix. PostgREST also turns `*`
+ * into `%` inside like/ilike values, so `*` is removed (no city name contains one).
+ */
+export function escapeLike(value: string): string {
+  return value.replace(/\*/g, '').replace(/[\\%_]/g, (m) => `\\${m}`)
 }
 
 /**

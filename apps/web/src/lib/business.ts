@@ -250,7 +250,8 @@ export function minuteToClock(minuteOfDay: number): string {
 
 /**
  * Format one business_hours row as an interval label, e.g. "9:00 AM – 5:00 PM". 00:00–24:00 reads
- * "Open 24 hours"; an interval that closes at or before it opens ends the next day and says so.
+ * "Open 24 hours"; an interval that closes before it opens ends the next day and says so; a
+ * zero-length interval returns null.
  * Returns null when either endpoint is unparseable (the row is omitted rather than shown broken).
  */
 export function formatHoursInterval(row: BusinessHours): string | null {
@@ -258,6 +259,8 @@ export function formatHoursInterval(row: BusinessHours): string | null {
   const close = timeToMinutes(row.close_time)
   if (open === null || close === null) return null
   if (open === 0 && close === MINUTES_PER_DAY) return 'Open 24 hours'
+  // A zero-length interval (e.g. 00:00–00:00) is not hours at all: omit it (never "(next day)").
+  if (close === open) return null
   const label = `${minuteToClock(open)} – ${minuteToClock(close)}`
   return close <= open ? `${label} (next day)` : label
 }
