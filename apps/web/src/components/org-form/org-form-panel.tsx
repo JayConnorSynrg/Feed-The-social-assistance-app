@@ -41,27 +41,19 @@ import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-fo
 import { NON_BUSINESS_ORG_TYPES } from '@/lib/org-vocab'
 import { fetchAdminOrgDetail, fetchOrgNameIndex, type AdminOrgDetail, type OrgNameIndexRow } from '@/lib/org-data'
 import { adminSaveOrganization } from '@/lib/org-admin-rpc'
-import {
-  ORG_PHOTO_ACCEPT,
-  OrgPhotoUploadError,
-  deleteOrgPhotos,
-  isAcceptablePhoto,
-  uploadErrorKey,
-  uploadOrgPhoto,
-} from '@/lib/org-photo-upload'
+import { ORG_PHOTO_ACCEPT, deleteOrgPhotos, isAcceptablePhoto, uploadOrgPhoto } from '@/lib/org-photo-upload'
 import { createSingleFlight } from '@/components/feed/composer-guards'
 import { ResourceDirectory } from './resource-directory'
 import type { SelectedResource } from './resource-directory-model'
 import { HoursEditor } from './hours-editor'
 import { orgTypeKey } from './org-labels'
 import {
-  buildSavePayload,
   emptyFormValues,
+  isLinkable,
   findSimilarOrgs,
   formValuesFromDetail,
-  newPhotoItems,
   orgFormSchema,
-  photoCleanupPaths,
+  runOrgSave,
   type OrgFormKind,
   type OrgFormMode,
   type OrgFormValues,
@@ -86,6 +78,8 @@ export interface OrgFormPanelProps {
   onEditExisting?: (id: string) => void
   /** A guarded close requested through the handle was declined ("Keep editing"). */
   onCloseRequestDeclined?: () => void
+  /** Where focus goes when the panel closes (Save, Cancel, Escape, Back). */
+  onCloseAutoFocus?: (event: Event) => void
   ref?: Ref<OrgFormPanelHandle>
 }
 
@@ -100,7 +94,7 @@ type CloseResult = 'saved' | 'discarded' | 'abandoned'
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
 const FIELD =
-  'w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-500 aria-[invalid=true]:border-red-600 ' +
+  'w-full rounded-lg border border-stone-500 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-500 aria-[invalid=true]:border-red-600 ' +
   FOCUS_RING
 const INPUT = `h-10 ${FIELD}`
 const LABEL = 'mb-1 block text-sm font-medium text-stone-800'
@@ -108,13 +102,16 @@ const PRIMARY =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 ' +
   FOCUS_RING
 const SECONDARY =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
   FOCUS_RING
+// Full-screen below 640px: keep header/footer clear of the notch and the home indicator.
+const SAFE_TOP = 'pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3'
+const SAFE_BOTTOM = 'pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3'
 const ICON_BUTTON =
   'inline-flex h-10 w-10 items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100 hover:text-stone-900 ' + FOCUS_RING
 
 export function OrgFormPanel(props: OrgFormPanelProps) {
-  const { open, mode, kind, orgId, locale, onOpenChange, onSaved, onEditExisting, onCloseRequestDeclined, ref } = props
+  const { open, mode, kind, orgId, locale, onOpenChange, onSaved, onEditExisting, onCloseRequestDeclined, onCloseAutoFocus, ref } = props
   const tr = useCallback((key: keyof OrgFormMessages) => orgFormT(locale, key), [locale])
 
   // Guard state shared with the form inside (dirty flag + saving flag + view), held in refs so the
@@ -128,7 +125,14 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   // Radix calls onOpenChange(false) after an Action/Cancel click too, so the resolution is read from
   // a ref: each pending action resolves exactly once.
   const pendingRef = useRef<PendingAction | null>(null)
+  // Where focus was when "Discard changes?" opened, restored on "Keep editing".
+  const discardReturnRef = useRef<HTMLElement | null>(null)
+  const keptEditingRef = useRef(false)
   const setPending = useCallback((action: PendingAction | null) => {
+    if (action && !pendingRef.current) {
+      discardReturnRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      keptEditingRef.current = false
+    }
     pendingRef.current = action
     setPendingState(action)
   }, [])
@@ -213,6 +217,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   const keepEditing = () => {
     const action = pendingRef.current
     if (!action) return
+    keptEditingRef.current = true
     setPending(null)
     if (action.type === 'close' && action.fromRequest) onCloseRequestDeclined?.()
   }
@@ -231,6 +236,8 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
       <Sheet open={open} onOpenChange={(next) => (next ? undefined : requestClose())}>
         <SheetContent
           dir={dir(locale)}
+          lang={locale}
+          onCloseAutoFocus={onCloseAutoFocus}
           side="right"
           hideDefaultClose
           disableOutsideClose={dirty}
@@ -259,7 +266,16 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
       </Sheet>
 
       <AlertDialog open={pending !== null} onOpenChange={(o) => (o ? undefined : keepEditing())}>
-        <AlertDialogContent dir={dir(locale)}>
+        <AlertDialogContent
+          dir={dir(locale)}
+          lang={locale}
+          onCloseAutoFocus={(e) => {
+            // "Keep editing": back to where the admin was. "Discard": the panel's own close handles focus.
+            e.preventDefault()
+            const target = discardReturnRef.current
+            if (keptEditingRef.current && target?.isConnected) target.focus()
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>{tr('discardTitle')}</AlertDialogTitle>
             <AlertDialogDescription>{tr('discardBody')}</AlertDialogDescription>
@@ -360,16 +376,19 @@ function PanelHeader({
 }: {
   title: string
   tr: (key: keyof OrgFormMessages) => string
-  onClose: () => void
+  /** Omitted in the directory sub-view, where Back is the way out. */
+  onClose?: () => void
   leading?: ReactNode
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-stone-200 bg-white px-4 py-3">
+    <div className={`flex items-center gap-2 border-b border-stone-200 bg-white px-4 py-3 ${SAFE_TOP}`}>
       {leading}
       <SheetTitle className="min-w-0 flex-1 truncate text-lg font-semibold text-stone-900">{title}</SheetTitle>
-      <button type="button" className={ICON_BUTTON} aria-label={tr('panelClose')} onClick={onClose}>
-        <X className="h-5 w-5" aria-hidden="true" />
-      </button>
+      {onClose && (
+        <button type="button" className={ICON_BUTTON} aria-label={tr('panelClose')} onClick={onClose}>
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }
@@ -409,7 +428,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
     mode: 'onSubmit',
     reValidateMode: 'onChange',
   })
-  const { register, control, handleSubmit, watch, setValue, getValues, formState } = form
+  const { register, control, handleSubmit, watch, setValue, getValues, setError, formState } = form
   const { errors, isDirty, dirtyFields } = formState
 
   // Report dirty state + the dirty field names (closed vocabulary) to the guard.
@@ -421,6 +440,19 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
   // ---- sub-view: resource directory ----------------------------------------------------------
   const [view, setView] = useState<'form' | 'directory'>('form')
   const [draftResources, setDraftResources] = useState<SelectedResource[]>([])
+  // Leaving the directory returns focus to "Browse directory" (the directory focuses its own search).
+  const browseRef = useRef<HTMLButtonElement>(null)
+  const cameFromDirectory = useRef(false)
+  useEffect(() => {
+    if (view === 'directory') {
+      cameFromDirectory.current = true
+      return
+    }
+    if (cameFromDirectory.current) {
+      cameFromDirectory.current = false
+      browseRef.current?.focus()
+    }
+  }, [view])
   useEffect(() => {
     registerBackToForm(() => {
       if (view !== 'directory') return false
@@ -531,49 +563,71 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Server-side 22023 field errors show on the field itself (and take focus) when one matches.
+  const FIELD_ERRORS: Partial<Record<keyof OrgFormMessages, { field: 'name' | 'email' | 'website'; message: keyof OrgFormMessages }>> = {
+    saveErrName: { field: 'name', message: 'errNameRequired' },
+    saveErrEmail: { field: 'email', message: 'errEmailInvalid' },
+    saveErrWebsite: { field: 'website', message: 'errWebsiteInvalid' },
+  }
+  const showSaveError = (key: keyof OrgFormMessages) => {
+    setSaveError(tr(key))
+    const fieldError = FIELD_ERRORS[key]
+    if (fieldError) setError(fieldError.field, { type: 'server', message: fieldError.message }, { shouldFocus: true })
+  }
+
   const save = async (values: OrgFormValues) => {
-    onSaveAttempt()
-    setSaving(true)
-    onSavingChange(true)
-    setSaveError(null)
-    const uploadedPaths: string[] = []
+    let ran = false
     try {
-      const uploaded = new Map<string, { url: string; path: string }>()
-      try {
-        for (const item of newPhotoItems(values)) {
-          const up = await uploadOrgPhoto(supabase, orgId, item.file)
-          uploaded.set(item.key, up)
-          uploadedPaths.push(up.path)
-        }
-      } catch (err) {
-        await deleteOrgPhotos(supabase, orgId, photoCleanupPaths(orgId, { ok: false, uploaded: uploadedPaths }))
-        setSaveError(tr(uploadErrorKey(err instanceof OrgPhotoUploadError ? err.status : 0)))
+      const outcome = await runOrgSave({
+        orgId,
+        values,
+        hadLocation,
+        flight: flight.current,
+        onStart: () => {
+          ran = true
+          onSaveAttempt()
+          setSaving(true)
+          onSavingChange(true)
+          setSaveError(null)
+        },
+        deps: {
+          upload: (file) => uploadOrgPhoto(supabase, orgId, file),
+          save: (payload) => adminSaveOrganization(supabase, orgId, payload, mode),
+          remove: (paths) => deleteOrgPhotos(supabase, orgId, paths),
+        },
+      })
+      if (!outcome) return
+      if (!outcome.ok) {
+        showSaveError(outcome.errorKey)
         return
       }
-      const payload = buildSavePayload(values, uploaded, hadLocation)
-      const res = await adminSaveOrganization(supabase, orgId, payload, mode)
-      if (!res.ok) {
-        await deleteOrgPhotos(supabase, orgId, photoCleanupPaths(orgId, { ok: false, uploaded: uploadedPaths }))
-        setSaveError(tr(res.errorKey))
-        return
-      }
-      await deleteOrgPhotos(supabase, orgId, photoCleanupPaths(orgId, { ok: true, removed: res.result.removed_photo_paths }))
       if (dupes.length > 0) logEvent('admin.org.duplicate_warning', { action: 'ignored' })
-      onSaved({ id: res.result.id, created: res.result.created, name: payload.name })
-    } catch {
-      await deleteOrgPhotos(supabase, orgId, photoCleanupPaths(orgId, { ok: false, uploaded: uploadedPaths }))
-      setSaveError(tr('saveErrGeneric'))
+      onSaved({ id: outcome.result.id, created: outcome.result.created, name: outcome.payload.name })
     } finally {
-      setSaving(false)
-      onSavingChange(false)
+      if (ran) {
+        setSaving(false)
+        onSavingChange(false)
+      }
     }
   }
 
-  const onInvalid = (errs: FieldErrors<OrgFormValues>) => {
-    const firstKey = (errs.hours?.root?.message ?? errs.hours?.message ?? errs.pin?.message) as keyof OrgFormMessages | undefined
-    setSaveError(firstKey ? tr(firstKey) : null)
+  // Client-side errors: name/email/website are focused by react-hook-form; hours focus their first
+  // invalid control (through the Controller ref); an unconfirmed pin focuses "Confirm pin".
+  const hoursSectionRef = useRef<HTMLDivElement>(null)
+  const resourcesRef = useRef<HTMLDivElement>(null)
+  const confirmPinRef = useRef<HTMLButtonElement>(null)
+  const focusFirstInvalidHours = () => {
+    hoursSectionRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }
-  const submit = handleSubmit((values) => void flight.current.run(() => save(values)), onInvalid)
+  const onInvalid = (errs: FieldErrors<OrgFormValues>) => {
+    const firstKey = (errs.resources?.root?.message ?? errs.resources?.message ?? errs.hours?.root?.message ?? errs.hours?.message ?? errs.pin?.message) as keyof OrgFormMessages | undefined
+    setSaveError(firstKey ? tr(firstKey) : null)
+    if (errs.name || errs.email || errs.website) return
+    if (errs.hours) focusFirstInvalidHours()
+    else if (errs.pin) confirmPinRef.current?.focus()
+    else if (errs.resources) resourcesRef.current?.querySelector<HTMLElement>('button')?.focus()
+  }
+  const submit = handleSubmit((values) => void save(values), onInvalid)
 
   const errText = (key: unknown): string | null => (typeof key === 'string' && key ? tr(key as keyof OrgFormMessages) : null)
   const resources = watch('resources')
@@ -596,7 +650,6 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
         <PanelHeader
           title={title}
           tr={tr}
-          onClose={back}
           leading={
             <button type="button" className={ICON_BUTTON} aria-label={tr('resBack')} onClick={back}>
               <ArrowLeft className="h-5 w-5 rtl:rotate-180" aria-hidden="true" />
@@ -606,6 +659,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
         <div className="flex-1 overflow-y-auto p-4">
           <ResourceDirectory
             key={orgId}
+            autoFocusSearch
             value={draftResources}
             onChange={setDraftResources}
             defaultState={getValues('state')}
@@ -613,7 +667,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
             locale={locale}
           />
         </div>
-        <div className="flex justify-end gap-2 border-t border-stone-200 bg-white px-4 py-3">
+        <div className={`flex justify-end gap-2 border-t border-stone-200 bg-white px-4 py-3 ${SAFE_BOTTOM}`}>
           <button type="button" className={SECONDARY} onClick={back}>
             {tr('resBack')}
           </button>
@@ -630,6 +684,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
   const websiteErr = errText(errors.website?.message)
   const hoursErr = errText(errors.hours?.root?.message ?? errors.hours?.message)
   const pinErr = errText(errors.pin?.message)
+  const resourcesErr = errText(errors.resources?.root?.message ?? errors.resources?.message)
 
   return (
     <>
@@ -639,12 +694,13 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
           <Section title={tr('secBasics')}>
             <div>
               <label htmlFor={`${uid}-name`} className={LABEL}>
-                {tr('fieldName')}
+                {tr('fieldName')} <span className="font-normal text-stone-600">({tr('fieldRequired')})</span>
               </label>
               <input
                 id={`${uid}-name`}
                 className={INPUT}
-                autoComplete="organization"
+                autoComplete="off"
+                aria-required="true"
                 aria-invalid={nameErr ? true : undefined}
                 aria-describedby={nameErr ? `${uid}-name-err` : dupes.length ? `${uid}-dupe` : undefined}
                 {...register('name', { onBlur: checkDuplicates })}
@@ -698,7 +754,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                 <label htmlFor={`${uid}-phone`} className={LABEL}>
                   {tr('fieldPhone')}
                 </label>
-                <input id={`${uid}-phone`} type="tel" autoComplete="tel" className={INPUT} {...register('phone')} />
+                <input id={`${uid}-phone`} type="tel" autoComplete="off" className={INPUT} {...register('phone')} />
               </div>
               <div>
                 <label htmlFor={`${uid}-email`} className={LABEL}>
@@ -707,7 +763,7 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                 <input
                   id={`${uid}-email`}
                   type="email"
-                  autoComplete="email"
+                  autoComplete="off"
                   className={INPUT}
                   aria-invalid={emailErr ? true : undefined}
                   aria-describedby={emailErr ? `${uid}-email-err` : undefined}
@@ -747,26 +803,26 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               <label htmlFor={`${uid}-street`} className={LABEL}>
                 {tr('fieldStreet')}
               </label>
-              <input id={`${uid}-street`} autoComplete="street-address" className={INPUT} {...register('address')} />
+              <input id={`${uid}-street`} autoComplete="off" className={INPUT} {...register('address')} />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr_1fr]">
               <div>
                 <label htmlFor={`${uid}-city`} className={LABEL}>
                   {tr('fieldCity')}
                 </label>
-                <input id={`${uid}-city`} autoComplete="address-level2" className={INPUT} {...register('city')} />
+                <input id={`${uid}-city`} autoComplete="off" className={INPUT} {...register('city')} />
               </div>
               <div>
                 <label htmlFor={`${uid}-state`} className={LABEL}>
                   {tr('fieldState')}
                 </label>
-                <input id={`${uid}-state`} autoComplete="address-level1" className={INPUT} {...register('state')} />
+                <input id={`${uid}-state`} autoComplete="off" className={INPUT} {...register('state')} />
               </div>
               <div>
                 <label htmlFor={`${uid}-zip`} className={LABEL}>
                   {tr('fieldZip')}
                 </label>
-                <input id={`${uid}-zip`} autoComplete="postal-code" inputMode="numeric" className={INPUT} {...register('zip_code')} />
+                <input id={`${uid}-zip`} autoComplete="off" inputMode="numeric" className={INPUT} {...register('zip_code')} />
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -776,8 +832,10 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               </button>
               {pin.status === 'draft' && (
                 <button
+                  ref={confirmPinRef}
                   type="button"
                   className={PRIMARY}
+                  aria-describedby={pinErr ? `${uid}-pin-err` : undefined}
                   onClick={() => {
                     setPin({ status: 'confirmed', lng: pin.lng, lat: pin.lat })
                   }}
@@ -809,24 +867,36 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
               recenterKey={recenterKey}
               onPlace={placePin}
               label={tr('locMapLabel')}
+              placeCenterLabel={tr('locPlaceCenter')}
               approximate={pin.status === 'draft' && pin.source === 'approximate'}
             />
-            {pinErr && <p className="text-sm text-red-700">{pinErr}</p>}
+            {pinErr && (
+              <p id={`${uid}-pin-err`} className="text-sm text-red-700">
+                {pinErr}
+              </p>
+            )}
           </Section>
 
           <Section title={tr('secHours')}>
+            <div ref={hoursSectionRef}>
             <Controller
               control={control}
               name="hours"
-              render={({ field }) => (
+              render={({ field }) => {
+                // react-hook-form focuses an errored field through its ref: point it at the first
+                // invalid hours control.
+                field.ref({ focus: focusFirstInvalidHours })
+                return (
                 <HoursEditor
                   value={field.value}
                   onChange={field.onChange}
                   locale={locale}
                   notice={initial.droppedZeroLength > 0 ? tr('hoursDroppedZero') : null}
                 />
-              )}
+                )
+              }}
             />
+            </div>
             {hoursErr && <p className="text-sm text-red-700">{hoursErr}</p>}
           </Section>
 
@@ -876,22 +946,51 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
           </Section>
 
           <Section title={tr('secResources')}>
+            <div ref={resourcesRef} className="flex flex-col gap-3">
             {resources.length === 0 ? (
               <p className="text-sm text-stone-600">{tr('resNone')}</p>
             ) : (
               <>
                 <p className="text-sm font-medium text-stone-800">{formatMessage(tr('resCount'), { count: resources.length })}</p>
                 <ol className="flex flex-col gap-1 text-sm text-stone-800">
-                  {resources.map((r) => (
-                    <li key={r.id} className="truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5">
-                      {r.name}
-                    </li>
-                  ))}
+                  {resources.map((r) => {
+                    const stale = !isLinkable(r)
+                    return (
+                      <li
+                        key={r.id}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 ${stale ? 'border-amber-400 bg-amber-50' : 'border-stone-200 bg-stone-50'}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                        {stale && (
+                          <>
+                            <span className="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">
+                              {tr('resNotApproved')}
+                            </span>
+                            <button
+                              type="button"
+                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-700 hover:bg-amber-100 ${FOCUS_RING}`}
+                              aria-label={formatMessage(tr('dirRemove'), { name: r.name })}
+                              onClick={() =>
+                                setValue(
+                                  'resources',
+                                  getValues('resources').filter((x) => x.id !== r.id),
+                                  { shouldDirty: true, shouldValidate: formState.isSubmitted }
+                                )
+                              }
+                            >
+                              <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ol>
               </>
             )}
             <div>
               <button
+                ref={browseRef}
                 type="button"
                 className={SECONDARY}
                 onClick={() => {
@@ -902,10 +1001,12 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                 {tr('resBrowse')}
               </button>
             </div>
+            {resourcesErr && <p className="text-sm text-red-700">{resourcesErr}</p>}
+            </div>
           </Section>
         </div>
       </form>
-      <div className="flex flex-col gap-2 border-t border-stone-200 bg-white px-4 py-3">
+      <div className={`flex flex-col gap-2 border-t border-stone-200 bg-white px-4 py-3 ${SAFE_BOTTOM}`}>
         <p aria-live="assertive" className="text-sm text-red-700 empty:hidden">
           {saveError}
         </p>

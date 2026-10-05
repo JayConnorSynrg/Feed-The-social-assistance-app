@@ -57,12 +57,14 @@ const PRIMARY =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 ' +
   FOCUS_RING
 const SECONDARY =
-  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
+  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
   FOCUS_RING
 const MENU_ITEM =
-  'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-3 text-sm text-stone-800 outline-none data-[highlighted]:bg-stone-100'
+  'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-3 text-sm text-stone-800 outline-none data-[highlighted]:bg-stone-100 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 
 type ConfirmTarget = { org: AdminOrgListRow; next: boolean }
+
+const moreButtonId = (orgId: string) => `more-${orgId}`
 
 export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: OrgsSectionProps) {
   const supabase = useMemo(() => createClient(), [])
@@ -118,7 +120,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
         </h2>
         <p className="mt-1 text-sm text-stone-600">{tr('listIntro')}</p>
       </div>
-      <button type="button" className={PRIMARY} onClick={onCreate}>
+      <button type="button" className={PRIMARY} onClick={onCreate} data-org-create="">
         <Plus className="h-4 w-4" aria-hidden="true" />
         {tr('createOrganization')}
       </button>
@@ -126,7 +128,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
   )
 
   return (
-    <div dir={dir(locale)}>
+    <div dir={dir(locale)} lang={locale}>
       {header}
       <p aria-live="polite" className="mb-3 text-sm font-medium text-brand empty:hidden">
         {notice}
@@ -201,7 +203,8 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                         type="button"
                         className={SECONDARY}
                         aria-expanded={expanded}
-                        aria-controls={`members-${org.id}`}
+                        aria-controls={expanded ? `members-${org.id}` : undefined}
+                        aria-label={formatMessage(tr('actionMembersNamed'), { name: org.name })}
                         onClick={() => setExpandedId(expanded ? null : org.id)}
                       >
                         {tr('actionMembers')}
@@ -210,10 +213,18 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                       <Menu.Root>
                         <Menu.Trigger asChild>
                           <button
+                            id={moreButtonId(org.id)}
                             type="button"
-                            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 disabled:opacity-60 ${FOCUS_RING}`}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-500 bg-white text-stone-700 hover:bg-stone-100 aria-disabled:opacity-60 ${FOCUS_RING}`}
                             aria-label={formatMessage(tr('actionMore'), { name: org.name })}
-                            disabled={busyId === org.id}
+                            aria-disabled={busyId === org.id || undefined}
+                            onPointerDown={(e) => {
+                              // Stays focusable while the toggle runs; just does not open.
+                              if (busyId === org.id) e.preventDefault()
+                            }}
+                            onKeyDown={(e) => {
+                              if (busyId === org.id && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) e.preventDefault()
+                            }}
                           >
                             {busyId === org.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -236,6 +247,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                                 <a href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer">
                                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                                   {tr('actionViewPublic')}
+                                  <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
                                 </a>
                               </Menu.Item>
                             )}
@@ -258,7 +270,15 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => (o ? undefined : setConfirm(null))}>
         {confirm && (
-          <AlertDialogContent dir={dir(locale)}>
+          <AlertDialogContent
+            dir={dir(locale)}
+            lang={locale}
+            onCloseAutoFocus={(e) => {
+              // Back to the row's More button (Radix would aim at the menu trigger it no longer tracks).
+              e.preventDefault()
+              document.getElementById(moreButtonId(confirm.org.id))?.focus()
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>
                 {formatMessage(tr(confirm.next ? 'reactivateTitle' : 'deactivateTitle'), { name: confirm.org.name })}
@@ -398,8 +418,16 @@ function OrgMembers({ orgId }: { orgId: string }) {
           {addingMember ? 'Adding…' : 'Add Member'}
         </button>
       </div>
-      {addMemberError && <p className="mb-2 text-xs text-red-700">{addMemberError}</p>}
-      {rosterError && <p className="mb-2 text-xs text-red-700">{rosterError}</p>}
+      {addMemberError && (
+        <p role="alert" className="mb-2 text-xs text-red-700">
+          {addMemberError}
+        </p>
+      )}
+      {rosterError && (
+        <p role="alert" className="mb-2 text-xs text-red-700">
+          {rosterError}
+        </p>
+      )}
 
       {loadingMembers ? (
         <p className="text-sm text-stone-600">Loading members…</p>
@@ -439,7 +467,8 @@ function OrgMembers({ orgId }: { orgId: string }) {
                     <button
                       type="button"
                       onClick={() => handleRemoveMember(m.id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-red-700 hover:text-red-800"
+                      aria-label={`Remove member ${m.user_id}`}
+                      className="inline-flex min-h-6 min-w-6 items-center gap-1 rounded px-1 text-xs font-medium text-red-700 hover:text-red-800"
                     >
                       <Trash2 className="h-3 w-3" aria-hidden="true" /> Remove
                     </button>

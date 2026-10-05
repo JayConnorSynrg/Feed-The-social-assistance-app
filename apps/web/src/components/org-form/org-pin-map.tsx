@@ -3,7 +3,8 @@
 //
 // Small map for placing an organization's pin. Mapbox TILES only (display) — no Mapbox geocoding
 // anywhere in this form, and Mapbox telemetry is off. Click the map to place the pin; drag the
-// pin to adjust it. The marker is controlled (it follows the drag locally and commits on drag end,
+// pin to adjust it. Keyboard path: focus the map, move it with the arrow keys, then "Place pin at
+// map center" (a crosshair marks the center). Every placement is a draft the person confirms. The marker is controlled (it follows the drag locally and commits on drag end,
 // so it never snaps back), and the camera recenters whenever `recenterKey` changes (a new
 // geocoded draft). The container may resize as the panel slides in, so a ResizeObserver keeps
 // the canvas sized.
@@ -13,7 +14,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import Map, { Marker, NavigationControl, type MapRef } from 'react-map-gl/mapbox'
-import { MapPin } from 'lucide-react'
+import { Crosshair, MapPin } from 'lucide-react'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 const US_CENTER = { longitude: -98.5795, latitude: 39.8283, zoom: 3 }
@@ -25,10 +26,12 @@ export interface OrgPinMapProps {
   /** Map click: place (or move) the pin here. */
   onPlace: (coords: { lng: number; lat: number }) => void
   label: string
+  /** Text of the "Place pin at map center" button. */
+  placeCenterLabel: string
   approximate?: boolean
 }
 
-export default function OrgPinMap({ pin, recenterKey, onPlace, label, approximate }: OrgPinMapProps) {
+export default function OrgPinMap({ pin, recenterKey, onPlace, label, placeCenterLabel, approximate }: OrgPinMapProps) {
   const mapRef = useRef<MapRef>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewState, setViewState] = useState(() =>
@@ -54,8 +57,14 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, approximat
   if (!MAPBOX_TOKEN) return null
   const shown = dragPos ?? pin
 
+  const placeAtCenter = () => {
+    const center = mapRef.current?.getCenter()
+    if (center) onPlace({ lng: center.lng, lat: center.lat })
+  }
+
   return (
-    <div ref={containerRef} role="group" aria-label={label} className="h-64 w-full overflow-hidden rounded-xl border border-stone-200">
+    <div className="flex flex-col gap-2">
+    <div ref={containerRef} role="group" aria-label={label} className="relative h-64 w-full overflow-hidden rounded-xl border border-stone-200">
       <Map
         performanceMetricsCollection={false}
         ref={mapRef}
@@ -87,6 +96,22 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, approximat
           </Marker>
         )}
       </Map>
+      {/* Map-center crosshair for "Place pin at map center". */}
+      <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2">
+        <span className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 bg-stone-900/70" />
+        <span className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-stone-900/70" />
+      </span>
+    </div>
+    <div>
+      <button
+        type="button"
+        onClick={placeAtCenter}
+        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 text-sm font-medium text-stone-800 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+      >
+        <Crosshair className="h-4 w-4" aria-hidden="true" />
+        {placeCenterLabel}
+      </button>
+    </div>
     </div>
   )
 }

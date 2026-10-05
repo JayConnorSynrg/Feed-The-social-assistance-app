@@ -44,6 +44,8 @@ export interface ResourceDirectoryProps {
   /** The org's city — the initial city-prefix filter. */
   defaultCity?: string | null
   locale: Locale
+  /** Focus the search box on mount (the panel opens the directory as a sub-view). */
+  autoFocusSearch?: boolean
 }
 
 const DEBOUNCE_MS = 300
@@ -51,10 +53,10 @@ const DEBOUNCE_MS = 300
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
 const FIELD =
-  'h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-500 ' +
+  'h-10 w-full rounded-lg border border-stone-500 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-500 ' +
   FOCUS_RING
 const SECONDARY_BUTTON =
-  'inline-flex min-h-9 items-center justify-center rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-50 ' +
+  'inline-flex min-h-9 items-center justify-center rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-50 ' +
   FOCUS_RING
 const PRIMARY_BUTTON =
   'inline-flex min-h-10 items-center justify-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50 ' +
@@ -82,7 +84,7 @@ interface ResultState {
   error: boolean
 }
 
-export function ResourceDirectory({ value, onChange, defaultState, defaultCity, locale }: ResourceDirectoryProps) {
+export function ResourceDirectory({ value, onChange, defaultState, defaultCity, locale, autoFocusSearch }: ResourceDirectoryProps) {
   const supabase = useMemo(() => createClient(), [])
   const tr = useCallback((key: keyof OrgFormMessages) => orgFormT(locale, key), [locale])
   const uid = useId()
@@ -151,6 +153,11 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
     setMoreError(false)
     try {
       const page = await fetchDirectoryPage(supabase, query, result.rows.length)
+      // After the merge, focus moves to the first newly loaded row (the button may unmount on the
+      // last page).
+      const shown = new Set(result.rows.map((r) => r.id))
+      const firstNew = page.rows.find((r) => !shown.has(r.id))
+      if (firstNew) focusRowAfterLoad.current = firstNew.id
       setResult((prev) =>
         prev && prev.key === key
           ? { ...prev, rows: mergePage(prev.rows, page.rows), total: page.total, hasMore: page.hasMore }
@@ -168,6 +175,20 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
   const pendingFocus = useRef<string | null>(null)
   const trayHeadingRef = useRef<HTMLHeadingElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const focusRowAfterLoad = useRef<string | null>(null)
+  const rowCheckboxId = (id: string) => `${uid}-row-${id}`
+
+  useEffect(() => {
+    if (autoFocusSearch) searchRef.current?.focus()
+  }, [autoFocusSearch])
+
+  useEffect(() => {
+    const id = focusRowAfterLoad.current
+    if (!id) return
+    focusRowAfterLoad.current = null
+    document.getElementById(rowCheckboxId(id))?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when a merged page renders
+  }, [result])
 
   // After a reorder/remove, restore focus to the moved item's control (or the tray heading).
   useEffect(() => {
@@ -212,6 +233,11 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
     location: 'dirClearLocation',
   }
 
+  const showing =
+    !loading && !error && rows.length > 0
+      ? formatMessage(tr('dirShowing'), { shown: rows.length.toLocaleString(locale), total: total.toLocaleString(locale) })
+      : ''
+
   let status: string
   if (loading) status = tr('dirLoading')
   else if (error) status = tr('dirError')
@@ -219,7 +245,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
   else status = formatMessage(tr('dirResultCount'), { count: total.toLocaleString(locale) })
 
   return (
-    <div dir={dir(locale)} className="flex flex-col gap-5 text-stone-900">
+    <div dir={dir(locale)} lang={locale} className="flex flex-col gap-5 text-stone-900">
       {/* ---- Selected tray ---- */}
       <section aria-labelledby={ids.tray} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
         <h3
@@ -349,7 +375,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
                 className={`inline-flex min-h-8 items-center rounded-full border px-3 text-sm font-medium ${FOCUS_RING} ${
                   pressed
                     ? 'border-brand bg-brand text-white hover:bg-brand-hover'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
+                    : 'border-stone-500 bg-white text-stone-700 hover:bg-stone-100'
                 }`}
               >
                 {c ? catLabel(c) : tr('dirCategoryAll')}
@@ -364,6 +390,7 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
         <legend className="mb-1 text-sm font-semibold text-stone-900">{tr('dirResultsLegend')}</legend>
         <p id={`${ids.results}-status`} aria-live="polite" className="mb-2 text-sm text-stone-600">
           {status}
+          {showing && <span className="sr-only">{` ${showing}`}</span>}
         </p>
 
         {error && (
@@ -394,10 +421,11 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
                 <li key={row.id}>
                   <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-stone-50">
                     <input
+                      id={rowCheckboxId(row.id)}
                       type="checkbox"
                       checked={selectedIds.has(row.id)}
                       onChange={() => onChange(toggleSelected(value, row))}
-                      className={`mt-0.5 h-6 w-6 shrink-0 cursor-pointer rounded accent-brand ${FOCUS_RING}`}
+                      className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer rounded accent-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block break-words text-sm font-medium text-stone-900">{row.name}</span>
@@ -419,11 +447,8 @@ export function ResourceDirectory({ value, onChange, defaultState, defaultCity, 
 
         {!loading && !error && rows.length > 0 && (
           <div className="mt-3 flex flex-col items-start gap-2">
-            <p className="text-xs text-stone-600">
-              {formatMessage(tr('dirShowing'), {
-                shown: rows.length.toLocaleString(locale),
-                total: total.toLocaleString(locale),
-              })}
+            <p className="text-xs text-stone-600" aria-hidden="true">
+              {showing}
             </p>
             {moreError && <p className="text-sm text-red-700">{tr('dirError')}</p>}
             {result?.hasMore && (

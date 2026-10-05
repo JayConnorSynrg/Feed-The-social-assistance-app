@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
-import { tierLabel } from '@/lib/admin-tier'
+import { canCreateOrganizations, tierLabel } from '@/lib/admin-tier'
 import { visibleTabs } from './admin-shell-tabs'
 import { logger } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
@@ -23,6 +23,7 @@ import { resolveUserLocale, type Locale } from '@/lib/i18n'
 import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
 import { OrgFormPanel, type OrgFormPanelHandle } from '@/components/org-form/org-form-panel'
 import type { OrgFormKind } from '@/components/org-form/org-form-model'
+import { restoreFocusAfterPanel } from './org-panel-focus'
 import {
   closeUrlAction,
   orgPanelHref,
@@ -64,7 +65,7 @@ export function AdminShell() {
     () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
     [profile]
   )
-  const canManageOrgs = tabs.includes('organizations')
+  const canManageOrgs = canCreateOrganizations(tier)
 
   // ---- Organization setup panel: owned here so the list, the Overview quick action and deep links
   // (?tab=organizations&org=new|<id>) all open the same panel. Opening pushes a history entry;
@@ -83,6 +84,8 @@ export function AdminShell() {
   const panelOpenRef = useRef(false)
   const closingViaPopRef = useRef(false)
   const panelTargetRef = useRef<OrgPanelTarget | null>(null)
+  // The control that opened the panel gets focus back when it closes.
+  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   const showPanel = useCallback((target: OrgPanelTarget) => {
     panelOpenRef.current = true
@@ -95,6 +98,9 @@ export function AdminShell() {
       setActiveTab('organizations')
       setOrgNotice(null)
       const href = orgPanelHref(window.location, target)
+      if (!panelOpenRef.current) {
+        returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      }
       if (panelOpenRef.current) {
         // Switching target inside an open panel ("Edit existing") reuses its history entry.
         window.history.replaceState(window.history.state, '', href)
@@ -355,6 +361,7 @@ export function AdminShell() {
           onSaved={handleOrgSaved}
           onEditExisting={(id) => openOrgPanel(id)}
           ref={panelHandle}
+          onCloseAutoFocus={(e) => restoreFocusAfterPanel(e, returnFocusRef.current)}
           onCloseRequestDeclined={restorePanelEntry}
         />
       )}

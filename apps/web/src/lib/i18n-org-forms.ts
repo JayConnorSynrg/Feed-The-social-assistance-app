@@ -209,6 +209,14 @@ export interface OrgFormMessages {
   saveErrUpload: string
   saveErrNetwork: string
   saveErrGeneric: string
+  // Fix round (a11y + review)
+  fieldRequired: string
+  locPlaceCenter: string
+  resNotApproved: string
+  resErrNotApproved: string
+  opensNewTab: string
+  hoursIntervalName: string
+  actionMembersNamed: string
 }
 
 export const orgFormMessages: Record<Locale, OrgFormMessages> = {
@@ -352,7 +360,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Remove pin',
     locRemoved: 'The pin will be removed when you save.',
     locNoPin: 'No pin yet.',
-    locMapLabel: 'Map. Click to place the pin; drag the pin to adjust it.',
+    locMapLabel: 'Map. Use the arrow keys to move the map, then choose “Place pin at map center”. You can also click the map to place the pin and drag it to adjust.',
     locConfirmBeforeSave: 'Confirm or remove the map pin before saving.',
     // Hours editor
     hoursOpen: 'Open',
@@ -382,7 +390,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Replace',
     photoRemove: 'Remove',
     photoRemoveNamed: 'Remove {label}',
-    photoHint: 'JPG, PNG or WebP up to 10 MB. Photos upload when you save.',
+    photoHint: 'JPG, PNG or WebP. Originals up to 10 MB are accepted; each photo must be under 5 MB after compression. Photos upload when you save.',
     photoInvalid: 'That file is not a JPG, PNG or WebP image under 10 MB.',
     photoPreviewAlt: '{label} preview',
     // Linked resources
@@ -407,12 +415,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'The map pin was not accepted. Place it again and confirm.',
     saveErrPhotos: 'A photo was not accepted. Remove it and try again.',
     saveErrResources: 'A linked resource is no longer available. Remove it and try again.',
-    saveErrUploadTooLarge: 'A photo is larger than 5 MB. Choose a smaller image.',
+    saveErrUploadTooLarge: 'A photo is too large. Originals up to 10 MB are accepted; each photo must be under 5 MB after compression.',
     saveErrUploadType: 'A photo is not a supported image. Use JPG, PNG or WebP.',
     saveErrUploadDenied: 'You do not have permission to upload photos for this organization.',
     saveErrUpload: 'A photo could not be uploaded. Try again.',
     saveErrNetwork: 'Could not reach the server. Check your connection and try again.',
     saveErrGeneric: 'Could not save the organization. Try again.',
+    // Fix round (a11y + review)
+    fieldRequired: 'required',
+    locPlaceCenter: 'Place pin at map center',
+    resNotApproved: 'No longer approved',
+    resErrNotApproved: 'Remove linked resources that are no longer approved before saving.',
+    opensNewTab: '(opens in a new tab)',
+    hoursIntervalName: '{day}, hours {n}',
+    actionMembersNamed: 'Members of {name}',
   },
 
   // TODO: native-speaker review
@@ -556,7 +572,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Quitar marcador',
     locRemoved: 'El marcador se quitará cuando guarde.',
     locNoPin: 'Todavía no hay marcador.',
-    locMapLabel: 'Mapa. Haga clic para poner el marcador; arrástrelo para ajustarlo.',
+    locMapLabel: 'Mapa. Use las flechas del teclado para mover el mapa y luego elija “Poner marcador en el centro del mapa”. También puede hacer clic en el mapa para poner el marcador y arrastrarlo para ajustarlo.',
     locConfirmBeforeSave: 'Confirme o quite el marcador del mapa antes de guardar.',
     // Hours editor
     hoursOpen: 'Abierto',
@@ -586,7 +602,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Reemplazar',
     photoRemove: 'Quitar',
     photoRemoveNamed: 'Quitar {label}',
-    photoHint: 'JPG, PNG o WebP de hasta 10 MB. Las fotos se suben cuando guarda.',
+    photoHint: 'JPG, PNG o WebP. Se aceptan originales de hasta 10 MB; cada foto debe pesar menos de 5 MB después de la compresión. Las fotos se suben cuando guarda.',
     photoInvalid: 'Ese archivo no es una imagen JPG, PNG o WebP de menos de 10 MB.',
     photoPreviewAlt: 'Vista previa de {label}',
     // Linked resources
@@ -611,12 +627,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'El marcador del mapa no se aceptó. Colóquelo de nuevo y confirme.',
     saveErrPhotos: 'Una foto no se aceptó. Quítela e intente de nuevo.',
     saveErrResources: 'Un recurso vinculado ya no está disponible. Quítelo e intente de nuevo.',
-    saveErrUploadTooLarge: 'Una foto pesa más de 5 MB. Elija una imagen más pequeña.',
+    saveErrUploadTooLarge: 'Una foto es demasiado grande. Se aceptan originales de hasta 10 MB; cada foto debe pesar menos de 5 MB después de la compresión.',
     saveErrUploadType: 'Una foto no es una imagen compatible. Use JPG, PNG o WebP.',
     saveErrUploadDenied: 'No tiene permiso para subir fotos de esta organización.',
     saveErrUpload: 'No se pudo subir una foto. Intente de nuevo.',
     saveErrNetwork: 'No se pudo conectar con el servidor. Revise su conexión e intente de nuevo.',
     saveErrGeneric: 'No se pudo guardar la organización. Intente de nuevo.',
+    // Fix round (a11y + review)
+    fieldRequired: 'obligatorio',
+    locPlaceCenter: 'Poner marcador en el centro del mapa',
+    resNotApproved: 'Ya no está aprobado',
+    resErrNotApproved: 'Quite los recursos vinculados que ya no están aprobados antes de guardar.',
+    opensNewTab: '(se abre en una pestaña nueva)',
+    hoursIntervalName: '{day}, horario {n}',
+    actionMembersNamed: 'Miembros de {name}',
   },
 
   // TODO: native-speaker review
@@ -760,7 +784,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Retire epeng lan',
     locRemoved: 'Epeng lan ap retire lè ou anrejistre.',
     locNoPin: 'Poko gen epeng.',
-    locMapLabel: 'Kat. Klike pou mete epeng lan; rale epeng lan pou ajiste l.',
+    locMapLabel: 'Kat. Sèvi ak flèch klavye yo pou deplase kat la, epi chwazi “Mete epeng lan nan mitan kat la”. Ou kapab klike sou kat la tou pou mete epeng lan epi rale l pou ajiste l.',
     locConfirmBeforeSave: 'Konfime oswa retire epeng sou kat la anvan ou anrejistre.',
     // Hours editor
     hoursOpen: 'Louvri',
@@ -790,7 +814,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Ranplase',
     photoRemove: 'Retire',
     photoRemoveNamed: 'Retire {label}',
-    photoHint: 'JPG, PNG oswa WebP jiska 10 MB. Foto yo voye lè ou anrejistre.',
+    photoHint: 'JPG, PNG oswa WebP. Nou aksepte fichye orijinal jiska 10 MB; chak foto dwe mwens pase 5 MB apre konpresyon. Foto yo voye lè ou anrejistre.',
     photoInvalid: 'Fichye sa a pa yon imaj JPG, PNG oswa WebP ki mwens pase 10 MB.',
     photoPreviewAlt: 'Apèsi {label}',
     // Linked resources
@@ -815,12 +839,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Epeng sou kat la pa t aksepte. Mete l ankò epi konfime.',
     saveErrPhotos: 'Yon foto pa t aksepte. Retire l epi eseye ankò.',
     saveErrResources: 'Yon resous ki konekte pa disponib ankò. Retire l epi eseye ankò.',
-    saveErrUploadTooLarge: 'Yon foto pi gwo pase 5 MB. Chwazi yon imaj ki pi piti.',
+    saveErrUploadTooLarge: 'Yon foto twò gwo. Nou aksepte fichye orijinal jiska 10 MB; chak foto dwe mwens pase 5 MB apre konpresyon.',
     saveErrUploadType: 'Yon foto pa yon imaj nou aksepte. Sèvi ak JPG, PNG oswa WebP.',
     saveErrUploadDenied: 'Ou pa gen pèmisyon pou voye foto pou òganizasyon sa a.',
     saveErrUpload: 'Nou pa t ka voye yon foto. Eseye ankò.',
     saveErrNetwork: 'Nou pa t ka jwenn sèvè a. Tcheke koneksyon ou epi eseye ankò.',
     saveErrGeneric: 'Nou pa t ka anrejistre òganizasyon an. Eseye ankò.',
+    // Fix round (a11y + review)
+    fieldRequired: 'obligatwa',
+    locPlaceCenter: 'Mete epeng lan nan mitan kat la',
+    resNotApproved: 'Pa apwouve ankò',
+    resErrNotApproved: 'Retire resous ki konekte ki pa apwouve ankò yo anvan ou anrejistre.',
+    opensNewTab: '(ap louvri nan yon nouvo onglè)',
+    hoursIntervalName: '{day}, lè {n}',
+    actionMembersNamed: 'Manm {name}',
   },
 
   // TODO: native-speaker review
@@ -964,7 +996,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Bỏ ghim',
     locRemoved: 'Ghim sẽ bị bỏ khi bạn lưu.',
     locNoPin: 'Chưa có ghim.',
-    locMapLabel: 'Bản đồ. Bấm để đặt ghim; kéo ghim để điều chỉnh.',
+    locMapLabel: 'Bản đồ. Dùng các phím mũi tên để di chuyển bản đồ, rồi chọn “Đặt ghim ở giữa bản đồ”. Bạn cũng có thể bấm vào bản đồ để đặt ghim và kéo ghim để điều chỉnh.',
     locConfirmBeforeSave: 'Hãy xác nhận hoặc bỏ ghim trên bản đồ trước khi lưu.',
     // Hours editor
     hoursOpen: 'Mở cửa',
@@ -994,7 +1026,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Thay thế',
     photoRemove: 'Bỏ',
     photoRemoveNamed: 'Bỏ {label}',
-    photoHint: 'JPG, PNG hoặc WebP tối đa 10 MB. Ảnh sẽ được tải lên khi bạn lưu.',
+    photoHint: 'JPG, PNG hoặc WebP. Chấp nhận ảnh gốc tối đa 10 MB; mỗi ảnh phải dưới 5 MB sau khi nén. Ảnh sẽ được tải lên khi bạn lưu.',
     photoInvalid: 'Tệp này không phải là ảnh JPG, PNG hoặc WebP dưới 10 MB.',
     photoPreviewAlt: 'Xem trước {label}',
     // Linked resources
@@ -1019,12 +1051,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Ghim trên bản đồ không được chấp nhận. Đặt lại ghim và xác nhận.',
     saveErrPhotos: 'Một ảnh không được chấp nhận. Bỏ ảnh đó và thử lại.',
     saveErrResources: 'Một tài nguyên đã liên kết không còn nữa. Bỏ tài nguyên đó và thử lại.',
-    saveErrUploadTooLarge: 'Một ảnh lớn hơn 5 MB. Hãy chọn ảnh nhỏ hơn.',
+    saveErrUploadTooLarge: 'Một ảnh quá lớn. Chấp nhận ảnh gốc tối đa 10 MB; mỗi ảnh phải dưới 5 MB sau khi nén.',
     saveErrUploadType: 'Một ảnh không đúng định dạng được hỗ trợ. Dùng JPG, PNG hoặc WebP.',
     saveErrUploadDenied: 'Bạn không có quyền tải ảnh lên cho tổ chức này.',
     saveErrUpload: 'Không thể tải một ảnh lên. Thử lại.',
     saveErrNetwork: 'Không thể kết nối với máy chủ. Kiểm tra kết nối và thử lại.',
     saveErrGeneric: 'Không thể lưu tổ chức. Thử lại.',
+    // Fix round (a11y + review)
+    fieldRequired: 'bắt buộc',
+    locPlaceCenter: 'Đặt ghim ở giữa bản đồ',
+    resNotApproved: 'Không còn được phê duyệt',
+    resErrNotApproved: 'Hãy bỏ các tài nguyên đã liên kết không còn được phê duyệt trước khi lưu.',
+    opensNewTab: '(mở trong thẻ mới)',
+    hoursIntervalName: '{day}, khung giờ {n}',
+    actionMembersNamed: 'Thành viên của {name}',
   },
 
   // TODO: native-speaker review
@@ -1168,7 +1208,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'إزالة الدبوس',
     locRemoved: 'ستتم إزالة الدبوس عند الحفظ.',
     locNoPin: 'لا يوجد دبوس بعد.',
-    locMapLabel: 'خريطة. انقر لوضع الدبوس؛ واسحب الدبوس لضبطه.',
+    locMapLabel: 'خريطة. استخدم مفاتيح الأسهم لتحريك الخريطة، ثم اختر “ضع الدبوس في وسط الخريطة”. يمكنك أيضًا النقر على الخريطة لوضع الدبوس وسحبه لضبطه.',
     locConfirmBeforeSave: 'أكّد دبوس الخريطة أو أزله قبل الحفظ.',
     // Hours editor
     hoursOpen: 'مفتوح',
@@ -1198,7 +1238,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'استبدال',
     photoRemove: 'إزالة',
     photoRemoveNamed: 'إزالة {label}',
-    photoHint: 'JPG أو PNG أو WebP بحجم يصل إلى 10 MB. تُرفع الصور عند الحفظ.',
+    photoHint: 'JPG أو PNG أو WebP. تُقبل الملفات الأصلية حتى 10 MB؛ ويجب أن يكون حجم كل صورة أقل من 5 MB بعد الضغط. تُرفع الصور عند الحفظ.',
     photoInvalid: 'هذا الملف ليس صورة JPG أو PNG أو WebP أقل من 10 MB.',
     photoPreviewAlt: 'معاينة {label}',
     // Linked resources
@@ -1223,12 +1263,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'لم يتم قبول دبوس الخريطة. ضعه مرة أخرى وأكّده.',
     saveErrPhotos: 'لم يتم قبول إحدى الصور. أزلها وحاول مرة أخرى.',
     saveErrResources: 'أحد الموارد المرتبطة لم يعد متاحًا. أزله وحاول مرة أخرى.',
-    saveErrUploadTooLarge: 'إحدى الصور أكبر من 5 MB. اختر صورة أصغر.',
+    saveErrUploadTooLarge: 'إحدى الصور كبيرة جدًا. تُقبل الملفات الأصلية حتى 10 MB؛ ويجب أن يكون حجم كل صورة أقل من 5 MB بعد الضغط.',
     saveErrUploadType: 'إحدى الصور ليست بتنسيق مدعوم. استخدم JPG أو PNG أو WebP.',
     saveErrUploadDenied: 'ليست لديك صلاحية لرفع صور لهذه المنظمة.',
     saveErrUpload: 'تعذر رفع إحدى الصور. حاول مرة أخرى.',
     saveErrNetwork: 'تعذر الوصول إلى الخادم. تحقق من اتصالك وحاول مرة أخرى.',
     saveErrGeneric: 'تعذر حفظ المنظمة. حاول مرة أخرى.',
+    // Fix round (a11y + review)
+    fieldRequired: 'مطلوب',
+    locPlaceCenter: 'ضع الدبوس في وسط الخريطة',
+    resNotApproved: 'لم يعد معتمدًا',
+    resErrNotApproved: 'أزل الموارد المرتبطة التي لم تعد معتمدة قبل الحفظ.',
+    opensNewTab: '(يُفتح في علامة تبويب جديدة)',
+    hoursIntervalName: '{day}، فترة الساعات {n}',
+    actionMembersNamed: 'أعضاء {name}',
   },
 
   // TODO: native-speaker review
@@ -1372,7 +1420,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: '移除图钉',
     locRemoved: '保存时将移除图钉。',
     locNoPin: '尚无图钉。',
-    locMapLabel: '地图。点击放置图钉；拖动图钉进行调整。',
+    locMapLabel: '地图。使用方向键移动地图，然后选择“在地图中心放置图钉”。您也可以点击地图放置图钉，并拖动图钉进行调整。',
     locConfirmBeforeSave: '保存前请确认或移除地图图钉。',
     // Hours editor
     hoursOpen: '营业',
@@ -1402,7 +1450,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: '替换',
     photoRemove: '移除',
     photoRemoveNamed: '移除 {label}',
-    photoHint: 'JPG、PNG 或 WebP，最大 10 MB。照片会在保存时上传。',
+    photoHint: 'JPG、PNG 或 WebP。原始文件最大可为 10 MB；压缩后每张照片必须小于 5 MB。照片会在保存时上传。',
     photoInvalid: '该文件不是 10 MB 以下的 JPG、PNG 或 WebP 图片。',
     photoPreviewAlt: '{label} 预览',
     // Linked resources
@@ -1427,12 +1475,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: '地图图钉未被接受。请重新放置并确认。',
     saveErrPhotos: '有一张照片未被接受。请移除后重试。',
     saveErrResources: '有一个已关联的资源已不可用。请移除后重试。',
-    saveErrUploadTooLarge: '有一张照片超过 5 MB。请选择较小的图片。',
+    saveErrUploadTooLarge: '有一张照片过大。原始文件最大可为 10 MB；压缩后每张照片必须小于 5 MB。',
     saveErrUploadType: '有一张照片不是支持的图片格式。请使用 JPG、PNG 或 WebP。',
     saveErrUploadDenied: '您没有为此机构上传照片的权限。',
     saveErrUpload: '有一张照片无法上传。请重试。',
     saveErrNetwork: '无法连接服务器。请检查网络连接后重试。',
     saveErrGeneric: '无法保存机构。请重试。',
+    // Fix round (a11y + review)
+    fieldRequired: '必填',
+    locPlaceCenter: '在地图中心放置图钉',
+    resNotApproved: '已不再获批',
+    resErrNotApproved: '保存前请移除已不再获批的关联资源。',
+    opensNewTab: '（在新标签页中打开）',
+    hoursIntervalName: '{day}，时段 {n}',
+    actionMembersNamed: '{name} 的成员',
   },
 
   // TODO: native-speaker review
@@ -1576,7 +1632,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Ka saar biinka',
     locRemoved: 'Biinka waa la saarayaa marka aad kaydiso.',
     locNoPin: 'Weli biin ma jiro.',
-    locMapLabel: 'Khariidad. Guji si aad biinka u dhigto; jiid biinka si aad u hagaajiso.',
+    locMapLabel: 'Khariidad. Isticmaal furayaasha fallaadhaha si aad u dhaqaajiso khariidadda, kadibna dooro “Dhig biinka bartamaha khariidadda”. Sidoo kale waad guji kartaa khariidadda si aad biinka u dhigto, waadna jiidi kartaa si aad u hagaajiso.',
     locConfirmBeforeSave: 'Xaqiiji ama ka saar biinka khariidadda ka hor intaadan kaydin.',
     // Hours editor
     hoursOpen: 'Furan',
@@ -1606,7 +1662,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Beddel',
     photoRemove: 'Ka saar',
     photoRemoveNamed: 'Ka saar {label}',
-    photoHint: 'JPG, PNG ama WebP ilaa 10 MB. Sawirrada waa la soo geliyaa marka aad kaydiso.',
+    photoHint: 'JPG, PNG ama WebP. Faylasha asalka ah ee ilaa 10 MB waa la aqbalayaa; sawir kastaa waa inuu ka yaraadaa 5 MB marka la cufo kadib. Sawirrada waa la soo geliyaa marka aad kaydiso.',
     photoInvalid: 'Faylkani maaha sawir JPG, PNG ama WebP ah oo ka yar 10 MB.',
     photoPreviewAlt: 'Muuqaalka {label}',
     // Linked resources
@@ -1631,12 +1687,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Biinka khariidadda lama aqbalin. Mar kale dhig oo xaqiiji.',
     saveErrPhotos: 'Sawir lama aqbalin. Ka saar oo isku day mar kale.',
     saveErrResources: 'Kheyraad la xiriiriyay hadda lama heli karo. Ka saar oo isku day mar kale.',
-    saveErrUploadTooLarge: 'Sawir ayaa ka weyn 5 MB. Dooro sawir ka yar.',
+    saveErrUploadTooLarge: 'Sawir ayaa aad u weyn. Faylasha asalka ah ee ilaa 10 MB waa la aqbalayaa; sawir kastaa waa inuu ka yaraadaa 5 MB marka la cufo kadib.',
     saveErrUploadType: 'Sawir maaha nooc la taageero. Isticmaal JPG, PNG ama WebP.',
     saveErrUploadDenied: 'Ma haysid ogolaansho aad sawirro ugu soo geliso ururkan.',
     saveErrUpload: 'Sawir lama soo gelin karin. Isku day mar kale.',
     saveErrNetwork: 'Server-ka lama gaari karin. Hubi xiriirkaaga oo isku day mar kale.',
     saveErrGeneric: 'Ururka lama kaydin karin. Isku day mar kale.',
+    // Fix round (a11y + review)
+    fieldRequired: 'qasab',
+    locPlaceCenter: 'Dhig biinka bartamaha khariidadda',
+    resNotApproved: 'Hadda lama ansixin',
+    resErrNotApproved: 'Ka saar kheyraadka la xiriiriyay ee hadda aan la ansixin ka hor intaadan kaydin.',
+    opensNewTab: '(waxay ka furmaysaa tab cusub)',
+    hoursIntervalName: '{day}, saacadaha {n}',
+    actionMembersNamed: 'Xubnaha {name}',
   },
 
   // TODO: native-speaker review
@@ -1780,7 +1844,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Retirer l’épingle',
     locRemoved: 'L’épingle sera retirée à l’enregistrement.',
     locNoPin: 'Pas encore d’épingle.',
-    locMapLabel: 'Carte. Cliquez pour placer l’épingle ; faites-la glisser pour l’ajuster.',
+    locMapLabel: 'Carte. Utilisez les flèches du clavier pour déplacer la carte, puis choisissez « Placer l’épingle au centre de la carte ». Vous pouvez aussi cliquer sur la carte pour placer l’épingle et la faire glisser pour l’ajuster.',
     locConfirmBeforeSave: 'Confirmez ou retirez l’épingle de la carte avant d’enregistrer.',
     // Hours editor
     hoursOpen: 'Ouvert',
@@ -1810,7 +1874,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Remplacer',
     photoRemove: 'Retirer',
     photoRemoveNamed: 'Retirer {label}',
-    photoHint: 'JPG, PNG ou WebP jusqu’à 10 Mo. Les photos sont envoyées à l’enregistrement.',
+    photoHint: 'JPG, PNG ou WebP. Les originaux jusqu’à 10 Mo sont acceptés ; chaque photo doit faire moins de 5 Mo après compression. Les photos sont envoyées à l’enregistrement.',
     photoInvalid: 'Ce fichier n’est pas une image JPG, PNG ou WebP de moins de 10 Mo.',
     photoPreviewAlt: 'Aperçu : {label}',
     // Linked resources
@@ -1835,12 +1899,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'L’épingle de la carte n’a pas été acceptée. Placez-la de nouveau et confirmez.',
     saveErrPhotos: 'Une photo n’a pas été acceptée. Retirez-la et réessayez.',
     saveErrResources: 'Une ressource associée n’est plus disponible. Retirez-la et réessayez.',
-    saveErrUploadTooLarge: 'Une photo dépasse 5 Mo. Choisissez une image plus petite.',
+    saveErrUploadTooLarge: 'Une photo est trop volumineuse. Les originaux jusqu’à 10 Mo sont acceptés ; chaque photo doit faire moins de 5 Mo après compression.',
     saveErrUploadType: 'Une photo n’est pas dans un format accepté. Utilisez JPG, PNG ou WebP.',
     saveErrUploadDenied: 'Vous n’avez pas l’autorisation d’envoyer des photos pour cette organisation.',
     saveErrUpload: 'Une photo n’a pas pu être envoyée. Réessayez.',
     saveErrNetwork: 'Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.',
     saveErrGeneric: 'Impossible d’enregistrer l’organisation. Réessayez.',
+    // Fix round (a11y + review)
+    fieldRequired: 'obligatoire',
+    locPlaceCenter: 'Placer l’épingle au centre de la carte',
+    resNotApproved: 'N’est plus approuvée',
+    resErrNotApproved: 'Retirez les ressources associées qui ne sont plus approuvées avant d’enregistrer.',
+    opensNewTab: '(s’ouvre dans un nouvel onglet)',
+    hoursIntervalName: '{day}, horaires {n}',
+    actionMembersNamed: 'Membres de {name}',
   },
 
   // TODO: native-speaker review
@@ -1984,7 +2056,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Remover marcador',
     locRemoved: 'O marcador será removido quando você salvar.',
     locNoPin: 'Ainda não há marcador.',
-    locMapLabel: 'Mapa. Clique para colocar o marcador; arraste o marcador para ajustá-lo.',
+    locMapLabel: 'Mapa. Use as teclas de seta para mover o mapa e depois escolha “Colocar marcador no centro do mapa”. Você também pode clicar no mapa para colocar o marcador e arrastá-lo para ajustar.',
     locConfirmBeforeSave: 'Confirme ou remova o marcador do mapa antes de salvar.',
     // Hours editor
     hoursOpen: 'Aberto',
@@ -2014,7 +2086,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Substituir',
     photoRemove: 'Remover',
     photoRemoveNamed: 'Remover {label}',
-    photoHint: 'JPG, PNG ou WebP de até 10 MB. As fotos são enviadas quando você salva.',
+    photoHint: 'JPG, PNG ou WebP. Arquivos originais de até 10 MB são aceitos; cada foto deve ter menos de 5 MB após a compressão. As fotos são enviadas quando você salva.',
     photoInvalid: 'Esse arquivo não é uma imagem JPG, PNG ou WebP com menos de 10 MB.',
     photoPreviewAlt: 'Prévia de {label}',
     // Linked resources
@@ -2039,12 +2111,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'O marcador do mapa não foi aceito. Coloque-o de novo e confirme.',
     saveErrPhotos: 'Uma foto não foi aceita. Remova-a e tente novamente.',
     saveErrResources: 'Um recurso vinculado não está mais disponível. Remova-o e tente novamente.',
-    saveErrUploadTooLarge: 'Uma foto tem mais de 5 MB. Escolha uma imagem menor.',
+    saveErrUploadTooLarge: 'Uma foto é grande demais. Arquivos originais de até 10 MB são aceitos; cada foto deve ter menos de 5 MB após a compressão.',
     saveErrUploadType: 'Uma foto não é uma imagem compatível. Use JPG, PNG ou WebP.',
     saveErrUploadDenied: 'Você não tem permissão para enviar fotos desta organização.',
     saveErrUpload: 'Não foi possível enviar uma foto. Tente novamente.',
     saveErrNetwork: 'Não foi possível conectar ao servidor. Confira sua conexão e tente novamente.',
     saveErrGeneric: 'Não foi possível salvar a organização. Tente novamente.',
+    // Fix round (a11y + review)
+    fieldRequired: 'obrigatório',
+    locPlaceCenter: 'Colocar marcador no centro do mapa',
+    resNotApproved: 'Não está mais aprovado',
+    resErrNotApproved: 'Remova os recursos vinculados que não estão mais aprovados antes de salvar.',
+    opensNewTab: '(abre em uma nova aba)',
+    hoursIntervalName: '{day}, horário {n}',
+    actionMembersNamed: 'Membros de {name}',
   },
 
   // TODO: native-speaker review
@@ -2188,7 +2268,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Убрать метку',
     locRemoved: 'Метка будет убрана при сохранении.',
     locNoPin: 'Метки пока нет.',
-    locMapLabel: 'Карта. Нажмите, чтобы поставить метку; перетащите метку, чтобы поправить её.',
+    locMapLabel: 'Карта. Перемещайте карту клавишами со стрелками, затем выберите «Поставить метку в центре карты». Также можно нажать на карту, чтобы поставить метку, и перетащить её, чтобы поправить.',
     locConfirmBeforeSave: 'Перед сохранением подтвердите или уберите метку на карте.',
     // Hours editor
     hoursOpen: 'Открыто',
@@ -2218,7 +2298,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Заменить',
     photoRemove: 'Удалить',
     photoRemoveNamed: 'Удалить {label}',
-    photoHint: 'JPG, PNG или WebP до 10 МБ. Фото загружаются при сохранении.',
+    photoHint: 'JPG, PNG или WebP. Принимаются оригиналы до 10 МБ; после сжатия каждое фото должно быть меньше 5 МБ. Фото загружаются при сохранении.',
     photoInvalid: 'Этот файл не является изображением JPG, PNG или WebP размером до 10 МБ.',
     photoPreviewAlt: 'Предпросмотр: {label}',
     // Linked resources
@@ -2243,12 +2323,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Метка на карте не принята. Поставьте её снова и подтвердите.',
     saveErrPhotos: 'Одно фото не принято. Удалите его и попробуйте снова.',
     saveErrResources: 'Один из привязанных ресурсов больше недоступен. Удалите его и попробуйте снова.',
-    saveErrUploadTooLarge: 'Одно фото больше 5 МБ. Выберите изображение поменьше.',
+    saveErrUploadTooLarge: 'Фото слишком большое. Принимаются оригиналы до 10 МБ; после сжатия каждое фото должно быть меньше 5 МБ.',
     saveErrUploadType: 'Одно фото имеет неподдерживаемый формат. Используйте JPG, PNG или WebP.',
     saveErrUploadDenied: 'У вас нет прав на загрузку фото для этой организации.',
     saveErrUpload: 'Не удалось загрузить фото. Попробуйте снова.',
     saveErrNetwork: 'Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.',
     saveErrGeneric: 'Не удалось сохранить организацию. Попробуйте снова.',
+    // Fix round (a11y + review)
+    fieldRequired: 'обязательно',
+    locPlaceCenter: 'Поставить метку в центре карты',
+    resNotApproved: 'Больше не одобрен',
+    resErrNotApproved: 'Перед сохранением удалите привязанные ресурсы, которые больше не одобрены.',
+    opensNewTab: '(откроется в новой вкладке)',
+    hoursIntervalName: '{day}, часы {n}',
+    actionMembersNamed: 'Участники: {name}',
   },
 
   // TODO: native-speaker review
@@ -2392,7 +2480,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: '핀 제거',
     locRemoved: '저장하면 핀이 제거됩니다.',
     locNoPin: '아직 핀이 없습니다.',
-    locMapLabel: '지도. 클릭해 핀을 놓고, 핀을 끌어 위치를 조정하세요.',
+    locMapLabel: '지도. 화살표 키로 지도를 이동한 다음 “지도 중앙에 핀 놓기”를 선택하세요. 지도를 클릭해 핀을 놓고 핀을 끌어 위치를 조정할 수도 있습니다.',
     locConfirmBeforeSave: '저장하기 전에 지도 핀을 확인하거나 제거하세요.',
     // Hours editor
     hoursOpen: '영업',
@@ -2422,7 +2510,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: '바꾸기',
     photoRemove: '제거',
     photoRemoveNamed: '{label} 제거',
-    photoHint: 'JPG, PNG 또는 WebP, 최대 10MB. 사진은 저장할 때 업로드됩니다.',
+    photoHint: 'JPG, PNG 또는 WebP. 원본은 최대 10MB까지 허용되며, 압축 후 각 사진은 5MB 미만이어야 합니다. 사진은 저장할 때 업로드됩니다.',
     photoInvalid: '이 파일은 10MB 미만의 JPG, PNG 또는 WebP 이미지가 아닙니다.',
     photoPreviewAlt: '{label} 미리 보기',
     // Linked resources
@@ -2447,12 +2535,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: '지도 핀이 받아들여지지 않았습니다. 다시 놓고 확인하세요.',
     saveErrPhotos: '사진 하나가 받아들여지지 않았습니다. 제거하고 다시 시도하세요.',
     saveErrResources: '연결된 리소스 하나를 더 이상 사용할 수 없습니다. 제거하고 다시 시도하세요.',
-    saveErrUploadTooLarge: '사진 하나가 5MB보다 큽니다. 더 작은 이미지를 선택하세요.',
+    saveErrUploadTooLarge: '사진이 너무 큽니다. 원본은 최대 10MB까지 허용되며, 압축 후 각 사진은 5MB 미만이어야 합니다.',
     saveErrUploadType: '사진 하나가 지원되지 않는 이미지입니다. JPG, PNG 또는 WebP를 사용하세요.',
     saveErrUploadDenied: '이 단체의 사진을 업로드할 권한이 없습니다.',
     saveErrUpload: '사진을 업로드할 수 없습니다. 다시 시도하세요.',
     saveErrNetwork: '서버에 연결할 수 없습니다. 연결 상태를 확인하고 다시 시도하세요.',
     saveErrGeneric: '단체를 저장할 수 없습니다. 다시 시도하세요.',
+    // Fix round (a11y + review)
+    fieldRequired: '필수',
+    locPlaceCenter: '지도 중앙에 핀 놓기',
+    resNotApproved: '더 이상 승인되지 않음',
+    resErrNotApproved: '저장하기 전에 더 이상 승인되지 않은 연결된 리소스를 제거하세요.',
+    opensNewTab: '(새 탭에서 열림)',
+    hoursIntervalName: '{day}, 시간 {n}',
+    actionMembersNamed: '{name} 구성원',
   },
 
   // TODO: native-speaker review
@@ -2596,7 +2692,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Alisin ang pin',
     locRemoved: 'Aalisin ang pin kapag nag-save ka.',
     locNoPin: 'Wala pang pin.',
-    locMapLabel: 'Mapa. I-click para ilagay ang pin; i-drag ang pin para ayusin ito.',
+    locMapLabel: 'Mapa. Gamitin ang mga arrow key para igalaw ang mapa, pagkatapos ay piliin ang “Ilagay ang pin sa gitna ng mapa”. Puwede mo ring i-click ang mapa para ilagay ang pin at i-drag ito para ayusin.',
     locConfirmBeforeSave: 'Kumpirmahin o alisin ang pin sa mapa bago mag-save.',
     // Hours editor
     hoursOpen: 'Bukas',
@@ -2626,7 +2722,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Palitan',
     photoRemove: 'Alisin',
     photoRemoveNamed: 'Alisin ang {label}',
-    photoHint: 'JPG, PNG o WebP na hanggang 10 MB. Ia-upload ang mga larawan kapag nag-save ka.',
+    photoHint: 'JPG, PNG o WebP. Tinatanggap ang mga orihinal na hanggang 10 MB; dapat mas mababa sa 5 MB ang bawat larawan pagkatapos ng compression. Ia-upload ang mga larawan kapag nag-save ka.',
     photoInvalid: 'Ang file na iyan ay hindi JPG, PNG o WebP na larawan na mas mababa sa 10 MB.',
     photoPreviewAlt: 'Preview ng {label}',
     // Linked resources
@@ -2651,12 +2747,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Hindi tinanggap ang pin sa mapa. Ilagay itong muli at kumpirmahin.',
     saveErrPhotos: 'May larawang hindi tinanggap. Alisin ito at subukan muli.',
     saveErrResources: 'May naka-link na resource na hindi na magagamit. Alisin ito at subukan muli.',
-    saveErrUploadTooLarge: 'May larawang mas malaki sa 5 MB. Pumili ng mas maliit na larawan.',
+    saveErrUploadTooLarge: 'Masyadong malaki ang isang larawan. Tinatanggap ang mga orihinal na hanggang 10 MB; dapat mas mababa sa 5 MB ang bawat larawan pagkatapos ng compression.',
     saveErrUploadType: 'May larawang hindi suportado. Gumamit ng JPG, PNG o WebP.',
     saveErrUploadDenied: 'Wala kang pahintulot na mag-upload ng mga larawan para sa organisasyong ito.',
     saveErrUpload: 'Hindi ma-upload ang isang larawan. Subukan muli.',
     saveErrNetwork: 'Hindi maabot ang server. Tingnan ang iyong koneksyon at subukan muli.',
     saveErrGeneric: 'Hindi ma-save ang organisasyon. Subukan muli.',
+    // Fix round (a11y + review)
+    fieldRequired: 'kailangan',
+    locPlaceCenter: 'Ilagay ang pin sa gitna ng mapa',
+    resNotApproved: 'Hindi na aprubado',
+    resErrNotApproved: 'Alisin ang mga naka-link na resource na hindi na aprubado bago mag-save.',
+    opensNewTab: '(magbubukas sa bagong tab)',
+    hoursIntervalName: '{day}, oras {n}',
+    actionMembersNamed: 'Mga miyembro ng {name}',
   },
 
   // TODO: native-speaker review
@@ -2800,7 +2904,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'ፒኑን አስወግድ',
     locRemoved: 'ስታስቀምጥ ፒኑ ይወገዳል።',
     locNoPin: 'እስካሁን ፒን የለም።',
-    locMapLabel: 'ካርታ። ፒኑን ለማስቀመጥ ጠቅ አድርግ፤ ለማስተካከል ፒኑን ጎትት።',
+    locMapLabel: 'ካርታ። ካርታውን ለማንቀሳቀስ የቀስት ቁልፎችን ተጠቀም፣ ከዚያ “ፒኑን በካርታው መሃል አስቀምጥ”ን ምረጥ። እንዲሁም ፒኑን ለማስቀመጥ ካርታውን ጠቅ ማድረግ እና ለማስተካከል ፒኑን መጎተት ትችላለህ።',
     locConfirmBeforeSave: 'ከማስቀመጥህ በፊት የካርታውን ፒን አረጋግጥ ወይም አስወግድ።',
     // Hours editor
     hoursOpen: 'ክፍት',
@@ -2830,7 +2934,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'ተካ',
     photoRemove: 'አስወግድ',
     photoRemoveNamed: '{label}ን አስወግድ',
-    photoHint: 'እስከ 10 MB የሆነ JPG፣ PNG ወይም WebP። ፎቶዎቹ ስታስቀምጥ ይሰቀላሉ።',
+    photoHint: 'JPG፣ PNG ወይም WebP። እስከ 10 MB የሆኑ ኦሪጅናል ፋይሎች ይቀበላሉ፤ እያንዳንዱ ፎቶ ከታመቀ በኋላ ከ5 MB በታች መሆን አለበት። ፎቶዎቹ ስታስቀምጥ ይሰቀላሉ።',
     photoInvalid: 'ያ ፋይል ከ10 MB በታች የሆነ JPG፣ PNG ወይም WebP ምስል አይደለም።',
     photoPreviewAlt: 'የ{label} ቅድመ እይታ',
     // Linked resources
@@ -2855,12 +2959,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'የካርታው ፒን ተቀባይነት አላገኘም። እንደገና አስቀምጠውና አረጋግጥ።',
     saveErrPhotos: 'አንድ ፎቶ ተቀባይነት አላገኘም። አስወግደውና እንደገና ሞክር።',
     saveErrResources: 'አንድ የተገናኘ ሀብት ከአሁን በኋላ አይገኝም። አስወግደውና እንደገና ሞክር።',
-    saveErrUploadTooLarge: 'አንድ ፎቶ ከ5 MB ይበልጣል። ትንሽ ምስል ምረጥ።',
+    saveErrUploadTooLarge: 'አንድ ፎቶ በጣም ትልቅ ነው። እስከ 10 MB የሆኑ ኦሪጅናል ፋይሎች ይቀበላሉ፤ እያንዳንዱ ፎቶ ከታመቀ በኋላ ከ5 MB በታች መሆን አለበት።',
     saveErrUploadType: 'አንድ ፎቶ የሚደገፍ ምስል አይደለም። JPG፣ PNG ወይም WebP ተጠቀም።',
     saveErrUploadDenied: 'ለዚህ ድርጅት ፎቶዎችን ለመስቀል ፈቃድ የለህም።',
     saveErrUpload: 'አንድ ፎቶ መስቀል አልተቻለም። እንደገና ሞክር።',
     saveErrNetwork: 'ወደ አገልጋዩ መድረስ አልተቻለም። ግንኙነትህን ፈትሽና እንደገና ሞክር።',
     saveErrGeneric: 'ድርጅቱን ማስቀመጥ አልተቻለም። እንደገና ሞክር።',
+    // Fix round (a11y + review)
+    fieldRequired: 'ግዴታ',
+    locPlaceCenter: 'ፒኑን በካርታው መሃል አስቀምጥ',
+    resNotApproved: 'ከአሁን በኋላ አልጸደቀም',
+    resErrNotApproved: 'ከማስቀመጥህ በፊት ከአሁን በኋላ ያልጸደቁ የተገናኙ ሀብቶችን አስወግድ።',
+    opensNewTab: '(በአዲስ ትር ይከፈታል)',
+    hoursIntervalName: '{day}፣ ሰዓቶች {n}',
+    actionMembersNamed: 'የ{name} አባላት',
   },
 
   // TODO: native-speaker review
@@ -3004,7 +3116,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locRemove: 'Tshem tus pin',
     locRemoved: 'Tus pin yuav raug tshem thaum koj khaws.',
     locNoPin: 'Tseem tsis tau muaj pin.',
-    locMapLabel: 'Daim ntawv qhia chaw. Nias kom muab tus pin tso; rub tus pin kom kho nws.',
+    locMapLabel: 'Daim ntawv qhia chaw. Siv cov yuam sij xub los txav daim ntawv qhia chaw, ces xaiv “Muab tus pin tso rau nruab nrab daim ntawv qhia chaw”. Koj kuj nias tau daim ntawv qhia chaw kom muab tus pin tso thiab rub nws kom kho.',
     locConfirmBeforeSave: 'Lees paub los sis tshem tus pin saum daim ntawv qhia chaw ua ntej khaws.',
     // Hours editor
     hoursOpen: 'Qhib',
@@ -3034,7 +3146,7 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     photoReplace: 'Hloov',
     photoRemove: 'Tshem',
     photoRemoveNamed: 'Tshem {label}',
-    photoHint: 'JPG, PNG los sis WebP txog 10 MB. Cov duab yuav xa mus thaum koj khaws.',
+    photoHint: 'JPG, PNG los sis WebP. Txais cov ntaub ntawv qub txog 10 MB; txhua daim duab yuav tsum me dua 5 MB tom qab nias kom me. Cov duab yuav xa mus thaum koj khaws.',
     photoInvalid: 'Daim ntawv ntawd tsis yog duab JPG, PNG los sis WebP uas me dua 10 MB.',
     photoPreviewAlt: 'Saib ua ntej {label}',
     // Linked resources
@@ -3059,12 +3171,20 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     saveErrLocation: 'Tus pin saum daim ntawv qhia chaw tsis raug txais. Muab tso dua thiab lees paub.',
     saveErrPhotos: 'Muaj ib daim duab tsis raug txais. Tshem nws thiab sim dua.',
     saveErrResources: 'Muaj ib qho kev pab uas txuas lawm tsis muaj lawm. Tshem nws thiab sim dua.',
-    saveErrUploadTooLarge: 'Muaj ib daim duab loj dua 5 MB. Xaiv ib daim duab me dua.',
+    saveErrUploadTooLarge: 'Muaj ib daim duab loj dhau. Txais cov ntaub ntawv qub txog 10 MB; txhua daim duab yuav tsum me dua 5 MB tom qab nias kom me.',
     saveErrUploadType: 'Muaj ib daim duab tsis yog hom siv tau. Siv JPG, PNG los sis WebP.',
     saveErrUploadDenied: 'Koj tsis muaj cai xa duab rau lub koom haum no.',
     saveErrUpload: 'Xa tsis tau ib daim duab. Sim dua.',
     saveErrNetwork: 'Txuas tsis tau rau lub server. Saib koj qhov kev txuas thiab sim dua.',
     saveErrGeneric: 'Khaws tsis tau lub koom haum. Sim dua.',
+    // Fix round (a11y + review)
+    fieldRequired: 'yuav tsum muaj',
+    locPlaceCenter: 'Muab tus pin tso rau nruab nrab daim ntawv qhia chaw',
+    resNotApproved: 'Tsis tau pom zoo lawm',
+    resErrNotApproved: 'Tshem cov kev pab uas txuas lawm uas tsis tau pom zoo lawm ua ntej khaws.',
+    opensNewTab: '(qhib rau hauv ib lub tab tshiab)',
+    hoursIntervalName: '{day}, sij hawm {n}',
+    actionMembersNamed: 'Cov tswv cuab ntawm {name}',
   },
 }
 

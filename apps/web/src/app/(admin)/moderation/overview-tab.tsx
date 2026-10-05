@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { MoreHorizontal, Plus } from 'lucide-react'
-import type { Locale } from '@/lib/i18n'
+import { dir, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ export function OverviewTab({
   return (
     <div className="space-y-4">
       {onCreateOrganization && (
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3">
+        <div dir={dir(locale)} lang={locale} className="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3">
           <button
             type="button"
             onClick={onCreateOrganization}

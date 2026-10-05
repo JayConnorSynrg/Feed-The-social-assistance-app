@@ -228,3 +228,35 @@ export function validateHours(rows: readonly BusinessHours[]): HoursIssue[] {
   }
   return issues
 }
+
+/**
+ * Accessible names for one day's hours controls. With more than one interval the interval number is
+ * part of each name ("Monday, hours 2 Opens"), so two selects never share a name.
+ */
+export function hoursControlNames(args: {
+  day: string
+  index: number
+  count: number
+  label: {
+    opens: string
+    closes: string
+    remove: string
+    copyWeekdays: string
+    copyAll: string
+    add: string
+    open24: string
+    intervalName: (day: string, n: number) => string
+  }
+}): { opens: string; closes: string; remove: string; copyWeekdays: string; copyAll: string; add: string; open24: string } {
+  const { day, index, count, label } = args
+  const subject = count > 1 ? label.intervalName(day, index + 1) : day
+  return {
+    opens: `${subject} ${label.opens}`,
+    closes: `${subject} ${label.closes}`,
+    remove: `${subject}: ${label.remove}`,
+    copyWeekdays: `${day}: ${label.copyWeekdays}`,
+    copyAll: `${day}: ${label.copyAll}`,
+    add: `${day}: ${label.add}`,
+    open24: `${day}: ${label.open24}`,
+  }
+}

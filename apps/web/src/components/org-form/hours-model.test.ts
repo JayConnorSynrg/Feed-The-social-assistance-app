@@ -9,6 +9,7 @@ import {
   addInterval,
   copyToAllDays,
   copyToWeekdays,
+  hoursControlNames,
   isOvernight,
   normalizeLoadedHours,
   presetHours,
@@ -142,3 +143,30 @@ describe('loaded data', () => {
     expect(validateHours(rows)).toEqual([])
   })
 })
+
+describe('accessible control names', () => {
+  const label = {
+    opens: 'Opens',
+    closes: 'Closes',
+    remove: 'Remove these hours',
+    copyWeekdays: 'Copy to weekdays',
+    copyAll: 'Copy to all days',
+    add: 'Add hours',
+    open24: 'Open 24 hours',
+    intervalName: (d: string, n: number) => `${d}, hours ${n}`,
+  }
+  it('one interval: names carry the day', () => {
+    const n = hoursControlNames({ day: 'Monday', index: 0, count: 1, label })
+    expect(n.opens).toBe('Monday Opens')
+    expect(n.add).toBe('Monday: Add hours')
+    expect(n.copyWeekdays).toBe('Monday: Copy to weekdays')
+    expect(n.open24).toBe('Monday: Open 24 hours')
+  })
+  it('several intervals: every Opens/Closes/Remove name is unique', () => {
+    const a = hoursControlNames({ day: 'Monday', index: 0, count: 2, label })
+    const b = hoursControlNames({ day: 'Monday', index: 1, count: 2, label })
+    expect(b.opens).toBe('Monday, hours 2 Opens')
+    expect(new Set([a.opens, b.opens, a.closes, b.closes, a.remove, b.remove]).size).toBe(6)
+  })
+})
+

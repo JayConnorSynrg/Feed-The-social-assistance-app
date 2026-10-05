@@ -27,7 +27,8 @@ import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminTier } from '@/hooks/use-admin-tier'
-import { resolveUserLocale } from '@/lib/i18n'
+import { canCreateOrganizations } from '@/lib/admin-tier'
+import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
@@ -39,6 +40,10 @@ export function OrganizationsPanel() {
   const { position, getCurrentPosition } = useGeolocation()
   const { profile } = useAuth()
   const { tier } = useAdminTier()
+  // The admin link speaks the admin's profile language (the rest of this panel is English).
+  const adminLocale: Locale = profile
+    ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null)
+    : 'en'
   const supabase = createClient()
 
   // Device GPS only with the explicit Share Location opt-in, requested once on mount.
@@ -112,13 +117,15 @@ export function OrganizationsPanel() {
             <h1 className="text-lg font-bold text-stone-800">Local Organizations</h1>
             <p className="text-xs text-stone-500">Food banks, shelters, clinics, and community organizations near you</p>
           </div>
-          {tier === 'platform_admin' && (
+          {canCreateOrganizations(tier) && (
             <a
               href="/moderation?tab=organizations&org=new"
+              lang={adminLocale}
+              dir={dir(adminLocale)}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              {orgFormT(profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en', 'addOrganization')}
+              {orgFormT(adminLocale, 'addOrganization')}
             </a>
           )}
         </div>
