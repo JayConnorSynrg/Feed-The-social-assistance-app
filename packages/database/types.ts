@@ -3936,6 +3936,14 @@ export type Database = {
         Args: { p_action: string; p_report_id: string }
         Returns: Json
       }
+      admin_save_organization: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: Json
+      }
+      admin_set_org_active: {
+        Args: { p_active: boolean; p_org_id: string }
+        Returns: undefined
+      }
       admin_set_tier: {
         Args: {
           p_reason?: string
@@ -4105,6 +4113,7 @@ export type Database = {
         }
         Returns: number
       }
+      can_manage_org_photos: { Args: { p_folder: string }; Returns: boolean }
       category_label: {
         Args: { p_category: Database["public"]["Enums"]["resource_category"] }
         Returns: string
