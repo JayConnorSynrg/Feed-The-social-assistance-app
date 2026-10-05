@@ -30,7 +30,17 @@
 --     aborts the whole call, so the org row, children and audit row land together or not
 --     at all.
 --
--- (b) businesses_in_bounds gains `AND is_active` (an approved-but-deactivated business was
+--     removed_photo_paths lists only files inside THIS org's `<org_id>/` folder: a row whose
+--     storage_path points elsewhere (a legacy post-images path, or a path a member planted on
+--     their own business) is dropped as a row but never handed to the client for file deletion.
+--
+-- (b) public.admin_set_org_active(p_org_id uuid, p_active boolean) RETURNS void
+--     The one audited path for Deactivate / Reactivate (any org_type, businesses included).
+--     Platform admin only; exactly one row; a no-op is allowed and still audited
+--     ('org.deactivate' | 'org.reactivate'). Deactivating fires the existing
+--     organizations_cascade_deactivate trigger (future event occurrences are cancelled).
+--
+-- (c) businesses_in_bounds gains `AND is_active` (an approved-but-deactivated business was
 --     still returned to the public map). Signature, return shape and grants unchanged.
 --
 -- Migration order (5-step): (1) no extensions; (2)-(4) no tables; functions only;
@@ -63,7 +73,10 @@ DECLARE
   c_email_re    constant text := '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$';
   c_open_re     constant text := '^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$';
   c_close_re    constant text := '^(([01][0-9]|2[0-3]):[0-5][0-9](:00)?|24:00(:00)?)$';
-  c_photo_url   constant text := '^https?://[^/?#]+/storage/v1/object/public/org-photos/';
+  c_photo_url   constant text := '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/storage/v1/object/public/org-photos/';
+  c_uuid_re     constant text := '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$';
+  c_text_keys   constant text[] := ARRAY['name','org_type','description','website','phone','email','address',
+                                         'city','state','zip_code','business_category','cost_model'];
   v_actor        uuid;
   v_existing     text;
   v_created      boolean;
@@ -89,6 +102,7 @@ DECLARE
   v_logo_n       int := 0;
   v_cover_n      int := 0;
   v_new_paths    text[] := '{}';
+  v_hour_keys    text[] := '{}';
   v_resource_ids uuid[] := '{}';
   v_removed      text[] := '{}';
   v_hours_n      int;
@@ -115,6 +129,13 @@ BEGIN
   v_created := NOT FOUND;
 
   -- ========================= VALIDATION (no writes) =========================
+  -- Text fields are JSON strings (or null); an object/array/number is never coerced to text.
+  FOREACH v_key IN ARRAY c_text_keys LOOP
+    IF p_payload ? v_key AND jsonb_typeof(p_payload->v_key) NOT IN ('string', 'null') THEN
+      RAISE EXCEPTION 'org_save_invalid: % must be a string', v_key USING ERRCODE = '22023';
+    END IF;
+  END LOOP;
+
   v_name := btrim(COALESCE(p_payload->>'name', ''));
   IF v_name = '' THEN
     RAISE EXCEPTION 'org_save_invalid: name is required' USING ERRCODE = '22023';
@@ -151,8 +172,11 @@ BEGIN
   IF p_payload ? 'location' AND jsonb_typeof(p_payload->'location') <> 'null' THEN
     IF jsonb_typeof(p_payload->'location') <> 'object'
        OR jsonb_typeof(p_payload->'location'->'lng') IS DISTINCT FROM 'number'
-       OR jsonb_typeof(p_payload->'location'->'lat') IS DISTINCT FROM 'number'
-       OR (p_payload->'location'->>'lng')::double precision NOT BETWEEN -180 AND 180
+       OR jsonb_typeof(p_payload->'location'->'lat') IS DISTINCT FROM 'number' THEN
+      RAISE EXCEPTION 'org_save_invalid: location must be {lng: -180..180, lat: -90..90} or null'
+        USING ERRCODE = '22023';
+    END IF;
+    IF (p_payload->'location'->>'lng')::double precision NOT BETWEEN -180 AND 180
        OR (p_payload->'location'->>'lat')::double precision NOT BETWEEN -90 AND 90 THEN
       RAISE EXCEPTION 'org_save_invalid: location must be {lng: -180..180, lat: -90..90} or null'
         USING ERRCODE = '22023';
@@ -183,8 +207,10 @@ BEGIN
       END IF;
     END IF;
     IF p_payload ? 'service_radius_miles' AND jsonb_typeof(p_payload->'service_radius_miles') <> 'null' THEN
-      IF jsonb_typeof(p_payload->'service_radius_miles') <> 'number'
-         OR (p_payload->>'service_radius_miles')::numeric < 0 THEN
+      IF jsonb_typeof(p_payload->'service_radius_miles') <> 'number' THEN
+        RAISE EXCEPTION 'org_save_invalid: service_radius_miles must be a number >= 0' USING ERRCODE = '22023';
+      END IF;
+      IF (p_payload->>'service_radius_miles')::numeric < 0 THEN
         RAISE EXCEPTION 'org_save_invalid: service_radius_miles must be a number >= 0' USING ERRCODE = '22023';
       END IF;
       v_radius := (p_payload->>'service_radius_miles')::numeric;
@@ -225,8 +251,12 @@ BEGIN
         RAISE EXCEPTION 'org_save_invalid: services must be an array' USING ERRCODE = '22023';
       END IF;
       FOR v_item IN SELECT e FROM jsonb_array_elements(p_payload->'services') e LOOP
-        IF jsonb_typeof(v_item) <> 'object' OR btrim(COALESCE(v_item->>'name', '')) = '' THEN
-          RAISE EXCEPTION 'org_save_invalid: every service needs a name' USING ERRCODE = '22023';
+        IF jsonb_typeof(v_item) <> 'object'
+           OR jsonb_typeof(v_item->'name') IS DISTINCT FROM 'string'
+           OR btrim(v_item->>'name') = ''
+           OR COALESCE(jsonb_typeof(v_item->'description'), 'null') NOT IN ('string', 'null') THEN
+          RAISE EXCEPTION 'org_save_invalid: every service needs a string name (description string or null)'
+            USING ERRCODE = '22023';
         END IF;
       END LOOP;
     END IF;
@@ -242,6 +272,8 @@ BEGIN
       IF jsonb_typeof(v_item) <> 'object'
          OR jsonb_typeof(v_item->'day_of_week') IS DISTINCT FROM 'number'
          OR (v_item->>'day_of_week') !~ '^[0-6]$'
+         OR jsonb_typeof(v_item->'open_time') IS DISTINCT FROM 'string'
+         OR jsonb_typeof(v_item->'close_time') IS DISTINCT FROM 'string'
          OR COALESCE(v_item->>'open_time', '') !~ c_open_re
          OR COALESCE(v_item->>'close_time', '') !~ c_close_re THEN
         RAISE EXCEPTION 'org_save_invalid: each hours entry needs day_of_week 0-6, open_time HH:MM, close_time HH:MM'
@@ -257,6 +289,12 @@ BEGIN
         RAISE EXCEPTION 'org_save_invalid: close 24:00 is only valid with open 00:00 (open 24 hours)'
           USING ERRCODE = '22023';
       END IF;
+      v_key := (v_item->>'day_of_week') || '|' || v_open::text || '|' || v_close::text;
+      IF v_key = ANY (v_hour_keys) THEN
+        RAISE EXCEPTION 'org_save_invalid: duplicate hours interval (day %, % - %)', v_item->>'day_of_week', v_open, v_close
+          USING ERRCODE = '22023';
+      END IF;
+      v_hour_keys := v_hour_keys || v_key;
     END LOOP;
   END IF;
 
@@ -270,8 +308,15 @@ BEGIN
               || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png)$';
     FOR v_item IN SELECT e FROM jsonb_array_elements(p_payload->'photos') e LOOP
       IF jsonb_typeof(v_item) <> 'object'
-         OR COALESCE(v_item->>'kind', '') NOT IN ('logo', 'cover', 'gallery') THEN
+         OR jsonb_typeof(v_item->'kind') IS DISTINCT FROM 'string'
+         OR v_item->>'kind' NOT IN ('logo', 'cover', 'gallery') THEN
         RAISE EXCEPTION 'org_save_invalid: photo kind must be logo, cover or gallery' USING ERRCODE = '22023';
+      END IF;
+      IF jsonb_typeof(v_item->'storage_path') IS DISTINCT FROM 'string'
+         OR jsonb_typeof(v_item->'url') IS DISTINCT FROM 'string'
+         OR COALESCE(jsonb_typeof(v_item->'caption'), 'null') NOT IN ('string', 'null') THEN
+        RAISE EXCEPTION 'org_save_invalid: photo storage_path and url must be strings (caption string or null)'
+          USING ERRCODE = '22023';
       END IF;
       v_path := COALESCE(v_item->>'storage_path', '');
       v_url  := COALESCE(v_item->>'url', '');
@@ -282,6 +327,9 @@ BEGIN
       IF v_url !~ c_photo_url OR regexp_replace(v_url, c_photo_url, '') <> v_path THEN
         RAISE EXCEPTION 'org_save_invalid: photo url must be the public org-photos URL of its storage_path'
           USING ERRCODE = '22023';
+      END IF;
+      IF v_path = ANY (v_new_paths) THEN
+        RAISE EXCEPTION 'org_save_invalid: duplicate photo storage_path %', v_path USING ERRCODE = '22023';
       END IF;
       IF v_item->>'kind' = 'logo'  THEN v_logo_n  := v_logo_n + 1;  END IF;
       IF v_item->>'kind' = 'cover' THEN v_cover_n := v_cover_n + 1; END IF;
@@ -297,9 +345,16 @@ BEGIN
     IF jsonb_typeof(p_payload->'resource_ids') <> 'array' THEN
       RAISE EXCEPTION 'org_save_invalid: resource_ids must be an array' USING ERRCODE = '22023';
     END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_payload->'resource_ids') AS e
+               WHERE jsonb_typeof(e) <> 'string' OR (e #>> '{}') !~ c_uuid_re) THEN
+      RAISE EXCEPTION 'org_save_invalid: every resource id must be a UUID string' USING ERRCODE = '22023';
+    END IF;
     SELECT COALESCE(array_agg(e::uuid ORDER BY ord), '{}')
       INTO v_resource_ids
       FROM jsonb_array_elements_text(p_payload->'resource_ids') WITH ORDINALITY AS t(e, ord);
+    IF cardinality(v_resource_ids) <> (SELECT count(DISTINCT rid) FROM unnest(v_resource_ids) u(rid)) THEN
+      RAISE EXCEPTION 'org_save_invalid: duplicate resource id' USING ERRCODE = '22023';
+    END IF;
     IF EXISTS (SELECT 1 FROM unnest(v_resource_ids) u(rid)
                WHERE NOT EXISTS (SELECT 1 FROM public.resources r
                                  WHERE r.id = u.rid AND r.status = 'approved')) THEN
@@ -369,7 +424,9 @@ BEGIN
     SELECT COALESCE(array_agg(bp.storage_path ORDER BY bp.storage_path), '{}')
       INTO v_removed
       FROM public.business_photos bp
-     WHERE bp.org_id = p_org_id AND NOT (bp.storage_path = ANY (v_new_paths));
+     WHERE bp.org_id = p_org_id
+       AND bp.storage_path LIKE p_org_id::text || '/%'
+       AND NOT (bp.storage_path = ANY (v_new_paths));
     DELETE FROM public.business_photos bp WHERE bp.org_id = p_org_id;
     INSERT INTO public.business_photos (org_id, kind, url, storage_path, sort_order, caption)
     SELECT p_org_id, e->>'kind', e->>'url', e->>'storage_path', (ord - 1)::int,
@@ -419,9 +476,54 @@ REVOKE EXECUTE ON FUNCTION public.admin_save_organization(uuid, jsonb) FROM PUBL
 GRANT EXECUTE ON FUNCTION public.admin_save_organization(uuid, jsonb) TO authenticated;
 
 -- ---------------------------------------------------------------------------
--- (b) businesses_in_bounds — only ACTIVE approved located businesses reach the map.
+-- (b) admin_set_org_active — audited Deactivate / Reactivate.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.admin_set_org_active(p_org_id uuid, p_active boolean)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_was      boolean;
+  v_org_type text;
+BEGIN
+  IF NOT public.is_current_user_admin() THEN
+    RAISE EXCEPTION 'org_active_denied: platform admin only' USING ERRCODE = '42501';
+  END IF;
+  IF p_active IS NULL THEN
+    RAISE EXCEPTION 'org_active_invalid: p_active is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT o.is_active, o.org_type INTO v_was, v_org_type
+    FROM public.organizations o WHERE o.id = p_org_id FOR UPDATE;
+
+  UPDATE public.organizations o
+     SET is_active = p_active, updated_at = now()
+   WHERE o.id = p_org_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'org_active_failed: organization % not found (0 rows)', p_org_id USING ERRCODE = 'P0002';
+  END IF;
+
+  PERFORM public.record_admin_action(
+    auth.uid(),
+    CASE WHEN p_active THEN 'org.reactivate' ELSE 'org.deactivate' END,
+    'organization', p_org_id::text, 'ok', NULL,
+    jsonb_build_object('org_type', v_org_type, 'was_active', v_was),
+    public.request_id());
+END
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.admin_set_org_active(uuid, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_set_org_active(uuid, boolean) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- (c) businesses_in_bounds — only ACTIVE approved located businesses reach the map.
 --     Same signature + return shape => CREATE OR REPLACE keeps the existing grants;
---     the REVOKE/GRANT pair below restates them unchanged.
+--     the REVOKE/GRANT pair below restates them unchanged. `geography` stays unqualified on
+--     purpose: production PostGIS is installed in schema `public` (pg_extension read
+--     2026-10-05), so `extensions.geography` does not exist there; the unqualified name is
+--     byte-identical to the live return type.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.businesses_in_bounds(
   min_lng double precision, min_lat double precision,

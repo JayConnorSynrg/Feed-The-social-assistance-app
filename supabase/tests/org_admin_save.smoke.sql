@@ -15,8 +15,14 @@
 -- held. Portable: it discovers an is_admin actor, a plain member and resources at runtime and
 -- SKIPs (with a loud NOTICE) when the fixtures are absent. Calls run as `authenticated` /
 -- `anon` (the grant + RLS surface); verification reads run as the connection superuser.
+--
+-- Lock safety: lock_timeout 2s for the whole transaction. S7 creates a trigger on
+-- public.organizations (ShareRowExclusive until ROLLBACK), so it runs ONLY on a local/ephemeral
+-- database that opts in with `SET feed.smoke_local = on` (or PGOPTIONS='-c feed.smoke_local=on');
+-- elsewhere it is skipped with a NOTICE.
 
 BEGIN;
+SET LOCAL lock_timeout = '2s';
 
 -- PostGIS lives in the extensions schema. LOCAL => reverts on ROLLBACK.
 SET LOCAL search_path TO public, extensions, pg_temp;
@@ -62,6 +68,10 @@ DECLARE
   v_snap_comm text;
   v_snap_biz  text;
   v_act    record;
+  v_own    text;
+  v_foreign text;
+  v_ev     uuid;
+  v_occ    uuid;
 BEGIN
   IF v_admin IS NULL OR v_member IS NULL OR cardinality(v_res) < 3 OR v_res_pending IS NULL THEN
     RAISE NOTICE 'SKIP org_admin_save smoke: needs one is_admin profile, one plain member, 3 approved + 1 non-approved resource';
@@ -116,7 +126,7 @@ BEGIN
     'website', 'https://example.org', 'email', 'info@example.org', 'city', 'Burlington', 'state', 'VT',
     'location', jsonb_build_object('lng', -179.85, 'lat', -89.85),
     'hours', jsonb_build_array(
-      jsonb_build_object('day_of_week', 1, 'open_time', '09:00', 'close_time', '17:00'),
+      jsonb_build_object('day_of_week', 1, 'open_time', '09:00:00', 'close_time', '17:00:00'),
       jsonb_build_object('day_of_week', 5, 'open_time', '22:00', 'close_time', '02:00'),
       jsonb_build_object('day_of_week', 6, 'open_time', '00:00', 'close_time', '24:00')),
     'photos', jsonb_build_array(
@@ -314,6 +324,24 @@ BEGIN
                                                                                                      jsonb_build_object('kind', 'logo', 'storage_path', v_gal, 'url', c_base || v_gal),
                                                                                                      jsonb_build_object('kind', 'logo', 'storage_path', v_cover, 'url', c_base || v_cover)))),
     jsonb_build_object('l', 'unapproved resource', 't', 'comm', 'f', 'approved resource',     'p', jsonb_build_object('resource_ids', jsonb_build_array(v_res_pending))),
+    jsonb_build_object('l', 'userinfo host trick', 't', 'comm', 'f', 'url',                   'p', jsonb_build_object('photos', jsonb_build_array(jsonb_build_object('kind', 'gallery', 'storage_path', v_gal,
+                                                                                                     'url', 'https://ndtpovonpadugthmcntl.supabase.co@evil.example/storage/v1/object/public/org-photos/' || v_gal)))),
+    jsonb_build_object('l', 'object name',         't', 'comm', 'f', 'name must be a string', 'p', jsonb_build_object('name', jsonb_build_object('a', 1))),
+    jsonb_build_object('l', 'array city',          't', 'comm', 'f', 'city must be a string', 'p', jsonb_build_object('city', jsonb_build_array('Burlington'))),
+    jsonb_build_object('l', 'number phone',        't', 'comm', 'f', 'phone must be a string','p', jsonb_build_object('phone', 8025550100)),
+    jsonb_build_object('l', 'string lng',          't', 'comm', 'f', 'location',              'p', jsonb_build_object('location', jsonb_build_object('lng', 'abc', 'lat', 2))),
+    jsonb_build_object('l', 'string day',          't', 'comm', 'f', 'day_of_week',           'p', jsonb_build_object('hours', jsonb_build_array(jsonb_build_object('day_of_week', '1', 'open_time', '09:00', 'close_time', '10:00')))),
+    jsonb_build_object('l', 'object caption',      't', 'comm', 'f', 'caption',               'p', jsonb_build_object('photos', jsonb_build_array(jsonb_build_object('kind', 'gallery', 'storage_path', v_gal, 'url', c_base || v_gal, 'caption', jsonb_build_object('x', 1))))),
+    jsonb_build_object('l', 'string radius',       't', 'biz',  'f', 'service_radius_miles',  'p', jsonb_build_object('service_radius_miles', 'ten')),
+    jsonb_build_object('l', 'duplicate photo',     't', 'comm', 'f', 'duplicate photo',       'p', jsonb_build_object('photos', jsonb_build_array(
+                                                                                                     jsonb_build_object('kind', 'gallery', 'storage_path', v_gal, 'url', c_base || v_gal),
+                                                                                                     jsonb_build_object('kind', 'gallery', 'storage_path', v_gal, 'url', c_base || v_gal)))),
+    jsonb_build_object('l', 'duplicate hours',     't', 'comm', 'f', 'duplicate hours',       'p', jsonb_build_object('hours', jsonb_build_array(
+                                                                                                     jsonb_build_object('day_of_week', 1, 'open_time', '09:00', 'close_time', '17:00'),
+                                                                                                     jsonb_build_object('day_of_week', 1, 'open_time', '09:00:00', 'close_time', '17:00')))),
+    jsonb_build_object('l', 'bad resource uuid',   't', 'comm', 'f', 'UUID string',           'p', jsonb_build_object('resource_ids', jsonb_build_array('not-a-uuid'))),
+    jsonb_build_object('l', 'numeric resource id', 't', 'comm', 'f', 'UUID string',           'p', jsonb_build_object('resource_ids', jsonb_build_array(123))),
+    jsonb_build_object('l', 'dup resource (case)', 't', 'comm', 'f', 'duplicate resource',    'p', jsonb_build_object('resource_ids', jsonb_build_array(v_res[1]::text, upper(v_res[1]::text)))),
     -- atomicity: valid name + hours + resources followed by an invalid photo => nothing persists
     jsonb_build_object('l', 'partial payload',     't', 'comm', 'f', 'storage_path',          'p', jsonb_build_object(
         'name', 'SMOKE Partial', 'hours', jsonb_build_array(jsonb_build_object('day_of_week', 3, 'open_time', '09:00', 'close_time', '10:00')),
@@ -337,29 +365,6 @@ BEGIN
   ASSERT NOT EXISTS (SELECT 1 FROM public.organizations WHERE id = v_new), 'S6: a rejected create writes no row';
   SELECT count(*) INTO v_after FROM public.admin_actions;
   ASSERT v_after = v_before, 'S6: a rejected save writes no audit row';
-
-  -- =====================================================================
-  -- S7 — an UPDATE that affects 0 rows is an error, never a silent success.
-  --      A BEFORE UPDATE trigger that skips the row simulates the 0-row outcome.
-  -- =====================================================================
-  CREATE FUNCTION public.smoke_skip_org_update() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
-  EXECUTE format('CREATE TRIGGER smoke_skip_org_update BEFORE UPDATE ON public.organizations
-                  FOR EACH ROW WHEN (OLD.id = %L::uuid) EXECUTE FUNCTION public.smoke_skip_org_update()', v_comm);
-  v_snap_comm := pg_temp.org_snap(v_comm);
-  SET LOCAL ROLE authenticated;
-  v_state := NULL; v_err := NULL;
-  BEGIN
-    PERFORM public.admin_save_organization(v_comm, jsonb_build_object(
-      'name', 'SMOKE Ghost', 'org_type', 'nonprofit',
-      'hours', jsonb_build_array(jsonb_build_object('day_of_week', 4, 'open_time', '09:00', 'close_time', '10:00'))));
-  EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
-  END;
-  RESET ROLE;
-  ASSERT v_state = 'P0002' AND v_err LIKE '%affected 0 rows%',
-    '0-row update must raise P0002, got '||COALESCE(v_state, '<none: silent success>')||' '||COALESCE(v_err, '');
-  ASSERT pg_temp.org_snap(v_comm) = v_snap_comm, 'S7: a 0-row update must persist no child writes';
-  DROP TRIGGER smoke_skip_org_update ON public.organizations;
-  DROP FUNCTION public.smoke_skip_org_update();
 
   -- =====================================================================
   -- S8 — can_manage_org_photos truth table + org-photos storage policies + bucket config.
@@ -430,12 +435,11 @@ BEGIN
   DELETE FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_obiz || '/%';
   GET DIAGNOSTICS v_n = ROW_COUNT;
   ASSERT v_n = 0, 'S8: member cannot delete in another org folder';
-  v_state := NULL; v_err := NULL;
-  BEGIN
-    INSERT INTO storage.objects (bucket_id, name) VALUES ('org-photos', v_mbiz || '/' || gen_random_uuid() || '.webp');
-  EXCEPTION WHEN insufficient_privilege THEN v_state := '42501';
-  END;
-  ASSERT v_state = '42501', 'S8: no direct client upload into org-photos (service-role edge fn only)';
+  ASSERT NOT EXISTS (SELECT 1 FROM pg_policies
+                     WHERE schemaname = 'storage' AND tablename = 'objects'
+                       AND cmd IN ('INSERT', 'UPDATE', 'ALL')
+                       AND (COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) LIKE '%org-photos%'),
+    'S8: no INSERT/UPDATE/ALL policy on storage.objects may reference org-photos (uploads are service-role only)';
   DELETE FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_mbiz || '/%';
   GET DIAGNOSTICS v_n = ROW_COUNT;
   ASSERT v_n = 1, 'S8: member deletes in own business folder';
@@ -456,7 +460,144 @@ BEGIN
     'S8: public listing of org-photos stays closed';
   RESET ROLE;
 
-  RAISE NOTICE 'PASS org_admin_save smoke: S1 gate, S2-S4 create/update, S5 switch, S6 validation+atomicity, S7 0-row, S8 photos';
+  -- =====================================================================
+  -- S9 — removed_photo_paths never returns a file outside THIS org's folder.
+  --      A member plants a row on their own business whose storage_path points into another
+  --      org's folder; an admin save that drops it must not hand that path back for deletion.
+  -- =====================================================================
+  v_own     := v_mbiz || '/' || gen_random_uuid() || '.webp';
+  v_foreign := v_comm || '/' || gen_random_uuid() || '.webp';
+  INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_mbiz, 'gallery', c_base || v_own, v_own);
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_member, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_mbiz, 'gallery', 'https://x/y.webp', v_foreign);
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  v_ret := public.admin_save_organization(v_mbiz, jsonb_build_object(
+    'name', 'SMOKE Member Biz', 'org_type', 'business', 'photos', '[]'::jsonb));
+  RESET ROLE;
+  ASSERT v_ret->'removed_photo_paths' = jsonb_build_array(v_own),
+    'S9: removed_photo_paths must list ONLY the own-folder file, got '||(v_ret->'removed_photo_paths')::text;
+  ASSERT NOT (v_ret->'removed_photo_paths' ? v_foreign), 'S9: a foreign-folder path must never be returned';
+  ASSERT (SELECT count(*) FROM public.business_photos WHERE org_id = v_mbiz) = 0, 'S9: both rows are dropped';
+
+  -- =====================================================================
+  -- S10 — admin_set_org_active: admin only, exactly one row, every call audited (no-op too),
+  --       deactivation fires organizations_cascade_deactivate, works for businesses.
+  -- =====================================================================
+  INSERT INTO public.assistance_events (org_id, title) VALUES (v_comm, 'SMOKE Event') RETURNING id INTO v_ev;
+  INSERT INTO public.event_occurrences (event_id, starts_at, ends_at)
+  VALUES (v_ev, now() + interval '1 day', now() + interval '1 day 2 hours') RETURNING id INTO v_occ;
+
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_member, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_state := NULL; v_err := NULL;
+  BEGIN PERFORM public.admin_set_org_active(v_comm, false);
+  EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM; END;
+  ASSERT v_state = '42501' AND v_err LIKE 'org_active_denied%',
+    'S10: non-admin must get 42501, got '||COALESCE(v_state, '<none>')||' '||COALESCE(v_err, '');
+  PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  SET LOCAL ROLE anon;
+  v_state := NULL; v_err := NULL;
+  BEGIN PERFORM public.admin_set_org_active(v_comm, false);
+  EXCEPTION WHEN others THEN v_state := SQLSTATE; END;
+  ASSERT v_state = '42501', 'S10: anon must be denied EXECUTE';
+  RESET ROLE;
+  ASSERT (SELECT is_active FROM public.organizations WHERE id = v_comm), 'S10: a denied call changes nothing';
+  ASSERT (SELECT status FROM public.event_occurrences WHERE id = v_occ) = 'upcoming', 'S10: a denied call cascades nothing';
+  ASSERT NOT has_function_privilege('anon', 'public.admin_set_org_active(uuid, boolean)', 'EXECUTE'),
+    'S10: anon must hold no EXECUTE on admin_set_org_active';
+
+  -- deactivate (cascade fires)
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  PERFORM set_config('request.headers', '{"x-request-id":"smoke-org-deact-1"}', true);
+  SELECT count(*) INTO v_before FROM public.admin_actions;
+  SET LOCAL ROLE authenticated;
+  PERFORM public.admin_set_org_active(v_comm, false);
+  RESET ROLE;
+  ASSERT (SELECT NOT is_active FROM public.organizations WHERE id = v_comm), 'S10: deactivate sets is_active=false';
+  ASSERT (SELECT status FROM public.event_occurrences WHERE id = v_occ) = 'cancelled',
+    'S10: deactivate must fire organizations_cascade_deactivate (future occurrence cancelled)';
+  SELECT count(*) INTO v_after FROM public.admin_actions;
+  ASSERT v_after - v_before = 1, 'S10: exactly one audit row per deactivate';
+  ASSERT (SELECT action = 'org.deactivate' AND target_type = 'organization' AND target_id = v_comm::text
+            AND actor_id = v_admin AND details->>'was_active' = 'true'
+          FROM public.admin_actions WHERE request_id = 'smoke-org-deact-1'),
+    'S10: audit row must be org.deactivate on the org with request_id';
+
+  -- reactivate, then a no-op reactivate (still audited)
+  PERFORM set_config('request.headers', '{"x-request-id":"smoke-org-react-1"}', true);
+  SET LOCAL ROLE authenticated;
+  PERFORM public.admin_set_org_active(v_comm, true);
+  RESET ROLE;
+  ASSERT (SELECT is_active FROM public.organizations WHERE id = v_comm), 'S10: reactivate sets is_active=true';
+  ASSERT (SELECT action = 'org.reactivate' AND details->>'was_active' = 'false'
+          FROM public.admin_actions WHERE request_id = 'smoke-org-react-1'), 'S10: reactivate audited';
+  PERFORM set_config('request.headers', '{"x-request-id":"smoke-org-react-2"}', true);
+  SELECT count(*) INTO v_before FROM public.admin_actions;
+  SET LOCAL ROLE authenticated;
+  PERFORM public.admin_set_org_active(v_comm, true);
+  RESET ROLE;
+  SELECT count(*) INTO v_after FROM public.admin_actions;
+  ASSERT v_after - v_before = 1 AND (SELECT is_active FROM public.organizations WHERE id = v_comm),
+    'S10: a no-op reactivate is allowed and still writes exactly one audit row';
+  ASSERT (SELECT details->>'was_active' = 'true' FROM public.admin_actions WHERE request_id = 'smoke-org-react-2'),
+    'S10: the no-op audit row records was_active=true';
+
+  -- businesses too
+  PERFORM set_config('request.headers', '{"x-request-id":"smoke-biz-deact-1"}', true);
+  SET LOCAL ROLE authenticated;
+  PERFORM public.admin_set_org_active(v_biz, false);
+  RESET ROLE;
+  ASSERT (SELECT NOT is_active FROM public.organizations WHERE id = v_biz), 'S10: a business can be deactivated';
+  ASSERT (SELECT action = 'org.deactivate' AND details->>'org_type' = 'business'
+          FROM public.admin_actions WHERE request_id = 'smoke-biz-deact-1'), 'S10: business deactivate audited';
+
+  -- 0 rows => P0002, no audit
+  SELECT count(*) INTO v_before FROM public.admin_actions;
+  SET LOCAL ROLE authenticated;
+  v_state := NULL; v_err := NULL;
+  BEGIN PERFORM public.admin_set_org_active(v_new, false);
+  EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM; END;
+  RESET ROLE;
+  ASSERT v_state = 'P0002', 'S10: an unknown org must raise P0002, got '||COALESCE(v_state, '<none: silent success>');
+  SELECT count(*) INTO v_after FROM public.admin_actions;
+  ASSERT v_after = v_before, 'S10: a failed call writes no audit row';
+
+  -- =====================================================================
+  -- S7 — an UPDATE that affects 0 rows is an error, never a silent success.
+  --      A BEFORE UPDATE trigger that skips the row simulates the 0-row outcome. It takes a
+  --      ShareRowExclusive lock on organizations until ROLLBACK (which also removes it), so it
+  --      runs only on a local database that opted in with feed.smoke_local=on. Runs LAST.
+  -- =====================================================================
+  IF current_setting('feed.smoke_local', true) = 'on' THEN
+    CREATE FUNCTION public.smoke_skip_org_update() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+    EXECUTE format('CREATE TRIGGER smoke_skip_org_update BEFORE UPDATE ON public.organizations
+                    FOR EACH ROW WHEN (OLD.id = %L::uuid) EXECUTE FUNCTION public.smoke_skip_org_update()', v_comm);
+    v_snap_comm := pg_temp.org_snap(v_comm);
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+    SET LOCAL ROLE authenticated;
+    v_state := NULL; v_err := NULL;
+    BEGIN
+      PERFORM public.admin_save_organization(v_comm, jsonb_build_object(
+        'name', 'SMOKE Ghost', 'org_type', 'nonprofit',
+        'hours', jsonb_build_array(jsonb_build_object('day_of_week', 4, 'open_time', '09:00', 'close_time', '10:00'))));
+    EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
+    END;
+    RESET ROLE;
+    ASSERT v_state = 'P0002' AND v_err LIKE '%affected 0 rows%',
+      '0-row update must raise P0002, got '||COALESCE(v_state, '<none: silent success>')||' '||COALESCE(v_err, '');
+    ASSERT pg_temp.org_snap(v_comm) = v_snap_comm, 'S7: a 0-row update must persist no child writes';
+    RAISE NOTICE 'PASS S7 0-row update guard (local)';
+  ELSE
+    RAISE NOTICE 'SKIP S7 0-row update guard: needs feed.smoke_local=on (creates a trigger on organizations; local DB only)';
+  END IF;
+
+  RAISE NOTICE 'PASS org_admin_save smoke: S1 gate, S2-S4 create/update, S5 switch, S6 validation+atomicity, S8 photos, S9 foreign paths, S10 set-active';
 END
 $smoke$;
 

@@ -19,6 +19,8 @@
 -- which is the surface the widened policies actually govern.
 
 BEGIN;
+-- Lock safety on shared databases: never wait on a lock longer than 2s.
+SET LOCAL lock_timeout = '2s';
 
 -- PostGIS lives in the extensions schema; pin it so st_makepoint / ::geography resolve
 -- exactly as public.organizations_in_bounds pins them. LOCAL => reverts on ROLLBACK.
