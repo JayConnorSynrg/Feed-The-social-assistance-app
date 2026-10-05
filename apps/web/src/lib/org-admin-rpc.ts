@@ -5,18 +5,20 @@
 //   admin_save_organization(p_org_id uuid, p_payload jsonb) -> {id, created, removed_photo_paths}
 //   admin_set_org_active(p_org_id uuid, p_active boolean)   -> void
 // Both run through privilegedRpc so the x-request-id lands in the audit row and the app_logs row.
-// When packages/database/types.ts is regenerated, only the casts in this file change.
+// The argument objects are checked against the generated Database Args types, so a signature change
+// in packages/database/types.ts is a compile error here.
 //
 // mapSaveError turns a SQLSTATE (42501 denied, 22023 'org_save_invalid:<reason>') into a
 // dictionary key the panel renders, so raw database text never reaches the UI.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@feed/database'
+import type { Database, Json } from '@feed/database'
 import { privilegedRpc } from './privileged-action'
-import type { BusinessHours } from './business'
 import type { OrgFormMessages } from './i18n-org-forms'
 
-export interface OrgPhotoPayload {
+type Rpc = Database['public']['Functions']
+
+export type OrgPhotoPayload = {
   kind: 'logo' | 'cover' | 'gallery'
   url: string
   storage_path: string
@@ -24,8 +26,9 @@ export interface OrgPhotoPayload {
   caption: string | null
 }
 
-/** The admin_save_organization payload for a NON-business org (business keys arrive in PR-B). */
-export interface OrgSavePayload {
+/** The admin_save_organization payload for a NON-business org (business keys arrive in PR-B).
+ *  A type alias (not an interface) so it is structurally assignable to the generated `Json`. */
+export type OrgSavePayload = {
   name: string
   org_type: string
   description: string | null
@@ -38,7 +41,7 @@ export interface OrgSavePayload {
   website: string | null
   /** Absent = keep the stored point; null = clear it; {lng,lat} = set it. */
   location?: { lng: number; lat: number } | null
-  hours: BusinessHours[]
+  hours: Array<{ day_of_week: number; open_time: string; close_time: string }>
   photos: OrgPhotoPayload[]
   resource_ids: string[]
 }
@@ -89,11 +92,12 @@ export async function adminSaveOrganization(
   mode: 'create' | 'edit',
 ): Promise<{ ok: true; result: OrgSaveResult } | RpcFailure> {
   const location = !('location' in payload) ? 'keep' : payload.location === null ? 'clear' : 'set'
-  const { data, error } = await privilegedRpc(
+  const args: Rpc['admin_save_organization']['Args'] = { p_org_id: orgId, p_payload: payload satisfies Json }
+  const { data, error } = await privilegedRpc<Rpc['admin_save_organization']['Returns']>(
     supabase,
     'admin.org.save',
     'admin_save_organization',
-    { p_org_id: orgId, p_payload: payload },
+    args,
     {
       target_id: orgId,
       mode,
@@ -114,11 +118,12 @@ export async function adminSetOrgActive(
   orgId: string,
   active: boolean,
 ): Promise<{ ok: true } | RpcFailure> {
-  const { error } = await privilegedRpc(
+  const args: Rpc['admin_set_org_active']['Args'] = { p_org_id: orgId, p_active: active }
+  const { error } = await privilegedRpc<Rpc['admin_set_org_active']['Returns']>(
     supabase,
     'admin.org.set_active',
     'admin_set_org_active',
-    { p_org_id: orgId, p_active: active },
+    args,
     { target_id: orgId, active },
   )
   if (error) return { ok: false, code: error.code ?? null, errorKey: mapSaveError(error) }
