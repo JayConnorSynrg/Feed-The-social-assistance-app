@@ -126,6 +126,11 @@ BEGIN
     RAISE EXCEPTION 'org_save_invalid: payload must be a JSON object' USING ERRCODE = '22023';
   END IF;
 
+  -- The only storage paths this org owns: `<org_id>/<uuid>.(webp|jpg|png)`, anchored. Used to
+  -- validate incoming photos AND to scope removed_photo_paths (no `<org>/../<other>/` escape).
+  v_path_re := '^' || p_org_id::text
+            || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png)$';
+
   -- Create vs update. FOR UPDATE serializes concurrent saves of the same org.
   SELECT o.org_type INTO v_existing FROM public.organizations o WHERE o.id = p_org_id FOR UPDATE;
   v_created := NOT FOUND;
@@ -306,8 +311,6 @@ BEGIN
     IF jsonb_typeof(p_payload->'photos') <> 'array' THEN
       RAISE EXCEPTION 'org_save_invalid: photos must be an array' USING ERRCODE = '22023';
     END IF;
-    v_path_re := '^' || p_org_id::text
-              || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png)$';
     FOR v_item IN SELECT e FROM jsonb_array_elements(p_payload->'photos') e LOOP
       IF jsonb_typeof(v_item) <> 'object'
          OR jsonb_typeof(v_item->'kind') IS DISTINCT FROM 'string'
@@ -427,7 +430,7 @@ BEGIN
       INTO v_removed
       FROM public.business_photos bp
      WHERE bp.org_id = p_org_id
-       AND bp.storage_path LIKE p_org_id::text || '/%'
+       AND bp.storage_path ~ v_path_re
        AND NOT (bp.storage_path = ANY (v_new_paths));
     DELETE FROM public.business_photos bp WHERE bp.org_id = p_org_id;
     INSERT INTO public.business_photos (org_id, kind, url, storage_path, sort_order, caption)

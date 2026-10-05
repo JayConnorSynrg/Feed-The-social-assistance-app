@@ -24,7 +24,8 @@
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 
--- PostGIS lives in the extensions schema. LOCAL => reverts on ROLLBACK.
+-- PostGIS lives in schema `public` on prod (the reviewer fixture installs it in public too);
+-- `extensions` stays on the path for parity with the functions' pinned search_path. LOCAL => reverts on ROLLBACK.
 SET LOCAL search_path TO public, extensions, pg_temp;
 
 -- Snapshot of an org row + every child table, for "nothing persisted" checks.
@@ -203,6 +204,26 @@ BEGIN
   SET LOCAL ROLE anon;
   ASSERT (SELECT count(*) FROM public.organizations WHERE id = v_biz) = 1,
     'S3: an admin-created business is public immediately (approved + active)';
+  RESET ROLE;
+
+  -- S3b — the admin gate precedes every lookup: a non-admin probing an EXISTING business id gets
+  --       42501 org_save_denied for a valid payload AND for one that a later step would reject
+  --       ("cannot switch"), so the error never reveals whether the id exists or its type.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_member, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  FOR v_payload IN SELECT * FROM unnest(ARRAY[
+      jsonb_build_object('name', 'X', 'org_type', 'business'),
+      jsonb_build_object('name', 'X', 'org_type', 'community')]) LOOP
+    v_state := NULL; v_err := NULL;
+    BEGIN
+      PERFORM public.admin_save_organization(v_biz, v_payload);
+    EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
+    END;
+    ASSERT v_state = '42501' AND v_err LIKE 'org_save_denied%',
+      'S3b: non-admin on an existing business id must get 42501 org_save_denied for '||v_payload::text
+      ||', got '||COALESCE(v_state, '<none>')||' '||COALESCE(v_err, '');
+  END LOOP;
   RESET ROLE;
 
   -- =====================================================================
@@ -468,6 +489,9 @@ BEGIN
   v_own     := v_mbiz || '/' || gen_random_uuid() || '.webp';
   v_foreign := v_comm || '/' || gen_random_uuid() || '.webp';
   INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_mbiz, 'gallery', c_base || v_own, v_own);
+  -- a traversal path that STARTS with this org's folder but resolves into another org's folder
+  INSERT INTO public.business_photos (org_id, kind, url, storage_path)
+  VALUES (v_mbiz, 'gallery', 'https://x/t.webp', v_mbiz || '/../' || v_comm || '/' || gen_random_uuid() || '.webp');
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_member, 'role', 'authenticated')::text, true);
   SET LOCAL ROLE authenticated;
@@ -480,7 +504,7 @@ BEGIN
   ASSERT v_ret->'removed_photo_paths' = jsonb_build_array(v_own),
     'S9: removed_photo_paths must list ONLY the own-folder file, got '||(v_ret->'removed_photo_paths')::text;
   ASSERT NOT (v_ret->'removed_photo_paths' ? v_foreign), 'S9: a foreign-folder path must never be returned';
-  ASSERT (SELECT count(*) FROM public.business_photos WHERE org_id = v_mbiz) = 0, 'S9: both rows are dropped';
+  ASSERT (SELECT count(*) FROM public.business_photos WHERE org_id = v_mbiz) = 0, 'S9: all three rows are dropped';
 
   -- =====================================================================
   -- S10 — admin_set_org_active: admin only, exactly one row, every call audited (no-op too),
