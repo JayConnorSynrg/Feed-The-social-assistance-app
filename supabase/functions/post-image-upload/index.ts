@@ -32,7 +32,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { edgeLog, getCorrelationId } from '../_shared/log.ts'
-import { ORG_BUCKET, buildObjectPath, decideUpload, parseUploadTarget, sizeBucket } from './target.ts'
+import { ORG_BUCKET, buildObjectPath, decideUpload, parseUploadTarget, resolveCanManage, sizeBucket } from './target.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -119,11 +119,9 @@ Deno.serve(async (req: Request) => {
     let canManage = false
     let rpcMessage: string | undefined
     if (user && user.is_anonymous !== true && target.kind === 'org') {
-      const { data: allowed, error: rpcError } = await supabaseUser.rpc('can_manage_org_photos', {
-        p_folder: target.orgId,
-      })
-      canManage = !rpcError && allowed === true
-      rpcMessage = rpcError?.message
+      const rpc = await supabaseUser.rpc('can_manage_org_photos', { p_folder: target.orgId })
+      canManage = resolveCanManage(rpc)
+      rpcMessage = rpc.error?.message
     }
 
     // 2b. One decision: 401 no caller, 403 guest (INV-M2), 400 bad org_id, 403 not a manager.

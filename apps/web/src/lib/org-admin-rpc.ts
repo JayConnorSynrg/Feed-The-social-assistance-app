@@ -54,6 +54,15 @@ export interface OrgSaveResult {
 
 export type RpcFailure = { ok: false; code: string | null; errorKey: keyof OrgFormMessages }
 
+/**
+ * The SQLSTATE of a failed call, or null when there is none. postgrest-js reports a network failure
+ * with code "" (not null/undefined), so an empty code means "no answer from the database" — the
+ * caller must treat that as ambiguous (the save may have committed), never as a definite rejection.
+ */
+export function sqlstateOf(error: { code?: string | null }): string | null {
+  return error.code || null
+}
+
 function asSaveResult(data: unknown, fallbackId: string): OrgSaveResult {
   const d = (data ?? {}) as Partial<OrgSaveResult>
   return {
@@ -67,7 +76,7 @@ function asSaveResult(data: unknown, fallbackId: string): OrgSaveResult {
 
 /** SQLSTATE / message -> the dictionary key the panel shows. Never surfaces database text. */
 export function mapSaveError(error: { code?: string | null; message?: string | null }): keyof OrgFormMessages {
-  const code = error.code ?? null
+  const code = sqlstateOf(error)
   const message = (error.message ?? '').toLowerCase()
   if (code === '42501') return 'saveErrDenied'
   if (code === '22023' || message.includes('org_save_invalid')) {
@@ -80,7 +89,8 @@ export function mapSaveError(error: { code?: string | null; message?: string | n
     if (message.includes('name')) return 'saveErrName'
     return 'saveErrInvalid'
   }
-  if (!code && /failed to fetch|network|load failed|timeout/.test(message)) return 'saveErrNetwork'
+  // No SQLSTATE (postgrest-js reports a network failure with code ""): the database never answered.
+  if (!code) return 'saveErrNetwork'
   return 'saveErrGeneric'
 }
 
@@ -108,7 +118,7 @@ export async function adminSaveOrganization(
       location_op: location,
     },
   )
-  if (error) return { ok: false, code: error.code ?? null, errorKey: mapSaveError(error) }
+  if (error) return { ok: false, code: sqlstateOf(error), errorKey: mapSaveError(error) }
   return { ok: true, result: asSaveResult(data, orgId) }
 }
 
@@ -126,6 +136,6 @@ export async function adminSetOrgActive(
     args,
     { target_id: orgId, active },
   )
-  if (error) return { ok: false, code: error.code ?? null, errorKey: mapSaveError(error) }
+  if (error) return { ok: false, code: sqlstateOf(error), errorKey: mapSaveError(error) }
   return { ok: true }
 }

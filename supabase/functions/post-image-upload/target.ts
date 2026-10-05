@@ -63,6 +63,14 @@ export function sizeBucket(bytes: number): string {
   return '>5MB'
 }
 
+/**
+ * can_manage_org_photos answered under the caller's own JWT. Only an error-free, literal `true`
+ * grants access; an RPC error, null, or any other value is "no".
+ */
+export function resolveCanManage(rpc: { data: unknown; error: unknown }): boolean {
+  return !rpc.error && rpc.data === true
+}
+
 /** The caller as the upload gate sees it (from auth.getUser under the caller's JWT). */
 export interface UploadCaller {
   id: string

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ORG_BUCKET, POST_BUCKET, buildObjectPath, decideUpload, parseUploadTarget, sizeBucket } from './target.ts'
+import { ORG_BUCKET, POST_BUCKET, buildObjectPath, decideUpload, parseUploadTarget, resolveCanManage, sizeBucket } from './target.ts'
 
 const ORG = '3f2b8c1e-9a4d-4c6b-8e1f-0a2b3c4d5e6f'
 const FILE = '11111111-2222-4333-8444-555555555555'
@@ -90,5 +90,18 @@ describe('decideUpload — authorization before any byte is written', () => {
     const d = decideUpload({ user, target: org, canManage: true })
     expect(d).toEqual({ allow: true, bucket: ORG_BUCKET, folder: `${ORG}/`, dest: org })
     if (d.allow) expect(buildObjectPath(d.dest, 'png', FILE)).toEqual({ bucket: ORG_BUCKET, path: `${ORG}/${FILE}.png` })
+  })
+})
+
+describe('resolveCanManage — only an error-free literal true grants org-photo access', () => {
+  it('grants only { data: true, error: null }', () => {
+    expect(resolveCanManage({ data: true, error: null })).toBe(true)
+  })
+  it('denies false, null, truthy non-booleans, and any RPC error', () => {
+    expect(resolveCanManage({ data: false, error: null })).toBe(false)
+    expect(resolveCanManage({ data: null, error: null })).toBe(false)
+    expect(resolveCanManage({ data: 'true', error: null })).toBe(false)
+    expect(resolveCanManage({ data: 1, error: null })).toBe(false)
+    expect(resolveCanManage({ data: true, error: { message: 'permission denied', code: '42501' } })).toBe(false)
   })
 })
