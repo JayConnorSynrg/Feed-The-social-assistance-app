@@ -3,7 +3,8 @@
 -- rolled-back WRITE that asserts observed behaviour (never a text/ILIKE grep on a policy
 -- or function body).
 --
--- Run against a database that ALREADY has migration 20261015000000 applied, e.g.:
+-- Run against a database that ALREADY has migrations 20261015000000 and 20261018000000
+-- (guest write block, checked by the GUEST-BLOCK block) applied, e.g.:
 --   psql "$DATABASE_URL" -f supabase/tests/p4b_organizations.smoke.sql
 --   -- or via the Management API SQL endpoint (single request; it wraps one txn).
 --
@@ -165,5 +166,156 @@ BEGIN
   RAISE NOTICE 'PASS p4b_organizations smoke: INV-1..INV-4 both directions all held';
 END
 $smoke$;
+
+-- =====================================================================
+-- GUEST-BLOCK (20261018000000) — a guest (anonymous sign-in, jwt is_anonymous=true) cannot
+-- INSERT / UPDATE / DELETE organizations, business_hours, business_photos, business_services or
+-- org_resources. To prove the RESTRICTIVE policy is the cause, the guest carries a platform-admin
+-- uid (every permissive write policy passes for it); the same uid as a permanent session is the
+-- control. Members keep their own-business writes; public + guest reads are unchanged.
+-- =====================================================================
+DO $guest$
+DECLARE
+  v_admin  uuid := (SELECT id FROM public.profiles WHERE is_admin = true ORDER BY id LIMIT 1);
+  v_member uuid := (SELECT id FROM public.profiles WHERE is_admin IS NOT TRUE ORDER BY id LIMIT 1);
+  v_res    uuid[] := ARRAY(SELECT id FROM public.resources WHERE status = 'approved' ORDER BY id LIMIT 2);
+  v_org    uuid;
+  v_biz    uuid;
+  v_hours  uuid;
+  v_photo  uuid;
+  v_svc    uuid;
+  v_new    uuid;
+  v_n      int;
+  v_err    text;
+  v_tbl    text;
+  v_guest_admin  text;
+  v_guest_member text;
+  v_admin_c      text;
+  v_member_c     text;
+BEGIN
+  IF v_admin IS NULL OR v_member IS NULL OR cardinality(v_res) < 2 THEN
+    RAISE NOTICE 'SKIP p4b guest-block smoke: needs one is_admin profile, one plain member, two approved resources';
+    RETURN;
+  END IF;
+  v_guest_admin  := json_build_object('sub', v_admin,  'role', 'authenticated', 'is_anonymous', true)::text;
+  v_guest_member := json_build_object('sub', v_member, 'role', 'authenticated', 'is_anonymous', true)::text;
+  v_admin_c      := json_build_object('sub', v_admin,  'role', 'authenticated')::text;
+  v_member_c     := json_build_object('sub', v_member, 'role', 'authenticated')::text;
+
+  RESET ROLE;
+  INSERT INTO public.organizations (name, org_type, is_active) VALUES ('SMOKE Guest Org', 'community', true)
+    RETURNING id INTO v_org;
+  INSERT INTO public.organizations (name, org_type, status, is_active, submitted_by)
+    VALUES ('SMOKE Guest Biz', 'business', 'approved', true, v_member) RETURNING id INTO v_biz;
+  INSERT INTO public.business_hours (org_id, day_of_week, open_time, close_time) VALUES (v_biz, 1, '09:00', '17:00')
+    RETURNING id INTO v_hours;
+  INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_biz, 'gallery', 'https://x/g.webp', 'p/g.webp')
+    RETURNING id INTO v_photo;
+  INSERT INTO public.business_services (org_id, name) VALUES (v_biz, 'SMOKE Svc') RETURNING id INTO v_svc;
+  INSERT INTO public.org_resources (org_id, resource_id) VALUES (v_org, v_res[1]);
+
+  -- ---------- G1: guest INSERT denied on all 5 tables ----------
+  PERFORM set_config('request.jwt.claims', v_guest_admin, true);
+  SET LOCAL ROLE authenticated;
+  FOREACH v_tbl IN ARRAY ARRAY['organizations', 'business_hours', 'business_photos', 'business_services', 'org_resources'] LOOP
+    v_err := NULL;
+    BEGIN
+      CASE v_tbl
+        WHEN 'organizations'     THEN INSERT INTO public.organizations (name, org_type) VALUES ('SMOKE Guest Insert', 'community');
+        WHEN 'business_hours'    THEN INSERT INTO public.business_hours (org_id, day_of_week, open_time, close_time) VALUES (v_biz, 2, '09:00', '17:00');
+        WHEN 'business_photos'   THEN INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_biz, 'gallery', 'https://x/h.webp', 'p/h.webp');
+        WHEN 'business_services' THEN INSERT INTO public.business_services (org_id, name) VALUES (v_biz, 'SMOKE Guest Svc');
+        WHEN 'org_resources'     THEN INSERT INTO public.org_resources (org_id, resource_id) VALUES (v_org, v_res[2]);
+      END CASE;
+    EXCEPTION WHEN insufficient_privilege THEN v_err := '42501';
+    END;
+    ASSERT v_err = '42501', 'GUEST-BLOCK G1: guest INSERT into '||v_tbl||' must be denied (42501), got '||COALESCE(v_err, '<allowed>');
+  END LOOP;
+
+  -- ---------- G2: guest UPDATE + DELETE affect 0 rows on all 5 tables ----------
+  UPDATE public.organizations     SET description = 'guest' WHERE id = v_org;  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest UPDATE organizations must affect 0 rows';
+  UPDATE public.business_hours    SET close_time = '18:00'  WHERE id = v_hours; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest UPDATE business_hours must affect 0 rows';
+  UPDATE public.business_photos   SET caption = 'guest'     WHERE id = v_photo; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest UPDATE business_photos must affect 0 rows';
+  UPDATE public.business_services SET description = 'guest' WHERE id = v_svc;   GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest UPDATE business_services must affect 0 rows';
+  UPDATE public.org_resources     SET sort_order = 9        WHERE org_id = v_org; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest UPDATE org_resources must affect 0 rows';
+  DELETE FROM public.business_hours    WHERE id = v_hours; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest DELETE business_hours must affect 0 rows';
+  DELETE FROM public.business_photos   WHERE id = v_photo; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest DELETE business_photos must affect 0 rows';
+  DELETE FROM public.business_services WHERE id = v_svc;   GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest DELETE business_services must affect 0 rows';
+  DELETE FROM public.org_resources     WHERE org_id = v_org; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest DELETE org_resources must affect 0 rows';
+  DELETE FROM public.organizations     WHERE id = v_org;   GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'GUEST-BLOCK G2: guest DELETE organizations must affect 0 rows';
+
+  -- ---------- G3: guest + public reads unchanged ----------
+  ASSERT (SELECT count(*) FROM public.organizations WHERE id = v_org) = 1, 'GUEST-BLOCK G3: guest still READS an active org';
+  ASSERT (SELECT count(*) FROM public.business_hours WHERE org_id = v_biz) = 1, 'GUEST-BLOCK G3: guest still READS business hours';
+  PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  SET LOCAL ROLE anon;
+  ASSERT (SELECT count(*) FROM public.organizations WHERE id = v_org) = 1, 'GUEST-BLOCK G3: anon still READS an active org';
+  ASSERT (SELECT count(*) FROM public.org_resources WHERE org_id = v_org) = 1, 'GUEST-BLOCK G3: anon still READS org links';
+
+  -- ---------- G4: guest member cannot write its OWN business (owner_all would allow) ----------
+  PERFORM set_config('request.jwt.claims', v_guest_member, true);
+  SET LOCAL ROLE authenticated;
+  v_err := NULL;
+  BEGIN
+    INSERT INTO public.business_hours (org_id, day_of_week, open_time, close_time) VALUES (v_biz, 3, '09:00', '17:00');
+  EXCEPTION WHEN insufficient_privilege THEN v_err := '42501';
+  END;
+  ASSERT v_err = '42501', 'GUEST-BLOCK G4: guest member must not write hours of its own business';
+  v_err := NULL;
+  BEGIN
+    INSERT INTO public.organizations (name, org_type) VALUES ('SMOKE Guest Submit', 'business');
+  EXCEPTION WHEN insufficient_privilege THEN v_err := '42501';
+  END;
+  ASSERT v_err = '42501', 'GUEST-BLOCK G4: guest must not submit a business';
+
+  -- ---------- G5: permanent admin (control) writes all 5 tables ----------
+  PERFORM set_config('request.jwt.claims', v_admin_c, true);
+  INSERT INTO public.organizations (name, org_type) VALUES ('SMOKE Admin Insert', 'community') RETURNING id INTO v_new;
+  INSERT INTO public.business_hours (org_id, day_of_week, open_time, close_time) VALUES (v_new, 2, '09:00', '17:00');
+  INSERT INTO public.business_photos (org_id, kind, url, storage_path) VALUES (v_new, 'gallery', 'https://x/a.webp', 'p/a.webp');
+  INSERT INTO public.business_services (org_id, name) VALUES (v_new, 'SMOKE Admin Svc');
+  INSERT INTO public.org_resources (org_id, resource_id) VALUES (v_new, v_res[2]);
+  UPDATE public.organizations     SET description = 'admin' WHERE id = v_org;     GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin UPDATE organizations must affect 1 row';
+  UPDATE public.business_photos   SET caption = 'admin'     WHERE id = v_photo;   GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin UPDATE business_photos must affect 1 row';
+  UPDATE public.org_resources     SET sort_order = 1        WHERE org_id = v_org; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin UPDATE org_resources must affect 1 row';
+  DELETE FROM public.business_hours    WHERE org_id = v_new; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin DELETE business_hours must affect 1 row';
+  DELETE FROM public.business_photos   WHERE org_id = v_new; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin DELETE business_photos must affect 1 row';
+  DELETE FROM public.business_services WHERE org_id = v_new; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin DELETE business_services must affect 1 row';
+  DELETE FROM public.org_resources     WHERE org_id = v_new; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin DELETE org_resources must affect 1 row';
+  DELETE FROM public.organizations     WHERE id = v_new;     GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G5: admin DELETE organizations must affect 1 row';
+
+  -- ---------- G6: permanent member keeps own-business child writes ----------
+  PERFORM set_config('request.jwt.claims', v_member_c, true);
+  UPDATE public.business_hours    SET close_time = '18:00'  WHERE id = v_hours; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G6: member UPDATE own business hours must affect 1 row';
+  UPDATE public.business_services SET description = 'member' WHERE id = v_svc;  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G6: member UPDATE own business services must affect 1 row';
+  INSERT INTO public.business_hours (org_id, day_of_week, open_time, close_time) VALUES (v_biz, 4, '09:00', '17:00');
+  DELETE FROM public.business_hours WHERE org_id = v_biz AND day_of_week = 4; GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'GUEST-BLOCK G6: member INSERT+DELETE own business hours must work';
+  INSERT INTO public.organizations (name, org_type) VALUES ('SMOKE Member Submit', 'business');
+
+  RESET ROLE;
+  RAISE NOTICE 'PASS p4b guest-block smoke: G1-G2 guest writes denied on 5 tables, G3 reads unchanged, G4 guest member denied, G5-G6 admin + member unaffected';
+END
+$guest$;
 
 ROLLBACK;
