@@ -94,5 +94,38 @@ export const A = () => (
 )`
     expect(reasons(src)).toEqual([])
   })
+
+  const DYN_MAP = 'dynamic import of a map library (not statically checkable)'
+  const DYN_ANY = 'dynamic import with a non-literal argument (not statically checkable)'
+  it.each([
+    ['spaced import (\'mapbox-gl\')', `const m = await import ('mapbox-gl')`, DYN_MAP],
+    ['template literal naming a map module', 'const m = await import(`react-map-gl/mapbox`)', DYN_MAP],
+    ['string concatenation', `const m = await import('mapbox' + '-gl')`, DYN_ANY],
+    ['template literal with an expression', 'const m = await import(`mapbox-${"gl"}`)', DYN_ANY],
+    ['import(variable)', `const name = 'mapbox-gl'\nconst m = await import(name)`, DYN_ANY],
+  ])('flags dynamic import: %s', (_label, src, reason) => {
+    expect(reasons(src)).toEqual([reason])
+  })
+
+  it('a literal dynamic import of a non-map module passes; import( inside a string is ignored', () => {
+    expect(reasons(`const m = await import('@/components/panels/map-panel')\nconst s = "import(x)"`)).toEqual([])
+  })
+
+  it('the prop only counts as a top-level attribute, not inside a string or a nested expression', () => {
+    expect(reasons(`import Map from 'react-map-gl/mapbox'\nconst A = () => <Map title="performanceMetricsCollection={false}" />`)).toEqual(['missing performanceMetricsCollection={false}'])
+    expect(reasons(`import Map from 'react-map-gl/mapbox'\nconst A = () => <Map style={{ performanceMetricsCollection={false} }} />`)).toEqual(['missing performanceMetricsCollection={false}'])
+    expect(reasons(`import Map from 'react-map-gl/mapbox'\nconst A = () => <Map onLoad={() => ({ x: 'performanceMetricsCollection={false}' })} />`)).toEqual(['missing performanceMetricsCollection={false}'])
+  })
+
+  it('new Map(...): the option must be top-level in an inline object, with no later ...spread', () => {
+    const gl = `import mapboxgl from 'mapbox-gl'\n`
+    expect(reasons(gl + `new mapboxgl.Map({ container: 'c', performanceMetricsCollection: false })`)).toEqual([])
+    expect(reasons(gl + `new mapboxgl.Map({ performanceMetricsCollection: false, ...opts })`)).toEqual(['new mapbox-gl Map: a later ...spread can override performanceMetricsCollection'])
+    expect(reasons(gl + `new mapboxgl.Map({ ...opts, performanceMetricsCollection: false })`)).toEqual([])
+    expect(reasons(gl + `new mapboxgl.Map({ container: 'performanceMetricsCollection: false' })`)).toEqual(['new mapbox-gl Map without performanceMetricsCollection: false'])
+    expect(reasons(gl + `new mapboxgl.Map({ nested: { performanceMetricsCollection: false } })`)).toEqual(['new mapbox-gl Map without performanceMetricsCollection: false'])
+    expect(reasons(gl + `new mapboxgl.Map({ performanceMetricsCollection: true })`)).toEqual(['new mapbox-gl Map without performanceMetricsCollection: false'])
+    expect(reasons(gl + `new mapboxgl.Map(opts)`)).toEqual(['new mapbox-gl Map without an inline options object (not statically checkable)'])
+  })
 })
 

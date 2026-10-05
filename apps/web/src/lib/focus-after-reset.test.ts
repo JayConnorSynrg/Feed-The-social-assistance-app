@@ -10,7 +10,7 @@ let frames: Array<() => void>
 beforeEach(() => {
   frames = []
   vi.stubGlobal('requestAnimationFrame', (cb: () => void) => { frames.push(cb); return frames.length })
-  vi.stubGlobal('document', { getElementById: (id: string) => (id === 'app-content' ? container : null) })
+  vi.stubGlobal('document', { activeElement: null, getElementById: (id: string) => (id === 'app-content' ? container : null) })
 })
 afterEach(() => vi.unstubAllGlobals())
 
