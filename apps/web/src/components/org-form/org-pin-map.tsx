@@ -89,9 +89,10 @@ export default function OrgPinMap({ pin, recenterKey, onPlace, label, instructio
       className="relative h-64 w-full overflow-hidden rounded-xl border border-stone-200"
     >
       <Map
-        performanceMetricsCollection={false}
         ref={mapRef}
         {...viewState}
+        // After the spread, so nothing can turn Mapbox telemetry back on.
+        performanceMetricsCollection={false}
         onMove={(e) => setViewState(e.viewState)}
         onClick={(e) => onPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
         mapboxAccessToken={MAPBOX_TOKEN}
