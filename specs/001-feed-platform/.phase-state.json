@@ -768,13 +768,15 @@
       "migrationApplied": "20261017000000 + 20261018000000 (prod ledger verified 2026-10-06)"
     },
     "feed-org-scoped-admin-events": {
-      "status": "BUILT_PENDING_DEPLOY",
+      "status": "COMPLETE",
       "migration": "20261020000000_org_scoped_admin_events (+ 20261019500000_sync_secret_vault, already applied in prod 2026-10-06)",
       "branch": "feature/feed-org-scoped-admin-events",
       "spec": "specs/org-scoped-admin-model.md",
       "docs": "docs/admin-organizations.md",
-      "note": "Org-scoped admin page /moderation/org/<id> (Overview/Events/Profile/Members for one organization; gate can_admin_org; reached from the org name / Open admin in Moderation -> Organizations and from Settings -> Administration for org admins). One-step events: create_org_event (event + first date + audit row, idempotency key), add_event_dates, cancel_event_occurrence; admin_update_event rewritten; admin_create_event, rrule columns, occurrence client write policies and orgs_update_org_admin dropped. Times in the venue's IANA time zone (fixed after create, DST gap/repeat refused); location = org pin or admin-confirmed Census geocode. ranked_feed_v2 shows an event to every viewer while event + org are active with a date in the next 30 days; events rank with ranking_config.event_half_life_hours=168. S1: hud-sync/imls-sync cron jobs read x-sync-secret from Vault at run time. Gates: tsc 0, eslint 0 errors/121 warnings, vitest 97 files/1057 passed, node --test 62/62, build ok, SECDEF guard 153 pinned; security MERGE-READY, a11y A11Y-PASS. See checklist 1.6.14-1.6.16.",
-      "recordedAt": "2026-10-06"
+      "note": "Org-scoped admin page /moderation/org/<id> (Overview/Events/Profile/Members for one organization; gate can_admin_org; reached from the org name / Open admin in Moderation -> Organizations and from Settings -> Administration for org admins). One-step events: create_org_event (event + first date + audit row, idempotency key), add_event_dates, cancel_event_occurrence; admin_update_event rewritten; admin_create_event, rrule columns, occurrence client write policies and orgs_update_org_admin dropped. Times in the venue's IANA time zone (fixed after create, DST gap/repeat refused); location = org pin or admin-confirmed Census geocode. ranked_feed_v2 shows an event to every viewer while event + org are active with a date in the next 30 days; events rank with ranking_config.event_half_life_hours=168. S1: hud-sync/imls-sync cron jobs read x-sync-secret from Vault at run time. Gates: tsc 0, eslint 0 errors/121 warnings, vitest 97 files/1057 passed, node --test 62/62, build ok, SECDEF guard 153 pinned; security MERGE-READY, a11y A11Y-PASS. See checklist 1.6.14-1.6.16. Prod: rehearsal probe passed for anon/guest/member/org admin/platform admin (event once in the feed for each; can_admin_org true only for the two admins); migration applied 2026-10-06; types.ts regenerated in full from prod.",
+      "recordedAt": "2026-10-06",
+      "pr": "#233",
+      "migrationApplied": "20261020000000 (2026-10-06 19:06 UTC, after zero-persist rehearsal; ledger top 20261020000000)"
     }
   }
 }
