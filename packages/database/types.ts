@@ -3778,7 +3778,6 @@ export type Database = {
         Returns: unknown
       }
       _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
-      addauth: { Args: { "": string }; Returns: boolean }
       add_event_dates: {
         Args: {
           p_ends_local: string[]
@@ -3787,6 +3786,7 @@ export type Database = {
         }
         Returns: number
       }
+      addauth: { Args: { "": string }; Returns: boolean }
       addgeometrycolumn:
         | {
             Args: {
@@ -4288,6 +4288,10 @@ export type Database = {
       engagement_weight: { Args: { p_kind: string }; Returns: number }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       event_attendance: { Args: { p_occurrence: string }; Returns: Json }
+      event_local_to_utc: {
+        Args: { p_local: string; p_time_zone: string }
+        Returns: string
+      }
       expand_state: { Args: { p_state: string }; Returns: string }
       export_petition_signatures: {
         Args: { p_petition_id: string }
@@ -4727,6 +4731,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      org_event_write_gate: { Args: { p_org_id: string }; Returns: string }
       organizations_in_bounds: {
         Args: {
           max_lat: number
