@@ -9,13 +9,18 @@ export interface AdminOrg {
   org_type: string
 }
 
-export function useAdminOrgs() {
+/**
+ * The orgs the caller administers (get_admin_org_list). `enabled: false` skips the call entirely —
+ * the organization admin page passes it so a screen scoped to one org never reads the others.
+ */
+export function useAdminOrgs({ enabled = true }: { enabled?: boolean } = {}) {
   const { loading: authLoading } = useAuth()
   const [orgs, setOrgs] = useState<AdminOrg[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!enabled) return
     // Wait for auth to reconcile before the RPC so it runs against the reconciled
     // session. This is an admin-only surface (route-gated), so no guest concern.
     if (authLoading) return
@@ -40,7 +45,7 @@ export function useAdminOrgs() {
         }
         setLoading(false)
       })
-  }, [authLoading])
+  }, [authLoading, enabled])
 
   return { orgs, loading, error }
 }

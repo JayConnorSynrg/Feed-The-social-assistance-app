@@ -114,6 +114,14 @@ BEGIN
 END $z$;
 `
 
+// 20261020000000 (org-scoped admin + events) changes behaviour pinned here; the probe adapts to
+// whichever side of that ledger row production is on.
+const GATE_020_SQL = `
+  SELECT EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261020000000'
+  ) AS applied
+`
+
 // Run the probe transaction. queryProd throws on the terminal RAISE (HTTP 400); the results
 // travel in the error body. Returns a label -> outcome map.
 async function runProbes(): Promise<Record<string, string>> {
@@ -138,6 +146,11 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
     const gate = await queryProd(GATE_SQL)
     if (gate[0]?.applied !== true) { ctx.skip(); return }
     const r = await runProbes()
+    // Since 20261020000000 policy orgs_update_org_admin is dropped: an org admin's direct UPDATE of
+    // organizations matches no policy and changes 0 rows (admin_save_organization is the single
+    // org-admin writer). Before it, the I3 guard rejected the same UPDATEs with 42501.
+    const has020 = (await queryProd(GATE_020_SQL))[0]?.applied === true
+    const orgAdminDirect = has020 ? /^OK rows=0$/ : /^ERR 42501 guard:organizations_admin_fields/
 
     // I1 resources — forge and status/moderation-field violations are rejected.
     expect(r.FORGE_INSERT, 'R1 forge (approved + foreign moderated_by) must be rejected').toMatch(
@@ -164,16 +177,11 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
     expect(r.UNFILTERED_UNHIDE, 'an unfiltered un-hide of a hidden comment must be rejected').toMatch(
       /^ERR 42501 guard:post_comments_is_hidden/
     )
-    // I3 organizations — an org admin cannot change created_by, and an UNFILTERED deactivate
-    // (which bypasses the SELECT-visibility filter) is still blocked by the guard.
-    expect(r.ORG_CREATED_BY, 'an org admin must NOT change created_by').toMatch(
-      /^ERR 42501 guard:organizations_admin_fields/
-    )
-    // The unfiltered deactivate runs while U administers only the active org, so it is the guard's
-    // is_active-change check (not the inactive-edit check) that blocks it — the probe that
-    // actually exercises that check.
-    expect(r.ORG_DEACTIVATE_UNFILTERED, 'an org admin must NOT deactivate their active org via an unfiltered UPDATE').toMatch(
-      /^ERR 42501 guard:organizations_admin_fields/
+    // I3 organizations — an org admin cannot change created_by, nor deactivate via an UNFILTERED
+    // UPDATE (see orgAdminDirect above for the before/after-20261020000000 expectation).
+    expect(r.ORG_CREATED_BY, 'an org admin must NOT change created_by').toMatch(orgAdminDirect)
+    expect(r.ORG_DEACTIVATE_UNFILTERED, 'an org admin must NOT deactivate their org via an unfiltered UPDATE').toMatch(
+      orgAdminDirect
     )
     // A platform admin's direct resource UPDATE succeeds (the admin bypass is load-bearing).
     expect(r.ADMIN_DIRECT_UPDATE, 'a platform admin direct resource UPDATE must succeed').toMatch(/^OK rows=1/)
@@ -193,10 +201,8 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
     expect(r.VOL_STATUS_NONARCHIVE, 'a volunteer owner must NOT set a non-archived status').toMatch(
       /^ERR 42501 guard:resources_moderation_fields/
     )
-    // An org admin cannot edit an inactive org (unfiltered UPDATE reaches the inactive row).
-    expect(r.INACTIVE_ORG_EDIT, 'an org admin must NOT edit an inactive org').toMatch(
-      /^ERR 42501 guard:organizations_admin_fields/
-    )
+    // An org admin cannot edit an inactive org.
+    expect(r.INACTIVE_ORG_EDIT, 'an org admin must NOT edit an inactive org').toMatch(orgAdminDirect)
   })
 
   it('[post-deploy] side fix — the duplicate updated_at trigger is gone, exactly one remains', async (ctx) => {

@@ -34,6 +34,14 @@ const GATE_SQL = `
   ) AS applied
 `
 
+// 20261020000000 (org-scoped admin + events) changes behaviour pinned here; the probe adapts to
+// whichever side of that ledger row production is on.
+const GATE_020_SQL = `
+  SELECT EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261020000000'
+  ) AS applied
+`
+
 function loadTokenForProbe(): string {
   const fromEnv = process.env.SUPABASE_ACCESS_TOKEN
   if (fromEnv && fromEnv.length > 10) return fromEnv
@@ -129,6 +137,10 @@ maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () =>
     const gate = await queryProd(GATE_SQL)
     if (gate[0]?.applied !== true) { ctx.skip(); return }
 
+    // assistance_events.time_zone is NOT NULL once 20261020000000 is applied.
+    const has020 = (await queryProd(GATE_020_SQL))[0]?.applied === true
+    const tzCol = has020 ? ',time_zone' : ''
+    const tzVal = has020 ? ",'America/New_York'" : ''
     // Seed one active org + two active events (each with one occurrence at the SAME
     // starts_at so the age factor is identical), located at DIFFERENT exact distances
     // both inside <2km, plus a third event with no geo. DO block RAISEs → full rollback.
@@ -144,10 +156,10 @@ maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () =>
         result jsonb;
       BEGIN
         INSERT INTO public.organizations (id,name,is_active) VALUES (org,'Probe',true);
-        INSERT INTO public.assistance_events (id,org_id,title,event_type,is_active,location) VALUES
-          (eA,org,'A','meal',true, ST_SetSRID(ST_MakePoint(-72.5780,44.2600),4326)::geography),
-          (eB,org,'B','meal',true, ST_SetSRID(ST_MakePoint(-72.5610,44.2600),4326)::geography),
-          (eC,org,'C','meal',true, NULL);
+        INSERT INTO public.assistance_events (id,org_id,title,event_type,is_active,location${tzCol}) VALUES
+          (eA,org,'A','meal',true, ST_SetSRID(ST_MakePoint(-72.5780,44.2600),4326)::geography${tzVal}),
+          (eB,org,'B','meal',true, ST_SetSRID(ST_MakePoint(-72.5610,44.2600),4326)::geography${tzVal}),
+          (eC,org,'C','meal',true, NULL${tzVal});
         INSERT INTO public.event_occurrences (id,event_id,starts_at,ends_at,status) VALUES
           (oA,eA,st,en,'upcoming'),(oB,eB,st,en,'upcoming'),(oC,eC,st,en,'upcoming');
         SELECT jsonb_object_agg(k,v) INTO result FROM (

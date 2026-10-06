@@ -19,6 +19,8 @@
  */
 
 import type { Database } from '@feed/database'
+import type { Locale } from '@/lib/i18n'
+import { eventFormT, formatMessage, type EventFormMessages } from '@/lib/i18n-event-forms'
 import type { BadgeSummary } from '@/lib/engagement-badges'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
@@ -352,6 +354,8 @@ export interface EventFeedItem {
   orgName: string | null
   startsAt: string
   endsAt: string
+  /** The venue's IANA zone (assistance_events.time_zone) — times are shown with it. */
+  timeZone: string
   locationName: string | null
   city: string | null
   state: string | null
@@ -361,6 +365,70 @@ export interface EventFeedItem {
   score: number
   /** Coarse distance bucket from the RPC ('<2km'…'>50km'|'unknown'). */
   distanceBucket: string
+}
+
+/** The event columns the feed hydrates (feed-panel select on event_occurrences). */
+export const FEED_EVENT_OCCURRENCE_SELECT = `
+  id, starts_at, ends_at, status,
+  event:assistance_events(
+    id, title, event_type, location_name, city, state, requires_registration, time_zone,
+    organization:organizations(name)
+  )
+`
+
+/** One hydrated event_occurrences row of FEED_EVENT_OCCURRENCE_SELECT. */
+export interface FeedEventOccurrenceRow {
+  id: string
+  starts_at: string
+  ends_at: string
+  status: string
+  event: {
+    id: string
+    title: string
+    event_type: string
+    location_name: string | null
+    city: string | null
+    state: string | null
+    requires_registration: boolean | null
+    time_zone: string
+    organization: { name: string } | null
+  } | null
+}
+
+/**
+ * Build the feed's event rows in ranked_feed_v2 order from the hydrated occurrences. A ranked
+ * event row whose occurrence (or parent event) the caller's RLS read did not return is skipped
+ * (I4 — the same drop-unhydrated rule the posts path uses).
+ */
+export function hydrateEventFeedItems(
+  ranked: readonly RankedFeedV2Row[],
+  rows: readonly FeedEventOccurrenceRow[],
+): EventFeedItem[] {
+  const byId = new Map(rows.map((o) => [o.id, o]))
+  const out: EventFeedItem[] = []
+  for (const r of ranked) {
+    if (r.kind !== 'event') continue
+    const o = byId.get(r.id)
+    if (!o || !o.event) continue
+    out.push({
+      occurrenceId: o.id,
+      eventId: o.event.id,
+      title: o.event.title,
+      eventType: o.event.event_type,
+      orgName: o.event.organization?.name ?? null,
+      startsAt: o.starts_at,
+      endsAt: o.ends_at,
+      timeZone: o.event.time_zone,
+      locationName: o.event.location_name ?? null,
+      city: o.event.city ?? null,
+      state: o.event.state ?? null,
+      status: o.status,
+      requiresRegistration: o.event.requires_registration ?? false,
+      score: r.score,
+      distanceBucket: r.distance_bucket,
+    })
+  }
+  return out
 }
 
 /** A single rendered feed row: a post card or an event card. Discriminated so the
@@ -443,31 +511,37 @@ export function mergeRankedFeedItems(
  * Coarse timing label for an event feed card, derived from now vs the occurrence's
  * start/end (the "age" the ranking peaks on). Pure + unit-testable. `isLive` marks
  * an in-progress occurrence (start passed, not yet ended) so the card can flag it.
+ * The label is in the viewer's locale (lib/i18n-event-forms.ts).
  */
 export function eventTimingLabel(
   nowMs: number,
   startsAtMs: number,
-  endsAtMs: number
+  endsAtMs: number,
+  locale: Locale = 'en'
 ): { label: string; isLive: boolean } {
-  if (nowMs >= startsAtMs && nowMs <= endsAtMs) return { label: 'Happening now', isLive: true }
-  if (nowMs > endsAtMs) return { label: 'Ended', isLive: false }
+  const t = (key: keyof EventFormMessages, n?: number) =>
+    n === undefined ? eventFormT(locale, key) : formatMessage(eventFormT(locale, key), { n })
+  if (nowMs >= startsAtMs && nowMs <= endsAtMs) return { label: t('timingNow'), isLive: true }
+  if (nowMs > endsAtMs) return { label: t('timingEnded'), isLive: false }
   const mins = Math.round((startsAtMs - nowMs) / 60000)
-  if (mins <= 60) return { label: `Starts in ${Math.max(1, mins)} min`, isLive: false }
+  if (mins <= 60) return { label: t('timingMinutes', Math.max(1, mins)), isLive: false }
   const hours = Math.round(mins / 60)
-  if (hours < 24) return { label: `Starts in ${hours} h`, isLive: false }
+  if (hours < 24) return { label: t('timingHours', hours), isLive: false }
   const days = Math.round(hours / 24)
-  return { label: `In ${days} day${days === 1 ? '' : 's'}`, isLive: false }
+  return { label: days === 1 ? t('timingOneDay') : t('timingDays', days), isLive: false }
 }
 
-/** Human distance-bucket label for an event card; null hides the row when unknown. */
-export function distanceBucketLabel(bucket: string | null | undefined): string | null {
-  switch (bucket) {
-    case '<2km':    return 'Within 2 km'
-    case '2-10km':  return '2–10 km away'
-    case '10-50km': return '10–50 km away'
-    case '>50km':   return 'Over 50 km away'
-    default:        return null // 'unknown' or absent → no distance shown
-  }
+const DISTANCE_KEYS: Record<string, keyof EventFormMessages> = {
+  '<2km': 'distUnder2',
+  '2-10km': 'dist2to10',
+  '10-50km': 'dist10to50',
+  '>50km': 'distOver50',
+}
+
+/** Distance-bucket label for an event card in the viewer's locale; null hides the row when unknown. */
+export function distanceBucketLabel(bucket: string | null | undefined, locale: Locale = 'en'): string | null {
+  const key = bucket ? DISTANCE_KEYS[bucket] : undefined
+  return key ? eventFormT(locale, key) : null // 'unknown' or absent → no distance shown
 }
 
 // ---------------------------------------------------------------------------

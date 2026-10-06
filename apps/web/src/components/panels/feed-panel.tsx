@@ -51,7 +51,7 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, hydrateEventFeedItems, FEED_EVENT_OCCURRENCE_SELECT, type FeedEventOccurrenceRow, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventFeedCard } from '@/components/feed/event-feed-card'
 import type { MyCheckinStatus } from '@/lib/event-checkin'
 import { PostTypeWizard } from './post-type-wizard'
@@ -1913,47 +1913,11 @@ export function FeedPanel() {
         if (eventIds.length > 0) {
           const { data: occData, error: occErr } = await supabase
             .from('event_occurrences')
-            .select(`
-              id, starts_at, ends_at, status,
-              event:assistance_events(
-                id, title, event_type, location_name, city, state, requires_registration,
-                organization:organizations(name)
-              )
-            `)
+            .select(FEED_EVENT_OCCURRENCE_SELECT)
             .in('id', eventIds)
             .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
           if (occErr) throw occErr
-          type OccRow = {
-            id: string; starts_at: string; ends_at: string; status: string
-            event: {
-              id: string; title: string; event_type: string
-              location_name: string | null; city: string | null; state: string | null
-              requires_registration: boolean | null
-              organization: { name: string } | null
-            } | null
-          }
-          const occById = new Map(((occData as unknown as OccRow[]) ?? []).map((o) => [o.id, o]))
-          for (const r of ranked) {
-            if (r.kind !== 'event') continue
-            const o = occById.get(r.id)
-            if (!o || !o.event) continue // dropped by RLS / no parent event → skip (I4)
-            events.push({
-              occurrenceId: o.id,
-              eventId: o.event.id,
-              title: o.event.title,
-              eventType: o.event.event_type,
-              orgName: o.event.organization?.name ?? null,
-              startsAt: o.starts_at,
-              endsAt: o.ends_at,
-              locationName: o.event.location_name ?? null,
-              city: o.event.city ?? null,
-              state: o.event.state ?? null,
-              status: o.status,
-              requiresRegistration: o.event.requires_registration ?? false,
-              score: r.score,
-              distanceBucket: r.distance_bucket,
-            })
-          }
+          events.push(...hydrateEventFeedItems(ranked, (occData as unknown as FeedEventOccurrenceRow[]) ?? []))
           if (user && !isAnonymous) {
             const { data: mine } = await supabase
               .from('event_checkins')

@@ -7,11 +7,14 @@
 // inactive). "Create organization" (top right, and in the empty state) and each row's Edit open the
 // setup panel, which the admin shell owns (it also serves the Overview quick action and deep
 // links). Each row's menu offers Deactivate / Reactivate (confirmed, truthful optimistic toggle
-// via admin_set_org_active, reverted on failure) and View public page (active orgs only). The
-// existing membership roster stays available as a row expansion.
+// via admin_set_org_active, reverted on failure), Open admin and View public page (active orgs
+// only). Each row's name links to that organization's admin page (/moderation/org/<id>). The
+// membership roster stays available as a row expansion; OrgMembers is also the Members tab of the
+// organization admin page, read-only there for organization admins.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronDown, ExternalLink, LayoutDashboard, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { DropdownMenu as Menu } from 'radix-ui'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
@@ -31,16 +34,16 @@ import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-fo
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
 import { orgTypeKey } from '@/components/org-form/org-labels'
+import { orgAdminHref } from '@/lib/org-admin-paths'
 import { finishToggle, guardBusyTrigger, startToggle } from './org-toggle-inflight'
-
-type MemberRole = 'admin' | 'member'
-
-interface OrgMember {
-  id: string
-  user_id: string
-  role: string
-  joined_at: string
-}
+import {
+  addOrgMember,
+  changeOrgMemberRole,
+  fetchOrgMembers,
+  removeOrgMember,
+  type MemberRole,
+  type OrgMember,
+} from './org-members-data'
 
 export interface OrgsSectionProps {
   locale: Locale
@@ -187,7 +190,9 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                 <li key={org.id} className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-stone-900">{org.name}</p>
+                      <p className="truncate font-medium text-stone-900">
+                        <OrgNameLink org={org} tr={tr} />
+                      </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                         <span className="rounded-full bg-org/10 px-2 py-0.5 font-medium text-org">{tr(orgTypeKey(org.org_type))}</span>
                         <span
@@ -248,18 +253,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                             sideOffset={4}
                             className="z-50 min-w-[12rem] rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
                           >
-                            <Menu.Item className={MENU_ITEM} onSelect={() => setConfirm({ org, next: !org.is_active })}>
-                              {org.is_active ? tr('actionDeactivate') : tr('actionReactivate')}
-                            </Menu.Item>
-                            {org.is_active && (
-                              <Menu.Item className={MENU_ITEM} asChild>
-                                <a href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                                  {tr('actionViewPublic')}
-                                  <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
-                                </a>
-                              </Menu.Item>
-                            )}
+                            <OrgRowMenuItems org={org} tr={tr} onToggle={() => setConfirm({ org, next: !org.is_active })} />
                           </Menu.Content>
                         </Menu.Portal>
                       </Menu.Root>
@@ -315,13 +309,74 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
 }
 
 // ---------------------------------------------------------------------------------------------
-// Membership roster (unchanged behavior, now a row expansion).
+// Row pieces, exported so the list wiring is testable without a DOM.
 // ---------------------------------------------------------------------------------------------
 
-function OrgMembers({ orgId }: { orgId: string }) {
+/** The row's name: an underlined link to that organization's admin page ("<name> – admin page"). */
+export function OrgNameLink({
+  org,
+  tr,
+}: {
+  org: Pick<AdminOrgListRow, 'id' | 'name'>
+  tr: (key: keyof OrgFormMessages) => string
+}) {
+  return (
+    <Link
+      href={orgAdminHref(org.id)}
+      className={`rounded-sm text-stone-900 underline decoration-stone-500 underline-offset-2 hover:decoration-stone-900 ${FOCUS_RING}`}
+    >
+      {org.name}
+      <span className="sr-only">{` – ${tr('linkAdminPageSuffix')}`}</span>
+    </Link>
+  )
+}
+
+/** The row's More menu entries (rendered inside Menu.Content). */
+export function OrgRowMenuItems({
+  org,
+  tr,
+  onToggle,
+}: {
+  org: Pick<AdminOrgListRow, 'id' | 'is_active'>
+  tr: (key: keyof OrgFormMessages) => string
+  onToggle: () => void
+}) {
+  return (
+    <>
+      <Menu.Item className={MENU_ITEM} onSelect={onToggle}>
+        {org.is_active ? tr('actionDeactivate') : tr('actionReactivate')}
+      </Menu.Item>
+      <Menu.Item className={MENU_ITEM} asChild>
+        <Link href={orgAdminHref(org.id)}>
+          <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+          {tr('actionOpenAdmin')}
+        </Link>
+      </Menu.Item>
+      {org.is_active && (
+        <Menu.Item className={MENU_ITEM} asChild>
+          <a href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            {tr('actionViewPublic')}
+            <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
+          </a>
+        </Menu.Item>
+      )}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------------------------
+// Membership roster: a row expansion here, and the Members tab of the organization admin page.
+// Every read and write is filtered by orgId (org-members-data.ts). readOnly (organization admins)
+// shows the roster without the add / role / remove controls; the database refuses those writes
+// for anyone but a platform admin either way.
+// ---------------------------------------------------------------------------------------------
+
+export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnly?: boolean }) {
   const supabase = useMemo(() => createClient(), [])
   const [members, setMembers] = useState<OrgMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [rosterError, setRosterError] = useState<string | null>(null)
   const [addUserId, setAddUserId] = useState('')
   const [addRole, setAddRole] = useState<MemberRole>('member')
@@ -330,12 +385,14 @@ function OrgMembers({ orgId }: { orgId: string }) {
 
   const fetchMembers = useCallback(async () => {
     setLoadingMembers(true)
-    const { data } = await supabase
-      .from('organization_members')
-      .select('id, user_id, role, joined_at')
-      .eq('org_id', orgId)
-    setMembers(data ?? [])
-    setLoadingMembers(false)
+    try {
+      setMembers(await fetchOrgMembers(supabase, orgId))
+      setLoadError(null)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load members.')
+    } finally {
+      setLoadingMembers(false)
+    }
   }, [supabase, orgId])
 
   useEffect(() => {
@@ -343,19 +400,14 @@ function OrgMembers({ orgId }: { orgId: string }) {
   }, [fetchMembers])
 
   const handleAddMember = useCallback(async () => {
-    if (!addUserId.trim()) return
+    if (readOnly || !addUserId.trim()) return
     setAddingMember(true)
     setAddMemberError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from('organization_members').insert({
-        org_id: orgId,
-        user_id: addUserId.trim(),
-        role: addRole,
-        invited_by: user?.id,
-      })
-      if (error) {
-        setAddMemberError(error.message)
+      const err = await addOrgMember(supabase, orgId, addUserId.trim(), addRole, user?.id ?? null)
+      if (err) {
+        setAddMemberError(err)
       } else {
         setAddUserId('')
         setAddRole('member')
@@ -364,84 +416,109 @@ function OrgMembers({ orgId }: { orgId: string }) {
     } finally {
       setAddingMember(false)
     }
-  }, [supabase, orgId, addUserId, addRole, fetchMembers])
+  }, [readOnly, supabase, orgId, addUserId, addRole, fetchMembers])
 
   const handleRemoveMember = useCallback(
     async (memberId: string) => {
+      if (readOnly) return
       setRosterError(null)
-      const { data, error } = await supabase.from('organization_members').delete().eq('id', memberId).select('id')
-      if (error) {
-        setRosterError(error.message)
-        return
-      }
-      if (!data || data.length === 0) {
-        setRosterError('Could not remove that member — you may not have permission, or they were already removed.')
+      const err = await removeOrgMember(supabase, orgId, memberId)
+      if (err) {
+        setRosterError(err)
         return
       }
       await fetchMembers()
     },
-    [supabase, fetchMembers]
+    [readOnly, supabase, orgId, fetchMembers]
   )
 
   const handleChangeRole = useCallback(
     async (memberId: string, nextRole: MemberRole) => {
+      if (readOnly) return
       setRosterError(null)
-      const { data, error } = await supabase
-        .from('organization_members')
-        .update({ role: nextRole })
-        .eq('id', memberId)
-        .select('id')
-      if (error) {
-        setRosterError(error.message)
-        return
-      }
-      if (!data || data.length === 0) {
-        setRosterError('Could not change that role — you may not have permission.')
+      const err = await changeOrgMemberRole(supabase, orgId, memberId, nextRole)
+      if (err) {
+        setRosterError(err)
         return
       }
       await fetchMembers()
     },
-    [supabase, fetchMembers]
+    [readOnly, supabase, orgId, fetchMembers]
   )
 
   return (
+    <OrgMembersView
+      members={members}
+      loading={loadingMembers}
+      loadError={loadError}
+      rosterError={rosterError}
+      readOnly={readOnly}
+      add={{ userId: addUserId, role: addRole, adding: addingMember, error: addMemberError }}
+      onAddUserIdChange={setAddUserId}
+      onAddRoleChange={setAddRole}
+      onAdd={handleAddMember}
+      onRemove={handleRemoveMember}
+      onChangeRole={handleChangeRole}
+    />
+  )
+}
+
+export interface OrgMembersViewProps {
+  members: OrgMember[]
+  loading: boolean
+  loadError: string | null
+  rosterError: string | null
+  readOnly: boolean
+  add: { userId: string; role: MemberRole; adding: boolean; error: string | null }
+  onAddUserIdChange: (v: string) => void
+  onAddRoleChange: (v: MemberRole) => void
+  onAdd: () => void
+  onRemove: (memberId: string) => void
+  onChangeRole: (memberId: string, role: MemberRole) => void
+}
+
+export function OrgMembersView(props: OrgMembersViewProps) {
+  const { members, loading, loadError, rosterError, readOnly, add } = props
+  return (
     // The roster is English-only for now; mark it so screen readers do not read it as the admin locale.
     <div lang="en" dir="ltr" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-      <div className="mb-3 flex flex-wrap gap-2">
-        <Input
-          value={addUserId}
-          onChange={(e) => setAddUserId(e.target.value)}
-          placeholder="User UUID"
-          aria-label="User UUID"
-          className="w-64 text-sm text-stone-900 placeholder:text-stone-500"
-        />
-        <Select value={addRole} onValueChange={(v) => setAddRole(v as MemberRole)}>
-          <SelectTrigger className="w-28 text-sm text-stone-900" aria-label="Role">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent lang="en">
-            <SelectItem value="member">Member</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-          </SelectContent>
-        </Select>
-        <button type="button" onClick={handleAddMember} disabled={addingMember || !addUserId.trim()} className={PRIMARY}>
-          {addingMember ? 'Adding…' : 'Add Member'}
-        </button>
-      </div>
-      {addMemberError && (
+      {!readOnly && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <Input
+            value={add.userId}
+            onChange={(e) => props.onAddUserIdChange(e.target.value)}
+            placeholder="User UUID"
+            aria-label="User UUID"
+            className="w-64 text-sm text-stone-900 placeholder:text-stone-500"
+          />
+          <Select value={add.role} onValueChange={(v) => props.onAddRoleChange(v as MemberRole)}>
+            <SelectTrigger className="w-28 text-sm text-stone-900" aria-label="Role">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent lang="en">
+              <SelectItem value="member">Member</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
+          <button type="button" onClick={props.onAdd} disabled={add.adding || !add.userId.trim()} className={PRIMARY}>
+            {add.adding ? 'Adding…' : 'Add Member'}
+          </button>
+        </div>
+      )}
+      {add.error && (
         <p role="alert" className="mb-2 text-xs text-red-700">
-          {addMemberError}
+          {add.error}
         </p>
       )}
-      {rosterError && (
+      {(rosterError || loadError) && (
         <p role="alert" className="mb-2 text-xs text-red-700">
-          {rosterError}
+          {rosterError ?? loadError}
         </p>
       )}
 
-      {loadingMembers ? (
+      {loading ? (
         <p className="text-sm text-stone-600">Loading members…</p>
-      ) : members.length === 0 ? (
+      ) : loadError ? null : members.length === 0 ? (
         <p className="text-sm text-stone-600">No members yet.</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
@@ -451,7 +528,11 @@ function OrgMembers({ orgId }: { orgId: string }) {
                 <th className="px-3 py-2 text-start font-medium text-stone-600">User ID</th>
                 <th className="px-3 py-2 text-start font-medium text-stone-600">Role</th>
                 <th className="px-3 py-2 text-start font-medium text-stone-600">Joined</th>
-                <th className="px-3 py-2" />
+                {!readOnly && (
+                  <th className="px-3 py-2">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
@@ -459,30 +540,36 @@ function OrgMembers({ orgId }: { orgId: string }) {
                 <tr key={m.id}>
                   <td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs text-stone-700">{m.user_id}</td>
                   <td className="px-3 py-2">
-                    <Select
-                      value={m.role === 'admin' ? 'admin' : 'member'}
-                      onValueChange={(v) => handleChangeRole(m.id, v as MemberRole)}
-                    >
-                      <SelectTrigger className="h-8 w-28 text-xs text-stone-900" aria-label="Role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent lang="en">
-                        <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {readOnly ? (
+                      <span className="text-xs text-stone-800">{m.role === 'admin' ? 'Admin' : 'Member'}</span>
+                    ) : (
+                      <Select
+                        value={m.role === 'admin' ? 'admin' : 'member'}
+                        onValueChange={(v) => props.onChangeRole(m.id, v as MemberRole)}
+                      >
+                        <SelectTrigger className="h-8 w-28 text-xs text-stone-900" aria-label="Role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent lang="en">
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs text-stone-600">{new Date(m.joined_at).toLocaleDateString()}</td>
-                  <td className="px-3 py-2 text-end">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(m.id)}
-                      aria-label={`Remove member ${m.user_id}`}
-                      className="inline-flex min-h-6 min-w-6 items-center gap-1 rounded px-1 text-xs font-medium text-red-700 hover:text-red-800"
-                    >
-                      <Trash2 className="h-3 w-3" aria-hidden="true" /> Remove
-                    </button>
-                  </td>
+                  {!readOnly && (
+                    <td className="px-3 py-2 text-end">
+                      <button
+                        type="button"
+                        onClick={() => props.onRemove(m.id)}
+                        aria-label={`Remove member ${m.user_id}`}
+                        className={`inline-flex min-h-6 min-w-6 items-center gap-1 rounded px-1 text-xs font-medium text-red-700 hover:text-red-800 ${FOCUS_RING}`}
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden="true" /> Remove
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

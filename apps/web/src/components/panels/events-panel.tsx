@@ -10,6 +10,9 @@ import {
   type MyCheckinStatus,
   type OccurrenceStatus,
 } from '@/lib/event-checkin'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { formatEventWhen } from '@/lib/event-time'
+import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel } from '@/lib/i18n-event-forms'
 
 interface OccurrenceWithEvent {
   id: string
@@ -27,33 +30,9 @@ interface OccurrenceWithEvent {
     city: string | null
     state: string | null
     requires_registration: boolean
+    time_zone: string
     organization: { name: string } | null
   } | null
-}
-
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  distribution: 'bg-lime-100 text-lime-800',
-  meal:         'bg-orange-100 text-orange-800',
-  pantry:       'bg-amber-100 text-amber-800',
-  clinic:       'bg-sky-100 text-sky-800',
-  other:        'bg-stone-100 text-stone-700',
-}
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  distribution: 'Distribution',
-  meal:         'Meal',
-  pantry:       'Pantry',
-  clinic:       'Clinic',
-  other:        'Other',
-}
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-}
-
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
 function getDateGroup(dateStr: string): 'today' | 'week' | 'upcoming' {
@@ -71,6 +50,7 @@ function getDateGroup(dateStr: string): 'today' | 'week' | 'upcoming' {
 export function EventsPanel() {
   const supabase = createClient()
   const { loading: authLoading, isAuthenticated, isAnonymous } = useAuth()
+  const locale = useProfileLocale()
 
   const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
   const [myStatuses, setMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
@@ -112,6 +92,7 @@ export function EventsPanel() {
             city,
             state,
             requires_registration,
+            time_zone,
             organization:organizations(name)
           )
         `)
@@ -232,8 +213,9 @@ export function EventsPanel() {
           {group.items.map((occ) => {
             const ev = occ.event
             if (!ev) return null
-            const typeColor = EVENT_TYPE_COLORS[ev.event_type] ?? 'bg-stone-100 text-stone-700'
-            const typeLabel = EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type
+            const typeColor = eventTypeColor(ev.event_type)
+            const typeLabel = eventTypeLabel(ev.event_type, locale)
+            const when = formatEventWhen(occ.starts_at, occ.ends_at, ev.time_zone, locale)
             const location = [ev.location_name, ev.city, ev.state].filter(Boolean).join(', ')
 
             const btn = computeCheckinButton({
@@ -261,10 +243,11 @@ export function EventsPanel() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-sm text-stone-700">
-                  <Calendar className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
+                <div className="flex items-start gap-1.5 text-sm text-stone-700">
+                  <Calendar className="w-3.5 h-3.5 mt-0.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
                   <span>
-                    {formatDate(occ.starts_at)} · {formatTime(occ.starts_at)}–{formatTime(occ.ends_at)}
+                    {when.text}
+                    {when.venue && <span className="block text-xs text-stone-600">{when.venue}</span>}
                   </span>
                 </div>
 
@@ -288,7 +271,7 @@ export function EventsPanel() {
 
                 {!ev.requires_registration && (
                   <span className="self-start text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-                    Walk-in welcome
+                    {eventFormT(locale, 'cardWalkIn')}
                   </span>
                 )}
 
@@ -303,6 +286,7 @@ export function EventsPanel() {
                         event: {
                           title: ev.title,
                           location_name: ev.location_name ?? null,
+                          time_zone: ev.time_zone,
                           organization: ev.organization ?? null,
                         },
                       })
@@ -314,17 +298,17 @@ export function EventsPanel() {
                     }}
                     className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
                   >
-                    {btn.label}
+                    {checkinButtonLabel(btn.kind, btn.label, locale)}
                   </button>
                 ) : (
                   <span
                     className={`self-start text-xs font-semibold px-3 py-1.5 rounded-xl ${
                       btn.kind === 'attended' || btn.kind === 'checked_early' || btn.kind === 'anonymous'
                         ? 'bg-lime-100 text-lime-800'
-                        : 'bg-stone-100 text-stone-500'
+                        : 'bg-stone-100 text-stone-600'
                     }`}
                   >
-                    {btn.label}
+                    {checkinButtonLabel(btn.kind, btn.label, locale)}
                   </span>
                 )}
               </div>

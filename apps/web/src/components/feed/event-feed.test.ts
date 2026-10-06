@@ -15,12 +15,17 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { checkinButtonLabel, eventFormMessages } from '@/lib/i18n-event-forms'
 import {
   partitionRankedRows,
   feedIncludesEvents,
   mergeRankedFeedItems,
   eventTimingLabel,
   distanceBucketLabel,
+  hydrateEventFeedItems,
+  type FeedEventOccurrenceRow,
   type RankedFeedV2Row,
   type Post,
   type EventFeedItem,
@@ -41,7 +46,7 @@ function post(id: string, score?: number): Post {
 function eventItem(occId: string, score: number): EventFeedItem {
   return {
     occurrenceId: occId, eventId: 'e-' + occId, title: 'T', eventType: 'meal', orgName: null,
-    startsAt: new Date().toISOString(), endsAt: new Date().toISOString(),
+    startsAt: new Date().toISOString(), endsAt: new Date().toISOString(), timeZone: 'America/New_York',
     locationName: null, city: null, state: null, status: 'upcoming', requiresRegistration: false,
     score, distanceBucket: 'unknown',
   }
@@ -148,5 +153,91 @@ describe('W1.6b — distanceBucketLabel', () => {
     expect(distanceBucketLabel('>50km')).toBe('Over 50 km away')
     expect(distanceBucketLabel('unknown')).toBeNull()
     expect(distanceBucketLabel(undefined)).toBeNull()
+  })
+})
+
+describe('hydrateEventFeedItems — the venue time zone reaches the card', () => {
+  const occ = (id: string, tz: string): FeedEventOccurrenceRow => ({
+    id, starts_at: '2026-11-10T15:00:00Z', ends_at: '2026-11-10T16:30:00Z', status: 'upcoming',
+    event: {
+      id: 'e-' + id, title: 'Meal ' + id, event_type: 'meal', location_name: null, city: 'Rutland', state: 'VT',
+      requires_registration: null, time_zone: tz, organization: { name: 'FEED' },
+    },
+  })
+
+  it('maps each ranked event row in RPC order and carries time_zone as timeZone', () => {
+    const ranked: RankedFeedV2Row[] = [
+      { id: 'p1', kind: 'post', score: 9, distance_bucket: 'unknown' },
+      { id: 'o2', kind: 'event', score: 8, distance_bucket: '<2km' },
+      { id: 'o1', kind: 'event', score: 7, distance_bucket: 'unknown' },
+    ]
+    const items = hydrateEventFeedItems(ranked, [occ('o1', 'America/Chicago'), occ('o2', 'America/New_York')])
+    expect(items.map((i) => [i.occurrenceId, i.timeZone, i.score, i.distanceBucket])).toEqual([
+      ['o2', 'America/New_York', 8, '<2km'],
+      ['o1', 'America/Chicago', 7, 'unknown'],
+    ])
+    expect(items[0]).toMatchObject({ eventId: 'e-o2', orgName: 'FEED', requiresRegistration: false })
+  })
+
+  it('drops an event row the caller could not read (RLS) or whose event is missing', () => {
+    const ranked: RankedFeedV2Row[] = [
+      { id: 'o1', kind: 'event', score: 8, distance_bucket: 'unknown' },
+      { id: 'o3', kind: 'event', score: 7, distance_bucket: 'unknown' },
+    ]
+    const orphan = { ...occ('o3', 'America/New_York'), event: null }
+    expect(hydrateEventFeedItems(ranked, [orphan]).map((i) => i.occurrenceId)).toEqual([])
+  })
+})
+
+const card = readFileSync(fileURLToPath(new URL('./event-feed-card.tsx', import.meta.url)), 'utf8')
+
+describe('feed card copy is translated', () => {
+  // The card is what every feed viewer sees; its labels come from lib/i18n-event-forms.ts.
+  it('renders "Event" and "Walk-in welcome" through the event dictionary, not English literals', () => {
+    expect(card).toMatch(/eventFormT\(locale, 'cardEventBadge'\)/)
+    expect(card).toMatch(/eventFormT\(locale, 'cardWalkIn'\)/)
+    expect(card).not.toMatch(/Walk-in welcome/)
+    expect(card).not.toMatch(/\/>\s*Event\s*</)
+  })
+  it('every locale has both labels', () => {
+    for (const m of Object.values(eventFormMessages)) {
+      expect(m.cardEventBadge.trim()).not.toBe('')
+      expect(m.cardWalkIn.trim()).not.toBe('')
+    }
+    expect(eventFormMessages.es.cardWalkIn).toBe('Sin cita previa')
+  })
+})
+
+describe('timing / distance / check-in labels follow the viewer locale', () => {
+  const now = Date.UTC(2026, 10, 10, 12, 0)
+  it('timing', () => {
+    expect(eventTimingLabel(now, now + 5 * 60000, now + 65 * 60000, 'es').label).toBe('Empieza en 5 min')
+    expect(eventTimingLabel(now, now + 3 * 3600000, now + 4 * 3600000, 'fr').label).toBe('Commence dans 3 h')
+    expect(eventTimingLabel(now, now + 24 * 3600000, now + 25 * 3600000, 'en').label).toBe('In 1 day')
+    expect(eventTimingLabel(now, now + 72 * 3600000, now + 73 * 3600000, 'ko').label).toBe('3일 후')
+    expect(eventTimingLabel(now, now - 60000, now + 60000, 'ar')).toEqual({ label: 'يجري الآن', isLive: true })
+  })
+  it('distance', () => {
+    expect(distanceBucketLabel('<2km', 'fr')).toBe('À moins de 2 km')
+    expect(distanceBucketLabel('unknown', 'fr')).toBeNull()
+  })
+  it('check-in button: every kind has a translation; an unknown kind keeps its English label', () => {
+    expect(checkinButtonLabel('in_window', "I'm here", 'es')).toBe('Ya llegué')
+    expect(checkinButtonLabel('early', 'Check in early', 'zh')).toBe('提前签到')
+    expect(checkinButtonLabel('mystery', 'Mystery', 'es')).toBe('Mystery')
+  })
+  it('the card and the Events panel render those labels in the viewer locale, with readable contrast', () => {
+    const panel = readFileSync(fileURLToPath(new URL('../panels/events-panel.tsx', import.meta.url)), 'utf8')
+    for (const src of [card, panel]) {
+      expect(src.match(/checkinButtonLabel\(btn\.kind, btn\.label, locale\)/g)?.length).toBe(2)
+      expect(src).not.toMatch(/\{btn\.label\}/)
+    }
+    expect(card).toMatch(/distanceBucketLabel\(event\.distanceBucket, locale\)/)
+    expect(card).toMatch(/new Date\(event\.endsAt\)\.getTime\(\), locale\)/)
+    // Distance text and the inert check-in pill: stone-600 (4.5:1+) on the card's light stone.
+    expect(card).not.toMatch(/text-stone-400"> · \{distanceLabel\}/)
+    expect(card).not.toMatch(/bg-stone-100 text-stone-500/)
+    // Venue time is read before the timing label.
+    expect(card.indexOf('{when.venue &&')).toBeLessThan(card.indexOf('{!timing.isLive &&'))
   })
 })

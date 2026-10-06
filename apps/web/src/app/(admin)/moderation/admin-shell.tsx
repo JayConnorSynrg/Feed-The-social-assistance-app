@@ -40,7 +40,7 @@ function PlaceholderTab({ label }: { label: string }) {
   )
 }
 
-const TRIGGER_CLASS = 'flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-lime-600 data-[state=active]:text-white'
+const TRIGGER_CLASS = 'flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white'
 
 export function AdminShell() {
   const { orgs, loading: orgsLoading } = useAdminOrgs()
