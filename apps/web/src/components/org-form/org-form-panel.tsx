@@ -20,7 +20,7 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
-import { useForm, Controller, type FieldErrors, type Resolver } from 'react-hook-form'
+import { useForm, Controller, type FieldErrors, type Resolver, type UseFormRegisterReturn } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, ImagePlus, Loader2, MapPin, X } from 'lucide-react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -77,6 +77,17 @@ export interface OrgFormPanelProps {
   onSaved: (result: { id: string; created: boolean; name: string }) => void
   /** "Edit existing" from the duplicate-name warning. */
   onEditExisting?: (id: string) => void
+  /**
+   * Load every organization name for the duplicate-name warning (default true). The organization
+   * admin page passes false: it edits one organization and reads no other organization's rows.
+   */
+  checkDuplicateNames?: boolean
+  /**
+   * The organization type can be changed (default true). The organization admin page passes false
+   * for an organization admin: the type is shown read-only and saved unchanged, because only a
+   * platform admin may change it (admin_save_organization refuses anyone else, 42501).
+   */
+  canChangeType?: boolean
   /** A guarded close requested through the handle was declined ("Keep editing"). */
   onCloseRequestDeclined?: () => void
   /** Where focus goes when the panel closes (Save, Cancel, Escape, Back). */
@@ -94,10 +105,14 @@ type CloseResult = 'saved' | 'discarded' | 'abandoned'
 
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
-const FIELD =
-  'w-full rounded-lg border border-stone-500 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-500 aria-[invalid=true]:border-red-600 ' +
+// Field chrome without a background, so an editable field (white) and a read-only one (stone-100)
+// each carry exactly one background class.
+const FIELD_BASE =
+  'w-full rounded-lg border border-stone-500 px-3 text-sm text-stone-900 placeholder:text-stone-500 aria-[invalid=true]:border-red-600 ' +
   FOCUS_RING
+const FIELD = `bg-white ${FIELD_BASE}`
 const INPUT = `h-10 ${FIELD}`
+const READONLY_INPUT = `h-10 bg-stone-100 ${FIELD_BASE}`
 const LABEL = 'mb-1 block text-sm font-medium text-stone-800'
 const PRIMARY =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 aria-disabled:cursor-not-allowed aria-disabled:bg-brand/60 ' +
@@ -113,6 +128,8 @@ const ICON_BUTTON =
 
 export function OrgFormPanel(props: OrgFormPanelProps) {
   const { open, mode, kind, orgId, locale, onOpenChange, onSaved, onEditExisting, onCloseRequestDeclined, onCloseAutoFocus, ref } = props
+  const checkDuplicateNames = props.checkDuplicateNames ?? true
+  const canChangeType = props.canChangeType ?? true
   const tr = useCallback((key: keyof OrgFormMessages) => orgFormT(locale, key), [locale])
 
   // Guard state shared with the form inside (dirty flag + saving flag + view), held in refs so the
@@ -273,6 +290,8 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
               tr={tr}
               requestClose={closeFromBody}
               requestSwitch={onEditExisting ? requestSwitch : undefined}
+              checkDuplicateNames={checkDuplicateNames}
+              canChangeType={canChangeType}
               onDirtyChange={handleDirtyChange}
               onSavingChange={handleSavingChange}
               onSaveAttempt={handleSaveAttempt}
@@ -311,6 +330,65 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
   )
 }
 
+/**
+ * The duplicate-name index (every organization name the caller can read), or an empty index without
+ * any read when the panel is scoped to one organization (checkDuplicateNames = false).
+ */
+export function loadOrgNameIndex(
+  supabase: ReturnType<typeof createClient>,
+  checkDuplicateNames: boolean
+): Promise<OrgNameIndexRow[]> {
+  return checkDuplicateNames ? fetchOrgNameIndex(supabase) : Promise.resolve([])
+}
+
+/**
+ * The organization type: a picker when it may be changed, otherwise the current type shown in a
+ * read-only field (not registered, so the form keeps and saves the loaded value unchanged).
+ */
+export function OrgTypeField({
+  id,
+  editable,
+  value,
+  tr,
+  registration,
+}: {
+  id: string
+  editable: boolean
+  value: string
+  tr: (key: keyof OrgFormMessages) => string
+  registration: UseFormRegisterReturn<'org_type'>
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className={LABEL}>
+        {tr('fieldType')}
+      </label>
+      {editable ? (
+        <select id={id} className={INPUT} {...registration}>
+          {NON_BUSINESS_ORG_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {tr(orgTypeKey(t))}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <>
+          <input
+            id={id}
+            className={READONLY_INPUT}
+            readOnly
+            value={tr(orgTypeKey(value))}
+            aria-describedby={`${id}-hint`}
+          />
+          <p id={`${id}-hint`} className="mt-1 text-sm text-stone-600">
+            {tr('fieldTypeReadOnlyHint')}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------------------------
 // Body: loads the edit target, then renders the form.
 // ---------------------------------------------------------------------------------------------
@@ -323,6 +401,8 @@ interface BodyProps {
   tr: (key: keyof OrgFormMessages) => string
   requestClose: () => void
   requestSwitch?: (id: string) => void
+  checkDuplicateNames: boolean
+  canChangeType: boolean
   onDirtyChange: (dirty: boolean, fields: string) => void
   onSavingChange: (saving: boolean) => void
   onSaveAttempt: () => void
@@ -433,7 +513,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 type GeoState = 'idle' | 'finding' | 'none' | 'need_street' | 'unavailable'
 
 function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: ReturnType<typeof createClient> }) {
-  const { mode, locale, tr, detail, supabase, requestClose, requestSwitch, onDirtyChange, onSavingChange, onSaveAttempt, registerBackToForm, onSaved } = props
+  const { mode, locale, tr, detail, supabase, requestClose, requestSwitch, checkDuplicateNames, canChangeType, onDirtyChange, onSavingChange, onSaveAttempt, registerBackToForm, onSaved } = props
   const uid = useId()
   const formId = `${uid}-form`
 
@@ -499,14 +579,14 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
   const [dupes, setDupes] = useState<OrgNameIndexRow[]>([])
   useEffect(() => {
     let cancelled = false
-    fetchOrgNameIndex(supabase).then(
+    loadOrgNameIndex(supabase, checkDuplicateNames).then(
       (rows) => !cancelled && setNameIndex(rows),
       () => undefined
     )
     return () => {
       cancelled = true
     }
-  }, [supabase])
+  }, [supabase, checkDuplicateNames])
   const checkDuplicates = () => {
     const matches = findSimilarOrgs(getValues('name'), nameIndex, detail?.id ?? orgId)
     if (matches.length > 0 && dupes.length === 0) logEvent('admin.org.duplicate_warning', { action: 'shown' })
@@ -763,18 +843,13 @@ function OrgForm(props: BodyProps & { detail: AdminOrgDetail | null; supabase: R
                   )}
               </div>
             </div>
-            <div>
-              <label htmlFor={`${uid}-type`} className={LABEL}>
-                {tr('fieldType')}
-              </label>
-              <select id={`${uid}-type`} className={INPUT} {...register('org_type')}>
-                {NON_BUSINESS_ORG_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {tr(orgTypeKey(t))}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <OrgTypeField
+              id={`${uid}-type`}
+              editable={canChangeType}
+              value={getValues('org_type')}
+              tr={tr}
+              registration={register('org_type')}
+            />
             <div>
               <label htmlFor={`${uid}-desc`} className={LABEL}>
                 {tr('fieldDescription')} <span className="font-normal text-stone-600">({tr('fieldOptional')})</span>

@@ -1,46 +1,47 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import {
-  startOfWeek,
-  addDays,
-  addWeeks,
-  subWeeks,
-  format,
-  isSameDay,
-  parseISO,
-} from 'date-fns'
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+// apps/web/src/app/(admin)/moderation/event-scheduler.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// Events tab — used by the organization admin page (selectedOrgId = that org's id) and by the
+// main admin (selectedOrgId = 'all' or the header's org). With a real org id it reads ONLY that
+// org's events and never calls get_admin_org_list; with 'all' it reads the orgs the caller
+// administers (unchanged scope).
+//
+// Every write is one RPC through lib/event-admin-rpc.ts (privilegedRpc -> one admin_actions row
+// + one app_logs row sharing request_id): create (one step, first date included), add dates,
+// cancel a date, edit, retire. The client writes no table directly. Times are shown through
+// lib/event-time.ts (viewer's time, plus venue time when the zones differ); the calendar files
+// each date under the venue's local day.
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { addDays, addWeeks, format, isSameDay, startOfWeek, subWeeks } from 'date-fns'
+import { ChevronLeft, ChevronRight, Loader2, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RecurrencePicker } from './recurrence-picker'
-import { OrganizerCheckinDisplay } from './organizer-checkin-display'
-import { AddressAutocomplete } from './address-autocomplete'
-import { useAdminOrgs } from './use-admin-orgs'
-import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
-import { PRECISE_GEOCODE_TIERS } from '@/lib/geocode-accuracy'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { eventFormT, eventTypeColor, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
+import { formatEventWhen, venueDateKey } from '@/lib/event-time'
+import { cancelEventOccurrence } from '@/lib/event-admin-rpc'
+import { createSubmitController, mintIdempotencyKey, type FieldError } from '@/lib/event-form-model'
 import { formatRatePct } from '@/lib/event-checkin'
-
-interface AssistanceEvent {
-  id: string
-  title: string
-  event_type: string
-  description: string | null
-  location_name: string | null
-  address: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  org_id: string
-  rrule: string | null
-  is_active: boolean
-  occurrences: EventOccurrence[]
-  org?: { name: string } | null
-}
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { OrganizerCheckinDisplay } from './organizer-checkin-display'
+import { useAdminOrgs } from './use-admin-orgs'
+import { EventCreateDialog, type OrgChoice } from './event-create-dialog'
+import { EventDatesDialog, type DatesTarget } from './event-dates-dialog'
+import { EventEditDialog, type EditTarget } from './event-edit-dialog'
+import { DANGER, EventDialog, FOCUS_RING, PRIMARY, SECONDARY, errorText } from './event-form-ui'
+import { restoreFocusAfterPanel } from './org-panel-focus'
+import { pickOpener } from './event-focus'
 
 interface EventOccurrence {
   id: string
@@ -52,30 +53,36 @@ interface EventOccurrence {
   notes: string | null
 }
 
-interface KioskTarget {
-  occurrence: {
-    id: string
-    starts_at: string
-    ends_at: string
-    event_title: string
-    org_name: string
-  }
+interface AssistanceEvent {
+  id: string
+  title: string
+  event_type: string
+  description: string | null
+  location_name: string | null
+  org_id: string
+  time_zone: string
+  is_active: boolean
+  occurrences: EventOccurrence[]
+  org?: { name: string } | null
 }
 
-interface Props {
-  selectedOrgId: string
+/** One date with its event's display fields. */
+type ScheduledDate = EventOccurrence & {
+  event_title: string
+  event_type: string
+  org_id: string
+  org_name: string
+  time_zone: string
 }
 
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  distribution: 'bg-[#4a5d23]/10 text-[#4a5d23] border-[#4a5d23]/30',
-  meal: 'bg-orange-50 text-orange-700 border-orange-200',
-  pantry: 'bg-amber-50 text-amber-700 border-amber-200',
-  clinic: 'bg-sky-50 text-sky-700 border-sky-200',
-  other: 'bg-stone-100 text-stone-600 border-stone-200',
-}
+const EVENT_SELECT =
+  'id, title, event_type, description, location_name, org_id, time_zone, is_active, created_at, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)'
+/** Bounded reads: newest events first, each with its latest dates. */
+const EVENT_LIST_LIMIT = 200
+const DATES_PER_EVENT = 200
 
 interface AttendanceView {
-  occurrence: { id: string; event_title: string; starts_at: string }
+  occurrence: ScheduledDate
   data: {
     early: number
     confirmed: number
@@ -90,539 +97,294 @@ interface AttendanceView {
   error: string | null
 }
 
+const SMALL_BTN =
+  'inline-flex min-h-6 w-full items-center justify-center rounded px-1 text-xs font-semibold transition-colors ' + FOCUS_RING
+const LINK_BTN =
+  'inline-flex min-h-6 items-center rounded px-1 text-xs font-medium text-[#4a5d23] hover:underline ' + FOCUS_RING
+
+interface Props {
+  selectedOrgId: string
+}
+
+function dayLabel(day: Date, locale: Locale, opts: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : locale, opts).format(day)
+}
+
 export function EventScheduler({ selectedOrgId }: Props) {
-  const supabase = createClient()
-  const { orgs: adminOrgs } = useAdminOrgs()
+  const supabase = useMemo(() => createClient(), [])
+  const locale = useProfileLocale()
+  const scoped = selectedOrgId !== 'all'
+  // On a single org's screen the cross-org list is never read.
+  const { orgs: adminOrgs, loading: orgsLoading } = useAdminOrgs({ enabled: !scoped })
 
   const [events, setEvents] = useState<AssistanceEvent[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [reload, setReload] = useState(0)
+  // "Now" for ended / cancellable decisions, taken when the list was (re)loaded.
+  const [loadedAt, setLoadedAt] = useState(() => Date.now())
+  const [notice, setNotice] = useState<string | null>(null)
 
-  // Attendance view (per occurrence)
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 0 }))
+  const [selectedDay, setSelectedDay] = useState<Date>(() => new Date())
+
+  const [createState, setCreateState] = useState<{ key: number; date?: string } | null>(null)
+  const [datesTarget, setDatesTarget] = useState<(DatesTarget & { key: number }) | null>(null)
+  const [editTarget, setEditTarget] = useState<(EditTarget & { key: number }) | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<ScheduledDate | null>(null)
+  const [cancelError, setCancelError] = useState<FieldError | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelController] = useState(() => createSubmitController(mintIdempotencyKey))
+  // Every dialog here is opened without a DialogTrigger: remember the control that opened it and
+  // return focus there on close, or to "New event" when that control is gone (or, after a date
+  // was cancelled, will be gone once the list refreshes).
+  const openerRef = useRef<HTMLElement | null>(null)
+  const newEventRef = useRef<HTMLButtonElement>(null)
+  const focusFallbackRef = useRef(false)
+  // Each open gets a fresh dialog key, so every open is a new form (new idempotency key).
+  const dialogSeq = useRef(0)
+  const rememberOpener = (e?: { currentTarget: unknown }) => {
+    openerRef.current = pickOpener(e?.currentTarget, document.activeElement, document.body) as HTMLElement | null
+    focusFallbackRef.current = false
+  }
+  const restoreFocus = (e: Event) => {
+    const opener = focusFallbackRef.current ? null : openerRef.current
+    restoreFocusAfterPanel(e, opener, { querySelector: () => newEventRef.current })
+  }
+  const [kiosk, setKiosk] = useState<ScheduledDate | null>(null)
   const [attendance, setAttendance] = useState<AttendanceView | null>(null)
 
-  // Calendar navigation
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date(), { weekStartsOn: 0 })
-  )
-  const [selectedDay, setSelectedDay] = useState<Date>(new Date())
-
-  // Kiosk
-  const [kioskTarget, setKioskTarget] = useState<KioskTarget | null>(null)
-  const [kioskOpen, setKioskOpen] = useState(false)
-
-  // Create event modal state
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createTitle, setCreateTitle] = useState('')
-  const [createEventType, setCreateEventType] = useState('distribution')
-  const [createLocationName, setCreateLocationName] = useState('')
-  const [createRrule, setCreateRrule] = useState<string | null>(null)
-  const [createOrgId, setCreateOrgId] = useState(selectedOrgId === 'all' ? '' : selectedOrgId)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [createInfo, setCreateInfo] = useState<string | null>(null)
-  // Address + geocode (reuses the resource-edit Mapbox v6 path; strong-match-only gate)
-  const [createAddress, setCreateAddress] = useState('')
-  const [createCity, setCreateCity] = useState('')
-  const [createState, setCreateState] = useState('')
-  const [createZip, setCreateZip] = useState('')
-  const [selectedMatch, setSelectedMatch] = useState<GeocodeMatch | null>(null)
-
-  // Add occurrence modal
-  const [addOccurrenceEventId, setAddOccurrenceEventId] = useState<string | null>(null)
-  const [addStartsAt, setAddStartsAt] = useState('')
-  const [addEndsAt, setAddEndsAt] = useState('')
-  const [addingOccurrence, setAddingOccurrence] = useState(false)
-  const [addOccurrenceError, setAddOccurrenceError] = useState<string | null>(null)
-
-  // Edit event modal state (wires admin_update_event; re-geocodes when the address changes)
-  const [editEventId, setEditEventId] = useState<string | null>(null)
-  const [editIsActive, setEditIsActive] = useState<boolean>(true)
-  const [editTitle, setEditTitle] = useState('')
-  const [editEventType, setEditEventType] = useState('distribution')
-  const [editLocationName, setEditLocationName] = useState('')
-  const [editAddress, setEditAddress] = useState('')
-  const [editCity, setEditCity] = useState('')
-  const [editState, setEditState] = useState('')
-  const [editZip, setEditZip] = useState('')
-  const [editOriginalAddress, setEditOriginalAddress] = useState('')
-  const [editSelectedMatch, setEditSelectedMatch] = useState<GeocodeMatch | null>(null)
-  const [savingEdit, setSavingEdit] = useState(false)
-  const [editError, setEditError] = useState<string | null>(null)
-  const [editInfo, setEditInfo] = useState<string | null>(null)
-
-  function openEditEvent(ev: AssistanceEvent) {
-    setEditEventId(ev.id)
-    setEditIsActive(ev.is_active)
-    setEditTitle(ev.title)
-    setEditEventType(ev.event_type)
-    setEditLocationName(ev.location_name ?? '')
-    setEditAddress(ev.address ?? '')
-    setEditCity(ev.city ?? '')
-    setEditState(ev.state ?? '')
-    setEditZip(ev.zip_code ?? '')
-    setEditOriginalAddress([ev.address, ev.city, ev.state, ev.zip_code].filter(Boolean).join(', '))
-    setEditSelectedMatch(null)
-    setEditError(null)
-    setEditInfo(null)
-  }
-
-  const fetchEvents = useCallback(async () => {
-    setLoading(true)
-    // G1 (D1 reachability): do NOT filter on is_active here. A RETIRED event whose org is still
-    // active keeps an in-progress occurrence LIVE (D1) and its ENDED occurrences are permanent
-    // history (D2), and the org admin must reach both (kiosk + Attendance). RLS scopes this to the
-    // org admin's own active org (events_select_reachable_authed / occurrences_select_reachable_authed
-    // + occurrences_org_admin_select), so a retired event surfaces only when it still has a
-    // reachable occurrence; the calendar hides cancelled ones and the "Past & cancelled" section
-    // carries the ended history. Platform admins see everything via the *_admin_select policies.
-    const query = supabase
-      .from('assistance_events')
-      .select('id, title, event_type, description, location_name, address, city, state, zip_code, org_id, rrule, is_active, org:organizations(name), occurrences:event_occurrences(id, event_id, starts_at, ends_at, status, capacity, notes)')
-
-    if (selectedOrgId !== 'all') {
-      query.eq('org_id', selectedOrgId)
-    } else {
-      // M4: the "All Organizations" default must not leak other orgs' events. A non-platform
-      // org admin's adminOrgs are exactly the orgs they administer; a platform admin's
-      // adminOrgs are all active orgs, so this filter is a no-op for them (unchanged).
-      query.in('org_id', adminOrgs.map((o) => o.id))
-    }
-
-    const { data } = await query
-    setEvents((data as AssistanceEvent[]) ?? [])
-    setLoading(false)
-  }, [supabase, selectedOrgId, adminOrgs])
-
   useEffect(() => {
-    fetchEvents()
-  }, [fetchEvents])
-
-  // Sync createOrgId when selectedOrgId changes
-  useEffect(() => {
-    if (selectedOrgId !== 'all') {
-      setCreateOrgId(selectedOrgId)
+    if (!scoped && orgsLoading) return
+    let cancelled = false
+    const base = supabase.from('assistance_events').select(EVENT_SELECT)
+    // Scope: exactly this org, or the orgs the caller administers ('all').
+    const filtered = scoped ? base.eq('org_id', selectedOrgId) : base.in('org_id', adminOrgs.map((o) => o.id))
+    void filtered
+      .order('created_at', { ascending: false })
+      .order('starts_at', { referencedTable: 'occurrences', ascending: false })
+      .limit(EVENT_LIST_LIMIT)
+      .limit(DATES_PER_EVENT, { referencedTable: 'occurrences' })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          logger.warn('admin.event.scheduler.load_failed', { code: error.code ?? null, scoped })
+          setLoadState('error')
+          return
+        }
+        setEvents((data as unknown as AssistanceEvent[]) ?? [])
+        setLoadedAt(Date.now())
+        setLoadState('ready')
+      })
+    return () => {
+      cancelled = true
     }
-  }, [selectedOrgId])
+  }, [supabase, scoped, selectedOrgId, adminOrgs, orgsLoading, reload])
 
-  // Collect all occurrences with event info for the calendar. Include ended (completed / past)
-  // occurrences — not just upcoming — so the organizer can reach Attendance for events that
-  // already ran. Cancelled occurrences are hidden HERE to keep the calendar clean; they remain
-  // reachable for Attendance in the dedicated "Past & cancelled" section below (K5b).
-  const allOccurrences = events.flatMap((event) =>
-    (event.occurrences ?? [])
-      .filter((occ) => occ.status !== 'cancelled')
-      .map((occ) => ({
-        ...occ,
-        event_title: event.title,
-        event_type: event.event_type,
-        org_name: event.org?.name ?? '',
-      }))
+  const refresh = () => setReload((n) => n + 1)
+
+  const isEnded = (occ: { status: string; ends_at: string }) => occ.status === 'completed' || new Date(occ.ends_at).getTime() < loadedAt
+  // Cancel is offered only on a date that has not ended and is not cancelled (the DB refuses
+  // cancelling an ended date — its attendance history is permanent).
+  const canCancel = (occ: { status: string; ends_at: string }) => occ.status !== 'cancelled' && !isEnded(occ)
+
+  const allDates: ScheduledDate[] = events.flatMap((event) =>
+    (event.occurrences ?? []).map((occ) => ({
+      ...occ,
+      event_title: event.title,
+      event_type: event.event_type,
+      org_id: event.org_id,
+      org_name: event.org?.name ?? '',
+      time_zone: event.time_zone,
+    }))
   )
-
-  // K5a: an occurrence has ENDED once it is completed or past its end time. Cancel is offered
-  // ONLY on a not-yet-ended, not-already-cancelled occurrence — an ended occurrence's attendance
-  // history is permanent (D2) and the DB refuses to cancel it, so the UI must not present Cancel.
-  const nowTs = Date.now()
-  const isEnded = (occ: { status: string; ends_at: string }) =>
-    occ.status === 'completed' || new Date(occ.ends_at).getTime() < nowTs
-  const canCancel = (occ: { status: string; ends_at: string }) =>
-    occ.status !== 'cancelled' && !isEnded(occ)
-
-  // K5b: cancelled AND past occurrences stay reachable for Attendance review in a dedicated
-  // "Past & cancelled" section (the week/day calendar above hides cancelled ones to stay clean).
-  const pastAndCancelled = events
-    .flatMap((event) =>
-      (event.occurrences ?? [])
-        .filter((occ) => occ.status === 'cancelled' || isEnded(occ))
-        .map((occ) => ({
-          ...occ,
-          event_title: event.title,
-          event_type: event.event_type,
-          org_name: event.org?.name ?? '',
-        }))
-    )
+  // The calendar hides cancelled dates; "Past and cancelled" keeps them reachable for Attendance.
+  const calendarDates = allDates.filter((o) => o.status !== 'cancelled')
+  const pastAndCancelled = allDates
+    .filter((o) => o.status === 'cancelled' || isEnded(o))
     .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
-
-  function getOccurrencesForDay(day: Date) {
-    return allOccurrences.filter((occ) => isSameDay(parseISO(occ.starts_at), day))
+  const datesOn = (day: Date) => {
+    const key = format(day, 'yyyy-MM-dd')
+    return calendarDates
+      .filter((o) => venueDateKey(o.starts_at, o.time_zone) === key)
+      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
   }
 
-  function openKiosk(occ: (typeof allOccurrences)[0]) {
-    setKioskTarget({
-      occurrence: {
-        id: occ.id,
-        starts_at: occ.starts_at,
-        ends_at: occ.ends_at,
-        event_title: occ.event_title,
-        org_name: occ.org_name,
-      },
-    })
-    setKioskOpen(true)
-    logger.info('admin.event.scheduler.kiosk_opened', {
-      occurrence_id: occ.id,
-      event_id: occ.event_id,
-    })
+  const openCreate = (e: { currentTarget: unknown }, date?: string) => {
+    rememberOpener(e)
+    setCreateState({ key: ++dialogSeq.current, date })
   }
 
-  async function handleCreateEvent() {
-    if (!createTitle.trim() || !createOrgId.trim()) return
-    setCreating(true)
-    setCreateError(null)
-    setCreateInfo(null)
-    try {
-      // Resolve a geocode for the address. Prefer the classified match from a chosen
-      // autocomplete suggestion; else forward-geocode the typed address on save. The
-      // server writes a location ONLY for a strong (precise-tier) match (I5).
-      let match: GeocodeMatch | null = selectedMatch
-      const fullAddress = [createAddress, createCity, createState, createZip].filter(Boolean).join(', ')
-      if (!match && createAddress.trim()) {
-        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
-      }
-      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
-
-      const { data, error } = await supabase.rpc('admin_create_event', {
-        p_org_id: createOrgId.trim(),
-        p_title: createTitle.trim(),
-        p_event_type: createEventType,
-        p_location_name: createLocationName.trim() || undefined,
-        p_address: createAddress.trim() || undefined,
-        p_city: createCity.trim() || undefined,
-        p_state: createState.trim() || undefined,
-        p_zip_code: createZip.trim() || undefined,
-        p_rrule: createRrule ?? undefined,
-        p_requires_registration: false,
-        p_lat: match?.lat,
-        p_lng: match?.lng,
-        p_geocode_accuracy: match?.accuracy,
-        p_geocode_confidence: match?.confidence,
-      })
-
-      if (error) {
-        setCreateError(error.message)
-        return
-      }
-
-      logger.info('admin.event.created', {
-        event_id: typeof data === 'string' ? data : null,
-        org_id: createOrgId,
-        rrule: createRrule,
-        event_type: createEventType,
-        geocode_accuracy: match?.accuracy ?? 'none',
-      })
-
-      // Surface the geocode outcome so the organizer knows whether the venue is mapped.
-      if (createAddress.trim()) {
-        setCreateInfo(isStrong
-          ? `Event created and located on the map (${match!.accuracy}).`
-          : 'Event created. The address did not resolve precisely, so it will show as an unknown location until edited.')
-      }
-
-      setShowCreateModal(false)
-      setCreateTitle('')
-      setCreateEventType('distribution')
-      setCreateLocationName('')
-      setCreateRrule(null)
-      setCreateAddress('')
-      setCreateCity('')
-      setCreateState('')
-      setCreateZip('')
-      setSelectedMatch(null)
-      await fetchEvents()
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  function applySuggestion(s: AddressSuggestion) {
-    setCreateAddress(s.address_line1 || s.label)
-    if (s.city) setCreateCity(s.city)
-    if (s.state) setCreateState(s.state)
-    if (s.zip) setCreateZip(s.zip)
-    setSelectedMatch(s.match)
-  }
-
-  // F5: an occurrence with check-ins can never be DELETED (the DB guard refuses); cancelling
-  // is the correct action — it preserves the attendance history and drops the occurrence from
-  // the member feed + active accounting. We expose Cancel (never Delete) so the UI can only
-  // reach the allowed path. Cancellation is always permitted, even once people have checked in.
-  async function handleCancelOccurrence(occ: { id: string; event_title: string }) {
-    if (!confirm(`Cancel this occurrence of "${occ.event_title}"? It will be removed from the schedule and members will no longer see it. Attendance already recorded is kept.`)) return
-    const { error } = await supabase
-      .from('event_occurrences')
-      .update({ status: 'cancelled' })
-      .eq('id', occ.id)
-    if (error) {
-      logger.error('admin.occurrence.cancel_failed', { occurrence_id: occ.id, error: error.message })
-      alert(error.message)
-      return
-    }
-    logger.info('admin.occurrence.cancelled', { occurrence_id: occ.id })
-    await fetchEvents()
-  }
-
-  async function openAttendance(occ: { id: string; event_title: string; starts_at: string }) {
+  async function openAttendance(occ: ScheduledDate, e: { currentTarget: unknown }) {
+    rememberOpener(e)
     setAttendance({ occurrence: occ, data: null, loading: true, error: null })
     const { data, error } = await supabase.rpc('event_attendance', { p_occurrence: occ.id })
     if (error) {
+      logger.warn('admin.event.attendance.load_failed', { code: error.code ?? null })
       setAttendance({ occurrence: occ, data: null, loading: false, error: error.message })
+    } else setAttendance({ occurrence: occ, data: (data as AttendanceView['data']) ?? null, loading: false, error: null })
+  }
+
+  function openKiosk(occ: ScheduledDate, e: { currentTarget: unknown }) {
+    rememberOpener(e)
+    setKiosk(occ)
+    logger.info('admin.event.scheduler.kiosk_opened', { occurrence_id: occ.id, event_id: occ.event_id })
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget || cancelController.inFlight) return
+    setCancelError(null)
+    setCancelling(true)
+    const target = cancelTarget
+    const outcome = await cancelController.submit(() =>
+      cancelEventOccurrence(supabase, { occurrenceId: target.id, eventId: target.event_id, orgId: target.org_id })
+    )
+    setCancelling(false)
+    if (outcome.status === 'busy') return
+    if (outcome.result.ok) {
+      // The cancelled date leaves the calendar on refresh, taking its button with it.
+      focusFallbackRef.current = true
+      setCancelTarget(null)
+      setNotice(eventFormT(locale, 'dateCancelled'))
+      refresh()
     } else {
-      setAttendance({ occurrence: occ, data: (data as AttendanceView['data']) ?? null, loading: false, error: null })
+      setCancelError({ key: outcome.result.errorKey })
     }
   }
 
-  async function handleAddOccurrence() {
-    if (!addOccurrenceEventId || !addStartsAt || !addEndsAt) return
-    setAddingOccurrence(true)
-    setAddOccurrenceError(null)
-    try {
-      const { data, error } = await supabase
-        .from('event_occurrences')
-        .insert({
-          event_id: addOccurrenceEventId,
-          starts_at: new Date(addStartsAt).toISOString(),
-          ends_at: new Date(addEndsAt).toISOString(),
-          status: 'upcoming',
-        })
-        .select('id')
-        .single()
+  const orgChoice: OrgChoice = scoped ? { kind: 'fixed', orgId: selectedOrgId } : { kind: 'pick', orgs: adminOrgs }
 
-      if (error) {
-        setAddOccurrenceError(error.message)
-        return
-      }
+  /** Ids of one calendar entry's title / day / time, so each action names the date it acts on. */
+  const entryIds = (occ: ScheduledDate, view: 'w' | 'd' | 'p') => ({
+    title: `ev-${view}-${occ.id}-title`,
+    day: `ev-${view}-${occ.id}-day`,
+    time: `ev-${view}-${occ.id}-time`,
+  })
 
-      logger.info('admin.occurrence.created', {
-        occurrence_id: data?.id,
-        event_id: addOccurrenceEventId,
-        starts_at: addStartsAt,
-      })
-
-      setAddOccurrenceEventId(null)
-      setAddStartsAt('')
-      setAddEndsAt('')
-      await fetchEvents()
-    } finally {
-      setAddingOccurrence(false)
-    }
-  }
-
-  async function handleEditEvent() {
-    if (!editEventId || !editTitle.trim()) return
-    setSavingEdit(true)
-    setEditError(null)
-    setEditInfo(null)
-    try {
-      const fullAddress = [editAddress, editCity, editState, editZip].filter(Boolean).join(', ')
-      const addressChanged = fullAddress !== editOriginalAddress
-      // Re-geocode only when the address actually changed. The server writes location ONLY
-      // from a strong (precise-tier) match (I5); a weak/failed re-geocode clears location
-      // and tags 'approximate'.
-      let match: GeocodeMatch | null = editSelectedMatch
-      if (addressChanged && !match && editAddress.trim()) {
-        match = await resolveGeoPointV6(fullAddress, process.env.NEXT_PUBLIC_MAPBOX_TOKEN)
-      }
-      const isStrong = !!match && PRECISE_GEOCODE_TIERS.has(match.accuracy)
-
-      // Explicit-clear semantics: a blanked optional text field is nulled via p_clear (a
-      // NULL argument alone would only be COALESCE'd back to the stored value). Clearing an
-      // already-empty field is a harmless no-op.
-      const clear: string[] = []
-      if (!editLocationName.trim()) clear.push('location_name')
-      if (!editAddress.trim()) clear.push('address')
-      if (!editCity.trim()) clear.push('city')
-      if (!editState.trim()) clear.push('state')
-      if (!editZip.trim()) clear.push('zip_code')
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase.rpc as any)('admin_update_event', {
-        p_event_id: editEventId,
-        p_title: editTitle.trim(),
-        p_event_type: editEventType,
-        p_location_name: editLocationName.trim() || undefined,
-        p_address: editAddress.trim() || undefined,
-        p_city: editCity.trim() || undefined,
-        p_state: editState.trim() || undefined,
-        p_zip_code: editZip.trim() || undefined,
-        p_lat: addressChanged ? match?.lat : undefined,
-        p_lng: addressChanged ? match?.lng : undefined,
-        p_geocode_accuracy: addressChanged ? match?.accuracy : undefined,
-        p_geocode_confidence: addressChanged ? match?.confidence : undefined,
-        p_regeocode: addressChanged,
-        p_clear: clear,
-      })
-
-      if (error) {
-        setEditError(error.message)
-        return
-      }
-
-      logger.info('admin.event.updated', {
-        event_id: editEventId,
-        regeocode: addressChanged,
-        geocode_accuracy: addressChanged ? (match?.accuracy ?? 'none') : 'unchanged',
-      })
-
-      if (addressChanged) {
-        setEditInfo(isStrong
-          ? `Saved and re-located on the map (${match!.accuracy}).`
-          : 'Saved. The new address did not resolve precisely, so it will show as an unknown location until edited.')
-      }
-
-      setEditEventId(null)
-      await fetchEvents()
-    } finally {
-      setSavingEdit(false)
-    }
-  }
-
-  async function handleRetireEvent() {
-    if (!editEventId) return
-    // Retire = set is_active=false. The event drops off the member feed for its NOT-YET-STARTED
-    // occurrences. D1: only not-yet-started occurrences are cancelled; an occurrence already in
-    // progress continues to its end (members there can still confirm and still see it in their
-    // Events list) and ended occurrences keep their attendance history — both stay reachable to the
-    // org admin here in the scheduler/kiosk/Attendance (G1). Reversible from the DB.
-    if (!confirm('Retire this event? Upcoming (not-yet-started) occurrences will be cancelled. Any occurrence already in progress finishes normally, and past attendance is kept.')) return
-    setSavingEdit(true)
-    setEditError(null)
-    setEditInfo(null)
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase.rpc as any)('admin_update_event', {
-        p_event_id: editEventId,
-        p_is_active: false,
-      })
-      if (error) {
-        setEditError(error.message)
-        return
-      }
-      logger.info('admin.event.retired', { event_id: editEventId })
-      setEditEventId(null)
-      await fetchEvents()
-    } finally {
-      setSavingEdit(false)
-    }
-  }
-
-  // Occurrence chip
-  function OccurrenceChip({ occ }: { occ: (typeof allOccurrences)[0] }) {
-    const colorClass = EVENT_TYPE_COLORS[occ.event_type] ?? EVENT_TYPE_COLORS.other
-    const timeStr = format(parseISO(occ.starts_at), 'h:mm a')
+  function dateActions(occ: ScheduledDate, stacked: boolean, describedBy: string) {
+    const cls = stacked ? `${SMALL_BTN} mt-1` : `${SECONDARY} min-h-9 px-3 text-xs`
     return (
-      <div className={`rounded-lg border p-1.5 text-xs mb-1 ${colorClass}`}>
-        <p className="font-medium leading-tight truncate">{occ.event_title}</p>
-        <p className="opacity-70">{timeStr}</p>
-        <button
-          type="button"
-          onClick={() => openKiosk(occ)}
-          className="mt-1 w-full text-center text-[10px] font-semibold bg-white/60 hover:bg-white/90 rounded px-1 py-0.5 transition-colors"
-        >
-          Sign-In
+      <>
+        <button type="button" aria-describedby={describedBy} onClick={(e) => openKiosk(occ, e)} className={`${cls} bg-white/70 hover:bg-white`}>
+          {eventFormT(locale, 'signIn')}
         </button>
-        <button
-          type="button"
-          onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
-          className="mt-1 w-full text-center text-[10px] font-semibold bg-white/40 hover:bg-white/80 rounded px-1 py-0.5 transition-colors"
-        >
-          Attendance
+        <button type="button" aria-describedby={describedBy} onClick={(e) => void openAttendance(occ, e)} className={`${cls} bg-white/50 hover:bg-white`}>
+          {eventFormT(locale, 'attendance')}
         </button>
         {canCancel(occ) && (
           <button
             type="button"
-            onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
-            className="mt-1 w-full text-center text-[10px] font-semibold bg-white/30 hover:bg-red-50 text-red-700 rounded px-1 py-0.5 transition-colors"
+            aria-describedby={describedBy}
+            onClick={(e) => {
+              rememberOpener(e)
+              setCancelError(null)
+              setCancelTarget(occ)
+            }}
+            className={`${cls} bg-white/40 text-red-700 hover:bg-red-50`}
           >
-            Cancel
+            {eventFormT(locale, 'cancelDate')}
           </button>
         )}
-      </div>
+      </>
     )
   }
 
-  if (loading) {
+  if (loadState === 'loading') {
     return (
-      <div className="flex items-center justify-center h-48 text-stone-400">
-        <span className="text-sm animate-pulse">Loading events…</span>
+      <div lang={locale} dir={dir(locale)} className="flex h-48 items-center justify-center text-stone-600" role="status">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        <span className="text-sm">{eventFormT(locale, 'loading')}</span>
+      </div>
+    )
+  }
+  if (loadState === 'error') {
+    return (
+      <div lang={locale} dir={dir(locale)} className="flex h-48 flex-col items-center justify-center gap-3" role="alert">
+        <p className="text-sm text-stone-800">{eventFormT(locale, 'loadError')}</p>
+        <button type="button" className={SECONDARY} onClick={refresh}>
+          {eventFormT(locale, 'retry')}
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header row */}
+    <div lang={locale} dir={dir(locale)} className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[#4a5d23]">Event Calendar</h2>
-        <Button
-          size="sm"
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-        >
-          <Plus className="h-4 w-4 mr-1" /> New Event
-        </Button>
+        <h2 className="text-lg font-bold text-[#4a5d23]">{eventFormT(locale, 'calendarTitle')}</h2>
+        <button ref={newEventRef} type="button" className={PRIMARY} onClick={(e) => openCreate(e)}>
+          <Plus className="h-4 w-4" aria-hidden="true" /> {eventFormT(locale, 'newEvent')}
+        </button>
       </div>
 
-      {/* Week navigation — visible on md+ */}
-      <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
-        {/* Nav bar */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-stone-100">
+      <p role="status" className="text-sm text-lime-800">
+        {notice}
+      </p>
+
+      {/* Week view (md+) */}
+      <div className="hidden overflow-hidden rounded-2xl border border-stone-100 bg-white shadow-sm md:block">
+        <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2">
           <button
             type="button"
             onClick={() => setCurrentWeekStart((d) => subWeeks(d, 1))}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 ${FOCUS_RING}`}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{eventFormT(locale, 'prevWeek')}</span>
           </button>
-          <span className="text-sm font-medium text-stone-700">
-            {format(currentWeekStart, 'MMM d')} – {format(addDays(currentWeekStart, 6), 'MMM d, yyyy')}
+          <span className="text-sm font-medium text-stone-800">
+            {dayLabel(currentWeekStart, locale, { month: 'short', day: 'numeric' })} –{' '}
+            {dayLabel(addDays(currentWeekStart, 6), locale, { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
           <button
             type="button"
             onClick={() => setCurrentWeekStart((d) => addWeeks(d, 1))}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 ${FOCUS_RING}`}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{eventFormT(locale, 'nextWeek')}</span>
           </button>
         </div>
-
-        {/* 8-column grid: time label + 7 days */}
-        <div className="grid grid-cols-8 divide-x divide-stone-100">
-          {/* Day headers */}
-          <div className="col-span-1" /> {/* Empty time column header */}
+        <div className="grid grid-cols-7 divide-x divide-stone-100">
           {weekDays.map((day) => (
-            <div key={day.toISOString()} className="py-2 px-2 text-center border-b border-stone-100">
-              <p className="text-xs font-medium text-stone-500">{format(day, 'EEE')}</p>
-              <p className={`text-sm font-bold mt-0.5 ${isSameDay(day, new Date()) ? 'text-lime-600' : 'text-stone-800'}`}>
+            <div key={day.toISOString()} className="border-b border-stone-100 px-2 py-2 text-center">
+              <p className="text-xs font-medium text-stone-600">{dayLabel(day, locale, { weekday: 'short' })}</p>
+              <p className={`mt-0.5 text-sm font-bold ${isSameDay(day, new Date()) ? 'text-lime-700' : 'text-stone-800'}`}>
                 {format(day, 'd')}
               </p>
             </div>
           ))}
-
-          {/* Time-range rows (simplified: one row per day, all-day style) */}
-          <div className="col-span-1 py-2 px-2 text-xs text-stone-400 text-right">All</div>
           {weekDays.map((day) => {
-            const occs = getOccurrencesForDay(day)
+            const dayKey = format(day, 'yyyy-MM-dd')
             return (
-              <div key={day.toISOString()} className="min-h-[100px] p-1 align-top">
-                {occs.map((occ) => (
-                  <OccurrenceChip key={occ.id} occ={occ} />
-                ))}
-                {/* Add occurrence quick button */}
+              <div key={dayKey} className="min-h-[100px] p-1">
+                {datesOn(day).map((occ) => {
+                  const when = formatEventWhen(occ.starts_at, occ.ends_at, occ.time_zone, locale, { timeOnly: true })
+                  const ids = entryIds(occ, 'w')
+                  return (
+                    <div key={occ.id} className={`mb-1 rounded-lg border border-stone-200 p-1.5 text-xs ${eventTypeColor(occ.event_type)}`}>
+                      <p id={ids.title} className="truncate font-medium leading-tight">{occ.event_title}</p>
+                      <span id={ids.day} className="sr-only">
+                        {dayLabel(day, locale, { weekday: 'long', month: 'long', day: 'numeric' })}
+                      </span>
+                      <p id={ids.time}>
+                        {when.text}
+                        {when.venue && <span className="block text-[11px]">{when.venue}</span>}
+                      </p>
+                      {dateActions(occ, true, `${ids.title} ${ids.day} ${ids.time}`)}
+                    </div>
+                  )
+                })}
                 <button
                   type="button"
-                  title="Add occurrence"
-                  onClick={() => {
-                    const dateStr = format(day, "yyyy-MM-dd'T'09:00")
-                    setAddStartsAt(dateStr)
-                    setAddEndsAt(format(day, "yyyy-MM-dd'T'11:00"))
-                    if (events.length > 0) {
-                      setAddOccurrenceEventId(events[0].id)
-                    }
-                  }}
-                  className="w-full text-center text-xs text-stone-300 hover:text-lime-600 hover:bg-lime-50 rounded py-1 transition-colors"
+                  onClick={(e) => openCreate(e, dayKey)}
+                  className={`${SMALL_BTN} text-stone-500 hover:bg-lime-50 hover:text-lime-800`}
                 >
-                  +
+                  <Plus className="h-3 w-3" aria-hidden="true" />
+                  <span className="sr-only">
+                    {formatMessage(eventFormT(locale, 'newEventOnDay'), { day: dayLabel(day, locale, { weekday: 'long', month: 'long', day: 'numeric' }) })}
+                  </span>
                 </button>
               </div>
             )
@@ -630,69 +392,54 @@ export function EventScheduler({ selectedOrgId }: Props) {
         </div>
       </div>
 
-      {/* Day view — visible on mobile (<md) */}
-      <div className="block md:hidden bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100">
+      {/* Day view (<md) */}
+      <div className="block overflow-hidden rounded-2xl border border-stone-100 bg-white shadow-sm md:hidden">
+        <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
           <button
             type="button"
             onClick={() => setSelectedDay((d) => addDays(d, -1))}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 ${FOCUS_RING}`}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{eventFormT(locale, 'prevDay')}</span>
           </button>
           <div className="text-center">
-            <p className="text-xs text-stone-500">{format(selectedDay, 'EEEE')}</p>
-            <p className={`text-lg font-bold ${isSameDay(selectedDay, new Date()) ? 'text-lime-600' : 'text-stone-800'}`}>
-              {format(selectedDay, 'MMM d, yyyy')}
+            <p className="text-xs text-stone-600">{dayLabel(selectedDay, locale, { weekday: 'long' })}</p>
+            <p className={`text-lg font-bold ${isSameDay(selectedDay, new Date()) ? 'text-lime-700' : 'text-stone-800'}`}>
+              {dayLabel(selectedDay, locale, { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setSelectedDay((d) => addDays(d, 1))}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 ${FOCUS_RING}`}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{eventFormT(locale, 'nextDay')}</span>
           </button>
         </div>
-        <div className="p-4 min-h-[120px] space-y-2">
-          {getOccurrencesForDay(selectedDay).length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-6">No events today</p>
+        <div className="min-h-[120px] space-y-2 p-4">
+          {datesOn(selectedDay).length === 0 ? (
+            <p className="py-6 text-center text-sm text-stone-600">{eventFormT(locale, 'noEventsDay')}</p>
           ) : (
-            getOccurrencesForDay(selectedDay).map((occ) => {
-              const colorClass = EVENT_TYPE_COLORS[occ.event_type] ?? EVENT_TYPE_COLORS.other
+            datesOn(selectedDay).map((occ) => {
+              const when = formatEventWhen(occ.starts_at, occ.ends_at, occ.time_zone, locale, { timeOnly: true })
+              const ids = entryIds(occ, 'd')
               return (
-                <div key={occ.id} className={`rounded-xl border p-3 ${colorClass}`}>
+                <div key={occ.id} className={`rounded-xl border border-stone-200 p-3 ${eventTypeColor(occ.event_type)}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold">{occ.event_title}</p>
-                      <p className="text-xs opacity-70">
-                        {format(parseISO(occ.starts_at), 'h:mm a')} – {format(parseISO(occ.ends_at), 'h:mm a')}
+                      <p id={ids.title} className="font-semibold">{occ.event_title}</p>
+                      <span id={ids.day} className="sr-only">
+                        {dayLabel(selectedDay, locale, { weekday: 'long', month: 'long', day: 'numeric' })}
+                      </span>
+                      <p id={ids.time} className="text-xs">
+                        {when.text}
+                        {when.venue && <span className="block">{when.venue}</span>}
                       </p>
                     </div>
-                    <div className="shrink-0 flex flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => openKiosk(occ)}
-                        className="rounded-lg bg-white/60 hover:bg-white/90 px-3 py-1.5 text-xs font-semibold transition-colors"
-                      >
-                        Sign-In
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
-                        className="rounded-lg bg-white/40 hover:bg-white/80 px-3 py-1.5 text-xs font-semibold transition-colors"
-                      >
-                        Attendance
-                      </button>
-                      {canCancel(occ) && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelOccurrence({ id: occ.id, event_title: occ.event_title })}
-                          className="rounded-lg bg-white/30 hover:bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      )}
+                    <div className="flex shrink-0 flex-col gap-1">
+                      {dateActions(occ, false, `${ids.title} ${ids.day} ${ids.time}`)}
                     </div>
                   </div>
                 </div>
@@ -702,447 +449,310 @@ export function EventScheduler({ selectedOrgId }: Props) {
         </div>
       </div>
 
-      {/* Events list with add-occurrence shortcut */}
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-4">
-        <h3 className="text-sm font-semibold text-stone-700 mb-3">All Events ({events.length})</h3>
+      {/* Events list */}
+      <div className="rounded-2xl border border-stone-100 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-stone-800">
+          {formatMessage(eventFormT(locale, 'allEvents'), { count: events.length })}
+        </h3>
         {events.length === 0 ? (
-          <p className="text-sm text-stone-400">No events yet. Create one above.</p>
+          <p className="text-sm text-stone-600">{eventFormT(locale, 'noEvents')}</p>
         ) : (
-          <div className="divide-y divide-stone-50">
-            {events.map((event) => (
-              <div key={event.id} className="py-2 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-stone-800">{event.title}</p>
-                  <p className="text-xs text-stone-400">{event.event_type} · {event.org?.name ?? ''}</p>
-                </div>
-                <div className="shrink-0 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => openEditEvent(event)}
-                    className="text-xs text-stone-500 hover:text-[#4a5d23] hover:underline font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddOccurrenceEventId(event.id)
-                      const today = format(new Date(), "yyyy-MM-dd'T'09:00")
-                      const todayEnd = format(new Date(), "yyyy-MM-dd'T'11:00")
-                      setAddStartsAt(today)
-                      setAddEndsAt(todayEnd)
-                    }}
-                    className="text-xs text-[#4a5d23] hover:underline font-medium"
-                  >
-                    + Occurrence
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-stone-100">
+            {events.map((event) => {
+              const next = [...(event.occurrences ?? [])]
+                .filter((o) => o.status !== 'cancelled' && !isEnded(o))
+                .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0]
+              const when = next ? formatEventWhen(next.starts_at, next.ends_at, event.time_zone, locale) : null
+              return (
+                <li key={event.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-stone-900">
+                      {event.title}
+                      {!event.is_active && (
+                        <span className="ml-2 rounded-full bg-stone-200 px-2 py-0.5 text-xs font-semibold text-stone-700">
+                          {eventFormT(locale, 'statusRetired')}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-stone-600">
+                      {eventTypeLabel(event.event_type, locale)}
+                      {!scoped && event.org?.name ? ` · ${event.org.name}` : ''}
+                      {when ? ` · ${when.text}` : ''}
+                    </p>
+                    {when?.venue && <p className="text-xs text-stone-600">{when.venue}</p>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className={LINK_BTN}
+                      aria-label={formatMessage(eventFormT(locale, 'editAria'), { title: event.title })}
+                      onClick={(e) => {
+                        rememberOpener(e)
+                        setEditTarget({
+                          key: ++dialogSeq.current,
+                          id: event.id,
+                          org_id: event.org_id,
+                          title: event.title,
+                          event_type: event.event_type,
+                          description: event.description,
+                          location_name: event.location_name,
+                          time_zone: event.time_zone,
+                          is_active: event.is_active,
+                        })
+                      }}
+                    >
+                      {eventFormT(locale, 'edit')}
+                    </button>
+                    {event.is_active && (
+                      <button
+                        type="button"
+                        className={LINK_BTN}
+                        aria-label={formatMessage(eventFormT(locale, 'addDatesAria'), { title: event.title })}
+                        onClick={(e) => {
+                          rememberOpener(e)
+                          setDatesTarget({
+                            key: ++dialogSeq.current,
+                            id: event.id,
+                            title: event.title,
+                            org_id: event.org_id,
+                            time_zone: event.time_zone,
+                          })
+                        }}
+                      >
+                        {eventFormT(locale, 'addDates')}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </div>
 
-      {/* K5b: Past & cancelled occurrences — Attendance stays reachable (history is permanent, D2). */}
       {pastAndCancelled.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-4">
-          <h3 className="text-sm font-semibold text-stone-700 mb-3">Past &amp; cancelled ({pastAndCancelled.length})</h3>
-          <div className="divide-y divide-stone-50">
-            {pastAndCancelled.map((occ) => (
-              <div key={occ.id} className="py-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-stone-800 truncate">{occ.event_title}</p>
-                  <p className="text-xs text-stone-400">
-                    {format(parseISO(occ.starts_at), 'MMM d, yyyy · h:mm a')}
-                    {' · '}
-                    <span className={occ.status === 'cancelled' ? 'text-red-600' : 'text-stone-500'}>
-                      {occ.status === 'cancelled' ? 'Cancelled' : 'Ended'}
-                    </span>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openAttendance({ id: occ.id, event_title: occ.event_title, starts_at: occ.starts_at })}
-                  className="shrink-0 text-xs font-semibold text-[#4a5d23] hover:underline"
-                >
-                  Attendance
-                </button>
-              </div>
-            ))}
-          </div>
+        <div className="rounded-2xl border border-stone-100 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-stone-800">
+            {formatMessage(eventFormT(locale, 'pastCancelled'), { count: pastAndCancelled.length })}
+          </h3>
+          <ul className="divide-y divide-stone-100">
+            {pastAndCancelled.map((occ) => {
+              const when = formatEventWhen(occ.starts_at, occ.ends_at, occ.time_zone, locale)
+              const ids = entryIds(occ, 'p')
+              return (
+                <li key={occ.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p id={ids.title} className="truncate text-sm font-medium text-stone-900">
+                      {occ.event_title}
+                    </p>
+                    <p id={ids.time} className="text-xs text-stone-600">
+                      {when.text} ·{' '}
+                      <span className={occ.status === 'cancelled' ? 'text-red-700' : 'text-stone-700'}>
+                        {eventFormT(locale, occ.status === 'cancelled' ? 'statusCancelled' : 'statusEnded')}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-describedby={`${ids.title} ${ids.time}`}
+                    onClick={(e) => void openAttendance(occ, e)}
+                    className={LINK_BTN}
+                  >
+                    {eventFormT(locale, 'attendance')}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
 
-      {/* Create Event Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <h3 className="font-bold text-stone-800">Create Event</h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Title</Label>
-                <Input
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
-                  placeholder="Event title"
-                  className="text-stone-900 placeholder:text-stone-400"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Event type</Label>
-                <Select value={createEventType} onValueChange={setCreateEventType}>
-                  <SelectTrigger className="text-stone-900">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="distribution">Distribution</SelectItem>
-                    <SelectItem value="meal">Meal</SelectItem>
-                    <SelectItem value="pantry">Pantry</SelectItem>
-                    <SelectItem value="clinic">Clinic</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Location name</Label>
-                <Input
-                  value={createLocationName}
-                  onChange={(e) => setCreateLocationName(e.target.value)}
-                  placeholder="Community Center, Church Hall…"
-                  className="text-stone-900 placeholder:text-stone-400"
-                />
-              </div>
-
-              {/* Address — autocompleted + geocoded on save (strong-match-only) */}
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Address</Label>
-                <AddressAutocomplete
-                  value={createAddress}
-                  onChange={(v) => { setCreateAddress(v); setSelectedMatch(null) }}
-                  onSelect={applySuggestion}
-                />
-              </div>
-              <div className="grid grid-cols-6 gap-2">
-                <div className="col-span-3 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">City</Label>
-                  <Input value={createCity} onChange={(e) => setCreateCity(e.target.value)} className="text-stone-900" />
-                </div>
-                <div className="col-span-1 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">State</Label>
-                  <Input value={createState} onChange={(e) => setCreateState(e.target.value)} className="text-stone-900" maxLength={2} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">ZIP</Label>
-                  <Input value={createZip} onChange={(e) => setCreateZip(e.target.value)} className="text-stone-900" />
-                </div>
-              </div>
-
-              {selectedOrgId === 'all' && (
-                <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-sm">Organization</Label>
-                  <Select value={createOrgId} onValueChange={setCreateOrgId}>
-                    <SelectTrigger className="text-stone-900">
-                      <SelectValue placeholder="Select an organization you manage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {adminOrgs.map((o) => (
-                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Recurrence</Label>
-                <RecurrencePicker value={createRrule} onChange={setCreateRrule} />
-              </div>
-
-              {createError && <p className="text-red-600 text-sm">{createError}</p>}
-              {createInfo && <p className="text-lime-700 text-sm">{createInfo}</p>}
-
-              <Button
-                onClick={handleCreateEvent}
-                disabled={creating || !createTitle.trim() || !createOrgId.trim()}
-                className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-              >
-                {creating ? 'Creating…' : 'Create Event'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Occurrence Modal */}
-      {addOccurrenceEventId && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <h3 className="font-bold text-stone-800">Add Occurrence</h3>
-              <button
-                type="button"
-                onClick={() => setAddOccurrenceEventId(null)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {events.length > 1 && (
-              <div className="px-5 pt-4">
-                <Label className="text-stone-700 text-sm">Event</Label>
-                <Select
-                  value={addOccurrenceEventId}
-                  onValueChange={setAddOccurrenceEventId}
-                >
-                  <SelectTrigger className="text-stone-900 mt-1.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {events.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-sm">Starts at</Label>
-                  <input
-                    type="datetime-local"
-                    value={addStartsAt}
-                    onChange={(e) => setAddStartsAt(e.target.value)}
-                    className="w-full rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-900 bg-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-sm">Ends at</Label>
-                  <input
-                    type="datetime-local"
-                    value={addEndsAt}
-                    onChange={(e) => setAddEndsAt(e.target.value)}
-                    className="w-full rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-900 bg-white"
-                  />
-                </div>
-              </div>
-
-              {addOccurrenceError && <p className="text-red-600 text-sm">{addOccurrenceError}</p>}
-
-              <Button
-                onClick={handleAddOccurrence}
-                disabled={addingOccurrence || !addStartsAt || !addEndsAt}
-                className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-              >
-                {addingOccurrence ? 'Adding…' : 'Add Occurrence'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Event Modal — wires admin_update_event (re-geocodes on address change) */}
-      {editEventId && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 sticky top-0 bg-white">
-              <h3 className="font-bold text-stone-800">Edit Event</h3>
-              <button
-                type="button"
-                onClick={() => setEditEventId(null)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Title</Label>
-                <Input
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Event title"
-                  className="text-stone-900 placeholder:text-stone-400"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Event type</Label>
-                <Select value={editEventType} onValueChange={setEditEventType}>
-                  <SelectTrigger className="text-stone-900">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="distribution">Distribution</SelectItem>
-                    <SelectItem value="meal">Meal</SelectItem>
-                    <SelectItem value="pantry">Pantry</SelectItem>
-                    <SelectItem value="clinic">Clinic</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Location name</Label>
-                <Input
-                  value={editLocationName}
-                  onChange={(e) => setEditLocationName(e.target.value)}
-                  placeholder="Community Center, Church Hall…"
-                  className="text-stone-900 placeholder:text-stone-400"
-                />
-              </div>
-
-              {/* Address — editing it re-geocodes on save (strong-match-only) */}
-              <div className="space-y-1.5">
-                <Label className="text-stone-700 text-sm">Address</Label>
-                <AddressAutocomplete
-                  value={editAddress}
-                  onChange={(v) => { setEditAddress(v); setEditSelectedMatch(null) }}
-                  onSelect={(s) => {
-                    setEditAddress(s.address_line1 || s.label)
-                    if (s.city) setEditCity(s.city)
-                    if (s.state) setEditState(s.state)
-                    if (s.zip) setEditZip(s.zip)
-                    setEditSelectedMatch(s.match)
-                  }}
-                />
-              </div>
-              <div className="grid grid-cols-6 gap-2">
-                <div className="col-span-3 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">City</Label>
-                  <Input value={editCity} onChange={(e) => { setEditCity(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
-                </div>
-                <div className="col-span-1 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">State</Label>
-                  <Input value={editState} onChange={(e) => { setEditState(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" maxLength={2} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label className="text-stone-700 text-sm">ZIP</Label>
-                  <Input value={editZip} onChange={(e) => { setEditZip(e.target.value); setEditSelectedMatch(null) }} className="text-stone-900" />
-                </div>
-              </div>
-
-              {editError && <p className="text-red-600 text-sm">{editError}</p>}
-              {editInfo && <p className="text-lime-700 text-sm">{editInfo}</p>}
-
-              <Button
-                onClick={handleEditEvent}
-                disabled={savingEdit || !editTitle.trim()}
-                className="w-full bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
-              >
-                {savingEdit ? 'Saving…' : 'Save changes'}
-              </Button>
-              {/* G1: a retired event stays reachable here for its in-progress/ended occurrences,
-                  but Retire is a dead action on it — offer it only while the event is active. */}
-              {editIsActive && (
-                <button
-                  type="button"
-                  onClick={handleRetireEvent}
-                  disabled={savingEdit}
-                  className="w-full text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 py-1"
-                >
-                  Retire event
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Organizer kiosk */}
-      {kioskTarget && (
-        <OrganizerCheckinDisplay
-          occurrence={kioskTarget.occurrence}
-          open={kioskOpen}
+      {createState && (
+        <EventCreateDialog
+          key={createState.key}
+          open
           onOpenChange={(open) => {
-            setKioskOpen(open)
-            if (!open) setKioskTarget(null)
+            if (!open) setCreateState(null)
+          }}
+          locale={locale}
+          orgChoice={orgChoice}
+          initialDate={createState.date}
+          onCloseAutoFocus={restoreFocus}
+          onCreated={(_id, title) => {
+            setNotice(formatMessage(eventFormT(locale, 'createdNotice'), { title }))
+            refresh()
           }}
         />
       )}
 
-      {/* Attendance view (per occurrence) */}
+      {datesTarget && (
+        <EventDatesDialog
+          key={datesTarget.key}
+          open
+          onOpenChange={(open) => {
+            if (!open) setDatesTarget(null)
+          }}
+          locale={locale}
+          event={datesTarget}
+          onCloseAutoFocus={restoreFocus}
+          initialDate={format(new Date(), 'yyyy-MM-dd')}
+          onAdded={(changed) => {
+            setNotice(
+              changed > 0
+                ? formatMessage(eventFormT(locale, 'datesAdded'), { count: changed })
+                : eventFormT(locale, 'datesNoneAdded')
+            )
+            refresh()
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <EventEditDialog
+          key={editTarget.key}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditTarget(null)
+          }}
+          locale={locale}
+          event={editTarget}
+          onCloseAutoFocus={restoreFocus}
+          onSaved={(action) => {
+            setNotice(eventFormT(locale, action === 'retire' ? 'retiredNotice' : 'savedNotice'))
+            refresh()
+          }}
+        />
+      )}
+
+      <AlertDialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancelling) setCancelTarget(null)
+        }}
+      >
+        <AlertDialogContent lang={locale} dir={dir(locale)} onCloseAutoFocus={restoreFocus}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{eventFormT(locale, 'cancelConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cancelTarget &&
+                formatMessage(eventFormT(locale, 'cancelConfirmBody'), {
+                  title: cancelTarget.event_title,
+                  when: formatEventWhen(cancelTarget.starts_at, cancelTarget.ends_at, cancelTarget.time_zone, locale).text,
+                })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {cancelError && (
+            <p role="alert" className="text-sm text-red-700">
+              {errorText(locale, cancelError)}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <button type="button" className={SECONDARY} onClick={() => setCancelTarget(null)} disabled={cancelling}>
+              {eventFormT(locale, 'keepDate')}
+            </button>
+            <button type="button" className={DANGER} aria-disabled={cancelling || undefined} onClick={() => void confirmCancel()}>
+              {cancelling && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {eventFormT(locale, 'cancelDate')}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {kiosk && (
+        <OrganizerCheckinDisplay
+          occurrence={{
+            id: kiosk.id,
+            starts_at: kiosk.starts_at,
+            ends_at: kiosk.ends_at,
+            event_title: kiosk.event_title,
+            org_name: kiosk.org_name,
+            time_zone: kiosk.time_zone,
+          }}
+          locale={locale}
+          open
+          onCloseAutoFocus={restoreFocus}
+          onOpenChange={(open) => {
+            if (!open) setKiosk(null)
+          }}
+        />
+      )}
+
+      {/* Attendance for one date */}
       {attendance && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setAttendance(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-              <div>
-                <h3 className="font-bold text-stone-800">Attendance</h3>
-                <p className="text-xs text-stone-400">{attendance.occurrence.event_title} · {format(parseISO(attendance.occurrence.starts_at), 'MMM d, h:mm a')}</p>
-              </div>
-              <button type="button" onClick={() => setAttendance(null)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto">
-              {attendance.loading ? (
-                <p className="text-sm text-stone-400">Loading attendance…</p>
-              ) : attendance.error ? (
-                <p className="text-sm text-red-600">{attendance.error}</p>
-              ) : !attendance.data ? (
-                <p className="text-sm text-stone-500">You do not have access to this event&rsquo;s attendance.</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-4 gap-2 mb-4">
-                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
-                      <p className="text-lg font-bold text-stone-800">{attendance.data.confirmed}</p>
-                      <p className="text-[10px] text-stone-500 uppercase">Confirmed</p>
-                    </div>
-                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
-                      <p className="text-lg font-bold text-stone-800">{attendance.data.early}</p>
-                      <p className="text-[10px] text-stone-500 uppercase">Early</p>
-                    </div>
-                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
-                      <p className="text-lg font-bold text-stone-800">{attendance.data.no_show}</p>
-                      <p className="text-[10px] text-stone-500 uppercase">No-show</p>
-                    </div>
-                    <div className="rounded-lg bg-stone-50 border border-stone-100 p-2 text-center">
-                      <p className="text-lg font-bold text-[#4a5d23]">{formatRatePct(attendance.data.show_rate)}</p>
-                      <p className="text-[10px] text-stone-500 uppercase">Show rate</p>
-                    </div>
+        <EventDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setAttendance(null)
+          }}
+          title={eventFormT(locale, 'attendance')}
+          locale={locale}
+          onCloseAutoFocus={restoreFocus}
+        >
+          <p className="mb-4 text-sm text-stone-700">
+            {attendance.occurrence.event_title} ·{' '}
+            {formatEventWhen(attendance.occurrence.starts_at, attendance.occurrence.ends_at, attendance.occurrence.time_zone, locale).text}
+          </p>
+          {attendance.loading ? (
+            <p role="status" className="text-sm text-stone-700">
+              {eventFormT(locale, 'attLoading')}
+            </p>
+          ) : attendance.error ? (
+            <p role="alert" className="text-sm text-red-700">
+              {eventFormT(locale, 'attLoadError')}
+            </p>
+          ) : !attendance.data ? (
+            <p className="text-sm text-stone-700">{eventFormT(locale, 'attNoAccess')}</p>
+          ) : (
+            <>
+              <dl className="mb-4 grid grid-cols-4 gap-2">
+                {(
+                  [
+                    ['attConfirmed', String(attendance.data.confirmed)],
+                    ['attEarly', String(attendance.data.early)],
+                    ['attNoShow', String(attendance.data.no_show)],
+                    ['attShowRate', formatRatePct(attendance.data.show_rate)],
+                  ] as const
+                ).map(([key, value]) => (
+                  <div key={key} className="flex flex-col-reverse rounded-lg border border-stone-100 bg-stone-50 p-2 text-center">
+                    <dt className="text-[11px] uppercase text-stone-700">{eventFormT(locale, key)}</dt>
+                    <dd className="text-lg font-bold text-stone-900">{value}</dd>
                   </div>
-                  <p className="text-xs text-stone-400 mb-2">
-                    {attendance.data.people_confirmed} people confirmed · {attendance.data.anonymous_confirmed} anonymous
-                    {attendance.data.ended ? '' : ' · in progress'}
-                  </p>
-                  {attendance.data.attendees.length === 0 ? (
-                    <p className="text-sm text-stone-400">No identified check-ins yet.</p>
-                  ) : (
-                    <div className="divide-y divide-stone-50">
-                      {attendance.data.attendees.map((att) => (
-                        <div key={att.user_id} className="py-2 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-stone-800 truncate">{att.name}</p>
-                            <p className="text-xs text-stone-400">Household {att.household_size}</p>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${att.status === 'confirmed' ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-500'}`}>
-                              {att.status === 'confirmed' ? 'Attended' : 'Early'}
-                            </span>
-                            <span className="text-xs text-stone-500 w-10 text-right">{formatRatePct(att.attendance_rate)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
+                ))}
+              </dl>
+              <p className="mb-2 text-xs text-stone-700">
+                {formatMessage(eventFormT(locale, 'attSummary'), {
+                  people: attendance.data.people_confirmed,
+                  anonymous: attendance.data.anonymous_confirmed,
+                })}
+                {attendance.data.ended ? '' : ` · ${eventFormT(locale, 'attInProgress')}`}
+              </p>
+              {attendance.data.attendees.length === 0 ? (
+                <p className="text-sm text-stone-700">{eventFormT(locale, 'attNone')}</p>
+              ) : (
+                <ul className="divide-y divide-stone-100">
+                  {attendance.data.attendees.map((att) => (
+                    <li key={att.user_id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-stone-900">{att.name}</p>
+                        <p className="text-xs text-stone-700">
+                          {formatMessage(eventFormT(locale, 'attHousehold'), { n: att.household_size })}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${att.status === 'confirmed' ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-700'}`}
+                        >
+                          {eventFormT(locale, att.status === 'confirmed' ? 'attAttended' : 'attEarly')}
+                        </span>
+                        <span className="w-10 text-right text-xs text-stone-700">{formatRatePct(att.attendance_rate)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        </EventDialog>
       )}
     </div>
   )

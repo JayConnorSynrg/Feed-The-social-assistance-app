@@ -78,7 +78,8 @@ function asSaveResult(data: unknown, fallbackId: string): OrgSaveResult {
 export function mapSaveError(error: { code?: string | null; message?: string | null }): keyof OrgFormMessages {
   const code = sqlstateOf(error)
   const message = (error.message ?? '').toLowerCase()
-  if (code === '42501') return 'saveErrDenied'
+  // 42501 org_save_denied: not allowed to save this organization (or to change its type).
+  if (code === '42501' || message.includes('org_save_denied')) return 'saveErrDenied'
   if (code === '22023' || message.includes('org_save_invalid')) {
     if (message.includes('photo') || message.includes('logo')) return 'saveErrPhotos'
     if (message.includes('resource')) return 'saveErrResources'

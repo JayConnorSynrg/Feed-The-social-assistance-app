@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { HOUSEHOLD_MIN, HOUSEHOLD_MAX } from '@/lib/event-checkin'
+import { formatEventWhen } from '@/lib/event-time'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import {
   Sheet,
   SheetContent,
@@ -20,6 +22,8 @@ export interface CheckinOccurrence {
   event: {
     title: string
     location_name: string | null
+    /** The venue's IANA zone (assistance_events.time_zone). */
+    time_zone: string | null
     organization: { name: string } | null
   } | null
 }
@@ -39,17 +43,10 @@ interface CheckinSheetProps {
   onSuccess?: () => void
 }
 
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-}
-
 export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence, hasTrackedRow = false, onSuccess }: CheckinSheetProps) {
   const supabase = createClient()
   const { isAnonymous } = useAuth()
+  const locale = useProfileLocale()
 
   const [householdSize, setHouseholdSize] = useState(1)
   // Default to a TRACKED check-in (R7): anonymous is opt-in and does not count toward
@@ -127,9 +124,15 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
               {ev.location_name && (
                 <p className="text-xs text-stone-500">{ev.location_name}</p>
               )}
-              <p className="text-xs text-stone-400">
-                {formatDate(occurrence.starts_at)} · {formatTime(occurrence.starts_at)}–{formatTime(occurrence.ends_at)}
-              </p>
+              {(() => {
+                const when = formatEventWhen(occurrence.starts_at, occurrence.ends_at, ev.time_zone, locale)
+                return (
+                  <p className="text-xs text-stone-500">
+                    {when.text}
+                    {when.venue && <span className="block">{when.venue}</span>}
+                  </p>
+                )
+              })()}
             </div>
           )}
         </SheetHeader>

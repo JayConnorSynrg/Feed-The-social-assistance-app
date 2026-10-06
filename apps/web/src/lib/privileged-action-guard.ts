@@ -22,6 +22,10 @@ export const AUDITED_PRIVILEGED = [
   'set_resource_location_by_id',
   'admin_save_organization',
   'admin_set_org_active',
+  'create_org_event',
+  'add_event_dates',
+  'cancel_event_occurrence',
+  'admin_update_event',
 ]
 
 const QUOTE = "[`'\"]"

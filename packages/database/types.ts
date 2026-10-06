@@ -302,13 +302,14 @@ export type Database = {
           geocode_accuracy: string | null
           geocode_confidence: string | null
           id: string
+          idempotency_key: string | null
           is_active: boolean
           location: unknown
           location_name: string | null
           org_id: string
           requires_registration: boolean
-          rrule: string | null
           state: string | null
+          time_zone: string
           title: string
           updated_at: string
           zip_code: string | null
@@ -324,13 +325,14 @@ export type Database = {
           geocode_accuracy?: string | null
           geocode_confidence?: string | null
           id?: string
+          idempotency_key?: string | null
           is_active?: boolean
           location?: unknown
           location_name?: string | null
           org_id: string
           requires_registration?: boolean
-          rrule?: string | null
           state?: string | null
+          time_zone: string
           title: string
           updated_at?: string
           zip_code?: string | null
@@ -346,13 +348,14 @@ export type Database = {
           geocode_accuracy?: string | null
           geocode_confidence?: string | null
           id?: string
+          idempotency_key?: string | null
           is_active?: boolean
           location?: unknown
           location_name?: string | null
           org_id?: string
           requires_registration?: boolean
-          rrule?: string | null
           state?: string | null
+          time_zone?: string
           title?: string
           updated_at?: string
           zip_code?: string | null
@@ -883,7 +886,6 @@ export type Database = {
           event_id: string
           id: string
           notes: string | null
-          rrule_dtstart: string | null
           starts_at: string
           status: string
           updated_at: string
@@ -895,7 +897,6 @@ export type Database = {
           event_id: string
           id?: string
           notes?: string | null
-          rrule_dtstart?: string | null
           starts_at: string
           status?: string
           updated_at?: string
@@ -907,7 +908,6 @@ export type Database = {
           event_id?: string
           id?: string
           notes?: string | null
-          rrule_dtstart?: string | null
           starts_at?: string
           status?: string
           updated_at?: string
@@ -2478,6 +2478,7 @@ export type Database = {
         Row: {
           comment_weight: number
           distance_decay_km: number
+          event_half_life_hours: number
           half_life_hours: number
           singleton_guard: boolean
           updated_at: string
@@ -2485,6 +2486,7 @@ export type Database = {
         Insert: {
           comment_weight?: number
           distance_decay_km?: number
+          event_half_life_hours?: number
           half_life_hours?: number
           singleton_guard?: boolean
           updated_at?: string
@@ -2492,6 +2494,7 @@ export type Database = {
         Update: {
           comment_weight?: number
           distance_decay_km?: number
+          event_half_life_hours?: number
           half_life_hours?: number
           singleton_guard?: boolean
           updated_at?: string
@@ -3776,6 +3779,14 @@ export type Database = {
       }
       _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       addauth: { Args: { "": string }; Returns: boolean }
+      add_event_dates: {
+        Args: {
+          p_ends_local: string[]
+          p_event_id: string
+          p_starts_local: string[]
+        }
+        Returns: number
+      }
       addgeometrycolumn:
         | {
             Args: {
@@ -3818,27 +3829,6 @@ export type Database = {
         Returns: string
       }
       admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
-      admin_create_event: {
-        Args: {
-          p_address?: string
-          p_city?: string
-          p_default_capacity?: number
-          p_description?: string
-          p_event_type?: string
-          p_geocode_accuracy?: string
-          p_geocode_confidence?: string
-          p_lat?: number
-          p_lng?: number
-          p_location_name?: string
-          p_org_id: string
-          p_requires_registration?: boolean
-          p_rrule?: string
-          p_state?: string
-          p_title: string
-          p_zip_code?: string
-        }
-        Returns: string
-      }
       admin_delete_user_note: {
         Args: { p_note_id: string }
         Returns: undefined
@@ -3992,15 +3982,12 @@ export type Database = {
           p_description?: string
           p_event_id: string
           p_event_type?: string
-          p_geocode_accuracy?: string
-          p_geocode_confidence?: string
           p_is_active?: boolean
           p_lat?: number
           p_lng?: number
           p_location_name?: string
-          p_regeocode?: boolean
+          p_location_source?: string
           p_requires_registration?: boolean
-          p_rrule?: string
           p_state?: string
           p_title?: string
           p_zip_code?: string
@@ -4143,7 +4130,12 @@ export type Database = {
         }
         Returns: number
       }
+      can_admin_org: { Args: { p_org_id: string }; Returns: boolean }
       can_manage_org_photos: { Args: { p_folder: string }; Returns: boolean }
+      cancel_event_occurrence: {
+        Args: { p_occurrence_id: string }
+        Returns: undefined
+      }
       capture_app_query_stats_weekly: { Args: never; Returns: number }
       category_label: {
         Args: { p_category: Database["public"]["Enums"]["resource_category"] }
@@ -4170,6 +4162,29 @@ export type Database = {
           suppressed: boolean
           total_visits: number
         }[]
+      }
+      create_org_event: {
+        Args: {
+          p_address?: string
+          p_city?: string
+          p_default_capacity?: number
+          p_description?: string
+          p_ends_local: string
+          p_event_type?: string
+          p_idempotency_key: string
+          p_lat?: number
+          p_lng?: number
+          p_location_name?: string
+          p_location_source: string
+          p_org_id: string
+          p_requires_registration?: boolean
+          p_starts_local: string
+          p_state?: string
+          p_time_zone: string
+          p_title: string
+          p_zip_code?: string
+        }
+        Returns: string
       }
       credit_post_created: {
         Args: { p_engager: string; p_post_id: string }

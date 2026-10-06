@@ -37,6 +37,7 @@ import { useMyBadges } from '@/hooks/use-my-badges'
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
+import { adminEntryHref } from '@/lib/org-admin-paths'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { normalizeState } from '@/lib/us-states'
@@ -801,7 +802,7 @@ function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
       ? 'Review reports and safety alerts, and manage the resource review queue.'
       : tier === 'community_moderator'
       ? 'Review reports and moderate posts and safety alerts.'
-      : 'Schedule your organization’s events and run the check-in kiosk.'
+      : 'Manage your organization’s events, public profile and members.'
   return (
     <SettingsSection
       title="Administration"
@@ -823,7 +824,7 @@ function AdminSection({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
           </div>
         </div>
         <Link
-          href="/moderation"
+          href={adminEntryHref(tier)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4d1c] transition-colors"
         >
           <ShieldAlert className="w-4 h-4" />

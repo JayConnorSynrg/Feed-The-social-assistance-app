@@ -179,6 +179,13 @@ describe('edit-mode prefill', () => {
     expect(orgFormSchema.safeParse(values).success).toBe(true)
     expect('location' in buildSavePayload(values, new Map(), true)).toBe(false)
   })
+
+  it('an untouched edit (type read-only for an org admin) saves the stored org_type unchanged', () => {
+    for (const org_type of ['pantry', 'government'] as const) {
+      const { values } = formValuesFromDetail({ ...detail, org_type })
+      expect(buildSavePayload(values, new Map(), true).org_type).toBe(org_type)
+    }
+  })
 })
 
 describe('create defaults', () => {

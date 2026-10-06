@@ -7,7 +7,8 @@ organization appears in the Organizations directory, on the map, and on its publ
 
 ## The list
 
-The tab lists every organization, active or inactive, with its type, city/state and status.
+The tab lists every organization, active or inactive, with its type, city/state and status. Each
+organization's name links to its [organization admin page](#the-organization-admin-page).
 
 - **Create organization**: the button at the top right of the list (also shown when the list is
   empty, as a quick action on **Overview**, and as **Add organization** on the feed's Organizations
@@ -18,6 +19,7 @@ The tab lists every organization, active or inactive, with its type, city/state 
     occurrences. Recorded attendance is kept. Reactivating does **not** restore cancelled occurrences;
     they must be re-added.
   - **Reactivate**: shows the organization again.
+  - **Open admin**: opens the organization admin page.
   - **View public page**: only while the organization is active.
 - **Members**: expands the organization's member roster (add by user id, change role, remove).
 
@@ -66,6 +68,47 @@ You can link straight to the panel: `/moderation?tab=organizations&org=new` (cre
   **Done** keeps your selection; **Back** discards it. A linked resource that is no longer approved
   is marked **No longer approved**; remove it before saving.
 
+## The organization admin page
+
+`/moderation/org/<id>` is the admin for one organization: **Overview** (that organization's active
+events, upcoming event dates, check-ins in the last 30 days, members), **Events**, **Profile** (the
+setup panel for that organization only) and **Members**.
+
+- **Who can open it**: a platform admin, for any non-business organization (active or inactive),
+  and an admin of that organization while it is active. Guest accounts are refused. Anyone else, an
+  unknown id and a malformed id all get the same "not found" page.
+- **Getting there**: platform admins click an organization's name (or **Open admin**) in the list.
+  An organization admin without a moderation role opens **Settings → Administration**, which goes
+  straight to their organization, or to `/moderation/org` (a list) when they run several.
+- **Organization admins** can edit the profile (name, description, contact, hours, pin, photos,
+  linked resources). They see the organization type read-only; only platform admins change it, and
+  a save always sends the stored type unchanged. They see the member roster read-only. Activating,
+  deactivating and membership changes stay with platform admins.
+- **Inactive organizations**: platform admins can still open their admin page, and only platform
+  admins see an inactive organization's event dates in the Events panel. Its own admins, members
+  and signed-out visitors see none, and the community feed shows its events to nobody until the
+  organization is reactivated.
+
+### Events
+
+- **New event** creates the event and its first date in one step: title, type, optional
+  description, start and end, the **time zone** of the venue, and the location. Enter times as they
+  are at the event location; every card and list shows the time in that zone. The time zone cannot
+  change after the event is created. A time that does not exist or happens twice on a
+  daylight-saving change is refused with a message naming it.
+- **Location**: the organization's own map pin by default. **Enter an address** instead looks it up
+  with the US Census Geocoder; confirm the pin on the map before saving.
+- **Add dates** schedules more dates in the event's time zone. A date that is already scheduled is
+  left as it is; re-adding a cancelled date schedules it again (unless it already has check-ins).
+- **Cancel date** cancels one date. Ended dates keep their attendance history and cannot be
+  cancelled.
+- **Edit** changes the details; **Retire event** cancels the dates that have not started (a date in
+  progress finishes normally).
+- **Community feed**: an event appears on the feed for everyone, signed in or not, while the event
+  and its organization are active and it has a date within the next 30 days.
+- Pressing Create twice, or retrying after a dropped connection, never creates a second event.
+- Every event change writes one row to the admin audit log (`admin_actions`).
+
 ## Keyboard and screen readers
 
 - Closing the panel (Save, Cancel, Escape, Back) returns focus to the button that opened it, or to
@@ -86,7 +129,6 @@ These predate the Organizations screens and are left for a separate change:
 - The admin tab icons are not marked `aria-hidden`.
 - The Open/Closed switch thumb does not mirror in right-to-left languages.
 - The switch thumb uses `bg-background`, which turns dark in the OS dark mode.
-- The active admin tab is white text on lime-600 (3.06:1, below the 4.5:1 AA minimum).
 
 ## Privacy and logging
 

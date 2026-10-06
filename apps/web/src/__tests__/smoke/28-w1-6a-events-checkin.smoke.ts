@@ -8,10 +8,14 @@
 //          authenticated-only EXECUTE), the confirmation-time credit trigger, the
 //          reconcile lockdown regression, and assistance_events geocode tagging.
 // Backend: supabase/migrations/20261007000000_w1_6a_events_hosting_checkin.sql
+//          supabase/migrations/20261020000000_org_scoped_admin_events.sql (admin_create_event
+//          replaced by create_org_event + add_event_dates + cancel_event_occurrence;
+//          admin_update_event loses its rrule/Mapbox parameters)
 //
-// GATE ON THE LEDGER, NOT ON THE STATE. The migration applies as a SEPARATE post-deploy
-// step recorded in supabase_migrations.schema_migrations. The suite skips ONLY while that
-// ledger row is absent (pre-deploy). Once recorded, the assertions ALWAYS run.
+// GATE ON THE LEDGER, NOT ON THE STATE. The migrations apply as SEPARATE post-deploy
+// steps recorded in supabase_migrations.schema_migrations. The suite skips ONLY while either
+// ledger row (20261007000000, 20261020000000) is absent (pre-deploy). Once both are recorded,
+// the assertions ALWAYS run.
 //
 // EMPIRICAL NOTE: every predicate below was validated against prod inside a single
 // BEGIN; … (RAISE→ROLLBACK) transaction on 2026-09-24 (the migration applied cleanly on
@@ -31,6 +35,8 @@ const maybeDescribe = skip ? describe.skip : describe
 const GATE_SQL = `
   SELECT EXISTS (
     SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261007000000'
+  ) AND EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261020000000'
   ) AS applied
 `
 
@@ -61,11 +67,12 @@ const STATE_SQL = `
        AND cmd='SELECT' AND coalesce(qual,'') ILIKE '%auth.uid()%')                       AS checkin_select_own,
     (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='event_checkins'
        AND permissive='RESTRICTIVE' AND policyname='event_checkins_block_anon_insert')    AS checkin_guest_block,
-    -- The 7 W1.6a functions are SECDEF with a pinned search_path.
-    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    -- The event functions that are SECDEF with a pinned search_path, by name (the set, not a count).
+    (SELECT string_agg(p.proname, ',' ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public'
        AND p.proname IN ('check_in','organizer_confirm','event_attendance','my_attendance_rate',
-         'admin_create_event','admin_update_event','w1_6a_user_org_rate')
+         'admin_create_event','create_org_event','add_event_dates','cancel_event_occurrence',
+         'admin_update_event','w1_6a_user_org_rate')
        AND p.prosecdef AND array_to_string(p.proconfig,',') ILIKE '%search_path%')        AS secdef_pinned,
     -- Client-callable RPCs: authenticated EXECUTE, anon denied.
     has_function_privilege('authenticated','public.check_in(uuid,integer,boolean)','EXECUTE')            AS checkin_auth_exec,
@@ -75,8 +82,8 @@ const STATE_SQL = `
     has_function_privilege('authenticated','public.event_attendance(uuid)','EXECUTE')                    AS att_auth_exec,
     has_function_privilege('authenticated','public.my_attendance_rate()','EXECUTE')                      AS myrate_auth_exec,
     has_function_privilege('anon','public.my_attendance_rate()','EXECUTE')                               AS myrate_anon_exec,
-    has_function_privilege('authenticated','public.admin_create_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text)','EXECUTE') AS create_auth_exec,
-    has_function_privilege('anon','public.admin_create_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text)','EXECUTE')          AS create_anon_exec,
+    has_function_privilege('authenticated','public.create_org_event(uuid,uuid,text,text,timestamp without time zone,timestamp without time zone,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)','EXECUTE') AS create_auth_exec,
+    has_function_privilege('anon','public.create_org_event(uuid,uuid,text,text,timestamp without time zone,timestamp without time zone,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)','EXECUTE')          AS create_anon_exec,
     -- The org-scoped rate helper is internal only (never client-executable).
     has_function_privilege('authenticated','public.w1_6a_user_org_rate(uuid,uuid)','EXECUTE')            AS rate_helper_auth_exec,
     -- Credit trigger: present, ENABLED, AFTER + ROW, fires on INSERT and UPDATE, confirmed-only body.
@@ -139,8 +146,9 @@ const STATE_SQL = `
        WHERE n.nspname='public' AND c.relname='event_occurrences'
        AND t.tgname='trg_event_occurrences_guard_checkin_bounds'
        AND (t.tgtype & 2)<>0 AND (t.tgtype & 16)<>0 AND t.tgenabled<>'D')                     AS m3_guard_trigger,
-    -- Retirement + explicit-clear: admin_update_event now carries p_is_active + p_clear (19 args).
-    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])','EXECUTE') AS update_event_retire_exec,
+    -- Retirement + explicit-clear: admin_update_event carries p_is_active + p_clear (16 args since
+    -- 20261020000000: no rrule / Mapbox geocode parameters).
+    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])','EXECUTE') AS update_event_retire_exec,
     -- ── fix round 4 (D1/D2/K1/K2/K4) ────────────────────────────────────────────
     -- K2: the org-deactivation cascade trigger (AFTER UPDATE OF is_active on organizations).
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -158,7 +166,7 @@ const STATE_SQL = `
     (pg_get_functiondef('public.event_occurrences_guard_checkin_bounds()'::regprocedure)
        ILIKE '%attendance history is permanent%') AS d2_ended_cancel_guard,
     -- D1: retire cancels only NOT-STARTED occurrences (starts_at > now, not ends_at > now).
-    (pg_get_functiondef('public.admin_update_event(uuid,text,text,text,text,text,text,text,text,text,integer,boolean,double precision,double precision,text,text,boolean,boolean,text[])'::regprocedure)
+    (pg_get_functiondef('public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])'::regprocedure)
        ILIKE '%starts_at > now()%') AS d1_retire_not_started,
     -- K4: rate math no longer filters on the event's/org's is_active ("ran" semantics).
     ((pg_get_functiondef('public.my_attendance_rate()'::regprocedure) NOT ILIKE '%ae.is_active AND o.is_active%')
@@ -184,8 +192,10 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     expect(Number(r.checkin_write_policies), 'no permissive client INSERT/UPDATE policy remains').toBe(0)
     expect(Number(r.checkin_select_own), 'own-read SELECT policy must remain').toBeGreaterThanOrEqual(1)
     expect(Number(r.checkin_guest_block), 'the RESTRICTIVE guest INSERT block must remain').toBe(1)
-    // SECDEF + pinned search_path across all 7 new functions.
-    expect(Number(r.secdef_pinned), 'all 7 W1.6a functions must be SECDEF with a pinned search_path').toBe(7)
+    // SECDEF + pinned search_path: exactly this set (admin_create_event is gone since 20261020000000).
+    expect(r.secdef_pinned, 'the event functions must be SECDEF with a pinned search_path').toBe(
+      'add_event_dates,admin_update_event,cancel_event_occurrence,check_in,create_org_event,event_attendance,my_attendance_rate,organizer_confirm,w1_6a_user_org_rate'
+    )
   })
 
   it('[post-deploy] I3/I4/R6 — EXECUTE grants, credit-at-confirm, regressions', async (ctx) => {
@@ -202,8 +212,8 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     expect(r.att_auth_exec, 'authenticated must EXECUTE event_attendance').toBe(true)
     expect(r.myrate_auth_exec, 'authenticated must EXECUTE my_attendance_rate').toBe(true)
     expect(r.myrate_anon_exec, 'anon must NOT EXECUTE my_attendance_rate').toBe(false)
-    expect(r.create_auth_exec, 'authenticated must EXECUTE admin_create_event').toBe(true)
-    expect(r.create_anon_exec, 'anon must NOT EXECUTE admin_create_event').toBe(false)
+    expect(r.create_auth_exec, 'authenticated must EXECUTE create_org_event').toBe(true)
+    expect(r.create_anon_exec, 'anon must NOT EXECUTE create_org_event').toBe(false)
     // I4: the org-scoped rate helper is internal only.
     expect(r.rate_helper_auth_exec, 'w1_6a_user_org_rate must NOT be client-executable').toBe(false)
     // R6: credit trigger fires on INSERT+UPDATE (AFTER+ROW), confirmed-only.

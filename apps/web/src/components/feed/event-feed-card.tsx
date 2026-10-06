@@ -23,29 +23,9 @@ import {
   eventTimingLabel,
   distanceBucketLabel,
 } from '@/components/feed/post-model'
-
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  distribution: 'bg-lime-100 text-lime-800',
-  meal:         'bg-orange-100 text-orange-800',
-  pantry:       'bg-amber-100 text-amber-800',
-  clinic:       'bg-sky-100 text-sky-800',
-  other:        'bg-stone-100 text-stone-700',
-}
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  distribution: 'Distribution',
-  meal:         'Meal',
-  pantry:       'Pantry',
-  clinic:       'Clinic',
-  other:        'Other',
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-}
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { formatEventWhen } from '@/lib/event-time'
+import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel } from '@/lib/i18n-event-forms'
 
 interface EventFeedCardProps {
   event: EventFeedItem
@@ -67,11 +47,13 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
   // check-in and on mount, which remounts the card with a fresh clock). Drives the
   // check-in button window + timing label exactly as the Events panel's render does.
   const [nowMs] = useState(() => Date.now())
-  const typeColor = EVENT_TYPE_COLORS[event.eventType] ?? 'bg-stone-100 text-stone-700'
-  const typeLabel = EVENT_TYPE_LABELS[event.eventType] ?? event.eventType
+  const locale = useProfileLocale()
+  const typeColor = eventTypeColor(event.eventType)
+  const typeLabel = eventTypeLabel(event.eventType, locale)
+  const when = formatEventWhen(event.startsAt, event.endsAt, event.timeZone, locale)
   const location = [event.locationName, event.city, event.state].filter(Boolean).join(', ')
-  const distanceLabel = distanceBucketLabel(event.distanceBucket)
-  const timing = eventTimingLabel(nowMs, new Date(event.startsAt).getTime(), new Date(event.endsAt).getTime())
+  const distanceLabel = distanceBucketLabel(event.distanceBucket, locale)
+  const timing = eventTimingLabel(nowMs, new Date(event.startsAt).getTime(), new Date(event.endsAt).getTime(), locale)
 
   const btn = computeCheckinButton({
     status: event.status as OccurrenceStatus,
@@ -90,6 +72,7 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
       event: {
         title: event.title,
         location_name: event.locationName,
+        time_zone: event.timeZone,
         organization: event.orgName ? { name: event.orgName } : null,
       },
     })
@@ -104,7 +87,7 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
       {/* Event marker so the row reads as an event amid posts */}
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-lime-800 bg-lime-100 px-2 py-0.5 rounded-full">
-          <Calendar className="w-3 h-3" aria-hidden="true" /> Event
+          <Calendar className="w-3 h-3" aria-hidden="true" /> {eventFormT(locale, 'cardEventBadge')}
         </span>
         {timing.isLive && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#4a5d23] px-2 py-0.5 rounded-full">
@@ -122,11 +105,12 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 text-sm text-stone-700">
-        <Calendar className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
+      <div className="flex items-start gap-1.5 text-sm text-stone-700">
+        <Calendar className="w-3.5 h-3.5 mt-0.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
         <span>
-          {formatDate(event.startsAt)} · {formatTime(event.startsAt)}–{formatTime(event.endsAt)}
-          {!timing.isLive && <span className="text-stone-400"> · {timing.label}</span>}
+          {when.text}
+          {when.venue && <span className="block text-xs text-stone-600">{when.venue}</span>}
+          {!timing.isLive && <span className="block text-stone-600">{timing.label}</span>}
         </span>
       </div>
 
@@ -135,14 +119,14 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
           <MapPin className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
           <span>
             {location}
-            {distanceLabel && <span className="text-stone-400"> · {distanceLabel}</span>}
+            {distanceLabel && <span className="text-stone-600"> · {distanceLabel}</span>}
           </span>
         </div>
       )}
 
       {!event.requiresRegistration && (
         <span className="self-start text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-          Walk-in welcome
+          {eventFormT(locale, 'cardWalkIn')}
         </span>
       )}
 
@@ -152,17 +136,17 @@ export function EventFeedCard({ event, myStatus, anonymousClaimed, onCheckedIn }
           onClick={openSheet}
           className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
         >
-          {btn.label}
+          {checkinButtonLabel(btn.kind, btn.label, locale)}
         </button>
       ) : (
         <span
           className={`self-start text-xs font-semibold px-3 py-1.5 rounded-xl ${
             btn.kind === 'attended' || btn.kind === 'checked_early' || btn.kind === 'anonymous'
               ? 'bg-lime-100 text-lime-800'
-              : 'bg-stone-100 text-stone-500'
+              : 'bg-stone-100 text-stone-600'
           }`}
         >
-          {btn.label}
+          {checkinButtonLabel(btn.kind, btn.label, locale)}
         </span>
       )}
 

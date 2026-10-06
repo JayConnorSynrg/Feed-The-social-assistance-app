@@ -6,6 +6,8 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { HOUSEHOLD_MIN, HOUSEHOLD_MAX, formatRatePct } from '@/lib/event-checkin'
+import { formatEventWhen } from '@/lib/event-time'
+import { dir, type Locale } from '@/lib/i18n'
 
 interface OccurrenceInfo {
   id: string
@@ -13,12 +15,17 @@ interface OccurrenceInfo {
   ends_at: string
   event_title: string
   org_name: string
+  /** The venue's IANA zone (assistance_events.time_zone). */
+  time_zone: string
 }
 
 interface Props {
   occurrence: OccurrenceInfo
   open: boolean
   onOpenChange: (open: boolean) => void
+  locale?: Locale
+  /** The kiosk is opened without a DialogTrigger: the opener restores focus here. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 interface Attendee {
@@ -40,7 +47,7 @@ interface AttendanceData {
   attendees: Attendee[]
 }
 
-export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange }: Props) {
+export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale = 'en', onCloseAutoFocus }: Props) {
   const supabase = createClient()
 
   const [data, setData] = useState<AttendanceData | null>(null)
@@ -121,10 +128,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange }: Prop
     setTimeout(() => setFlash(null), 2500)
   }, [busyId, supabase, occurrence.id, walkinSize, fetchAttendance])
 
-  const formattedStart = new Date(occurrence.starts_at).toLocaleString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-  })
-  const formattedEnd = new Date(occurrence.ends_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const when = formatEventWhen(occurrence.starts_at, occurrence.ends_at, occurrence.time_zone, locale)
 
   const waiting = (data?.attendees ?? []).filter((a) => a.status === 'early')
   const confirmedList = (data?.attendees ?? []).filter((a) => a.status === 'confirmed')
@@ -136,6 +140,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange }: Prop
         <DialogPrimitive.Content
           className="fixed inset-0 z-50 flex flex-col bg-stone-50 overflow-hidden"
           aria-describedby={undefined}
+          onCloseAutoFocus={onCloseAutoFocus}
         >
           <DialogPrimitive.Close className="absolute right-3 top-3 z-10 rounded-full bg-stone-200/80 p-1.5 text-stone-600 hover:bg-stone-300 transition-colors">
             <X className="h-4 w-4" />
@@ -147,7 +152,9 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange }: Prop
             <DialogPrimitive.Title className="text-2xl sm:text-3xl font-bold leading-tight">
               {occurrence.event_title}
             </DialogPrimitive.Title>
-            <p className="text-lime-200 text-sm mt-1">{formattedStart} – {formattedEnd}</p>
+            {/* The kiosk copy is English; only the date line follows the admin's locale. */}
+            <p lang={locale} dir={dir(locale)} className="text-lime-200 text-sm mt-1">{when.text}</p>
+            {when.venue && <p lang={locale} dir={dir(locale)} className="text-lime-200 text-xs">{when.venue}</p>}
             <p className="text-lime-300 text-xs mt-0.5">{occurrence.org_name}</p>
             <div className="mt-3 inline-flex items-center gap-2 bg-white/15 rounded-full px-3 py-1.5">
               <span className="h-2 w-2 rounded-full bg-lime-300 animate-pulse" />

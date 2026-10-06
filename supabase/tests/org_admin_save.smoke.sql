@@ -3,6 +3,9 @@
 --   20261017000000_org_admin_save.sql          (admin_save_organization, businesses_in_bounds)
 --   20261018000000_org_photos_and_guest_block.sql (org-photos bucket, can_manage_org_photos,
 --                                                  storage.objects manager policies)
+--   20261020000000_org_scoped_admin_events.sql   (org admins save their own active non-business
+--                                                  org + manage its photos; orgs_update_org_admin
+--                                                  dropped) — S8 org-admin cases + S11
 -- The guest write block is covered in p4b_organizations.smoke.sql; the map is_active leak in
 -- p4a_local_business.smoke.sql.
 --
@@ -73,9 +76,17 @@ DECLARE
   v_foreign text;
   v_ev     uuid;
   v_occ    uuid;
+  v_oadm   uuid;   -- a second plain member who is an ORG admin (S8 + S11)
+  v_oa     uuid;   -- community, active   — v_oadm is its admin
+  v_oai    uuid;   -- community, inactive — v_oadm is its admin
+  v_oab    uuid;   -- business, approved  — v_oadm is its admin (not the submitter)
+  v_oa_photo text;
+  v_snap_oa  text;
 BEGIN
-  IF v_admin IS NULL OR v_member IS NULL OR cardinality(v_res) < 3 OR v_res_pending IS NULL THEN
-    RAISE NOTICE 'SKIP org_admin_save smoke: needs one is_admin profile, one plain member, 3 approved + 1 non-approved resource';
+  v_oadm := (SELECT p.id FROM public.profiles p JOIN auth.users u ON u.id = p.id
+             WHERE p.is_admin IS NOT TRUE AND u.is_anonymous IS NOT TRUE AND p.id <> v_member ORDER BY p.id LIMIT 1);
+  IF v_admin IS NULL OR v_member IS NULL OR v_oadm IS NULL OR cardinality(v_res) < 3 OR v_res_pending IS NULL THEN
+    RAISE NOTICE 'SKIP org_admin_save smoke: needs one is_admin profile, two plain members, 3 approved + 1 non-approved resource';
     RETURN;
   END IF;
 
@@ -166,7 +177,8 @@ BEGIN
      AND v_act.outcome = 'ok' AND v_act.request_id = 'smoke-org-create-1',
     'S2: audit row must be org.create by admin with request_id, got '||row_to_json(v_act)::text;
   ASSERT v_act.details = jsonb_build_object('org_type', 'community', 'hours_count', 3, 'photo_count', 2,
-                           'resource_count', 3, 'service_count', 0, 'location_set', true),
+                           'resource_count', 3, 'service_count', 0, 'location_set', true,
+                           'actor_role', 'platform_admin'),
     'S2: audit details mismatch: '||v_act.details::text;
 
   -- =====================================================================
@@ -430,6 +442,22 @@ BEGIN
   ASSERT public.can_manage_org_photos(v_mcomm::text) IS FALSE, 'S8: member + own NON-business row => false';
   ASSERT public.can_manage_org_photos(v_new::text)   IS FALSE, 'S8: member + unknown uuid => false';
   ASSERT public.can_manage_org_photos('x')           IS FALSE, 'S8: member + non-uuid => false';
+  RESET ROLE;
+  -- org admin (20261020): own ACTIVE NON-business org only
+  INSERT INTO public.organizations (name, org_type, is_active) VALUES ('SMOKE OA Comm', 'community', true) RETURNING id INTO v_oa;
+  INSERT INTO public.organizations (name, org_type, is_active) VALUES ('SMOKE OA Inactive', 'community', false) RETURNING id INTO v_oai;
+  INSERT INTO public.organizations (name, org_type, status, is_active) VALUES ('SMOKE OA Biz', 'business', 'approved', true) RETURNING id INTO v_oab;
+  INSERT INTO public.organization_members (org_id, user_id, role) VALUES (v_oa, v_oadm, 'admin'), (v_oai, v_oadm, 'admin'), (v_oab, v_oadm, 'admin');
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated')::text, true);
+  ASSERT public.can_manage_org_photos(v_oa::text)   IS TRUE,  'S8: org admin + own active non-business org => true';
+  ASSERT public.can_manage_org_photos(v_oai::text)  IS FALSE, 'S8: org admin + own INACTIVE org => false';
+  ASSERT public.can_manage_org_photos(v_oab::text)  IS FALSE, 'S8: org admin + own BUSINESS org (not submitter) => false';
+  ASSERT public.can_manage_org_photos(v_comm::text) IS FALSE, 'S8: org admin + another org => false';
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated', 'is_anonymous', true)::text, true);
+  ASSERT public.can_manage_org_photos(v_oa::text)   IS FALSE, 'S8: org admin uid as a guest session => false';
   -- anon role
   PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
   SET LOCAL ROLE anon;
@@ -469,6 +497,18 @@ BEGIN
     json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
   ASSERT (SELECT count(*) FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_obiz || '/%') = 1,
     'S8: admin lists any org folder';
+  RESET ROLE;
+  INSERT INTO storage.objects (bucket_id, name) VALUES ('org-photos', v_oa || '/' || gen_random_uuid() || '.webp');
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  ASSERT (SELECT count(*) FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_oa || '/%') = 1,
+    'S8: org admin lists own org folder';
+  ASSERT (SELECT count(*) FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_obiz || '/%') = 0,
+    'S8: org admin cannot list another org folder';
+  DELETE FROM storage.objects WHERE bucket_id = 'org-photos' AND name LIKE v_oa || '/%';
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'S8: org admin deletes in own org folder';
 
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_member, 'role', 'authenticated', 'is_anonymous', true)::text, true);
@@ -510,7 +550,7 @@ BEGIN
   -- S10 — admin_set_org_active: admin only, exactly one row, every call audited (no-op too),
   --       deactivation fires organizations_cascade_deactivate, works for businesses.
   -- =====================================================================
-  INSERT INTO public.assistance_events (org_id, title) VALUES (v_comm, 'SMOKE Event') RETURNING id INTO v_ev;
+  INSERT INTO public.assistance_events (org_id, title, time_zone) VALUES (v_comm, 'SMOKE Event', 'America/New_York') RETURNING id INTO v_ev;
   INSERT INTO public.event_occurrences (event_id, starts_at, ends_at)
   VALUES (v_ev, now() + interval '1 day', now() + interval '1 day 2 hours') RETURNING id INTO v_occ;
 
@@ -592,6 +632,128 @@ BEGIN
   ASSERT v_after = v_before, 'S10: a failed call writes no audit row';
 
   -- =====================================================================
+  -- S11 — org admins (20261020): save their OWN active non-business org, nothing else, and never
+  --       its org_type (platform-only); guests are refused even holding an admin row; same 42501
+  --       org_save_denied otherwise; no direct UPDATE path remains.
+  -- =====================================================================
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated')::text, true);
+  PERFORM set_config('request.headers', '{"x-request-id":"smoke-oa-save-1"}', true);
+  v_oa_photo := v_oa || '/' || gen_random_uuid() || '.webp';
+  SELECT count(*) INTO v_before FROM public.admin_actions;
+  SET LOCAL ROLE authenticated;
+  v_ret := public.admin_save_organization(v_oa, jsonb_build_object(
+    'name', 'SMOKE OA Renamed', 'org_type', 'community', 'description', 'Run by its org admin',
+    'location', jsonb_build_object('lng', -179.85, 'lat', -89.85),
+    'hours', jsonb_build_array(jsonb_build_object('day_of_week', 3, 'open_time', '09:00', 'close_time', '12:00')),
+    'photos', jsonb_build_array(jsonb_build_object('kind', 'logo', 'storage_path', v_oa_photo, 'url', c_base || v_oa_photo)),
+    'resource_ids', jsonb_build_array(v_res[1]),
+    'is_active', false, 'status', 'rejected', 'created_by', v_oadm, 'submitted_by', v_oadm));
+  RESET ROLE;
+  ASSERT NOT (v_ret->>'created')::boolean, 'S11: org admin save of own org is an update';
+  ASSERT (SELECT name = 'SMOKE OA Renamed' AND org_type = 'community' AND description = 'Run by its org admin'
+            AND location IS NOT NULL AND is_active AND status = 'approved' AND submitted_by IS NULL
+            AND created_by IS DISTINCT FROM v_oadm
+          FROM public.organizations WHERE id = v_oa),
+    'S11: org admin edits profile fields; is_active/status/created_by/submitted_by never change';
+  ASSERT (SELECT count(*) FROM public.business_hours WHERE org_id = v_oa) = 1
+     AND (SELECT count(*) FROM public.business_photos WHERE org_id = v_oa AND storage_path = v_oa_photo) = 1
+     AND (SELECT count(*) FROM public.org_resources WHERE org_id = v_oa) = 1,
+    'S11: org admin saves hours, photos and linked resources';
+  SELECT count(*) INTO v_after FROM public.admin_actions;
+  ASSERT v_after - v_before = 1, 'S11: exactly one audit row per org-admin save';
+  SELECT * INTO v_act FROM public.admin_actions WHERE request_id = 'smoke-oa-save-1';
+  ASSERT v_act.action = 'org.update' AND v_act.actor_id = v_oadm AND v_act.actor_tier IS NULL
+     AND v_act.target_id = v_oa::text AND v_act.details->>'actor_role' = 'org_admin',
+    'S11: audit row must be org.update by the org admin (actor_tier NULL, actor_role org_admin), got '||row_to_json(v_act)::text;
+
+  -- refusals: same 42501 org_save_denied, nothing written
+  v_snap_comm := pg_temp.org_snap(v_comm);
+  v_snap_biz  := pg_temp.org_snap(v_oab);
+  v_target    := gen_random_uuid();
+  SELECT count(*) INTO v_before FROM public.admin_actions;
+  SET LOCAL ROLE authenticated;
+  FOR v_case IN SELECT e FROM jsonb_array_elements(jsonb_build_array(
+      jsonb_build_object('l', 'another org',      'id', v_comm,   'p', jsonb_build_object('name', 'X', 'org_type', 'nonprofit')),
+      jsonb_build_object('l', 'create',           'id', v_target, 'p', jsonb_build_object('name', 'X', 'org_type', 'community')),
+      jsonb_build_object('l', 'own inactive org', 'id', v_oai,    'p', jsonb_build_object('name', 'X', 'org_type', 'community')),
+      jsonb_build_object('l', 'own business org', 'id', v_oab,    'p', jsonb_build_object('name', 'X', 'org_type', 'business'))
+  )) AS e LOOP
+    v_state := NULL; v_err := NULL;
+    BEGIN
+      PERFORM public.admin_save_organization((v_case->>'id')::uuid, v_case->'p');
+    EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
+    END;
+    ASSERT v_state = '42501' AND v_err LIKE 'org_save_denied%',
+      format('S11 [%s]: org admin must get 42501 org_save_denied, got %s %s', v_case->>'l', COALESCE(v_state, '<none: call succeeded>'), COALESCE(v_err, ''));
+  END LOOP;
+  -- org_type is platform-only: an org admin changing it (to another non-business type, or to
+  -- business) gets 42501 and nothing changes
+  v_snap_oa := pg_temp.org_snap(v_oa);
+  FOR v_payload IN SELECT * FROM unnest(ARRAY[
+      jsonb_build_object('name', 'SMOKE OA Renamed', 'org_type', 'clinic', 'description', 'type change'),
+      jsonb_build_object('name', 'SMOKE OA Renamed', 'org_type', 'business'),
+      jsonb_build_object('name', 'SMOKE OA Renamed')]) LOOP
+    v_state := NULL; v_err := NULL;
+    BEGIN
+      PERFORM public.admin_save_organization(v_oa, v_payload);
+    EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
+    END;
+    ASSERT v_state = '42501' AND v_err = 'org_save_denied: only a platform admin may change the organization type',
+      format('S11: org admin changing org_type (%s) must get 42501, got %s %s', v_payload->>'org_type',
+             COALESCE(v_state, '<none: call succeeded>'), COALESCE(v_err, ''));
+  END LOOP;
+  RESET ROLE;
+  ASSERT pg_temp.org_snap(v_oa) = v_snap_oa AND (SELECT org_type FROM public.organizations WHERE id = v_oa) = 'community',
+    'S11: refused type changes leave the org (and its children) unchanged';
+  -- a guest (anonymous sign-in) session is refused even though v_oadm holds an admin row
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated', 'is_anonymous', true)::text, true);
+  SET LOCAL ROLE authenticated;
+  v_state := NULL; v_err := NULL;
+  BEGIN
+    PERFORM public.admin_save_organization(v_oa, jsonb_build_object('name', 'Guest edit', 'org_type', 'community'));
+  EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
+  END;
+  ASSERT v_state = '42501' AND v_err LIKE 'org_save_denied%', 'S11: a guest session with an admin row must get 42501, got '||COALESCE(v_state, '<none>')||' '||COALESCE(v_err, '');
+  RESET ROLE;
+  ASSERT (SELECT name FROM public.organizations WHERE id = v_oa) = 'SMOKE OA Renamed', 'S11: the guest save changed nothing';
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_oadm, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  -- the dropped direct path: an UPDATE as the org admin matches no policy (0 rows)
+  UPDATE public.organizations SET org_type = 'business', submitted_by = v_oadm, status = 'approved' WHERE id = v_oa;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'S11: an org admin has no direct UPDATE path to organizations (orgs_update_org_admin dropped)';
+  UPDATE public.organizations SET is_active = false WHERE id = v_oa;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 0, 'S11: an org admin cannot deactivate their org directly';
+  RESET ROLE;
+  ASSERT (SELECT org_type = 'community' AND submitted_by IS NULL AND is_active FROM public.organizations WHERE id = v_oa),
+    'S11: the direct UPDATE attempts changed nothing';
+  -- no other client path: every permissive UPDATE / ALL policy on organizations is platform-admin-only
+  ASSERT NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organizations'
+                       AND permissive = 'PERMISSIVE' AND cmd IN ('UPDATE', 'ALL')
+                       AND COALESCE(qual, '') || COALESCE(with_check, '') NOT LIKE '%is_current_user_admin()%'),
+    'S11: every permissive UPDATE/ALL policy on organizations requires a platform admin';
+  ASSERT NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organizations'
+                       AND policyname = 'orgs_update_org_admin'), 'S11: orgs_update_org_admin is dropped';
+  ASSERT pg_temp.org_snap(v_comm) = v_snap_comm AND pg_temp.org_snap(v_oab) = v_snap_biz
+     AND NOT EXISTS (SELECT 1 FROM public.organizations WHERE id = v_target)
+     AND (SELECT name FROM public.organizations WHERE id = v_oai) = 'SMOKE OA Inactive',
+    'S11: refused saves change nothing';
+  SELECT count(*) INTO v_after FROM public.admin_actions;
+  ASSERT v_after = v_before, 'S11: refused saves write no audit row';
+  -- same rule as the event writers: a platform admin may save an INACTIVE non-business org
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_ret := public.admin_save_organization(v_oai, jsonb_build_object('name', 'SMOKE OA Inactive Edited', 'org_type', 'community'));
+  RESET ROLE;
+  ASSERT (SELECT name = 'SMOKE OA Inactive Edited' AND NOT is_active FROM public.organizations WHERE id = v_oai),
+    'S11: a platform admin saves an inactive org (it stays inactive)';
+
+  -- =====================================================================
   -- S7 — an UPDATE that affects 0 rows is an error, never a silent success.
   --      A BEFORE UPDATE trigger that skips the row simulates the 0-row outcome. It takes a
   --      ShareRowExclusive lock on organizations until ROLLBACK (which also removes it), so it
@@ -621,7 +783,7 @@ BEGIN
     RAISE NOTICE 'SKIP S7 0-row update guard: needs feed.smoke_local=on (creates a trigger on organizations; local DB only)';
   END IF;
 
-  RAISE NOTICE 'PASS org_admin_save smoke: S1 gate, S2-S4 create/update, S5 switch, S6 validation+atomicity, S8 photos, S9 foreign paths, S10 set-active';
+  RAISE NOTICE 'PASS org_admin_save smoke: S1 gate, S2-S4 create/update, S5 switch, S6 validation+atomicity, S8 photos, S9 foreign paths, S10 set-active, S11 org-admin save';
 END
 $smoke$;
 

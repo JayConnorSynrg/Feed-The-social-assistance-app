@@ -2,8 +2,9 @@
 -- Behavioural smoke for the P4a local-business data plane. Every check is a rolled-back
 -- WRITE that asserts observed behaviour (never a text/ILIKE grep on a function body).
 --
--- Run against a database that ALREADY has migrations 20261012000000 and 20261017000000
--- (businesses_in_bounds is_active filter, checked by the MAP-LEAK block) applied, e.g.:
+-- Run against a database that ALREADY has migrations 20261012000000, 20261017000000
+-- (businesses_in_bounds is_active filter, checked by the MAP-LEAK block) and 20261020000000
+-- (create_org_event, checked by INV5) applied, e.g.:
 --   psql "$DATABASE_URL" -f supabase/tests/p4a_local_business.smoke.sql
 --   -- or via the Management API SQL endpoint (single request; it wraps one txn).
 --
@@ -81,12 +82,21 @@ BEGIN
     json_build_object('sub', v_member, 'role','authenticated')::text, true);
   SET LOCAL ROLE authenticated;
   ASSERT public.is_org_admin(v_biz) IS FALSE, 'INV5: submitter must not be org admin';
+  -- (20261020) create_org_event is the one event writer; the submitter must get exactly 42501
+  -- (any other SQLSTATE, e.g. undefined_function, would mean the gate was never reached).
   v_host := NULL;
   BEGIN
-    PERFORM public.admin_create_event(v_biz, 'SMOKE Sneak Event');
+    PERFORM public.create_org_event(v_biz, gen_random_uuid(), 'SMOKE Sneak Event', 'America/New_York',
+                                    '2026-11-10 10:00'::timestamp, '2026-11-10 11:00'::timestamp, 'org');
     v_host := 'HOSTED';
-  EXCEPTION WHEN others THEN v_host := 'BLOCKED'; END;
-  ASSERT v_host = 'BLOCKED', 'INV5: submitter must not be able to host an event on the biz';
+  EXCEPTION WHEN others THEN v_host := SQLSTATE; END;
+  ASSERT v_host = '42501', 'INV5: submitter must get 42501 hosting an event on the biz, got '||COALESCE(v_host, '<none>');
+  RESET ROLE;
+  ASSERT NOT EXISTS (SELECT 1 FROM public.assistance_events WHERE org_id = v_biz),
+    'INV5: the refused call must write no event';
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_member, 'role','authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
 
   -- ============ INV3 — approve/reject authority + exactly-one audit ============
   -- lower tier cannot approve

@@ -93,6 +93,8 @@ describe('adminSetOrgActive', () => {
 describe('mapSaveError', () => {
   it.each([
     [{ code: '42501', message: 'denied' }, 'saveErrDenied'],
+    [{ code: '42501', message: 'org_save_denied: only a platform admin can change the organization type' }, 'saveErrDenied'],
+    [{ code: '', message: 'org_save_denied: platform admin or an admin of this organization only' }, 'saveErrDenied'],
     [{ code: '22023', message: 'org_save_invalid: name is required' }, 'saveErrName'],
     [{ code: '22023', message: 'org_save_invalid: email is not a valid address' }, 'saveErrEmail'],
     [{ code: '22023', message: 'org_save_invalid: an hours interval cannot open and close at the same time' }, 'saveErrHours'],
