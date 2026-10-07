@@ -308,7 +308,7 @@ export type Database = {
           org_id: string
           recurrence: Json | null
           requires_registration: boolean
-          series_duration: unknown
+          series_duration: string | null
           series_start_local: string | null
           state: string | null
           time_zone: string
@@ -333,7 +333,7 @@ export type Database = {
           org_id: string
           recurrence?: Json | null
           requires_registration?: boolean
-          series_duration?: unknown
+          series_duration?: string | null
           series_start_local?: string | null
           state?: string | null
           time_zone: string
@@ -358,7 +358,7 @@ export type Database = {
           org_id?: string
           recurrence?: Json | null
           requires_registration?: boolean
-          series_duration?: unknown
+          series_duration?: string | null
           series_start_local?: string | null
           state?: string | null
           time_zone?: string
@@ -4308,7 +4308,10 @@ export type Database = {
       }
       engagement_weight: { Args: { p_kind: string }; Returns: number }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
-      event_adopt_manual_dates: { Args: { p_event_id: string }; Returns: number }
+      event_adopt_manual_dates: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
       event_apply_rule_change: { Args: { p_event_id: string }; Returns: Json }
       event_attendance: { Args: { p_occurrence: string }; Returns: Json }
       event_date_announced: {
@@ -4366,7 +4369,7 @@ export type Database = {
       event_rule_occurrences: {
         Args: {
           p_dtstart: string
-          p_duration: unknown
+          p_duration: string
           p_from: string
           p_rule: Json
           p_through: string
