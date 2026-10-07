@@ -48,3 +48,24 @@ describe('focus after "Try again"', () => {
     }
   })
 })
+
+describe('ending-soon list: loading and "Try again"', () => {
+  it('loading text is announced politely; the focusable heading is there in every state', async () => {
+    const { EndingSoonView } = await import('./org-overview')
+    for (const state of ['loading', 'ready', 'error'] as const) {
+      const html = renderToStaticMarkup(
+        h(EndingSoonView, { series: state === 'ready' ? [] : null, state, notice: '', orgId: 'o', onRetry: () => {}, onExtended: () => {} }),
+      )
+      expect(html, state).toMatch(/<h2 id="org-ending-soon-heading" tabindex="-1"/)
+      if (state === 'loading') expect(html).toMatch(/<p [^>]*aria-live="polite"[^>]*>.*Loading…<\/p>/)
+    }
+  })
+
+  it('"Try again" marks a retry and the heading takes focus once the reload settles (same rule as the numbers)', async () => {
+    const fs = await import('node:fs')
+    const src = fs.readFileSync(new URL('./org-overview.tsx', import.meta.url), 'utf8')
+    const section = src.slice(src.indexOf('function EndingSoonSection'), src.indexOf('export function EndingSoonView'))
+    expect(section).toMatch(/useEffect\(\(\) => \{\s*focusAfterRetry\(retryPending, state, headingRef\.current\)\s*\}, \[state\]\)/)
+    expect(section).toMatch(/onRetry=\{\(\) => \{\s*retryPending\.current = true/)
+  })
+})

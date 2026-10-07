@@ -51,9 +51,12 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, hydrateEventFeedItems, FEED_EVENT_OCCURRENCE_SELECT, type FeedEventOccurrenceRow, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
-import { EventFeedCard } from '@/components/feed/event-feed-card'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { EventCard } from '@/components/feed/event-card'
 import type { MyCheckinStatus } from '@/lib/event-checkin'
+import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
+import { loadEventCards } from '@/lib/event-card-data'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
@@ -1422,6 +1425,7 @@ export function FeedPanel() {
   const [eventItems, setEventItems] = useState<EventFeedItem[]>([])
   const [eventMyStatuses, setEventMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
   const [eventAnonClaims, setEventAnonClaims] = useState<Set<string>>(new Set())
+  const eventLocale = useProfileLocale()
   // Cached caller geo (undefined = not yet read; null = unavailable/denied). Read at
   // most once per mount and never triggers a permission prompt.
   const geoRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined)
@@ -1902,57 +1906,43 @@ export function FeedPanel() {
         const transformed = rows.map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
         const ordered = orderByRankAndAttachBucket(postRankRows, transformed)
 
-        // W1.6b: hydrate the event (occurrence) rows and build EventFeedItems in RPC
-        // rank order, dropping any occurrence the RLS read did not surface (I4 — the
-        // same drop-unhydrated rule the posts path uses). The check-in button state
-        // comes from the member's OWN rows only (RLS checkins_select_own) + own
-        // anonymous claims (my_anonymous_claims), exactly as the Events panel loads it.
-        const events: EventFeedItem[] = []
-        const eventStatuses: Record<string, MyCheckinStatus> = {}
-        const eventClaims = new Set<string>()
+        // W1.6b: build the event cards in RPC rank order through the loader the Events tab
+        // shares (lib/event-card-data.ts): hydrate the shown dates, dropping any occurrence
+        // the RLS read did not surface (I4 — the same drop-unhydrated rule the posts path
+        // uses); then, in parallel, the next upcoming date for a shown date that was
+        // cancelled ("Sat, Oct 10 cancelled — next: Sat, Oct 24") and the member's own
+        // check-in state. Each event row is the event's shown date (one per event; the server
+        // applies the organizer's "post N days before" window, and keeps an event listed while
+        // its cancelled date is announced and not ended).
+        let events: EventFeedItem[] = []
+        let checkinState = emptyCheckinState()
         if (eventIds.length > 0) {
-          const { data: occData, error: occErr } = await supabase
-            .from('event_occurrences')
-            .select(FEED_EVENT_OCCURRENCE_SELECT)
-            .in('id', eventIds)
-            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-          if (occErr) throw occErr
-          events.push(...hydrateEventFeedItems(ranked, (occData as unknown as FeedEventOccurrenceRow[]) ?? []))
-          if (user && !isAnonymous) {
-            const { data: mine } = await supabase
-              .from('event_checkins')
-              .select('occurrence_id, status')
-              .eq('user_id', user.id)
-              .in('occurrence_id', eventIds)
-            for (const row of mine ?? []) {
-              eventStatuses[row.occurrence_id as string] = (row.status as MyCheckinStatus) ?? 'confirmed'
-            }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: claims } = await (supabase.rpc as any)('my_anonymous_claims', { p_occurrence_ids: eventIds })
-            for (const row of (claims as Array<{ occurrence_id: string }> | null) ?? []) {
-              if (row?.occurrence_id) eventClaims.add(row.occurrence_id)
-            }
-          }
+          const loaded = await loadEventCards(supabase, rankedEventRefs(ranked), {
+            surface: 'feed',
+            userId: user?.id ?? null,
+            isGuest: isAnonymous,
+            timeoutMs: QUERY_TIMEOUT_MS,
+          })
+          events = rankEventCards(ranked, loaded.items)
+          checkinState = loaded.checkin
         }
 
         if (cursor === null) {
           setPosts(ordered)
           setEventItems(events)
-          setEventMyStatuses(eventStatuses)
-          setEventAnonClaims(eventClaims)
+          setEventMyStatuses(checkinState.statuses)
+          setEventAnonClaims(checkinState.anonClaims)
         } else {
           setPosts((prev) => {
             const existingIds = new Set(prev.map((p) => p.id))
             const fresh = ordered.filter((p) => !existingIds.has(p.id))
             return [...prev, ...fresh]
           })
-          setEventItems((prev) => {
-            const existing = new Set(prev.map((e) => e.occurrenceId))
-            const fresh = events.filter((e) => !existing.has(e.occurrenceId))
-            return [...prev, ...fresh]
-          })
-          setEventMyStatuses((prev) => ({ ...prev, ...eventStatuses }))
-          setEventAnonClaims((prev) => new Set([...prev, ...eventClaims]))
+          // One card per event across pages: an event already listed is skipped even when
+          // its shown date moved on between the two page loads (different occurrence id).
+          setEventItems((prev) => appendNewEvents(prev, events))
+          setEventMyStatuses((prev) => ({ ...prev, ...checkinState.statuses }))
+          setEventAnonClaims((prev) => new Set([...prev, ...checkinState.anonClaims]))
         }
 
         if (ranked.length === PAGE_SIZE) {
@@ -2726,17 +2716,27 @@ export function FeedPanel() {
               // reshuffle on W1.4 count patches). Enter/exit is opacity+transform only.
               <AnimatePresence initial={false}>
               {feedItems.map((item) => {
-                // W1.6b: an event row renders the EventFeedCard (same enter/exit
+                // W1.6b: an event row renders the shared EventCard (same enter/exit
                 // motion, no `layout`); check-in reuses the W1.6a logic + sheet.
                 if (item.kind === 'event') {
                   const ev = item.event
                   return (
-                    <m.div key={`event-${ev.occurrenceId}`} data-testid={`event-${ev.occurrenceId}`} {...postEnterExit(reduce)}>
-                      <EventFeedCard
+                    <m.div key={`event-${ev.eventId}`} data-testid={`event-${ev.occurrenceId}`} {...postEnterExit(reduce)}>
+                      <EventCard
                         event={ev}
+                        locale={eventLocale}
+                        surface="feed"
+                        distanceBucket={ev.distanceBucket}
                         myStatus={eventMyStatuses[ev.occurrenceId] ?? 'none'}
                         anonymousClaimed={eventAnonClaims.has(ev.occurrenceId)}
-                        onCheckedIn={refreshFeed}
+                        onCheckedIn={(occurrenceId, result) => {
+                          // Apply the server's check_in answer to this card in place (the feed,
+                          // the member's place and focus stay); re-read only when it is unknown.
+                          const effect = checkinResultEffect(result)
+                          if (!effect) { refreshFeed(); return }
+                          if ('anonymous' in effect) setEventAnonClaims((prev) => new Set(prev).add(occurrenceId))
+                          else setEventMyStatuses((prev) => ({ ...prev, [occurrenceId]: effect.status }))
+                        }}
                       />
                     </m.div>
                   )

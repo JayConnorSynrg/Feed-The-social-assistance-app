@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 interface CreateAccountPromptProps {
   /** Optional override message. Defaults to the standard guest-UX copy. */
   message?: string
+  /** Optional translated label for the sign-up link. Defaults to the English label. */
+  linkLabel?: string
 }
 
 /**
@@ -14,14 +16,14 @@ interface CreateAccountPromptProps {
  * Modelled after chat-panel's SignInPrompt but for guest sessions that
  * already have a Supabase user object — they just need a real account.
  */
-export function CreateAccountPrompt({ message }: CreateAccountPromptProps) {
+export function CreateAccountPrompt({ message, linkLabel = 'Create free account' }: CreateAccountPromptProps) {
   const defaultMessage = "Create a free account to save your information and use this feature"
   return (
     <div
       className="flex flex-col items-center gap-3 p-4 bg-lime-50 rounded-lg border border-lime-200"
       data-testid="create-account-prompt"
     >
-      <UserPlus className="h-6 w-6 text-lime-700" />
+      <UserPlus className="h-6 w-6 text-lime-700" aria-hidden="true" />
       <p className="text-sm text-stone-700 text-center">
         {message ?? defaultMessage}
       </p>
@@ -31,7 +33,7 @@ export function CreateAccountPrompt({ message }: CreateAccountPromptProps) {
         size="sm"
       >
         <Link href="/signup" data-testid="create-account-prompt-link">
-          Create free account
+          {linkLabel}
         </Link>
       </Button>
     </div>

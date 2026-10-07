@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-06T00:00:00.000Z",
+  "lastUpdated": "2026-10-07T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -777,6 +777,15 @@
       "recordedAt": "2026-10-06",
       "pr": "#233",
       "migrationApplied": "20261020000000 (2026-10-06 19:06 UTC, after zero-persist rehearsal; ledger top 20261020000000)"
+    },
+    "feed-events-recurring-announce": {
+      "status": "COMPLETE",
+      "migration": "20261023000000_events_recurring_announce",
+      "branch": "feature/feed-events-recurring-announce",
+      "spec": "specs/events-recurring-contract.md + specs/org-scoped-admin-model.md \u00a710.5",
+      "docs": "docs/admin-organizations.md",
+      "note": "Organization events can repeat (weekly every 1-4 weeks on chosen weekdays, or monthly nth/last weekday or day of month; ends on a date (default 6 months), after N dates, or never) with a preview of the next dates, and each event chooses when each date is posted to the community feed and the members' Events tab (0/1/3/7/14/30 days before, default 7, from 00:00 venue time). Dates are generated today..today+180 at save time and nightly (pg_cron events_generate_nightly 37 3 * * *; watchdog 37 15 * * *). Edits move/replace only future check-in-free dates; check-in dates are never moved or deleted; stop repeating keeps the next date as a one-off (also while retired). Overview lists series ending within 30 days with Repeat for 6 more months (extend_event_series). Feed + Events tab share event_feed_next: one card per event, identical for every viewer; a cancelled next date stays listed until it ends with the following date (upcoming_events). Gates: tsc 0, eslint 0 errors/121 warnings, vitest 105 files/1349 passed, node --test 62/62, build ok, SECDEF guard 157 pinned, PG17 harness 6 smokes + 2 races PASS; security MERGE-READY, a11y A11Y-PASS. See checklist 1.6.17.",
+      "recordedAt": "2026-10-07"
     }
   }
 }

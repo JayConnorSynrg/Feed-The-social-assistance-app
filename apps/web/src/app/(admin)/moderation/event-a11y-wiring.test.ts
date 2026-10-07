@@ -60,3 +60,57 @@ describe('location field', () => {
     expect(loc).toMatch(/\[opts\.note, error \? errId : null\]/)
   })
 })
+
+describe('recurring-events review fixes (wiring the node env cannot render)', () => {
+  const scheduler = read('event-scheduler.tsx')
+  const edit = read('event-edit-dialog.tsx')
+
+  it('Edit focuses the first error in its own document order and returns to Save changes after a failed stop-confirm', () => {
+    expect(edit).toMatch(/firstErrorField\(next, EDIT_FIELD_ORDER\)/)
+    expect(edit).toMatch(/if \(focusAfterFailedSave\(placed, stopConfirmed\) === 'submit'\) requestAnimationFrame\(\(\) => submitRef\.current\?\.focus\(\)\)/)
+  })
+
+  it('a failed calendar window never replaces the tab; both calendars show the inline status', () => {
+    expect(scheduler).toMatch(/const loadState = listState === 'error' \? 'error' :/)
+    expect(scheduler.match(/<CalendarWindowStatus result=\{\{ state: windowState, overLimit: windowOverLimit, retrying: windowRetrying \}\}/g)).toHaveLength(2)
+  })
+
+  it('"Load more dates" has its own event key, shows its failure next to the button, and announces what loaded', () => {
+    expect(scheduler).toMatch(/eventFormT\(locale, 'loadMoreDates'\)/)
+    expect(scheduler).not.toMatch(/dirLoadMore/)
+    expect(scheduler).toMatch(/aria-describedby=\{pastError \? 'ev-past-more-err' : undefined\}/)
+    expect(scheduler).toMatch(/setNotice\(page\.notice\)/)
+  })
+
+  it('date badges use a logical margin (right-to-left safe)', () => {
+    expect(scheduler).toMatch(/className="me-1 mt-0\.5 inline-block rounded-full/)
+    expect(scheduler).not.toMatch(/\bmr-1\b/)
+  })
+})
+
+describe('calendar window retry focus', () => {
+  const scheduler = read('event-scheduler.tsx')
+  it('Try again marks a retry; once the window read settles the visible calendar label (tabIndex -1) takes focus', () => {
+    expect(scheduler).toMatch(/const retryWindow = \(\) => \{\s*windowRetryPending\.current = true/)
+    expect(scheduler.match(/onRetry=\{retryWindow\}/g)).toHaveLength(2)
+    expect(scheduler).toMatch(/focusAfterWindowRetry\(windowRetryPending, windowState, visibleCalendarLabel\(\[weekLabelRef\.current, dayLabelRef\.current\]\)\)/)
+    expect(scheduler).toMatch(/windowRetryPending\.current = true\s*setWindowRetrying\(true\)/)
+    expect(scheduler.match(/retrying: windowRetrying \}\}/g)).toHaveLength(2)
+    expect(scheduler.match(/setWindowSettled\(\(n\) => n \+ 1\)/g)).toHaveLength(2)
+    expect(scheduler).toMatch(/<span ref=\{weekLabelRef\} tabIndex=\{-1\}/)
+    expect(scheduler).toMatch(/<div ref=\{dayLabelRef\} tabIndex=\{-1\}/)
+  })
+})
+
+describe('the same status sentence is announced again', () => {
+  const scheduler = read('event-scheduler.tsx')
+  const button = read('extend-series-button.tsx')
+  const overview = read('org/org-overview.tsx')
+  it('the status line is cleared before each awaited Load more / Extend', () => {
+    expect(scheduler).toMatch(/setNotice\(null\)\s*const res = await pastDatesQuery/)
+    expect(button).toMatch(/onStart\?\.\(\)\s*const outcome = await runExtend/)
+    expect(scheduler).toMatch(/onStart=\{\(\) => setNotice\(null\)\}/)
+    expect(overview).toMatch(/onStart=\{\(\) => setNotice\(''\)\}/)
+    expect(overview).toMatch(/onStart=\{onStart\}/)
+  })
+})

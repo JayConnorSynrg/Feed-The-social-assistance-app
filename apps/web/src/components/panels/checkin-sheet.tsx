@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Loader2, Users, CheckCircle2, Minus, Plus, CalendarCheck } from 'lucide-react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Loader2, Users, CheckCircle2, Minus, Plus, CalendarCheck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { HOUSEHOLD_MIN, HOUSEHOLD_MAX } from '@/lib/event-checkin'
 import { formatEventWhen } from '@/lib/event-time'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { eventFormT, formatMessage } from '@/lib/i18n-event-forms'
+import { checkinErrorKey, eventMemberT, type EventMemberMessages } from '@/lib/i18n-event-member'
 import {
   Sheet,
   SheetContent,
@@ -40,10 +43,31 @@ interface CheckinSheetProps {
    * an existing tracked row (a member is counted at most once per occurrence, M2).
    */
   hasTrackedRow?: boolean
-  onSuccess?: () => void
+  /**
+   * Called when the sheet CLOSES after a successful check-in, with the check_in RPC's answer
+   * ('early' | 'already_early' | 'confirmed' | 'already_confirmed' | 'confirmed_anonymous'; null
+   * when the request was cut off and the answer is unknown). Calling it on close — not on submit —
+   * keeps the confirmation on screen until the member dismisses it.
+   */
+  onSuccess?: (result: string | null) => void
+  /** Where focus goes when the sheet closes (Radix onCloseAutoFocus). */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
-export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence, hasTrackedRow = false, onSuccess }: CheckinSheetProps) {
+/**
+ * What to report when the sheet's open state changes: the check_in answer when it closes after a
+ * successful check-in, else nothing. The confirmation therefore stays on screen until the member
+ * dismisses it, and the list behind the sheet changes only after that.
+ */
+export function checkinResultOnClose(
+  nextOpen: boolean,
+  succeeded: boolean,
+  result: string | null,
+): { result: string | null } | null {
+  return !nextOpen && succeeded ? { result } : null
+}
+
+export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence, hasTrackedRow = false, onSuccess, onCloseAutoFocus }: CheckinSheetProps) {
   const supabase = createClient()
   const { isAnonymous } = useAuth()
   const locale = useProfileLocale()
@@ -53,9 +77,16 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
   // attendance or badges — stated inline below.
   const [anonymous, setAnonymous] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // A translated message key — the check_in RPC's own (English) text never reaches the member.
+  const [error, setError] = useState<keyof EventMemberMessages | null>(null)
   const [success, setSuccess] = useState(false)
   const [resultKind, setResultKind] = useState<string | null>(null)
+  const successHeadingRef = useRef<HTMLParagraphElement>(null)
+
+  // Move focus to the confirmation so it is read out (the submit button it replaces is gone).
+  useEffect(() => {
+    if (success) successHeadingRef.current?.focus()
+  }, [success])
 
   const handleSubmit = useCallback(async () => {
     setSubmitting(true)
@@ -70,13 +101,12 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
       })
 
       if (rpcError) {
-        setError(rpcError.message)
+        setError(checkinErrorKey(rpcError.message))
         return
       }
 
       setResultKind(typeof data === 'string' ? data : null)
       setSuccess(true)
-      onSuccess?.()
     } catch (err) {
       // Next.js may abort the fetch on re-render — treat AbortError as success.
       if (
@@ -84,16 +114,16 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
         (err instanceof Error && err.message.includes('signal'))
       ) {
         setSuccess(true)
-        onSuccess?.()
         return
       }
-      setError(err instanceof Error ? err.message : 'Failed to check in')
+      setError('errGeneric')
     } finally {
       setSubmitting(false)
     }
-  }, [supabase, occurrence.id, anonymous, householdSize, onSuccess])
+  }, [supabase, occurrence.id, anonymous, householdSize])
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
+    const report = checkinResultOnClose(nextOpen, success, resultKind)
     if (!nextOpen) {
       setHouseholdSize(1)
       setAnonymous(false)
@@ -102,32 +132,50 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
       setResultKind(null)
     }
     onOpenChange(nextOpen)
-  }, [onOpenChange])
+    if (report) onSuccess?.(report.result)
+  }, [onOpenChange, onSuccess, success, resultKind])
 
   const ev = occurrence.event
   const isEarly = resultKind === 'early' || (resultKind === 'already_early')
   const isAnon = resultKind === 'confirmed_anonymous'
+  const t = (key: keyof EventMemberMessages) => eventMemberT(locale, key)
+  const actionLabel = eventFormT(locale, confirmsPresence ? 'checkinHere' : 'checkinEarly')
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="flex flex-col overflow-y-auto">
+      <SheetContent
+        className="flex flex-col overflow-y-auto"
+        lang={locale}
+        dir={dir(locale)}
+        hideDefaultClose
+        aria-describedby={undefined}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <button
+          type="button"
+          onClick={() => handleOpenChange(false)}
+          className="absolute end-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">{t('closeSheet')}</span>
+        </button>
         <SheetHeader>
           <SheetTitle className="text-[#4a5d23]">
-            {confirmsPresence ? "I'm here" : 'Check in early'}
+            {actionLabel}
           </SheetTitle>
           {ev && (
             <div className="mt-1 space-y-0.5">
               <p className="text-sm font-medium text-stone-800">{ev.title}</p>
               {ev.organization && (
-                <p className="text-xs text-stone-500">{ev.organization.name}</p>
+                <p className="text-xs text-stone-600">{ev.organization.name}</p>
               )}
               {ev.location_name && (
-                <p className="text-xs text-stone-500">{ev.location_name}</p>
+                <p className="text-xs text-stone-600">{ev.location_name}</p>
               )}
               {(() => {
                 const when = formatEventWhen(occurrence.starts_at, occurrence.ends_at, ev.time_zone, locale)
                 return (
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-600">
                     {when.text}
                     {when.venue && <span className="block">{when.venue}</span>}
                   </p>
@@ -141,42 +189,41 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
           {isAnonymous ? (
             // R8: guests cannot check in — offer the account path.
             <div className="pt-4">
-              <CreateAccountPrompt message="Create a free account to check in to events and track your attendance" />
+              <CreateAccountPrompt message={t('guestPrompt')} linkLabel={t('createAccount')} />
             </div>
           ) : success ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
               {isAnon ? (
                 <>
                   <CheckCircle2 className="w-12 h-12 text-lime-600" aria-hidden="true" />
-                  <p className="text-base font-semibold text-stone-800">Counted anonymously ✓</p>
-                  <p className="text-sm text-stone-500">
-                    Your visit was added to the event count, not linked to your account — so it
-                    won&rsquo;t appear in your attendance or badges.
-                  </p>
+                  <p ref={successHeadingRef} tabIndex={-1} className="text-base font-semibold text-stone-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">{eventFormT(locale, 'checkinAnonymous')}</p>
+                  <p className="text-sm text-stone-600">{t('successAnonBody')}</p>
                 </>
               ) : isEarly ? (
                 <>
                   <CalendarCheck className="w-12 h-12 text-lime-600" aria-hidden="true" />
-                  <p className="text-base font-semibold text-stone-800">You&rsquo;re on the list!</p>
-                  <p className="text-sm text-stone-500">
-                    Tap &ldquo;I&rsquo;m here&rdquo; when you arrive to confirm your attendance.
+                  <p ref={successHeadingRef} tabIndex={-1} className="text-base font-semibold text-stone-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">{t('successEarlyTitle')}</p>
+                  <p className="text-sm text-stone-600">
+                    {formatMessage(t('successEarlyBody'), { here: eventFormT(locale, 'checkinHere') })}
                   </p>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-12 h-12 text-lime-600" aria-hidden="true" />
-                  <p className="text-base font-semibold text-stone-800">You&rsquo;re checked in!</p>
-                  <p className="text-sm text-stone-500">Thank you for being here.</p>
+                  <p ref={successHeadingRef} tabIndex={-1} className="text-base font-semibold text-stone-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">{t('successTitle')}</p>
+                  <p className="text-sm text-stone-600">{t('successBody')}</p>
                 </>
               )}
             </div>
           ) : (
             <>
               {/* Household size */}
-              <div className="space-y-3">
+              <div className="space-y-3" role="group" aria-labelledby="checkin-household-label">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#4a5d23]" aria-hidden="true" />
-                  <label className="text-sm font-medium text-stone-700">Household size</label>
+                  <span id="checkin-household-label" className="text-sm font-medium text-stone-700">
+                    {t('householdLabel')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-4">
                   <button
@@ -184,25 +231,26 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
                     onClick={() => setHouseholdSize((s) => Math.max(HOUSEHOLD_MIN, s - 1))}
                     disabled={householdSize <= HOUSEHOLD_MIN}
                     className="w-9 h-9 rounded-full border border-stone-200 bg-white flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    aria-label="Decrease household size"
+                    aria-label={t('householdDecrease')}
                   >
-                    <Minus className="w-4 h-4" />
+                    <Minus className="w-4 h-4" aria-hidden="true" />
                   </button>
-                  <span className="text-2xl font-bold text-stone-900 w-8 text-center tabular-nums">
+                  <output
+                    aria-live="polite"
+                    aria-labelledby="checkin-household-label"
+                    className="text-2xl font-bold text-stone-900 w-8 text-center tabular-nums"
+                  >
                     {householdSize}
-                  </span>
+                  </output>
                   <button
                     type="button"
                     onClick={() => setHouseholdSize((s) => Math.min(HOUSEHOLD_MAX, s + 1))}
                     disabled={householdSize >= HOUSEHOLD_MAX}
                     className="w-9 h-9 rounded-full border border-stone-200 bg-white flex items-center justify-center text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    aria-label="Increase household size"
+                    aria-label={t('householdIncrease')}
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-4 h-4" aria-hidden="true" />
                   </button>
-                  <span className="text-xs text-stone-400">
-                    {householdSize === 1 ? 'person' : 'people'}
-                  </span>
                 </div>
               </div>
 
@@ -223,19 +271,16 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
                   />
                   <div className="space-y-0.5">
                     <label htmlFor="anon-checkin" className="text-sm font-medium text-stone-700 cursor-pointer">
-                      Check in anonymously
+                      {t('anonLabel')}
                     </label>
-                    <p className="text-xs text-stone-400">
-                      Your visit is counted for the event, but not linked to your account — it won&rsquo;t
-                      count toward your attendance or badges.
-                    </p>
+                    <p className="text-xs text-stone-600">{t('anonHint')}</p>
                   </div>
                 </div>
               )}
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3">
-                  <p className="text-sm text-red-700">{error}</p>
+                <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3" role="alert">
+                  <p className="text-sm text-red-700">{t(error)}</p>
                 </div>
               )}
 
@@ -247,11 +292,11 @@ export function CheckinSheet({ occurrence, open, onOpenChange, confirmsPresence,
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Checking in…</span>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <span>{t('submitting')}</span>
                   </>
                 ) : (
-                  confirmsPresence ? "I'm here" : 'Check in early'
+                  actionLabel
                 )}
               </button>
             </>

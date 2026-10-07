@@ -424,6 +424,13 @@ granted to anon/authenticated/service_role (identical grants to `ranked_feed`).
   (`DISTINCT ON (event_id) … ORDER BY starts_at ASC`) where the occurrence is
   `status='upcoming' AND ends_at>=now() AND starts_at<=now()+30d` — matching the
   events-panel horizon. `kind='event'`, row `id = occurrence id`.
+  *(Superseded by `20261023000000_events_recurring_announce.sql`: the 30-day horizon is
+  each event's announce window — from 00:00 venue local time `announce_days_before`
+  (0/1/3/7/14/30, default 7) days before the date's local date — via the shared rule
+  `event_feed_next`, which the members' Events tab also reads (`upcoming_events`); an
+  admin-cancelled next date keeps the event listed (as that cancelled occurrence) until it
+  ends. The score becomes max(freshness since the date became shown, proximity to start)
+  — proximity only for a cancelled row — × the same distance factor. See `specs/org-scoped-admin-model.md` §10.5.)*
   - Ranking (LOCKED rulings): engagement term = `1.0` (events have no
     likes/comments); `age_h = |now - starts_at|` in hours (peaks around the start,
     same half-life fading before **and** after); the **same** quantized distance

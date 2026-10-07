@@ -4,8 +4,9 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // One-step event creation: title, type, optional description, date + start + end in the venue's
-// time zone, and the location — then ONE create_org_event call writes the event with its first
-// date. The parent remounts this dialog (key) every time it opens, so each open is a new form
+// time zone, whether and how it repeats (with a preview of its next dates), when each date is
+// posted to the feed, and the location — then ONE create_org_event call writes the event with
+// its repeat rule, its lead and its first date(s). The parent remounts this dialog (key) every time it opens, so each open is a new form
 // with a new idempotency key; retries of that form reuse the key (the server returns the same
 // event), and the key is renewed after a successful create. A click while a save is in flight is
 // refused before any request (single-flight flag flipped synchronously in the controller).
@@ -18,6 +19,12 @@ import { orgFormT } from '@/lib/i18n-org-forms'
 import { EVENT_TYPES, eventFormT, eventTypeLabel } from '@/lib/i18n-event-forms'
 import { browserTimeZone } from '@/lib/event-time'
 import { createOrgEvent } from '@/lib/event-admin-rpc'
+import {
+  DEFAULT_ANNOUNCE_LEAD,
+  defaultRecurrenceForm,
+  recurrenceRuleFromForm,
+  withRecurrenceStartDate,
+} from '@/lib/event-recurrence'
 import {
   buildCreateArgs,
   createSubmitController,
@@ -45,6 +52,7 @@ import {
   useOrgHasPin,
 } from './event-form-ui'
 import { EventLocationField } from './event-location-field'
+import { LeadField, RepeatField, RepeatPreview, focusField } from './event-repeat-field'
 import type { AdminOrg } from './use-admin-orgs'
 
 export type OrgChoice = { kind: 'fixed'; orgId: string } | { kind: 'pick'; orgs: AdminOrg[] }
@@ -78,6 +86,7 @@ export function EventCreateDialog({
   const [controller] = useState(() => createSubmitController(mintIdempotencyKey))
   const [draft, setDraft] = useState<CreateEventDraft>(() => {
     const tz = browserTimeZone()
+    const date = initialDate ?? todayIn(tz)
     return {
       orgId: orgChoice.kind === 'fixed' ? orgChoice.orgId : '',
       title: '',
@@ -85,8 +94,10 @@ export function EventCreateDialog({
       description: '',
       locationName: '',
       timeZone: tz,
-      time: sameDayTime(initialDate ?? todayIn(tz), '09:00', '11:00'),
+      time: sameDayTime(date, '09:00', '11:00'),
       location: defaultLocation(false),
+      recurrence: defaultRecurrenceForm(date),
+      announce: DEFAULT_ANNOUNCE_LEAD,
     }
   })
   const [locationTouched, setLocationTouched] = useState(false)
@@ -106,10 +117,11 @@ export function EventCreateDialog({
   const endRef = useRef<HTMLInputElement>(null)
   const timeZoneRef = useRef<HTMLSelectElement>(null)
   const locationRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const showErrors = (next: FieldErrors) => {
     setErrors(next)
     const first = firstErrorField(next)
-    const target = {
+    const target: Partial<Record<NonNullable<typeof first>, { current: { focus: () => void } | null }>> = {
       org: orgRef,
       title: titleRef,
       date: dateRef,
@@ -119,10 +131,22 @@ export function EventCreateDialog({
       timeZone: timeZoneRef,
       location: locationRef,
     }
-    if (first) requestAnimationFrame(() => target[first].current?.focus())
+    if (!first) return
+    const ref = target[first]
+    requestAnimationFrame(() => (ref ? ref.current?.focus() : focusField(formRef.current, first)))
   }
 
   const set = <K extends keyof CreateEventDraft>(k: K, v: CreateEventDraft[K]) => setDraft((d) => ({ ...d, [k]: v }))
+  // A new start date carries the repeat choices that only echoed the old one (its weekday, its
+  // day of the month, the six-month end) along with it.
+  const setTime = (time: CreateEventDraft['time']) =>
+    setDraft((d) => ({
+      ...d,
+      time,
+      recurrence: time.date === d.time.date ? d.recurrence : withRecurrenceStartDate(d.recurrence, d.time.date, time.date),
+    }))
+  const built = recurrenceRuleFromForm(draft.recurrence, draft.time.date)
+  const previewRule = built.ok ? built.rule : null
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -164,7 +188,7 @@ export function EventCreateDialog({
 
   return (
     <EventDialog open={open} onOpenChange={onOpenChange} title={eventFormT(locale, 'createTitle')} locale={locale} onCloseAutoFocus={onCloseAutoFocus}>
-      <form noValidate onSubmit={handleSubmit} className="space-y-4">
+      <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-4">
         {orgChoice.kind === 'pick' && (
           <div className="space-y-1">
             <label htmlFor={orgId} className={LABEL}>
@@ -243,7 +267,7 @@ export function EventCreateDialog({
             idPrefix={`${uid}-when`}
             locale={locale}
             value={draft.time}
-            onChange={(t) => set('time', t)}
+            onChange={setTime}
             errors={errors}
             refs={{ date: dateRef, start: startRef, endDate: endDateRef, end: endRef }}
             describedBy={`${uid}-tz-hint`}
@@ -257,6 +281,31 @@ export function EventCreateDialog({
             selectRef={timeZoneRef}
           />
         </fieldset>
+
+        <RepeatField
+          idPrefix={`${uid}-repeat`}
+          locale={locale}
+          value={draft.recurrence}
+          onChange={(r) => set('recurrence', r)}
+          startDate={draft.time.date}
+          errors={errors}
+        />
+        <RepeatPreview
+          supabase={supabase}
+          locale={locale}
+          rule={previewRule}
+          time={draft.time}
+          timeZone={draft.timeZone}
+          orgId={draft.orgId}
+        />
+        <LeadField
+          id={`${uid}-lead`}
+          locale={locale}
+          value={draft.announce}
+          onChange={(n) => set('announce', n)}
+          firstDate={draft.time.date}
+          error={errors.lead}
+        />
 
         <div className="space-y-1">
           <label htmlFor={placeId} className={LABEL}>

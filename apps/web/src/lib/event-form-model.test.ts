@@ -11,18 +11,30 @@ vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.f
 import {
   buildCreateArgs,
   buildUpdateArgs,
+  canExtendSeries,
   createSubmitController,
   defaultLocation,
+  firstErrorField,
+  intervalMinutes,
+  isExtraDate,
   locateTimeError,
   resolveLocation,
   sameDayTime,
+  sameRule,
+  seriesLastDate,
+  seriesState,
+  seriesTimeFromStored,
+  stopsRepeating,
+  timeDraftFromInstants,
   toLocalDates,
   withStartDate,
   validateDateRows,
   validateTime,
   type CreateEventDraft,
   type DraftPin,
+  type EditEventDraft,
 } from './event-form-model'
+import { defaultRecurrenceForm, recurrenceFormFromRule, type RecurrenceFormState, type RecurrenceRule } from './event-recurrence'
 
 function keys() {
   let n = 0
@@ -122,8 +134,15 @@ function draft(over: Partial<CreateEventDraft> = {}): CreateEventDraft {
     timeZone: 'America/New_York',
     time: { date: '2026-11-10', start: '10:00', endDate: '2026-11-10', end: '11:30' },
     location: { source: 'org' },
+    recurrence: defaultRecurrenceForm('2026-11-10'),
+    announce: 7,
     ...over,
   }
+}
+
+/** The create form with its repeat section switched on (2026-11-10 is a Tuesday). */
+function repeating(over: Partial<RecurrenceFormState>, base = '2026-11-10'): RecurrenceFormState {
+  return { ...defaultRecurrenceForm(base), ...over }
 }
 
 describe('create arguments', () => {
@@ -142,6 +161,7 @@ describe('create arguments', () => {
         p_starts_local: '2026-11-10T10:00',
         p_ends_local: '2026-11-10T11:30',
         p_location_source: 'org',
+        p_announce_days_before: 7,
       },
     })
   })
@@ -202,12 +222,28 @@ describe('time validation (venue zone)', () => {
   })
 })
 
+const oneOffStored = { rule: null, time: sameDayTime('2026-11-10', '10:00', '11:30'), announce: 7 as const }
+
+function editDraft(over: Partial<EditEventDraft> = {}): EditEventDraft {
+  return {
+    eventId: 'e-1',
+    title: 'Meal',
+    eventType: 'meal',
+    description: '',
+    locationName: '',
+    location: { source: 'keep' },
+    timeZone: 'America/New_York',
+    recurrence: defaultRecurrenceForm('2026-11-10'),
+    time: oneOffStored.time,
+    announce: 7,
+    stored: oneOffStored,
+    ...over,
+  }
+}
+
 describe('edit arguments', () => {
-  it('no rrule, no geocode tier, no time zone; blanked text fields are cleared', () => {
-    const r = buildUpdateArgs(
-      { eventId: 'e-1', title: 'Meal', eventType: 'meal', description: '', locationName: '', location: { source: 'keep' } },
-      true,
-    )
+  it('no geocode tier, no time zone, no unchanged series field; blanked text fields are cleared', () => {
+    const r = buildUpdateArgs(editDraft(), true)
     expect(r).toEqual({
       ok: true,
       args: {
@@ -269,5 +305,195 @@ describe('overnight events — an end date after the start date', () => {
     const rows = [sameDayTime('2026-11-07', '10:00', '11:00'), sameDayTime('2026-11-14', '10:00', '11:00')]
     expect(locateTimeError('2026-11-14 10:00', rows, 'start')).toEqual({ row: 1, field: 'start' })
     expect(locateTimeError('2026-12-01 10:00', rows, 'start')).toEqual({ row: 0, field: 'start' })
+  })
+})
+
+describe('create — repeat and "post to the feed"', () => {
+  it('weekly on the start weekday, ending after six months by default: ONE call carries the rule and the lead', () => {
+    const r = buildCreateArgs(draft({ recurrence: repeating({ repeat: 'weekly' }), announce: 14 }), 'k-1', true)
+    expect(r.ok && r.args.p_recurrence).toEqual({ frequency: 'weekly', byDay: [{ day: 'tu' }], until: '2027-05-10T23:59:59' })
+    expect(r.ok && r.args.p_announce_days_before).toBe(14)
+    expect(r.ok && [r.args.p_starts_local, r.args.p_ends_local]).toEqual(['2026-11-10T10:00', '2026-11-10T11:30'])
+  })
+
+  it('every 2 weeks on Tuesday and Thursday, after 12 dates: days written Sunday-first, interval only above 1', () => {
+    const r = buildCreateArgs(
+      draft({ recurrence: repeating({ repeat: 'weekly', interval: 2, weekdays: ['th', 'tu'], end: 'count', count: '12' }) }),
+      'k',
+      true,
+    )
+    expect(r.ok && r.args.p_recurrence).toEqual({ frequency: 'weekly', interval: 2, byDay: [{ day: 'tu' }, { day: 'th' }], count: 12 })
+  })
+
+  it('monthly on the second Tuesday, never ending', () => {
+    const r = buildCreateArgs(
+      draft({
+        recurrence: repeating({ repeat: 'monthly', monthly: { kind: 'weekday', days: [{ day: 'tu', nthOfPeriod: 2 }] }, end: 'never' }),
+      }),
+      'k',
+      true,
+    )
+    expect(r.ok && r.args.p_recurrence).toEqual({ frequency: 'monthly', byDay: [{ day: 'tu', nthOfPeriod: 2 }] })
+  })
+
+  it('a one-off event sends no rule at all (NULL = one date) but still its lead', () => {
+    const r = buildCreateArgs(draft({ announce: 0 }), 'k', true)
+    expect(r.ok && 'p_recurrence' in r.args).toBe(false)
+    expect(r.ok && r.args.p_announce_days_before).toBe(0)
+  })
+
+  it('the first date must be one of the pattern’s dates — refused before any request', () => {
+    // Tuesday start, Saturday pattern.
+    const r = buildCreateArgs(draft({ recurrence: repeating({ repeat: 'weekly', weekdays: ['sa'] }) }), 'k', true)
+    expect(r).toEqual({ ok: false, errors: { pattern: { key: 'errRepeatStartNotInPattern' } } })
+  })
+
+  it('a repeating date longer than 24 hours is refused on End; a one-off may run longer', () => {
+    const time = { date: '2026-11-10', start: '20:00', endDate: '2026-11-11', end: '21:00' }
+    expect(buildCreateArgs(draft({ time, recurrence: repeating({ repeat: 'weekly' }) }), 'k', true)).toEqual({
+      ok: false,
+      errors: { end: { key: 'errRepeatTooLong' } },
+    })
+    expect(buildCreateArgs(draft({ time }), 'k', true).ok).toBe(true)
+  })
+
+  it('a lead outside the presets is refused', () => {
+    expect(buildCreateArgs(draft({ announce: 5 }), 'k', true)).toEqual({ ok: false, errors: { lead: { key: 'errLeadPreset' } } })
+  })
+
+  it('focus order: the repeat section comes after the times and before the lead and the location', () => {
+    expect(firstErrorField({ location: { key: 'errConfirmPin' }, lead: { key: 'errLeadPreset' }, pattern: { key: 'errRepeatStartNotInPattern' } })).toBe('pattern')
+    expect(firstErrorField({ weekdays: { key: 'errRepeatNoDays' }, end: { key: 'errRepeatTooLong' } })).toBe('end')
+  })
+})
+
+describe('edit — only what changed is sent', () => {
+  const weeklySat: RecurrenceRule = { frequency: 'weekly', byDay: [{ day: 'sa' }], until: '2027-04-10T23:59:59' }
+  const satTime = sameDayTime('2026-10-10', '09:00', '11:00')
+  const stored = { rule: weeklySat, time: satTime, announce: 7 as const }
+  const series = (over: Partial<EditEventDraft> = {}) =>
+    editDraft({ recurrence: recurrenceFormFromRule(weeklySat, '2026-10-10'), time: satTime, stored, ...over })
+
+  it('a repeating event saved untouched sends no rule, no first date and no lead', () => {
+    const r = buildUpdateArgs(series(), true)
+    expect(r.ok && Object.keys(r.args).filter((k) => /recurrence|series|announce/.test(k))).toEqual([])
+    expect(r.ok && r.args.p_clear).toEqual(['description', 'location_name'])
+  })
+
+  it('a new lead only: p_announce_days_before alone', () => {
+    const r = buildUpdateArgs(series({ announce: 1 }), true)
+    expect(r.ok && r.args.p_announce_days_before).toBe(1)
+    expect(r.ok && [r.args.p_recurrence, r.args.p_series_starts_local]).toEqual([undefined, undefined])
+  })
+
+  it('a new time for every upcoming date: the stored first DATE with the new times, no rule', () => {
+    const r = buildUpdateArgs(series({ time: sameDayTime('2026-10-10', '10:30', '12:00') }), true)
+    expect(r.ok && [r.args.p_series_starts_local, r.args.p_series_ends_local, r.args.p_recurrence]).toEqual([
+      '2026-10-10T10:30',
+      '2026-10-10T12:00',
+      undefined,
+    ])
+  })
+
+  it('a new pattern that still includes the first date: p_recurrence only', () => {
+    const r = buildUpdateArgs(series({ recurrence: { ...recurrenceFormFromRule(weeklySat, '2026-10-10'), weekdays: ['sa', 'we'] } }), true)
+    expect(r.ok && r.args.p_recurrence).toEqual({ frequency: 'weekly', byDay: [{ day: 'we' }, { day: 'sa' }], until: '2027-04-10T23:59:59' })
+    expect(r.ok && r.args.p_series_starts_local).toBeUndefined()
+  })
+
+  it('a new pattern that leaves out the first date is refused until the first date moves', () => {
+    const sunOnly = { ...recurrenceFormFromRule(weeklySat, '2026-10-10'), weekdays: ['su' as const] }
+    expect(buildUpdateArgs(series({ recurrence: sunOnly }), true)).toEqual({
+      ok: false,
+      errors: { pattern: { key: 'errRepeatStartNotInPattern' } },
+    })
+    const r = buildUpdateArgs(series({ recurrence: sunOnly, time: sameDayTime('2026-10-11', '09:00', '11:00') }), true)
+    expect(r.ok && [r.args.p_recurrence, r.args.p_series_starts_local]).toEqual([
+      { frequency: 'weekly', byDay: [{ day: 'su' }], until: '2027-04-10T23:59:59' },
+      '2026-10-11T09:00',
+    ])
+  })
+
+  it('a one-off event that starts repeating sends the rule AND its first date', () => {
+    const r = buildUpdateArgs(editDraft({ recurrence: repeating({ repeat: 'weekly' }) }), true)
+    expect(r.ok && [r.args.p_recurrence, r.args.p_series_starts_local, r.args.p_series_ends_local]).toEqual([
+      { frequency: 'weekly', byDay: [{ day: 'tu' }], until: '2027-05-10T23:59:59' },
+      '2026-11-10T10:00',
+      '2026-11-10T11:30',
+    ])
+  })
+
+  it('Repeat: does not repeat on a series = stop repeating: p_clear recurrence and nothing else of the series', () => {
+    const d = series({ recurrence: { ...recurrenceFormFromRule(weeklySat, '2026-10-10'), repeat: 'none' } })
+    expect(stopsRepeating(d)).toBe(true)
+    const r = buildUpdateArgs(d, true)
+    expect(r.ok && r.args.p_clear).toEqual(['description', 'location_name', 'recurrence'])
+    expect(r.ok && [r.args.p_recurrence, r.args.p_series_starts_local]).toEqual([undefined, undefined])
+    expect(stopsRepeating(editDraft())).toBe(false)
+  })
+
+  it('the same rule written in another order is the same rule', () => {
+    expect(sameRule({ frequency: 'weekly', interval: 1, byDay: [{ day: 'sa' }, { day: 'tu' }] }, { frequency: 'weekly', byDay: [{ day: 'tu' }, { day: 'sa' }] })).toBe(true)
+    expect(sameRule({ frequency: 'monthly', byMonthDay: [15, 1] }, { frequency: 'monthly', byMonthDay: [1, 15] })).toBe(true)
+    expect(sameRule(weeklySat, { ...weeklySat, until: '2027-04-11T23:59:59' })).toBe(false)
+  })
+})
+
+describe('stored series -> form', () => {
+  it('reads the PostgREST interval text of series_duration', () => {
+    expect(intervalMinutes('01:30:00')).toBe(90)
+    expect(intervalMinutes('1 day')).toBe(1440)
+    expect(intervalMinutes('06:00:00')).toBe(360)
+    expect(intervalMinutes('PT1H')).toBeNull()
+    expect(intervalMinutes(null)).toBeNull()
+  })
+
+  it('first date + times from series_start_local and the length (overnight rolls to the next day)', () => {
+    expect(seriesTimeFromStored('2026-10-10T09:00:00', '02:00:00')).toEqual(sameDayTime('2026-10-10', '09:00', '11:00'))
+    expect(seriesTimeFromStored('2026-10-10T20:00:00', '06:00:00')).toEqual({ date: '2026-10-10', start: '20:00', endDate: '2026-10-11', end: '02:00' })
+  })
+
+  it('a one-off event’s next date on the VENUE clock (viewer zone does not matter)', () => {
+    expect(timeDraftFromInstants('2026-11-10T15:00:00Z', '2026-11-10T16:30:00Z', 'America/New_York')).toEqual(
+      sameDayTime('2026-11-10', '10:00', '11:30'),
+    )
+  })
+})
+
+describe('series display', () => {
+  const sat: RecurrenceRule = { frequency: 'weekly', byDay: [{ day: 'sa' }], until: '2026-11-03T23:59:59' }
+
+  it('the last date of an until series is the last pattern date on or before until; of a count series the count-th', () => {
+    expect(seriesLastDate(sat, '2026-10-10', '09:00')).toBe('2026-10-31')
+    expect(seriesLastDate({ frequency: 'weekly', byDay: [{ day: 'sa' }], count: 3 }, '2026-10-10')).toBe('2026-10-24')
+    expect(seriesLastDate({ frequency: 'monthly', byMonthDay: [31], count: 2 }, '2026-10-31')).toBe('2026-12-31')
+    expect(seriesLastDate({ frequency: 'weekly', byDay: [{ day: 'sa' }] }, '2026-10-10')).toBeNull()
+  })
+
+  it('ending soon within 30 days, ended once the last date passed, never for an open series', () => {
+    expect(seriesState(sat, '2026-10-10T09:00:00', '2026-10-07')).toMatchObject({ kind: 'ends', lastDate: '2026-10-31', endingSoon: true, ended: false })
+    expect(seriesState(sat, '2026-10-10T09:00:00', '2026-09-01')).toMatchObject({ kind: 'ends', endingSoon: false, ended: false })
+    expect(seriesState(sat, '2026-10-10T09:00:00', '2026-11-01')).toMatchObject({ kind: 'ends', ended: true })
+    expect(seriesState({ frequency: 'weekly', byDay: [{ day: 'sa' }] }, '2026-10-10T09:00:00', '2026-10-07')).toMatchObject({ kind: 'never' })
+    expect(seriesState(null, null, '2026-10-07')).toEqual({ kind: 'none' })
+  })
+
+  it('"Repeat for 6 more months" only on an ACTIVE series that ENDS', () => {
+    expect(canExtendSeries({ is_active: true, recurrence: sat })).toBe(true)
+    expect(canExtendSeries({ is_active: false, recurrence: sat })).toBe(false)
+    expect(canExtendSeries({ is_active: true, recurrence: { frequency: 'weekly', byDay: [{ day: 'sa' }] } })).toBe(false)
+    expect(canExtendSeries({ is_active: true, recurrence: null })).toBe(false)
+  })
+
+  it('"Extra date": a hand-added date off the pattern (or at another time); never a rule date or a one-off date', () => {
+    const ev = { recurrence: sat, series_start_local: '2026-10-10T09:00:00', time_zone: 'America/New_York' }
+    // Wed Oct 14 09:00 EDT, added by hand.
+    expect(isExtraDate({ source: 'manual', starts_at: '2026-10-14T13:00:00Z' }, ev)).toBe(true)
+    // Sat Oct 17 at the series time, added by hand: on the pattern.
+    expect(isExtraDate({ source: 'manual', starts_at: '2026-10-17T13:00:00Z' }, ev)).toBe(false)
+    // Sat Oct 17 at 18:00: same day, another time.
+    expect(isExtraDate({ source: 'manual', starts_at: '2026-10-17T22:00:00Z' }, ev)).toBe(true)
+    expect(isExtraDate({ source: 'rule', starts_at: '2026-10-14T13:00:00Z' }, ev)).toBe(false)
+    expect(isExtraDate({ source: 'manual', starts_at: '2026-10-14T13:00:00Z' }, { ...ev, recurrence: null })).toBe(false)
   })
 })

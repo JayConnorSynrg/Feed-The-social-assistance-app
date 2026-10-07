@@ -71,8 +71,8 @@ You can link straight to the panel: `/moderation?tab=organizations&org=new` (cre
 ## The organization admin page
 
 `/moderation/org/<id>` is the admin for one organization: **Overview** (that organization's active
-events, upcoming event dates, check-ins in the last 30 days, members), **Events**, **Profile** (the
-setup panel for that organization only) and **Members**.
+events, upcoming event dates, check-ins in the last 30 days, members, and repeating events ending
+soon), **Events**, **Profile** (the setup panel for that organization only) and **Members**.
 
 - **Who can open it**: a platform admin, for any non-business organization (active or inactive),
   and an admin of that organization while it is active. Guest accounts are refused. Anyone else, an
@@ -98,14 +98,43 @@ setup panel for that organization only) and **Members**.
   daylight-saving change is refused with a message naming it.
 - **Location**: the organization's own map pin by default. **Enter an address** instead looks it up
   with the US Census Geocoder; confirm the pin on the map before saving.
+- **Repeat**: an event can repeat **weekly** (every 1, 2, 3 or 4 weeks, on one or more days of the
+  week) or **monthly** (a day of the month, or the 1st/2nd/3rd/4th/last weekday). The start date and
+  times are the first date and apply to every date; the first date must be one of the repeating
+  dates, and each date lasts at most 24 hours. **Ends**: on a date (the default is six months after
+  the first date), after a number of dates (1 to 1000), or never. **Next dates** previews the
+  coming dates before you save. A month without the chosen day (31 in April) is skipped. On a
+  daylight-saving change a time the clocks skip moves later, which the preview points out.
+- **Dates of a repeating event** exist from today through the next six months; a nightly job adds
+  the following ones (03:37 UTC). Cancelling one date is permanent for the series; adding that date
+  again with **Add dates** schedules it again.
+- **Post to the feed**: each event chooses when each date appears on the community feed and in the
+  members' **Events** tab: on the day, 1, 3, 7 (the default), 14 or 30 days before. A date appears
+  from midnight, venue time, on that day and stays until it ends.
+- **Editing a repeating event**: a new time of day moves every upcoming date that has no check-ins
+  (same dates, new time). A new pattern replaces the upcoming dates without check-ins. A date that
+  already has check-ins is never moved or removed; if it no longer fits the pattern it is cancelled
+  and keeps its attendance. Dates added by hand are marked **Extra date** and are left as they are.
+- **Stop repeating** (choose **Does not repeat**): the next date stays as a single event (same date,
+  same check-ins). Later repeat dates without check-ins are removed; dates with check-ins are kept.
+  This works on a retired event too: the next date is kept and comes back when the event is
+  reactivated.
+- **Ending soon**: the Overview lists repeating events whose last date is within 30 days (or has
+  passed). **Repeat for 6 more months** extends one; a series that ends after a number of dates
+  then ends on a date six months after its last date. A double tap, or a retry after a dropped
+  connection, extends it once.
 - **Add dates** schedules more dates in the event's time zone. A date that is already scheduled is
-  left as it is; re-adding a cancelled date schedules it again (unless it already has check-ins).
+  left as it is; re-adding a cancelled date schedules it again (unless it already has check-ins). At
+  most 366 dates at a time.
 - **Cancel date** cancels one date. Ended dates keep their attendance history and cannot be
   cancelled.
 - **Edit** changes the details; **Retire event** cancels the dates that have not started (a date in
-  progress finishes normally).
-- **Community feed**: an event appears on the feed for everyone, signed in or not, while the event
-  and its organization are active and it has a date within the next 30 days.
+  progress finishes normally). Reactivating brings back the future dates without check-ins that
+  retiring cancelled, and fills in missing repeat dates.
+- **Community feed and Events tab**: everyone, signed in or not, sees the same events: one card per
+  event while the event and its organization are active, showing its next date once that date is
+  posted (see **Post to the feed**). When the next date is cancelled, the card stays until that date
+  would have ended and says so, with the following date: "Sat Oct 10 cancelled — next: Sat Oct 24".
 - Pressing Create twice, or retrying after a dropped connection, never creates a second event.
 - Every event change writes one row to the admin audit log (`admin_actions`).
 
