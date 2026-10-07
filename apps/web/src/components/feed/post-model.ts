@@ -21,6 +21,9 @@
 import type { Database } from '@feed/database'
 import type { Locale } from '@/lib/i18n'
 import { eventFormT, formatMessage, type EventFormMessages } from '@/lib/i18n-event-forms'
+import { formatShortDate, isKnownTimeZone, relativeTimeText, venueDateKey } from '@/lib/event-time'
+import { parseRecurrenceRule, type RecurrenceRule } from '@/lib/event-recurrence'
+import { formatCancelledNotice, formatRecurrence } from '@/lib/event-recurrence-format'
 import type { BadgeSummary } from '@/lib/engagement-badges'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 
@@ -343,15 +346,20 @@ export interface RankedFeedV2Row {
   distance_bucket: string
 }
 
-/** A hydrated event occurrence rendered as one feed row (W1.6b). The occurrence
- *  id is the feed-row id; the check-in button reuses the W1.6a event-checkin logic. */
-export interface EventFeedItem {
-  /** Occurrence id — the feed-row id and the id the check-in RPC acts on. */
+/** One event as a member sees it — the shared card of the community feed and the Events tab.
+ *  One card per event: the server picks the event's shown date with the organizer's "post N
+ *  days before" window. That shown date is either upcoming (the card times it and offers
+ *  check-in) or cancelled (the event stays listed while the cancelled date is announced and not
+ *  ended, and the card reads "Sat, Oct 10 cancelled — next: Sat, Oct 24"). */
+export interface EventCardItem {
+  /** Occurrence id of the shown date — the card's key and the id the check-in RPC acts on. */
   occurrenceId: string
   eventId: string
   title: string
   eventType: string
   orgName: string | null
+  /** The date the card times: the shown date, or — when the shown date was cancelled — the
+   *  event's next upcoming date (the cancelled date itself when there is none). */
   startsAt: string
   endsAt: string
   /** The venue's IANA zone (assistance_events.time_zone) — times are shown with it. */
@@ -361,27 +369,49 @@ export interface EventFeedItem {
   state: string | null
   status: string
   requiresRegistration: boolean
+  capacity: number | null
+  notes: string | null
+  /** The repeat rule (assistance_events.recurrence); null for an event with hand-added dates only. */
+  recurrence: RecurrenceRule | null
+  /** A hand-added date of a repeating event ("Extra date"). */
+  isExtraDate: boolean
+  /** Start of the shown date when it was cancelled (the date the notice names), else null. */
+  cancelledStartsAt: string | null
+  /** null: the shown date is upcoming. Otherwise the shown date was cancelled (no check-in) and
+   *  the next upcoming date was 'next' found (startsAt/endsAt time it), 'none' (there is none),
+   *  or 'unknown' (the lookup failed — the notice names only the cancelled date). */
+  cancelledShown: null | 'next' | 'none' | 'unknown'
+}
+
+/** An event card placed in the ranked community feed (W1.6b). */
+export interface EventFeedItem extends EventCardItem {
   /** ranked_feed_v2 score — used to interleave among posts. */
   score: number
   /** Coarse distance bucket from the RPC ('<2km'…'>50km'|'unknown'). */
   distanceBucket: string
 }
 
-/** The event columns the feed hydrates (feed-panel select on event_occurrences). */
-export const FEED_EVENT_OCCURRENCE_SELECT = `
-  id, starts_at, ends_at, status,
+/** The occurrence + event columns both member surfaces hydrate (select on event_occurrences,
+ *  by the occurrence ids the server returned). The organization is read by id through the
+ *  normal RLS select; no profile column is read. */
+export const EVENT_OCCURRENCE_SELECT = `
+  id, starts_at, ends_at, status, notes, capacity, source,
   event:assistance_events(
-    id, title, event_type, location_name, city, state, requires_registration, time_zone,
+    id, title, event_type, location_name, city, state, requires_registration, time_zone, recurrence,
     organization:organizations(name)
   )
 `
 
-/** One hydrated event_occurrences row of FEED_EVENT_OCCURRENCE_SELECT. */
-export interface FeedEventOccurrenceRow {
+/** One hydrated event_occurrences row of EVENT_OCCURRENCE_SELECT. */
+export interface EventOccurrenceRow {
   id: string
   starts_at: string
   ends_at: string
   status: string
+  notes?: string | null
+  capacity?: number | null
+  /** 'rule' (generated from the repeat rule) | 'manual' (added by hand). */
+  source?: string | null
   event: {
     id: string
     title: string
@@ -391,44 +421,243 @@ export interface FeedEventOccurrenceRow {
     state: string | null
     requires_registration: boolean | null
     time_zone: string
+    recurrence?: unknown
     organization: { name: string } | null
   } | null
 }
 
+/** One row of the members' upcoming_events RPC (ids + times only). When the event's shown date
+ *  was cancelled, cancelled_* is that date and occurrence_id / starts_at / ends_at the event's
+ *  next upcoming date (NULL when there is none). */
+export interface UpcomingEventRow {
+  event_id: string
+  occurrence_id: string | null
+  starts_at: string | null
+  ends_at: string | null
+  cancelled_occurrence_id: string | null
+  cancelled_starts_at: string | null
+}
+
+/** The next upcoming date of an event (event_occurrences, status 'upcoming'). */
+export interface NextDateRow {
+  id: string
+  starts_at: string
+  ends_at: string
+}
+
+/** A shown date to render, in display order. `next` is the event's next upcoming date when the
+ *  shown date was cancelled and the server already returned it (null = there is none);
+ *  undefined = not known yet (the loader looks it up). */
+export interface ShownEventRef {
+  occurrenceId: string
+  next?: NextDateRow | null
+}
+
+function toEventCardItem(o: EventOccurrenceRow): EventCardItem | null {
+  if (!o.event) return null
+  const recurrence = parseRecurrenceRule(o.event.recurrence ?? null)
+  const shownCancelled = o.status === 'cancelled'
+  return {
+    occurrenceId: o.id,
+    eventId: o.event.id,
+    title: o.event.title,
+    eventType: o.event.event_type,
+    orgName: o.event.organization?.name ?? null,
+    startsAt: o.starts_at,
+    endsAt: o.ends_at,
+    timeZone: o.event.time_zone,
+    locationName: o.event.location_name ?? null,
+    city: o.event.city ?? null,
+    state: o.event.state ?? null,
+    status: o.status,
+    requiresRegistration: o.event.requires_registration ?? false,
+    capacity: o.capacity ?? null,
+    notes: o.notes ?? null,
+    recurrence,
+    isExtraDate: recurrence !== null && o.source === 'manual',
+    cancelledStartsAt: shownCancelled ? o.starts_at : null,
+    // Until the next date is known, a cancelled shown date names only itself.
+    cancelledShown: shownCancelled ? 'unknown' : null,
+  }
+}
+
 /**
- * Build the feed's event rows in ranked_feed_v2 order from the hydrated occurrences. A ranked
- * event row whose occurrence (or parent event) the caller's RLS read did not return is skipped
- * (I4 — the same drop-unhydrated rule the posts path uses).
+ * Build the cards for shown dates in the given order. A shown date the caller's RLS read did not
+ * return (or whose event is missing) is skipped (I4 — the same drop-unhydrated rule the posts
+ * path uses); a second date of an event already listed is skipped (one card per event).
  */
-export function hydrateEventFeedItems(
-  ranked: readonly RankedFeedV2Row[],
-  rows: readonly FeedEventOccurrenceRow[],
-): EventFeedItem[] {
+export function buildEventCards(
+  refs: readonly ShownEventRef[],
+  rows: readonly EventOccurrenceRow[],
+): EventCardItem[] {
   const byId = new Map(rows.map((o) => [o.id, o]))
-  const out: EventFeedItem[] = []
-  for (const r of ranked) {
-    if (r.kind !== 'event') continue
-    const o = byId.get(r.id)
-    if (!o || !o.event) continue
-    out.push({
-      occurrenceId: o.id,
-      eventId: o.event.id,
-      title: o.event.title,
-      eventType: o.event.event_type,
-      orgName: o.event.organization?.name ?? null,
-      startsAt: o.starts_at,
-      endsAt: o.ends_at,
-      timeZone: o.event.time_zone,
-      locationName: o.event.location_name ?? null,
-      city: o.event.city ?? null,
-      state: o.event.state ?? null,
-      status: o.status,
-      requiresRegistration: o.event.requires_registration ?? false,
-      score: r.score,
-      distanceBucket: r.distance_bucket,
-    })
+  const seen = new Set<string>()
+  const out: EventCardItem[] = []
+  for (const ref of refs) {
+    const o = byId.get(ref.occurrenceId)
+    const item = o ? toEventCardItem(o) : null
+    if (!item || seen.has(item.eventId)) continue
+    seen.add(item.eventId)
+    if (item.cancelledShown !== null && ref.next !== undefined) {
+      out.push(withNextDate(item, ref.next))
+    } else {
+      out.push(item)
+    }
   }
   return out
+}
+
+/** The shown dates of a ranked_feed_v2 page, in rank order. */
+export function rankedEventRefs(ranked: readonly RankedFeedV2Row[]): ShownEventRef[] {
+  return ranked.filter((r) => r.kind === 'event').map((r) => ({ occurrenceId: r.id }))
+}
+
+/** Attach each card's ranked_feed_v2 score and distance bucket (cards built in rank order). */
+export function rankEventCards(ranked: readonly RankedFeedV2Row[], cards: readonly EventCardItem[]): EventFeedItem[] {
+  const rankById = new Map(ranked.filter((r) => r.kind === 'event').map((r) => [r.id, r]))
+  const out: EventFeedItem[] = []
+  for (const c of cards) {
+    const r = rankById.get(c.occurrenceId)
+    if (r) out.push({ ...c, score: r.score, distanceBucket: r.distance_bucket })
+  }
+  return out
+}
+
+
+/**
+ * The Events tab's shown dates in upcoming_events order (by the shown date's start). For an event
+ * whose shown date was cancelled the RPC returns that date as cancelled_* and the event's next
+ * upcoming date (or NULL) as occurrence_id / starts_at / ends_at.
+ */
+export function upcomingEventRefs(upcoming: readonly UpcomingEventRow[]): ShownEventRef[] {
+  const refs: ShownEventRef[] = []
+  for (const u of upcoming) {
+    if (u.cancelled_occurrence_id) {
+      const next = u.occurrence_id && u.starts_at && u.ends_at
+        ? { id: u.occurrence_id, starts_at: u.starts_at, ends_at: u.ends_at }
+        : null
+      refs.push({ occurrenceId: u.cancelled_occurrence_id, next })
+    } else if (u.occurrence_id) {
+      refs.push({ occurrenceId: u.occurrence_id })
+    }
+  }
+  return refs
+}
+
+/** A cancelled shown date with its next upcoming date known: null = there is none. */
+function withNextDate<T extends EventCardItem>(item: T, next: NextDateRow | null): T {
+  if (!next) return { ...item, cancelledShown: 'none' }
+  return { ...item, cancelledShown: 'next', startsAt: next.starts_at, endsAt: next.ends_at }
+}
+
+/**
+ * Fill in the next upcoming date of each card whose shown date was cancelled and whose next date
+ * is not known yet. `nextByEvent` is null when the lookup failed (the card then names only the
+ * cancelled date); an event missing from the map has no upcoming date.
+ */
+export function applyNextDates<T extends EventCardItem>(
+  items: readonly T[],
+  nextByEvent: ReadonlyMap<string, NextDateRow> | null,
+): T[] {
+  return items.map((item) => {
+    if (item.cancelledShown !== 'unknown' || nextByEvent === null) return item
+    return withNextDate(item, nextByEvent.get(item.eventId) ?? null)
+  })
+}
+
+/**
+ * Append the next feed page's events, keeping one card per event across pages: an event already
+ * listed is skipped even when its shown date moved on between the two page loads (a different
+ * occurrence id for the same event).
+ */
+export function appendNewEvents(
+  prev: readonly EventFeedItem[],
+  next: readonly EventFeedItem[],
+): EventFeedItem[] {
+  const seen = new Set(prev.map((e) => e.eventId))
+  const out = [...prev]
+  for (const e of next) {
+    if (seen.has(e.eventId)) continue
+    seen.add(e.eventId)
+    out.push(e)
+  }
+  return out
+}
+
+export type EventDayGroup = 'today' | 'week' | 'later'
+
+/** The instant a card is filed under: the cancelled date for a card whose shown date was
+ *  cancelled (that is the date the notice is about), else the date it times. */
+export function eventCardDay(item: Pick<EventCardItem, 'startsAt' | 'cancelledShown' | 'cancelledStartsAt'>): string {
+  return item.cancelledShown !== null && item.cancelledStartsAt ? item.cancelledStartsAt : item.startsAt
+}
+
+/**
+ * Group Events-tab cards by the VENUE's calendar day: Today (the venue's today, or started on an
+ * earlier day and still running), This week (the next six venue days), Later. Order within a
+ * group is kept.
+ */
+export function groupEventsByVenueDay<T extends Pick<EventCardItem, 'startsAt' | 'timeZone' | 'cancelledShown' | 'cancelledStartsAt'>>(
+  items: readonly T[],
+  nowMs: number,
+): Record<EventDayGroup, T[]> {
+  const groups: Record<EventDayGroup, T[]> = { today: [], week: [], later: [] }
+  const nowIso = new Date(nowMs).toISOString()
+  for (const item of items) {
+    const tz = isKnownTimeZone(item.timeZone) ? item.timeZone : 'UTC'
+    const day = venueDateKey(eventCardDay(item), tz)
+    const today = venueDateKey(nowIso, tz)
+    const diff = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000)
+    groups[diff <= 0 ? 'today' : diff < 7 ? 'week' : 'later'].push(item)
+  }
+  return groups
+}
+
+/** Whether the card times a date (and so shows the when line, timing and check-in state). */
+export function eventCardHasDate(item: Pick<EventCardItem, 'cancelledShown'>): boolean {
+  return item.cancelledShown === null || item.cancelledShown === 'next'
+}
+
+/**
+ * A date as members read it: the viewer's local date, plus the venue's date whenever that reads
+ * differently ("Fri, Oct 9 (Venue time: Sat, Oct 10)"), so a remote viewer never sees a date
+ * that contradicts the venue-day group it is filed under. Same rule as formatCancelledNotice.
+ */
+export function memberDateText(iso: string, venueTz: string | null | undefined, locale: Locale = 'en', viewerTz?: string): string {
+  const viewer = formatShortDate(iso, locale, viewerTz)
+  if (!venueTz || !isKnownTimeZone(venueTz)) return viewer
+  const venue = formatShortDate(iso, locale, venueTz)
+  return venue === viewer ? viewer : `${viewer} (${formatMessage(eventFormT(locale, 'whenVenueTime'), { when: venue })})`
+}
+
+/** The repeat line of a card: "Every week on Saturday · Next: Sat, Oct 24"; the pattern alone
+ *  when the shown date was cancelled (the notice names the next date); null for an event
+ *  without a repeat rule. */
+export function eventRepeatLine(
+  item: Pick<EventCardItem, 'recurrence' | 'startsAt' | 'cancelledShown' | 'timeZone'>,
+  locale: Locale = 'en',
+  viewerTz?: string,
+): string | null {
+  if (!item.recurrence) return null
+  const pattern = formatRecurrence(item.recurrence, locale)
+  // A cancelled shown date's notice already names the next date (or says there is none).
+  if (item.cancelledShown !== null) return pattern
+  const next = formatMessage(eventFormT(locale, 'nextDate'), {
+    when: memberDateText(item.startsAt, item.timeZone, locale, viewerTz),
+  })
+  return `${pattern} · ${next}`
+}
+
+/** The cancelled-date notice of a card: "Sat, Oct 10 cancelled — next: Sat, Oct 24", or
+ *  "Sat, Oct 10 cancelled" alone when no following date is known; null when nothing was cancelled. */
+export function eventCancelledLine(
+  item: Pick<EventCardItem, 'cancelledStartsAt' | 'startsAt' | 'cancelledShown' | 'timeZone'>,
+  locale: Locale = 'en',
+  viewerTz?: string,
+): string | null {
+  if (!item.cancelledStartsAt) return null
+  const next = item.cancelledShown === 'next' ? item.startsAt : null
+  return formatCancelledNotice(item.cancelledStartsAt, next, locale, viewerTz, item.timeZone)
 }
 
 /** A single rendered feed row: a post card or an event card. Discriminated so the
@@ -523,12 +752,15 @@ export function eventTimingLabel(
     n === undefined ? eventFormT(locale, key) : formatMessage(eventFormT(locale, key), { n })
   if (nowMs >= startsAtMs && nowMs <= endsAtMs) return { label: t('timingNow'), isLive: true }
   if (nowMs > endsAtMs) return { label: t('timingEnded'), isLive: false }
-  const mins = Math.round((startsAtMs - nowMs) / 60000)
-  if (mins <= 60) return { label: t('timingMinutes', Math.max(1, mins)), isLive: false }
+  // Intl.RelativeTimeFormat supplies each language's plural forms; the dictionary phrases are
+  // used where the runtime has no relative-time data for the locale (ht, hmn).
+  const mins = Math.max(1, Math.round((startsAtMs - nowMs) / 60000))
+  if (mins <= 60) return { label: relativeTimeText(mins, 'minute', locale) ?? t('timingMinutes', mins), isLive: false }
   const hours = Math.round(mins / 60)
-  if (hours < 24) return { label: t('timingHours', hours), isLive: false }
+  if (hours < 24) return { label: relativeTimeText(hours, 'hour', locale) ?? t('timingHours', hours), isLive: false }
   const days = Math.round(hours / 24)
-  return { label: days === 1 ? t('timingOneDay') : t('timingDays', days), isLive: false }
+  const fallback = days === 1 ? t('timingOneDay') : t('timingDays', days)
+  return { label: relativeTimeText(days, 'day', locale) ?? fallback, isLive: false }
 }
 
 const DISTANCE_KEYS: Record<string, keyof EventFormMessages> = {

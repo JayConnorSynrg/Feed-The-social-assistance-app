@@ -293,21 +293,23 @@ export type Database = {
       assistance_events: {
         Row: {
           address: string | null
+          announce_days_before: number
           city: string | null
           created_at: string
           created_by: string | null
           default_capacity: number | null
           description: string | null
           event_type: string
-          geocode_accuracy: string | null
-          geocode_confidence: string | null
           id: string
           idempotency_key: string | null
           is_active: boolean
           location: unknown
           location_name: string | null
           org_id: string
+          recurrence: Json | null
           requires_registration: boolean
+          series_duration: string | null
+          series_start_local: string | null
           state: string | null
           time_zone: string
           title: string
@@ -316,21 +318,23 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          announce_days_before?: number
           city?: string | null
           created_at?: string
           created_by?: string | null
           default_capacity?: number | null
           description?: string | null
           event_type?: string
-          geocode_accuracy?: string | null
-          geocode_confidence?: string | null
           id?: string
           idempotency_key?: string | null
           is_active?: boolean
           location?: unknown
           location_name?: string | null
           org_id: string
+          recurrence?: Json | null
           requires_registration?: boolean
+          series_duration?: string | null
+          series_start_local?: string | null
           state?: string | null
           time_zone: string
           title: string
@@ -339,21 +343,23 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          announce_days_before?: number
           city?: string | null
           created_at?: string
           created_by?: string | null
           default_capacity?: number | null
           description?: string | null
           event_type?: string
-          geocode_accuracy?: string | null
-          geocode_confidence?: string | null
           id?: string
           idempotency_key?: string | null
           is_active?: boolean
           location?: unknown
           location_name?: string | null
           org_id?: string
+          recurrence?: Json | null
           requires_registration?: boolean
+          series_duration?: string | null
+          series_start_local?: string | null
           state?: string | null
           time_zone?: string
           title?: string
@@ -880,34 +886,43 @@ export type Database = {
       }
       event_occurrences: {
         Row: {
+          cancel_reason: string | null
           capacity: number | null
           created_at: string
           ends_at: string
           event_id: string
           id: string
           notes: string | null
+          series_local_date: string | null
+          source: string
           starts_at: string
           status: string
           updated_at: string
         }
         Insert: {
+          cancel_reason?: string | null
           capacity?: number | null
           created_at?: string
           ends_at: string
           event_id: string
           id?: string
           notes?: string | null
+          series_local_date?: string | null
+          source?: string
           starts_at: string
           status?: string
           updated_at?: string
         }
         Update: {
+          cancel_reason?: string | null
           capacity?: number | null
           created_at?: string
           ends_at?: string
           event_id?: string
           id?: string
           notes?: string | null
+          series_local_date?: string | null
+          source?: string
           starts_at?: string
           status?: string
           updated_at?: string
@@ -3976,6 +3991,7 @@ export type Database = {
       admin_update_event: {
         Args: {
           p_address?: string
+          p_announce_days_before?: number
           p_city?: string
           p_clear?: string[]
           p_default_capacity?: number
@@ -3987,7 +4003,10 @@ export type Database = {
           p_lng?: number
           p_location_name?: string
           p_location_source?: string
+          p_recurrence?: Json
           p_requires_registration?: boolean
+          p_series_ends_local?: string
+          p_series_starts_local?: string
           p_state?: string
           p_title?: string
           p_zip_code?: string
@@ -4166,6 +4185,7 @@ export type Database = {
       create_org_event: {
         Args: {
           p_address?: string
+          p_announce_days_before?: number
           p_city?: string
           p_default_capacity?: number
           p_description?: string
@@ -4177,6 +4197,7 @@ export type Database = {
           p_location_name?: string
           p_location_source: string
           p_org_id: string
+          p_recurrence?: Json
           p_requires_registration?: boolean
           p_starts_local: string
           p_state?: string
@@ -4287,11 +4308,87 @@ export type Database = {
       }
       engagement_weight: { Args: { p_kind: string }; Returns: number }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      event_adopt_manual_dates: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
+      event_apply_rule_change: { Args: { p_event_id: string }; Returns: Json }
       event_attendance: { Args: { p_occurrence: string }; Returns: Json }
+      event_date_announced: {
+        Args: {
+          p_days: number
+          p_now: string
+          p_starts_at: string
+          p_time_zone: string
+        }
+        Returns: boolean
+      }
+      event_feed_next: {
+        Args: { p_now: string }
+        Returns: {
+          cancelled: boolean
+          ends_at: string
+          event_id: string
+          occurrence_id: string
+          shown_since: string
+          starts_at: string
+        }[]
+      }
+      event_generate_occurrences: {
+        Args: { p_event_id: string; p_skip_locked?: boolean }
+        Returns: number
+      }
       event_local_to_utc: {
         Args: { p_local: string; p_time_zone: string }
         Returns: string
       }
+      event_local_to_utc_rfc: {
+        Args: { p_local: string; p_time_zone: string }
+        Returns: string
+      }
+      event_recurrence_problem: {
+        Args: { p_rule: Json; p_series_start: string }
+        Returns: string
+      }
+      event_restore_system_cancelled: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
+      event_rule_dates: {
+        Args: {
+          p_dtstart: string
+          p_from: string
+          p_rule: Json
+          p_through: string
+        }
+        Returns: {
+          local_date: string
+          local_start: string
+        }[]
+      }
+      event_rule_occurrences: {
+        Args: {
+          p_dtstart: string
+          p_duration: string
+          p_from: string
+          p_rule: Json
+          p_through: string
+          p_time_zone: string
+        }
+        Returns: {
+          ends_at: string
+          local_date: string
+          local_end: string
+          local_start: string
+          starts_at: string
+        }[]
+      }
+      event_series_last_date: {
+        Args: { p_dtstart: string; p_rule: Json }
+        Returns: string
+      }
+      events_generate_nightly: { Args: never; Returns: Json }
+      events_generate_watchdog: { Args: never; Returns: boolean }
       expand_state: { Args: { p_state: string }; Returns: string }
       export_petition_signatures: {
         Args: { p_petition_id: string }
@@ -4304,6 +4401,10 @@ export type Database = {
           signer_full_name: string
           user_agent: string
         }[]
+      }
+      extend_event_series: {
+        Args: { p_event_id: string; p_idempotency_key: string }
+        Returns: Json
       }
       find_duplicate_resource: {
         Args: {
@@ -4732,6 +4833,15 @@ export type Database = {
         }
       }
       org_event_write_gate: { Args: { p_org_id: string }; Returns: string }
+      org_events_ending_soon: {
+        Args: { p_org_id: string; p_within_days?: number }
+        Returns: {
+          event_id: string
+          last_local_date: string
+          remaining_dates: number
+          title: string
+        }[]
+      }
       organizations_in_bounds: {
         Args: {
           max_lat: number
@@ -4833,6 +4943,23 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      preview_event_recurrence: {
+        Args: {
+          p_ends_local: string
+          p_limit?: number
+          p_recurrence: Json
+          p_starts_local: string
+          p_time_zone: string
+        }
+        Returns: {
+          ends_at: string
+          ends_local: string
+          local_date: string
+          shifted: boolean
+          starts_at: string
+          starts_local: string
+        }[]
+      }
       projected_turnout: {
         Args: { p_date?: string; p_org_id: string }
         Returns: {
@@ -5685,6 +5812,17 @@ export type Database = {
           id: string
           state: string
           zip_code: string
+        }[]
+      }
+      upcoming_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          cancelled_occurrence_id: string
+          cancelled_starts_at: string
+          ends_at: string
+          event_id: string
+          occurrence_id: string
+          starts_at: string
         }[]
       }
       update_safety_alert: {

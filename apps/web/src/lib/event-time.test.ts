@@ -8,7 +8,20 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
-import { checkLocalTime, formatEventWhen as formatRaw, timeZoneOptions, venueDateKey, COMMON_US_ZONES } from './event-time'
+import { spawnSync } from 'node:child_process'
+import {
+  checkLocalTime,
+  dateTimeFormat,
+  formatCalendarDate,
+  formatEventWhen as formatRaw,
+  formatShortDate,
+  intlLocale,
+  relativeTimeText,
+  timeZoneOptions,
+  venueDateKey,
+  COMMON_US_ZONES,
+  SERVER_UNSUPPORTED_ZONES,
+} from './event-time'
 
 // ICU versions differ in the spaces they print (U+202F before AM/PM, U+2009 around the range
 // dash); compare with plain spaces so the assertion is about the words, not the ICU build.
@@ -132,5 +145,96 @@ describe('venueDateKey / timeZoneOptions', () => {
     expect(o.common[0].label).toBe('Eastern Standard Time (America/New_York)')
     expect(o.all.some((z) => z.value === 'Europe/London')).toBe(true)
     expect(o.all.some((z) => z.value === 'UTC' || z.value === 'America/New_York')).toBe(false)
+  })
+})
+
+describe('intlLocale — locales without CLDR data render in US English on every device', () => {
+  it('every FEED locale ends with en-US', () => {
+    expect(intlLocale('en')).toEqual(['en-US'])
+    expect(intlLocale('ht')).toEqual(['ht', 'en-US'])
+    expect(intlLocale('hmn')).toEqual(['hmn', 'en-US'])
+    expect(intlLocale('es')).toEqual(['es', 'en-US'])
+  })
+
+  it('on a device whose own language is Spanish, ht dates are English, not Spanish', () => {
+    // The ICU default locale comes from the process environment, so this runs in a child Node
+    // with a Spanish default and hands it the exact list intlLocale returns.
+    const sat = Date.UTC(2026, 9, 10, 12)
+    const script = `const t = JSON.parse(process.argv[1]); process.stdout.write(new Intl.DateTimeFormat(t, { weekday: 'long', timeZone: 'UTC' }).format(new Date(${sat})))`
+    const run = (tags: unknown) =>
+      spawnSync(process.execPath, ['-e', script, JSON.stringify(tags)], {
+        env: { ...process.env, LC_ALL: 'es_ES.UTF-8', LANG: 'es_ES.UTF-8' },
+        encoding: 'utf8',
+      }).stdout
+    expect(run('ht')).toBe('sábado') // control: a bare 'ht' takes the device language
+    expect(run(intlLocale('ht'))).toBe('Saturday')
+    expect(run(intlLocale('hmn'))).toBe('Saturday')
+  })
+})
+
+describe('dateTimeFormat — one Intl.DateTimeFormat per (locale, zone, options)', () => {
+  it('returns the same formatter for the same inputs and a new one when any differs', () => {
+    const o = { hour: 'numeric', minute: '2-digit' } as const
+    const a = dateTimeFormat('en', 'America/New_York', o)
+    expect(dateTimeFormat('en', 'America/New_York', { ...o })).toBe(a)
+    expect(dateTimeFormat('es', 'America/New_York', o)).not.toBe(a)
+    expect(dateTimeFormat('en', 'America/Chicago', o)).not.toBe(a)
+    expect(dateTimeFormat('en', 'America/New_York', { ...o, weekday: 'short' })).not.toBe(a)
+  })
+
+  it('rendering many cards builds a handful of formatters, not one per card', () => {
+    // Count real constructions (a subclass, so cached instances keep working) for a zone pair no
+    // other test uses, so the cache starts cold for it.
+    const Real = Intl.DateTimeFormat
+    let built = 0
+    class Counting extends Real {
+      constructor(...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+        super(...args)
+        built++
+      }
+    }
+    ;(Intl as { DateTimeFormat: unknown }).DateTimeFormat = Counting
+    try {
+      for (let i = 0; i < 50; i++) {
+        formatEventWhen(START, END, 'Asia/Kathmandu', 'en', { viewerTz: 'Pacific/Chatham' })
+      }
+    } finally {
+      ;(Intl as { DateTimeFormat: unknown }).DateTimeFormat = Real
+    }
+    expect(built).toBeGreaterThan(0) // control: the counter sees the first card's formatters
+    expect(built).toBeLessThan(10)
+  })
+})
+
+describe('time-zone picker leaves out zones the server converts differently', () => {
+  it('America/Asuncion and America/Coyhaique are not offered', () => {
+    expect([...SERVER_UNSUPPORTED_ZONES].sort()).toEqual(['America/Asuncion', 'America/Coyhaique'])
+    const ids = timeZoneOptions('en', 'America/New_York').all.map((z) => z.value)
+    expect(ids).not.toContain('America/Asuncion')
+    expect(ids).not.toContain('America/Coyhaique')
+    // control: Intl does list Asuncion, and its neighbours stay in the picker
+    expect((Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('timeZone')).toContain('America/Asuncion')
+    expect(ids).toContain('America/Montevideo')
+  })
+  it('an event already in one of them still shows its own zone', () => {
+    expect(timeZoneOptions('en', 'America/Asuncion').all.map((z) => z.value)).toContain('America/Asuncion')
+  })
+})
+
+describe('calendar dates and relative time', () => {
+  it('a venue calendar date reads the same in every device zone', () => {
+    expect(plain(formatCalendarDate('2027-04-30', 'en'))).toBe('Fri, Apr 30, 2027')
+    expect(plain(formatCalendarDate('2027-04-30', 'ht'))).toBe('Fri, Apr 30, 2027')
+  })
+  it('the short date of an instant follows the viewer zone', () => {
+    // 2026-10-11 03:00Z is still Oct 10 in Los Angeles.
+    expect(formatShortDate('2026-10-11T03:00:00Z', 'en', 'America/Los_Angeles')).toBe('Sat, Oct 10')
+    expect(formatShortDate('2026-10-11T03:00:00Z', 'en', 'Europe/London')).toBe('Sun, Oct 11')
+  })
+  it('relative time: Intl wording, sentence-cased; null where the runtime has no data', () => {
+    expect(relativeTimeText(3, 'day', 'en')).toBe('In 3 days')
+    expect(relativeTimeText(2, 'hour', 'ru')).toBe('Через 2 часа')
+    expect(relativeTimeText(3, 'day', 'ht')).toBeNull()
+    expect(relativeTimeText(3, 'day', 'hmn')).toBeNull()
   })
 })

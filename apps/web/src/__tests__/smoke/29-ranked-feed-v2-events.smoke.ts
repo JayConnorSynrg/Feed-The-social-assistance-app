@@ -2,7 +2,7 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 // Mission: 29 — Events mixed into the ranked community feed (W1.6b)
 // Surface: apps/web/src/components/panels/feed-panel.tsx (ranked path) → RPC
-//          public.ranked_feed_v2; apps/web/src/components/feed/event-feed-card.tsx
+//          public.ranked_feed_v2; apps/web/src/components/feed/event-card.tsx
 // Backend: supabase/migrations/20261008000000_w1_6b_events_in_feed.sql
 //
 // GATE ON THE LEDGER, NOT ON THE STATE (schema-first — v2 ships before the client so
@@ -39,6 +39,15 @@ const GATE_SQL = `
 const GATE_020_SQL = `
   SELECT EXISTS (
     SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261020000000'
+  ) AS applied
+`
+
+// 20261023000000 (repeating events + per-event announce window): the events branch reads the
+// shared rule event_feed_next; the pg_cron top-up + watchdog jobs exist only on a pg_cron database,
+// so they are verified here (the local harness has no pg_cron).
+const GATE_023_SQL = `
+  SELECT EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261023000000'
   ) AS applied
 `
 
@@ -184,5 +193,25 @@ maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () =>
     expect(res.A.score).toBe(res.B.score)
     // Geo/no-geo ratio equals the discrete <2km bucket factor, not a continuous fn.
     expect(Math.abs(res.A.score / res.C.score - Math.exp(-1 / decay))).toBeLessThan(1e-4)
+  })
+
+  it('[post-deploy 20261023000000] nightly top-up + watchdog scheduled; upcoming_events open to anon; v2 reads the shared rule', async (ctx) => {
+    const gate = await queryProd(GATE_023_SQL)
+    if (gate[0]?.applied !== true) { ctx.skip(); return }
+    const rows = await queryProd(`
+      SELECT
+        (SELECT count(*)::int FROM cron.job WHERE jobname = 'events_generate_nightly'
+           AND schedule = '37 3 * * *' AND command ILIKE '%events_generate_nightly()%' AND active)  AS nightly_job,
+        (SELECT count(*)::int FROM cron.job WHERE jobname = 'events_generate_watchdog'
+           AND schedule = '37 15 * * *' AND command ILIKE '%events_generate_watchdog()%' AND active) AS watchdog_job,
+        has_function_privilege('anon', 'public.upcoming_events(integer)', 'EXECUTE')           AS upcoming_anon_x,
+        has_function_privilege('authenticated', 'public.event_generate_occurrences(uuid,boolean)', 'EXECUTE') AS generator_auth_x,
+        (pg_get_functiondef('${SIG}'::regprocedure) ILIKE '%public.event_feed_next(now())%')    AS v2_shared_rule
+    `)
+    expect(rows[0].nightly_job, 'cron events_generate_nightly at 37 3 * * *').toBe(1)
+    expect(rows[0].watchdog_job, 'cron events_generate_watchdog at 37 15 * * *').toBe(1)
+    expect(rows[0].upcoming_anon_x, 'anon may call upcoming_events (members Events tab)').toBe(true)
+    expect(rows[0].generator_auth_x, 'the generator is not client-executable').toBe(false)
+    expect(rows[0].v2_shared_rule, 'ranked_feed_v2 events branch reads event_feed_next').toBe(true)
   })
 })

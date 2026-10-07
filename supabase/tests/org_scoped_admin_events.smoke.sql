@@ -1,5 +1,7 @@
 -- org_scoped_admin_events.smoke.sql
--- Behavioural smoke for 20261020000000_org_scoped_admin_events.sql:
+-- Behavioural smoke for 20261020000000_org_scoped_admin_events.sql (as changed by
+-- 20261023000000_events_recurring_announce.sql: announce window instead of 30 days, geocode
+-- columns dropped, new trailing RPC arguments; recurrence is covered in events_recurring.smoke.sql):
 --   create_org_event / add_event_dates / cancel_event_occurrence / admin_update_event,
 --   event time zones (DST gap + repeat), idempotency, write authority, the event_occurrences
 --   write lockdown, ranked_feed_v2 event visibility + event half-life, can_admin_org, and the
@@ -140,15 +142,16 @@ BEGIN
   v_ev := substr(v_r, 4)::uuid;
   ASSERT (SELECT org_id = v_c AND title = 'Food Share' AND time_zone = 'America/New_York' AND is_active
             AND idempotency_key = v_key AND created_by = v_m1 AND description = 'Weekly'
-            AND default_capacity = 40 AND geocode_accuracy = 'point' AND geocode_confidence IS NULL
+            AND default_capacity = 40 AND recurrence IS NULL AND series_start_local IS NULL
+            AND announce_days_before = 7
             AND address = '1 Main St' AND city = 'Montpelier' AND state = 'VT' AND zip_code = '05602'
             AND location_name = 'SMOKE Pantry'
             AND ST_Equals(location::geometry, (SELECT o.location::geometry FROM public.organizations o WHERE o.id = v_c))
           FROM public.assistance_events WHERE id = v_ev),
-    'E1: event row must carry the trimmed title, zone, key, creator and the org pin + address (accuracy point)';
+    'E1: event row must carry the trimmed title, zone, key, creator, the org pin + address, no repeat rule and the default 7-day announce lead';
   ASSERT (SELECT count(*) FROM public.event_occurrences WHERE event_id = v_ev) = 1, 'E1: exactly one first date';
   ASSERT (SELECT starts_at = '2026-11-10 15:00+00' AND ends_at = '2026-11-10 17:00+00' AND status = 'upcoming'
-            AND capacity = 40
+            AND capacity = 40 AND source = 'manual' AND series_local_date IS NULL AND cancel_reason IS NULL
           FROM public.event_occurrences WHERE event_id = v_ev),
     'E1: 10:00-12:00 America/New_York on 2026-11-10 (EST) must be stored as 15:00-17:00 UTC';
   SELECT count(*) INTO v_after FROM public.admin_actions;
@@ -193,9 +196,9 @@ BEGIN
   RESET ROLE;
   ASSERT v_r LIKE 'OK %', 'E3: platform admin address create must succeed, got '||v_r;
   v_ev2 := substr(v_r, 4)::uuid;
-  ASSERT (SELECT address = '22 State St' AND geocode_accuracy = 'point'
+  ASSERT (SELECT address = '22 State St'
             AND abs(ST_X(location::geometry) + 72.5754) < 1e-9 AND abs(ST_Y(location::geometry) - 44.2601) < 1e-9
-          FROM public.assistance_events WHERE id = v_ev2), 'E3: the confirmed point + address must be stored (accuracy point)';
+          FROM public.assistance_events WHERE id = v_ev2), 'E3: the confirmed point + address must be stored';
   ASSERT (SELECT details->>'actor_role' = 'platform_admin' AND details->>'location_source' = 'address'
             AND request_id = 'smoke-ev-create-2'
           FROM public.admin_actions WHERE target_id = v_ev2::text AND action = 'event.create'),
@@ -461,7 +464,7 @@ BEGIN
   RESET ROLE;
   ASSERT (SELECT count(*) FROM public.admin_actions WHERE target_id = v_ev::text AND action = 'event.update') = 1,
     'E9: the refused edits wrote no audit row; the successful edit wrote exactly one event.update row';
-  ASSERT (SELECT title = 'Food Share+' AND address = '9 Elm St' AND city = 'Montpelier' AND geocode_accuracy = 'point'
+  ASSERT (SELECT title = 'Food Share+' AND address = '9 Elm St' AND city = 'Montpelier'
             AND abs(ST_Y(location::geometry) - 44.27) < 1e-9 AND time_zone = 'America/New_York'
           FROM public.assistance_events WHERE id = v_ev),
     'E9: the new address + point are stored; city kept; the time zone is unchanged';
@@ -470,7 +473,7 @@ BEGIN
   PERFORM pg_temp.act(v_m1);
   v_r := pg_temp.try(format('SELECT public.admin_update_event(p_event_id => %L, p_clear => ARRAY[''address''])::text', v_ev));
   RESET ROLE;
-  ASSERT v_r LIKE 'OK %' AND (SELECT address IS NULL AND location IS NULL AND geocode_accuracy IS NULL FROM public.assistance_events WHERE id = v_ev),
+  ASSERT v_r LIKE 'OK %' AND (SELECT address IS NULL AND location IS NULL FROM public.assistance_events WHERE id = v_ev),
     'E9: clearing the address drops the pin, got '||v_r;
   -- edit + retire are audited: exactly one row per call, sharing the request id
   PERFORM set_config('request.headers', '{"x-request-id":"smoke-ev-update-1"}', true);
@@ -546,7 +549,7 @@ BEGIN
   v_ev_q := substr(pg_temp.try(pg_temp.create_sql(v_c, gen_random_uuid(), 'Retired upcoming', 'Etc/UTC',
                     v_now + interval '3 days', v_now + interval '3 days 1 hour', 'org')), 4)::uuid;
   v_ev_f := substr(pg_temp.try(pg_temp.create_sql(v_c, gen_random_uuid(), 'Too far', 'Etc/UTC',
-                    v_now + interval '40 days', v_now + interval '40 days 1 hour', 'org')), 4)::uuid;
+                    v_now + interval '10 days', v_now + interval '10 days 1 hour', 'org')), 4)::uuid;
   v_ev_x := substr(pg_temp.try(pg_temp.create_sql(v_c, gen_random_uuid(), 'Cancelled', 'Etc/UTC',
                     v_now + interval '4 days', v_now + interval '4 days 1 hour', 'org')), 4)::uuid;
   SELECT id INTO v_occ_x FROM public.event_occurrences WHERE event_id = v_ev_x;
@@ -573,18 +576,19 @@ BEGIN
     PERFORM pg_temp.act(v_viewer.uid, v_viewer.anon);
     v_feed := pg_temp.feed_events();
     RESET ROLE;
-    ASSERT v_occ_a = ANY (v_feed), format('E11 [%s]: an active event of an active org with a date in 30 days MUST appear', v_viewer.label);
+    ASSERT v_occ_a = ANY (v_feed), format('E11 [%s]: an active event of an active org with a date inside its announce window (default 7 days) MUST appear', v_viewer.label);
     -- (covers BOTH removed paths: the admin/org-admin bypass and the signed-in non-guest
     --  "in-progress date of a retired event" path — the member viewer exercises the latter)
     ASSERT NOT (v_occ_r = ANY (v_feed)), format('E11 [%s]: a retired event (date in progress) must NOT appear', v_viewer.label);
     ASSERT NOT (v_occ_q = ANY (v_feed)), format('E11 [%s]: a retired event (date upcoming) must NOT appear', v_viewer.label);
     ASSERT NOT (v_occ_i = ANY (v_feed)), format('E11 [%s]: an event of an inactive org must NOT appear', v_viewer.label);
-    ASSERT NOT (v_occ_f = ANY (v_feed)), format('E11 [%s]: a date beyond 30 days must NOT appear', v_viewer.label);
-    ASSERT NOT (v_occ_x = ANY (v_feed)), format('E11 [%s]: a cancelled date must NOT appear', v_viewer.label);
+    ASSERT NOT (v_occ_f = ANY (v_feed)), format('E11 [%s]: a date 10 days out (beyond the default 7-day announce window) must NOT appear', v_viewer.label);
+    -- since 20261023000000 an admin-cancelled, announced, not-ended date keeps its event listed (as the cancelled row)
+    ASSERT v_occ_x = ANY (v_feed), format('E11 [%s]: an event whose only date was cancelled is listed with that cancelled date until it ends', v_viewer.label);
   END LOOP;
   -- reactivating brings it back for everyone (both directions)
   UPDATE public.assistance_events SET is_active = true WHERE id = v_ev_q;
-  UPDATE public.organizations SET is_active = true WHERE id = v_i;   -- cascade only fires on deactivate
+  UPDATE public.organizations SET is_active = true WHERE id = v_i;   -- nothing to restore: seeded while inactive
   FOR v_viewer IN SELECT * FROM (VALUES
       ('anon', NULL::uuid, false), ('guest', v_guest, true), ('member', v_m2, false),
       ('org admin', v_m1, false), ('platform admin', v_admin, false)) AS t(label, uid, anon) LOOP
@@ -597,7 +601,7 @@ BEGIN
   UPDATE public.organizations SET is_active = false WHERE id = v_i;
   -- the deactivation cascade cancelled its date; restore it (no session => server-side write)
   PERFORM set_config('request.jwt.claims', '{}', true);
-  UPDATE public.event_occurrences SET status = 'upcoming' WHERE id = v_occ_i;
+  UPDATE public.event_occurrences SET status = 'upcoming', cancel_reason = NULL WHERE id = v_occ_i;
 
   -- =====================================================================
   -- E11b — inactive organization: its ORG ADMIN is refused by every event writer (is_org_admin has
@@ -712,6 +716,10 @@ BEGIN
   RESET ROLE;
   v_ev_h := substr(v_r, 4)::uuid;
   SELECT id INTO v_occ_h FROM public.event_occurrences WHERE event_id = v_ev_h;
+  -- Since 20261023000000 an event scores max(freshness, proximity). Isolate the proximity term:
+  -- announced 30 days ahead + created 60 days ago => freshness ~2^-23 (freshness: events_recurring R13).
+  UPDATE public.assistance_events SET announce_days_before = 30 WHERE id = v_ev_h;
+  UPDATE public.event_occurrences SET created_at = now() - interval '60 days' WHERE id = v_occ_h;
   v_score := pg_temp.event_score(v_occ_h);
   ASSERT abs(v_score - 0.5) < 1e-6, 'E13: an event starting in 168 h scores 0.5 with the default 168 h half-life, got '||v_score;
   v_p1 := pg_temp.posts_v2();
@@ -721,7 +729,7 @@ BEGIN
   ASSERT pg_temp.posts_v2() = v_p1, 'E13: event_half_life_hours must not change any post score';
   UPDATE public.ranking_config SET event_half_life_hours = 168, half_life_hours = 48;
   v_score := pg_temp.event_score(v_occ_h);
-  ASSERT abs(v_score - 0.5) < 1e-6, 'E13: half_life_hours (posts) must not change an event score, got '||v_score;
+  ASSERT abs(v_score - 0.5) < 1e-6, 'E13: while proximity dominates, half_life_hours (posts) must not change the event score, got '||v_score;
   UPDATE public.ranking_config SET half_life_hours = 24;
 
   -- =====================================================================
@@ -772,10 +780,10 @@ BEGIN
   -- E15 — SECURITY DEFINER hygiene of every new / changed function
   -- =====================================================================
   FOREACH v_fn IN ARRAY ARRAY[
-      'public.create_org_event(uuid,uuid,text,text,timestamp,timestamp,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)',
+      'public.create_org_event(uuid,uuid,text,text,timestamp,timestamp,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean,jsonb,integer)',
       'public.add_event_dates(uuid,timestamp[],timestamp[])',
       'public.cancel_event_occurrence(uuid)',
-      'public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])',
+      'public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[],jsonb,timestamp,timestamp,integer)',
       'public.admin_save_organization(uuid,jsonb)',
       'public.can_manage_org_photos(text)',
       'public.can_admin_org(uuid)',
@@ -789,10 +797,10 @@ BEGIN
       'E15: PUBLIC must hold no EXECUTE on '||v_fn;
   END LOOP;
   FOREACH v_fn IN ARRAY ARRAY[
-      'public.create_org_event(uuid,uuid,text,text,timestamp,timestamp,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)',
+      'public.create_org_event(uuid,uuid,text,text,timestamp,timestamp,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean,jsonb,integer)',
       'public.add_event_dates(uuid,timestamp[],timestamp[])',
       'public.cancel_event_occurrence(uuid)',
-      'public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])',
+      'public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[],jsonb,timestamp,timestamp,integer)',
       'public.admin_save_organization(uuid,jsonb)',
       'public.can_manage_org_photos(text)'] LOOP
     ASSERT NOT has_function_privilege('anon', v_fn, 'EXECUTE'), 'E15: anon must NOT EXECUTE '||v_fn;

@@ -24,8 +24,10 @@ import {
   mergeRankedFeedItems,
   eventTimingLabel,
   distanceBucketLabel,
-  hydrateEventFeedItems,
-  type FeedEventOccurrenceRow,
+  buildEventCards,
+  rankEventCards,
+  rankedEventRefs,
+  type EventOccurrenceRow,
   type RankedFeedV2Row,
   type Post,
   type EventFeedItem,
@@ -48,6 +50,7 @@ function eventItem(occId: string, score: number): EventFeedItem {
     occurrenceId: occId, eventId: 'e-' + occId, title: 'T', eventType: 'meal', orgName: null,
     startsAt: new Date().toISOString(), endsAt: new Date().toISOString(), timeZone: 'America/New_York',
     locationName: null, city: null, state: null, status: 'upcoming', requiresRegistration: false,
+    capacity: null, notes: null, recurrence: null, isExtraDate: false, cancelledStartsAt: null, cancelledShown: null,
     score, distanceBucket: 'unknown',
   }
 }
@@ -136,8 +139,8 @@ describe('W1.6b — eventTimingLabel (age math)', () => {
     expect(r.label).toBe('Happening now')
   })
   it('labels minutes / hours / days before the start', () => {
-    expect(eventTimingLabel(start - 20 * 60_000, start, end)).toMatchObject({ isLive: false, label: 'Starts in 20 min' })
-    expect(eventTimingLabel(start - 3 * 3600_000, start, end)).toMatchObject({ isLive: false, label: 'Starts in 3 h' })
+    expect(eventTimingLabel(start - 20 * 60_000, start, end)).toMatchObject({ isLive: false, label: 'In 20 minutes' })
+    expect(eventTimingLabel(start - 3 * 3600_000, start, end)).toMatchObject({ isLive: false, label: 'In 3 hours' })
     expect(eventTimingLabel(start - 2 * 86_400_000, start, end)).toMatchObject({ isLive: false, label: 'In 2 days' })
   })
   it('labels an ended occurrence', () => {
@@ -156,8 +159,8 @@ describe('W1.6b — distanceBucketLabel', () => {
   })
 })
 
-describe('hydrateEventFeedItems — the venue time zone reaches the card', () => {
-  const occ = (id: string, tz: string): FeedEventOccurrenceRow => ({
+describe('feed event cards (rankEventCards ∘ buildEventCards) — the venue time zone reaches the card', () => {
+  const occ = (id: string, tz: string): EventOccurrenceRow => ({
     id, starts_at: '2026-11-10T15:00:00Z', ends_at: '2026-11-10T16:30:00Z', status: 'upcoming',
     event: {
       id: 'e-' + id, title: 'Meal ' + id, event_type: 'meal', location_name: null, city: 'Rutland', state: 'VT',
@@ -171,7 +174,7 @@ describe('hydrateEventFeedItems — the venue time zone reaches the card', () =>
       { id: 'o2', kind: 'event', score: 8, distance_bucket: '<2km' },
       { id: 'o1', kind: 'event', score: 7, distance_bucket: 'unknown' },
     ]
-    const items = hydrateEventFeedItems(ranked, [occ('o1', 'America/Chicago'), occ('o2', 'America/New_York')])
+    const items = rankEventCards(ranked, buildEventCards(rankedEventRefs(ranked), [occ('o1', 'America/Chicago'), occ('o2', 'America/New_York')]))
     expect(items.map((i) => [i.occurrenceId, i.timeZone, i.score, i.distanceBucket])).toEqual([
       ['o2', 'America/New_York', 8, '<2km'],
       ['o1', 'America/Chicago', 7, 'unknown'],
@@ -185,11 +188,12 @@ describe('hydrateEventFeedItems — the venue time zone reaches the card', () =>
       { id: 'o3', kind: 'event', score: 7, distance_bucket: 'unknown' },
     ]
     const orphan = { ...occ('o3', 'America/New_York'), event: null }
-    expect(hydrateEventFeedItems(ranked, [orphan]).map((i) => i.occurrenceId)).toEqual([])
+    expect(rankEventCards(ranked, buildEventCards(rankedEventRefs(ranked), [orphan])).map((i) => i.occurrenceId)).toEqual([])
   })
 })
 
-const card = readFileSync(fileURLToPath(new URL('./event-feed-card.tsx', import.meta.url)), 'utf8')
+// The shared card (feed + Events tab) — components/feed/event-card.tsx.
+const card = readFileSync(fileURLToPath(new URL('./event-card.tsx', import.meta.url)), 'utf8')
 
 describe('feed card copy is translated', () => {
   // The card is what every feed viewer sees; its labels come from lib/i18n-event-forms.ts.
@@ -211,11 +215,23 @@ describe('feed card copy is translated', () => {
 describe('timing / distance / check-in labels follow the viewer locale', () => {
   const now = Date.UTC(2026, 10, 10, 12, 0)
   it('timing', () => {
-    expect(eventTimingLabel(now, now + 5 * 60000, now + 65 * 60000, 'es').label).toBe('Empieza en 5 min')
-    expect(eventTimingLabel(now, now + 3 * 3600000, now + 4 * 3600000, 'fr').label).toBe('Commence dans 3 h')
+    // Intl.RelativeTimeFormat wording (sentence-cased) for every locale the runtime has data for.
+    expect(eventTimingLabel(now, now + 5 * 60000, now + 65 * 60000, 'es').label).toBe('Dentro de 5 minutos')
+    expect(eventTimingLabel(now, now + 3 * 3600000, now + 4 * 3600000, 'fr').label).toBe('Dans 3 heures')
     expect(eventTimingLabel(now, now + 24 * 3600000, now + 25 * 3600000, 'en').label).toBe('In 1 day')
     expect(eventTimingLabel(now, now + 72 * 3600000, now + 73 * 3600000, 'ko').label).toBe('3일 후')
     expect(eventTimingLabel(now, now - 60000, now + 60000, 'ar')).toEqual({ label: 'يجري الآن', isLive: true })
+  })
+  it('timing uses each language\'s plural forms (Arabic 3–10 vs 11+, Russian few vs many)', () => {
+    expect(eventTimingLabel(now, now + 3 * 86_400_000, now + 3 * 86_400_000 + 3600000, 'ar').label).toBe('خلال 3 أيام')
+    expect(eventTimingLabel(now, now + 11 * 86_400_000, now + 11 * 86_400_000 + 3600000, 'ar').label).toBe('خلال 11 يومًا')
+    expect(eventTimingLabel(now, now + 3 * 3600000, now + 4 * 3600000, 'ru').label).toBe('Через 3 часа')
+    expect(eventTimingLabel(now, now + 5 * 3600000, now + 6 * 3600000, 'ru').label).toBe('Через 5 часов')
+  })
+  it('timing in a locale with no relative-time data (ht, hmn) uses the dictionary phrase, not English', () => {
+    expect(eventTimingLabel(now, now + 72 * 3600000, now + 73 * 3600000, 'ht').label).toBe('Nan 3 jou')
+    expect(eventTimingLabel(now, now + 20 * 60000, now + 80 * 60000, 'ht').label).toBe('Kòmanse nan 20 min')
+    expect(eventTimingLabel(now, now + 24 * 3600000, now + 25 * 3600000, 'hmn').label).not.toMatch(/^In /)
   })
   it('distance', () => {
     expect(distanceBucketLabel('<2km', 'fr')).toBe('À moins de 2 km')
@@ -226,14 +242,11 @@ describe('timing / distance / check-in labels follow the viewer locale', () => {
     expect(checkinButtonLabel('early', 'Check in early', 'zh')).toBe('提前签到')
     expect(checkinButtonLabel('mystery', 'Mystery', 'es')).toBe('Mystery')
   })
-  it('the card and the Events panel render those labels in the viewer locale, with readable contrast', () => {
-    const panel = readFileSync(fileURLToPath(new URL('../panels/events-panel.tsx', import.meta.url)), 'utf8')
-    for (const src of [card, panel]) {
-      expect(src.match(/checkinButtonLabel\(btn\.kind, btn\.label, locale\)/g)?.length).toBe(2)
-      expect(src).not.toMatch(/\{btn\.label\}/)
-    }
-    expect(card).toMatch(/distanceBucketLabel\(event\.distanceBucket, locale\)/)
-    expect(card).toMatch(/new Date\(event\.endsAt\)\.getTime\(\), locale\)/)
+  it('the shared card renders those labels in the viewer locale, with readable contrast', () => {
+    expect(card.match(/checkinButtonLabel\(btn\.kind, btn\.label, locale\)/g)?.length).toBe(2)
+    expect(card).not.toMatch(/\{btn\.label\}/)
+    expect(card).toMatch(/distanceBucketLabel\(distanceBucket, locale\)/)
+    expect(card).toMatch(/eventTimingLabel\(nowMs, startsAtMs, endsAtMs, locale\)/)
     // Distance text and the inert check-in pill: stone-600 (4.5:1+) on the card's light stone.
     expect(card).not.toMatch(/text-stone-400"> · \{distanceLabel\}/)
     expect(card).not.toMatch(/bg-stone-100 text-stone-500/)

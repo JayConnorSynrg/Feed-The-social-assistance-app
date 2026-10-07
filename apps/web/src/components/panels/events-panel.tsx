@@ -1,334 +1,232 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Calendar, Loader2, AlertCircle, MapPin, Users } from 'lucide-react'
+// events-panel.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The members' Events tab. It lists exactly the events the community feed shows — the
+// upcoming_events RPC applies the same server rule as ranked_feed_v2 (each date appears from
+// the organizer's "post N days before" day, venue time, until it ends) — one card per event
+// (its next shown date), grouped Today / This week / Later by the venue's calendar day. Each
+// card is the shared EventCard, so repeating events read "Every week on Saturday · Next: …" and a
+// cancelled date that comes first reads "Sat, Oct 10 cancelled — next: Sat, Oct 24".
+
+import { useState, useEffect, useCallback, useRef, type Ref } from 'react'
+import { Calendar, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { CheckinSheet, type CheckinOccurrence } from './checkin-sheet'
-import {
-  computeCheckinButton,
-  type MyCheckinStatus,
-  type OccurrenceStatus,
-} from '@/lib/event-checkin'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
-import { formatEventWhen } from '@/lib/event-time'
-import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel } from '@/lib/i18n-event-forms'
+import { withMetric } from '@/lib/logger'
+import { dir, type Locale } from '@/lib/i18n'
+import { eventFormT } from '@/lib/i18n-event-forms'
+import { eventMemberT } from '@/lib/i18n-event-member'
+import { applyCheckinResult, checkinResultEffect, type CheckinState } from '@/lib/event-checkin-state'
+import { loadEventCards } from '@/lib/event-card-data'
+import { EventCard } from '@/components/feed/event-card'
+import {
+  groupEventsByVenueDay,
+  upcomingEventRefs,
+  type EventCardItem,
+  type EventDayGroup,
+  type UpcomingEventRow,
+} from '@/components/feed/post-model'
 
-interface OccurrenceWithEvent {
-  id: string
-  starts_at: string
-  ends_at: string
-  notes: string | null
-  capacity: number | null
-  status: string
-  event: {
-    id: string
-    title: string
-    event_type: string
-    location_name: string | null
-    address: string | null
-    city: string | null
-    state: string | null
-    requires_registration: boolean
-    time_zone: string
-    organization: { name: string } | null
-  } | null
+const UPCOMING_LIMIT = 50
+const QUERY_TIMEOUT_MS = 12_000
+
+export type EventsTabState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  /** loadedAt: the clock the day groups are computed with (the time the list was loaded). */
+  | { status: 'ready'; items: EventCardItem[]; checkin: CheckinState; loadedAt: number }
+
+const GROUPS: ReadonlyArray<{ key: EventDayGroup; label: 'groupToday' | 'groupThisWeek' | 'groupLater' }> = [
+  { key: 'today', label: 'groupToday' },
+  { key: 'week', label: 'groupThisWeek' },
+  { key: 'later', label: 'groupLater' },
+]
+
+export interface EventsTabViewProps {
+  state: EventsTabState
+  locale: Locale
+  onRetry: () => void
+  /** A check-in finished on a card: the date's id and the check_in answer (null = unknown). */
+  onCheckedIn: (occurrenceId: string, result: string | null) => void
+  /** The tab heading (focused after a reload settles). */
+  titleRef?: Ref<HTMLHeadingElement>
+  /** False on the first paint: the status region mounts empty, so the first message that
+   *  enters it ("Loading events…") is announced. */
+  announce?: boolean
+  /** The clock the cards read (tests); defaults to their mount time. */
+  now?: number
+  /** The viewer's zone (tests); defaults to the browser's. */
+  viewerTz?: string
 }
 
-function getDateGroup(dateStr: string): 'today' | 'week' | 'upcoming' {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfNextDay = new Date(startOfToday.getTime() + 86400000)
-  const startOfNextWeek = new Date(startOfToday.getTime() + 7 * 86400000)
+/** The Events tab's rendering for one load state (pure; EventsPanel owns the loading). */
+export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz }: EventsTabViewProps) {
+  // One status region, always mounted, so every load / reload outcome is announced.
+  const announcement = !announce
+    ? ''
+    : state.status === 'loading'
+      ? eventFormT(locale, 'loading')
+      : state.status === 'error'
+        ? eventFormT(locale, 'loadError')
+        : state.items.length === 0
+          ? eventFormT(locale, 'eventsTabEmpty')
+          : ''
+  return (
+    <section lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 pb-1">
+        <Calendar className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
+        <h2 id="events-tab-title" ref={titleRef} tabIndex={-1} className="text-lg font-bold text-stone-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">
+          {eventMemberT(locale, 'eventsTabTitle')}
+        </h2>
+      </div>
 
-  if (d < startOfNextDay) return 'today'          // started earlier today OR now in progress
-  if (d < startOfNextWeek) return 'week'
-  return 'upcoming'
+      <p role="status" aria-live="polite" className="sr-only" data-testid="events-tab-status">
+        {announcement}
+      </p>
+
+      {state.status === 'loading' && (
+        <div aria-hidden="true" className="flex flex-col items-center justify-center h-48 gap-3">
+          <Loader2 className="w-7 h-7 text-lime-700 animate-spin" aria-hidden="true" />
+          <p className="text-sm text-stone-600">{eventFormT(locale, 'loading')}</p>
+        </div>
+      )}
+
+      {state.status === 'error' && (
+        <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
+          <AlertCircle className="w-7 h-7 text-red-700" aria-hidden="true" />
+          <p aria-hidden="true" className="text-sm text-stone-700">{eventFormT(locale, 'loadError')}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-6 min-w-6 px-3 py-1.5 rounded-lg text-sm font-semibold text-lime-800 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
+          >
+            {eventFormT(locale, 'retry')}
+          </button>
+        </div>
+      )}
+
+      {state.status === 'ready' && state.items.length === 0 && (
+        <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
+          <Calendar className="w-8 h-8 text-stone-400" aria-hidden="true" />
+          <p aria-hidden="true" className="text-sm text-stone-600 font-medium">{eventFormT(locale, 'eventsTabEmpty')}</p>
+        </div>
+      )}
+
+      {state.status === 'ready' && state.items.length > 0 && (() => {
+        const grouped = groupEventsByVenueDay(state.items, now ?? state.loadedAt)
+        return GROUPS.filter((g) => grouped[g.key].length > 0).map((g) => (
+          <section key={g.key} aria-labelledby={`events-group-${g.key}`} className="flex flex-col gap-3">
+            <h3 id={`events-group-${g.key}`} className="text-sm font-semibold text-stone-600 uppercase tracking-wide">
+              {eventFormT(locale, g.label)}
+            </h3>
+            {grouped[g.key].map((item) => (
+              <EventCard
+                key={item.eventId}
+                event={item}
+                locale={locale}
+                surface="events-tab"
+                headingLevel={4}
+                myStatus={state.checkin.statuses[item.occurrenceId] ?? 'none'}
+                anonymousClaimed={state.checkin.anonClaims.has(item.occurrenceId)}
+                onCheckedIn={onCheckedIn}
+                now={now}
+                viewerTz={viewerTz}
+              />
+            ))}
+          </section>
+        ))
+      })()}
+    </section>
+  )
 }
 
 export function EventsPanel() {
   const supabase = createClient()
-  const { loading: authLoading, isAuthenticated, isAnonymous } = useAuth()
+  const { loading: authLoading, user, isAnonymous } = useAuth()
   const locale = useProfileLocale()
+  const [state, setState] = useState<EventsTabState>({ status: 'loading' })
+  const userId = user?.id ?? null
 
-  const [occurrences, setOccurrences] = useState<OccurrenceWithEvent[]>([])
-  const [myStatuses, setMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
-  // Occurrences this member has already spent their one anonymous check-in on (own-only, via
-  // the my_anonymous_claims SECDEF RPC). The anonymous event_checkins row is unlinkable, so
-  // this RPC is the only way the member learns they are already counted anonymously (M2).
-  const [anonClaims, setAnonClaims] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
-  const [checkinConfirms, setCheckinConfirms] = useState(false)
-  const [checkinOpen, setCheckinOpen] = useState(false)
-  const [checkinHasTracked, setCheckinHasTracked] = useState(false)
-
-  const fetchOccurrences = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  // The initial state is 'loading'; Retry and a check-in set it again before calling load().
+  const load = useCallback(async () => {
     try {
-      const now = new Date().toISOString()
-      const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-
-      // In-progress events stay listed: gate on ends_at >= now (not starts_at), so an event
-      // that has started but not ended still appears with its "I'm here" button.
-      const { data, error: fetchError } = await supabase
-        .from('event_occurrences')
-        .select(`
-          id,
-          starts_at,
-          ends_at,
-          notes,
-          capacity,
-          status,
-          event:assistance_events(
-            id,
-            title,
-            event_type,
-            location_name,
-            address,
-            city,
-            state,
-            requires_registration,
-            time_zone,
-            organization:organizations(name)
-          )
-        `)
-        .eq('status', 'upcoming')
-        .gte('ends_at', now)
-        .lte('starts_at', thirtyDaysOut)
-        .order('starts_at', { ascending: true })
-        .limit(50)
-
-      if (fetchError) {
-        setError(fetchError.message)
-        return
-      }
-      const occs = (data as unknown as OccurrenceWithEvent[]) ?? []
-      setOccurrences(occs)
-
-      // Load this user's own check-in state for the visible occurrences (own rows only,
-      // via RLS checkins_select_own). Guests have none.
-      if (isAuthenticated && !isAnonymous && occs.length > 0) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const ids = occs.map((o) => o.id)
-          const { data: mine } = await supabase
-            .from('event_checkins')
-            .select('occurrence_id, status')
-            .eq('user_id', user.id)
-            .in('occurrence_id', ids)
-          const map: Record<string, MyCheckinStatus> = {}
-          for (const row of mine ?? []) {
-            map[row.occurrence_id as string] = (row.status as MyCheckinStatus) ?? 'confirmed'
-          }
-          setMyStatuses(map)
-
-          // Own anonymous claims for the visible occurrences (unlinkable rows are invisible
-          // above; this SECDEF RPC returns only the caller's own claimed occurrence ids).
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: claims } = await (supabase.rpc as any)('my_anonymous_claims', { p_occurrence_ids: ids })
-          const claimed = new Set<string>()
-          for (const row of (claims as Array<{ occurrence_id: string }> | null) ?? []) {
-            if (row?.occurrence_id) claimed.add(row.occurrence_id)
-          }
-          setAnonClaims(claimed)
-        }
-      } else {
-        setMyStatuses({})
-        setAnonClaims(new Set())
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events')
-    } finally {
-      setLoading(false)
+      const loadedAt = Date.now()
+      // One wide event per load (events.tab.load.complete / .error) covering the RPC and the
+      // card loader (shared with the feed); the member sees the translated message, never the
+      // database text.
+      const { items, checkin } = await withMetric('events.tab.load', { limit: UPCOMING_LIMIT }, async () => {
+        const { data, error } = await supabase
+          .rpc('upcoming_events', { p_limit: UPCOMING_LIMIT })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (error) throw error
+        return loadEventCards(supabase, upcomingEventRefs((data ?? []) as UpcomingEventRow[]), {
+          surface: 'events_tab',
+          userId,
+          isGuest: isAnonymous,
+          timeoutMs: QUERY_TIMEOUT_MS,
+        })
+      })
+      setState({ status: 'ready', items, checkin, loadedAt })
+    } catch {
+      setState({ status: 'error' })
     }
-  }, [supabase, isAuthenticated, isAnonymous])
+  }, [supabase, userId, isAnonymous])
 
   useEffect(() => {
-    if (!authLoading) {
-      fetchOccurrences()
+    // load() sets state only after its awaited reads (the initial state is already 'loading').
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!authLoading) void load()
+  }, [authLoading, load])
+
+  // A reload replaces the control the member used (Retry, or a card), so once it settles focus
+  // goes to the tab heading.
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  // The always-mounted status region (it carries "Loading events…") starts empty and gets its
+  // first text a frame later, so that first message is announced.
+  const [announce, setAnnounce] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setAnnounce(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const focusTitleAfterLoad = useRef(false)
+  useEffect(() => {
+    if (state.status !== 'loading' && focusTitleAfterLoad.current) {
+      focusTitleAfterLoad.current = false
+      titleRef.current?.focus()
     }
-  }, [authLoading, fetchOccurrences])
+  }, [state.status])
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3">
-        <Loader2 className="w-7 h-7 text-lime-700 animate-spin" aria-hidden="true" />
-        <p className="text-sm text-stone-500">Loading events…</p>
-      </div>
-    )
-  }
+  const reload = useCallback(() => {
+    focusTitleAfterLoad.current = true
+    setState({ status: 'loading' })
+    void load()
+  }, [load])
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
-        <AlertCircle className="w-7 h-7 text-red-400" aria-hidden="true" />
-        <p className="text-sm text-stone-700">{error}</p>
-        <button onClick={fetchOccurrences} className="text-sm text-lime-700 underline underline-offset-2">
-          Try again
-        </button>
-      </div>
-    )
-  }
-
-  if (occurrences.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
-        <Calendar className="w-8 h-8 text-stone-300" aria-hidden="true" />
-        <p className="text-sm text-stone-500 font-medium">No upcoming events in your area</p>
-        <p className="text-xs text-stone-600">Check back soon — events are added regularly.</p>
-      </div>
-    )
-  }
-
-  const groups: Array<{ key: 'today' | 'week' | 'upcoming'; label: string; items: OccurrenceWithEvent[] }> = [
-    { key: 'today', label: 'Today', items: [] },
-    { key: 'week', label: 'This Week', items: [] },
-    { key: 'upcoming', label: 'Upcoming', items: [] },
-  ]
-
-  for (const occ of occurrences) {
-    const g = groups.find((g) => g.key === getDateGroup(occ.starts_at))
-    if (g) g.items.push(occ)
-  }
-
-  const nonEmptyGroups = groups.filter((g) => g.items.length > 0)
-  const nowMs = Date.now()
+  // Apply the server's check_in answer to that card in place (the list, the member's place and
+  // focus stay); re-read only when the answer is unknown.
+  const onCheckedIn = useCallback((occurrenceId: string, result: string | null) => {
+    if (checkinResultEffect(result) === null) {
+      reload()
+      return
+    }
+    setState((prev) => {
+      if (prev.status !== 'ready') return prev
+      const checkin = applyCheckinResult(prev.checkin, occurrenceId, result)
+      return checkin ? { ...prev, checkin } : prev
+    })
+  }, [reload])
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 pb-1">
-        <Calendar className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
-        <h2 className="text-lg font-bold text-stone-900">Community Events</h2>
-      </div>
-
-      {nonEmptyGroups.map((group) => (
-        <div key={group.key} className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wide">
-            {group.label}
-          </h3>
-          {group.items.map((occ) => {
-            const ev = occ.event
-            if (!ev) return null
-            const typeColor = eventTypeColor(ev.event_type)
-            const typeLabel = eventTypeLabel(ev.event_type, locale)
-            const when = formatEventWhen(occ.starts_at, occ.ends_at, ev.time_zone, locale)
-            const location = [ev.location_name, ev.city, ev.state].filter(Boolean).join(', ')
-
-            const btn = computeCheckinButton({
-              status: occ.status as OccurrenceStatus,
-              startsAtMs: new Date(occ.starts_at).getTime(),
-              endsAtMs: new Date(occ.ends_at).getTime(),
-              myStatus: myStatuses[occ.id] ?? 'none',
-              nowMs,
-              anonymousClaimed: anonClaims.has(occ.id),
-            })
-
-            return (
-              <div
-                key={occ.id}
-                className="bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-2"
-              >
-                {ev.organization && (
-                  <p className="text-xs text-stone-500 font-medium">{ev.organization.name}</p>
-                )}
-
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-base font-semibold text-stone-900 leading-snug">{ev.title}</h3>
-                  <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${typeColor}`}>
-                    {typeLabel}
-                  </span>
-                </div>
-
-                <div className="flex items-start gap-1.5 text-sm text-stone-700">
-                  <Calendar className="w-3.5 h-3.5 mt-0.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
-                  <span>
-                    {when.text}
-                    {when.venue && <span className="block text-xs text-stone-600">{when.venue}</span>}
-                  </span>
-                </div>
-
-                {location && (
-                  <div className="flex items-center gap-1.5 text-sm text-stone-600">
-                    <MapPin className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
-                    <span>{location}</span>
-                  </div>
-                )}
-
-                {occ.capacity != null && (
-                  <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                    <Users className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" aria-hidden="true" />
-                    <span>Capacity: {occ.capacity}</span>
-                  </div>
-                )}
-
-                {occ.notes && (
-                  <p className="text-xs text-stone-600 leading-relaxed">{occ.notes}</p>
-                )}
-
-                {!ev.requires_registration && (
-                  <span className="self-start text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-                    {eventFormT(locale, 'cardWalkIn')}
-                  </span>
-                )}
-
-                {btn.actionable ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCheckinOccurrence({
-                        id: occ.id,
-                        starts_at: occ.starts_at,
-                        ends_at: occ.ends_at,
-                        event: {
-                          title: ev.title,
-                          location_name: ev.location_name ?? null,
-                          time_zone: ev.time_zone,
-                          organization: ev.organization ?? null,
-                        },
-                      })
-                      setCheckinConfirms(btn.confirmsPresence)
-                      // Hide the anonymous option when the member already has a tracked row
-                      // (server refuses an anonymous check-in on top of one).
-                      setCheckinHasTracked((myStatuses[occ.id] ?? 'none') !== 'none')
-                      setCheckinOpen(true)
-                    }}
-                    className="self-start text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors"
-                  >
-                    {checkinButtonLabel(btn.kind, btn.label, locale)}
-                  </button>
-                ) : (
-                  <span
-                    className={`self-start text-xs font-semibold px-3 py-1.5 rounded-xl ${
-                      btn.kind === 'attended' || btn.kind === 'checked_early' || btn.kind === 'anonymous'
-                        ? 'bg-lime-100 text-lime-800'
-                        : 'bg-stone-100 text-stone-600'
-                    }`}
-                  >
-                    {checkinButtonLabel(btn.kind, btn.label, locale)}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      ))}
-      {checkinOccurrence && (
-        <CheckinSheet
-          occurrence={checkinOccurrence}
-          open={checkinOpen}
-          confirmsPresence={checkinConfirms}
-          hasTrackedRow={checkinHasTracked}
-          onOpenChange={(open) => {
-            setCheckinOpen(open)
-            if (!open) setCheckinOccurrence(null)
-          }}
-          onSuccess={() => { void fetchOccurrences() }}
-        />
-      )}
-    </div>
+    <EventsTabView
+      state={state}
+      locale={locale}
+      onRetry={reload}
+      onCheckedIn={onCheckedIn}
+      titleRef={titleRef}
+      announce={announce}
+    />
   )
 }

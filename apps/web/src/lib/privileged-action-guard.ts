@@ -26,6 +26,7 @@ export const AUDITED_PRIVILEGED = [
   'add_event_dates',
   'cancel_event_occurrence',
   'admin_update_event',
+  'extend_event_series',
 ]
 
 const QUOTE = "[`'\"]"

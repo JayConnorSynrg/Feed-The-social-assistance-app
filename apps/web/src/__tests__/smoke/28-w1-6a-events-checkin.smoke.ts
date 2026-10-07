@@ -11,6 +11,10 @@
 //          supabase/migrations/20261020000000_org_scoped_admin_events.sql (admin_create_event
 //          replaced by create_org_event + add_event_dates + cancel_event_occurrence;
 //          admin_update_event loses its rrule/Mapbox parameters)
+//          supabase/migrations/20261023000000_events_recurring_announce.sql (create_org_event and
+//          admin_update_event gain repeat-rule / announce parameters — looked up by NAME below so
+//          the probe holds on either side of that ledger row; geocode_accuracy/geocode_confidence
+//          dropped once it is recorded)
 //
 // GATE ON THE LEDGER, NOT ON THE STATE. The migrations apply as SEPARATE post-deploy
 // steps recorded in supabase_migrations.schema_migrations. The suite skips ONLY while either
@@ -49,6 +53,7 @@ const STATE_SQL = `
     (SELECT count(*) FROM information_schema.columns
        WHERE table_schema='public' AND table_name='assistance_events'
        AND column_name IN ('geocode_accuracy','geocode_confidence'))                      AS event_geo_cols,
+    EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261023000000') AS recur_applied,
     -- status CHECK allows exactly early/confirmed.
     (SELECT count(*) FROM pg_constraint c JOIN pg_class cl ON cl.oid=c.conrelid
        WHERE cl.relname='event_checkins' AND c.contype='c'
@@ -82,8 +87,10 @@ const STATE_SQL = `
     has_function_privilege('authenticated','public.event_attendance(uuid)','EXECUTE')                    AS att_auth_exec,
     has_function_privilege('authenticated','public.my_attendance_rate()','EXECUTE')                      AS myrate_auth_exec,
     has_function_privilege('anon','public.my_attendance_rate()','EXECUTE')                               AS myrate_anon_exec,
-    has_function_privilege('authenticated','public.create_org_event(uuid,uuid,text,text,timestamp without time zone,timestamp without time zone,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)','EXECUTE') AS create_auth_exec,
-    has_function_privilege('anon','public.create_org_event(uuid,uuid,text,text,timestamp without time zone,timestamp without time zone,text,text,text,text,text,text,text,text,double precision,double precision,integer,boolean)','EXECUTE')          AS create_anon_exec,
+    (SELECT bool_and(has_function_privilege('authenticated', p.oid, 'EXECUTE')) FROM pg_proc p
+       WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'create_org_event')     AS create_auth_exec,
+    (SELECT bool_or(has_function_privilege('anon', p.oid, 'EXECUTE')) FROM pg_proc p
+       WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'create_org_event')     AS create_anon_exec,
     -- The org-scoped rate helper is internal only (never client-executable).
     has_function_privilege('authenticated','public.w1_6a_user_org_rate(uuid,uuid)','EXECUTE')            AS rate_helper_auth_exec,
     -- Credit trigger: present, ENABLED, AFTER + ROW, fires on INSERT and UPDATE, confirmed-only body.
@@ -146,9 +153,12 @@ const STATE_SQL = `
        WHERE n.nspname='public' AND c.relname='event_occurrences'
        AND t.tgname='trg_event_occurrences_guard_checkin_bounds'
        AND (t.tgtype & 2)<>0 AND (t.tgtype & 16)<>0 AND t.tgenabled<>'D')                     AS m3_guard_trigger,
-    -- Retirement + explicit-clear: admin_update_event carries p_is_active + p_clear (16 args since
-    -- 20261020000000: no rrule / Mapbox geocode parameters).
-    has_function_privilege('authenticated','public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])','EXECUTE') AS update_event_retire_exec,
+    -- Retirement + explicit-clear: admin_update_event carries p_is_active + p_clear (no rrule / Mapbox
+    -- parameters since 20261020000000; repeat-rule / announce parameters since 20261023000000).
+    (SELECT bool_and(has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                     AND 'p_is_active' = ANY (p.proargnames) AND 'p_clear' = ANY (p.proargnames)
+                     AND NOT ('p_rrule' = ANY (p.proargnames))) FROM pg_proc p
+       WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'admin_update_event') AS update_event_retire_exec,
     -- ── fix round 4 (D1/D2/K1/K2/K4) ────────────────────────────────────────────
     -- K2: the org-deactivation cascade trigger (AFTER UPDATE OF is_active on organizations).
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -166,8 +176,8 @@ const STATE_SQL = `
     (pg_get_functiondef('public.event_occurrences_guard_checkin_bounds()'::regprocedure)
        ILIKE '%attendance history is permanent%') AS d2_ended_cancel_guard,
     -- D1: retire cancels only NOT-STARTED occurrences (starts_at > now, not ends_at > now).
-    (pg_get_functiondef('public.admin_update_event(uuid,text,text,text,text,text,text,text,text,integer,boolean,text,double precision,double precision,boolean,text[])'::regprocedure)
-       ILIKE '%starts_at > now()%') AS d1_retire_not_started,
+    (SELECT bool_and(pg_get_functiondef(p.oid) ILIKE '%starts_at > now()%') FROM pg_proc p
+       WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'admin_update_event') AS d1_retire_not_started,
     -- K4: rate math no longer filters on the event's/org's is_active ("ran" semantics).
     ((pg_get_functiondef('public.my_attendance_rate()'::regprocedure) NOT ILIKE '%ae.is_active AND o.is_active%')
      AND (pg_get_functiondef('public.w1_6a_user_org_rate(uuid,uuid)'::regprocedure) NOT ILIKE '%ae.is_active AND o.is_active%')) AS k4_rate_no_isactive_filter
@@ -181,7 +191,9 @@ maybeDescribe('28 — W1.6a events + two-state check-in (PROD read-only)', () =>
     expect(rows.length).toBe(1)
     const r = rows[0]
     expect(Number(r.checkin_cols), 'event_checkins must have status/confirmed_at/confirmed_by').toBe(3)
-    expect(Number(r.event_geo_cols), 'assistance_events must have geocode_accuracy/geocode_confidence').toBe(2)
+    // 20261023000000 drops the never-read geocode tags (the pin is assistance_events.location).
+    expect(Number(r.event_geo_cols), 'assistance_events geocode_accuracy/geocode_confidence: 2 before 20261023000000, 0 after')
+      .toBe(r.recur_applied ? 0 : 2)
     expect(Number(r.status_check), 'status CHECK must allow early/confirmed').toBe(1)
     // I1: no client writes; SELECT kept; guest block kept; permissive write policies gone.
     expect(r.auth_insert, 'authenticated must NOT INSERT event_checkins').toBe(false)
