@@ -4,6 +4,7 @@
 // map reader safety_alerts_in_view applies. pg_cron job safety_alerts_expire
 // (migration 20261025000000) moves past-expiry rows to 'expired' every 5 minutes;
 // the expires_at filter keeps an alert in that window out of admin views too.
+// `now` is the browser clock; any skew is bounded by the job's 5-minute status flip.
 
 interface LiveFilterable<Q> {
   eq(column: 'status', value: 'live'): Q

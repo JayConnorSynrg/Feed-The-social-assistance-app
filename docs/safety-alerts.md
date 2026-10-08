@@ -24,8 +24,12 @@ within 5 minutes:
 - Admin review list and the Overview "Live Safety Alerts" count: `whereSafetyAlertLive`
   (`apps/web/src/app/(admin)/moderation/safety-alert-live.ts`).
 
-What changes when a row becomes `expired`: votes are refused (`vote_safety_alert` requires
-`live`), and the RLS policy no longer returns it to members. Owners can still edit / delete it
+Votes follow the same rule: `vote_safety_alert` refuses a vote with "alert is no longer live"
+when the status is not `live` **or** `expires_at` has passed, and its auto-clear only changes a
+row that is still `live`, so a vote racing the job or a removal never turns that alert into
+`cleared`.
+
+What changes when a row becomes `expired`: the RLS policy no longer returns it to members. Owners can still edit / delete it
 through `update_safety_alert` / `delete_safety_alert` (ownership check only), and moderators can
 still verify or remove it (no status check), though no UI lists expired alerts. The expiry
 UPDATE never changes `verified`, so the Watcher engagement trigger
@@ -34,6 +38,7 @@ UPDATE never changes `verified`, so the Watcher engagement trigger
 ## Operations
 
 - Migration: `supabase/migrations/20261025000000_safety_alerts_expire_job.sql`.
+- SQL smoke: `supabase/tests/safety_alerts_expire.smoke.sql` (BEGIN … ROLLBACK; X4b needs `feed.smoke_local=on`).
 - Log: one `app_logs` row `safety_alerts.expire` per run that expired at least one alert
   (`info`, `context.expired`) or failed (`error`, `context.error_code`). See
   [observability.md](observability.md).

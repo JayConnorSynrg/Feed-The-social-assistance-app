@@ -23,14 +23,17 @@
 --   2 hours: severity 1 = 2h, 2 = 6h, 3 = 24h, 4 = 72h, set by place_safety_alert).
 --   The one trigger on safety_alerts (trg_engagement_safety_alert_verify, 20261005000000)
 --   acts only when verified flips to true, which this UPDATE never does.
+--   vote_safety_alert is replaced with the same liveness rule (refuses votes once expires_at
+--   has passed) and its auto-clear only changes a row that is still 'live', so no writer can
+--   turn an expired or removed alert into 'cleared'.
 --
 -- Privilege: plain invoker function with a pinned search_path, run by pg_cron as the job
 -- owner (the same shape as events_generate_nightly in 20261023000000); EXECUTE is revoked
 -- from PUBLIC, anon and authenticated, so no client can call it.
 --
--- Migration order (5-step): (1) no extensions; (2)-(4) no tables; one function + one cron
--- job; (5) no RLS change (no new table). ONE transaction; the schema_migrations ledger row is
--- written in the SAME transaction.
+-- Migration order (5-step): (1) no extensions; (2)-(4) no tables; one new function, one
+-- replaced function, one cron job; (5) no RLS change (no new table). ONE transaction; the
+-- schema_migrations ledger row is written in the SAME transaction.
 
 BEGIN;
 -- Fail fast instead of queueing behind long reads when a lock is contended.
@@ -67,6 +70,85 @@ REVOKE EXECUTE ON FUNCTION public.expire_safety_alerts() FROM PUBLIC, anon, auth
 
 COMMENT ON FUNCTION public.expire_safety_alerts() IS
   'Moves safety_alerts from live to expired when expires_at <= now(); returns the count. Run by pg_cron job safety_alerts_expire every 5 minutes. 20261025000000.';
+
+-- vote_safety_alert: the latest definition (20260611173053:649-717) copied verbatim with two
+-- changes. (1) A vote on an alert past expires_at is refused like any non-live alert
+-- ('alert is no longer live'), so the job's 5-minute lag never lets a stale alert take votes.
+-- (2) The auto-clear CASE only fires while the row is still 'live': if an expire or a removal
+-- commits between the liveness check and this UPDATE, the UPDATE re-reads the committed row
+-- and keeps its status instead of overwriting it with 'cleared'. SECURITY DEFINER, search_path
+-- and grants are unchanged (CREATE OR REPLACE keeps the ACL; the two grant lines are restated
+-- verbatim from 20260611173053:716-717 and change nothing).
+CREATE OR REPLACE FUNCTION public.vote_safety_alert(
+  p_alert_id uuid,
+  p_vote     text
+)
+RETURNS public.safety_alerts
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_row     public.safety_alerts;
+BEGIN
+  -- Anonymous guard: guests may not perform write actions
+  IF COALESCE((SELECT (auth.jwt()->>'is_anonymous')::boolean), false) THEN
+    RAISE EXCEPTION 'Account required for this action' USING ERRCODE='42501';
+  END IF;
+
+  IF p_vote NOT IN ('confirm', 'clear') THEN
+    RAISE EXCEPTION 'vote must be confirm or clear';
+  END IF;
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'not authenticated';
+  END IF;
+
+  -- Verify the alert exists and is live (live = status 'live' AND not past expires_at)
+  SELECT * INTO v_row FROM public.safety_alerts WHERE id = p_alert_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'alert not found';
+  END IF;
+  IF v_row.status <> 'live' OR v_row.expires_at <= now() THEN
+    RAISE EXCEPTION 'alert is no longer live';
+  END IF;
+
+  -- Upsert vote (one per user per alert)
+  INSERT INTO public.safety_alert_votes (alert_id, voter_id, vote)
+  VALUES (p_alert_id, auth.uid(), p_vote)
+  ON CONFLICT (alert_id, voter_id) DO UPDATE
+    SET vote = EXCLUDED.vote;
+
+  -- Recompute counts atomically
+  UPDATE public.safety_alerts
+  SET
+    confirm_count = (
+      SELECT count(*) FROM public.safety_alert_votes
+      WHERE alert_id = p_alert_id AND vote = 'confirm'
+    ),
+    clear_count = (
+      SELECT count(*) FROM public.safety_alert_votes
+      WHERE alert_id = p_alert_id AND vote = 'clear'
+    ),
+    -- Auto-clear: >= 3 clear votes and clears outweigh confirms, only while still live
+    -- (a concurrent expire / remove that committed first is never overwritten)
+    status = CASE
+      WHEN status = 'live' AND (
+        (SELECT count(*) FROM public.safety_alert_votes WHERE alert_id = p_alert_id AND vote = 'clear') >= 3
+        AND
+        (SELECT count(*) FROM public.safety_alert_votes WHERE alert_id = p_alert_id AND vote = 'clear')
+          > (SELECT count(*) FROM public.safety_alert_votes WHERE alert_id = p_alert_id AND vote = 'confirm')
+      ) THEN 'cleared'
+      ELSE status
+    END
+  WHERE id = p_alert_id
+  RETURNING * INTO v_row;
+
+  RETURN v_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.vote_safety_alert(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.vote_safety_alert(uuid, text) TO authenticated;
 
 -- pg_cron job (guarded + idempotent re-schedule, same shape as 20261023000000).
 DO $cron$
