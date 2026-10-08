@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
 import { isApproximateGeocode } from '@/lib/geocode-accuracy'
-import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, useMarkerPopup } from './marker-popup'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 interface Resource {
   id: string
@@ -36,7 +36,7 @@ interface ResourceMarkerProps {
 
 export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
-  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup } = useMarkerPopup(focused)
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
   const color = getCategoryHex(resource.category)
   const isApproximate = isApproximateGeocode(resource.geocode_accuracy)
@@ -63,7 +63,7 @@ export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerPro
 
   return (
     <>
-      <Marker
+      <Marker ref={markerA11yRef}
         longitude={resource.longitude}
         latitude={resource.latitude}
         anchor="bottom"
@@ -94,8 +94,9 @@ export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerPro
           latitude={resource.latitude}
           anchor="bottom"
           onClose={closePopup}
+          onOpen={onPopupOpen}
           focusAfterOpen={false}
-          closeButton={true}
+          closeButton={false}
           closeOnClick={false}
           offset={40}
           maxWidth="320px"

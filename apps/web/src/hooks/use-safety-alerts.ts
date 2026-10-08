@@ -6,7 +6,7 @@ import type { Database } from '@feed/database'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
-import { SafetyAlertsFetchScheduler } from '@/lib/safety-alerts-fetch'
+import { SafetyAlertsFetchScheduler, createLatestOnlyLoader } from '@/lib/safety-alerts-fetch'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -71,52 +71,27 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
-  const fetchAlerts = useCallback(
-    async (bounds: ViewportBounds) => {
-      setLoading(true)
-      setError(null)
-      try {
-        const { data, error: rpcError } = await supabase
-          .rpc('safety_alerts_in_view', {
-            p_min_lng: bounds.west,
-            p_min_lat: bounds.south,
-            p_max_lng: bounds.east,
-            p_max_lat: bounds.north,
-          })
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-
-        if (rpcError) throw rpcError
-
-        const rows = data ?? []
-        const alerts = rows.map((r): SafetyAlert => ({
-          id: r.id,
-          alert_type: r.alert_type as SafetyAlert['alert_type'],
-          severity: r.severity,
-          description: r.description,
-          lng: r.lng,
-          lat: r.lat,
-          status: r.status,
-          confirm_count: r.confirm_count,
-          clear_count: r.clear_count,
-          created_at: r.created_at,
-          expires_at: r.expires_at,
-          verified: r.verified,
-          is_mine: r.is_mine ?? false,
-        }))
+  // Only the latest read's answer is applied: a slow answer for an older viewport is dropped.
+  const [fetchAlerts] = useState(() =>
+    createLatestOnlyLoader<ViewportBounds, SafetyAlert[]>({
+      read: (bounds) => readSafetyAlertsInView(supabase, bounds),
+      onStart: () => {
+        setLoading(true)
+        setError(null)
+      },
+      onResult: (alerts) => {
         const newMap = new Map<string, SafetyAlert>()
         alerts.forEach((r) => newMap.set(r.id, r))
         alertMapRef.current = newMap
         setAlerts(alerts)
-      } catch (err) {
+      },
+      onError: (err) => {
         const e = err instanceof Error ? err : new Error(String(err))
         logger.error('safety-alerts.fetch.error', { message: e.message })
         setError(e)
-      } finally {
-        setLoading(false)
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+      },
+      onSettled: () => setLoading(false),
+    })
   )
 
   // ── When to read (lib/safety-alerts-fetch.ts) ─────────────────────────────
@@ -139,6 +114,13 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   }, [scheduler, viewportBounds])
 
   useEffect(() => () => scheduler.dispose(), [scheduler])
+
+  // A hidden tab skips the poll; coming back reads once at once.
+  useEffect(() => {
+    const onVisibility = () => scheduler.visibilityChanged(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [scheduler])
 
   // ── Place alert ────────────────────────────────────────────────────────────
 
@@ -295,4 +277,35 @@ export async function updateSafetyAlert(
     logger.error('safety-alerts.update.error', { message: e.message })
     throw e
   }
+}
+
+/** One safety_alerts_in_view read, mapped to the marker shape. */
+export async function readSafetyAlertsInView(
+  supabase: SupabaseClient<Database>,
+  bounds: ViewportBounds,
+): Promise<SafetyAlert[]> {
+  const { data, error: rpcError } = await supabase
+    .rpc('safety_alerts_in_view', {
+      p_min_lng: bounds.west,
+      p_min_lat: bounds.south,
+      p_max_lng: bounds.east,
+      p_max_lat: bounds.north,
+    })
+    .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+  if (rpcError) throw rpcError
+  return (data ?? []).map((r): SafetyAlert => ({
+    id: r.id,
+    alert_type: r.alert_type as SafetyAlert['alert_type'],
+    severity: r.severity,
+    description: r.description,
+    lng: r.lng,
+    lat: r.lat,
+    status: r.status,
+    confirm_count: r.confirm_count,
+    clear_count: r.clear_count,
+    created_at: r.created_at,
+    expires_at: r.expires_at,
+    verified: r.verified,
+    is_mine: r.is_mine ?? false,
+  }))
 }

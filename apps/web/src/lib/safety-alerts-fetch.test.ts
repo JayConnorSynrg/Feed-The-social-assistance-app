@@ -11,7 +11,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
-import { ALERTS_DEBOUNCE_MS, ALERTS_POLL_MS, SafetyAlertsFetchScheduler, boundsKey, type AlertBounds } from './safety-alerts-fetch'
+import {
+  ALERTS_DEBOUNCE_MS,
+  ALERTS_POLL_MS,
+  SafetyAlertsFetchScheduler,
+  boundsKey,
+  createLatestOnlyLoader,
+  type AlertBounds,
+} from './safety-alerts-fetch'
 import { placeSafetyAlert, updateSafetyAlert } from '@/hooks/use-safety-alerts'
 
 const B = (west = -73, south = 43, east = -72, north = 44): AlertBounds => ({ west, south, east, north })
@@ -80,6 +87,19 @@ describe('SafetyAlertsFetchScheduler', () => {
     expect(calls[1]).toEqual(B())
   })
 
+  it('the tab becoming visible reads the current viewport once; becoming hidden reads nothing', () => {
+    const { scheduler, calls } = counting()
+    scheduler.visibilityChanged(true) // no viewport yet
+    expect(calls).toHaveLength(0)
+    scheduler.setBounds(B())
+    vi.advanceTimersByTime(ALERTS_DEBOUNCE_MS)
+    scheduler.visibilityChanged(false)
+    expect(calls).toHaveLength(1)
+    scheduler.visibilityChanged(true)
+    expect(calls).toHaveLength(2)
+    expect(calls[1]).toEqual(B())
+  })
+
   it('dispose stops every timer; a StrictMode re-mount (setBounds after dispose) schedules afresh', () => {
     const { scheduler, calls } = counting()
     scheduler.setBounds(B())
@@ -120,5 +140,70 @@ describe('place / edit an alert → one refetch so the pin appears (their RPCs r
     const none = vi.fn()
     await expect(updateSafetyAlert(bad.client, 'a1', input, none)).rejects.toThrow('not yours')
     expect(none).not.toHaveBeenCalled()
+  })
+})
+
+describe('createLatestOnlyLoader — a slow answer for an older viewport never wins', () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    let reject!: (e: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  function harness() {
+    const pending: Array<ReturnType<typeof deferred<string>>> = []
+    const results: string[] = []
+    const errors: unknown[] = []
+    const loading: boolean[] = []
+    const load = createLatestOnlyLoader<number, string>({
+      read: () => {
+        const d = deferred<string>()
+        pending.push(d)
+        return d.promise
+      },
+      onStart: () => loading.push(true),
+      onResult: (r) => results.push(r),
+      onError: (e) => errors.push(e),
+      onSettled: () => loading.push(false),
+    })
+    return { load, pending, results, errors, loading }
+  }
+
+  it('two reads in flight resolving in reverse order: the newer result wins, the older is dropped', async () => {
+    const hx = harness()
+    const first = hx.load(1)
+    const second = hx.load(2)
+    hx.pending[1].resolve('newer viewport')
+    await second
+    hx.pending[0].resolve('older viewport')
+    await first
+    expect(hx.results).toEqual(['newer viewport'])
+    // Loading ends with the newer read only.
+    expect(hx.loading).toEqual([true, true, false])
+  })
+
+  it('an older read failing after a newer one succeeded reports no error', async () => {
+    const hx = harness()
+    const first = hx.load(1)
+    const second = hx.load(2)
+    hx.pending[1].resolve('ok')
+    await second
+    hx.pending[0].reject(new Error('timeout'))
+    await first
+    expect(hx.results).toEqual(['ok'])
+    expect(hx.errors).toEqual([])
+  })
+
+  it('a single read applies its result', async () => {
+    const hx = harness()
+    const only = hx.load(1)
+    hx.pending[0].resolve('only')
+    await only
+    expect(hx.results).toEqual(['only'])
+    expect(hx.loading).toEqual([true, false])
   })
 })

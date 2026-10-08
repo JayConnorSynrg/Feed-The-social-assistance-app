@@ -117,9 +117,6 @@ export function abandonFocus(pending: { current: PendingFocus | null }): boolean
   return true
 }
 
-// Reduced motion lives in lib/accessibility-prefs.ts (shared with the map's camera flights).
-export { prefersReducedMotion }
-
 /** The live highlight: its expiry timer and its blur listener. */
 export interface HighlightHandle {
   timer: ReturnType<typeof setTimeout>

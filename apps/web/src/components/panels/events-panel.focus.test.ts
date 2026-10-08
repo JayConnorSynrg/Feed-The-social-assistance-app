@@ -26,7 +26,6 @@ import {
   arriveFocus,
   decideEventFocus,
   endHighlight,
-  prefersReducedMotion,
   type HighlightHandle,
   focusSettles,
   takeSettledFocus,
@@ -172,14 +171,6 @@ describe('leaving before the list loads (abandonFocus)', () => {
     const ref = { current: arriveFocus(target(E1), { status: 'loading' }).pending as PendingFocus | null }
     expect(takeSettledFocus(ref, ready(E1))).not.toBeNull()
     expect(abandonFocus(ref)).toBe(false)
-  })
-})
-
-describe('reduced motion (prefersReducedMotion)', () => {
-  it("FEED's own setting or the operating system's", () => {
-    expect(prefersReducedMotion('reduce', false)).toBe(true)
-    expect(prefersReducedMotion(undefined, true)).toBe(true)
-    expect(prefersReducedMotion(undefined, false)).toBe(false)
   })
 })
 

@@ -15,7 +15,7 @@ import type { UpdateAlertInput } from '@/hooks/use-safety-alerts'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
-import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, useMarkerPopup } from './marker-popup'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Severity colors:  1-2 = amber (low-medium risk), 3-4 = red-orange (high risk)
@@ -77,7 +77,7 @@ interface SafetyAlertMarkerProps {
 // SafetyAlertMarkerInner contains all hooks; called only when coords are valid.
 function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete, focused }: SafetyAlertMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
-  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup } = useMarkerPopup(focused)
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
   const [voting, setVoting] = useState<'confirm' | 'clear' | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
 
@@ -145,7 +145,7 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
 
   return (
     <>
-      <Marker
+      <Marker ref={markerA11yRef}
         longitude={alert.lng}
         latitude={alert.lat}
         anchor="bottom"
@@ -179,8 +179,9 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
           anchor="bottom"
           offset={40}
           onClose={closePopup}
+          onOpen={onPopupOpen}
           focusAfterOpen={false}
-          closeButton={true}
+          closeButton={false}
           closeOnClick={false}
           maxWidth="280px"
         >

@@ -14,7 +14,7 @@ import { MapPin, Leaf, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
-import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, useMarkerPopup } from './marker-popup'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 interface BusinessMarkerProps {
   business: MappableBusiness
@@ -24,7 +24,7 @@ interface BusinessMarkerProps {
 
 export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
-  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup } = useMarkerPopup(focused)
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
   const handleClick = useCallback((e: { originalEvent: MouseEvent }) => {
     e.originalEvent.stopPropagation()
@@ -35,7 +35,7 @@ export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
 
   return (
     <>
-      <Marker longitude={business.lng} latitude={business.lat} anchor="bottom" onClick={handleClick}>
+      <Marker ref={markerA11yRef} longitude={business.lng} latitude={business.lat} anchor="bottom" onClick={handleClick}>
         <button
           type="button"
           ref={triggerRef}
@@ -59,8 +59,9 @@ export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
           latitude={business.lat}
           anchor="bottom"
           onClose={closePopup}
+          onOpen={onPopupOpen}
           focusAfterOpen={false}
-          closeButton={true}
+          closeButton={false}
           closeOnClick={false}
           offset={28}
           maxWidth="320px"
