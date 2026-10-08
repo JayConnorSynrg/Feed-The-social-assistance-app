@@ -4390,6 +4390,7 @@ export type Database = {
       events_generate_nightly: { Args: never; Returns: Json }
       events_generate_watchdog: { Args: never; Returns: boolean }
       expand_state: { Args: { p_state: string }; Returns: string }
+      expire_safety_alerts: { Args: never; Returns: number }
       export_petition_signatures: {
         Args: { p_petition_id: string }
         Returns: {
