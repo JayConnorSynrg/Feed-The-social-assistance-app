@@ -10,7 +10,7 @@
 // inactive, no upcoming dates.
 
 import type { Locale } from '@/lib/i18n'
-import { adminNavT } from '@/lib/i18n-admin-nav'
+import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
 import { formatMessage } from '@/lib/i18n-event-forms'
 import { formatCalendarDate, venueDateKey } from '@/lib/event-time'
 import { eventFeedStatus, type FeedWindowEvent, type FeedWindowOccurrence } from '@/lib/event-feed-window'
@@ -33,11 +33,26 @@ export interface EventFeedLinkProps {
   source: MemberViewSource
 }
 
-export function EventFeedLink({ event, now, locale, source }: EventFeedLinkProps) {
-  const status = eventFeedStatus(event, event.feed_next?.[0] ?? null, event.org?.is_active === true, new Date(now))
-  if (!status.listed && 'appearsAt' in status) {
+function statusOf(event: EventFeedLinkEvent, now: number) {
+  return eventFeedStatus(event, event.feed_next?.[0] ?? null, event.org?.is_active === true, new Date(now))
+}
+
+/** What the row says when there is no link: "Appears in feed <venue date>" or the reason. null when
+ *  the event is listed (the row shows "View in feed"). */
+export function eventFeedText(event: EventFeedLinkEvent, now: number, locale: Locale): string | null {
+  const status = statusOf(event, now)
+  if (status.listed) return null
+  if ('appearsAt' in status) {
     const date = formatCalendarDate(venueDateKey(status.appearsAt.toISOString(), event.time_zone), locale)
-    return <span className={REASON_CLASS}>{formatMessage(adminNavT(locale, 'appearsInFeed'), { date })}</span>
+    return formatMessage(adminNavT(locale, 'appearsInFeed'), { date })
+  }
+  return memberReasonText(locale, status.reason)
+}
+
+export function EventFeedLink({ event, now, locale, source }: EventFeedLinkProps) {
+  const status = statusOf(event, now)
+  if (!status.listed && 'appearsAt' in status) {
+    return <span className={REASON_CLASS}>{eventFeedText(event, now, locale)}</span>
   }
   return (
     <MemberViewLink
@@ -48,5 +63,33 @@ export function EventFeedLink({ event, now, locale, source }: EventFeedLinkProps
       source={source}
       locale={locale}
     />
+  )
+}
+
+export interface EventStatusNoticeProps {
+  /** The status text ("Event “X” created."), or null (nothing to say). */
+  text: string | null
+  /** The event the text is about, once the list has it (or null). */
+  event: EventFeedLinkEvent | null
+  now: number
+  locale: Locale
+  source: MemberViewSource
+  className?: string
+}
+
+/**
+ * The scheduler's status line. One always-mounted live region holding only plain text — the notice,
+ * plus "Appears in feed <date>" or the reason when it is about an event that is not listed — so it is
+ * announced once; when the event is listed, "View in feed" sits right after the region, outside it.
+ */
+export function EventStatusNotice({ text, event, now, locale, source, className }: EventStatusNoticeProps) {
+  const extra = text && event ? eventFeedText(event, now, locale) : null
+  return (
+    <>
+      <p role="status" className={className}>
+        {text && extra ? `${text} ${extra}` : text}
+      </p>
+      {text && event && extra === null && <EventFeedLink event={event} now={now} locale={locale} source={source} />}
+    </>
   )
 }

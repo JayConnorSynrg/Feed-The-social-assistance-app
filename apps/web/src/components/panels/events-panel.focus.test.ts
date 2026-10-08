@@ -8,8 +8,6 @@
 // ringed. Scroll / focus movement itself is checked in a browser.
 
 import { describe, it, expect, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -23,7 +21,12 @@ vi.mock('@/lib/logger', () => ({
 
 import {
   EventsTabView,
+  abandonFocus,
+  arriveFocus,
   decideEventFocus,
+  endHighlight,
+  prefersReducedMotion,
+  type HighlightHandle,
   focusSettles,
   takeSettledFocus,
   type EventsTabState,
@@ -130,22 +133,76 @@ describe('what the member sees', () => {
     expect(cards).toHaveLength(2)
     expect(cards.find((c) => c.includes(E2))).toContain(EVENT_CARD_HIGHLIGHT)
     expect(cards.find((c) => c.includes(E1))).not.toContain(EVENT_CARD_HIGHLIGHT)
-    expect(EVENT_CARD_HIGHLIGHT).toMatch(/ring-lime-500/)
+    expect(EVENT_CARD_HIGHLIGHT).toMatch(/(^| )ring-lime-700( |$)/) // 4.96:1 on the white offset (1.4.11)
     expect(EVENT_CARD_HIGHLIGHT).not.toMatch(/(^| )transition/) // motion only under motion-safe
   })
 })
 
-describe('source contract', () => {
-  const panel = readFileSync(fileURLToPath(new URL('./events-panel.tsx', import.meta.url)), 'utf8')
-  it('arrival is keyed on the focus object (the subtab reached via alias does not remount)', () => {
-    expect(panel).toMatch(/\}, \[focus, load\]\)/)
+describe('arrival (arriveFocus)', () => {
+  it('a list already on screen: the focus waits for a re-read, never that list', () => {
+    const onScreen = ready(E1)
+    const { pending, reread } = arriveFocus(target(E2), onScreen)
+    expect(reread).toBe(true)
+    expect(pending.staleState).toBe(onScreen)
+    expect(pending.target).toEqual(target(E2))
+    // The event created after that list was read is found once the re-read settles.
+    const ref = { current: pending as PendingFocus | null }
+    expect(takeSettledFocus(ref, onScreen)).toBeNull()
+    expect(takeSettledFocus(ref, ready(E1, E2))?.decision).toEqual({ outcome: 'found', eventId: E2 })
   })
-  it('a resolution logs one nav.deeplink.resolve row with closed labels (no id) and clears the focus', () => {
-    expect(panel).toMatch(/logEvent\('nav\.deeplink\.resolve', \{ kind: 'event', outcome: decision\.outcome, panel: 'events' \}\)/)
-    expect(panel).toMatch(/prev\.focus === target \? \{ \.\.\.prev, focus: undefined \}/)
+  it('a failed list on screen is read again too', () => {
+    const failed: EventsTabState = { status: 'error' }
+    expect(arriveFocus(target(E1), failed)).toEqual({ pending: { target: target(E1), staleState: failed }, reread: true })
   })
-  it('reduced motion scrolls without animation', () => {
-    expect(panel).toMatch(/behavior: reduceMotion \? 'auto' : 'smooth'/)
-    expect(panel).toMatch(/focus\(\{ preventScroll: true \}\)/)
+  it('while a read is running: no second read; that read resolves it', () => {
+    const { pending, reread } = arriveFocus(target(E1), { status: 'loading' })
+    expect(reread).toBe(false)
+    expect(pending.staleState).toBeNull()
+    expect(takeSettledFocus({ current: pending }, ready(E1))?.decision).toEqual({ outcome: 'found', eventId: E1 })
+  })
+})
+
+describe('leaving before the list loads (abandonFocus)', () => {
+  it('a waiting focus is abandoned exactly once (one `abandoned` row)', () => {
+    const ref = { current: arriveFocus(target(E1), { status: 'loading' }).pending as PendingFocus | null }
+    expect([abandonFocus(ref), abandonFocus(ref)]).toEqual([true, false])
+  })
+  it('a resolved focus is not abandoned (its row is already written)', () => {
+    const ref = { current: arriveFocus(target(E1), { status: 'loading' }).pending as PendingFocus | null }
+    expect(takeSettledFocus(ref, ready(E1))).not.toBeNull()
+    expect(abandonFocus(ref)).toBe(false)
+  })
+})
+
+describe('reduced motion (prefersReducedMotion)', () => {
+  it("FEED's own setting or the operating system's", () => {
+    expect(prefersReducedMotion('reduce', false)).toBe(true)
+    expect(prefersReducedMotion(undefined, true)).toBe(true)
+    expect(prefersReducedMotion(undefined, false)).toBe(false)
+  })
+})
+
+describe('the highlight lasts 4 s from the latest link (endHighlight)', () => {
+  it('a re-click within 4 s ends the first timer, so it cannot clear the new highlight early', () => {
+    vi.useFakeTimers()
+    try {
+      let shown = 0
+      const detach = vi.fn()
+      let handle: HighlightHandle | null = { timer: setTimeout(() => (shown = 0), 4000), detach }
+      shown = 1
+      vi.advanceTimersByTime(3000)
+      handle = endHighlight(handle, clearTimeout) // the second link arrives
+      expect(detach).toHaveBeenCalledTimes(1)
+      handle = { timer: setTimeout(() => (shown = 0), 4000), detach: () => {} }
+      shown = 2
+      vi.advanceTimersByTime(1500) // past the first timer's 4 s
+      expect(shown).toBe(2)
+      vi.advanceTimersByTime(2500) // the second timer's own 4 s
+      expect(shown).toBe(0)
+      expect(endHighlight(null, clearTimeout)).toBeNull()
+      void handle
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

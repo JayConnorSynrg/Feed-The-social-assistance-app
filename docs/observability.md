@@ -149,7 +149,7 @@ Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
 | `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events` · `safety_alerts`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
-| `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the panel, or a newer link replaced it, before it settled); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
+| `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the panel before the focus settled — the Events tab before its list loaded, the map before the pin appeared — or, on the map, a newer link replaced it first); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
 
 These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels — `org_id` / `resource_id` are object ids (not personal data) kept for path analysis: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs), `nav.alias.resolve` (`panel`, `subtab` — an alias such as `events` resolved to its parent panel; the unregistered `input` label was dropped).
 
@@ -172,10 +172,12 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
   opens as `#<panel>` would and the shell writes one `nav.deeplink.resolve` row with `outcome=invalid`.
   A `?` with no `focus` parameter is ignored (it used to send the member to Chat), and prototype keys
   such as `#toString` resolve to Chat like any unknown panel.
-- The panel that takes the focus writes the `found` / `not_found` row and clears the focus. The Events
+- The panel that takes the focus writes the `found` / `not_found` row and clears the focus; if it unmounts
+  with the focus still waiting it writes `abandoned`. Any in-app panel or subtab switch drops a focus no
+  panel has taken yet, so each followed link writes exactly one row. The Events
   list reads itself again first (an already open list may predate the event), then scrolls the event's
-  card into view, focuses it and rings it in lime (4 s or until it loses focus; no smooth scroll or fade
-  under reduced motion); an event the list does not show gets one polite status line.
+  card into view, focuses it and rings it in lime-700 (4 s from the latest link, or until it loses focus;
+  no smooth scroll or fade under reduced motion — the OS setting or FEED's own); an event the list does not show gets one polite status line.
 - The map (`components/panels/map-panel.tsx`, `lib/map-focus.ts`) takes `resource`, `organization`,
   `business` and `safety_alert`. It reads the item by id under exactly the predicate of the layer that
   draws it (resource: approved + located; organization: active, non-business, located; business:

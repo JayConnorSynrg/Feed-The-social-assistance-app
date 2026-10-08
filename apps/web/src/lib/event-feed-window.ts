@@ -5,6 +5,8 @@
 // A clause-by-clause mirror of public.event_feed_next(now()) — the rule upcoming_events (the Events
 // tab) and ranked_feed_v2 share — in supabase/migrations/20261023000000_events_recurring_announce.sql.
 // The admin event scheduler shows "View in feed" exactly when this says listed.
+// Known gap: upcoming_events also applies LIMIT 50, which this does not model — an event ranked 51st or
+// later is "listed" here but missing from the members' list (the Events tab then says it is not listed).
 //
 // The caller passes the event's soonest occurrence that is not ended and is either 'upcoming' or
 // cancelled for a reason other than retired / org_inactive (event-scheduler.tsx's feed_next

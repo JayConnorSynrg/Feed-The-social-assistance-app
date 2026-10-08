@@ -112,7 +112,9 @@ to the founder. It never exposes email or ban data (those stay in the PA-only `a
   there now (the server rule `event_feed_next`: active event, active organization, a date that has not
   ended, from 00:00 venue time "N days before" its date). Otherwise the row says *Appears in feed
   <date>* (the venue's date) or why not: *Retired*, *Organization inactive*, or *No upcoming dates*.
-  After **New event** the "created" notice offers the same link or date for the new event. If the
+  After **New event** the "created" notice offers the same link or date for the new event.
+  Known gap: the link follows the window rule only; the members' list shows the first 50 events, so an
+  event ranked 51st or later gets the link but is reported as not in the list. If the
   event is not among the first 50 listed when the link is followed, the members' list says so and
   nothing moves.
 - **View on map** (Manage resources, Businesses, the Organizations More menu, the organization admin
