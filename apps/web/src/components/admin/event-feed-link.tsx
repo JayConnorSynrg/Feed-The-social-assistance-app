@@ -86,8 +86,11 @@ export function EventStatusNotice({ text, event, now, locale, source, className 
   const extra = text && event ? eventFeedText(event, now, locale) : null
   return (
     <>
-      <p role="status" className={className}>
-        {text && extra ? `${text} ${extra}` : text}
+      {/* aria-atomic="false": when the appear date / reason is added after the refresh, only that
+          addition is read, not the created notice a second time. */}
+      <p role="status" aria-atomic="false" className={className}>
+        {text}
+        {text && extra && <span> {extra}</span>}
       </p>
       {text && event && extra === null && <EventFeedLink event={event} now={now} locale={locale} source={source} />}
     </>

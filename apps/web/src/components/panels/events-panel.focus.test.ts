@@ -22,6 +22,7 @@ vi.mock('@/lib/logger', () => ({
 import {
   EventsTabView,
   abandonFocus,
+  supersedeFocus,
   arriveFocus,
   decideEventFocus,
   endHighlight,
@@ -204,5 +205,21 @@ describe('the highlight lasts 4 s from the latest link (endHighlight)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('a second link before the list loads (supersedeFocus)', () => {
+  it('the waiting focus is abandoned once, the new one waits (a row per arrival)', () => {
+    const ref = { current: null as PendingFocus | null }
+    const first = arriveFocus(target(E1), { status: 'loading' }).pending
+    const second = arriveFocus(target(E1), { status: 'loading' }).pending
+    expect(supersedeFocus(ref, first)).toBe(false)
+    expect(supersedeFocus(ref, second)).toBe(true)
+    expect(ref.current).toBe(second)
+  })
+  it('a resolved focus is not abandoned when the next link arrives', () => {
+    const ref = { current: arriveFocus(target(E1), { status: 'loading' }).pending as PendingFocus | null }
+    expect(takeSettledFocus(ref, ready(E1))).not.toBeNull()
+    expect(supersedeFocus(ref, arriveFocus(target(E1), { status: 'loading' }).pending)).toBe(false)
   })
 })

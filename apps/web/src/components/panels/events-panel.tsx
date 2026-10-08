@@ -140,6 +140,16 @@ export function endHighlight(handle: HighlightHandle | null, clearTimer: (t: Ret
 
 /** Take the pending focus if this state settles it: returns its target and decision exactly once
  *  (the ref is emptied), null otherwise. */
+/**
+ * A new focus replaces one still waiting for the list: the earlier one is abandoned (true → its one
+ * `abandoned` row), so a double-clicked link writes a row per arrival, never fewer.
+ */
+export function supersedeFocus(pending: { current: PendingFocus | null }, next: PendingFocus | null): boolean {
+  const abandoned = abandonFocus(pending)
+  pending.current = next
+  return abandoned
+}
+
 export function takeSettledFocus(
   pending: { current: PendingFocus | null },
   state: EventsTabState,
@@ -338,7 +348,9 @@ export function EventsPanel() {
   useEffect(() => {
     if (!focus || focus.kind !== 'event' || pendingFocus.current?.target === focus) return
     const { pending, reread } = arriveFocus(focus, stateRef.current)
-    pendingFocus.current = pending
+    if (supersedeFocus(pendingFocus, pending)) {
+      logEvent('nav.deeplink.resolve', { kind: 'event', outcome: 'abandoned', panel: 'events' })
+    }
     highlightRef.current = endHighlight(highlightRef.current, clearTimeout)
     // A link arriving from the URL (an external system) replaces the last miss line and highlight.
     // eslint-disable-next-line react-hooks/set-state-in-effect
