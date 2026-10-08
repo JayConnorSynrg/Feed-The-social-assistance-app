@@ -20,9 +20,10 @@ within 5 minutes:
 
 - Map: `safety_alerts_in_view` (RPC). When it is called (`lib/safety-alerts-fetch.ts`): once per real
   viewport change, 400 ms after the map settles (keyed on the four bound numbers, so a re-render with
-  the same bounds calls nothing); every 60 s while the tab is visible; and once right after the member
-  places or edits an alert (those RPCs return no lng/lat for the marker). Deleting removes the pin
-  locally, with no read. Until 2026-10 a new bounds object every render re-armed the debounce on every
+  the same bounds calls nothing); every 60 s while the tab is visible; once when the tab becomes
+  visible again; and once right after the member places or edits an alert (those RPCs return no
+  lng/lat for the marker). Only the latest read's answer is applied, so a slow answer for an older
+  viewport never replaces a newer one. Deleting removes the pin locally, with no read. Until 2026-10 a new bounds object every render re-armed the debounce on every
   render: about 1.5–2.5 calls a second per open map, and the 60 s poll never fired.
 - Feed safety strip (`feed-panel.tsx`): RLS `safety_alerts_select` (`status = 'live'`) plus
   `expires_at > now`.

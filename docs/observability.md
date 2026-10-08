@@ -187,7 +187,8 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
   so a later GPS fix or profile geocode does not move it. The whole lifecycle is `MapFocusSession`;
   the panel's effects only forward to it. `found` = the pin's id appears in its loaded layer within 8 s
   of the link arriving; its popup opens as a named dialog that takes focus (a resource is also
-  selected, as a click on it would). A resource that a visible business links to lands on that
+  selected, as a click on it would; the dialog has its own Close button, and Escape or Close returns
+  focus to the marker). A resource that a visible business links to lands on that
   business's pin (the map draws one pin for the pair) and is logged as `kind=resource`. `not_found` =
   the by-id read returned nothing (or failed), or the 8 s deadline (counted from arrival, so a hung read
   also settles; the read is then aborted) passed first; the map shows one polite, translated line
