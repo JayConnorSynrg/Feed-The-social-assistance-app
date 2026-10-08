@@ -183,7 +183,7 @@ describe('the highlight lasts 4 s from the latest link (endHighlight)', () => {
       let handle: HighlightHandle | null = { timer: setTimeout(() => (shown = 0), 4000), detach }
       shown = 1
       vi.advanceTimersByTime(3000)
-      handle = endHighlight(handle, clearTimeout) // the second link arrives
+      expect(endHighlight(handle, clearTimeout)).toBeNull() // the second link arrives
       expect(detach).toHaveBeenCalledTimes(1)
       handle = { timer: setTimeout(() => (shown = 0), 4000), detach: () => {} }
       shown = 2
@@ -192,7 +192,7 @@ describe('the highlight lasts 4 s from the latest link (endHighlight)', () => {
       vi.advanceTimersByTime(2500) // the second timer's own 4 s
       expect(shown).toBe(0)
       expect(endHighlight(null, clearTimeout)).toBeNull()
-      void handle
+      expect(endHighlight(handle, clearTimeout)).toBeNull()
     } finally {
       vi.useRealTimers()
     }

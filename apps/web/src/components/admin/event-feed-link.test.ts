@@ -108,7 +108,8 @@ describe('the created notice (EventStatusNotice): the live region holds plain te
   const notice = (ev: EventFeedLinkEvent | null, now = LISTED, text: string | null = 'Event “FEED INFO” created.') =>
     renderToStaticMarkup(h(EventStatusNotice, { text, event: ev, now, locale: 'en', source: 'event_scheduler' }))
   const region = (html: string) => html.match(/<p role="status"[^>]*>([\s\S]*?)<\/p>/)?.[1]
-  const spoken = (html: string) => region(html)?.replace(/<[^>]+>/g, '')
+  // The region's text as read aloud: the notice plus its late-added <span> (the only tag inside).
+  const spoken = (html: string) => region(html)?.replaceAll('<span>', '').replaceAll('</span>', '')
 
   it('listed: the region says the notice; "View in feed" follows it, outside the region', () => {
     const html = notice(event)
