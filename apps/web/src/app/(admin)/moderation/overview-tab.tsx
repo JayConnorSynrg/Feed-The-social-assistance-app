@@ -23,6 +23,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { MoreHorizontal, Plus } from 'lucide-react'
 import { dir, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
+import { whereSafetyAlertLive } from './safety-alert-live'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -423,7 +424,7 @@ function OverviewStats({ selectedOrgId }: { selectedOrgId: string }) {
           rpc('community_people_fed', { p_start_date: thirtyDaysAgo(), p_end_date: todayIso() }),
           supabase.from('organizations').select('id, name').eq('is_active', true).limit(10),
           supabase.from('resources').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-          supabase.from('safety_alerts').select('id', { count: 'exact', head: true }).eq('status', 'live'),
+          whereSafetyAlertLive(supabase.from('safety_alerts').select('id', { count: 'exact', head: true }), new Date()),
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
           // SECDEF RPC: avoids 42501 on phone (no SELECT grant) + uses onboarding_completed
           // (the authoritative signal — full_name+phone proxy always returned 0 on prod)

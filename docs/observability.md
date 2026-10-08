@@ -84,6 +84,15 @@ The registry was sourced from every static event name in `apps/web/src` (logger,
 
 pg_cron job `app_logs_retention_30d` runs daily (03:17 UTC) and deletes only `app_logs` rows older than 30 days, bounding the table (it held 105k rows from a past error incident).
 
+## Database-written events (pg_cron jobs)
+
+These rows are inserted by SQL, not by the browser, so they are not in `src/lib/event-registry.ts` (that registry is the allowlist for `/api/client-log`).
+
+| Event | Job (schedule, UTC) | Rows |
+|---|---|---|
+| `events.generate.nightly` / `events.generate.skipped` / `events.generate.watchdog` | `events_generate_nightly` (03:37), `events_generate_watchdog` (15:37) | One per run; watchdog only when no successful run in 26 h. See `20261023000000`. |
+| `safety_alerts.expire` | `safety_alerts_expire` (every 5 min) | Only when a run expired ≥ 1 alert (`info`, `context.expired`) or failed (`error`, `context.error_code`). See [safety-alerts.md](safety-alerts.md). |
+
 ## Operator queries & alerts (committed in migration `20260928000000_observability_wide_events.sql`)
 
 All three are `service_role`-only (mirrors `app_logs` grants). Run via the Management API SQL endpoint / ops layer.

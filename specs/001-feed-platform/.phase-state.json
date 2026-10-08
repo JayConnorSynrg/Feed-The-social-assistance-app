@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-07T00:00:00.000Z",
+  "lastUpdated": "2026-10-08T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -788,6 +788,16 @@
       "recordedAt": "2026-10-07",
       "pr": "#234",
       "migrationApplied": "20261023000000 (2026-10-07 20:31 UTC, after zero-persist rehearsal; ledger top 20261023000000)"
+    },
+    "feed-safety-alert-expiry": {
+      "status": "COMPLETE",
+      "migration": "20261025000000_safety_alerts_expire_job",
+      "branch": "feature/feed-safety-alert-expiry",
+      "docs": "docs/safety-alerts.md, docs/observability.md",
+      "note": "Expired safety alerts are marked 'expired': pg_cron safety_alerts_expire (*/5) runs expire_safety_alerts() (UPDATE live->expired WHERE status='live' AND expires_at <= now(); idempotent; only live rows). Admin review list + Overview live count filter status live AND expires_at > now via whereSafetyAlertLive.",
+      "recordedAt": "2026-10-08",
+      "pr": null,
+      "migrationApplied": null
     }
   }
 }
