@@ -52,7 +52,13 @@ export interface EventCardProps {
   now?: number
   /** The viewer's zone (tests); defaults to the browser's. */
   viewerTz?: string
+  /** A deep link (#events?focus=event:<id>) brought this card into view: a lime ring marks it. */
+  highlighted?: boolean
 }
+
+/** The deep-link highlight: a lime-700 ring outside the card (4.96:1 on the white offset, 4.75:1 on
+ *  stone-50 — WCAG 1.4.11), fading in only when motion is allowed. */
+export const EVENT_CARD_HIGHLIGHT = 'ring-4 ring-lime-700 ring-offset-2 motion-safe:transition-shadow motion-safe:duration-300'
 
 export function EventCard({
   event,
@@ -65,6 +71,7 @@ export function EventCard({
   onCheckedIn,
   now,
   viewerTz,
+  highlighted = false,
 }: EventCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
@@ -139,7 +146,7 @@ export function EventCard({
       lang={locale}
       dir={dir(locale)}
       data-event-id={event.eventId}
-      className="bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700"
+      className={`bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700${highlighted ? ` ${EVENT_CARD_HIGHLIGHT}` : ''}`}
     >
       {showBadges && (
         <div className="flex flex-wrap items-center gap-2">

@@ -11,5 +11,5 @@
 import { EventScheduler } from '../../event-scheduler'
 
 export function OrgEventsTab({ orgId }: { orgId: string }) {
-  return <EventScheduler selectedOrgId={orgId} />
+  return <EventScheduler selectedOrgId={orgId} source="org_admin_events" />
 }

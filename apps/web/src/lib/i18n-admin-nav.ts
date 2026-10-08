@@ -19,6 +19,16 @@ export interface AdminNavMessages {
   reasonInactive: string
   reasonNotApproved: string
   reasonNotFound: string
+  /** Event rows: the event is retired (assistance_events.is_active = false). */
+  reasonRetired: string
+  /** Event rows: its organization is inactive. */
+  reasonOrgInactive: string
+  /** Event rows: no date that is not ended and still shown. */
+  reasonNoUpcoming: string
+  /** Event rows: the link to the event in the members' Events list. */
+  viewInFeed: string
+  /** Event rows: not listed yet; {date} = the venue-local date it will be. */
+  appearsInFeed: string
 }
 
 export const adminNavMessages: Record<Locale, AdminNavMessages> = {
@@ -30,6 +40,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Inactive — hidden from members',
     reasonNotApproved: 'Not approved — hidden from members',
     reasonNotFound: 'No longer exists',
+    reasonRetired: 'Retired — not in the feed',
+    reasonOrgInactive: 'Organization inactive — not in the feed',
+    reasonNoUpcoming: 'No upcoming dates — not in the feed',
+    viewInFeed: 'View in feed',
+    appearsInFeed: 'Appears in feed {date}',
   },
   es: {
     backToFeed: 'Volver al feed',
@@ -39,6 +54,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Inactivo: oculto para los miembros',
     reasonNotApproved: 'No aprobado: oculto para los miembros',
     reasonNotFound: 'Ya no existe',
+    reasonRetired: 'Retirado: no aparece en el feed',
+    reasonOrgInactive: 'Organización inactiva: no aparece en el feed',
+    reasonNoUpcoming: 'Sin fechas próximas: no aparece en el feed',
+    viewInFeed: 'Ver en el feed',
+    appearsInFeed: 'Aparece en el feed el {date}',
   },
   ht: {
     backToFeed: 'Retounen nan fil la',
@@ -48,6 +68,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Pa aktif — kache pou manm yo',
     reasonNotApproved: 'Pa apwouve — kache pou manm yo',
     reasonNotFound: 'Li pa egziste ankò',
+    reasonRetired: 'Retire — pa nan fil la',
+    reasonOrgInactive: 'Òganizasyon an pa aktif — pa nan fil la',
+    reasonNoUpcoming: 'Pa gen dat k ap vini — pa nan fil la',
+    viewInFeed: 'Gade nan fil la',
+    appearsInFeed: 'Ap parèt nan fil la {date}',
   },
   vi: {
     backToFeed: 'Quay lại bảng tin',
@@ -57,6 +82,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Ngừng hoạt động — ẩn với thành viên',
     reasonNotApproved: 'Chưa được duyệt — ẩn với thành viên',
     reasonNotFound: 'Không còn tồn tại',
+    reasonRetired: 'Đã ngừng — không có trên bảng tin',
+    reasonOrgInactive: 'Tổ chức ngừng hoạt động — không có trên bảng tin',
+    reasonNoUpcoming: 'Không có ngày sắp tới — không có trên bảng tin',
+    viewInFeed: 'Xem trên bảng tin',
+    appearsInFeed: 'Xuất hiện trên bảng tin vào {date}',
   },
   ar: {
     backToFeed: 'العودة إلى الموجز',
@@ -66,6 +96,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'غير نشط — مخفي عن الأعضاء',
     reasonNotApproved: 'غير معتمد — مخفي عن الأعضاء',
     reasonNotFound: 'لم يعد موجودًا',
+    reasonRetired: 'متوقف — غير ظاهر في الموجز',
+    reasonOrgInactive: 'المنظمة غير نشطة — غير ظاهر في الموجز',
+    reasonNoUpcoming: 'لا توجد مواعيد قادمة — غير ظاهر في الموجز',
+    viewInFeed: 'عرض في الموجز',
+    appearsInFeed: 'يظهر في الموجز في {date}',
   },
   zh: {
     backToFeed: '返回动态',
@@ -75,6 +110,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: '已停用 — 对成员隐藏',
     reasonNotApproved: '未批准 — 对成员隐藏',
     reasonNotFound: '已不存在',
+    reasonRetired: '已停办 — 不在动态中',
+    reasonOrgInactive: '组织已停用 — 不在动态中',
+    reasonNoUpcoming: '没有即将到来的日期 — 不在动态中',
+    viewInFeed: '在动态中查看',
+    appearsInFeed: '将于 {date} 出现在动态中',
   },
   so: {
     backToFeed: 'Ku noqo bogga bulshada',
@@ -84,6 +124,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Aan firfircoonayn — laga qariyay xubnaha',
     reasonNotApproved: 'Lama ansixin — laga qariyay xubnaha',
     reasonNotFound: 'Hadda ma jiro',
+    reasonRetired: 'La joojiyay — kuma jiro bogga bulshada',
+    reasonOrgInactive: 'Ururku ma firfircoona — kuma jiro bogga bulshada',
+    reasonNoUpcoming: 'Ma jiraan taariikho soo socda — kuma jiro bogga bulshada',
+    viewInFeed: 'Ka eeg bogga bulshada',
+    appearsInFeed: 'Wuxuu ka soo muuqan doonaa bogga bulshada {date}',
   },
   fr: {
     backToFeed: 'Retour au fil',
@@ -93,6 +138,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Inactif — masqué aux membres',
     reasonNotApproved: 'Non approuvé — masqué aux membres',
     reasonNotFound: 'N’existe plus',
+    reasonRetired: 'Retiré — absent du fil',
+    reasonOrgInactive: 'Organisation inactive — absent du fil',
+    reasonNoUpcoming: 'Aucune date à venir — absent du fil',
+    viewInFeed: 'Voir dans le fil',
+    appearsInFeed: 'Apparaît dans le fil le {date}',
   },
   pt: {
     backToFeed: 'Voltar ao feed',
@@ -102,6 +152,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Inativo — oculto para os membros',
     reasonNotApproved: 'Não aprovado — oculto para os membros',
     reasonNotFound: 'Não existe mais',
+    reasonRetired: 'Encerrado — fora do feed',
+    reasonOrgInactive: 'Organização inativa — fora do feed',
+    reasonNoUpcoming: 'Sem datas futuras — fora do feed',
+    viewInFeed: 'Ver no feed',
+    appearsInFeed: 'Aparece no feed em {date}',
   },
   ru: {
     backToFeed: 'Назад к ленте',
@@ -111,6 +166,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Неактивно — скрыто от участников',
     reasonNotApproved: 'Не одобрено — скрыто от участников',
     reasonNotFound: 'Больше не существует',
+    reasonRetired: 'Снято — нет в ленте',
+    reasonOrgInactive: 'Организация неактивна — нет в ленте',
+    reasonNoUpcoming: 'Нет предстоящих дат — нет в ленте',
+    viewInFeed: 'Посмотреть в ленте',
+    appearsInFeed: 'Появится в ленте {date}',
   },
   ko: {
     backToFeed: '피드로 돌아가기',
@@ -120,6 +180,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: '비활성 — 회원에게 숨겨짐',
     reasonNotApproved: '승인되지 않음 — 회원에게 숨겨짐',
     reasonNotFound: '더 이상 존재하지 않음',
+    reasonRetired: '종료됨 — 피드에 없음',
+    reasonOrgInactive: '단체 비활성 — 피드에 없음',
+    reasonNoUpcoming: '예정된 날짜 없음 — 피드에 없음',
+    viewInFeed: '피드에서 보기',
+    appearsInFeed: '{date}에 피드에 표시됨',
   },
   tl: {
     backToFeed: 'Bumalik sa feed',
@@ -129,6 +194,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Hindi aktibo — nakatago sa mga miyembro',
     reasonNotApproved: 'Hindi aprubado — nakatago sa mga miyembro',
     reasonNotFound: 'Wala na',
+    reasonRetired: 'Itinigil — wala sa feed',
+    reasonOrgInactive: 'Hindi aktibo ang organisasyon — wala sa feed',
+    reasonNoUpcoming: 'Walang paparating na petsa — wala sa feed',
+    viewInFeed: 'Tingnan sa feed',
+    appearsInFeed: 'Lalabas sa feed sa {date}',
   },
   am: {
     backToFeed: 'ወደ ማህበረሰብ ገጽ ተመለስ',
@@ -138,6 +208,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'ንቁ ያልሆነ — ከአባላት ተደብቋል',
     reasonNotApproved: 'ያልጸደቀ — ከአባላት ተደብቋል',
     reasonNotFound: 'ከአሁን በኋላ የለም',
+    reasonRetired: 'ተቋርጧል — በማህበረሰብ ገጽ ላይ የለም',
+    reasonOrgInactive: 'ድርጅቱ ንቁ አይደለም — በማህበረሰብ ገጽ ላይ የለም',
+    reasonNoUpcoming: 'መጪ ቀኖች የሉም — በማህበረሰብ ገጽ ላይ የለም',
+    viewInFeed: 'በማህበረሰብ ገጽ ላይ ይመልከቱ',
+    appearsInFeed: 'በ{date} በማህበረሰብ ገጽ ላይ ይታያል',
   },
   hmn: {
     backToFeed: 'Rov qab mus rau zej zog',
@@ -147,6 +222,11 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonInactive: 'Kaw — zais ntawm cov tswv cuab',
     reasonNotApproved: 'Tsis tau pom zoo — zais ntawm cov tswv cuab',
     reasonNotFound: 'Tsis muaj lawm',
+    reasonRetired: 'Tso lawm — tsis muaj nyob rau zej zog',
+    reasonOrgInactive: 'Lub koom haum kaw lawm — tsis muaj nyob rau zej zog',
+    reasonNoUpcoming: 'Tsis muaj hnub tom ntej — tsis muaj nyob rau zej zog',
+    viewInFeed: 'Saib hauv zej zog',
+    appearsInFeed: 'Yuav tshwm rau zej zog {date}',
   },
 }
 
@@ -160,6 +240,9 @@ const REASON_KEY: Record<ReasonCode, keyof AdminNavMessages> = {
   inactive: 'reasonInactive',
   not_approved: 'reasonNotApproved',
   not_found: 'reasonNotFound',
+  retired: 'reasonRetired',
+  org_inactive: 'reasonOrgInactive',
+  no_upcoming: 'reasonNoUpcoming',
 }
 
 /** The text a row shows, in place of a "View …" link, when members cannot see the item. */

@@ -12,6 +12,8 @@ import { translate, type Locale } from './i18n'
 
 export interface EventMemberMessages {
   eventsTabTitle: string
+  /** A deep link (#events?focus=event:<id>) named an event the list does not show right now. */
+  focusNotListed: string
   cardCapacity: string
   householdLabel: string
   householdDecrease: string
@@ -42,6 +44,7 @@ export interface EventMemberMessages {
 export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   en: {
     eventsTabTitle: 'Community events',
+    focusNotListed: "That event isn't in the upcoming list right now.",
     cardCapacity: 'Capacity: {n}',
     householdLabel: 'Household size',
     householdDecrease: 'Decrease household size',
@@ -70,6 +73,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   es: {
     eventsTabTitle: 'Eventos de la comunidad',
+    focusNotListed: 'Ese evento no está en la lista de próximos eventos en este momento.',
     cardCapacity: 'Capacidad: {n}',
     householdLabel: 'Tamaño del hogar',
     householdDecrease: 'Reducir el tamaño del hogar',
@@ -98,6 +102,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   ht: {
     eventsTabTitle: 'Evènman kominote a',
+    focusNotListed: 'Evènman sa a pa nan lis evènman k ap vini yo kounye a.',
     cardCapacity: 'Kapasite: {n}',
     householdLabel: 'Kantite moun nan kay la',
     householdDecrease: 'Diminye kantite moun nan kay la',
@@ -126,6 +131,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   vi: {
     eventsTabTitle: 'Sự kiện cộng đồng',
+    focusNotListed: 'Sự kiện đó hiện không có trong danh sách sắp diễn ra.',
     cardCapacity: 'Sức chứa: {n}',
     householdLabel: 'Số người trong hộ',
     householdDecrease: 'Giảm số người trong hộ',
@@ -154,6 +160,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   ar: {
     eventsTabTitle: 'فعاليات المجتمع',
+    focusNotListed: 'هذه الفعالية ليست في قائمة الفعاليات القادمة حاليًا.',
     cardCapacity: 'السعة: {n}',
     householdLabel: 'عدد أفراد الأسرة',
     householdDecrease: 'تقليل عدد أفراد الأسرة',
@@ -182,6 +189,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   zh: {
     eventsTabTitle: '社区活动',
+    focusNotListed: '该活动目前不在即将举行的活动列表中。',
     cardCapacity: '容量：{n}',
     householdLabel: '家庭人数',
     householdDecrease: '减少家庭人数',
@@ -210,6 +218,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   so: {
     eventsTabTitle: 'Dhacdooyinka bulshada',
+    focusNotListed: 'Dhacdadaas hadda kuma jirto liiska dhacdooyinka soo socda.',
     cardCapacity: 'Awoodda: {n}',
     householdLabel: 'Tirada qoyska',
     householdDecrease: 'Yaree tirada qoyska',
@@ -238,6 +247,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   fr: {
     eventsTabTitle: 'Événements de la communauté',
+    focusNotListed: 'Cet événement n’est pas dans la liste des événements à venir pour le moment.',
     cardCapacity: 'Capacité : {n}',
     householdLabel: 'Taille du foyer',
     householdDecrease: 'Diminuer la taille du foyer',
@@ -266,6 +276,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   pt: {
     eventsTabTitle: 'Eventos da comunidade',
+    focusNotListed: 'Esse evento não está na lista de próximos eventos no momento.',
     cardCapacity: 'Capacidade: {n}',
     householdLabel: 'Tamanho da família',
     householdDecrease: 'Diminuir o tamanho da família',
@@ -294,6 +305,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   ru: {
     eventsTabTitle: 'События сообщества',
+    focusNotListed: 'Этого события сейчас нет в списке предстоящих.',
     cardCapacity: 'Вместимость: {n}',
     householdLabel: 'Число членов семьи',
     householdDecrease: 'Уменьшить число членов семьи',
@@ -322,6 +334,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   ko: {
     eventsTabTitle: '지역 행사',
+    focusNotListed: '해당 행사는 현재 예정된 행사 목록에 없습니다.',
     cardCapacity: '정원: {n}',
     householdLabel: '가구원 수',
     householdDecrease: '가구원 수 줄이기',
@@ -350,6 +363,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   tl: {
     eventsTabTitle: 'Mga event ng komunidad',
+    focusNotListed: 'Wala sa listahan ng mga paparating na event ang event na iyon sa ngayon.',
     cardCapacity: 'Kapasidad: {n}',
     householdLabel: 'Bilang ng tao sa sambahayan',
     householdDecrease: 'Bawasan ang bilang ng tao sa sambahayan',
@@ -378,6 +392,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   am: {
     eventsTabTitle: 'የማህበረሰብ ዝግጅቶች',
+    focusNotListed: 'ያ ዝግጅት በአሁኑ ጊዜ በመጪ ዝግጅቶች ዝርዝር ውስጥ የለም።',
     cardCapacity: 'የሚይዘው ሰው ብዛት፦ {n}',
     householdLabel: 'የቤተሰብ ብዛት',
     householdDecrease: 'የቤተሰብ ብዛት ቀንስ',
@@ -406,6 +421,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
   },
   hmn: {
     eventsTabTitle: 'Cov xwm txheej hauv zej zog',
+    focusNotListed: 'Qhov kev tshwm sim ntawd tsis nyob hauv daim ntawv teev cov kev tshwm sim tom ntej tam sim no.',
     cardCapacity: 'Muaj chaw rau: {n}',
     householdLabel: 'Tus naj npawb neeg hauv tsev',
     householdDecrease: 'Txo tus naj npawb neeg hauv tsev',
