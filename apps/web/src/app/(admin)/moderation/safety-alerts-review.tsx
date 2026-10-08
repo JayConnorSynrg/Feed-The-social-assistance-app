@@ -1,7 +1,8 @@
 'use client'
 
 /**
- * SafetyAlertsReview — admin post-hoc review of live safety alerts.
+ * SafetyAlertsReview — admin post-hoc review of live safety alerts (status 'live'
+ * and not yet past expires_at — see safety-alert-live.ts).
  *
  * Pins go live immediately (publish-then-review). Admins can set status='removed'
  * via the admin_remove_safety_alert SECDEF RPC (gated to is_staff=true at the DB level).
@@ -17,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
+import { whereSafetyAlertLive } from './safety-alert-live'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -67,10 +69,12 @@ export function SafetyAlertsReview() {
     const load = async () => {
       setLoading(true)
       try {
-        const { data, error: fetchErr } = await supabase
-          .from('safety_alerts')
-          .select('id, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified')
-          .eq('status', 'live')
+        const { data, error: fetchErr } = await whereSafetyAlertLive(
+          supabase
+            .from('safety_alerts')
+            .select('id, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'),
+          new Date(),
+        )
           .order('created_at', { ascending: false })
           .limit(50)
 
