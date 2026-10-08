@@ -103,7 +103,7 @@ export function useComments(postId: string) {
     try {
       const { data, error: fetchError } = await supabase
         .from('post_comments')
-        .select('*, user:profiles(id, first_name, avatar_url, admin_tier)')
+        .select('*, user:profiles!post_comments_user_id_fkey(id, first_name, avatar_url, admin_tier)')
         .eq('post_id', postId)
         .eq('is_hidden', false)
         .order('created_at', { ascending: true })

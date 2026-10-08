@@ -13,7 +13,7 @@ export async function GET(
   // Explicit column list (omits posts.location — W1.3 V1b): OG image needs content + author.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, user:profiles(first_name, avatar_url, username)')
+    .select('id, content, user:profiles!posts_user_id_fkey(first_name, avatar_url, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()

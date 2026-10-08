@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // this anon-facing SSR read must never select('*') on posts.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, user:profiles(first_name, username)')
+    .select('id, content, user:profiles!posts_user_id_fkey(first_name, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -77,7 +77,7 @@ export default async function SharedPostPage({ params }: Props) {
   // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, image_url, user:profiles(id, first_name, username, avatar_url, admin_tier)')
+    .select('id, content, image_url, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
