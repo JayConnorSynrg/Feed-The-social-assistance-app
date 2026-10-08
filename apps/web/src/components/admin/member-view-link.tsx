@@ -22,6 +22,7 @@ import type { Locale } from '@/lib/i18n'
 import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
 import { logEvent } from '@/lib/logger'
 import { memberUrl, type MemberItemKind, type MemberItemTarget } from '@/lib/member-url'
+import { assertNever } from '@/components/feed/post-model'
 import type { MemberVisibility } from '@/lib/member-visibility'
 
 /** The admin surface a "View …" link sits on (the `source` label of admin.nav.member_view). */
@@ -33,6 +34,8 @@ export type MemberViewSource =
   | 'businesses'
   | 'orgs_section'
   | 'org_admin_profile'
+  | 'event_scheduler'
+  | 'org_admin_events'
 
 /** The named browsing context every member view reuses. */
 export const FEED_PREVIEW_TARGET = 'feed-preview'
@@ -41,7 +44,7 @@ const LINK_CLASS =
   'inline-flex min-h-6 min-w-6 items-center gap-1 rounded-sm text-xs font-medium text-lime-800 underline-offset-2 hover:underline ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-600 focus-visible:ring-offset-1'
 // stone-600: 7.0:1 on stone-100 and white (stone-500 is 4.4:1 on stone-100 — below 1.4.3).
-const REASON_CLASS = 'inline-flex min-h-6 items-center text-xs text-stone-600'
+export const REASON_CLASS = 'inline-flex min-h-6 items-center text-xs text-stone-600'
 
 export interface MemberViewLinkProps
   extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel' | 'children'> {
@@ -59,8 +62,25 @@ export interface MemberViewLinkProps
   ref?: Ref<HTMLAnchorElement>
 }
 
+/** Where the link opens (the `view` label): a member page, the feed's Events list, or the map. */
+export function memberViewOf(kind: MemberItemKind): 'page' | 'feed' | 'map' {
+  switch (kind) {
+    case 'post':
+    case 'organization':
+    case 'business':
+    case 'resource':
+      return 'page'
+    case 'event':
+      return 'feed'
+    case 'map_focus':
+      return 'map'
+    default:
+      return assertNever(kind)
+  }
+}
+
 function logMemberView(kind: MemberItemKind, source: MemberViewSource) {
-  logEvent('admin.nav.member_view', { kind, source, view: 'page' })
+  logEvent('admin.nav.member_view', { kind, source, view: memberViewOf(kind) })
 }
 
 export function MemberViewLink({

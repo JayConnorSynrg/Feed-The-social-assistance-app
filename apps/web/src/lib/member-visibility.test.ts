@@ -51,4 +51,14 @@ describe('reason text', () => {
     }
     expect(Object.keys(adminNavMessages)).toHaveLength(14)
   })
+
+  it('event reasons and the "Appears in feed {date}" line exist in every locale, placeholder kept', () => {
+    expect(memberReasonText('en', 'retired')).toBe('Retired — not in the feed')
+    expect(memberReasonText('en', 'org_inactive')).toBe('Organization inactive — not in the feed')
+    expect(memberReasonText('en', 'no_upcoming')).toBe('No upcoming dates — not in the feed')
+    for (const [locale, msgs] of Object.entries(adminNavMessages)) {
+      expect(msgs.appearsInFeed, locale).toContain('{date}')
+      if (locale !== 'en') expect(msgs.viewInFeed, locale).not.toBe(adminNavMessages.en.viewInFeed)
+    }
+  })
 })

@@ -127,9 +127,26 @@ describe('bounded reads that keep near-term dates', () => {
     expect(String(callsOf(q, 'select')[0][0])).toMatch(/next:event_occurrences\(id, event_id, starts_at, ends_at, status, capacity, notes, source, cancel_reason\)/)
     expect(String(callsOf(q, 'select')[0][0])).toMatch(/recurrence, series_start_local, series_duration, announce_days_before/)
     expect(callsOf(q, 'eq')).toContainEqual(['next.status', 'upcoming'])
-    expect(callsOf(q, 'gte')).toEqual([['next.ends_at', now]])
+    expect(callsOf(q, 'gte')).toEqual([['next.ends_at', now], ['feed_next.ends_at', now]])
     expect(callsOf(q, 'order')).toContainEqual(['starts_at', { referencedTable: 'next', ascending: true }])
     expect(callsOf(q, 'limit')).toContainEqual([1, { referencedTable: 'next' }])
+  })
+
+  it('events: for "View in feed", the org is_active and the soonest date event_feed_next considers', () => {
+    eventListQuery(recordingClient() as never, scope, now)
+    const q = rec.queries[0]
+    const select = String(callsOf(q, 'select')[0][0])
+    expect(select).toMatch(/org:organizations\(name, is_active\)/)
+    expect(select).toMatch(/feed_next:event_occurrences\(id, event_id, starts_at, ends_at, status, capacity, notes, source, cancel_reason\)/)
+    // event_feed_next :412-415 — upcoming, or cancelled with a reason IS DISTINCT FROM retired / org_inactive
+    // (a NULL reason counts, and `not.in` alone drops NULL, so it is spelled out).
+    expect(callsOf(q, 'or')).toEqual([
+      ['status.eq.upcoming,and(status.eq.cancelled,or(cancel_reason.is.null,cancel_reason.not.in.(retired,org_inactive)))', { referencedTable: 'feed_next' }],
+    ])
+    // :416 not ended; soonest first; one row.
+    expect(callsOf(q, 'gte')).toContainEqual(['feed_next.ends_at', now])
+    expect(callsOf(q, 'order')).toContainEqual(['starts_at', { referencedTable: 'feed_next', ascending: true }])
+    expect(callsOf(q, 'limit')).toContainEqual([1, { referencedTable: 'feed_next' }])
   })
 
   it('calendar: every date starting inside the window, oldest first, no per-event cap, one overall bound', () => {
