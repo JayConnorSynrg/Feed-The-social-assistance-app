@@ -31,7 +31,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
-import { businessVisibility } from '@/lib/member-visibility'
+import { businessMapVisibility, businessVisibility, isMapPoint, showsMapControl } from '@/lib/member-visibility'
+import { adminNavT } from '@/lib/i18n-admin-nav'
+import { parseGeographyPoint } from '@/lib/business'
 import { privilegedRpc } from '@/lib/privileged-action'
 import {
   fetchPendingBusinesses,
@@ -393,7 +395,7 @@ export function BusinessesTab() {
                         {item.phone && <span>{item.phone}</span>}
                         {item.website && <span className="truncate">{item.website}</span>}
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                         {/* fetchAdminBusinessList returns status='approved' rows only. */}
                         <MemberViewLink
                           to={{ kind: 'business', id: item.id }}
@@ -402,6 +404,8 @@ export function BusinessesTab() {
                           itemName={item.name}
                           source="businesses"
                         />
+                        {/* Its pin on the members' map (businesses_in_bounds also needs a location). */}
+                        <BusinessMapLink item={item} />
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
@@ -550,5 +554,26 @@ export function BusinessesTab() {
         )}
       </div>
     </div>
+  )
+}
+
+/** An approved business row's "View on map": its pin on the members' map, or why it has none — not
+ *  repeated when it is the reason the row already shows for the public page (inactive). */
+function BusinessMapLink({ item }: { item: AdminBusiness }) {
+  const page = businessVisibility({ status: 'approved', is_active: item.is_active })
+  const map = businessMapVisibility({
+    status: 'approved',
+    is_active: item.is_active,
+    has_map_location: isMapPoint(parseGeographyPoint(item.location)),
+  })
+  if (!showsMapControl(page, map)) return null
+  return (
+    <MemberViewLink
+      to={{ kind: 'map_focus', focus: { kind: 'business', id: item.id } }}
+      visibility={map}
+      label={adminNavT('en', 'viewOnMap')}
+      itemName={item.name}
+      source="businesses"
+    />
   )
 }

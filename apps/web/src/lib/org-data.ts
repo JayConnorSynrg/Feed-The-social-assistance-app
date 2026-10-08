@@ -21,6 +21,7 @@ import { withMetric } from './logger'
 import { NON_BUSINESS_ORG_TYPES } from './org-vocab'
 import { fetchBusinessHours, fetchBusinessPhotos } from './business-data'
 import { parseGeographyPoint, type BusinessHours, type BusinessPhoto } from './business'
+import { isMapPoint } from './member-visibility'
 import { trimSeconds, minutesOf } from '@/components/org-form/hours-model'
 import type { ResourceCategory } from './resource-directory'
 
@@ -220,10 +221,14 @@ export interface AdminOrgListRow {
   city: string | null
   state: string | null
   is_active: boolean
+  /** The org has a point the members' map draws (location set, neither coordinate 0) — the one
+   *  location fact the row needs, for "View on map" (lib/member-visibility.ts). */
+  has_map_location: boolean
 }
 
-// Admin-list projection — exactly what a list row renders (explicit, never *).
-const ADMIN_LIST_COLUMNS = 'id, name, org_type, city, state, is_active'
+// Admin-list projection — what a list row renders (explicit, never *). location is read only to
+// derive has_map_location; the row never carries the coordinates.
+const ADMIN_LIST_COLUMNS = 'id, name, org_type, city, state, is_active, location'
 
 /**
  * Admin list reader — EVERY NON-business org, active OR inactive, ordered by name. Drops the
@@ -244,7 +249,9 @@ export async function fetchAdminOrgList(
       .order('name', { ascending: true })
       .then((r) => r)
     if (error) throw new OrgReadError(error.message)
-    const rows = (data ?? []) as AdminOrgListRow[]
+    const rows = ((data ?? []) as Array<Omit<AdminOrgListRow, 'has_map_location'> & { location: Organization['location'] }>).map(
+      ({ location, ...row }) => ({ ...row, has_map_location: isMapPoint(parseGeographyPoint(location)) }),
+    )
     attrs.result_count = rows.length
     return rows
   })

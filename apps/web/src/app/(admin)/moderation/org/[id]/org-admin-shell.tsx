@@ -20,9 +20,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Building2, Calendar, ExternalLink, LayoutDashboard, Pencil, Users } from 'lucide-react'
+import { ArrowLeft, Building2, Calendar, ExternalLink, LayoutDashboard, Map as MapIcon, Pencil, Users } from 'lucide-react'
 import { MemberViewLink } from '@/components/admin/member-view-link'
-import { organizationVisibility } from '@/lib/member-visibility'
+import { organizationMapVisibility, organizationVisibility, showsMapControl } from '@/lib/member-visibility'
+import { adminNavT } from '@/lib/i18n-admin-nav'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/use-auth'
 import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
@@ -43,6 +44,8 @@ export interface OrgAdminOrg {
   is_active: boolean
   city: string | null
   state: string | null
+  /** A point the members' map draws (location set, neither coordinate 0). */
+  has_map_location: boolean
 }
 
 export interface OrgAdminShellProps {
@@ -191,6 +194,22 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
                   className={SECONDARY}
                   reasonClassName="inline-flex min-h-10 items-center text-sm text-stone-600"
                 />
+                {/* The org's pin on the members' map, or why it has none (inactive, no location). */}
+                {showsMapControl(organizationVisibility(org), organizationMapVisibility(org)) && (
+                  <MemberViewLink
+                    lang={locale}
+                    dir={dir(locale)}
+                    locale={locale}
+                    to={{ kind: 'map_focus', focus: { kind: 'organization', id: org.id } }}
+                    visibility={organizationMapVisibility(org)}
+                    label={adminNavT(locale, 'viewOnMap')}
+                    itemName={org.name}
+                    source="org_admin_profile"
+                    icon={<MapIcon className="h-4 w-4" aria-hidden="true" />}
+                    className={SECONDARY}
+                    reasonClassName="inline-flex min-h-10 items-center text-sm text-stone-600"
+                  />
+                )}
               </div>
             </section>
           </TabsContent>

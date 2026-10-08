@@ -8,24 +8,28 @@
 // colored badge + a click popup. The business teal is distinct from resource-olive,
 // volunteer-amber, SNAP-green and safety-red so the layer reads as its own thing.
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Leaf, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
+import { useFocusedPopup } from './use-focused-popup'
 
 interface BusinessMarkerProps {
   business: MappableBusiness
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
-export function BusinessMarker({ business }: BusinessMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const [showPopup, setShowPopup] = useFocusedPopup(focused)
 
   const handleClick = useCallback((e: { originalEvent: MouseEvent }) => {
     e.originalEvent.stopPropagation()
     setShowPopup(true)
-  }, [])
+  }, [setShowPopup])
 
   const fullAddress = [business.address, business.city, business.state].filter(Boolean).join(', ')
 

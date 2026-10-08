@@ -15,6 +15,7 @@ import type { UpdateAlertInput } from '@/hooks/use-safety-alerts'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
+import { useFocusedPopup } from './use-focused-popup'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Severity colors:  1-2 = amber (low-medium risk), 3-4 = red-orange (high risk)
@@ -65,6 +66,8 @@ interface SafetyAlertMarkerProps {
   currentUserId?: string | null
   onUpdate?: (alertId: string, input: UpdateAlertInput) => Promise<void>
   onDelete?: (alertId: string) => Promise<void>
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,8 +75,9 @@ interface SafetyAlertMarkerProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SafetyAlertMarkerInner contains all hooks; called only when coords are valid.
-function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete }: SafetyAlertMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete, focused }: SafetyAlertMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const [showPopup, setShowPopup] = useFocusedPopup(focused)
   const [voting, setVoting] = useState<'confirm' | 'clear' | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
 

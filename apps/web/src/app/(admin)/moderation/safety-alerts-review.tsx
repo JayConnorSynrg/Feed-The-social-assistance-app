@@ -9,6 +9,12 @@
  *
  * Auth pattern mirrors moderation-queue.tsx: client-side Supabase call.
  * Logging: logger.info('pin.removed', { alertId }) on admin removal.
+ *
+ * Each row offers "View on map" (/#map?focus=safety_alert:<id>, opened in the reused feed-preview
+ * tab) while the members' map shows the pin: safetyAlertMapVisibility, the safety_alerts_in_view
+ * rule. The list already holds only live, unexpired alerts, so today every row links; the predicate
+ * stays so a list change can never hand an admin a link to a pin members do not see.
+ * SafetyAlertsReviewView is the stateless rendering (tested with react-dom/server).
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -18,14 +24,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { adminNavT } from '@/lib/i18n-admin-nav'
+import { safetyAlertMapVisibility } from '@/lib/member-visibility'
 import { whereSafetyAlertLive } from './safety-alert-live'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface LiveAlert {
+export interface LiveAlert {
   id: string
+  status: string
   alert_type: string
   severity: number
   description: string | null
@@ -63,17 +73,21 @@ export function SafetyAlertsReview() {
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The clock the list was read with (the map-visibility check uses the same instant).
+  const [loadedAt, setLoadedAt] = useState(() => new Date())
 
   // Fetch live alerts for admin review
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
+        const now = new Date()
+        setLoadedAt(now)
         const { data, error: fetchErr } = await whereSafetyAlertLive(
           supabase
             .from('safety_alerts')
-            .select('id, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'),
-          new Date(),
+            .select('id, status, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'),
+          now,
         )
           .order('created_at', { ascending: false })
           .limit(50)
@@ -146,15 +160,52 @@ export function SafetyAlertsReview() {
     []
   )
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
+  return (
+    <SafetyAlertsReviewView
+      alerts={alerts}
+      loading={loading}
+      error={error}
+      approvingId={approvingId}
+      removingId={removingId}
+      now={loadedAt}
+      onApprove={handleApprove}
+      onRemove={handleRemove}
+    />
+  )
+}
 
+export interface SafetyAlertsReviewViewProps {
+  alerts: LiveAlert[]
+  loading: boolean
+  error: string | null
+  approvingId: string | null
+  removingId: string | null
+  /** The clock the list was read with. */
+  now: Date
+  onApprove: (alertId: string) => void
+  onRemove: (alertId: string) => void
+}
+
+const formatDate = (d: string) =>
+  new Date(d).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+
+/** The review list for one load state (stateless). */
+export function SafetyAlertsReviewView({
+  alerts,
+  loading,
+  error,
+  approvingId,
+  removingId,
+  now,
+  onApprove,
+  onRemove,
+}: SafetyAlertsReviewViewProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div role="status" aria-label="Loading safety alerts" className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
       </div>
     )
   }
@@ -172,7 +223,7 @@ export function SafetyAlertsReview() {
       </p>
 
       {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <div role="alert" className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -223,7 +274,7 @@ export function SafetyAlertsReview() {
                       variant="outline"
                       className="border-green-300 text-green-700 hover:bg-green-50"
                       disabled={approvingId === alert.id}
-                      onClick={() => handleApprove(alert.id)}
+                      onClick={() => onApprove(alert.id)}
                       data-testid={`admin-approve-alert-${alert.id}`}
                     >
                       {approvingId === alert.id ? (
@@ -238,7 +289,7 @@ export function SafetyAlertsReview() {
                     size="sm"
                     variant="destructive"
                     disabled={removingId === alert.id}
-                    onClick={() => handleRemove(alert.id)}
+                    onClick={() => onRemove(alert.id)}
                     data-testid={`admin-remove-alert-${alert.id}`}
                   >
                     {removingId === alert.id ? (
@@ -248,6 +299,13 @@ export function SafetyAlertsReview() {
                     )}
                     Remove alert
                   </Button>
+                  <MemberViewLink
+                    to={{ kind: 'map_focus', focus: { kind: 'safety_alert', id: alert.id } }}
+                    visibility={safetyAlertMapVisibility(alert, now)}
+                    label={adminNavT('en', 'viewOnMap')}
+                    itemName={`${ALERT_LABELS[alert.alert_type] ?? alert.alert_type}, ${SEVERITY_LABELS[alert.severity] ?? `severity ${alert.severity}`}`}
+                    source="safety_alerts"
+                  />
                 </div>
               </CardContent>
             </Card>

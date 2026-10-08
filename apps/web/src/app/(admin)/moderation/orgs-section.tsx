@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ExternalLink, LayoutDashboard, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ExternalLink, LayoutDashboard, Loader2, Map as MapIcon, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { DropdownMenu as Menu } from 'radix-ui'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
@@ -31,8 +31,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { dir, type Locale } from '@/lib/i18n'
 import { MemberViewLink } from '@/components/admin/member-view-link'
-import { memberReasonText } from '@/lib/i18n-admin-nav'
-import { organizationVisibility } from '@/lib/member-visibility'
+import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
+import { organizationMapVisibility, organizationVisibility, showsMapControl, type MemberVisibility } from '@/lib/member-visibility'
 import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
@@ -345,12 +345,13 @@ export function OrgRowMenuItems({
   locale,
   onToggle,
 }: {
-  org: Pick<AdminOrgListRow, 'id' | 'name' | 'is_active'>
+  org: Pick<AdminOrgListRow, 'id' | 'name' | 'is_active' | 'has_map_location'>
   tr: (key: keyof OrgFormMessages) => string
   locale: Locale
   onToggle: () => void
 }) {
   const visibility = organizationVisibility(org)
+  const mapVisibility = organizationMapVisibility(org)
   return (
     <>
       <Menu.Item className={MENU_ITEM} onSelect={onToggle}>
@@ -376,14 +377,37 @@ export function OrgRowMenuItems({
           />
         </Menu.Item>
       ) : (
-        // Where the link would be: why members cannot open this org's public page. Not `disabled` —
-        // Radix skips disabled items with the arrow keys. aria-disabled survives because Radix spreads
-        // the item's own props after its defaults (@radix-ui/react-menu 2.1.18 MenuItemImpl).
-        <Menu.Item className={MENU_REASON} aria-disabled="true" onSelect={(e) => e.preventDefault()}>
-          {memberReasonText(locale, visibility.reason)}
-        </Menu.Item>
+        <MenuReason locale={locale} visibility={visibility} />
       )}
+      {/* The org's pin on the members' map, or why it has none (inactive, no location). */}
+      {mapVisibility.visible ? (
+        <Menu.Item className={MENU_ITEM} asChild>
+          <MemberViewLink
+            locale={locale}
+            to={{ kind: 'map_focus', focus: { kind: 'organization', id: org.id } }}
+            visibility={mapVisibility}
+            label={adminNavT(locale, 'viewOnMap')}
+            itemName={org.name}
+            source="orgs_section"
+            icon={<MapIcon className="h-4 w-4" aria-hidden="true" />}
+            className={MENU_ITEM}
+          />
+        </Menu.Item>
+      ) : showsMapControl(visibility, mapVisibility) ? (
+        <MenuReason locale={locale} visibility={mapVisibility} />
+      ) : null}
     </>
+  )
+}
+
+/** Where a "View …" link would be: why members cannot open it. Not `disabled` — Radix skips
+ *  disabled items with the arrow keys. aria-disabled survives because Radix spreads the item's own
+ *  props after its defaults (@radix-ui/react-menu 2.1.18 MenuItemImpl). */
+function MenuReason({ locale, visibility }: { locale: Locale; visibility: Extract<MemberVisibility, { visible: false }> }) {
+  return (
+    <Menu.Item className={MENU_REASON} aria-disabled="true" onSelect={(e) => e.preventDefault()}>
+      {memberReasonText(locale, visibility.reason)}
+    </Menu.Item>
   )
 }
 

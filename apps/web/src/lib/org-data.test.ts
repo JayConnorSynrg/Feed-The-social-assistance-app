@@ -285,6 +285,36 @@ describe('INV-1 — admin Organizations roster lists ONLY non-business orgs (bus
     })
   })
 
+  it('derives has_map_location (the map draws a pin) from location, and never returns the coordinates', async () => {
+    // EWKB hex (SRID 4326, little-endian) for a point.
+    const ewkb = (lng: number, lat: number) => {
+      const b = Buffer.alloc(25)
+      b.writeUInt8(1, 0)
+      b.writeUInt32LE(0x20000001, 1)
+      b.writeUInt32LE(4326, 5)
+      b.writeDoubleLE(lng, 9)
+      b.writeDoubleLE(lat, 17)
+      return b.toString('hex')
+    }
+    const base = { name: 'X', org_type: 'pantry', city: null, state: null, is_active: true }
+    const client = makeListClient({
+      data: [
+        { ...base, id: 'located', location: ewkb(-72.97, 43.61) },
+        { ...base, id: 'unlocated', location: null },
+        { ...base, id: 'zero', location: ewkb(0, 0) },
+      ],
+      error: null,
+    })
+    const rows = await fetchAdminOrgList(client)
+    expect(client.state.selected).toContain('location')
+    expect(rows.map((r) => [r.id, r.has_map_location])).toEqual([
+      ['located', true],
+      ['unlocated', false],
+      ['zero', false],
+    ])
+    for (const row of rows) expect(row).not.toHaveProperty('location')
+  })
+
   it('surfaces a load failure as a throw (never a silent empty roster masking an error)', async () => {
     const client = makeListClient({ data: null, error: { message: 'boom' } })
     await expect(fetchAdminOrgList(client)).rejects.toThrow('boom')

@@ -9,16 +9,19 @@
 // plum (ORG_MARKER_HEX) is distinct from business-teal, resource-olive, volunteer-amber, SNAP-green and safety-red,
 // and the Building2 icon (vs the business Leaf) reads as its own layer.
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Building2, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import type { MappableOrg } from '@/hooks/use-viewport-organizations'
 import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
+import { useFocusedPopup } from './use-focused-popup'
 
 interface OrgMarkerProps {
   organization: MappableOrg
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
@@ -26,13 +29,14 @@ function orgTypeLabel(orgType: string): string {
   return isNonBusinessOrgType(orgType) ? ORG_TYPE_LABELS[orgType] : orgType
 }
 
-export function OrgMarker({ organization }: OrgMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+export function OrgMarker({ organization, focused }: OrgMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const [showPopup, setShowPopup] = useFocusedPopup(focused)
 
   const handleClick = useCallback((e: { originalEvent: MouseEvent }) => {
     e.originalEvent.stopPropagation()
     setShowPopup(true)
-  }, [])
+  }, [setShowPopup])
 
   const fullAddress = [organization.address, organization.city, organization.state].filter(Boolean).join(', ')
 

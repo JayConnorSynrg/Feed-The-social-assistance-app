@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Phone, Globe, Clock, Navigation, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
 import { isApproximateGeocode } from '@/lib/geocode-accuracy'
+import { useFocusedPopup } from './use-focused-popup'
 
 interface Resource {
   id: string
@@ -29,10 +30,13 @@ interface Resource {
 interface ResourceMarkerProps {
   resource: Resource
   onClick?: (resource: Resource) => void
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
-export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const [showPopup, setShowPopup] = useFocusedPopup(focused)
 
   const color = getCategoryHex(resource.category)
   const isApproximate = isApproximateGeocode(resource.geocode_accuracy)
@@ -40,7 +44,7 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
   const handleClick = useCallback(() => {
     setShowPopup(true)
     onClick?.(resource)
-  }, [resource, onClick])
+  }, [resource, onClick, setShowPopup])
 
   const handleDirections = useCallback(() => {
     openDirections({

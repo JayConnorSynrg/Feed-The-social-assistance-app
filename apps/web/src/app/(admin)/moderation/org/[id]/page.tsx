@@ -17,6 +17,8 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { withMetric } from '@/lib/logger'
 import { isUuid } from '@/lib/org-admin-paths'
+import { parseGeographyPoint } from '@/lib/business'
+import { isMapPoint } from '@/lib/member-visibility'
 import { OrgAdminShell, type OrgAdminOrg } from './org-admin-shell'
 
 interface Props {
@@ -55,7 +57,7 @@ async function loadOrgAdminView(
   }
 
   const [orgRes, adminRes] = await Promise.all([
-    supabase.from('organizations').select('id, name, org_type, is_active, city, state').eq('id', id).maybeSingle(),
+    supabase.from('organizations').select('id, name, org_type, is_active, city, state, location').eq('id', id).maybeSingle(),
     supabase.rpc('is_current_user_admin'),
   ])
   if (orgRes.error) throw new OrgAdminAccessError(orgRes.error.message, orgRes.error.code)
@@ -67,7 +69,12 @@ async function loadOrgAdminView(
 
   attrs.outcome = 'ok'
   attrs.org_id = id
-  return { org: orgRes.data as OrgAdminOrg, isPlatformAdmin: adminRes.data === true }
+  // location is read only to tell the Profile tab whether the members' map draws a pin for the org.
+  const { location, ...org } = orgRes.data as Omit<OrgAdminOrg, 'has_map_location'> & { location: unknown }
+  return {
+    org: { ...org, has_map_location: isMapPoint(parseGeographyPoint(location as Parameters<typeof parseGeographyPoint>[0])) },
+    isPlatformAdmin: adminRes.data === true,
+  }
 }
 
 export default async function OrgAdminPage({ params }: Props) {
