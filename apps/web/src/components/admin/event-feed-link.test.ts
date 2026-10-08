@@ -17,7 +17,7 @@ vi.mock('@/lib/logger', () => ({
   withMetric: async (_op: string, _a: unknown, fn: () => Promise<unknown>) => fn(),
 }))
 
-import { EventFeedLink, type EventFeedLinkEvent, type EventFeedLinkProps } from './event-feed-link'
+import { EventFeedLink, EventStatusNotice, type EventFeedLinkEvent, type EventFeedLinkProps } from './event-feed-link'
 import { MemberViewLink } from './member-view-link'
 
 const ID = '8f285b5a-4e4f-4bbc-b661-23fcaf84353a'
@@ -101,5 +101,29 @@ describe('logging (E4)', () => {
   it('the organization admin page reports its own source', () => {
     anchor(props({ source: 'org_admin_events' })).props.onClick({})
     expect(events).toEqual([{ name: 'admin.nav.member_view', attrs: { kind: 'event', source: 'org_admin_events', view: 'feed' } }])
+  })
+})
+
+describe('the created notice (EventStatusNotice): the live region holds plain text only', () => {
+  const notice = (ev: EventFeedLinkEvent | null, now = LISTED, text: string | null = 'Event “FEED INFO” created.') =>
+    renderToStaticMarkup(h(EventStatusNotice, { text, event: ev, now, locale: 'en', source: 'event_scheduler' }))
+  const region = (html: string) => html.match(/<p role="status"[^>]*>([\s\S]*?)<\/p>/)?.[1]
+
+  it('listed: the region says the notice; "View in feed" follows it, outside the region', () => {
+    const html = notice(event)
+    expect(region(html)).toBe('Event “FEED INFO” created.')
+    expect(html).toMatch(/<\/p><a [^>]*href="\/#events\?focus=event:/)
+  })
+  it('not listed yet: "Appears in feed <date>" is part of the announced text; no link anywhere', () => {
+    const html = notice(event, BEFORE)
+    expect(region(html)).toBe('Event “FEED INFO” created. Appears in feed Thu, Oct 8, 2026')
+    expect(html).not.toContain('<a ')
+  })
+  it('a reason is announced the same way', () => {
+    expect(region(notice({ ...event, feed_next: [] }))).toBe('Event “FEED INFO” created. No upcoming dates — not in the feed')
+  })
+  it('before the list has the event, and with no notice: the region is still there (always mounted)', () => {
+    expect(notice(null)).toBe('<p role="status">Event “FEED INFO” created.</p>')
+    expect(notice(event, LISTED, null)).toBe('<p role="status"></p>')
   })
 })

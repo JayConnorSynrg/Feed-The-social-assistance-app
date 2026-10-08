@@ -100,6 +100,44 @@ export function focusSettles(pending: PendingFocus | null, state: EventsTabState
   return pending !== null && state.status !== 'loading' && state !== pending.staleState
 }
 
+/** A focus link arrives. A list already on screen may predate the event (the admin just created
+ *  it), so it is read again (`reread`) and the focus waits for that read; while a read is running
+ *  the focus waits for it. */
+export function arriveFocus(target: FocusTarget, current: EventsTabState): { pending: PendingFocus; reread: boolean } {
+  const settled = current.status !== 'loading'
+  return { pending: { target, staleState: settled ? current : null }, reread: settled }
+}
+
+/** The focus was never resolved (the member left the Events tab before the list loaded): true once,
+ *  so the unmount writes exactly one `abandoned` row. */
+export function abandonFocus(pending: { current: PendingFocus | null }): boolean {
+  if (!pending.current) return false
+  pending.current = null
+  return true
+}
+
+/** Reduced motion: FEED's own setting (<html data-motion="reduce">, lib/accessibility-prefs.ts) or
+ *  the operating system's. */
+export function prefersReducedMotion(dataMotion: string | undefined, osReduce: boolean): boolean {
+  return dataMotion === 'reduce' || osReduce
+}
+
+/** The live highlight: its expiry timer and its blur listener. */
+export interface HighlightHandle {
+  timer: ReturnType<typeof setTimeout>
+  detach: () => void
+}
+
+/** End the current highlight's timer and blur listener (a new focus arrived, or the panel left),
+ *  so an earlier highlight can never clear a later one early. */
+export function endHighlight(handle: HighlightHandle | null, clearTimer: (t: ReturnType<typeof setTimeout>) => void): null {
+  if (handle) {
+    clearTimer(handle.timer)
+    handle.detach()
+  }
+  return null
+}
+
 /** Take the pending focus if this state settles it: returns its target and decision exactly once
  *  (the ref is emptied), null otherwise. */
 export function takeSettledFocus(
@@ -293,22 +331,36 @@ export function EventsPanel() {
   }, [state])
   const [focusMiss, setFocusMiss] = useState(false)
   const [highlightId, setHighlightId] = useState<string | null>(null)
+  const highlightRef = useRef<HighlightHandle | null>(null)
 
-  // Arrival: remember the target once, and read the list fresh when one is already on screen (it
-  // may predate the event the admin just created).
+  // Arrival: remember the target once, end any earlier highlight, and read the list fresh when one
+  // is already on screen.
   useEffect(() => {
     if (!focus || focus.kind !== 'event' || pendingFocus.current?.target === focus) return
-    const current = stateRef.current
-    const settled = current.status !== 'loading'
-    pendingFocus.current = { target: focus, staleState: settled ? current : null }
-    // A link arriving from the URL (an external system) replaces the last miss line.
+    const { pending, reread } = arriveFocus(focus, stateRef.current)
+    pendingFocus.current = pending
+    highlightRef.current = endHighlight(highlightRef.current, clearTimeout)
+    // A link arriving from the URL (an external system) replaces the last miss line and highlight.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocusMiss(false)
-    if (settled) {
+    setHighlightId(null)
+    if (reread) {
       setState({ status: 'loading' })
       void load()
     }
   }, [focus, load])
+
+  // Leaving the tab with a focus still waiting: one `abandoned` row, so every followed link writes
+  // exactly one nav.deeplink.resolve row.
+  useEffect(
+    () => () => {
+      if (abandonFocus(pendingFocus)) {
+        logEvent('nav.deeplink.resolve', { kind: 'event', outcome: 'abandoned', panel: 'events' })
+      }
+      highlightRef.current = endHighlight(highlightRef.current, clearTimeout)
+    },
+    [],
+  )
 
   // Resolution: once that read settles — one row, then clear the focus so it never runs again.
   useEffect(() => {
@@ -325,16 +377,20 @@ export function EventsPanel() {
     }
     const card = listRef.current?.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(decision.eventId)}"]`)
     if (!card) return
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduceMotion = prefersReducedMotion(
+      document.documentElement.dataset.motion,
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    )
     card.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' })
     card.focus({ preventScroll: true })
     setHighlightId(decision.eventId)
-    const clear = () => setHighlightId((id) => (id === decision.eventId ? null : id))
-    const timer = window.setTimeout(clear, 4000)
-    card.addEventListener('blur', () => {
-      window.clearTimeout(timer)
-      clear()
-    }, { once: true })
+    // Ringed for 4 s or until the card loses focus, whichever comes first.
+    const clear = () => {
+      highlightRef.current = endHighlight(highlightRef.current, clearTimeout)
+      setHighlightId(null)
+    }
+    card.addEventListener('blur', clear, { once: true })
+    highlightRef.current = { timer: setTimeout(clear, 4000), detach: () => card.removeEventListener('blur', clear) }
   }, [state, setPanelParams])
 
   return (

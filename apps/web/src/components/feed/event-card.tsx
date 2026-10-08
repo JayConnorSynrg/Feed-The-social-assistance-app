@@ -56,9 +56,9 @@ export interface EventCardProps {
   highlighted?: boolean
 }
 
-/** The deep-link highlight: a lime ring outside the card's own focus ring (it fades in only when
- *  motion is allowed). */
-export const EVENT_CARD_HIGHLIGHT = 'ring-4 ring-lime-500 ring-offset-2 motion-safe:transition-shadow motion-safe:duration-300'
+/** The deep-link highlight: a lime-700 ring outside the card (4.96:1 on the white offset, 4.75:1 on
+ *  stone-50 — WCAG 1.4.11), fading in only when motion is allowed. */
+export const EVENT_CARD_HIGHLIGHT = 'ring-4 ring-lime-700 ring-offset-2 motion-safe:transition-shadow motion-safe:duration-300'
 
 export function EventCard({
   event,

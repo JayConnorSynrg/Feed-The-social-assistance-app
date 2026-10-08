@@ -66,7 +66,7 @@ import { DANGER, EventDialog, FOCUS_RING, PRIMARY, SECONDARY, errorText } from '
 import { restoreFocusAfterPanel } from './org-panel-focus'
 import { pickOpener } from './event-focus'
 import { ExtendSeriesButton } from './extend-series-button'
-import { EventFeedLink } from '@/components/admin/event-feed-link'
+import { EventFeedLink, EventStatusNotice } from '@/components/admin/event-feed-link'
 
 interface EventOccurrence {
   id: string
@@ -633,15 +633,9 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
         </button>
       </div>
 
-      <p role="status" className="text-sm text-lime-800">
-        {notice}
-        {notice && noticeEvent && (
-          <>
-            {' '}
-            <EventFeedLink event={noticeEvent} now={loadedAt} locale={locale} source={source} />
-          </>
-        )}
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <EventStatusNotice text={notice} event={noticeEvent} now={loadedAt} locale={locale} source={source} className="text-sm text-lime-800" />
+      </div>
 
       {/* Week view (md+) */}
       <div className="hidden overflow-hidden rounded-2xl border border-stone-100 bg-white shadow-sm md:block">
