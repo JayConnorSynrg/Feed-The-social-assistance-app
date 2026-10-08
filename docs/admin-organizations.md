@@ -20,7 +20,9 @@ organization's name links to its [organization admin page](#the-organization-adm
     they must be re-added.
   - **Reactivate**: shows the organization again.
   - **Open admin**: opens the organization admin page.
-  - **View public page**: only while the organization is active.
+  - **View public page**: opens the public page in the `feed-preview` tab while the organization is
+    active; an inactive organization shows *Inactive — hidden from members* instead (see
+    [admin-tiers.md](admin-tiers.md#getting-back-to-the-feed--viewing-as-members)).
 - **Members**: expands the organization's member roster (add by user id, change role, remove).
 
 ## The setup panel

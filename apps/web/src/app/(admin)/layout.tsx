@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { BackToFeedBar } from '@/components/admin/back-to-feed-bar'
 
 export default async function AdminLayout({
   children,
@@ -31,6 +32,13 @@ export default async function AdminLayout({
     redirect('/')
   }
 
+  // The "Back to feed" bar sits above every admin page (and above the admin error screen, which
+  // renders in place of {children}), so each admin view shows exactly one way back to the feed.
   // id = focus target for (admin)/error.tsx "Try again" (see lib/focus-after-reset.ts).
-  return <div id="admin-content" className="outline-none">{children}</div>
+  return (
+    <>
+      <BackToFeedBar />
+      <div id="admin-content" className="outline-none">{children}</div>
+    </>
+  )
 }

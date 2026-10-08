@@ -2,10 +2,11 @@
 
 // apps/web/src/app/(admin)/error.tsx
 // Error boundary for the admin route group: renders a recovery card and persists one
-// admin.error.boundary row (error code + capped message + digest) to app_logs.
+// admin.error.boundary row (error code + capped message + digest) to app_logs. It renders inside
+// (admin)/layout.tsx, whose "Back to feed" bar stays above it — so this card offers only "Try again"
+// (a second way back to the feed here would put two identical links in one view).
 
 import { useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
 import { retryWithFocus } from '@/lib/focus-after-reset'
@@ -48,7 +49,7 @@ export default function AdminError({
           Something went wrong
         </h1>
         <p className="text-stone-500 text-sm">
-          This admin page hit an unexpected error. Please try again.
+          This admin page hit an unexpected error. Please try again, or use Back to feed above.
         </p>
         {error.digest && (
           <p className="text-xs text-stone-500 font-mono">ref: {error.digest}</p>
@@ -59,9 +60,6 @@ export default function AdminError({
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             Try again
-          </Button>
-          <Button asChild variant="outline" className="border-lime-300">
-            <Link href="/">Go home</Link>
           </Button>
         </div>
       </div>

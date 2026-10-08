@@ -238,7 +238,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
       ) : (
         <a
           data-testid="embed-opt-in-btn"
-          href={`${appUrl}/?post=${id}`}
+          href={`${appUrl}/s/post/${id}`}
           target="_top"
           rel="noopener"
           className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"

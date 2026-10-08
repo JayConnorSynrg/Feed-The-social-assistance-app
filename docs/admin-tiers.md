@@ -93,6 +93,24 @@ Admin nav. It lists people with their current tier and offers only the grants/re
 make (computed by `grantableTiers`), each requiring a reason. The Platform Admin option appears only
 to the founder. It never exposes email or ban data (those stay in the PA-only `admin_list_users`).
 
+## Getting back to the feed / viewing as members
+
+- **Back to feed**: every admin page (`/moderation`, the organization admin pages, `/federation/*`, and the
+  admin error screen) has one **Back to feed** link at the top left. It opens the community feed in the
+  same tab. It follows the profile language.
+- **View …**: admin rows link to what members see — **View post** (Moderation reports and Removed & Held
+  posts), **View public page** (Manage resources, Businesses, Organizations More menu, the organization
+  admin page's Profile tab) and **View profile** (People). The link appears only while a member can see
+  the item there. Otherwise the row says why: *Hidden from members*, *Inactive — hidden from members*,
+  *Not approved — hidden from members*, *No username — no public profile*, or *No longer exists*.
+  Links open in one preview tab named `feed-preview`; each click reuses it. What an admin sees there
+  is what a member sees: the public business pages and showcase hide inactive businesses, and an
+  organization page lists only approved linked resources.
+- **Tabs in the URL**: the open tab is in the address (`/moderation?tab=people`,
+  `/moderation/org/<id>?tab=members`), so a reload or a shared link returns to it. A tab your tier does
+  not include opens your first tab instead. Switching tabs replaces the address without adding Back
+  entries.
+
 ## Facilitator code — retired
 
 The `claim-facilitator-admin` edge function, its onboarding "Administrator" option and code input,

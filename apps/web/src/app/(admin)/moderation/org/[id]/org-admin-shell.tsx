@@ -13,11 +13,16 @@
 //
 // Language: the root carries the viewer's lang/dir; the shell's own copy is English for now and is
 // marked lang="en" dir="ltr" where it appears (same convention as the roster in orgs-section.tsx).
+//
+// The open tab is in the URL (`?tab=overview|events|profile|members`, replaced on each switch) so a
+// reload or a shared link lands on the same tab; an unknown value opens Overview.
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Building2, Calendar, ExternalLink, LayoutDashboard, Pencil, Users } from 'lucide-react'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { organizationVisibility } from '@/lib/member-visibility'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/use-auth'
 import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
@@ -26,6 +31,7 @@ import { ORG_ADMIN_INDEX } from '@/lib/org-admin-paths'
 import { orgTypeKey } from '@/components/org-form/org-labels'
 import { OrgFormPanel } from '@/components/org-form/org-form-panel'
 import { restoreFocusAfterPanel } from '../../org-panel-focus'
+import { ORG_ADMIN_TABS, readTabParam, tabParamHref, type OrgAdminTab } from '../../admin-tab-url'
 import { OrgMembers } from '../../orgs-section'
 import { OrgOverview } from '../org-overview'
 import { OrgEventsTab } from './org-events-tab'
@@ -60,6 +66,20 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
     () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
     [profile]
   )
+
+  const [tab, setTab] = useState<OrgAdminTab>('overview')
+  // Deep link: window.location exists only after mount, so setState in this effect is the idiom
+  // (same as the admin shell's ?tab / ?org read).
+  useEffect(() => {
+    const requested = readTabParam(window.location.search, ORG_ADMIN_TABS)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (requested) setTab(requested)
+  }, [])
+  const handleTabChange = useCallback((next: string) => {
+    if (!(ORG_ADMIN_TABS as readonly string[]).includes(next)) return
+    setTab(next as OrgAdminTab)
+    window.history.replaceState(window.history.state, '', tabParamHref(window.location, next))
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -111,7 +131,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
         <p aria-live="polite" className="mb-3 min-h-5 text-sm font-medium text-brand">
           {notice}
         </p>
-        <Tabs defaultValue="overview">
+        <Tabs value={tab} onValueChange={handleTabChange}>
           <div className="-mx-2 overflow-x-auto px-2 pb-1">
             <TabsList
               lang="en"
@@ -157,13 +177,20 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                   Edit profile
                 </button>
-                {org.is_active && (
-                  <a lang={locale} dir={dir(locale)} href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer" className={SECONDARY}>
-                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    {tr('actionViewPublic')}
-                    <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
-                  </a>
-                )}
+                {/* Members see the public page only while the org is active; otherwise the reason shows. */}
+                <MemberViewLink
+                  lang={locale}
+                  dir={dir(locale)}
+                  locale={locale}
+                  to={{ kind: 'organization', id: org.id }}
+                  visibility={organizationVisibility(org)}
+                  label={tr('actionViewPublic')}
+                  itemName={org.name}
+                  source="org_admin_profile"
+                  icon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
+                  className={SECONDARY}
+                  reasonClassName="inline-flex min-h-10 items-center text-sm text-stone-600"
+                />
               </div>
             </section>
           </TabsContent>

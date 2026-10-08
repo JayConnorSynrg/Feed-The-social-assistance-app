@@ -78,6 +78,8 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.form_template.approve.complete': ['action', 'request_id', 'target_id'],
   'admin.form_template.approve.error': ['action', 'request_id', 'target_id'],
   'admin.hours.invalid': ['kind'],
+  'admin.nav.back_to_feed': ['source'],
+  'admin.nav.member_view': ['kind', 'source', 'view'],
   'admin.notes.add.complete': ['request_id'],
   'admin.notes.add.error': ['request_id'],
   'admin.notes.delete.complete': ['request_id'],

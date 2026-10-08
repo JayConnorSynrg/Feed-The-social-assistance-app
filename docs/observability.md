@@ -132,6 +132,32 @@ export async function withMetric<T>(
 
 ---
 
+## Admin → member navigation
+
+Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout.tsx`), and admin rows offer **View …** links that open an item's member page in one reused `feed-preview` tab (`components/admin/member-view-link.tsx`). Each click persists exactly one row; labels carry no ids or personal data:
+
+| Event | Labels | Values |
+|---|---|---|
+| `admin.nav.back_to_feed` | `source` | `admin_bar` |
+| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `profile`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `businesses` · `orgs_section` · `org_admin_profile` · `people`; `view`: `page` |
+
+These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs).
+
+Clicks over the last 7 days (service role):
+```sql
+select event,
+       context->>'kind'   as kind,
+       context->>'source' as source,
+       count(*)           as clicks
+from public.app_logs
+where event in ('admin.nav.member_view', 'admin.nav.back_to_feed')
+  and created_at > now() - interval '7 days'
+group by 1, 2, 3
+order by 1, 4 desc;
+```
+
+---
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

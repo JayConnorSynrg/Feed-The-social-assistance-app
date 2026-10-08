@@ -62,6 +62,7 @@ import {
   photoSizeBucket,
   withPhotoUploadMetric,
   fetchAdminBusinessList,
+  fetchApprovedBusinessById,
   adminSetBusinessActive,
   adminUpdateBusiness,
 } from './business-data'
@@ -929,5 +930,52 @@ describe('adminUpdateBusiness — descriptive/contact edit, normalized website (
     ).rejects.toThrow('permission denied')
     expect(sinks).toHaveLength(1)
     expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.update.error' })
+  })
+})
+
+// ---- I4 parity: the public business readers show an admin exactly what members see ------------------
+// orgs_select_active admits a business to members only when is_active AND status='approved'; an admin's
+// read also passes orgs_admin_select (any is_active). So each PUBLIC reader must filter is_active=true
+// itself, or an admin would see an inactive business on /s/business/<id>, its OG image and the showcase
+// while members get a 404 / omission. The admin management reader must NOT filter it.
+function makeSingleClient(row: unknown) {
+  const state = { eqCalls: [] as Array<[string, unknown]> }
+  const builder: Record<string, unknown> = {}
+  Object.assign(builder, {
+    select: () => builder,
+    eq: (col: string, val: unknown) => {
+      state.eqCalls.push([col, val])
+      return builder
+    },
+    single: async () => ({ data: row, error: row ? null : { message: 'not found' } }),
+  })
+  const client = { state, from: () => builder }
+  return client as unknown as SupabaseClient<Database> & { state: typeof state }
+}
+
+describe('I4 — public business readers filter is_active=true; the admin reader does not', () => {
+  it('fetchApprovedBusinesses (showcase) filters is_active=true', async () => {
+    const client = makeLogoEmbedClient([])
+    await fetchApprovedBusinesses(client)
+    expect(client.state.eqCalls).toContainEqual(['is_active', true])
+  })
+
+  it('fetchApprovedBusinessById (public page + OG) filters is_active=true, approved business only', async () => {
+    const client = makeSingleClient({ id: 'b1', name: 'B' })
+    expect(await fetchApprovedBusinessById(client, 'b1')).toMatchObject({ id: 'b1' })
+    expect(client.state.eqCalls).toContainEqual(['is_active', true])
+    expect(client.state.eqCalls).toContainEqual(['status', 'approved'])
+    expect(client.state.eqCalls).toContainEqual(['org_type', 'business'])
+  })
+
+  it('a row the filters exclude resolves to null (the page 404s for admins too)', async () => {
+    expect(await fetchApprovedBusinessById(makeSingleClient(null), 'b1')).toBeNull()
+  })
+
+  it('fetchAdminBusinessList (admin management) never filters is_active — inactive rows stay listed', async () => {
+    const client = makeLogoEmbedClient([])
+    await fetchAdminBusinessList(client)
+    expect(client.state.eqCalls.map(([c]) => c)).not.toContain('is_active')
+    expect(client.state.eqCalls).toContainEqual(['status', 'approved'])
   })
 })

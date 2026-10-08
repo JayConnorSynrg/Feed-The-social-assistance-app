@@ -45,7 +45,7 @@ describe('platform Organizations list → org admin page', () => {
   it('the More menu offers "Open admin" linking to the same page (active and inactive orgs)', () => {
     for (const is_active of [true, false]) {
       const html = renderToStaticMarkup(
-        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, is_active }, tr, onToggle: () => {} })))
+        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, name: 'Rutland Food Shelf', is_active }, tr, locale: 'en', onToggle: () => {} })))
       )
       const link = html.match(/<a [^>]*role="menuitem"[^>]*>.*?<\/a>/g)?.find((a) => a.includes('Open admin'))
       expect(link, `is_active=${is_active}`).toBeDefined()
