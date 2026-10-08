@@ -44,17 +44,16 @@ describe('MemberViewLink — visible', () => {
     expect(anchors[0]).not.toMatch(/rel=/)
   })
 
-  it('accessible name starts with the visible label, then the item name; the preview-tab notice describes it', () => {
+  it('accessible name = visible label, item name, then the preview-tab notice (no description needed)', () => {
     const html = renderToStaticMarkup(h(MemberViewLink, base))
-    expect(html).toContain('aria-label="View public page: Riverside Pantry"')
-    const describedBy = html.match(/aria-describedby="([^"]+)"/)![1]
-    expect(html).toContain(`<span id="${describedBy}" class="sr-only"> (opens in the feed preview tab)</span>`)
-    expect(html).toMatch(/>View public page<span/)
+    expect(html).toContain('aria-label="View public page: Riverside Pantry (opens in the feed preview tab)"')
+    expect(html).not.toContain('aria-describedby')
+    expect(html).toMatch(/>View public page<\/a>$/)
   })
 
-  it('the notice follows the viewer locale', () => {
+  it('the notice follows the viewer locale, still after the visible label', () => {
     const html = renderToStaticMarkup(h(MemberViewLink, { ...base, locale: 'es', label: 'Ver página pública' }))
-    expect(html).toContain('(se abre en la pestaña de vista previa del feed)')
+    expect(html).toContain('aria-label="Ver página pública: Riverside Pantry (se abre en la pestaña de vista previa del feed)"')
   })
 
   it('a business routes to /s/business, never /s/organization', () => {
@@ -76,7 +75,8 @@ describe('MemberViewLink — not visible to members', () => {
     const html = renderToStaticMarkup(
       h(MemberViewLink, { ...base, to: { kind: 'post', id: ID }, visibility: { visible: false, reason: 'hidden' } })
     )
-    expect(html).toBe('<span class="inline-flex min-h-6 items-center text-xs text-stone-500">Hidden from members</span>')
+    // stone-600: the reason must meet 1.4.3 on the stone-100 page background (stone-500 is 4.4:1).
+    expect(html).toBe('<span class="inline-flex min-h-6 items-center text-xs text-stone-600">Hidden from members</span>')
   })
 })
 
@@ -94,9 +94,9 @@ describe('MemberViewLink — logging (I5)', () => {
   }
 
   it('one click writes exactly one admin.nav.member_view row with kind/source/view and no ids', () => {
-    const a = renderedAnchor({ ...base, to: { kind: 'profile', username: 'ann' }, source: 'people' })
+    const a = renderedAnchor({ ...base, to: { kind: 'resource', id: ID }, source: 'manage_resources' })
     a.props.onClick({})
-    expect(events).toEqual([{ name: 'admin.nav.member_view', attrs: { kind: 'profile', source: 'people', view: 'page' } }])
+    expect(events).toEqual([{ name: 'admin.nav.member_view', attrs: { kind: 'resource', source: 'manage_resources', view: 'page' } }])
   })
 
   it('a middle click (no click event) also writes exactly one row; a right click writes none', () => {

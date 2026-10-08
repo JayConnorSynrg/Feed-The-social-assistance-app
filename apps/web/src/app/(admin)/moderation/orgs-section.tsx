@@ -66,8 +66,10 @@ const PRIMARY =
 const SECONDARY =
   'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
   FOCUS_RING
-// A non-interactive menu line (the reason a "View public page" link is absent).
-const MENU_REASON = 'flex min-h-9 select-none items-center rounded-md px-3 text-sm text-stone-600 outline-none'
+// The reason a "View public page" link is absent: a menu line arrow keys reach (so screen readers read
+// it), announced as unavailable (aria-disabled), that does nothing when chosen.
+const MENU_REASON =
+  'flex min-h-9 select-none items-center rounded-md px-3 text-sm text-stone-600 outline-none data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 const MENU_ITEM =
   'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-3 text-sm text-stone-800 outline-none data-[highlighted]:bg-stone-100 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 
@@ -374,8 +376,10 @@ export function OrgRowMenuItems({
           />
         </Menu.Item>
       ) : (
-        // Where the link would be: why members cannot open this org's public page.
-        <Menu.Item className={MENU_REASON} disabled>
+        // Where the link would be: why members cannot open this org's public page. Not `disabled` —
+        // Radix skips disabled items with the arrow keys. aria-disabled survives because Radix spreads
+        // the item's own props after its defaults (@radix-ui/react-menu 2.1.18 MenuItemImpl).
+        <Menu.Item className={MENU_REASON} aria-disabled="true" onSelect={(e) => e.preventDefault()}>
           {memberReasonText(locale, visibility.reason)}
         </Menu.Item>
       )}

@@ -96,13 +96,13 @@ to the founder. It never exposes email or ban data (those stay in the PA-only `a
 ## Getting back to the feed / viewing as members
 
 - **Back to feed**: every admin page (`/moderation`, the organization admin pages, `/federation/*`, and the
-  admin error screen) has one **Back to feed** link at the top left. It opens the community feed in the
-  same tab. It follows the profile language.
+  admin error and not-found screens) has one **Back to feed** link at the top left. It opens the
+  community feed in the same tab. It follows the profile language.
 - **View …**: admin rows link to what members see — **View post** (Moderation reports and Removed & Held
-  posts), **View public page** (Manage resources, Businesses, Organizations More menu, the organization
-  admin page's Profile tab) and **View profile** (People). The link appears only while a member can see
-  the item there. Otherwise the row says why: *Hidden from members*, *Inactive — hidden from members*,
-  *Not approved — hidden from members*, *No username — no public profile*, or *No longer exists*.
+  posts) and **View public page** (Manage resources, Businesses, Organizations More menu, the
+  organization admin page's Profile tab). The link appears only while a member can see the item there.
+  Otherwise the row says why: *Hidden from members*, *Inactive — hidden from members*, *Not approved —
+  hidden from members* (also on every "Awaiting review" business and resource), or *No longer exists*.
   Links open in one preview tab named `feed-preview`; each click reuses it. What an admin sees there
   is what a member sees: the public business pages and showcase hide inactive businesses, and an
   organization page lists only approved linked resources.

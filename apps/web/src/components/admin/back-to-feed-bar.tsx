@@ -19,6 +19,8 @@ import { adminNavT } from '@/lib/i18n-admin-nav'
 import { logEvent } from '@/lib/logger'
 import { memberUrl } from '@/lib/member-url'
 
+// One admin.nav.back_to_feed row per click or auxclick (middle-button) activation. A context-menu
+// "Open in new tab" fires neither event, so it writes no row.
 function logBackToFeed() {
   logEvent('admin.nav.back_to_feed', { source: 'admin_bar' })
 }

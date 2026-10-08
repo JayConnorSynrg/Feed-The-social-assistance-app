@@ -9,6 +9,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
+import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
@@ -18,26 +19,6 @@ const REASON_LABELS: Record<string, string> = {
   illegal: 'Illegal content',
   off_topic: 'Off topic',
   other: 'Other',
-}
-
-interface ReportRow {
-  id: string
-  reporter_id: string
-  content_type: string
-  content_id: string
-  reason: string
-  details: string | null
-  status: string
-  created_at: string
-}
-
-interface ContentGroup {
-  content_id: string
-  post_content: string | null
-  post_author: string | null
-  /** The reported post's is_hidden; null when the post row was not returned (deleted). */
-  post_hidden: boolean | null
-  reports: ReportRow[]
 }
 
 interface HeldPost {
@@ -80,23 +61,10 @@ export function ReportsQueue() {
 
         if (reportsError) throw reportsError
 
-        // Group by content_id
-        const groupMap = new Map<string, ContentGroup>()
-        for (const report of (reports ?? []) as ReportRow[]) {
-          if (!groupMap.has(report.content_id)) {
-            groupMap.set(report.content_id, {
-              content_id: report.content_id,
-              post_content: null,
-              post_author: null,
-              post_hidden: null,
-              reports: [],
-            })
-          }
-          groupMap.get(report.content_id)!.reports.push(report)
-        }
-
-        // Enrich with post content where available
-        const contentIds = Array.from(groupMap.keys())
+        // Group by reported post, then enrich with each post's text and hidden state.
+        const reportRows = (reports ?? []) as ReportRow[]
+        const contentIds = [...new Set(reportRows.map((r) => r.content_id))]
+        let postRows: ReportedPostRow[] = []
         if (contentIds.length > 0) {
           const { data: posts, error: postsError } = await supabase
             .from('posts')
@@ -106,18 +74,10 @@ export function ReportsQueue() {
           // read succeeded without that row), so it surfaces like a failed reports read.
           if (postsError) throw postsError
 
-          if (posts) {
-            for (const post of posts) {
-              const group = groupMap.get(post.id)
-              if (group) {
-                group.post_content = (post.content as string | null)?.slice(0, 200) ?? null
-                group.post_hidden = post.is_hidden === true
-              }
-            }
-          }
+          postRows = (posts ?? []) as ReportedPostRow[]
         }
 
-        setGroups(Array.from(groupMap.values()))
+        setGroups(buildReportGroups(reportRows, postRows))
 
         // Load removed & held posts
         const { data: hiddenPostsData } = await supabase
@@ -325,7 +285,7 @@ export function ReportsQueue() {
                   <div className="mt-1">
                     <MemberViewLink
                       to={{ kind: 'post', id: group.content_id }}
-                      visibility={postVisibility(group.post_hidden === null ? null : { is_hidden: group.post_hidden })}
+                      visibility={groupPostVisibility(group)}
                       label="View post"
                       itemName={postItemName(group.post_content)}
                       source="reports_queue"
@@ -444,7 +404,7 @@ export function ReportsQueue() {
                   {(post.content ?? '').slice(0, 120)}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
                     <span className="font-medium">
                       {post.hidden_reason === 'admin_removal' ? 'Removed' : 'Held for Review'}
                     </span>

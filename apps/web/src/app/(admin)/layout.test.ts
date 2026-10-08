@@ -50,6 +50,7 @@ vi.mock('@/lib/logger', () => ({
 
 import AdminLayout from './layout'
 import AdminError from './error'
+import AdminNotFound from './not-found'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
@@ -74,7 +75,7 @@ describe('admin layout — Back to feed bar', () => {
     expect(feedLinks(html)[0]).not.toMatch(/target=/)
     expect(html.match(/Back to feed/g)).toHaveLength(1)
     expect(html.indexOf('Back to feed')).toBeLessThan(html.indexOf('PAGE'))
-    expect(html).toMatch(/^<nav aria-label="Community feed"/)
+    expect(html).toMatch(/^<nav aria-label="Leave admin"/)
   })
 
   it('the admin error screen (rendered inside the layout) still shows exactly one, and offers Try again', async () => {
@@ -82,14 +83,33 @@ describe('admin layout — Back to feed bar', () => {
     expect(feedLinks(html)).toHaveLength(1)
     // One link labelled Back to feed (the card's hint text points up at it; it is not a link).
     expect(html.match(/<a [^>]*>(?:(?!<\/a>).)*Back to feed<\/a>/g)).toHaveLength(1)
-    expect(html).toContain('use Back to feed above')
+    expect(html).toContain('use the link at the top of the page')
     expect(html).toContain('Try again')
+  })
+
+  it('the admin not-found screen (notFound() in an admin page) shows exactly one, under a heading', async () => {
+    const html = await renderLayout(h(AdminNotFound))
+    expect(feedLinks(html)).toHaveLength(1)
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toContain('<h1 class="text-2xl font-bold text-stone-800">Page not found</h1>')
+    expect(html.indexOf('Back to feed')).toBeLessThan(html.indexOf('Page not found'))
+  })
+
+  it('the not-found screen sits in the admin group, so Next renders it inside the admin layout', () => {
+    // notFound() resolves to the nearest not-found.tsx above the page; this one is a sibling of
+    // (admin)/layout.tsx, and there is no not-found.tsx between it and /moderation/org/[id].
+    expect(fs.existsSync(path.join(HERE, 'not-found.tsx'))).toBe(true)
+    const between = ['moderation', 'moderation/org', 'moderation/org/[id]'].filter((d) => fs.existsSync(path.join(HERE, d, 'not-found.tsx')))
+    expect(between).toEqual([])
+    expect(fs.readFileSync(path.join(HERE, 'moderation/org/[id]/page.tsx'), 'utf8')).toContain('notFound()') // CONTROL
   })
 
   it('the error screen alone renders no second way home', () => {
     const html = renderToStaticMarkup(h(AdminError, { error: new Error('x'), reset: () => {} }))
     expect(html).not.toContain('<a ')
     expect(html).not.toContain('Go home')
+    // The hint points at the bar without quoting its (translated) label in English.
+    expect(html).not.toContain('Back to feed')
   })
 
   it("follows the viewer's profile language", async () => {

@@ -49,7 +49,7 @@ export default function AdminError({
           Something went wrong
         </h1>
         <p className="text-stone-500 text-sm">
-          This admin page hit an unexpected error. Please try again, or use Back to feed above.
+          This admin page hit an unexpected error. Please try again, or use the link at the top of the page.
         </p>
         {error.digest && (
           <p className="text-xs text-stone-500 font-mono">ref: {error.digest}</p>

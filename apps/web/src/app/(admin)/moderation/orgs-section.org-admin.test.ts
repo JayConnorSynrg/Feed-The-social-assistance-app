@@ -53,6 +53,26 @@ describe('platform Organizations list → org admin page', () => {
     }
   })
 
+  it('an inactive org: the menu shows the reason as an item arrow keys reach, announced unavailable, no link', () => {
+    const menu = (is_active: boolean) =>
+      renderToStaticMarkup(
+        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, name: 'Rutland Food Shelf', is_active }, tr, locale: 'en', onToggle: () => {} })))
+      )
+    const inactive = menu(false)
+    const reason = inactive.match(/<div [^>]*>Inactive — hidden from members<\/div>/)?.[0]
+    expect(reason).toBeDefined()
+    expect(reason).toContain('role="menuitem"')
+    expect(reason).toContain('aria-disabled="true"')
+    // Not Radix-disabled: a data-disabled item is skipped by the arrow keys.
+    expect(reason).not.toContain('data-disabled')
+    expect(inactive).not.toContain('/s/organization/')
+    // Active: the View public page link, in the preview tab, and no reason.
+    const active = menu(true)
+    expect(active).toContain(`href="/s/organization/${ORG}"`)
+    expect(active).toContain('target="feed-preview"')
+    expect(active).not.toContain('hidden from members')
+  })
+
   it('the list renders those two pieces for every row', () => {
     const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'orgs-section.tsx'), 'utf8')
     expect(src).toMatch(/<OrgNameLink org=\{org\} tr=\{tr\} \/>/)

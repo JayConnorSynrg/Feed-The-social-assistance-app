@@ -13,8 +13,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { logger } from '@/lib/logger'
-import { MemberViewLink } from '@/components/admin/member-view-link'
-import { profileVisibility } from '@/lib/member-visibility'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { grantableTiers, tierLabel, type AdminTier, type GrantOption } from '@/lib/admin-tier'
 
@@ -172,13 +170,6 @@ export function PeopleTab({ viewerTier, isFounder }: { viewerTier: AdminTier | n
                             {person.first_name ?? <span className="text-stone-400 italic">No name</span>}
                           </p>
                           <p className="text-xs text-stone-500 truncate">{person.username ? `@${person.username}` : '—'}</p>
-                          <MemberViewLink
-                            to={{ kind: 'profile', username: person.username ?? '' }}
-                            visibility={profileVisibility(person)}
-                            label="View profile"
-                            itemName={person.first_name ?? (person.username ? `@${person.username}` : '')}
-                            source="people"
-                          />
                         </div>
                       </div>
                     </TableCell>

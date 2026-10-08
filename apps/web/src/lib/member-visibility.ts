@@ -6,18 +6,19 @@
 // more than members (the *_admin_select policies), so an admin list cannot assume an item it shows is
 // visible to members — these answers decide whether the row offers a "View …" link or a reason.
 
-export type ReasonCode = 'hidden' | 'inactive' | 'not_approved' | 'no_username' | 'not_found'
+export type ReasonCode = 'hidden' | 'inactive' | 'not_approved' | 'not_found'
 
 export type MemberVisibility = { visible: true } | { visible: false; reason: ReasonCode }
 
 const VISIBLE: MemberVisibility = { visible: true }
 const hiddenBecause = (reason: ReasonCode): MemberVisibility => ({ visible: false, reason })
 
-/** Post: posts_select_public (NOT is_hidden OR owner OR staff) and /s/post/[id] reads is_hidden=false.
- *  null = the post row was not returned (deleted), so there is nothing to open. */
-export function postVisibility(post: { is_hidden: boolean } | null): MemberVisibility {
+/** Post: posts_select_public (NOT is_hidden OR owner OR staff) and /s/post/[id] reads is_hidden=false
+ *  (a NULL is_hidden matches neither, so it is hidden too). null = the post row was not returned
+ *  (deleted), so there is nothing to open. */
+export function postVisibility(post: { is_hidden: boolean | null } | null): MemberVisibility {
   if (!post) return hiddenBecause('not_found')
-  return post.is_hidden ? hiddenBecause('hidden') : VISIBLE
+  return post.is_hidden === false ? VISIBLE : hiddenBecause('hidden')
 }
 
 /** Organization (non-business): orgs_select_active (is_active AND …) and fetchOrganizationById
@@ -36,9 +37,4 @@ export function businessVisibility(business: { status: string; is_active: boolea
 /** Resource: /s/resource/[id] reads status='approved' (resources public select). */
 export function resourceVisibility(resource: { status: string }): MemberVisibility {
   return resource.status === 'approved' ? VISIBLE : hiddenBecause('not_approved')
-}
-
-/** Profile: /profile/[username] looks the person up by username only — no username, no page. */
-export function profileVisibility(person: { username: string | null }): MemberVisibility {
-  return person.username ? VISIBLE : hiddenBecause('no_username')
 }

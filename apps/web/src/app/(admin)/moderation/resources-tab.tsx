@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { resourceVisibility } from '@/lib/member-visibility'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -737,6 +739,17 @@ export function ResourcesTab() {
                       {[item.address, item.city, item.state].filter(Boolean).join(', ')}
                     </div>
                   )}
+
+                  {/* Awaiting review: members cannot see it yet (admin_list_pending_resources lists
+                      pending items), so this shows the reason, never a link. A form template never
+                      has a member resource page. */}
+                  <MemberViewLink
+                    to={{ kind: 'resource', id: item.id }}
+                    visibility={contentType === 'form' ? { visible: false, reason: 'not_approved' } : resourceVisibility(item)}
+                    label="View public page"
+                    itemName={item.name}
+                    source="resources_queue"
+                  />
 
                   {/* Expanded detail */}
                   {isExpanded && (

@@ -134,14 +134,14 @@ export async function withMetric<T>(
 
 ## Admin → member navigation
 
-Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout.tsx`), and admin rows offer **View …** links that open an item's member page in one reused `feed-preview` tab (`components/admin/member-view-link.tsx`). Each click persists exactly one row; labels carry no ids or personal data:
+Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout.tsx`), and admin rows offer **View …** links that open an item's member page in one reused `feed-preview` tab (`components/admin/member-view-link.tsx`). Every click or auxclick (middle-button) activation persists exactly one row; a context-menu "Open in new tab" fires neither event and writes no row. These two events carry no entity ids or personal data:
 
 | Event | Labels | Values |
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
-| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `profile`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `businesses` · `orgs_section` · `org_admin_profile` · `people`; `view`: `page` |
+| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile`; `view`: `page` |
 
-These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs).
+These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels — `org_id` / `resource_id` are object ids (not personal data) kept for path analysis: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs).
 
 Clicks over the last 7 days (service role):
 ```sql

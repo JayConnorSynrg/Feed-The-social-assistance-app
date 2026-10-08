@@ -278,6 +278,16 @@ export function BusinessesTab() {
                         {item.phone && <span>{item.phone}</span>}
                         {item.website && <span className="truncate">{item.website}</span>}
                       </div>
+                      <div className="mt-1">
+                        {/* fetchPendingBusinesses returns status='pending' rows: members cannot see them yet. */}
+                        <MemberViewLink
+                          to={{ kind: 'business', id: item.id }}
+                          visibility={businessVisibility({ status: 'pending', is_active: true })}
+                          label="View public page"
+                          itemName={item.name}
+                          source="businesses"
+                        />
+                      </div>
                     </div>
                   </div>
 

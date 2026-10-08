@@ -16,7 +16,6 @@ export type MemberTarget =
   | { kind: 'organization'; id: string }
   | { kind: 'business'; id: string }
   | { kind: 'resource'; id: string }
-  | { kind: 'profile'; username: string }
 
 /** A target that names one item (everything except the feed home). */
 export type MemberItemTarget = Exclude<MemberTarget, { kind: 'feed_home' }>
@@ -36,8 +35,6 @@ export function memberUrl(target: MemberTarget): string {
       return `/s/business/${encodeURIComponent(target.id)}`
     case 'resource':
       return `/s/resource/${encodeURIComponent(target.id)}`
-    case 'profile':
-      return `/profile/${encodeURIComponent(target.username)}`
     default:
       return assertNever(target)
   }

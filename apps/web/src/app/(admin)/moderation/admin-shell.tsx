@@ -52,6 +52,9 @@ export function AdminShell() {
   const tabs = visibleTabs(tier, isOrgAdmin)
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
+  // Starts at 'overview' and the mount effect below applies a `?tab=` deep link, so a deep link
+  // paints the default tab for one frame. Deliberate: a lazy initializer reading window.location would
+  // differ between the server render and the first client render (hydration mismatch).
   const [activeTab, setActiveTab] = useState<string>('overview')
   // Fall back to the first visible tab when the requested tab is not entitled for this tier.
   const effectiveTab = resolveAdminTab(activeTab, tabs)

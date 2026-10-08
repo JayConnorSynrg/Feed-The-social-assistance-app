@@ -231,8 +231,8 @@ AND the legitimate one still works), via the extended harness `gen6.py` + `check
 - **F3 — platform dashboards count confirmed presence only.** `dashboard_event_stats` and
   `community_people_fed` are redefined (W5 bodies verbatim + `status = 'confirmed'` on the check-in
   aggregates); their numbers equal the confirmed-only truth (e.g. `total_checkins`/`people_fed`
-  reflect confirmed rows, not early intents). Consumers (`overview-tab.tsx`, `dashboard-section.tsx`)
-  read the same fields unchanged.
+  reflect confirmed rows, not early intents). Consumers (`overview-tab.tsx`; `dashboard-section.tsx`
+  was removed as dead code on 2026-10-08) read the same fields unchanged.
 - **F4 — concurrent anonymous + identified check-in can't both commit.** `check_in` takes a
   transaction-scoped `pg_advisory_xact_lock` on a hash of `(occurrence, member)` at entry; the loser
   re-reads and hits the once-per-member guard. Proven locally under both orderings — always exactly

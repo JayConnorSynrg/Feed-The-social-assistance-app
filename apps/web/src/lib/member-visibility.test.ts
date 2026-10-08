@@ -9,7 +9,6 @@ import {
   businessVisibility,
   organizationVisibility,
   postVisibility,
-  profileVisibility,
   resourceVisibility,
 } from './member-visibility'
 import { memberReasonText, adminNavMessages } from './i18n-admin-nav'
@@ -18,6 +17,8 @@ describe('member visibility', () => {
   it('post: visible unless hidden; a missing row is not found', () => {
     expect(postVisibility({ is_hidden: false })).toEqual({ visible: true })
     expect(postVisibility({ is_hidden: true })).toEqual({ visible: false, reason: 'hidden' })
+    // /s/post/[id] reads is_hidden=false only: a NULL is_hidden is not visible to members.
+    expect(postVisibility({ is_hidden: null })).toEqual({ visible: false, reason: 'hidden' })
     expect(postVisibility(null)).toEqual({ visible: false, reason: 'not_found' })
   })
 
@@ -37,12 +38,6 @@ describe('member visibility', () => {
     expect(resourceVisibility({ status: 'approved' })).toEqual({ visible: true })
     expect(resourceVisibility({ status: 'pending' })).toEqual({ visible: false, reason: 'not_approved' })
     expect(resourceVisibility({ status: 'rejected' })).toEqual({ visible: false, reason: 'not_approved' })
-  })
-
-  it('profile: visible only with a username', () => {
-    expect(profileVisibility({ username: 'ann' })).toEqual({ visible: true })
-    expect(profileVisibility({ username: null })).toEqual({ visible: false, reason: 'no_username' })
-    expect(profileVisibility({ username: '' })).toEqual({ visible: false, reason: 'no_username' })
   })
 })
 
