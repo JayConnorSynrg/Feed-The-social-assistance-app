@@ -148,9 +148,52 @@ Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout
 | Event | Labels | Values |
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
-| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile`; `view`: `page` |
+| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
+| `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid`; `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
 
-These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels — `org_id` / `resource_id` are object ids (not personal data) kept for path analysis: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs).
+These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels — `org_id` / `resource_id` are object ids (not personal data) kept for path analysis: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs), `nav.alias.resolve` (`panel`, `subtab` — an alias such as `events` resolved to its parent panel; the unregistered `input` label was dropped).
+
+### Member deep links (hash scheme)
+
+The member app is one page at `/`; the hash names the panel (`#feed`, `#map`, …) or an alias of a
+panel + subtab (`#events` → feed / Events, `#messages`, `#forms`, `#businesses`, `#organizations`,
+`#add-business`, … — `PANEL_ALIASES` in `components/layout/feed-shell.tsx`). A focus link adds one
+item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organization` · `business` ·
+`safety_alert` (`lib/deep-link.ts`: `parseHash`, `buildFocusHash`; admin code builds them only through
+`memberUrl` — `{ kind: 'event', id }` → `/#events?focus=event:<id>`, `{ kind: 'map_focus', focus }` →
+`/#map?focus=<kind>:<id>`).
+
+- The shell reads the hash on load and on every `hashchange` (a re-click in the reused `feed-preview`
+  tab is one), opens the panel, and hands the focus to it as `panelParams.focus` only when that panel
+  shows the kind (`FOCUS_CONSUMERS`: feed / events ← `event`; map ← `resource`, `organization`,
+  `business`, `safety_alert`). It then rewrites the URL in place to `#<panel>`, so a reload does not
+  focus again and the same link clicked again differs from the URL and fires a new `hashchange`.
+- A malformed focus, an unknown kind, or a kind the panel does not show never changes the panel: it
+  opens as `#<panel>` would and the shell writes one `nav.deeplink.resolve` row with `outcome=invalid`.
+  A `?` with no `focus` parameter is ignored (it used to send the member to Chat), and prototype keys
+  such as `#toString` resolve to Chat like any unknown panel.
+- The panel that takes the focus writes the `found` / `not_found` row and clears the focus. The Events
+  list reads itself again first (an already open list may predate the event), then scrolls the event's
+  card into view, focuses it and rings it in lime (4 s or until it loses focus; no smooth scroll or fade
+  under reduced motion); an event the list does not show gets one polite status line.
+
+"View in feed" funnel over the last 7 days (service role) — admin clicks on event links, then what
+the followed links resolved to (an `invalid` focus on the Events panel counts here; `not_found` means
+the event was not among the 50 listed when the link was followed):
+```sql
+select 'admin.nav.member_view' as step, context->>'source' as detail, count(*) as n
+from public.app_logs
+where event = 'admin.nav.member_view' and context->>'kind' = 'event'
+  and created_at > now() - interval '7 days'
+group by 1, 2
+union all
+select 'nav.deeplink.resolve', context->>'outcome', count(*)
+from public.app_logs
+where event = 'nav.deeplink.resolve' and context->>'panel' = 'events'
+  and created_at > now() - interval '7 days'
+group by 1, 2
+order by 1, 3 desc;
+```
 
 Clicks over the last 7 days (service role):
 ```sql

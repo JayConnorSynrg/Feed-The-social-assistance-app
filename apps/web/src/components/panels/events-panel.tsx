@@ -9,13 +9,21 @@
 // (its next shown date), grouped Today / This week / Later by the venue's calendar day. Each
 // card is the shared EventCard, so repeating events read "Every week on Saturday · Next: …" and a
 // cancelled date that comes first reads "Sat, Oct 10 cancelled — next: Sat, Oct 24".
+//
+// Deep link: #events?focus=event:<id> (an admin's "View in feed", lib/member-url.ts) reaches this
+// panel as panelParams.focus. Once per link the list is read fresh, the event's card is scrolled
+// into view, focused and ringed in lime (4 s or until it loses focus), one nav.deeplink.resolve row
+// records found / not_found, and the focus is cleared. An event not in the list gets a polite
+// status line and nothing else moves.
 
 import { useState, useEffect, useCallback, useRef, type Ref } from 'react'
 import { Calendar, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
-import { withMetric } from '@/lib/logger'
+import { logEvent, withMetric } from '@/lib/logger'
+import type { FocusTarget } from '@/lib/deep-link'
+import { usePanelContext } from '@/components/layout/feed-shell'
 import { dir, type Locale } from '@/lib/i18n'
 import { eventFormT } from '@/lib/i18n-event-forms'
 import { eventMemberT } from '@/lib/i18n-event-member'
@@ -60,10 +68,53 @@ export interface EventsTabViewProps {
   now?: number
   /** The viewer's zone (tests); defaults to the browser's. */
   viewerTz?: string
+  /** A deep link named an event this list does not show (polite status line). */
+  focusMiss?: boolean
+  /** The event a deep link brought into view (its card is ringed). */
+  highlightId?: string | null
+  /** The list section (the deep-link focus looks for the card inside it). */
+  listRef?: Ref<HTMLElement>
+}
+
+export type EventFocusDecision = { outcome: 'found'; eventId: string } | { outcome: 'not_found' }
+
+/** Where a deep-link focus lands in a settled list: the event's card, or nowhere (not listed, or
+ *  the list could not be read). */
+export function decideEventFocus(target: FocusTarget, state: Exclude<EventsTabState, { status: 'loading' }>): EventFocusDecision {
+  if (state.status === 'ready' && state.items.some((item) => item.eventId === target.id)) {
+    return { outcome: 'found', eventId: target.id }
+  }
+  return { outcome: 'not_found' }
+}
+
+/** A focus waiting for the list: `staleState` is the list that was on screen when it arrived
+ *  (null when a read was already running), which may predate the event. */
+export interface PendingFocus {
+  target: FocusTarget
+  staleState: EventsTabState | null
+}
+
+/** Resolve the pending focus against this state? Only once a read that started after it arrived
+ *  has settled — never against the loading state or the list it arrived on. */
+export function focusSettles(pending: PendingFocus | null, state: EventsTabState): state is Exclude<EventsTabState, { status: 'loading' }> {
+  return pending !== null && state.status !== 'loading' && state !== pending.staleState
+}
+
+/** Take the pending focus if this state settles it: returns its target and decision exactly once
+ *  (the ref is emptied), null otherwise. */
+export function takeSettledFocus(
+  pending: { current: PendingFocus | null },
+  state: EventsTabState,
+): { target: FocusTarget; decision: EventFocusDecision } | null {
+  const p = pending.current
+  if (!focusSettles(p, state) || !p) return null
+  pending.current = null
+  return { target: p.target, decision: decideEventFocus(p.target, state) }
 }
 
 /** The Events tab's rendering for one load state (pure; EventsPanel owns the loading). */
-export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz }: EventsTabViewProps) {
+export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz, focusMiss = false, highlightId = null, listRef }: EventsTabViewProps) {
+  const showMiss = focusMiss && state.status === 'ready'
   // One status region, always mounted, so every load / reload outcome is announced.
   const announcement = !announce
     ? ''
@@ -71,11 +122,13 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
       ? eventFormT(locale, 'loading')
       : state.status === 'error'
         ? eventFormT(locale, 'loadError')
-        : state.items.length === 0
-          ? eventFormT(locale, 'eventsTabEmpty')
-          : ''
+        : showMiss
+          ? eventMemberT(locale, 'focusNotListed')
+          : state.items.length === 0
+            ? eventFormT(locale, 'eventsTabEmpty')
+            : ''
   return (
-    <section lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
+    <section ref={listRef} lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
       <div className="flex items-center gap-2 pb-1">
         <Calendar className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
         <h2 id="events-tab-title" ref={titleRef} tabIndex={-1} className="text-lg font-bold text-stone-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">
@@ -86,6 +139,12 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
       <p role="status" aria-live="polite" className="sr-only" data-testid="events-tab-status">
         {announcement}
       </p>
+
+      {showMiss && (
+        <p aria-hidden="true" data-testid="events-focus-miss" className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+          {eventMemberT(locale, 'focusNotListed')}
+        </p>
+      )}
 
       {state.status === 'loading' && (
         <div aria-hidden="true" className="flex flex-col items-center justify-center h-48 gap-3">
@@ -134,6 +193,7 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
                 onCheckedIn={onCheckedIn}
                 now={now}
                 viewerTz={viewerTz}
+                highlighted={item.eventId === highlightId}
               />
             ))}
           </section>
@@ -149,6 +209,8 @@ export function EventsPanel() {
   const locale = useProfileLocale()
   const [state, setState] = useState<EventsTabState>({ status: 'loading' })
   const userId = user?.id ?? null
+  const { panelParams, setPanelParams } = usePanelContext()
+  const focus = panelParams.focus
 
   // The initial state is 'loading'; Retry and a check-in set it again before calling load().
   const load = useCallback(async () => {
@@ -219,6 +281,62 @@ export function EventsPanel() {
     })
   }, [reload])
 
+  // ---- Deep-link focus (#events?focus=event:<id>) ------------------------------------------------
+  // Keyed on the focus object itself, not on mount: the feed panel and this subtab stay mounted
+  // when a hashchange (a re-click in the reused preview tab) delivers a new focus.
+  const listRef = useRef<HTMLElement>(null)
+  const pendingFocus = useRef<PendingFocus | null>(null)
+  // The latest state for the arrival effect (synced first, in effect order, every commit).
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+  const [focusMiss, setFocusMiss] = useState(false)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  // Arrival: remember the target once, and read the list fresh when one is already on screen (it
+  // may predate the event the admin just created).
+  useEffect(() => {
+    if (!focus || focus.kind !== 'event' || pendingFocus.current?.target === focus) return
+    const current = stateRef.current
+    const settled = current.status !== 'loading'
+    pendingFocus.current = { target: focus, staleState: settled ? current : null }
+    // A link arriving from the URL (an external system) replaces the last miss line.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFocusMiss(false)
+    if (settled) {
+      setState({ status: 'loading' })
+      void load()
+    }
+  }, [focus, load])
+
+  // Resolution: once that read settles — one row, then clear the focus so it never runs again.
+  useEffect(() => {
+    const taken = takeSettledFocus(pendingFocus, state)
+    if (!taken) return
+    const { target, decision } = taken
+    logEvent('nav.deeplink.resolve', { kind: 'event', outcome: decision.outcome, panel: 'events' })
+    setPanelParams((prev) => (prev.focus === target ? { ...prev, focus: undefined } : prev))
+    if (decision.outcome === 'not_found') {
+      // The outcome of the read that just settled.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFocusMiss(true)
+      return
+    }
+    const card = listRef.current?.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(decision.eventId)}"]`)
+    if (!card) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    card.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' })
+    card.focus({ preventScroll: true })
+    setHighlightId(decision.eventId)
+    const clear = () => setHighlightId((id) => (id === decision.eventId ? null : id))
+    const timer = window.setTimeout(clear, 4000)
+    card.addEventListener('blur', () => {
+      window.clearTimeout(timer)
+      clear()
+    }, { once: true })
+  }, [state, setPanelParams])
+
   return (
     <EventsTabView
       state={state}
@@ -227,6 +345,9 @@ export function EventsPanel() {
       onCheckedIn={onCheckedIn}
       titleRef={titleRef}
       announce={announce}
+      focusMiss={focusMiss}
+      highlightId={highlightId}
+      listRef={listRef}
     />
   )
 }

@@ -106,6 +106,15 @@ to the founder. It never exposes email or ban data (those stay in the PA-only `a
   Links open in one preview tab named `feed-preview`; each click reuses it. What an admin sees there
   is what a member sees: the public business pages and showcase hide inactive businesses, and an
   organization page lists only approved linked resources.
+- **View in feed** (Events tab, both the main admin and an organization's admin page): each event row
+  links to that event in the members' Events list, opened in the `feed-preview` tab, where its card is
+  scrolled into view, focused and highlighted. The link appears exactly when members see the event
+  there now (the server rule `event_feed_next`: active event, active organization, a date that has not
+  ended, from 00:00 venue time "N days before" its date). Otherwise the row says *Appears in feed
+  <date>* (the venue's date) or why not: *Retired*, *Organization inactive*, or *No upcoming dates*.
+  After **New event** the "created" notice offers the same link or date for the new event. If the
+  event is not among the first 50 listed when the link is followed, the members' list says so and
+  nothing moves.
 - **Tabs in the URL**: the open tab is in the address (`/moderation?tab=people`,
   `/moderation/org/<id>?tab=members`), so a reload or a shared link returns to it. A tab your tier does
   not include opens your first tab instead. Switching tabs replaces the address without adding Back

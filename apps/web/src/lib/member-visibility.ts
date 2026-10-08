@@ -6,7 +6,15 @@
 // more than members (the *_admin_select policies), so an admin list cannot assume an item it shows is
 // visible to members — these answers decide whether the row offers a "View …" link or a reason.
 
-export type ReasonCode = 'hidden' | 'inactive' | 'not_approved' | 'not_found'
+import type { EventFeedReason } from './event-feed-window'
+
+export type ReasonCode =
+  | 'hidden'
+  | 'inactive'
+  | 'not_approved'
+  | 'not_found'
+  // Events (lib/event-feed-window.ts): why an event is not in the members' Events list.
+  | EventFeedReason
 
 export type MemberVisibility = { visible: true } | { visible: false; reason: ReasonCode }
 

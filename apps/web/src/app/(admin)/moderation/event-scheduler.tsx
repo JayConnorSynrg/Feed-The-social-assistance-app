@@ -15,7 +15,9 @@
 // each date under the venue's local day.
 //
 // Reads are bounded so a repeating event's ~180 generated dates never push near-term dates out:
-//   1. events, each with only its NEXT upcoming date (aliased embed, limit 1);
+//   1. events, each with only its NEXT upcoming date (aliased embed, limit 1), and — for the
+//      "View in feed" link (components/admin/event-feed-link.tsx) — its organization's is_active and
+//      its soonest date that event_feed_next would consider (a second aliased embed, limit 1);
 //   2. the dates of the visible window — the week (desktop) and the selected day (phone), one day
 //      wider on each side because the calendar files dates by the venue's day;
 //   3. past and cancelled dates, newest first, 50 at a time ("Load more").
@@ -64,6 +66,7 @@ import { DANGER, EventDialog, FOCUS_RING, PRIMARY, SECONDARY, errorText } from '
 import { restoreFocusAfterPanel } from './org-panel-focus'
 import { pickOpener } from './event-focus'
 import { ExtendSeriesButton } from './extend-series-button'
+import { EventFeedLink } from '@/components/admin/event-feed-link'
 
 interface EventOccurrence {
   id: string
@@ -98,6 +101,10 @@ interface AssistanceEvent extends DateEvent {
   announce_days_before: number
   /** Its next upcoming date (0 or 1 row). */
   next: EventOccurrence[]
+  /** Its soonest not-ended date that is upcoming or cancelled for a reason other than retired /
+   *  org_inactive — the date event_feed_next decides the event by (0 or 1 row). */
+  feed_next: EventOccurrence[]
+  org?: { name: string; is_active: boolean } | null
 }
 
 type DateRow = EventOccurrence & { event: DateEvent }
@@ -115,7 +122,7 @@ type ScheduledDate = EventOccurrence & {
 const OCCURRENCE_COLUMNS = 'id, event_id, starts_at, ends_at, status, capacity, notes, source, cancel_reason'
 const EVENT_SELECT =
   'id, title, event_type, description, location_name, org_id, time_zone, is_active, created_at, recurrence, series_start_local, series_duration, announce_days_before, ' +
-  `org:organizations(name), next:event_occurrences(${OCCURRENCE_COLUMNS})`
+  `org:organizations(name, is_active), next:event_occurrences(${OCCURRENCE_COLUMNS}), feed_next:event_occurrences(${OCCURRENCE_COLUMNS})`
 const DATE_SELECT =
   `${OCCURRENCE_COLUMNS}, event:assistance_events!inner(id, title, event_type, org_id, time_zone, recurrence, series_start_local, org:organizations(name))`
 /** Newest events first. */
@@ -130,17 +137,26 @@ export type SchedulerScope = { kind: 'org'; orgId: string } | { kind: 'orgs'; or
 
 type Client = SupabaseClient<Database>
 
-/** Events, each with ONLY its next upcoming (not ended) date. */
+/** event_feed_next's status clause: upcoming, or cancelled for a reason other than retired /
+ *  org_inactive (`IS DISTINCT FROM`, so a NULL reason counts). */
+export const FEED_NEXT_STATUS =
+  'status.eq.upcoming,and(status.eq.cancelled,or(cancel_reason.is.null,cancel_reason.not.in.(retired,org_inactive)))'
+
+/** Events, each with ONLY its next upcoming (not ended) date, and its soonest feed-eligible date. */
 export function eventListQuery(supabase: Client, scope: SchedulerScope, nowIso: string) {
   const base = supabase.from('assistance_events').select(EVENT_SELECT)
   const scoped = scope.kind === 'org' ? base.eq('org_id', scope.orgId) : base.in('org_id', scope.orgIds)
   return scoped
     .eq('next.status', 'upcoming')
     .gte('next.ends_at', nowIso)
+    .or(FEED_NEXT_STATUS, { referencedTable: 'feed_next' })
+    .gte('feed_next.ends_at', nowIso)
     .order('created_at', { ascending: false })
     .order('starts_at', { referencedTable: 'next', ascending: true })
+    .order('starts_at', { referencedTable: 'feed_next', ascending: true })
     .limit(EVENT_LIST_LIMIT)
     .limit(1, { referencedTable: 'next' })
+    .limit(1, { referencedTable: 'feed_next' })
 }
 
 /** Every date (any status) starting in [fromIso, toIso), oldest first. */
@@ -295,13 +311,15 @@ const LINK_BTN =
 
 interface Props {
   selectedOrgId: string
+  /** The admin surface (the `source` of admin.nav.member_view on "View in feed"). */
+  source?: 'event_scheduler' | 'org_admin_events'
 }
 
 function dayLabel(day: Date, locale: Locale, opts: Intl.DateTimeFormatOptions): string {
   return dateTimeFormat(locale, browserTimeZone(), opts).format(day)
 }
 
-export function EventScheduler({ selectedOrgId }: Props) {
+export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const locale = useProfileLocale()
   const scoped = selectedOrgId !== 'all'
@@ -324,7 +342,14 @@ export function EventScheduler({ selectedOrgId }: Props) {
   const [reload, setReload] = useState(0)
   // "Now" for ended / cancellable decisions, taken when the list was (re)loaded.
   const [loadedAt, setLoadedAt] = useState(() => Date.now())
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNoticeText] = useState<string | null>(null)
+  // The event a "created" notice is about: the notice then also offers "View in feed" (or when it
+  // will appear). Any other notice replaces it.
+  const [noticeEventId, setNoticeEventId] = useState<string | null>(null)
+  const setNotice = (text: string | null) => {
+    setNoticeText(text)
+    setNoticeEventId(null)
+  }
 
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: WEEK_START }))
   const [selectedDay, setSelectedDay] = useState<Date>(() => new Date())
@@ -473,6 +498,8 @@ export function EventScheduler({ selectedOrgId }: Props) {
   // Attendance); a cancelled date of a series stays as a "Cancelled" chip so the gap in the
   // pattern is explained.
   const calendarDates = windowDates.filter((o) => o.status !== 'cancelled' || o.event.recurrence != null)
+  // The created event, once the refreshed list has it.
+  const noticeEvent = noticeEventId ? events.find((e) => e.id === noticeEventId) ?? null : null
   const pastAndCancelled = pastDates
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
@@ -608,6 +635,12 @@ export function EventScheduler({ selectedOrgId }: Props) {
 
       <p role="status" className="text-sm text-lime-800">
         {notice}
+        {notice && noticeEvent && (
+          <>
+            {' '}
+            <EventFeedLink event={noticeEvent} now={loadedAt} locale={locale} source={source} />
+          </>
+        )}
       </p>
 
       {/* Week view (md+) */}
@@ -794,6 +827,7 @@ export function EventScheduler({ selectedOrgId }: Props) {
                     )}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <EventFeedLink event={event} now={loadedAt} locale={locale} source={source} />
                     {canExtendSeries(event) && (
                       <ExtendSeriesButton
                         eventId={event.id}
@@ -928,8 +962,9 @@ export function EventScheduler({ selectedOrgId }: Props) {
           orgChoice={orgChoice}
           initialDate={createState.date}
           onCloseAutoFocus={restoreFocus}
-          onCreated={(_id, title) => {
+          onCreated={(id, title) => {
             setNotice(formatMessage(eventFormT(locale, 'createdNotice'), { title }))
+            setNoticeEventId(id)
             refresh()
           }}
         />
