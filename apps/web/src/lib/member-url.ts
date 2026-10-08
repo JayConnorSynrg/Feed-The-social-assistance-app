@@ -9,6 +9,7 @@
 // type-check until the new kind has a URL.
 
 import { assertNever } from '@/components/feed/post-model'
+import { buildFocusHash, type FocusTarget } from './deep-link'
 
 export type MemberTarget =
   | { kind: 'feed_home' }
@@ -16,6 +17,10 @@ export type MemberTarget =
   | { kind: 'organization'; id: string }
   | { kind: 'business'; id: string }
   | { kind: 'resource'; id: string }
+  /** One event, highlighted in the members' Events list (the `events` alias of the feed panel). */
+  | { kind: 'event'; id: string }
+  /** One item brought into view on the members' map. */
+  | { kind: 'map_focus'; focus: FocusTarget }
 
 /** A target that names one item (everything except the feed home). */
 export type MemberItemTarget = Exclude<MemberTarget, { kind: 'feed_home' }>
@@ -35,6 +40,12 @@ export function memberUrl(target: MemberTarget): string {
       return `/s/business/${encodeURIComponent(target.id)}`
     case 'resource':
       return `/s/resource/${encodeURIComponent(target.id)}`
+    case 'event':
+      // A hash deep link into the single-page shell (lib/deep-link.ts); the shell strips the focus
+      // part once the Events list has it, so a reload does not focus again.
+      return '/' + buildFocusHash('events', { kind: 'event', id: target.id })
+    case 'map_focus':
+      return '/' + buildFocusHash('map', target.focus)
     default:
       return assertNever(target)
   }

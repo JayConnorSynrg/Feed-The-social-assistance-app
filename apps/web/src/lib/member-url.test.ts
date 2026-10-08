@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { memberUrl } from './member-url'
+import { parseHash } from './deep-link'
 
 const ID = '11111111-1111-4111-8111-111111111111'
 const SRC = fileURLToPath(new URL('..', import.meta.url))
@@ -23,6 +24,14 @@ describe('memberUrl — each kind maps to its member route', () => {
     expect(memberUrl({ kind: 'organization', id: ID })).toBe(`/s/organization/${ID}`)
     expect(memberUrl({ kind: 'business', id: ID })).toBe(`/s/business/${ID}`)
     expect(memberUrl({ kind: 'resource', id: ID })).toBe(`/s/resource/${ID}`)
+  })
+  it('an event opens the members\' Events list focused on it (a shell hash, parsed back by the shell)', () => {
+    expect(memberUrl({ kind: 'event', id: ID })).toBe(`/#events?focus=event:${ID}`)
+    expect(parseHash(memberUrl({ kind: 'event', id: ID }).slice(1))).toEqual({ panelKey: 'events', focus: { kind: 'event', id: ID } })
+  })
+  it('a map focus opens the map panel focused on the item', () => {
+    expect(memberUrl({ kind: 'map_focus', focus: { kind: 'resource', id: ID } })).toBe(`/#map?focus=resource:${ID}`)
+    expect(memberUrl({ kind: 'map_focus', focus: { kind: 'safety_alert', id: ID } })).toBe(`/#map?focus=safety_alert:${ID}`)
   })
   it('a business never routes to /s/organization', () => {
     expect(memberUrl({ kind: 'business', id: ID })).not.toContain('/s/organization/')

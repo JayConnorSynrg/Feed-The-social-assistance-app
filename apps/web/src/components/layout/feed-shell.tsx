@@ -32,7 +32,8 @@ import {
   Calendar,
   ShieldAlert,
 } from 'lucide-react'
-import { logger } from '@/lib/logger'
+import { logEvent, logger } from '@/lib/logger'
+import { parseHash, type FocusKind, type FocusTarget } from '@/lib/deep-link'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 
 // ============================================
@@ -56,6 +57,13 @@ export type UserFocus =
 
 type PanelType = 'chat' | 'map' | 'programs' | 'feed' | 'applications' | 'documents' | 'forms' | 'settings' | 'overview' | 'messages' | 'wizard' | 'petitions' | 'events' | 'businesses' | 'organizations'
 
+/**
+ * Cross-panel parameters. `focus` is a member deep-link target (`#<panel>?focus=<kind>:<uuid>`,
+ * lib/deep-link.ts): the shell sets it once per followed link, and the panel that shows that kind
+ * brings the item into view, logs nav.deeplink.resolve, and clears it.
+ */
+export type PanelParams = Record<string, unknown> & { focus?: FocusTarget }
+
 interface ShellContextType {
   activePanel: PanelType
   setActivePanel: (panel: PanelType) => void
@@ -63,8 +71,8 @@ interface ShellContextType {
   setUserRole: (role: UserRole) => void
   userFocus: UserFocus[]
   setUserFocus: (focus: UserFocus[]) => void
-  panelParams: Record<string, unknown>
-  setPanelParams: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+  panelParams: PanelParams
+  setPanelParams: React.Dispatch<React.SetStateAction<PanelParams>>
 }
 
 const ShellContext = createContext<ShellContextType>({
@@ -525,24 +533,66 @@ interface FeedShellProps {
 // Valid panel names for URL hash routing (aliases included for deep-link init)
 const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
 
-// Resolve a hash value to a panel + optional subtab (+ optional deep-link params).
-// Alias hashes (#forms, #messages, #businesses, #organizations, #add-business) map to their parent
-// panel + subtab, and may carry params (e.g. add-business opens the submit form).
-function resolveHashToPanel(hash: string): { panel: PanelType; subtab?: string; params?: Record<string, unknown> } {
-  if (hash in PANEL_ALIASES) {
-    return PANEL_ALIASES[hash]
+// Resolve a panel key (the hash before any `?`) to a panel + optional subtab (+ optional deep-link
+// params). Alias keys (forms, messages, events, businesses, organizations, add-business) map to
+// their parent panel + subtab, and may carry params (e.g. add-business opens the submit form).
+// Object.hasOwn, not `in`: `in` also matches inherited keys, so #toString resolved to a function.
+function resolveHashToPanel(panelKey: string): { panel: PanelType; subtab?: string; params?: Record<string, unknown> } {
+  if (Object.hasOwn(PANEL_ALIASES, panelKey)) {
+    return PANEL_ALIASES[panelKey]
   }
-  if (hash && VALID_PANELS.includes(hash as PanelType)) {
-    return { panel: hash as PanelType }
+  if (panelKey && VALID_PANELS.includes(panelKey as PanelType)) {
+    return { panel: panelKey as PanelType }
   }
   return { panel: 'chat' }
 }
 
-// Get panel from URL hash (e.g., #chat -> 'chat')
-function getPanelFromHash(): PanelType {
-  if (typeof window === 'undefined') return 'chat'
-  const hash = window.location.hash.slice(1)
-  return resolveHashToPanel(hash).panel
+/** Which focus kinds each panel (+ subtab) brings into view. A focus that lands anywhere else is
+ *  ignored and logged as invalid, so every followed link writes one nav.deeplink.resolve row. */
+export const FOCUS_CONSUMERS: ReadonlyArray<{ panel: PanelType; subtab?: string; kinds: readonly FocusKind[] }> = [
+  { panel: 'feed', subtab: 'events', kinds: ['event'] },
+  { panel: 'map', kinds: ['resource', 'organization', 'business', 'safety_alert'] },
+]
+
+export interface HashLocation {
+  panel: PanelType
+  subtab?: string
+  params?: Record<string, unknown>
+  /** The panel key before any `?` (what the URL is rewritten to once a focus is taken). */
+  panelKey: string
+  /** A focus the resolved panel shows — hand it to the panel. */
+  focus?: FocusTarget
+  /** The hash named a focus (valid or not) — strip it from the URL so a reload does not repeat it. */
+  hadFocusParam: boolean
+  /** The focus is malformed, of an unknown kind, or of a kind this panel does not show:
+   *  the label set for its one nav.deeplink.resolve row. */
+  invalid?: { kind: FocusKind | 'unknown' }
+}
+
+/** Pure: the shell's reading of a location hash (panel, subtab, alias params, focus). */
+export function resolveHashLocation(hash: string): HashLocation {
+  const { panelKey, focus, focusInvalid } = parseHash(hash)
+  const resolved = resolveHashToPanel(panelKey)
+  const base = { ...resolved, panelKey, hadFocusParam: Boolean(focus || focusInvalid) }
+  if (focusInvalid) return { ...base, invalid: { kind: 'unknown' } }
+  if (!focus) return base
+  const shown = FOCUS_CONSUMERS.some(
+    (c) => c.panel === resolved.panel && c.subtab === resolved.subtab && c.kinds.includes(focus.kind)
+  )
+  return shown ? { ...base, focus } : { ...base, invalid: { kind: focus.kind } }
+}
+
+/** Side effects of reading a focus hash: drop the query from the URL (in place — a reload then
+ *  opens the panel without focusing again, and a re-click of the same link differs from the
+ *  current URL, so it fires a hashchange again) and log an ignored focus once. */
+export function settleFocusHash(loc: HashLocation) {
+  if (!loc.hadFocusParam) return
+  window.history.replaceState(window.history.state, '', `#${loc.panelKey}`)
+  if (loc.invalid) {
+    // panel label: the subtab when there is one (events), else the panel — a closed set, never
+    // the raw hash text.
+    logEvent('nav.deeplink.resolve', { kind: loc.invalid.kind, outcome: 'invalid', panel: loc.subtab ?? loc.panel })
+  }
 }
 
 export function FeedShell({
@@ -557,19 +607,17 @@ export function FeedShell({
 }: FeedShellProps) {
   const [userRole, setUserRole] = useState<UserRole>(initialRole)
   const [userFocus, setUserFocus] = useState<UserFocus[]>(initialFocus)
-  const [panelParams, setPanelParams] = useState<Record<string, unknown>>({})
+  const [panelParams, setPanelParams] = useState<PanelParams>({})
 
   // Initialize panel from URL hash (client-side only)
   const [activePanel, setActivePanelState] = useState<PanelType>('chat')
-  const [isInitialized, setIsInitialized] = useState(false)
 
   // Initialize from hash on mount — resolve aliases so #forms boots into
   // documents panel with subtab='forms'. Reads window.location (browser API,
   // unavailable during SSR), so setState in effect is the correct idiom here.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const hash = window.location.hash.slice(1)
-    const resolved = resolveHashToPanel(hash)
+    const resolved = resolveHashLocation(window.location.hash)
     // Initializing panel state from window.location.hash — browser API only
     // available after mount, so setState in effect is the correct idiom here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -578,9 +626,15 @@ export function FeedShell({
     // resolves one (alias hashes), clear it otherwise so a direct #feed load
     // shows the base feed rather than a stale subtab. Deep-link params (e.g.
     // #add-business → businessSubmit) are merged through so the target subtab
-    // can open in the requested state.
-    setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab, ...(resolved.params ?? {}) }))
-    setIsInitialized(true)
+    // can open in the requested state. A focus target (#events?focus=event:<id>) is merged only
+    // when present, so a second run of this effect (the hash is already stripped) keeps it.
+    setPanelParams((prev) => ({
+      ...prev,
+      subtab: resolved.subtab,
+      ...(resolved.params ?? {}),
+      ...(resolved.focus ? { focus: resolved.focus } : {}),
+    }))
+    settleFocusHash(resolved)
   }, [])
 
   // Alias-aware setActivePanel.
@@ -589,9 +643,9 @@ export function FeedShell({
   //   pre-set openConversationId (or other params) are not overwritten.
   // - For non-alias panels, sets activePanel directly and pushes hash.
   const setActivePanel = useCallback((panel: PanelType) => {
-    if (panel in PANEL_ALIASES) {
+    if (Object.hasOwn(PANEL_ALIASES, panel)) {
       const { panel: parent, subtab, params } = PANEL_ALIASES[panel]
-      logger.info('nav.alias.resolve', { input: panel, panel: parent, subtab })
+      logEvent('nav.alias.resolve', { panel: parent, subtab })
       setActivePanelState(parent)
       // Functional update merges — preserves any existing params (e.g. openConversationId)
       // and layers this alias's deep-link params (e.g. add-business → businessSubmit).
@@ -608,8 +662,9 @@ export function FeedShell({
       // return to e.g. 'feed' after visiting the events/petitions subtabs lands
       // on the base view instead of re-deriving the old subtab. Also clear the
       // add-business deep-link flag so it can't re-open the submit form on a
-      // later return. Other params (openConversationId, formsTarget, …) are preserved.
-      setPanelParams((prev) => ({ ...prev, subtab: undefined, businessSubmit: undefined }))
+      // later return, and any unconsumed deep-link focus. Other params (openConversationId,
+      // formsTarget, …) are preserved.
+      setPanelParams((prev) => ({ ...prev, subtab: undefined, businessSubmit: undefined, focus: undefined }))
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -623,8 +678,7 @@ export function FeedShell({
   // Alias hashes resolve to parent panel + subtab.
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.slice(1)
-      const resolved = resolveHashToPanel(hash)
+      const resolved = resolveHashLocation(window.location.hash)
       setActivePanelState(resolved.panel)
       // Mirror the init/setActivePanel paths: subtab tracks the resolved hash and
       // is cleared when the hash carries none, so browser back/forward to #feed
@@ -632,8 +686,17 @@ export function FeedShell({
       // Clear the add-business deep-link flag first (mirrors the setActivePanel
       // base branch) so a Back to a base hash cannot leave businessSubmit=true to
       // auto-open the form on a later Businesses-tab visit; the resolved params
-      // spread comes AFTER, so #add-business still wins and opens the form.
-      setPanelParams((prev) => ({ ...prev, subtab: resolved.subtab, businessSubmit: undefined, ...(resolved.params ?? {}) }))
+      // spread comes AFTER, so #add-business still wins and opens the form. focus tracks the hash
+      // the same way: a focus link (a re-click in the reused preview tab included) sets it, any
+      // other hash clears a focus no panel has taken yet.
+      setPanelParams((prev) => ({
+        ...prev,
+        subtab: resolved.subtab,
+        businessSubmit: undefined,
+        ...(resolved.params ?? {}),
+        focus: resolved.focus,
+      }))
+      settleFocusHash(resolved)
     }
 
     window.addEventListener('hashchange', handleHashChange)

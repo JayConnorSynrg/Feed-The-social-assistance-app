@@ -299,6 +299,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'messages.send.error': ['content_length'],
   'my_badges_fetch_failed': [],
   'nav.alias.resolve': ['panel', 'subtab'],
+  'nav.deeplink.resolve': ['kind', 'outcome', 'panel'],
   'nav.subtab.switch': ['panel', 'subtab'],
   'notif.pref.changed': ['application_updates', 'community_posts', 'resource_alerts'],
   'notif.pref.read_failed': [],
