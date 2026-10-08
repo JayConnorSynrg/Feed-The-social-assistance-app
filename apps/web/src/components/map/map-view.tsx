@@ -4,6 +4,7 @@ import { useRef, useCallback, useState, useEffect, useImperativeHandle, forwardR
 import Map, { NavigationControl, GeolocateControl, MapRef, ViewStateChangeEvent } from 'react-map-gl/mapbox'
 import { Loader2 } from 'lucide-react'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { motionDuration, readPrefersReducedMotion } from '@/lib/accessibility-prefs'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
@@ -69,7 +70,9 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         mapRef.current?.flyTo({
           center: opts.center,
           zoom: opts.zoom,
-          duration: opts.duration ?? 1000,
+          // Mapbox honours the OS reduced-motion setting but not FEED's own (data-motion="reduce"),
+          // so every caller's flight is made instant here when either asks for less motion.
+          duration: motionDuration(opts.duration ?? 1000, readPrefersReducedMotion()),
         })
         return
       }

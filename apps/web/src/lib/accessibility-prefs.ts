@@ -139,3 +139,22 @@ export function syncA11yFromStorage(): void {
  * layout.tsx with the per-request CSP nonce.
  */
 export const A11Y_PREPAINT_SCRIPT = `(function(){try{var k=${JSON.stringify(PRIVACY_PREFS_KEY)};var r=document.documentElement;var s=localStorage.getItem(k);var a=s?(JSON.parse(s)||{}).accessibility:null;a=a&&typeof a==='object'?a:{};if(a.highContrast===true)r.setAttribute('data-contrast','more');else r.removeAttribute('data-contrast');if(a.largeText===true)r.setAttribute('data-text-size','large');else r.removeAttribute('data-text-size');if(a.reduceMotion===true)r.setAttribute('data-motion','reduce');else r.removeAttribute('data-motion');}catch(e){}})();`
+
+/** Reduced motion: FEED's own setting (<html data-motion="reduce">, applyA11yAttributes) or the
+ *  operating system's. */
+export function prefersReducedMotion(dataMotion: string | undefined, osReduce: boolean): boolean {
+  return dataMotion === 'reduce' || osReduce
+}
+
+/** The live answer for script-driven motion (Mapbox camera flights, scrollIntoView): the CSS
+ *  attribute alone only reaches stylesheets. false outside a browser. */
+export function readPrefersReducedMotion(): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return false
+  const os = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return prefersReducedMotion(document.documentElement.dataset.motion, os)
+}
+
+/** An animation's duration under the motion preference: instant (0) when motion is reduced. */
+export function motionDuration(requestedMs: number, reduce: boolean): number {
+  return reduce ? 0 : requestedMs
+}

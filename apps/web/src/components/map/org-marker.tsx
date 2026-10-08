@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import type { MappableOrg } from '@/hooks/use-viewport-organizations'
 import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
-import { useFocusedPopup } from './use-focused-popup'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, useMarkerPopup } from './marker-popup'
 
 interface OrgMarkerProps {
   organization: MappableOrg
@@ -31,7 +31,7 @@ function orgTypeLabel(orgType: string): string {
 
 export function OrgMarker({ organization, focused }: OrgMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
-  const [showPopup, setShowPopup] = useFocusedPopup(focused)
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup } = useMarkerPopup(focused)
 
   const handleClick = useCallback((e: { originalEvent: MouseEvent }) => {
     e.originalEvent.stopPropagation()
@@ -43,17 +43,21 @@ export function OrgMarker({ organization, focused }: OrgMarkerProps) {
   return (
     <>
       <Marker longitude={organization.lng} latitude={organization.lat} anchor="bottom" onClick={handleClick}>
-        <div
-          className="cursor-pointer transition-transform hover:scale-110"
+        <button
+          type="button"
+          ref={triggerRef}
+          className={`block cursor-pointer rounded-full transition-transform hover:scale-110 ${MARKER_BUTTON_FOCUS}`}
           aria-label={`Organization: ${organization.name}`}
+          aria-haspopup="dialog"
+          aria-expanded={showPopup}
         >
-          <div
+          <span
             className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-white shadow-md"
             style={{ backgroundColor: ORG_MARKER_HEX }}
           >
-            <Building2 className="h-4 w-4" />
-          </div>
-        </div>
+            <Building2 className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </button>
       </Marker>
 
       {showPopup && (
@@ -61,12 +65,14 @@ export function OrgMarker({ organization, focused }: OrgMarkerProps) {
           longitude={organization.lng}
           latitude={organization.lat}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
+          onClose={closePopup}
+          focusAfterOpen={false}
           closeButton={true}
           closeOnClick={false}
           offset={28}
           maxWidth="320px"
         >
+          <MarkerPopupDialog titleId={titleId} onClose={closePopup}>
           <Card className="border-0 shadow-none">
             <CardHeader className="pb-2 pt-0 px-0">
               <div
@@ -75,7 +81,7 @@ export function OrgMarker({ organization, focused }: OrgMarkerProps) {
               >
                 {orgTypeLabel(organization.org_type)}
               </div>
-              <CardTitle className="text-base">{organization.name}</CardTitle>
+              <CardTitle id={titleId} className="text-base">{organization.name}</CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 space-y-2">
               {organization.description && (
@@ -96,6 +102,7 @@ export function OrgMarker({ organization, focused }: OrgMarkerProps) {
               </a>
             </CardContent>
           </Card>
+          </MarkerPopupDialog>
         </Popup>
       )}
     </>
