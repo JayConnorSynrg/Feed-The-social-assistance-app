@@ -198,6 +198,19 @@ describe('createLatestOnlyLoader — a slow answer for an older viewport never w
     expect(hx.errors).toEqual([])
   })
 
+  it('the newest read failing still ends loading (an older answer arriving late changes nothing)', async () => {
+    const hx = harness()
+    const first = hx.load(1)
+    const second = hx.load(2)
+    hx.pending[1].reject(new Error('timeout'))
+    await second
+    hx.pending[0].resolve('older viewport')
+    await first
+    expect(hx.errors).toHaveLength(1)
+    expect(hx.results).toEqual([])
+    expect(hx.loading).toEqual([true, true, false])
+  })
+
   it('a single read applies its result', async () => {
     const hx = harness()
     const only = hx.load(1)
