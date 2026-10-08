@@ -160,7 +160,9 @@ export async function fetchOrganizationById(
  * Read the catalog resources linked to an org, ordered by the curator-set sort_order (INV-H). RLS
  * (org_resources_public_select + resources' own public select) admits only visible rows, so a
  * logged-out visitor sees exactly the org's linked, publicly-visible resources. A null embed (a linked
- * resource RLS hides) is dropped so the list never carries a dangling entry.
+ * resource RLS hides) is dropped so the list never carries a dangling entry. A non-approved embed is
+ * dropped too: resources_admin_select lets an admin read pending/rejected resources, and the public
+ * page must show an admin exactly what members see (status='approved', like /s/resource/[id]).
  */
 export async function fetchOrgResources(
   supabase: SupabaseClient<Database>,
@@ -177,7 +179,7 @@ export async function fetchOrgResources(
     if (error) throw new OrgReadError(error.message)
     const rows = ((data ?? []) as Array<{ resource: OrgLinkedResource | null }>)
       .map((r) => r.resource)
-      .filter((r): r is OrgLinkedResource => r != null)
+      .filter((r): r is OrgLinkedResource => r != null && r.status === 'approved')
     attrs.result_count = rows.length
     return rows
   })

@@ -105,12 +105,11 @@ test('(a) embed route renders widget with slot count and opt-in link', async ({ 
   await expect(slotCount).toBeVisible({ timeout: 5_000 })
   await expect(slotCount).toContainText(/1 of 2/)
 
-  // Opt-in button present and href points to the FEED app root with post param
+  // Opt-in button present and href points to the post's public page
   const optInBtn = page.locator('[data-testid="embed-opt-in-btn"]')
   await expect(optInBtn).toBeVisible({ timeout: 5_000 })
   const href = await optInBtn.getAttribute('href')
-  expect(href).toMatch(/\?post=/)
-  expect(href).toContain(postId)
+  expect(href).toMatch(new RegExp(`/s/post/${postId}$`))
 
   // target="_top" so it escapes the iframe
   const target = await optInBtn.getAttribute('target')

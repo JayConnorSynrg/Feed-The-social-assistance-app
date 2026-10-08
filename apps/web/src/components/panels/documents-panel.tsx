@@ -62,7 +62,7 @@ import type { AutofillValues } from '@/lib/form-field-mapper'
 import { FormsPanel } from './forms-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { VaultUnlockModal } from '@/components/vault'
-import { logger, withMetric } from '@/lib/logger'
+import { logEvent, logger, withMetric } from '@/lib/logger'
 
 // ============================================
 // TYPES
@@ -964,7 +964,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   // sidebar/deep-link alias switching (setActivePanel → effect → viewMode); its
   // viewMode !== tab guard makes it a no-op when we already set viewMode here.
   const handleTabSwitch = useCallback((tab: 'documents' | 'applications' | 'resources') => {
-    logger.info('nav.subtab.switch', { panel: 'documents', subtab: tab })
+    logEvent('nav.subtab.switch', { panel: 'documents', subtab: tab })
     setViewMode(tab)
     setPanelParams((prev) => ({ ...prev, subtab: tab }))
     if (typeof window !== 'undefined') {

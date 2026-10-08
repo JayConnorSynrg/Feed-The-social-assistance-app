@@ -7,8 +7,8 @@
 // inactive). "Create organization" (top right, and in the empty state) and each row's Edit open the
 // setup panel, which the admin shell owns (it also serves the Overview quick action and deep
 // links). Each row's menu offers Deactivate / Reactivate (confirmed, truthful optimistic toggle
-// via admin_set_org_active, reverted on failure), Open admin and View public page (active orgs
-// only). Each row's name links to that organization's admin page (/moderation/org/<id>). The
+// via admin_set_org_active, reverted on failure), Open admin and View public page (active orgs; an
+// inactive org shows why members cannot see it instead). Each row's name links to that organization's admin page (/moderation/org/<id>). The
 // membership roster stays available as a row expansion; OrgMembers is also the Members tab of the
 // organization admin page, read-only there for organization admins.
 
@@ -30,6 +30,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { dir, type Locale } from '@/lib/i18n'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { memberReasonText } from '@/lib/i18n-admin-nav'
+import { organizationVisibility } from '@/lib/member-visibility'
 import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
@@ -63,6 +66,10 @@ const PRIMARY =
 const SECONDARY =
   'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 disabled:opacity-60 ' +
   FOCUS_RING
+// The reason a "View public page" link is absent: a menu line arrow keys reach (so screen readers read
+// it), announced as unavailable (aria-disabled), that does nothing when chosen.
+const MENU_REASON =
+  'flex min-h-9 select-none items-center rounded-md px-3 text-sm text-stone-600 outline-none data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 const MENU_ITEM =
   'flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-3 text-sm text-stone-800 outline-none data-[highlighted]:bg-stone-100 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 
@@ -253,7 +260,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                             sideOffset={4}
                             className="z-50 min-w-[12rem] rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
                           >
-                            <OrgRowMenuItems org={org} tr={tr} onToggle={() => setConfirm({ org, next: !org.is_active })} />
+                            <OrgRowMenuItems org={org} tr={tr} locale={locale} onToggle={() => setConfirm({ org, next: !org.is_active })} />
                           </Menu.Content>
                         </Menu.Portal>
                       </Menu.Root>
@@ -335,12 +342,15 @@ export function OrgNameLink({
 export function OrgRowMenuItems({
   org,
   tr,
+  locale,
   onToggle,
 }: {
-  org: Pick<AdminOrgListRow, 'id' | 'is_active'>
+  org: Pick<AdminOrgListRow, 'id' | 'name' | 'is_active'>
   tr: (key: keyof OrgFormMessages) => string
+  locale: Locale
   onToggle: () => void
 }) {
+  const visibility = organizationVisibility(org)
   return (
     <>
       <Menu.Item className={MENU_ITEM} onSelect={onToggle}>
@@ -352,13 +362,25 @@ export function OrgRowMenuItems({
           {tr('actionOpenAdmin')}
         </Link>
       </Menu.Item>
-      {org.is_active && (
+      {visibility.visible ? (
         <Menu.Item className={MENU_ITEM} asChild>
-          <a href={`/s/organization/${org.id}`} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            {tr('actionViewPublic')}
-            <span className="sr-only">{` ${tr('opensNewTab')}`}</span>
-          </a>
+          <MemberViewLink
+            locale={locale}
+            to={{ kind: 'organization', id: org.id }}
+            visibility={visibility}
+            label={tr('actionViewPublic')}
+            itemName={org.name}
+            source="orgs_section"
+            icon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
+            className={MENU_ITEM}
+          />
+        </Menu.Item>
+      ) : (
+        // Where the link would be: why members cannot open this org's public page. Not `disabled` —
+        // Radix skips disabled items with the arrow keys. aria-disabled survives because Radix spreads
+        // the item's own props after its defaults (@radix-ui/react-menu 2.1.18 MenuItemImpl).
+        <Menu.Item className={MENU_REASON} aria-disabled="true" onSelect={(e) => e.preventDefault()}>
+          {memberReasonText(locale, visibility.reason)}
         </Menu.Item>
       )}
     </>

@@ -40,7 +40,8 @@ import { BusinessesPanel } from './businesses-panel'
 import { OrganizationsPanel } from './organizations-panel'
 import { PetitionsPanel } from './petitions-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
-import { logger, withMetric } from '@/lib/logger'
+import { logEvent, logger, withMetric } from '@/lib/logger'
+import { generateShareUrl } from '@/lib/utils/url'
 import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
@@ -1488,7 +1489,7 @@ export function FeedPanel() {
   // Tab switch handler: drives via setActivePanel alias path so hash + state
   // stay in sync through one code path. replaceState — no back-button spam.
   const handleSubtabSwitch = useCallback((tab: FeedSubtab) => {
-    logger.info('nav.subtab.switch', { panel: 'feed', subtab: tab })
+    logEvent('nav.subtab.switch', { panel: 'feed', subtab: tab })
     if (tab === 'messages') {
       setActivePanel('messages')
     } else if (tab === 'events') {
@@ -2398,7 +2399,7 @@ export function FeedPanel() {
   }
 
   const handleShare = (postId: string) => {
-    const url = `${window.location.origin}/post/${postId}`
+    const url = generateShareUrl('post', postId)
     if (navigator.share) {
       navigator.share({ title: 'FEED Community Post', url }).catch((err: unknown) => {
         // AbortError = user cancelled — swallow silently

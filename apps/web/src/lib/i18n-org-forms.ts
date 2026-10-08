@@ -218,7 +218,6 @@ export interface OrgFormMessages {
   locPlaceCenter: string
   resNotApproved: string
   resErrNotApproved: string
-  opensNewTab: string
   hoursIntervalName: string
   actionMembersNamed: string
   // Re-review round
@@ -440,7 +439,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Place pin at map center',
     resNotApproved: 'No longer approved',
     resErrNotApproved: 'Remove linked resources that are no longer approved before saving.',
-    opensNewTab: '(opens in a new tab)',
     hoursIntervalName: '{day}, hours {n}',
     actionMembersNamed: 'Members of {name}',
     // Re-review round
@@ -662,7 +660,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Poner marcador en el centro del mapa',
     resNotApproved: 'Ya no está aprobado',
     resErrNotApproved: 'Quite los recursos vinculados que ya no están aprobados antes de guardar.',
-    opensNewTab: '(se abre en una pestaña nueva)',
     hoursIntervalName: '{day}, horario {n}',
     actionMembersNamed: 'Miembros de {name}',
     // Re-review round
@@ -884,7 +881,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Mete epeng lan nan mitan kat la',
     resNotApproved: 'Pa apwouve ankò',
     resErrNotApproved: 'Retire resous ki konekte ki pa apwouve ankò yo anvan ou anrejistre.',
-    opensNewTab: '(ap louvri nan yon nouvo onglè)',
     hoursIntervalName: '{day}, lè {n}',
     actionMembersNamed: 'Manm {name}',
     // Re-review round
@@ -1106,7 +1102,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Đặt ghim ở giữa bản đồ',
     resNotApproved: 'Không còn được phê duyệt',
     resErrNotApproved: 'Hãy bỏ các tài nguyên đã liên kết không còn được phê duyệt trước khi lưu.',
-    opensNewTab: '(mở trong thẻ mới)',
     hoursIntervalName: '{day}, khung giờ {n}',
     actionMembersNamed: 'Thành viên của {name}',
     // Re-review round
@@ -1328,7 +1323,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'ضع الدبوس في وسط الخريطة',
     resNotApproved: 'لم يعد معتمدًا',
     resErrNotApproved: 'أزل الموارد المرتبطة التي لم تعد معتمدة قبل الحفظ.',
-    opensNewTab: '(يُفتح في علامة تبويب جديدة)',
     hoursIntervalName: '{day}، فترة الساعات {n}',
     actionMembersNamed: 'أعضاء {name}',
     // Re-review round
@@ -1550,7 +1544,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: '在地图中心放置图钉',
     resNotApproved: '已不再获批',
     resErrNotApproved: '保存前请移除已不再获批的关联资源。',
-    opensNewTab: '（在新标签页中打开）',
     hoursIntervalName: '{day}，时段 {n}',
     actionMembersNamed: '{name} 的成员',
     // Re-review round
@@ -1772,7 +1765,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Dhig biinka bartamaha khariidadda',
     resNotApproved: 'Hadda lama ansixin',
     resErrNotApproved: 'Ka saar kheyraadka la xiriiriyay ee hadda aan la ansixin ka hor intaadan kaydin.',
-    opensNewTab: '(waxay ka furmaysaa tab cusub)',
     hoursIntervalName: '{day}, saacadaha {n}',
     actionMembersNamed: 'Xubnaha {name}',
     // Re-review round
@@ -1994,7 +1986,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Placer l’épingle au centre de la carte',
     resNotApproved: 'N’est plus approuvée',
     resErrNotApproved: 'Retirez les ressources associées qui ne sont plus approuvées avant d’enregistrer.',
-    opensNewTab: '(s’ouvre dans un nouvel onglet)',
     hoursIntervalName: '{day}, horaires {n}',
     actionMembersNamed: 'Membres de {name}',
     // Re-review round
@@ -2216,7 +2207,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Colocar marcador no centro do mapa',
     resNotApproved: 'Não está mais aprovado',
     resErrNotApproved: 'Remova os recursos vinculados que não estão mais aprovados antes de salvar.',
-    opensNewTab: '(abre em uma nova aba)',
     hoursIntervalName: '{day}, horário {n}',
     actionMembersNamed: 'Membros de {name}',
     // Re-review round
@@ -2438,7 +2428,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Поставить метку в центре карты',
     resNotApproved: 'Больше не одобрен',
     resErrNotApproved: 'Перед сохранением удалите привязанные ресурсы, которые больше не одобрены.',
-    opensNewTab: '(откроется в новой вкладке)',
     hoursIntervalName: '{day}, часы {n}',
     actionMembersNamed: 'Участники: {name}',
     // Re-review round
@@ -2660,7 +2649,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: '지도 중앙에 핀 놓기',
     resNotApproved: '더 이상 승인되지 않음',
     resErrNotApproved: '저장하기 전에 더 이상 승인되지 않은 연결된 리소스를 제거하세요.',
-    opensNewTab: '(새 탭에서 열림)',
     hoursIntervalName: '{day}, 시간 {n}',
     actionMembersNamed: '{name} 구성원',
     // Re-review round
@@ -2882,7 +2870,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Ilagay ang pin sa gitna ng mapa',
     resNotApproved: 'Hindi na aprubado',
     resErrNotApproved: 'Alisin ang mga naka-link na resource na hindi na aprubado bago mag-save.',
-    opensNewTab: '(magbubukas sa bagong tab)',
     hoursIntervalName: '{day}, oras {n}',
     actionMembersNamed: 'Mga miyembro ng {name}',
     // Re-review round
@@ -3104,7 +3091,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'ፒኑን በካርታው መሃል አስቀምጥ',
     resNotApproved: 'ከአሁን በኋላ አልጸደቀም',
     resErrNotApproved: 'ከማስቀመጥህ በፊት ከአሁን በኋላ ያልጸደቁ የተገናኙ ሀብቶችን አስወግድ።',
-    opensNewTab: '(በአዲስ ትር ይከፈታል)',
     hoursIntervalName: '{day}፣ ሰዓቶች {n}',
     actionMembersNamed: 'የ{name} አባላት',
     // Re-review round
@@ -3326,7 +3312,6 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
     locPlaceCenter: 'Muab tus pin tso rau nruab nrab daim ntawv qhia chaw',
     resNotApproved: 'Tsis tau pom zoo lawm',
     resErrNotApproved: 'Tshem cov kev pab uas txuas lawm uas tsis tau pom zoo lawm ua ntej khaws.',
-    opensNewTab: '(qhib rau hauv ib lub tab tshiab)',
     hoursIntervalName: '{day}, sij hawm {n}',
     actionMembersNamed: 'Cov tswv cuab ntawm {name}',
     // Re-review round

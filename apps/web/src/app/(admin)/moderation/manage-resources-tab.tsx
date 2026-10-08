@@ -10,7 +10,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { logger } from '@/lib/logger'
+import { logEvent, logger } from '@/lib/logger'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { resourceVisibility } from '@/lib/member-visibility'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -451,12 +453,19 @@ export function ManageResourcesTab() {
                 {r.description && (
                   <p className="text-xs text-stone-600 line-clamp-3">{r.description}</p>
                 )}
+                <MemberViewLink
+                  to={{ kind: 'resource', id: r.id }}
+                  visibility={resourceVisibility(r)}
+                  label="View public page"
+                  itemName={r.name}
+                  source="manage_resources"
+                />
                 {r.website && (
                   <a
                     href={r.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => logger.info('admin.resource.link.visit', { resource_id: r.id })}
+                    onClick={() => logEvent('admin.resource.link.visit', { resource_id: r.id })}
                     className="text-xs text-lime-700 hover:underline flex items-center gap-1 truncate mt-auto"
                   >
                     <ExternalLink className="h-3 w-3 shrink-0" />

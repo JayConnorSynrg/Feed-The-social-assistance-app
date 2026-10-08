@@ -8,8 +8,8 @@
  * Coverage:
  *  (a) an authed user signs a test petition → count increments
  *  (b) that user withdraws → count decrements, "Signed" reverts to the sign CTA
- *  (c) re-sign; admin opens /moderation → View signers shows the FULL name;
- *      Export CSV downloads the full legal record + sets exported_at
+ *  (c) re-sign; the admin export RPC returns the full legal record (FULL name +
+ *      version hash) and sets exported_at
  *  (d) after export, the signer's panel shows the withdraw control GONE + the
  *      "final" note; calling withdraw now RAISES locked (RPC rejects)
  *  (e) the FAQ block renders with the copy
@@ -314,7 +314,7 @@ test('admin-gate: non-admin (signer) calling the RPCs is rejected', async () => 
   expect(rows[0].exported_at).toBeNull()
 })
 
-test('(c) admin re-signs as signer, then views FULL name + Export CSV sets exported_at', async ({ page, context }) => {
+test('(c) signer re-signs, then the admin export returns the FULL name and sets exported_at', async ({ page }) => {
   // Re-sign as signer so there is a signature to export
   await loginAs(page, SIGNER_EMAIL, PASSWORD)
   await page.locator('[data-testid="sidebar-feed"]').click()
@@ -332,46 +332,22 @@ test('(c) admin re-signs as signer, then views FULL name + Export CSV sets expor
   await reSignResp
   await expect(petitionCard.locator('text=Signed')).toBeVisible({ timeout: 10_000 })
 
-  // New context as admin → /moderation
-  const adminPage = await context.browser()!.newContext().then((c) => c.newPage())
-  await loginAs(adminPage, PA_EMAIL!, PA_PASSWORD!)
-  await adminPage.goto('/moderation')
-
-  const exportSection = adminPage.locator('[data-testid="petition-signatures-export"]')
-  await expect(exportSection).toBeVisible({ timeout: 20_000 })
-
-  const exportCard = adminPage.locator(`[data-testid="petition-export-${petitionId}"]`)
-  await expect(exportCard).toBeVisible({ timeout: 10_000 })
-
-  // View signers → FULL name visible (not the first-name display name)
-  await exportCard.locator(`[data-testid="view-signers-${petitionId}"]`).click()
-  const roster = adminPage.locator(`[data-testid="roster-${petitionId}"]`)
-  await expect(roster).toBeVisible({ timeout: 10_000 })
-  await expect(roster).toContainText(SIGNER_FULL_NAME)
-
-  // Export CSV → triggers a download
-  const downloadPromise = adminPage.waitForEvent('download', { timeout: 15_000 })
-  await exportCard.locator(`[data-testid="export-signers-${petitionId}"]`).click()
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/petition-signatures-.*\.csv/)
-
-  // CSV contains the full legal record (full name + version hash)
-  const stream = await download.createReadStream()
-  const chunks: Buffer[] = []
-  for await (const chunk of stream) chunks.push(chunk as Buffer)
-  const csv = Buffer.concat(chunks).toString('utf-8')
-  expect(csv).toContain('Full Name')
-  expect(csv).toContain('Petition Version Hash')
-  expect(csv).toContain(SIGNER_FULL_NAME)
-  expect(csv).toContain(`e2ehash-${RUN_TAG}`)
+  // Admin exports through the RPC (the admin-panel export UI was removed as dead code): the export
+  // returns the FULL legal record and sets the lock.
+  const adminClient = anonClient()
+  const { error: adminSignInErr } = await adminClient.auth.signInWithPassword({ email: PA_EMAIL!, password: PA_PASSWORD! })
+  expect(adminSignInErr).toBeNull()
+  const exp = await adminClient.rpc('export_petition_signatures', { p_petition_id: petitionId })
+  expect(exp.error).toBeNull()
+  const exported = (exp.data ?? []) as Array<{ signer_full_name: string | null; petition_version_hash: string | null }>
+  expect(exported.map((r) => r.signer_full_name)).toContain(SIGNER_FULL_NAME)
+  expect(exported.map((r) => r.petition_version_hash)).toContain(`e2ehash-${RUN_TAG}`)
 
   // exported_at is now set in the DB (the lock moment)
   const rows = (await mgmtSql(
     `SELECT exported_at FROM public.petitions WHERE id = '${petitionId}';`
   )) as Array<{ exported_at: string | null }>
   expect(rows[0].exported_at).not.toBeNull()
-
-  await adminPage.close()
 })
 
 test('(d) after export the withdraw control is gone + the RPC rejects locked withdrawal', async ({ page }) => {

@@ -315,6 +315,25 @@ describe('INV-H — fetchOrgResources lists linked resources, ordered, with null
     expect(sinks[0]).toMatchObject({ level: 'info', event: 'org.resources.fetch.complete', attrs: { result_count: 2 } })
   })
 
+  it('I4: a pending or rejected linked resource is not returned (an admin sees what members see)', async () => {
+    // resources_admin_select lets an admin read non-approved resources through the embed; the public
+    // org page must still list only approved ones, like /s/resource/[id] (status='approved').
+    const res = (id: string, status: string) => ({ id, name: id, category: 'food', description: null, address_line1: null, city: null, state: null, phone: null, website: null, service_mode: 'physical', status })
+    const client = makeResourcesClient({
+      data: [
+        { sort_order: 0, resource: res('r1', 'approved') },
+        { sort_order: 1, resource: res('r2', 'pending') },
+        { sort_order: 2, resource: res('r3', 'rejected') },
+        { sort_order: 3, resource: null },
+        { sort_order: 4, resource: res('r4', 'approved') },
+      ],
+      error: null,
+    })
+    const rows = await fetchOrgResources(client, 'org-42')
+    expect(rows.map((r) => r.id)).toEqual(['r1', 'r4'])
+    expect(sinks[sinks.length - 1]).toMatchObject({ event: 'org.resources.fetch.complete', attrs: { result_count: 2 } })
+  })
+
   it('an org with no links renders no rows (empty state, never a dangling section)', async () => {
     const client = makeResourcesClient({ data: [], error: null })
     expect(await fetchOrgResources(client, 'org-42')).toEqual([])

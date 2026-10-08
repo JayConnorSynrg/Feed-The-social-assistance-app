@@ -45,12 +45,32 @@ describe('platform Organizations list → org admin page', () => {
   it('the More menu offers "Open admin" linking to the same page (active and inactive orgs)', () => {
     for (const is_active of [true, false]) {
       const html = renderToStaticMarkup(
-        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, is_active }, tr, onToggle: () => {} })))
+        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, name: 'Rutland Food Shelf', is_active }, tr, locale: 'en', onToggle: () => {} })))
       )
       const link = html.match(/<a [^>]*role="menuitem"[^>]*>.*?<\/a>/g)?.find((a) => a.includes('Open admin'))
       expect(link, `is_active=${is_active}`).toBeDefined()
       expect(link).toContain(`href="/moderation/org/${ORG}"`)
     }
+  })
+
+  it('an inactive org: the menu shows the reason as an item arrow keys reach, announced unavailable, no link', () => {
+    const menu = (is_active: boolean) =>
+      renderToStaticMarkup(
+        h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(OrgRowMenuItems, { org: { id: ORG, name: 'Rutland Food Shelf', is_active }, tr, locale: 'en', onToggle: () => {} })))
+      )
+    const inactive = menu(false)
+    const reason = inactive.match(/<div [^>]*>Inactive — hidden from members<\/div>/)?.[0]
+    expect(reason).toBeDefined()
+    expect(reason).toContain('role="menuitem"')
+    expect(reason).toContain('aria-disabled="true"')
+    // Not Radix-disabled: a data-disabled item is skipped by the arrow keys.
+    expect(reason).not.toContain('data-disabled')
+    expect(inactive).not.toContain('/s/organization/')
+    // Active: the View public page link, in the preview tab, and no reason.
+    const active = menu(true)
+    expect(active).toContain(`href="/s/organization/${ORG}"`)
+    expect(active).toContain('target="feed-preview"')
+    expect(active).not.toContain('hidden from members')
   })
 
   it('the list renders those two pieces for every row', () => {

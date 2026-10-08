@@ -10,8 +10,8 @@
 
 import { tierAtLeast, type AdminTier } from '@/lib/admin-tier'
 
-// Canonical left-to-right order of the tab bar.
-const TAB_ORDER = [
+// Canonical left-to-right order of the tab bar (also the set of tab ids `?tab=` may name).
+export const TAB_ORDER = [
   'overview',
   'events',
   'moderation',
@@ -45,4 +45,13 @@ export function visibleTabs(tier: AdminTier | null, isOrgAdmin: boolean): AdminT
   }
 
   return TAB_ORDER.filter((t) => rule[t])
+}
+
+/**
+ * The tab the shell shows for a requested tab id: the request when this viewer is entitled to it,
+ * otherwise the first entitled tab ('events' while the tier is still loading and nothing is entitled).
+ * A `?tab=` deep link goes through this too, so a URL can never open a tab the tier does not grant.
+ */
+export function resolveAdminTab(requested: string, allowed: readonly AdminTabId[]): AdminTabId {
+  return (allowed as readonly string[]).includes(requested) ? (requested as AdminTabId) : (allowed[0] ?? 'events')
 }

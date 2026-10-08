@@ -17,8 +17,10 @@
 //      Reactivate flips it back. The row stays in the list either way, so both directions are visible.
 //
 // NO non-business org appears here: both readers filter org_type='business' (INV-2). The public
-// fetchApprovedBusinesses is left untouched (it omits is_active; the public surfaces rely on
-// orgs_select_active to hide inactive rows) — only this admin reader projects is_active.
+// readers (fetchApprovedBusinesses / fetchApprovedBusinessById) filter is_active=true themselves, so an
+// admin viewing a member surface sees what members see — only this admin reader projects is_active
+// and lists inactive rows. Each approved row offers "View public page" (/s/business/<id>) while active,
+// and says why members cannot see it while inactive.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, X, Loader2, Leaf, MapPin, Pencil } from 'lucide-react'
@@ -28,6 +30,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { logger } from '@/lib/logger'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { businessVisibility } from '@/lib/member-visibility'
 import { privilegedRpc } from '@/lib/privileged-action'
 import {
   fetchPendingBusinesses,
@@ -274,6 +278,16 @@ export function BusinessesTab() {
                         {item.phone && <span>{item.phone}</span>}
                         {item.website && <span className="truncate">{item.website}</span>}
                       </div>
+                      <div className="mt-1">
+                        {/* fetchPendingBusinesses returns status='pending' rows: members cannot see them yet. */}
+                        <MemberViewLink
+                          to={{ kind: 'business', id: item.id }}
+                          visibility={businessVisibility({ status: 'pending', is_active: true })}
+                          label="View public page"
+                          itemName={item.name}
+                          source="businesses"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -378,6 +392,16 @@ export function BusinessesTab() {
                         )}
                         {item.phone && <span>{item.phone}</span>}
                         {item.website && <span className="truncate">{item.website}</span>}
+                      </div>
+                      <div className="mt-1">
+                        {/* fetchAdminBusinessList returns status='approved' rows only. */}
+                        <MemberViewLink
+                          to={{ kind: 'business', id: item.id }}
+                          visibility={businessVisibility({ status: 'approved', is_active: item.is_active })}
+                          label="View public page"
+                          itemName={item.name}
+                          source="businesses"
+                        />
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">

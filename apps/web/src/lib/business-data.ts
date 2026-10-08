@@ -186,9 +186,11 @@ export async function businessesInBounds(
 }
 
 /**
- * Public showcase reader — every approved business (RLS admits approved business rows to
- * anon + authenticated). Direct select is RLS-safe: the orgs_select_active policy only lets
- * business rows through when status='approved'.
+ * Public showcase reader — every approved, ACTIVE business (RLS admits approved active business rows
+ * to anon + authenticated). Direct select is RLS-safe: the orgs_select_active policy only lets
+ * business rows through when is_active AND status='approved'. The is_active filter is applied here
+ * too because an admin's read also passes orgs_admin_select (any is_active): without it an admin
+ * would see an inactive business in the member showcase that members never see.
  */
 export async function fetchApprovedBusinesses(
   supabase: SupabaseClient<Database>
@@ -207,6 +209,7 @@ export async function fetchApprovedBusinesses(
       .select(`${BUSINESS_COLUMNS}, business_photos(url)`)
       .eq('org_type', 'business')
       .eq('status', 'approved')
+      .eq('is_active', true)
       .eq('business_photos.kind', 'logo')
       .order('name', { ascending: true })
       .then((r) => r)
@@ -228,7 +231,7 @@ export async function fetchApprovedBusinesses(
 
 /** An approved business as the admin management list sees it — every showcase field PLUS is_active,
  *  which governs whether the business is live on the public surfaces. Only fetchAdminBusinessList (read
- *  under orgs_admin_select) projects is_active; the public readers never do. */
+ *  under orgs_admin_select) projects is_active; the public readers filter on it but never return it. */
 export interface AdminBusiness extends Business {
   is_active: boolean
 }
@@ -236,10 +239,9 @@ export interface AdminBusiness extends Business {
 /**
  * Admin management reader — EVERY approved business, active OR inactive, with is_active projected so
  * the moderation Businesses tab can show live/retired state and drive a coherent Deactivate↔Reactivate
- * toggle. Distinct from the public fetchApprovedBusinesses (which is unchanged and omits is_active):
- * this reader is reached only by a platform admin, for whom orgs_admin_select admits business rows at
- * ANY is_active, so an inactive (retired) business the public showcase/map/page hide via
- * orgs_select_active still appears here. Same single logo-embed query shape (no N+1), same org_type=
+ * toggle. Distinct from the public fetchApprovedBusinesses (which filters is_active=true): this reader
+ * is reached only by a platform admin, for whom orgs_admin_select admits business rows at ANY
+ * is_active, so an inactive (retired) business the public showcase/map/page hide still appears here. Same single logo-embed query shape (no N+1), same org_type=
  * business AND status=approved gate (INV-2). Throws BusinessReadError so the caller can surface it.
  */
 export async function fetchAdminBusinessList(
@@ -275,9 +277,10 @@ export async function fetchAdminBusinessList(
 }
 
 /**
- * Public single-business reader by id — approved business orgs only. Used by the standalone
- * public page + OG route (outside FeedShell). Returns null when the org is missing or not an
- * approved business, so callers can notFound() (CINV5). RLS also enforces the approved gate.
+ * Public single-business reader by id — approved, ACTIVE business orgs only. Used by the standalone
+ * public page + OG route (outside FeedShell). Returns null when the org is missing, inactive or not an
+ * approved business, so callers can notFound() (CINV5). RLS also enforces both gates for members;
+ * the is_active filter keeps an admin (orgs_admin_select) from seeing a page members get a 404 for.
  */
 export async function fetchApprovedBusinessById(
   supabase: SupabaseClient<Database>,
@@ -289,6 +292,7 @@ export async function fetchApprovedBusinessById(
     .eq('id', id)
     .eq('org_type', 'business')
     .eq('status', 'approved')
+    .eq('is_active', true)
     .single()
   if (error || !data) return null
   return data as unknown as Business

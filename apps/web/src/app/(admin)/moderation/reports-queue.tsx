@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { createClient } from '@/lib/supabase/client'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
+import { MemberViewLink } from '@/components/admin/member-view-link'
+import { postVisibility } from '@/lib/member-visibility'
+import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
@@ -18,31 +21,20 @@ const REASON_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-interface ReportRow {
-  id: string
-  reporter_id: string
-  content_type: string
-  content_id: string
-  reason: string
-  details: string | null
-  status: string
-  created_at: string
-}
-
-interface ContentGroup {
-  content_id: string
-  post_content: string | null
-  post_author: string | null
-  reports: ReportRow[]
-}
-
 interface HeldPost {
   id: string
+  is_hidden: boolean
   content: string | null
   created_at: string
   hidden_at: string | null
   hidden_reason: string | null
   user_id: string
+}
+
+/** A short accessible name for a post in a "View post" link: the start of its text. */
+function postItemName(content: string | null): string {
+  const text = (content ?? '').replace(/\s+/g, ' ').trim()
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
 export function ReportsQueue() {
@@ -69,44 +61,28 @@ export function ReportsQueue() {
 
         if (reportsError) throw reportsError
 
-        // Group by content_id
-        const groupMap = new Map<string, ContentGroup>()
-        for (const report of (reports ?? []) as ReportRow[]) {
-          if (!groupMap.has(report.content_id)) {
-            groupMap.set(report.content_id, {
-              content_id: report.content_id,
-              post_content: null,
-              post_author: null,
-              reports: [],
-            })
-          }
-          groupMap.get(report.content_id)!.reports.push(report)
-        }
-
-        // Enrich with post content where available
-        const contentIds = Array.from(groupMap.keys())
+        // Group by reported post, then enrich with each post's text and hidden state.
+        const reportRows = (reports ?? []) as ReportRow[]
+        const contentIds = [...new Set(reportRows.map((r) => r.content_id))]
+        let postRows: ReportedPostRow[] = []
         if (contentIds.length > 0) {
-          const { data: posts } = await supabase
+          const { data: posts, error: postsError } = await supabase
             .from('posts')
-            .select('id, content, user_id')
+            .select('id, content, user_id, is_hidden')
             .in('id', contentIds)
+          // A failed read must not pass for "post deleted" (post_hidden stays null only when the
+          // read succeeded without that row), so it surfaces like a failed reports read.
+          if (postsError) throw postsError
 
-          if (posts) {
-            for (const post of posts) {
-              const group = groupMap.get(post.id)
-              if (group) {
-                group.post_content = (post.content as string | null)?.slice(0, 200) ?? null
-              }
-            }
-          }
+          postRows = (posts ?? []) as ReportedPostRow[]
         }
 
-        setGroups(Array.from(groupMap.values()))
+        setGroups(buildReportGroups(reportRows, postRows))
 
         // Load removed & held posts
         const { data: hiddenPostsData } = await supabase
           .from('posts')
-          .select('id, content, created_at, hidden_at, hidden_reason, user_id')
+          .select('id, is_hidden, content, created_at, hidden_at, hidden_reason, user_id')
           .eq('is_hidden', true)
           .in('hidden_reason', ['admin_removal', 'hold_for_review'])
           .order('hidden_at', { ascending: false })
@@ -306,6 +282,15 @@ export function ReportsQueue() {
                       {group.post_content}
                     </CardDescription>
                   )}
+                  <div className="mt-1">
+                    <MemberViewLink
+                      to={{ kind: 'post', id: group.content_id }}
+                      visibility={groupPostVisibility(group)}
+                      label="View post"
+                      itemName={postItemName(group.post_content)}
+                      source="reports_queue"
+                    />
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
@@ -419,13 +404,20 @@ export function ReportsQueue() {
                   {(post.content ?? '').slice(0, 120)}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                  <div className="flex gap-2 text-xs text-stone-500">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
                     <span className="font-medium">
                       {post.hidden_reason === 'admin_removal' ? 'Removed' : 'Held for Review'}
                     </span>
                     <span>
                       {post.hidden_at ? new Date(post.hidden_at).toLocaleDateString() : ''}
                     </span>
+                    <MemberViewLink
+                      to={{ kind: 'post', id: post.id }}
+                      visibility={postVisibility(post)}
+                      label="View post"
+                      itemName={postItemName(post.content)}
+                      source="held_posts"
+                    />
                   </div>
                   {post.hidden_reason === 'hold_for_review' && (
                     <Button

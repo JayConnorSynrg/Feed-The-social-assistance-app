@@ -7,8 +7,9 @@ import { useAdminOrgs } from './use-admin-orgs'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
 import { canCreateOrganizations, tierLabel } from '@/lib/admin-tier'
-import { visibleTabs } from './admin-shell-tabs'
-import { logger } from '@/lib/logger'
+import { resolveAdminTab, TAB_ORDER, visibleTabs } from './admin-shell-tabs'
+import { readTabParam, tabParamHref } from './admin-tab-url'
+import { logEvent } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
 import { ModerationTab } from './moderation-tab'
@@ -51,9 +52,12 @@ export function AdminShell() {
   const tabs = visibleTabs(tier, isOrgAdmin)
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
-  const [activeTab, setActiveTab] = useState('overview')
+  // Starts at 'overview' and the mount effect below applies a `?tab=` deep link, so a deep link
+  // paints the default tab for one frame. Deliberate: a lazy initializer reading window.location would
+  // differ between the server render and the first client render (hydration mismatch).
+  const [activeTab, setActiveTab] = useState<string>('overview')
   // Fall back to the first visible tab when the requested tab is not entitled for this tier.
-  const effectiveTab = (tabs as string[]).includes(activeTab) ? activeTab : (tabs[0] ?? 'events')
+  const effectiveTab = resolveAdminTab(activeTab, tabs)
 
   // Header label: the tier marker, or "Organizer" for a non-tier org admin.
   const headerLabel = tierLabel(tier) ?? 'Organizer'
@@ -97,10 +101,13 @@ export function AdminShell() {
     (target: OrgPanelTarget) => {
       setActiveTab('organizations')
       setOrgNotice(null)
-      const href = orgPanelHref(window.location, target)
       if (!panelOpenRef.current) {
         returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        // The panel switches the shell to Organizations (e.g. from the Overview quick action): record
+        // that tab on the entry Back returns to, so closing the panel lands on a URL that matches.
+        window.history.replaceState(window.history.state, '', tabParamHref(window.location, 'organizations'))
       }
+      const href = orgPanelHref(window.location, target)
       if (panelOpenRef.current) {
         // Switching target inside an open panel ("Edit existing") reuses its history entry.
         window.history.replaceState(window.history.state, '', href)
@@ -130,12 +137,15 @@ export function AdminShell() {
   }, [])
 
   // Deep link: read ?tab / ?org once on mount. window.location exists only after mount, so
-  // setState in this effect is the correct idiom (same as feed-shell's hash routing).
+  // setState in this effect is the correct idiom (same as feed-shell's hash routing). Any tab id is
+  // honoured; resolveAdminTab still clamps it to the tabs this tier is entitled to.
   useEffect(() => {
     const search = window.location.search
     const target = readOrgPanelTarget(search)
+    const requested = readTabParam(search, TAB_ORDER)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (readsOrganizationsTab(search) || target) setActiveTab('organizations')
+    else if (requested) setActiveTab(requested)
     if (target) showPanel(target)
   }, [showPanel])
 
@@ -182,12 +192,15 @@ export function AdminShell() {
   )
 
   function handleTabChange(tab: string) {
-    logger.info('admin.shell.tab_switch', { to_tab: tab, from_tab: activeTab, org_id: selectedOrgId })
+    logEvent('admin.shell.tab_switch', { to_tab: tab, from_tab: effectiveTab, org_id: selectedOrgId })
     setActiveTab(tab)
+    // Replace (not push): the open tab is in the URL for reloads and links, without a Back entry per
+    // click. Other params and the org panel's own entries are untouched.
+    window.history.replaceState(window.history.state, '', tabParamHref(window.location, tab))
   }
 
   function handleOrgChange(orgId: string) {
-    logger.info('admin.shell.org_switch', { org_id: orgId })
+    logEvent('admin.shell.org_switch', { org_id: orgId })
     setSelectedOrgId(orgId)
   }
 

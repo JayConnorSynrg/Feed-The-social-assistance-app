@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { PetitionWithMeta } from '@/hooks/use-petitions'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
-import { logger } from '@/lib/logger'
+import { logEvent } from '@/lib/logger'
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -226,7 +226,7 @@ export function PetitionsPanel() {
 
   const handleSubtabSwitch = useCallback((subtab: 'all' | 'signed') => {
     setActiveSubtab(subtab)
-    logger.info('nav.subtab.switch', { panel: 'petitions', subtab })
+    logEvent('nav.subtab.switch', { panel: 'petitions', subtab })
   }, [])
 
   // ARIA roving tabindex keyboard handler for petitions subtab list
