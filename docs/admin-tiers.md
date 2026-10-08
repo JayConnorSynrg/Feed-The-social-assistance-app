@@ -125,8 +125,11 @@ to the founder. It never exposes email or ban data (those stay in the PA-only `a
   has not expired. Otherwise the row says why: *No location — not on the map*, *Inactive*, *Not
   approved*, or *Expired — not on the map* (an inactive organization or business shows *Inactive* once,
   not twice). A resource whose business is on the map opens on the business's pin, because the map
-  shows one pin for the two. If the place has left the map by the time the link is followed, the map
-  says "That place isn't on the map right now." and does not move.
+  shows one pin for the two. If the place has left the map by the time the link is followed (its
+  status, location or expiry no longer qualify), the map says "That place isn't on the map right now."
+  and does not move. If it still qualifies but its pin does not load within 8 seconds, the map has
+  already flown to where it is and shows the same line. The flight is instant under Reduce motion
+  (FEED's setting or the device's).
 - **Tabs in the URL**: the open tab is in the address (`/moderation?tab=people`,
   `/moderation/org/<id>?tab=members`), so a reload or a shared link returns to it. A tab your tier does
   not include opens your first tab instead. Switching tabs replaces the address without adding Back

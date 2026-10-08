@@ -183,13 +183,17 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
   draws it (resource: approved + located; organization: active, non-business, located; business:
   approved, active, located; safety alert: live and `expires_at` > now — the expiry is re-checked on the
   row because RLS checks status only), flies to it at zoom 17 (above the cluster `maxZoom` 16, so a
-  clustered pin becomes a leaf), and claims the camera so a later GPS fix or profile geocode does not
-  move it. `found` = the pin's id appears in its loaded layer within 8 s; the popup opens (a resource is
-  also selected, as a click on it would). A resource that a visible business links to lands on that
+  clustered pin becomes a leaf; instant under FEED's or the OS's reduced motion), and claims the camera
+  so a later GPS fix or profile geocode does not move it. The whole lifecycle is `MapFocusSession`;
+  the panel's effects only forward to it. `found` = the pin's id appears in its loaded layer within 8 s
+  of the link arriving; its popup opens as a named dialog that takes focus (a resource is also
+  selected, as a click on it would). A resource that a visible business links to lands on that
   business's pin (the map draws one pin for the pair) and is logged as `kind=resource`. `not_found` =
-  the by-id read returned nothing (or failed), or the pin never appeared; the map shows one polite,
-  translated line ("That place isn't on the map right now."). `abandoned` = the member left the map, or
-  a newer link replaced this one, first. Every followed map link writes exactly one row.
+  the by-id read returned nothing (or failed), or the 8 s deadline (counted from arrival, so a hung read
+  also settles; the read is then aborted) passed first; the map shows one polite, translated line
+  ("That place isn't on the map right now."). `abandoned` = the member left the map, followed a newer
+  link, or dragged/zoomed the map during the flight, first. Every followed map link writes exactly one
+  row; a layer that loads after a settle opens nothing.
 
 "View in feed" funnel over the last 7 days (service role) — admin clicks on event links, then what
 the followed links resolved to (an `invalid` focus on the Events panel counts here; `not_found` means
@@ -207,6 +211,19 @@ where event = 'nav.deeplink.resolve' and context->>'panel' = 'events'
   and created_at > now() - interval '7 days'
 group by 1, 2
 order by 1, 3 desc;
+```
+
+Safety-alert map reads (`safety_alerts_in_view`): one call per settled pan/zoom (400 ms debounce),
+one per 60 s while the map tab is visible, and one after a member places or edits an alert. Before
+the 2026-10 fix (admin-nav PR-3) a new bounds object every render re-armed the debounce on every
+render — about 1.5–2.5 calls a second per open map (pg_stat_statements: 139,348 calls vs 126 for
+`resources_in_bounds`). Expected after deploy: a stationary open map drops from ~2/s to 1/60 s
+(~100x fewer), and the ratio to `resources_in_bounds` falls from ~1,100:1 toward ~1–3:1. Measure
+(record the counts at deploy, compare the deltas a day later):
+```sql
+select query, calls from pg_stat_statements
+where query ilike '%safety_alerts_in_view%' or query ilike '%resources_in_bounds%'
+order by calls desc;
 ```
 
 "View on map" funnel over the last 7 days, by kind (service role) — admin clicks on map links, then

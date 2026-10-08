@@ -18,11 +18,16 @@ An alert is **live** while `status = 'live' AND expires_at > now()`. Every reade
 rule, so an alert drops out of every view at its expiry instant, and its row is marked `expired`
 within 5 minutes:
 
-- Map: `safety_alerts_in_view` (RPC).
+- Map: `safety_alerts_in_view` (RPC). When it is called (`lib/safety-alerts-fetch.ts`): once per real
+  viewport change, 400 ms after the map settles (keyed on the four bound numbers, so a re-render with
+  the same bounds calls nothing); every 60 s while the tab is visible; and once right after the member
+  places or edits an alert (those RPCs return no lng/lat for the marker). Deleting removes the pin
+  locally, with no read. Until 2026-10 a new bounds object every render re-armed the debounce on every
+  render: about 1.5–2.5 calls a second per open map, and the 60 s poll never fired.
 - Feed safety strip (`feed-panel.tsx`): RLS `safety_alerts_select` (`status = 'live'`) plus
   `expires_at > now`.
 - Admin review list and the Overview "Live Safety Alerts" count: `whereSafetyAlertLive`
-  (`apps/web/src/app/(admin)/moderation/safety-alert-live.ts`).
+  (`apps/web/src/lib/safety-alert-live.ts`).
 
 Votes follow the same rule: `vote_safety_alert` refuses a vote with "alert is no longer live"
 when the status is not `live` **or** `expires_at` has passed, and its auto-clear only changes a
