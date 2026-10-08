@@ -49,7 +49,7 @@ describe('whereSafetyAlertLive — admin "live" = status live AND expires_at > n
 })
 
 describe('admin safety-alert reads go through the one rule', () => {
-  const read = (f: string) => readFileSync(path.join(__dirname, f), 'utf8')
+  const read = (f: string) => readFileSync(path.join(__dirname, '../app/(admin)/moderation', f), 'utf8')
 
   it.each(['safety-alerts-review.tsx', 'overview-tab.tsx'])('%s filters safety_alerts with whereSafetyAlertLive', (file) => {
     const src = read(file)

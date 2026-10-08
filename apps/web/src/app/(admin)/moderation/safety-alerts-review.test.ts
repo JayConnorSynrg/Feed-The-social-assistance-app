@@ -47,9 +47,11 @@ const base: SafetyAlertsReviewViewProps = {
 const render = (over: Partial<SafetyAlertsReviewViewProps> = {}) => renderToStaticMarkup(h(SafetyAlertsReviewView, { ...base, ...over }))
 
 describe('SafetyAlertsReviewView — a11y', () => {
-  it('loading is a named status region and the spinner icon is aria-hidden', () => {
+  it('loading is a status region whose announced text is in the region (not an aria-label)', () => {
     const html = render({ loading: true })
-    expect(html).toMatch(/^<div role="status" aria-label="Loading safety alerts"/)
+    expect(html).toMatch(/^<div role="status"[^>]*>/)
+    expect(html).not.toMatch(/^<div role="status"[^>]*aria-label/)
+    expect(html).toMatch(/<span class="sr-only">Loading safety alerts<\/span><\/div>$/)
     expect(html).toMatch(/<svg[^>]*aria-hidden="true"/)
   })
 

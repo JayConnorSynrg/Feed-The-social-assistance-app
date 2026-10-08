@@ -2,7 +2,7 @@
 
 /**
  * SafetyAlertsReview — admin post-hoc review of live safety alerts (status 'live'
- * and not yet past expires_at — see safety-alert-live.ts).
+ * and not yet past expires_at — see lib/safety-alert-live.ts).
  *
  * Pins go live immediately (publish-then-review). Admins can set status='removed'
  * via the admin_remove_safety_alert SECDEF RPC (gated to is_staff=true at the DB level).
@@ -27,7 +27,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { safetyAlertMapVisibility } from '@/lib/member-visibility'
-import { whereSafetyAlertLive } from './safety-alert-live'
+import { whereSafetyAlertLive } from '@/lib/safety-alert-live'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -204,8 +204,10 @@ export function SafetyAlertsReviewView({
 }: SafetyAlertsReviewViewProps) {
   if (loading) {
     return (
-      <div role="status" aria-label="Loading safety alerts" className="flex items-center justify-center py-12">
+      <div role="status" className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
+        {/* A live region announces its text content (an aria-label on it is not read out). */}
+        <span className="sr-only">Loading safety alerts</span>
       </div>
     )
   }

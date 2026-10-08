@@ -6,19 +6,16 @@
 // A map marker's popup state, opened by a followed deep link (#map?focus=…, lib/map-focus.ts):
 //  - a marker that mounts already focused (a cluster that splits at the focus zoom) opens at once;
 //  - a marker already on the map opens when `focused` turns true.
-// The second case adjusts state while rendering when the prop changes (React's documented
-// alternative to a setState-in-effect); popupOnFocusChange is that decision, pure and tested.
+// The prop change is applied while rendering (React's documented alternative to setState in an
+// effect) through the pure reducer popupStateFor; `setOpen` is the click / close path.
 
-import { useState } from 'react'
-import { focusOpensPopup, popupOnFocusChange } from '@/lib/map-focus'
+import { useCallback, useState } from 'react'
+import { initialPopupState, popupStateFor } from '@/lib/map-focus'
 
 export function useFocusedPopup(focused: boolean | undefined) {
-  const [showPopup, setShowPopup] = useState(() => focusOpensPopup(focused))
-  const [seenFocused, setSeenFocused] = useState(focused)
-  if (seenFocused !== focused) {
-    setSeenFocused(focused)
-    const next = popupOnFocusChange(seenFocused, focused, showPopup)
-    if (next !== showPopup) setShowPopup(next)
-  }
-  return [showPopup, setShowPopup] as const
+  const [state, setState] = useState(() => initialPopupState(focused))
+  const next = popupStateFor(state, focused)
+  if (next !== state) setState(next)
+  const setOpen = useCallback((open: boolean) => setState((s) => (s.open === open ? s : { ...s, open })), [])
+  return [next.open, setOpen] as const
 }

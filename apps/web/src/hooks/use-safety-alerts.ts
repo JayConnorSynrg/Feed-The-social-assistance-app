@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@feed/database'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
+import { SafetyAlertsFetchScheduler } from '@/lib/safety-alerts-fetch'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -65,7 +68,6 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   // Track per-alert vote state (single-source-of-truth; avoids ?? stale-state)
   const alertMapRef = useRef<Map<string, SafetyAlert>>(new Map())
 
-  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -117,79 +119,33 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
     []
   )
 
-  // ── Debounced refetch on viewport change ───────────────────────────────────
+  // ── When to read (lib/safety-alerts-fetch.ts) ─────────────────────────────
+  // One read per real viewport change (debounced 400 ms, keyed on the four bound numbers, so a
+  // re-render with the same bounds schedules nothing), a 60 s poll while the tab is visible
+  // (safety_alerts is intentionally NOT in the realtime publication — migration 20260619000400 —
+  // so created_by never transits the WAL), and a read right after the member places or edits an
+  // alert. Timers stop on unmount.
+
+  const [scheduler] = useState(
+    () =>
+      new SafetyAlertsFetchScheduler({
+        fetch: (bounds) => void fetchAlerts(bounds),
+        isVisible: () => document.visibilityState === 'visible',
+      })
+  )
 
   useEffect(() => {
-    if (!viewportBounds) return
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      fetchAlerts(viewportBounds)
-    }, 400)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [viewportBounds, fetchAlerts])
+    scheduler.setBounds(viewportBounds)
+  }, [scheduler, viewportBounds])
 
-  // ── Polling refetch (replaces realtime) ────────────────────────────────────
-  //
-  // safety_alerts is intentionally NOT in the supabase_realtime publication
-  // (migration 20260619000400) so created_by never transits the WAL payload —
-  // this preserves reporter anonymity. Without realtime, a stationary map viewer
-  // would not see new hazard pins until they pan/zoom. A conservative 60s poll
-  // re-invokes the existing in-view fetch to keep pins and vote counts fresh.
-  //
-  // The poll only fires when there is an active viewport AND the tab is visible
-  // (no background polling). The interval is cleared on unmount and re-created on
-  // bounds change so intervals never stack. The viewport-change refetch above is
-  // untouched and remains the primary freshness path for pan/zoom.
-
-  useEffect(() => {
-    if (!viewportBounds) return
-    const bounds = viewportBounds
-    const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchAlerts(bounds)
-      }
-    }, 60000)
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [viewportBounds, fetchAlerts])
+  useEffect(() => () => scheduler.dispose(), [scheduler])
 
   // ── Place alert ────────────────────────────────────────────────────────────
 
   const placeAlert = useCallback(
-    async (input: PlaceAlertInput): Promise<SafetyAlert | null> => {
-      try {
-        const { data, error: rpcError } = await supabase
-          .rpc('place_safety_alert', {
-            p_type: input.type,
-            p_severity: input.severity,
-            p_description: input.description,
-            p_lng: input.lng,
-            p_lat: input.lat,
-          })
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-
-        if (rpcError) throw rpcError
-        // The RPC returns the full safety_alerts row (with geography location column,
-        // not decomposed lng/lat). We do NOT add it to local state optimistically
-        // because the Marker needs numeric lng/lat. The realtime subscription
-        // (INSERT event) will pick it up with coordinates from the RPC response
-        // via a follow-up in-view fetch. Log the success.
-        const row = data as unknown as { id: string }
-        if (row?.id) {
-          logger.info('pin.place', { type: input.type, severity: input.severity, id: row.id })
-        }
-        return data as unknown as SafetyAlert
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err))
-        logger.error('safety-alerts.place.error', { message: e.message })
-        throw e
-      }
-    },
+    (input: PlaceAlertInput): Promise<SafetyAlert | null> => placeSafetyAlert(supabase, input, () => scheduler.refresh()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [scheduler]
   )
 
   // ── Vote on alert ──────────────────────────────────────────────────────────
@@ -242,28 +198,10 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   // ── Update alert ───────────────────────────────────────────────────────────
 
   const updateAlert = useCallback(
-    async (alertId: string, input: UpdateAlertInput): Promise<void> => {
-      try {
-        const { error: rpcError } = await supabase
-          .rpc('update_safety_alert', {
-            p_alert_id: alertId,
-            p_type: input.type!,
-            p_severity: input.severity!,
-            p_description: input.description ?? '',
-            p_lng: input.lng!,
-            p_lat: input.lat!,
-          })
-          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-        if (rpcError) throw rpcError
-        logger.info('safety-alerts.update.success', { alertId })
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err))
-        logger.error('safety-alerts.update.error', { message: e.message })
-        throw e
-      }
-    },
+    (alertId: string, input: UpdateAlertInput): Promise<void> =>
+      updateSafetyAlert(supabase, alertId, input, () => scheduler.refresh()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [scheduler]
   )
 
   // ── Delete alert ───────────────────────────────────────────────────────────
@@ -277,7 +215,8 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
           })
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcError) throw rpcError
-        // Optimistically remove from local state
+        // Removed from local state here, so the pin goes at once — no read needed (place and edit
+        // need one: their RPCs return no lng/lat).
         alertMapRef.current.delete(alertId)
         setAlerts(Array.from(alertMapRef.current.values()))
         logger.info('safety-alerts.delete.success', { alertId })
@@ -292,4 +231,68 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   )
 
   return { alerts, loading, error, placeAlert, voteAlert, updateAlert, deleteAlert }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Writes that need a follow-up read
+// ─────────────────────────────────────────────────────────────────────────────
+// place_safety_alert / update_safety_alert return the raw safety_alerts row (geography location,
+// not lng/lat), so the marker cannot be drawn from it: `onWritten` (the hook's scheduler.refresh)
+// re-reads the viewport once after a successful write, and never after a failed one.
+
+export async function placeSafetyAlert(
+  supabase: SupabaseClient<Database>,
+  input: PlaceAlertInput,
+  onWritten: () => void,
+): Promise<SafetyAlert | null> {
+  try {
+    const { data, error: rpcError } = await supabase
+      .rpc('place_safety_alert', {
+        p_type: input.type,
+        p_severity: input.severity,
+        p_description: input.description,
+        p_lng: input.lng,
+        p_lat: input.lat,
+      })
+      .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+
+    if (rpcError) throw rpcError
+    const row = data as unknown as { id: string }
+    if (row?.id) {
+      logger.info('pin.place', { type: input.type, severity: input.severity, id: row.id })
+    }
+    onWritten()
+    return data as unknown as SafetyAlert
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err))
+    logger.error('safety-alerts.place.error', { message: e.message })
+    throw e
+  }
+}
+
+export async function updateSafetyAlert(
+  supabase: SupabaseClient<Database>,
+  alertId: string,
+  input: UpdateAlertInput,
+  onWritten: () => void,
+): Promise<void> {
+  try {
+    const { error: rpcError } = await supabase
+      .rpc('update_safety_alert', {
+        p_alert_id: alertId,
+        p_type: input.type!,
+        p_severity: input.severity!,
+        p_description: input.description ?? '',
+        p_lng: input.lng!,
+        p_lat: input.lat!,
+      })
+      .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+    if (rpcError) throw rpcError
+    logger.info('safety-alerts.update.success', { alertId })
+    onWritten()
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err))
+    logger.error('safety-alerts.update.error', { message: e.message })
+    throw e
+  }
 }

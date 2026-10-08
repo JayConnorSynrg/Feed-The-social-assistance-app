@@ -11,10 +11,11 @@
 //     own pending submission — would return rows no member's map shows). A resource that a visible
 //     business links to resolves to that business's pin: the map draws the business leaf instead
 //     (dedupeResourcesForBusinesses, lib/business.ts).
-//  2. MapFocusController — the one-shot lifecycle: begin → located (fly) → found when the pin's id is
-//     in its loaded layer; not_found when the read returns nothing or the id never appears before
-//     the deadline; abandoned when the panel unmounts or a newer focus replaces it first. Every path
-//     settles exactly once (one nav.deeplink.resolve row, the focus cleared).
+//  2. MapFocusSession — the one-shot lifecycle the panel's effects forward to: arrive (camera lock,
+//     deadline, read, fly) → found when the pin's id is in its loaded layer; not_found when the read
+//     returns nothing or the deadline fires first; abandoned when the member leaves first (panel
+//     switch, newer link, drag/zoom). Every path settles exactly once (one nav.deeplink.resolve row,
+//     the focus cleared).
 //  3. Camera lock — a focus claims the camera so a later GPS fix or profile geocode does not fly
 //     the map away from the pin.
 
@@ -26,7 +27,7 @@ import { parseGeographyPoint } from './business'
 import { fetchApprovedBusinessById } from './business-data'
 import { fetchOrganizationById } from './org-data'
 import { isMapPoint, safetyAlertMapVisibility } from './member-visibility'
-import { whereSafetyAlertLive } from '@/app/(admin)/moderation/safety-alert-live'
+import { whereSafetyAlertLive } from './safety-alert-live'
 
 /** The focus kinds the map brings into view (feed-shell FOCUS_CONSUMERS registers the same four). */
 export type MapFocusKind = Exclude<FocusKind, 'event'>
@@ -61,6 +62,7 @@ interface Result<T> {
 }
 /** The chained PostgREST calls these readers use (structural, so a test can record them). */
 interface FocusQuery extends PromiseLike<Result<Row[]>> {
+  abortSignal(signal: AbortSignal): FocusQuery
   eq(column: string, value: unknown): FocusQuery
   gt(column: string, value: string): FocusQuery
   order(column: string, options: { ascending: boolean }): FocusQuery
@@ -79,10 +81,11 @@ function pinAt(layer: MapPinLayer, id: string, location: unknown): MapFocusPin |
 /** resources_in_bounds: status='approved' AND location NOT NULL (+ the client's non-zero point).
  *  Then the business leaf that replaces it, when one is visible: businesses_in_bounds' predicate
  *  (business, approved, active, located) on organizations.resource_id. */
-async function readResourcePin(supabase: SupabaseClient<Database>, id: string): Promise<MapFocusPin | null> {
+async function readResourcePin(supabase: SupabaseClient<Database>, id: string, signal: AbortSignal): Promise<MapFocusPin | null> {
   const { data: resource } = await db(supabase)
     .from('resources')
     .select('id, location')
+    .abortSignal(signal)
     .eq('id', id)
     .eq('status', 'approved')
     .maybeSingle()
@@ -93,6 +96,7 @@ async function readResourcePin(supabase: SupabaseClient<Database>, id: string): 
   const { data: businesses } = await db(supabase)
     .from('organizations')
     .select('id, location')
+    .abortSignal(signal)
     .eq('resource_id', id)
     .eq('org_type', 'business')
     .eq('status', 'approved')
@@ -119,9 +123,9 @@ async function readBusinessPin(supabase: SupabaseClient<Database>, id: string): 
 
 /** safety_alerts_in_view: status='live' AND expires_at > now. RLS safety_alerts_select checks status
  *  only, so the expiry is filtered in the query and checked again on the returned row. */
-async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, now: Date): Promise<MapFocusPin | null> {
+async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, now: Date, signal: AbortSignal): Promise<MapFocusPin | null> {
   const { data: alert } = await whereSafetyAlertLive(
-    db(supabase).from('safety_alerts').select('id, location, status, expires_at').eq('id', id),
+    db(supabase).from('safety_alerts').select('id, location, status, expires_at').abortSignal(signal).eq('id', id),
     now,
   ).maybeSingle()
   if (!alert) return null
@@ -129,22 +133,25 @@ async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string
   return visibility.visible ? pinAt('safety_alert', id, alert.location) : null
 }
 
-/** The pin a member's map draws for this target right now, or null (a failed read counts as null). */
+/** The pin a member's map draws for this target right now, or null (a failed or aborted read counts
+ *  as null). `signal` aborts the resource and safety-alert queries; the organization and business
+ *  readers (org-data / business-data) take none — the session's deadline settles a hung read. */
 export async function readMapFocusPin(
   supabase: SupabaseClient<Database>,
   target: { kind: MapFocusKind; id: string },
   now: Date = new Date(),
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<MapFocusPin | null> {
   try {
     switch (target.kind) {
       case 'resource':
-        return await readResourcePin(supabase, target.id)
+        return await readResourcePin(supabase, target.id, signal)
       case 'organization':
         return await readOrganizationPin(supabase, target.id)
       case 'business':
         return await readBusinessPin(supabase, target.id)
       case 'safety_alert':
-        return await readSafetyAlertPin(supabase, target.id, now)
+        return await readSafetyAlertPin(supabase, target.id, now, signal)
       default:
         return assertNever(target.kind)
     }
@@ -158,78 +165,140 @@ export async function readMapFocusPin(
 /** The ids each layer has loaded (what the map can draw right now). */
 export type MapLayers = Record<MapPinLayer, readonly { id: string }[]>
 
-export function pinInLayers(pin: MapFocusPin, layers: MapLayers): boolean {
-  return layers[pin.layer].some((item) => item.id === pin.id)
-}
-
-/** found: the pin is on the map with its popup open. not_found: the place is not on the map.
- *  abandoned: the member left (panel switched, or a newer link replaced it) before it settled. */
+/** found: the pin is on the map with its popup open. not_found: the place is not on the map (the
+ *  read found nothing, or the pin did not appear before the deadline). abandoned: the member left
+ *  first — switched panel, followed a newer link, or took the map (drag/zoom) during the flight. */
 export type MapFocusOutcome = 'found' | 'not_found' | 'abandoned'
-export type MapFocusSettled = { outcome: 'found'; pin: MapFocusPin } | { outcome: 'not_found' } | { outcome: 'abandoned' }
+
+type Timer = ReturnType<typeof setTimeout>
+
+export interface MapFocusSessionDeps {
+  /** The by-id read (readMapFocusPin); `signal` aborts it when the focus settles first. */
+  read: (target: { kind: MapFocusKind; id: string }, signal: AbortSignal) => Promise<MapFocusPin | null>
+  /** The panel's camera flags; arrival applies FOCUS_CAMERA_LOCK to them. */
+  camera: { setUserHasMovedMap: (value: boolean) => void; setHasGeocentered: (value: boolean) => void }
+  /** A new focus is in hand (the panel resets its miss line and popup target). */
+  onArrive: (target: FocusTarget) => void
+  /** Move the camera to the located pin. */
+  fly: (pin: MapFocusPin) => void
+  /** The pin is in its loaded layer: open its popup (`item` is that layer's row). */
+  onFound: (pin: MapFocusPin, item: { id: string }) => void
+  /** Exactly once per accepted focus (mapFocusSettler: one row, focus cleared, miss line). */
+  onSettle: (target: FocusTarget, outcome: MapFocusOutcome) => void
+}
 
 interface PendingFocus {
   target: FocusTarget
   pin: MapFocusPin | null
-  deadline: number
+  deadline: Timer
+  read: AbortController
 }
 
-/**
- * One focus at a time, each settled exactly once. `onSettle` runs once per focus that `begin`
- * accepted (the panel logs nav.deeplink.resolve and clears panelParams.focus there).
- */
-export class MapFocusController {
-  private pending: PendingFocus | null = null
+const EMPTY_LAYERS: MapLayers = { resource: [], organization: [], business: [], safety_alert: [] }
 
-  constructor(private readonly onSettle: (target: FocusTarget, outcome: MapFocusOutcome) => void) {}
+/**
+ * The map panel's deep-link focus, one at a time, each settled exactly once. The panel's effects
+ * only forward to it: arrive (panelParams.focus changed), layersUpdated (a layer loaded),
+ * memberTookMap (a drag or zoom gesture), unmount / remount (the panel's mount effect).
+ *
+ *  - arrive: claims the camera (FOCUS_CAMERA_LOCK), starts the deadline (MAP_FOCUS_TIMEOUT_MS from
+ *    arrival, so a hung read still settles), then reads the pin and flies to it.
+ *  - found: the pin's id is in its loaded layer (checked on every layer update and right after the
+ *    read, against the layers already on screen).
+ *  - not_found: the read returned nothing, or the deadline timer fired first — expire(target)
+ *    settles that target whenever it is still pending, whatever the clock says.
+ *  - abandoned: a newer focus, a member gesture, or a real unmount (the unmount is confirmed a tick
+ *    later, so a StrictMode unmount + remount of the same instance keeps the focus).
+ * Settling clears the deadline and aborts the read; a later read result or layer update for a
+ * settled focus does nothing (no popup, no second row, no miss line).
+ */
+export class MapFocusSession {
+  private pending: PendingFocus | null = null
+  private layers: MapLayers = EMPTY_LAYERS
+  private mounted = true
+
+  constructor(private readonly deps: MapFocusSessionDeps) {}
 
   /** The focus waiting to land, if any. */
   get target(): FocusTarget | null {
     return this.pending?.target ?? null
   }
 
-  /** A focus arrived. False when it is the one already in hand (the same object). A newer focus
-   *  replaces an unsettled one, which settles as abandoned. */
-  begin(target: FocusTarget): boolean {
-    if (this.pending?.target === target) return false
-    if (this.pending) this.settle({ outcome: 'abandoned' })
-    this.pending = { target, pin: null, deadline: Infinity }
+  /** panelParams.focus changed. False when it is not a map kind or the one already in hand. */
+  arrive(focus: FocusTarget): boolean {
+    if (!isMapFocusKind(focus.kind) || this.pending?.target === focus) return false
+    if (this.pending) this.settle('abandoned')
+    const pending: PendingFocus = {
+      target: focus,
+      pin: null,
+      deadline: setTimeout(() => this.expire(focus), MAP_FOCUS_TIMEOUT_MS),
+      read: new AbortController(),
+    }
+    this.pending = pending
+    applyFocusCameraLock(this.deps.camera)
+    this.deps.onArrive(focus)
+    this.deps.read({ kind: focus.kind, id: focus.id }, pending.read.signal).then(
+      (pin) => this.located(focus, pin),
+      () => this.located(focus, null),
+    )
     return true
   }
 
-  /** The by-id read for `target` finished. Returns the pin to fly to, or null: no pin settles the
-   *  focus as not_found; a read for a focus no longer in hand is ignored. */
-  located(target: FocusTarget, pin: MapFocusPin | null, now: number): MapFocusPin | null {
+  /** A layer loaded: found when the pin is in it. */
+  layersUpdated(layers: MapLayers): void {
+    this.layers = layers
+    this.tryFound()
+  }
+
+  /** The deadline for `target`: not_found if it is still the pending focus. */
+  expire(target: FocusTarget): void {
+    if (this.pending?.target === target) this.settle('not_found')
+  }
+
+  /** The member dragged or zoomed: the focus is no longer theirs to land. */
+  memberTookMap(): void {
+    if (this.pending) this.settle('abandoned')
+  }
+
+  unmount(): void {
+    this.mounted = false
+    setTimeout(() => {
+      if (!this.mounted && this.pending) this.settle('abandoned')
+    }, 0)
+  }
+
+  remount(): void {
+    this.mounted = true
+  }
+
+  private located(target: FocusTarget, pin: MapFocusPin | null): void {
     const p = this.pending
-    if (!p || p.target !== target) return null
+    if (!p || p.target !== target) return
     if (!pin) {
-      this.settle({ outcome: 'not_found' })
-      return null
+      this.settle('not_found')
+      return
     }
     p.pin = pin
-    p.deadline = now + MAP_FOCUS_TIMEOUT_MS
-    return pin
+    this.deps.fly(pin)
+    this.tryFound()
   }
 
-  /** After a layer load or the deadline tick: found once the pin is in its layer, not_found once
-   *  the deadline has passed without it, otherwise keep waiting (null). */
-  check(layers: MapLayers, now: number): MapFocusSettled | null {
+  private tryFound(): void {
     const p = this.pending
-    if (!p?.pin) return null
-    if (pinInLayers(p.pin, layers)) return this.settle({ outcome: 'found', pin: p.pin })
-    if (now >= p.deadline) return this.settle({ outcome: 'not_found' })
-    return null
+    if (!p?.pin) return
+    const pin = p.pin
+    const item = this.layers[pin.layer].find((row) => row.id === pin.id)
+    if (!item) return
+    this.settle('found')
+    this.deps.onFound(pin, item)
   }
 
-  /** The panel is going away with a focus still in hand. */
-  abandon(): void {
-    if (this.pending) this.settle({ outcome: 'abandoned' })
-  }
-
-  private settle(result: MapFocusSettled): MapFocusSettled {
-    const target = this.pending!.target
+  private settle(outcome: MapFocusOutcome): void {
+    const p = this.pending!
     this.pending = null
-    this.onSettle(target, result.outcome)
-    return result
+    clearTimeout(p.deadline)
+    p.read.abort()
+    this.deps.onSettle(p.target, outcome)
   }
 }
 
@@ -282,16 +351,23 @@ export function applyFocusCameraLock(set: {
   set.setHasGeocentered(FOCUS_CAMERA_LOCK.hasGeocentered)
 }
 
-/** A marker mounting with `focused` starts with its popup open (one that mounts later: a cluster
- *  that splits at the focus zoom). */
-export function focusOpensPopup(focused: boolean | undefined): boolean {
-  return focused === true
+/** A marker's popup state: open, and the `focused` prop it last saw. */
+export interface PopupState {
+  open: boolean
+  seenFocused: boolean | undefined
 }
 
-/** A marker already on the map whose `focused` prop changed: the focus landing on it opens the
- *  popup; anything else leaves the popup as the member left it (losing focus never closes it). */
-export function popupOnFocusChange(prev: boolean | undefined, next: boolean | undefined, open: boolean): boolean {
-  return next === true && prev !== true ? true : open
+/** A marker mounting focused starts with its popup open (a cluster that splits at the focus zoom). */
+export function initialPopupState(focused: boolean | undefined): PopupState {
+  return { open: focused === true, seenFocused: focused }
+}
+
+/** The prop-change reducer (run while rendering): `focused` turning on opens the popup; any other
+ *  change leaves it as the member left it (losing focus never closes it). Same object when nothing
+ *  changed, so the hook only sets state on a real change. */
+export function popupStateFor(state: PopupState, focused: boolean | undefined): PopupState {
+  if (state.seenFocused === focused) return state
+  return { open: focused === true && state.seenFocused !== true ? true : state.open, seenFocused: focused }
 }
 
 /** Whether a marker in `layer` with `id` is the focused pin. */

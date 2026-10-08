@@ -23,7 +23,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { MoreHorizontal, Plus } from 'lucide-react'
 import { dir, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
-import { whereSafetyAlertLive } from './safety-alert-live'
+import { whereSafetyAlertLive } from '@/lib/safety-alert-live'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

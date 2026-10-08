@@ -58,13 +58,10 @@ import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
 import { mapMemberT } from '@/lib/i18n-map-member'
 import {
-  MAP_FOCUS_TIMEOUT_MS,
   MAP_FOCUS_ZOOM,
-  MapFocusController,
-  applyFocusCameraLock,
+  MapFocusSession,
   gpsCenterDecision,
   isFocusedPin,
-  isMapFocusKind,
   mapFocusSettler,
   profileCenterAllowed,
   readMapFocusPin,
@@ -664,11 +661,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && showSnapLayer,
   })
 
-  // Safety alerts layer — live alerts in the current viewport
-  const viewportBoundsForAlerts = bounds
-    ? { west: bounds.west, south: bounds.south, east: bounds.east, north: bounds.north }
-    : null
-  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(viewportBoundsForAlerts)
+  // Safety alerts layer — live alerts in the current viewport. The bounds state itself: its identity
+  // changes only when the map reports new bounds (a fresh object every render re-ran the hook's
+  // debounce on every render — a refetch loop).
+  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(bounds)
 
   // Current map center — used as default pin location for hazard reports
   const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
@@ -753,84 +749,63 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   )
 
   // ---- Deep-link focus (#map?focus=<kind>:<id>) -------------------------------------------------
+  // The lifecycle lives in MapFocusSession (lib/map-focus.ts); these effects only forward to it.
   // Declared after the profile-centring effects so, in a commit where both run, the focus camera
   // write lands last; from then on FOCUS_CAMERA_LOCK keeps them (and the GPS fix) off the camera.
   // Keyed on the focus object, not on mount: the map stays mounted when a hashchange (a re-click in
   // the reused preview tab) delivers a new focus.
   const locale = useProfileLocale()
   const focus = panelParams.focus
-  const focusSupabase = useMemo(() => createClient(), [])
   const [focusedPin, setFocusedPin] = useState<MapFocusPin | null>(null)
   const [focusMiss, setFocusMiss] = useState(false)
-  // Bumped when a pin is located (check against layers already loaded) and at the deadline.
-  const [focusTick, setFocusTick] = useState(0)
-  const focusTimerRef = useRef<number | null>(null)
-  const [focusController] = useState(
-    () => new MapFocusController(mapFocusSettler({ logEvent, setPanelParams, setFocusMiss }))
+  const [focusSession] = useState(
+    () =>
+      new MapFocusSession({
+        read: (target, signal) => readMapFocusPin(createClient(), target, new Date(), signal),
+        camera: { setUserHasMovedMap, setHasGeocentered },
+        onArrive: (target) => {
+          // A link arriving from the URL replaces the last miss line and popup target.
+          setFocusMiss(false)
+          setFocusedPin(null)
+          if (target.kind === 'resource') {
+            // The resource layer is the filtered list: a leftover search or category would hide the pin.
+            setSearchQuery('')
+            setSelectedCategory(null)
+          }
+        },
+        fly: (pin) => {
+          mapViewRef.current?.flyTo({ center: [pin.lng, pin.lat], zoom: MAP_FOCUS_ZOOM, duration: 1000 })
+          // MapView owns the live camera; this keeps the panel's copy (cluster zoom, list sort) on the
+          // target too — before the style loads, flyTo emits no move events to sync it.
+          setViewState({ longitude: pin.lng, latitude: pin.lat, zoom: MAP_FOCUS_ZOOM })
+        },
+        onFound: (pin, item) => {
+          setFocusedPin(pin)
+          // A resource is also selected, as a click on its pin would (the row is a MapResource from
+          // the resource layer below).
+          if (pin.layer === 'resource') setSelectedResource(item as MapResource)
+        },
+        onSettle: mapFocusSettler({ logEvent, setPanelParams, setFocusMiss }),
+      })
   )
 
-  // Arrival: claim the camera, read the pin under the member predicate, then fly to it.
   useEffect(() => {
-    if (!focus || !isMapFocusKind(focus.kind)) return
-    if (!focusController.begin(focus)) return
-    const target = focus
-    const kind = focus.kind
-    applyFocusCameraLock({ setUserHasMovedMap, setHasGeocentered })
-    // A link arriving from the URL replaces the last miss line and popup target.
-    setFocusMiss(false)
-    setFocusedPin(null)
-    if (kind === 'resource') {
-      // The resource layer is the filtered list: a leftover search or category would hide the pin.
-      setSearchQuery('')
-      setSelectedCategory(null)
-    }
-    void readMapFocusPin(focusSupabase, { kind, id: target.id }).then((pin) => {
-      const fly = focusController.located(target, pin, Date.now())
-      if (!fly) return
-      mapViewRef.current?.flyTo({ center: [fly.lng, fly.lat], zoom: MAP_FOCUS_ZOOM, duration: 1000 })
-      // MapView owns the live camera; this keeps the panel's copy (cluster zoom, list sort) on the
-      // target too — before the style loads, flyTo emits no move events to sync it.
-      setViewState({ longitude: fly.lng, latitude: fly.lat, zoom: MAP_FOCUS_ZOOM })
-      setFocusTick((n) => n + 1)
-      if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
-      focusTimerRef.current = window.setTimeout(() => setFocusTick((n) => n + 1), MAP_FOCUS_TIMEOUT_MS)
+    if (focus) focusSession.arrive(focus)
+  }, [focus, focusSession])
+
+  useEffect(() => {
+    focusSession.layersUpdated({
+      resource: dedupedMappableResources,
+      business: viewportBusinesses,
+      organization: viewportOrganizations,
+      safety_alert: safetyAlerts,
     })
-  }, [focus, focusController, focusSupabase])
+  }, [focusSession, dedupedMappableResources, viewportBusinesses, viewportOrganizations, safetyAlerts])
 
-  // Resolution: found once the pin is in its loaded layer (the popup opens; a resource is selected,
-  // as a click on its pin would), not_found at the deadline.
   useEffect(() => {
-    const settled = focusController.check(
-      {
-        resource: dedupedMappableResources,
-        business: viewportBusinesses,
-        organization: viewportOrganizations,
-        safety_alert: safetyAlerts,
-      },
-      Date.now()
-    )
-    if (settled?.outcome !== 'found') return
-    const { pin } = settled
-    setFocusedPin(pin)
-    if (pin.layer === 'resource') {
-      const row = dedupedMappableResources.find((r) => r.id === pin.id)
-      if (row) setSelectedResource(row)
-    }
-  }, [focusController, focusTick, dedupedMappableResources, viewportBusinesses, viewportOrganizations, safetyAlerts])
-
-  // Leaving the map with a focus still in hand settles it once as abandoned — after a tick, so a
-  // StrictMode re-mount (same instance, effects re-run) keeps it.
-  const focusMountedRef = useRef(false)
-  useEffect(() => {
-    focusMountedRef.current = true
-    return () => {
-      focusMountedRef.current = false
-      if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
-      window.setTimeout(() => {
-        if (!focusMountedRef.current) focusController.abandon()
-      }, 0)
-    }
-  }, [focusController])
+    focusSession.remount()
+    return () => focusSession.unmount()
+  }, [focusSession])
 
   // Use clustering for map markers
   const clusters = useCluster({
@@ -1092,7 +1067,9 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           onBoundsChange={handleBoundsChange}
           onUserInteraction={() => {
             setUserHasMovedMap(true)
-            // The member has taken the map: the deep-link popup target and miss line are done.
+            // The member has taken the map: a focus still in flight settles (abandoned), and the
+            // deep-link popup target and miss line are done.
+            focusSession.memberTookMap()
             setFocusedPin(null)
             setFocusMiss(false)
           }}

@@ -7,16 +7,17 @@
 //      holds rows an admin (resources_admin_select / orgs_admin_select) or a submitter (own pending
 //      submission) can read but no member's map shows — dropping one filter resolves such a row, RED.
 //   2. A resource a visible business links to lands on that business's pin.
-//   3. MapFocusController + mapFocusSettler: found / not_found / abandoned, exactly one
-//      nav.deeplink.resolve row per focus (no id), the focus cleared on every path.
-//   4. Camera lock: once a focus applies FOCUS_CAMERA_LOCK, a later GPS fix or profile geocode
-//      cannot move the camera.
-//   5. Marker popup: mounting focused opens it (rendered through the real hook); turning focused on
-//      a mounted marker opens it (popupOnFocusChange — react-dom/server renders once and cannot run
-//      a re-render, so the change case is proven on the pure decision the hook calls).
+//   3. MapFocusSession (the whole lifecycle the panel's effects forward to), on fake timers: found /
+//      not_found / abandoned, exactly one nav.deeplink.resolve row per focus (no id), the focus
+//      cleared on every path, the camera lock applied on arrival, the deadline from arrival (a hung
+//      read still settles; a timer firing early still settles), a real unmount vs a StrictMode
+//      unmount + remount, a member drag during the flight, and nothing after a settle.
+//   4. Camera lock: once applied, a later GPS fix or profile geocode cannot move the camera.
+//   5. Marker popup: the real hook driven through focused false → true → (member closes) → false →
+//      true, by render-phase updates in react-dom/server (state is kept across those re-renders).
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createElement as h } from 'react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createElement as h, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
@@ -31,17 +32,18 @@ import {
   FOCUS_CAMERA_LOCK,
   MAP_FOCUS_TIMEOUT_MS,
   MAP_FOCUS_ZOOM,
-  MapFocusController,
+  MapFocusSession,
   applyFocusCameraLock,
-  focusOpensPopup,
   gpsCenterDecision,
+  initialPopupState,
   isFocusedPin,
   mapFocusSettler,
-  popupOnFocusChange,
+  popupStateFor,
   profileCenterAllowed,
   readMapFocusPin,
   type MapFocusOutcome,
   type MapFocusPin,
+  type MapFocusSessionDeps,
   type MapLayers,
 } from './map-focus'
 import type { FocusTarget } from './deep-link'
@@ -71,6 +73,7 @@ interface FakeOptions {
 
 function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
   const calls: string[] = []
+  const signals: AbortSignal[] = []
   const client = {
     from(table: string) {
       let rows = [...(tables[table] ?? [])]
@@ -78,6 +81,11 @@ function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
       const builder = {
         select(cols: string) {
           calls.push(`${table}.select(${cols})`)
+          return builder
+        },
+        abortSignal(signal: AbortSignal) {
+          calls.push(`${table}.abortSignal`)
+          signals.push(signal)
           return builder
         },
         eq(col: string, val: unknown) {
@@ -114,7 +122,7 @@ function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
       return builder
     },
   }
-  return { client: client as unknown as SupabaseClient<Database>, calls }
+  return { client: client as unknown as SupabaseClient<Database>, calls, signals }
 }
 
 const NOW = new Date('2026-10-08T19:00:00.000Z')
@@ -236,6 +244,18 @@ describe('readMapFocusPin — safety alert (safety_alerts_in_view: live AND expi
   })
 })
 
+describe('readMapFocusPin — the read can be aborted', () => {
+  it('the resource and safety-alert queries carry the session signal', async () => {
+    const signal = new AbortController().signal
+    for (const [kind, table] of [['resource', 'resources'], ['safety_alert', 'safety_alerts']] as const) {
+      const fake = fakeClient({ resources: [resource()], safety_alerts: [alert()] })
+      await readMapFocusPin(fake.client, { kind, id: kind === 'resource' ? R1 : A1 }, NOW, signal)
+      expect(fake.calls, kind).toContain(`${table}.abortSignal`)
+      expect(fake.signals[0], kind).toBe(signal)
+    }
+  })
+})
+
 describe('readMapFocusPin — a failed read', () => {
   it('counts as no pin (not_found), never a throw', async () => {
     for (const kind of ['resource', 'organization', 'business', 'safety_alert'] as const) {
@@ -244,140 +264,255 @@ describe('readMapFocusPin — a failed read', () => {
   })
 })
 
-// ---- 3. Lifecycle and logging ----------------------------------------------------------------------
+// ---- 3. The session (lifecycle + logging) on fake timers ---------------------------------------------
 
 const target = (id = R1, kind: FocusTarget['kind'] = 'resource'): FocusTarget => ({ kind, id })
 const PIN: MapFocusPin = { layer: 'resource', id: R1, lng: -72.97, lat: 43.61 }
 const EMPTY: MapLayers = { resource: [], business: [], organization: [], safety_alert: [] }
 const WITH_PIN: MapLayers = { ...EMPTY, resource: [{ id: B2 }, { id: R1 }] }
 
+/** A read the test resolves by hand (or never, for a hung read). */
+function deferredRead() {
+  const reads: Array<{ target: { kind: string; id: string }; signal: AbortSignal; resolve: (pin: MapFocusPin | null) => void }> = []
+  const read: MapFocusSessionDeps['read'] = (t, signal) =>
+    new Promise((resolve) => {
+      reads.push({ target: t, signal, resolve })
+    })
+  return { read, reads }
+}
+
 function harness() {
   const rows: Array<{ name: string; attrs: Record<string, unknown> }> = []
   let params: { focus?: FocusTarget } = {}
   const misses: boolean[] = []
-  const onSettle = mapFocusSettler({
-    logEvent: (name, attrs) => rows.push({ name, attrs: { ...attrs } }),
-    setPanelParams: (update) => {
-      params = update(params)
-    },
-    setFocusMiss: (m) => misses.push(m),
+  const flights: MapFocusPin[] = []
+  const found: Array<{ pin: MapFocusPin; item: { id: string } }> = []
+  const camera = { setUserHasMovedMap: vi.fn(), setHasGeocentered: vi.fn() }
+  const arrivals: FocusTarget[] = []
+  const { read, reads } = deferredRead()
+  const session = new MapFocusSession({
+    read,
+    camera,
+    onArrive: (t) => arrivals.push(t),
+    fly: (pin) => flights.push(pin),
+    onFound: (pin, item) => found.push({ pin, item }),
+    onSettle: mapFocusSettler({
+      logEvent: (name, attrs) => rows.push({ name, attrs: { ...attrs } }),
+      setPanelParams: (update) => {
+        params = update(params)
+      },
+      setFocusMiss: (m) => misses.push(m),
+    }),
   })
-  const controller = new MapFocusController(onSettle)
   const arrive = (t: FocusTarget) => {
     params = { ...params, focus: t }
-    return controller.begin(t)
+    return session.arrive(t)
   }
-  return { controller, rows, misses, arrive, params: () => params, outcomes: () => rows.map((r) => r.attrs.outcome as MapFocusOutcome) }
+  return {
+    session, rows, misses, flights, found, camera, arrivals, reads, arrive,
+    params: () => params,
+    outcomes: () => rows.map((r) => r.attrs.outcome as MapFocusOutcome),
+  }
 }
 
-describe('MapFocusController + mapFocusSettler — one row per followed focus, focus always cleared', () => {
-  it('found: the pin appears in its layer after the fly → one row, focus cleared, popup target returned', () => {
+/** Let a resolved read's continuation run. */
+const settleReads = () => vi.advanceTimersByTimeAsync(0)
+
+describe('MapFocusSession — one row per followed focus, focus always cleared', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('arrive claims the camera (GPS fix and profile geocode locked out) and starts the read', () => {
+    const hx = harness()
+    expect(hx.arrive(target())).toBe(true)
+    expect(hx.camera.setUserHasMovedMap).toHaveBeenCalledWith(true)
+    expect(hx.camera.setHasGeocentered).toHaveBeenCalledWith(true)
+    expect(hx.arrivals).toHaveLength(1)
+    expect(hx.reads.map((r) => r.target)).toEqual([{ kind: 'resource', id: R1 }])
+  })
+
+  it('found: the read lands, the camera flies, the pin appears in its layer → one row, focus cleared, popup', async () => {
     const t = target()
     const hx = harness()
-    expect(hx.arrive(t)).toBe(true)
-    expect(hx.controller.located(t, PIN, 0)).toEqual(PIN)
-    expect(hx.controller.check(EMPTY, 100)).toBeNull() // still loading: keep waiting, no row
+    hx.arrive(t)
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    expect(hx.flights).toEqual([PIN])
+    hx.session.layersUpdated(EMPTY) // still loading: no row
     expect(hx.rows).toHaveLength(0)
-    expect(hx.controller.check(WITH_PIN, 200)).toEqual({ outcome: 'found', pin: PIN })
+    hx.session.layersUpdated(WITH_PIN)
     expect(hx.rows).toEqual([{ name: 'nav.deeplink.resolve', attrs: { kind: 'resource', outcome: 'found', panel: 'map' } }])
+    expect(hx.found).toEqual([{ pin: PIN, item: { id: R1 } }])
     expect(hx.params().focus).toBeUndefined()
     expect(hx.misses).toEqual([])
-    // Settled: later layer loads change nothing.
-    expect(hx.controller.check(WITH_PIN, 300)).toBeNull()
+    // Settled: the deadline and later layers change nothing.
+    await vi.advanceTimersByTimeAsync(MAP_FOCUS_TIMEOUT_MS * 2)
+    hx.session.layersUpdated(WITH_PIN)
     expect(hx.rows).toHaveLength(1)
   })
 
-  it('not_found: the id never appears before the deadline → one row, focus cleared, miss line', () => {
-    const t = target()
+  it('found at once when the pin is already in the layers on screen when the read lands', async () => {
     const hx = harness()
-    hx.arrive(t)
-    hx.controller.located(t, PIN, 1000)
-    expect(hx.controller.check(EMPTY, 1000 + MAP_FOCUS_TIMEOUT_MS - 1)).toBeNull()
-    expect(hx.controller.check(EMPTY, 1000 + MAP_FOCUS_TIMEOUT_MS)).toEqual({ outcome: 'not_found' })
+    hx.session.layersUpdated(WITH_PIN)
+    hx.arrive(target())
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    expect(hx.outcomes()).toEqual(['found'])
+  })
+
+  it('not_found: the read returns nothing → one row, miss line, no flight', async () => {
+    const hx = harness()
+    hx.arrive(target())
+    hx.reads[0].resolve(null)
+    await settleReads()
     expect(hx.outcomes()).toEqual(['not_found'])
-    expect(hx.params().focus).toBeUndefined()
+    expect(hx.flights).toEqual([])
     expect(hx.misses).toEqual([true])
+    expect(hx.params().focus).toBeUndefined()
   })
 
-  it('not_found: the by-id read returned nothing → settled at once, no fly', () => {
-    const t = target()
+  it('not_found: the pin never appears → the deadline timer settles it, exactly once', async () => {
     const hx = harness()
-    hx.arrive(t)
-    expect(hx.controller.located(t, null, 0)).toBeNull()
+    hx.arrive(target())
+    hx.reads[0].resolve(PIN)
+    await vi.advanceTimersByTimeAsync(MAP_FOCUS_TIMEOUT_MS - 1)
+    expect(hx.rows).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(1)
     expect(hx.outcomes()).toEqual(['not_found'])
-    expect(hx.params().focus).toBeUndefined()
-    expect(hx.controller.check(WITH_PIN, 1)).toBeNull()
+    expect(hx.misses).toEqual([true])
+    // A layer arriving after the deadline opens no popup and adds no row.
+    hx.session.layersUpdated(WITH_PIN)
+    expect(hx.found).toEqual([])
     expect(hx.rows).toHaveLength(1)
   })
 
-  it('abandoned: the panel unmounts with the focus pending → one row; a second abandon writes nothing', () => {
-    const t = target()
+  it('the deadline settles even when the timer fires early (clock jitter): expire does not compare clocks', async () => {
     const hx = harness()
+    const t = target()
     hx.arrive(t)
-    hx.controller.abandon()
-    hx.controller.abandon()
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    vi.setSystemTime(Date.now() - 1) // the timer's callback runs "1 ms before" the deadline instant
+    hx.session.expire(t)
+    expect(hx.outcomes()).toEqual(['not_found'])
+  })
+
+  it('a hung read still yields one not_found at the deadline (counted from arrival), and is aborted', async () => {
+    const hx = harness()
+    hx.arrive(target())
+    await vi.advanceTimersByTimeAsync(MAP_FOCUS_TIMEOUT_MS)
+    expect(hx.outcomes()).toEqual(['not_found'])
+    expect(hx.misses).toEqual([true])
+    expect(hx.reads[0].signal.aborted).toBe(true)
+    // The read finally answering does nothing.
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    expect(hx.flights).toEqual([])
+    expect(hx.rows).toHaveLength(1)
+  })
+
+  it('a real unmount writes one abandoned row', async () => {
+    const hx = harness()
+    hx.arrive(target())
+    hx.session.unmount()
+    expect(hx.rows).toHaveLength(0) // confirmed a tick later
+    await vi.advanceTimersByTimeAsync(0)
     expect(hx.outcomes()).toEqual(['abandoned'])
     expect(hx.params().focus).toBeUndefined()
     expect(hx.misses).toEqual([])
+    await vi.advanceTimersByTimeAsync(MAP_FOCUS_TIMEOUT_MS)
+    expect(hx.rows).toHaveLength(1)
   })
 
-  it('a newer link replaces a pending one: the old one is abandoned, the new one kept in panelParams', () => {
+  it('unmount + remount in the same tick (StrictMode) writes no row and the focus still lands', async () => {
+    const hx = harness()
+    hx.arrive(target())
+    hx.session.unmount()
+    hx.session.remount()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(hx.rows).toHaveLength(0)
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    hx.session.layersUpdated(WITH_PIN)
+    expect(hx.outcomes()).toEqual(['found'])
+  })
+
+  it('a member drag during the flight settles it as abandoned; the pin arriving later opens nothing', async () => {
+    const hx = harness()
+    hx.arrive(target())
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    hx.session.memberTookMap()
+    expect(hx.outcomes()).toEqual(['abandoned'])
+    hx.session.layersUpdated(WITH_PIN)
+    expect(hx.found).toEqual([])
+    expect(hx.rows).toHaveLength(1)
+    hx.session.memberTookMap() // nothing pending: no row
+    expect(hx.rows).toHaveLength(1)
+  })
+
+  it('a newer link replaces a pending one: the old one is abandoned, the new one kept in panelParams', async () => {
     const first = target(R1)
     const second = target(B1, 'business')
     const hx = harness()
     hx.arrive(first)
-    hx.controller.located(first, PIN, 0)
     hx.arrive(second)
     expect(hx.outcomes()).toEqual(['abandoned'])
-    expect(hx.params().focus).toBe(second) // clearing the old one did not drop the new one
-    // The old read resolving late is ignored.
-    expect(hx.controller.located(first, PIN, 10)).toBeNull()
-    expect(hx.rows).toHaveLength(1)
-    hx.controller.located(second, { layer: 'business', id: B1, lng: 1, lat: 1 }, 20)
-    hx.controller.check({ ...EMPTY, business: [{ id: B1 }] }, 30)
+    expect(hx.params().focus).toBe(second)
+    expect(hx.reads[0].signal.aborted).toBe(true)
+    hx.reads[0].resolve(PIN) // the old read answering late is ignored
+    hx.reads[1].resolve({ layer: 'business', id: B1, lng: 1, lat: 1 })
+    await settleReads()
+    expect(hx.flights.map((f) => f.id)).toEqual([B1])
+    hx.session.layersUpdated({ ...EMPTY, business: [{ id: B1 }] })
     expect(hx.outcomes()).toEqual(['abandoned', 'found'])
     expect(hx.params().focus).toBeUndefined()
   })
 
-  it('the same focus object delivered again (re-render, StrictMode effect re-run) is not a second focus', () => {
+  it('the same focus object again (re-render) is not a second focus; a new object for the same item is', async () => {
+    const hx = harness()
     const t = target()
-    const hx = harness()
     expect(hx.arrive(t)).toBe(true)
-    expect(hx.controller.begin(t)).toBe(false)
-    hx.controller.located(t, PIN, 0)
-    hx.controller.check(WITH_PIN, 1)
-    expect(hx.rows).toHaveLength(1)
-  })
-
-  it('a re-click in the preview tab (a new object for the same item) is a new focus with its own row', () => {
-    const hx = harness()
-    for (const t of [target(), target()]) {
-      hx.arrive(t)
-      hx.controller.located(t, PIN, 0)
-      hx.controller.check(WITH_PIN, 1)
-    }
+    expect(hx.session.arrive(t)).toBe(false)
+    hx.reads[0].resolve(PIN)
+    await settleReads()
+    hx.session.layersUpdated(WITH_PIN)
+    const again = target()
+    expect(hx.arrive(again)).toBe(true) // a re-click in the preview tab
+    hx.reads[1].resolve(PIN)
+    await settleReads()
     expect(hx.outcomes()).toEqual(['found', 'found'])
   })
 
-  it('rows carry kind / outcome / panel only — never an id', () => {
-    const t = target(A1, 'safety_alert')
+  it('an event focus is not the map\'s: ignored, no row', () => {
     const hx = harness()
-    hx.arrive(t)
-    hx.controller.located(t, null, 0)
+    expect(hx.session.arrive(target(R1, 'event'))).toBe(false)
+    expect(hx.reads).toHaveLength(0)
+  })
+
+  it('rows carry kind / outcome / panel only — never an id', async () => {
+    const hx = harness()
+    hx.arrive(target(A1, 'safety_alert'))
+    hx.reads[0].resolve(null)
+    await settleReads()
     expect(Object.keys(hx.rows[0].attrs).sort()).toEqual(['kind', 'outcome', 'panel'])
     expect(JSON.stringify(hx.rows)).not.toContain(A1)
     expect(hx.rows[0].attrs).toEqual({ kind: 'safety_alert', outcome: 'not_found', panel: 'map' })
   })
 
-  it('a business-linked resource is logged as the kind that was followed (resource), found on the business layer', () => {
-    const t = target(R1, 'resource')
+  it('a business-linked resource is logged as resource and found on the business layer only', async () => {
     const hx = harness()
-    hx.arrive(t)
+    hx.arrive(target(R1, 'resource'))
     const leaf: MapFocusPin = { layer: 'business', id: B1, lng: 1, lat: 1 }
-    hx.controller.located(t, leaf, 0)
-    // The resource layer never holds it (deduped away); the business layer does.
-    expect(hx.controller.check({ ...EMPTY, resource: [{ id: B1 }] }, 1)).toBeNull()
-    expect(hx.controller.check({ ...EMPTY, business: [{ id: B1 }] }, 2)).toEqual({ outcome: 'found', pin: leaf })
+    hx.reads[0].resolve(leaf)
+    await settleReads()
+    hx.session.layersUpdated({ ...EMPTY, resource: [{ id: B1 }] })
+    expect(hx.rows).toHaveLength(0)
+    hx.session.layersUpdated({ ...EMPTY, business: [{ id: B1 }] })
     expect(hx.rows[0].attrs).toEqual({ kind: 'resource', outcome: 'found', panel: 'map' })
   })
 })
@@ -425,26 +560,63 @@ describe('camera lock — a focus keeps a later GPS fix or profile geocode off t
 
 // ---- 5. Marker popup -----------------------------------------------------------------------------------
 
-function PopupProbe({ focused }: { focused?: boolean }) {
-  const [open] = useFocusedPopup(focused)
-  return h('span', null, open ? 'open' : 'closed')
+/** Drive the real hook through a sequence of `focused` values (and a member close) inside one
+ *  react-dom/server render: each step advances by a render-phase update, which re-runs the
+ *  component with its hook state kept. Returns the settled `open` after each step / action. */
+function runPopup(steps: Array<{ focused?: boolean; close?: boolean }>): string[] {
+  const log: string[] = []
+  function Probe() {
+    const [step, setStep] = useState(0)
+    const [closedAt, setClosedAt] = useState(-1)
+    const [lastSeen, setLastSeen] = useState('')
+    const [open, setOpen] = useFocusedPopup(steps[step].focused)
+    const sig = `${step}:${open}:${closedAt}`
+    if (sig !== lastSeen) {
+      setLastSeen(sig) // one more pass to see whether this state is settled
+      return null
+    }
+    if (steps[step].close && closedAt !== step) {
+      log.push(`${step}:${open}`)
+      setOpen(false) // the member closes the popup (× or Escape)
+      setClosedAt(step)
+      return null
+    }
+    log.push(`${step}:${open}${closedAt === step ? ' (closed by member)' : ''}`)
+    if (step < steps.length - 1) setStep(step + 1)
+    return null
+  }
+  renderToStaticMarkup(h(Probe))
+  return log
 }
 
 describe('marker popup — opened by the focus', () => {
-  it('a marker that mounts focused renders its popup open (the real hook)', () => {
-    expect(renderToStaticMarkup(h(PopupProbe, { focused: true }))).toBe('<span>open</span>')
-    expect(renderToStaticMarkup(h(PopupProbe, { focused: false }))).toBe('<span>closed</span>')
-    expect(renderToStaticMarkup(h(PopupProbe, {}))).toBe('<span>closed</span>')
-    expect(focusOpensPopup(true)).toBe(true)
-    expect(focusOpensPopup(undefined)).toBe(false)
+  it('a mounted marker: false → true opens, the member closes it, false keeps it closed, true opens again', () => {
+    expect(runPopup([{ focused: false }, { focused: true, close: true }, { focused: false }, { focused: true }])).toEqual([
+      '0:false',
+      '1:true',
+      '1:false (closed by member)',
+      '2:false',
+      '3:true',
+    ])
   })
 
-  it('a mounted marker opens when focused turns on; losing focus never closes a popup the member has open', () => {
-    expect(popupOnFocusChange(false, true, false)).toBe(true)
-    expect(popupOnFocusChange(undefined, true, false)).toBe(true)
-    expect(popupOnFocusChange(true, false, true)).toBe(true)
-    expect(popupOnFocusChange(true, false, false)).toBe(false)
-    expect(popupOnFocusChange(false, undefined, false)).toBe(false)
+  it('losing focus never closes a popup the member has open', () => {
+    expect(runPopup([{ focused: true }, { focused: false }, { focused: undefined }])).toEqual(['0:true', '1:true', '2:true'])
+  })
+
+  it('a marker that mounts focused starts open; unfocused starts closed', () => {
+    expect(runPopup([{ focused: true }])).toEqual(['0:true'])
+    expect(runPopup([{ focused: false }])).toEqual(['0:false'])
+    expect(runPopup([{}])).toEqual(['0:false'])
+  })
+
+  it('the reducer: same object when nothing changed (no state write), open only on a turn to true', () => {
+    const s0 = initialPopupState(false)
+    expect(popupStateFor(s0, false)).toBe(s0)
+    const s1 = popupStateFor(s0, true)
+    expect(s1).toEqual({ open: true, seenFocused: true })
+    expect(popupStateFor({ open: false, seenFocused: true }, false)).toEqual({ open: false, seenFocused: false })
+    expect(popupStateFor({ open: false, seenFocused: undefined }, true).open).toBe(true)
   })
 
   it('only the marker in the focused layer with the focused id is focused', () => {
