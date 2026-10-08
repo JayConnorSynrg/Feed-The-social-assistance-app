@@ -9,7 +9,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const logEvent = vi.fn()
 vi.mock('@/lib/logger', () => ({ logEvent: (...a: unknown[]) => logEvent(...a), logger: { info: vi.fn() } }))
 
-import { resolveHashLocation, settleFocusHash } from './feed-shell'
+import {
+  paramsOnAliasSwitch,
+  paramsOnBaseSwitch,
+  paramsOnHashChange,
+  paramsOnInit,
+  resolveHashLocation,
+  settleFocusHash,
+} from './feed-shell'
 
 const ID = '8f285b5a-4e4f-4bbc-b661-23fcaf84353a'
 const replaceState = vi.fn()
@@ -50,5 +57,64 @@ describe('settleFocusHash', () => {
     const stripped = replaceState.mock.calls[0][2] as string
     expect(resolveHashLocation(stripped)).toMatchObject({ panel: 'feed', subtab: 'events', hadFocusParam: false })
     expect(resolveHashLocation(stripped).focus).toBeUndefined()
+  })
+})
+
+// The panelParams each shell path produces — what a panel then reads (subtab, alias params, focus).
+describe('panelParams merges', () => {
+  const FOCUS = { kind: 'event' as const, id: ID }
+  const OTHER = { kind: 'event' as const, id: '11111111-1111-4111-8111-111111111111' }
+
+  describe('on mount (paramsOnInit)', () => {
+    it('a focus link: events subtab + the focus, other params kept', () => {
+      expect(paramsOnInit({ openConversationId: 'c1' }, resolveHashLocation(`#events?focus=event:${ID}`))).toEqual({
+        openConversationId: 'c1',
+        subtab: 'events',
+        focus: FOCUS,
+      })
+    })
+    it('alias params come through (#add-business opens the form); a plain #feed clears the subtab', () => {
+      expect(paramsOnInit({}, resolveHashLocation('#add-business'))).toMatchObject({ subtab: 'businesses', businessSubmit: true })
+      expect(paramsOnInit({ subtab: 'events' }, resolveHashLocation('#feed')).subtab).toBeUndefined()
+    })
+    it('a second run on the stripped hash keeps the focus taken by the first', () => {
+      const first = paramsOnInit({}, resolveHashLocation(`#events?focus=event:${ID}`))
+      expect(paramsOnInit(first, resolveHashLocation('#events')).focus).toEqual(FOCUS)
+    })
+  })
+
+  describe('on hashchange (paramsOnHashChange)', () => {
+    it('a focus link in an open tab: sets the subtab and the new focus (a re-click replaces the old one)', () => {
+      expect(paramsOnHashChange({ subtab: 'feed', focus: OTHER }, resolveHashLocation(`#events?focus=event:${ID}`))).toEqual({
+        subtab: 'events',
+        businessSubmit: undefined,
+        focus: FOCUS,
+      })
+    })
+    it('any other hash clears an untaken focus and a stale add-business flag; #add-business still sets it', () => {
+      const next = paramsOnHashChange({ focus: FOCUS, businessSubmit: true, openConversationId: 'c1' }, resolveHashLocation('#feed'))
+      expect(next).toEqual({ subtab: undefined, businessSubmit: undefined, focus: undefined, openConversationId: 'c1' })
+      expect(paramsOnHashChange({}, resolveHashLocation('#add-business'))).toMatchObject({ subtab: 'businesses', businessSubmit: true })
+      expect(paramsOnHashChange({}, resolveHashLocation('#messages')).subtab).toBe('messages')
+    })
+  })
+
+  describe('in-app switches (setActivePanel)', () => {
+    it('an alias switch keeps other params, sets its subtab + params, and drops an untaken focus', () => {
+      expect(paramsOnAliasSwitch({ openConversationId: 'c1', focus: FOCUS }, { subtab: 'petitions' })).toEqual({
+        openConversationId: 'c1',
+        subtab: 'petitions',
+        focus: undefined,
+      })
+      expect(paramsOnAliasSwitch({}, { subtab: 'businesses', params: { businessSubmit: true } })).toMatchObject({ businessSubmit: true })
+    })
+    it('a base switch clears subtab, the add-business flag and an untaken focus, keeping the rest', () => {
+      expect(paramsOnBaseSwitch({ subtab: 'events', businessSubmit: true, focus: FOCUS, formsTarget: 'x' })).toEqual({
+        subtab: undefined,
+        businessSubmit: undefined,
+        focus: undefined,
+        formsTarget: 'x',
+      })
+    })
   })
 })

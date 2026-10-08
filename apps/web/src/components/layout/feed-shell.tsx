@@ -595,6 +595,42 @@ export function settleFocusHash(loc: HashLocation) {
   }
 }
 
+// ---- panelParams merges (pure; the effects and setActivePanel below call them) --------------------
+
+/** First read of the hash on mount. subtab is a pure function of the resolved hash — set when the
+ *  hash resolves one (alias hashes), cleared otherwise so a direct #feed load shows the base feed
+ *  rather than a stale subtab. Alias params (e.g. #add-business → businessSubmit) are merged through.
+ *  A focus is merged only when present, so a second run of the mount effect (the hash is already
+ *  stripped) keeps it. */
+export function paramsOnInit(prev: PanelParams, loc: HashLocation): PanelParams {
+  return { ...prev, subtab: loc.subtab, ...(loc.params ?? {}), ...(loc.focus ? { focus: loc.focus } : {}) }
+}
+
+/** A hashchange (Back / Forward, or a link clicked into an open tab — a re-click of a focus link in
+ *  the reused preview tab included). subtab tracks the hash; the add-business flag is cleared first
+ *  so a Back to a base hash cannot leave it set, and the alias params spread after it so
+ *  #add-business still opens the form. focus tracks the hash the same way: a focus link sets it,
+ *  any other hash clears a focus no panel has taken yet. */
+export function paramsOnHashChange(prev: PanelParams, loc: HashLocation): PanelParams {
+  return { ...prev, subtab: loc.subtab, businessSubmit: undefined, ...(loc.params ?? {}), focus: loc.focus }
+}
+
+/** An in-app switch to an alias (a subtab button): keeps other params (e.g. openConversationId),
+ *  layers the alias's own params, and drops any unconsumed focus — it belonged to the link that
+ *  opened the page, not to this click. */
+export function paramsOnAliasSwitch(
+  prev: PanelParams,
+  alias: { subtab: string; params?: Record<string, unknown> },
+): PanelParams {
+  return { ...prev, subtab: alias.subtab, focus: undefined, ...(alias.params ?? {}) }
+}
+
+/** An in-app switch to a base panel: no subtab, no add-business flag, no unconsumed focus; other
+ *  params (openConversationId, formsTarget, …) are kept. */
+export function paramsOnBaseSwitch(prev: PanelParams): PanelParams {
+  return { ...prev, subtab: undefined, businessSubmit: undefined, focus: undefined }
+}
+
 export function FeedShell({
   children,
   isAuthenticated = false,
@@ -622,18 +658,7 @@ export function FeedShell({
     // available after mount, so setState in effect is the correct idiom here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePanelState(resolved.panel)
-    // subtab is a pure function of the resolved hash — set it when the hash
-    // resolves one (alias hashes), clear it otherwise so a direct #feed load
-    // shows the base feed rather than a stale subtab. Deep-link params (e.g.
-    // #add-business → businessSubmit) are merged through so the target subtab
-    // can open in the requested state. A focus target (#events?focus=event:<id>) is merged only
-    // when present, so a second run of this effect (the hash is already stripped) keeps it.
-    setPanelParams((prev) => ({
-      ...prev,
-      subtab: resolved.subtab,
-      ...(resolved.params ?? {}),
-      ...(resolved.focus ? { focus: resolved.focus } : {}),
-    }))
+    setPanelParams((prev) => paramsOnInit(prev, resolved))
     settleFocusHash(resolved)
   }, [])
 
@@ -644,12 +669,10 @@ export function FeedShell({
   // - For non-alias panels, sets activePanel directly and pushes hash.
   const setActivePanel = useCallback((panel: PanelType) => {
     if (Object.hasOwn(PANEL_ALIASES, panel)) {
-      const { panel: parent, subtab, params } = PANEL_ALIASES[panel]
-      logEvent('nav.alias.resolve', { panel: parent, subtab })
-      setActivePanelState(parent)
-      // Functional update merges — preserves any existing params (e.g. openConversationId)
-      // and layers this alias's deep-link params (e.g. add-business → businessSubmit).
-      setPanelParams((prev) => ({ ...prev, subtab, ...(params ?? {}) }))
+      const alias = PANEL_ALIASES[panel]
+      logEvent('nav.alias.resolve', { panel: alias.panel, subtab: alias.subtab })
+      setActivePanelState(alias.panel)
+      setPanelParams((prev) => paramsOnAliasSwitch(prev, alias))
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -658,13 +681,7 @@ export function FeedShell({
       }
     } else {
       setActivePanelState(panel)
-      // A base (non-alias) panel carries no subtab. Clear any stale subtab so a
-      // return to e.g. 'feed' after visiting the events/petitions subtabs lands
-      // on the base view instead of re-deriving the old subtab. Also clear the
-      // add-business deep-link flag so it can't re-open the submit form on a
-      // later return, and any unconsumed deep-link focus. Other params (openConversationId,
-      // formsTarget, …) are preserved.
-      setPanelParams((prev) => ({ ...prev, subtab: undefined, businessSubmit: undefined, focus: undefined }))
+      setPanelParams(paramsOnBaseSwitch)
       if (typeof window !== 'undefined') {
         const newHash = `#${panel}`
         if (window.location.hash !== newHash) {
@@ -680,22 +697,7 @@ export function FeedShell({
     const handleHashChange = () => {
       const resolved = resolveHashLocation(window.location.hash)
       setActivePanelState(resolved.panel)
-      // Mirror the init/setActivePanel paths: subtab tracks the resolved hash and
-      // is cleared when the hash carries none, so browser back/forward to #feed
-      // returns to the base feed instead of a stale events/petitions subtab.
-      // Clear the add-business deep-link flag first (mirrors the setActivePanel
-      // base branch) so a Back to a base hash cannot leave businessSubmit=true to
-      // auto-open the form on a later Businesses-tab visit; the resolved params
-      // spread comes AFTER, so #add-business still wins and opens the form. focus tracks the hash
-      // the same way: a focus link (a re-click in the reused preview tab included) sets it, any
-      // other hash clears a focus no panel has taken yet.
-      setPanelParams((prev) => ({
-        ...prev,
-        subtab: resolved.subtab,
-        businessSubmit: undefined,
-        ...(resolved.params ?? {}),
-        focus: resolved.focus,
-      }))
+      setPanelParams((prev) => paramsOnHashChange(prev, resolved))
       settleFocusHash(resolved)
     }
 
