@@ -154,3 +154,37 @@ describe('readA11yUserPrefs', () => {
     expect(readA11yUserPrefs()).toEqual({})
   })
 })
+
+// Script-driven motion (the map's camera flights) follows FEED's own Reduce motion as well as the OS.
+describe('reduced motion for script-driven animation', () => {
+  it('prefersReducedMotion: FEED setting or OS', async () => {
+    const { prefersReducedMotion } = await import('./accessibility-prefs')
+    expect(prefersReducedMotion('reduce', false)).toBe(true)
+    expect(prefersReducedMotion(undefined, true)).toBe(true)
+    expect(prefersReducedMotion(undefined, false)).toBe(false)
+  })
+
+  it('motionDuration: instant when reduced, the requested duration otherwise', async () => {
+    const { motionDuration } = await import('./accessibility-prefs')
+    expect(motionDuration(1000, true)).toBe(0)
+    expect(motionDuration(1000, false)).toBe(1000)
+  })
+
+  it('readPrefersReducedMotion reads data-motion="reduce" even when the OS does not ask', async () => {
+    const { readPrefersReducedMotion } = await import('./accessibility-prefs')
+    const g = globalThis as Record<string, unknown>
+    const saved = { document: g.document, window: g.window }
+    try {
+      g.window = { matchMedia: () => ({ matches: false }) }
+      g.document = { documentElement: { dataset: { motion: 'reduce' } } }
+      expect(readPrefersReducedMotion()).toBe(true)
+      g.document = { documentElement: { dataset: {} } }
+      expect(readPrefersReducedMotion()).toBe(false)
+      g.window = { matchMedia: () => ({ matches: true }) }
+      expect(readPrefersReducedMotion()).toBe(true)
+    } finally {
+      g.document = saved.document
+      g.window = saved.window
+    }
+  })
+})

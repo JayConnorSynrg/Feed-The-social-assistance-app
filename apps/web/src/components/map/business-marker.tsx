@@ -8,41 +8,49 @@
 // colored badge + a click popup. The business teal is distinct from resource-olive,
 // volunteer-amber, SNAP-green and safety-red so the layer reads as its own thing.
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Leaf, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 interface BusinessMarkerProps {
   business: MappableBusiness
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
-export function BusinessMarker({ business }: BusinessMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
   const handleClick = useCallback((e: { originalEvent: MouseEvent }) => {
     e.originalEvent.stopPropagation()
     setShowPopup(true)
-  }, [])
+  }, [setShowPopup])
 
   const fullAddress = [business.address, business.city, business.state].filter(Boolean).join(', ')
 
   return (
     <>
-      <Marker longitude={business.lng} latitude={business.lat} anchor="bottom" onClick={handleClick}>
-        <div
-          className="cursor-pointer transition-transform hover:scale-110"
+      <Marker ref={markerA11yRef} longitude={business.lng} latitude={business.lat} anchor="bottom" onClick={handleClick}>
+        <button
+          type="button"
+          ref={triggerRef}
+          className={`block cursor-pointer rounded-full transition-transform hover:scale-110 ${MARKER_BUTTON_FOCUS}`}
           aria-label={`Local business: ${business.name}`}
+          aria-haspopup="dialog"
+          aria-expanded={showPopup}
         >
-          <div
+          <span
             className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-white shadow-md"
             style={{ backgroundColor: BUSINESS_MARKER_HEX }}
           >
-            <Leaf className="h-4 w-4" />
-          </div>
-        </div>
+            <Leaf className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </button>
       </Marker>
 
       {showPopup && (
@@ -50,12 +58,15 @@ export function BusinessMarker({ business }: BusinessMarkerProps) {
           longitude={business.lng}
           latitude={business.lat}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
-          closeButton={true}
+          onClose={closePopup}
+          onOpen={onPopupOpen}
+          focusAfterOpen={false}
+          closeButton={false}
           closeOnClick={false}
           offset={28}
           maxWidth="320px"
         >
+          <MarkerPopupDialog titleId={titleId} onClose={closePopup}>
           <Card className="border-0 shadow-none">
             <CardHeader className="pb-2 pt-0 px-0">
               <div
@@ -64,7 +75,7 @@ export function BusinessMarker({ business }: BusinessMarkerProps) {
               >
                 Local business
               </div>
-              <CardTitle className="text-base">{business.name}</CardTitle>
+              <CardTitle id={titleId} className="text-base">{business.name}</CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 space-y-2">
               {business.description && (
@@ -85,6 +96,7 @@ export function BusinessMarker({ business }: BusinessMarkerProps) {
               </a>
             </CardContent>
           </Card>
+          </MarkerPopupDialog>
         </Popup>
       )}
     </>

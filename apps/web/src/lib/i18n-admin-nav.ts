@@ -29,6 +29,12 @@ export interface AdminNavMessages {
   viewInFeed: string
   /** Event rows: not listed yet; {date} = the venue-local date it will be. */
   appearsInFeed: string
+  /** Map rows: the link to the item's pin on the members' map. */
+  viewOnMap: string
+  /** Map rows: the item has no location, so the map draws no pin. */
+  reasonNoLocation: string
+  /** Map rows: the safety alert is past its expiry. */
+  reasonExpired: string
 }
 
 export const adminNavMessages: Record<Locale, AdminNavMessages> = {
@@ -45,6 +51,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'No upcoming dates — not in the feed',
     viewInFeed: 'View in feed',
     appearsInFeed: 'Appears in feed {date}',
+    viewOnMap: 'View on map',
+    reasonNoLocation: 'No location — not on the map',
+    reasonExpired: 'Expired — not on the map',
   },
   es: {
     backToFeed: 'Volver al feed',
@@ -59,6 +68,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Sin fechas próximas: no aparece en el feed',
     viewInFeed: 'Ver en el feed',
     appearsInFeed: 'Aparece en el feed el {date}',
+    viewOnMap: 'Ver en el mapa',
+    reasonNoLocation: 'Sin ubicación: no aparece en el mapa',
+    reasonExpired: 'Vencida: no aparece en el mapa',
   },
   ht: {
     backToFeed: 'Retounen nan fil la',
@@ -73,6 +85,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Pa gen dat k ap vini — pa nan fil la',
     viewInFeed: 'Gade nan fil la',
     appearsInFeed: 'Ap parèt nan fil la {date}',
+    viewOnMap: 'Gade sou kat la',
+    reasonNoLocation: 'Pa gen kote — pa sou kat la',
+    reasonExpired: 'Ekspire — pa sou kat la',
   },
   vi: {
     backToFeed: 'Quay lại bảng tin',
@@ -87,6 +102,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Không có ngày sắp tới — không có trên bảng tin',
     viewInFeed: 'Xem trên bảng tin',
     appearsInFeed: 'Xuất hiện trên bảng tin vào {date}',
+    viewOnMap: 'Xem trên bản đồ',
+    reasonNoLocation: 'Không có vị trí — không có trên bản đồ',
+    reasonExpired: 'Đã hết hạn — không có trên bản đồ',
   },
   ar: {
     backToFeed: 'العودة إلى الموجز',
@@ -101,6 +119,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'لا توجد مواعيد قادمة — غير ظاهر في الموجز',
     viewInFeed: 'عرض في الموجز',
     appearsInFeed: 'يظهر في الموجز في {date}',
+    viewOnMap: 'عرض على الخريطة',
+    reasonNoLocation: 'لا يوجد موقع — غير ظاهر على الخريطة',
+    reasonExpired: 'منتهي الصلاحية — غير ظاهر على الخريطة',
   },
   zh: {
     backToFeed: '返回动态',
@@ -115,6 +136,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: '没有即将到来的日期 — 不在动态中',
     viewInFeed: '在动态中查看',
     appearsInFeed: '将于 {date} 出现在动态中',
+    viewOnMap: '在地图上查看',
+    reasonNoLocation: '没有位置 — 不在地图上',
+    reasonExpired: '已过期 — 不在地图上',
   },
   so: {
     backToFeed: 'Ku noqo bogga bulshada',
@@ -129,6 +153,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Ma jiraan taariikho soo socda — kuma jiro bogga bulshada',
     viewInFeed: 'Ka eeg bogga bulshada',
     appearsInFeed: 'Wuxuu ka soo muuqan doonaa bogga bulshada {date}',
+    viewOnMap: 'Ka eeg khariidadda',
+    reasonNoLocation: 'Goob ma leh — kuma jiro khariidadda',
+    reasonExpired: 'Wuu dhacay — kuma jiro khariidadda',
   },
   fr: {
     backToFeed: 'Retour au fil',
@@ -143,6 +170,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Aucune date à venir — absent du fil',
     viewInFeed: 'Voir dans le fil',
     appearsInFeed: 'Apparaît dans le fil le {date}',
+    viewOnMap: 'Voir sur la carte',
+    reasonNoLocation: 'Aucun emplacement — absent de la carte',
+    reasonExpired: 'Expirée — absente de la carte',
   },
   pt: {
     backToFeed: 'Voltar ao feed',
@@ -157,6 +187,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Sem datas futuras — fora do feed',
     viewInFeed: 'Ver no feed',
     appearsInFeed: 'Aparece no feed em {date}',
+    viewOnMap: 'Ver no mapa',
+    reasonNoLocation: 'Sem localização — fora do mapa',
+    reasonExpired: 'Expirado — fora do mapa',
   },
   ru: {
     backToFeed: 'Назад к ленте',
@@ -171,6 +204,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Нет предстоящих дат — нет в ленте',
     viewInFeed: 'Посмотреть в ленте',
     appearsInFeed: 'Появится в ленте {date}',
+    viewOnMap: 'Показать на карте',
+    reasonNoLocation: 'Нет местоположения — нет на карте',
+    reasonExpired: 'Истёк срок — нет на карте',
   },
   ko: {
     backToFeed: '피드로 돌아가기',
@@ -185,6 +221,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: '예정된 날짜 없음 — 피드에 없음',
     viewInFeed: '피드에서 보기',
     appearsInFeed: '{date}에 피드에 표시됨',
+    viewOnMap: '지도에서 보기',
+    reasonNoLocation: '위치 없음 — 지도에 없음',
+    reasonExpired: '만료됨 — 지도에 없음',
   },
   tl: {
     backToFeed: 'Bumalik sa feed',
@@ -199,6 +238,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Walang paparating na petsa — wala sa feed',
     viewInFeed: 'Tingnan sa feed',
     appearsInFeed: 'Lalabas sa feed sa {date}',
+    viewOnMap: 'Tingnan sa mapa',
+    reasonNoLocation: 'Walang lokasyon — wala sa mapa',
+    reasonExpired: 'Nag-expire na — wala sa mapa',
   },
   am: {
     backToFeed: 'ወደ ማህበረሰብ ገጽ ተመለስ',
@@ -213,6 +255,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'መጪ ቀኖች የሉም — በማህበረሰብ ገጽ ላይ የለም',
     viewInFeed: 'በማህበረሰብ ገጽ ላይ ይመልከቱ',
     appearsInFeed: 'በ{date} በማህበረሰብ ገጽ ላይ ይታያል',
+    viewOnMap: 'በካርታ ላይ ይመልከቱ',
+    reasonNoLocation: 'አካባቢ የለውም — በካርታው ላይ የለም',
+    reasonExpired: 'ጊዜው አልፎበታል — በካርታው ላይ የለም',
   },
   hmn: {
     backToFeed: 'Rov qab mus rau zej zog',
@@ -227,6 +272,9 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     reasonNoUpcoming: 'Tsis muaj hnub tom ntej — tsis muaj nyob rau zej zog',
     viewInFeed: 'Saib hauv zej zog',
     appearsInFeed: 'Yuav tshwm rau zej zog {date}',
+    viewOnMap: 'Saib ntawm daim ntawv qhia',
+    reasonNoLocation: 'Tsis muaj qhov chaw — tsis nyob ntawm daim ntawv qhia',
+    reasonExpired: 'Tas sij hawm lawm — tsis nyob ntawm daim ntawv qhia',
   },
 }
 
@@ -243,6 +291,8 @@ const REASON_KEY: Record<ReasonCode, keyof AdminNavMessages> = {
   retired: 'reasonRetired',
   org_inactive: 'reasonOrgInactive',
   no_upcoming: 'reasonNoUpcoming',
+  no_location: 'reasonNoLocation',
+  expired: 'reasonExpired',
 }
 
 /** The text a row shows, in place of a "View …" link, when members cannot see the item. */

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Marker, Popup } from 'react-map-gl/mapbox'
 import { MapPin, Phone, Globe, Clock, Navigation, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
 import { isApproximateGeocode } from '@/lib/geocode-accuracy'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 interface Resource {
   id: string
@@ -29,10 +30,13 @@ interface Resource {
 interface ResourceMarkerProps {
   resource: Resource
   onClick?: (resource: Resource) => void
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
-export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
   const color = getCategoryHex(resource.category)
   const isApproximate = isApproximateGeocode(resource.geocode_accuracy)
@@ -40,7 +44,7 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
   const handleClick = useCallback(() => {
     setShowPopup(true)
     onClick?.(resource)
-  }, [resource, onClick])
+  }, [resource, onClick, setShowPopup])
 
   const handleDirections = useCallback(() => {
     openDirections({
@@ -59,25 +63,29 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
 
   return (
     <>
-      <Marker
+      <Marker ref={markerA11yRef}
         longitude={resource.longitude}
         latitude={resource.latitude}
         anchor="bottom"
         onClick={handleClick}
       >
-        <div
-          className="cursor-pointer transition-transform hover:scale-110"
+        <button
+          type="button"
+          ref={triggerRef}
+          className={`block cursor-pointer rounded-full transition-transform hover:scale-110 ${MARKER_BUTTON_FOCUS}`}
           style={{ color }}
-          role="img"
           aria-label={isApproximate ? `${resource.name} (approximate location)` : resource.name}
+          aria-haspopup="dialog"
+          aria-expanded={showPopup}
           title={isApproximate ? 'Approximate location' : undefined}
         >
           <MapPin
             className="h-8 w-8 drop-shadow-md"
             fill={isApproximate ? 'none' : color}
             strokeWidth={isApproximate ? 2.5 : 2}
+            aria-hidden="true"
           />
-        </div>
+        </button>
       </Marker>
 
       {showPopup && (
@@ -85,12 +93,15 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
           longitude={resource.longitude}
           latitude={resource.latitude}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
-          closeButton={true}
+          onClose={closePopup}
+          onOpen={onPopupOpen}
+          focusAfterOpen={false}
+          closeButton={false}
           closeOnClick={false}
           offset={40}
           maxWidth="320px"
         >
+          <MarkerPopupDialog titleId={titleId} onClose={closePopup}>
           <Card className="border-0 shadow-none">
             <CardHeader className="pb-2 pt-0 px-0">
               <div className="flex items-center gap-1.5 mb-1">
@@ -106,7 +117,7 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
                   </div>
                 )}
               </div>
-              <CardTitle className="text-base">{resource.name}</CardTitle>
+              <CardTitle id={titleId} className="text-base">{resource.name}</CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-0 space-y-2">
               {resource.description && (
@@ -171,6 +182,7 @@ export function ResourceMarker({ resource, onClick }: ResourceMarkerProps) {
               </div>
             </CardContent>
           </Card>
+          </MarkerPopupDialog>
         </Popup>
       )}
     </>

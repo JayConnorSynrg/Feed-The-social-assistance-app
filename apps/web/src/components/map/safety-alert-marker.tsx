@@ -15,6 +15,7 @@ import type { UpdateAlertInput } from '@/hooks/use-safety-alerts'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
+import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Severity colors:  1-2 = amber (low-medium risk), 3-4 = red-orange (high risk)
@@ -65,6 +66,8 @@ interface SafetyAlertMarkerProps {
   currentUserId?: string | null
   onUpdate?: (alertId: string, input: UpdateAlertInput) => Promise<void>
   onDelete?: (alertId: string) => Promise<void>
+  /** A followed map deep link landed on this pin: open its popup. */
+  focused?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,8 +75,9 @@ interface SafetyAlertMarkerProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SafetyAlertMarkerInner contains all hooks; called only when coords are valid.
-function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete }: SafetyAlertMarkerProps) {
-  const [showPopup, setShowPopup] = useState(false)
+function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, onUpdate, onDelete, focused }: SafetyAlertMarkerProps) {
+  // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
+  const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
   const [voting, setVoting] = useState<'confirm' | 'clear' | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
 
@@ -141,7 +145,7 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
 
   return (
     <>
-      <Marker
+      <Marker ref={markerA11yRef}
         longitude={alert.lng}
         latitude={alert.lat}
         anchor="bottom"
@@ -150,17 +154,22 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
           setShowPopup(true)
         }}
       >
-        <div
+        <button
+          type="button"
+          ref={triggerRef}
           className={cn(
             'flex items-center justify-center w-8 h-8 rounded-full border-2 cursor-pointer shadow-md transition-transform hover:scale-110',
+            MARKER_BUTTON_FOCUS,
             markerBgClass(alert.severity)
           )}
           style={{ background: color }}
           aria-label={`${ALERT_LABELS[alert.alert_type]} severity ${alert.severity}`}
+          aria-haspopup="dialog"
+          aria-expanded={showPopup}
           data-testid={`safety-alert-marker-${alert.id}`}
         >
-          <IconComp className="w-4 h-4" />
-        </div>
+          <IconComp className="w-4 h-4" aria-hidden="true" />
+        </button>
       </Marker>
 
       {showPopup && (
@@ -169,12 +178,14 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
           latitude={alert.lat}
           anchor="bottom"
           offset={40}
-          onClose={() => setShowPopup(false)}
-          closeButton={true}
+          onClose={closePopup}
+          onOpen={onPopupOpen}
+          focusAfterOpen={false}
+          closeButton={false}
           closeOnClick={false}
           maxWidth="280px"
         >
-          <div className="p-2 text-stone-900">
+          <MarkerPopupDialog titleId={titleId} onClose={closePopup} className="p-2 text-stone-900">
             {/* Trust label */}
             {alert.verified ? (
               <div className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-0.5 mb-2">
@@ -193,7 +204,7 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
               <span className="w-4 h-4 flex-shrink-0" style={{ color }}>
                 <IconComp className="w-4 h-4" />
               </span>
-              <span className="font-semibold text-sm">{ALERT_LABELS[alert.alert_type]}</span>
+              <span id={titleId} className="font-semibold text-sm">{ALERT_LABELS[alert.alert_type]}</span>
               <span
                 className={cn(
                   'text-xs rounded px-1.5 py-0.5 font-medium',
@@ -350,7 +361,7 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
             <p className="text-xs text-stone-400 mt-2">
               Reported {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
-          </div>
+          </MarkerPopupDialog>
         </Popup>
       )}
     </>

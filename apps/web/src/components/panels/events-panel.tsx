@@ -21,6 +21,7 @@ import { Calendar, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { prefersReducedMotion } from '@/lib/accessibility-prefs'
 import { logEvent, withMetric } from '@/lib/logger'
 import type { FocusTarget } from '@/lib/deep-link'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -114,12 +115,6 @@ export function abandonFocus(pending: { current: PendingFocus | null }): boolean
   if (!pending.current) return false
   pending.current = null
   return true
-}
-
-/** Reduced motion: FEED's own setting (<html data-motion="reduce">, lib/accessibility-prefs.ts) or
- *  the operating system's. */
-export function prefersReducedMotion(dataMotion: string | undefined, osReduce: boolean): boolean {
-  return dataMotion === 'reduce' || osReduce
 }
 
 /** The live highlight: its expiry timer and its blur listener. */

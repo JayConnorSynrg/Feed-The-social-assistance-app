@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import { logEvent, logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
-import { resourceVisibility } from '@/lib/member-visibility'
+import { resourceMapVisibility, resourceVisibility } from '@/lib/member-visibility'
+import { adminNavT } from '@/lib/i18n-admin-nav'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -453,13 +454,24 @@ export function ManageResourcesTab() {
                 {r.description && (
                   <p className="text-xs text-stone-600 line-clamp-3">{r.description}</p>
                 )}
-                <MemberViewLink
-                  to={{ kind: 'resource', id: r.id }}
-                  visibility={resourceVisibility(r)}
-                  label="View public page"
-                  itemName={r.name}
-                  source="manage_resources"
-                />
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <MemberViewLink
+                    to={{ kind: 'resource', id: r.id }}
+                    visibility={resourceVisibility(r)}
+                    label="View public page"
+                    itemName={r.name}
+                    source="manage_resources"
+                  />
+                  {/* Its pin on the members' map (approved + a non-zero location); a resource a
+                      visible business links to lands on that business's pin. */}
+                  <MemberViewLink
+                    to={{ kind: 'map_focus', focus: { kind: 'resource', id: r.id } }}
+                    visibility={resourceMapVisibility(r)}
+                    label={adminNavT('en', 'viewOnMap')}
+                    itemName={r.name}
+                    source="manage_resources"
+                  />
+                </div>
                 {r.website && (
                   <a
                     href={r.website}

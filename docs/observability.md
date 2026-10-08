@@ -148,8 +148,8 @@ Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout
 | Event | Labels | Values |
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
-| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
-| `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the Events tab before its list loaded); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
+| `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events` · `safety_alerts`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
+| `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the panel before the focus settled — the Events tab before its list loaded, the map before the pin appeared — or, on the map, a newer link replaced it first); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
 
 These navigation events were console-only (`logger.info`) and now persist through `logEvent` with their existing registered labels — `org_id` / `resource_id` are object ids (not personal data) kept for path analysis: `admin.shell.tab_switch` (`from_tab`, `org_id`, `to_tab`; `from_tab` is the tab that was showing), `admin.shell.org_switch` (`org_id`), `admin.resource.link.visit` (`resource_id`), `nav.subtab.switch` (`panel`, `subtab` — feed, documents and petitions subtabs), `nav.alias.resolve` (`panel`, `subtab` — an alias such as `events` resolved to its parent panel; the unregistered `input` label was dropped).
 
@@ -178,6 +178,23 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
   list reads itself again first (an already open list may predate the event), then scrolls the event's
   card into view, focuses it and rings it in lime-700 (4 s from the latest link, or until it loses focus;
   no smooth scroll or fade under reduced motion — the OS setting or FEED's own); an event the list does not show gets one polite status line.
+- The map (`components/panels/map-panel.tsx`, `lib/map-focus.ts`) takes `resource`, `organization`,
+  `business` and `safety_alert`. It reads the item by id under exactly the predicate of the layer that
+  draws it (resource: approved + located; organization: active, non-business, located; business:
+  approved, active, located; safety alert: live and `expires_at` > now — the expiry is re-checked on the
+  row because RLS checks status only), flies to it at zoom 17 (above the cluster `maxZoom` 16, so a
+  clustered pin becomes a leaf; instant under FEED's or the OS's reduced motion), and claims the camera
+  so a later GPS fix or profile geocode does not move it. The whole lifecycle is `MapFocusSession`;
+  the panel's effects only forward to it. `found` = the pin's id appears in its loaded layer within 8 s
+  of the link arriving; its popup opens as a named dialog that takes focus (a resource is also
+  selected, as a click on it would; the dialog has its own Close button, and Escape or Close returns
+  focus to the marker). A resource that a visible business links to lands on that
+  business's pin (the map draws one pin for the pair) and is logged as `kind=resource`. `not_found` =
+  the by-id read returned nothing (or failed), or the 8 s deadline (counted from arrival, so a hung read
+  also settles; the read is then aborted) passed first; the map shows one polite, translated line
+  ("That place isn't on the map right now."). `abandoned` = the member left the map, followed a newer
+  link, or dragged/zoomed the map during the flight, first. Every followed map link writes exactly one
+  row; a layer that loads after a settle opens nothing.
 
 "View in feed" funnel over the last 7 days (service role) — admin clicks on event links, then what
 the followed links resolved to (an `invalid` focus on the Events panel counts here; `not_found` means
@@ -195,6 +212,38 @@ where event = 'nav.deeplink.resolve' and context->>'panel' = 'events'
   and created_at > now() - interval '7 days'
 group by 1, 2
 order by 1, 3 desc;
+```
+
+Safety-alert map reads (`safety_alerts_in_view`): one call per settled pan/zoom (400 ms debounce),
+one per 60 s while the map tab is visible, and one after a member places or edits an alert. Before
+the 2026-10 fix (admin-nav PR-3) a new bounds object every render re-armed the debounce on every
+render — about 1.5–2.5 calls a second per open map (pg_stat_statements: 139,348 calls vs 126 for
+`resources_in_bounds`). Expected after deploy: a stationary open map drops from ~2/s to 1/60 s
+(~100x fewer), and the ratio to `resources_in_bounds` falls from ~1,100:1 toward ~1–3:1. Measure
+(record the counts at deploy, compare the deltas a day later):
+```sql
+select query, calls from pg_stat_statements
+where query ilike '%safety_alerts_in_view%' or query ilike '%resources_in_bounds%'
+order by calls desc;
+```
+
+"View on map" funnel over the last 7 days, by kind (service role) — admin clicks on map links, then
+what the followed links resolved to on the map (`found` / `not_found` / `abandoned`; an `invalid` focus
+on the map counts here too):
+```sql
+select 'admin.nav.member_view' as step,
+       context->>'source' as kind_or_source, null as outcome, count(*) as n
+from public.app_logs
+where event = 'admin.nav.member_view' and context->>'view' = 'map'
+  and created_at > now() - interval '7 days'
+group by 1, 2
+union all
+select 'nav.deeplink.resolve', context->>'kind', context->>'outcome', count(*)
+from public.app_logs
+where event = 'nav.deeplink.resolve' and context->>'panel' = 'map'
+  and created_at > now() - interval '7 days'
+group by 1, 2, 3
+order by 1, 2, 3;
 ```
 
 Clicks over the last 7 days (service role):

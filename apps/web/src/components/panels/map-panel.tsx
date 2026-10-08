@@ -3,6 +3,14 @@
 // apps/web/src/components/panels/map-panel.tsx
 // Resource Map panel - shows resources on an interactive Mapbox map
 // Three-column layout: Resource List | Interactive Map | Resource Details
+//
+// Deep link: #map?focus=<kind>:<id> (an admin's "View on map", lib/member-url.ts) reaches this panel
+// as panelParams.focus — a resource, organization, business or safety alert. Once per link the pin is
+// read by id under the member predicate (lib/map-focus.ts), the camera flies to it at zoom 17 (above
+// the cluster maxZoom) and is locked against a later GPS fix or profile geocode, and when the pin
+// appears in its loaded layer its popup opens (a resource is also selected, as a click would). One
+// nav.deeplink.resolve row records found / not_found / abandoned and the focus is cleared; a place
+// that is not on the map gets a polite, translated status line.
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
@@ -44,7 +52,21 @@ import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
-import { logger } from '@/lib/logger'
+import { logger, logEvent } from '@/lib/logger'
+import { createClient } from '@/lib/supabase/client'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { mapMemberT } from '@/lib/i18n-map-member'
+import {
+  MAP_FOCUS_ZOOM,
+  MapFocusSession,
+  gpsCenterDecision,
+  isFocusedPin,
+  mapFocusSettler,
+  profileCenterAllowed,
+  readMapFocusPin,
+  type MapFocusPin,
+} from '@/lib/map-focus'
 import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { getCategoryLabel, getCategoryTailwind } from '@/lib/resource-categories'
 import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
@@ -433,7 +455,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // setState in effect is correct here: syncing Mapbox viewState from an external
   // data source (Supabase profile) that arrives asynchronously after first render.
   useEffect(() => {
-    if (userHasMovedMap) return
+    if (!profileCenterAllowed({ userHasMovedMap })) return
     if (!profile?.latitude || !profile?.longitude) return
 
     setViewState((prev) => ({
@@ -455,7 +477,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // at render time.
   const geocodeAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    if (userHasMovedMap) return
+    if (!profileCenterAllowed({ userHasMovedMap })) return
     if (!profile?.location_city || !profile?.location_state) return
     if (profile?.latitude && profile?.longitude) return // lat/lng stored — Priority 1a handles it
 
@@ -542,12 +564,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   // or when GPS has already been applied (hasGeocentered).
   // flyTo is used instead of setViewState so the Mapbox instance animates to the
   // position — setViewState only updates MapPanel's local state, not the live map.
+  // (A deep-link focus sets both flags — FOCUS_CAMERA_LOCK — so a fix arriving after it is skipped.)
   useEffect(() => {
-    if (userHasMovedMap && hasProfileCentered) {
+    const decision = gpsCenterDecision({ hasPosition: !!position, userHasMovedMap, hasProfileCentered, hasGeocentered })
+    if (decision === 'blocked') {
       logger.info('map.geolocation.blocked', { reason: 'user_panned' })
       return
     }
-    if (hasGeocentered) {
+    if (decision === 'skipped') {
       logger.info('map.geolocation.skipped', { reason: 'already_centered' })
       return
     }
@@ -637,11 +661,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && showSnapLayer,
   })
 
-  // Safety alerts layer — live alerts in the current viewport
-  const viewportBoundsForAlerts = bounds
-    ? { west: bounds.west, south: bounds.south, east: bounds.east, north: bounds.north }
-    : null
-  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(viewportBoundsForAlerts)
+  // Safety alerts layer — live alerts in the current viewport. The bounds state itself: its identity
+  // changes only when the map reports new bounds (a fresh object every render re-ran the hook's
+  // debounce on every render — a refetch loop).
+  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(bounds)
 
   // Current map center — used as default pin location for hazard reports
   const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
@@ -724,6 +747,65 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     () => dedupeResourcesForBusinesses(mappableResources, viewportBusinesses),
     [mappableResources, viewportBusinesses]
   )
+
+  // ---- Deep-link focus (#map?focus=<kind>:<id>) -------------------------------------------------
+  // The lifecycle lives in MapFocusSession (lib/map-focus.ts); these effects only forward to it.
+  // Declared after the profile-centring effects so, in a commit where both run, the focus camera
+  // write lands last; from then on FOCUS_CAMERA_LOCK keeps them (and the GPS fix) off the camera.
+  // Keyed on the focus object, not on mount: the map stays mounted when a hashchange (a re-click in
+  // the reused preview tab) delivers a new focus.
+  const locale = useProfileLocale()
+  const focus = panelParams.focus
+  const [focusedPin, setFocusedPin] = useState<MapFocusPin | null>(null)
+  const [focusMiss, setFocusMiss] = useState(false)
+  const [focusSession] = useState(
+    () =>
+      new MapFocusSession({
+        read: (target, signal) => readMapFocusPin(createClient(), target, new Date(), signal),
+        camera: { setUserHasMovedMap, setHasGeocentered },
+        onArrive: (target) => {
+          // A link arriving from the URL replaces the last miss line and popup target.
+          setFocusMiss(false)
+          setFocusedPin(null)
+          if (target.kind === 'resource') {
+            // The resource layer is the filtered list: a leftover search or category would hide the pin.
+            setSearchQuery('')
+            setSelectedCategory(null)
+          }
+        },
+        fly: (pin) => {
+          mapViewRef.current?.flyTo({ center: [pin.lng, pin.lat], zoom: MAP_FOCUS_ZOOM, duration: 1000 })
+          // MapView owns the live camera; this keeps the panel's copy (cluster zoom, list sort) on the
+          // target too — before the style loads, flyTo emits no move events to sync it.
+          setViewState({ longitude: pin.lng, latitude: pin.lat, zoom: MAP_FOCUS_ZOOM })
+        },
+        onFound: (pin, item) => {
+          setFocusedPin(pin)
+          // A resource is also selected, as a click on its pin would (the row is a MapResource from
+          // the resource layer below).
+          if (pin.layer === 'resource') setSelectedResource(item as MapResource)
+        },
+        onSettle: mapFocusSettler({ logEvent, setPanelParams, setFocusMiss }),
+      })
+  )
+
+  useEffect(() => {
+    if (focus) focusSession.arrive(focus)
+  }, [focus, focusSession])
+
+  useEffect(() => {
+    focusSession.layersUpdated({
+      resource: dedupedMappableResources,
+      business: viewportBusinesses,
+      organization: viewportOrganizations,
+      safety_alert: safetyAlerts,
+    })
+  }, [focusSession, dedupedMappableResources, viewportBusinesses, viewportOrganizations, safetyAlerts])
+
+  useEffect(() => {
+    focusSession.remount()
+    return () => focusSession.unmount()
+  }, [focusSession])
 
   // Use clustering for map markers
   const clusters = useCluster({
@@ -983,7 +1065,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           initialViewState={viewState}
           onViewStateChange={handleViewStateChange}
           onBoundsChange={handleBoundsChange}
-          onUserInteraction={() => setUserHasMovedMap(true)}
+          onUserInteraction={() => {
+            setUserHasMovedMap(true)
+            // The member has taken the map: a focus still in flight settles (abandoned), and the
+            // deep-link popup target and miss line are done.
+            focusSession.memberTookMap()
+            setFocusedPin(null)
+            setFocusMiss(false)
+          }}
           className="h-full"
         >
           {clusters.map((cluster) =>
@@ -1012,6 +1101,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                 key={cluster.id}
                 resource={cluster.resource!}
                 onClick={() => handleResourceSelect(cluster.resource as MapResource)}
+                focused={isFocusedPin(focusedPin, 'resource', cluster.resource!.id)}
               />
             )
           )}
@@ -1024,12 +1114,20 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           {/* P4a local-business leaf layer — one unclustered leaf per approved business
               (CINV2), independent of the resource cluster pipeline. */}
           {viewportBusinesses.map((business) => (
-            <BusinessMarker key={`business-${business.id}`} business={business} />
+            <BusinessMarker
+              key={`business-${business.id}`}
+              business={business}
+              focused={isFocusedPin(focusedPin, 'business', business.id)}
+            />
           ))}
           {/* Org leaf layer — one unclustered indigo pin per active located non-business org,
               independent of the resource cluster pipeline and the business layer. */}
           {viewportOrganizations.map((organization) => (
-            <OrgMarker key={`org-${organization.id}`} organization={organization} />
+            <OrgMarker
+              key={`org-${organization.id}`}
+              organization={organization}
+              focused={isFocusedPin(focusedPin, 'organization', organization.id)}
+            />
           ))}
           {/* Safety alert markers — rendered on top of resource markers */}
           {safetyAlerts.map((alert) => (
@@ -1040,6 +1138,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               currentUserId={currentUserId}
               onUpdate={updateAlert}
               onDelete={deleteAlert}
+              focused={isFocusedPin(focusedPin, 'safety_alert', alert.id)}
             />
           ))}
           {/* Staging pin — shown while safety alert wizard is open */}
@@ -1053,6 +1152,20 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             />
           )}
         </MapView>
+        {/* Deep-link miss: always mounted so the line is announced politely when it appears. */}
+        <p
+          role="status"
+          lang={locale}
+          dir={dir(locale)}
+          data-testid="map-focus-miss"
+          className={
+            focusMiss
+              ? 'absolute bottom-4 left-1/2 z-10 max-w-[90%] -translate-x-1/2 rounded-lg border border-stone-200 bg-white/95 px-3 py-2 text-sm text-stone-800 shadow-md'
+              : 'sr-only'
+          }
+        >
+          {focusMiss ? mapMemberT(locale, 'focusNotOnMap') : ''}
+        </p>
         {/* SNAP food-access layer toggle — top-left, clear of the top-right map controls */}
         <button
           type="button"
