@@ -11,8 +11,9 @@
 //
 // The failure is a PostgREST schema-cache contract with no unit-observable runtime, so this test
 // scans source: every string literal (including the pieces of a `.select(` built across lines)
-// under apps/web/src that embeds `profiles(` must carry a `!<fk_name>` hint. `!inner` / `!left`
-// alone are join modifiers, not relationship names, and do not count.
+// under apps/web/src and supabase/functions that embeds `profiles(` must carry a `!<fk_name>` hint
+// naming a foreign-key constraint (`*_fkey` / `*_fk`). `!inner` / `!left` alone are join modifiers,
+// and a table hint such as `!post_likes` selects the many-to-many likers path — neither counts.
 
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
@@ -21,17 +22,19 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 const SRC_ROOT = fileURLToPath(new URL('../..', import.meta.url)) // apps/web/src
+const FUNCTIONS_ROOT = fileURLToPath(new URL('../../../../../supabase/functions', import.meta.url))
 
 // `profiles` as an embed target, followed by optional `!hint` segments, then `(`.
 const PROFILES_EMBED = /(?<![\w.])profiles((?:\s*!\s*\w+)*)\s*\(/g
 const JOIN_MODIFIERS = new Set(['inner', 'left'])
+const FK_CONSTRAINT = /_(fkey|fk)$/
 
-/** Returns each `profiles(` embed in `text` that names no relationship. */
+/** Returns each `profiles(` embed in `text` that names no foreign-key constraint. */
 function untargetedProfilesEmbeds(text: string): string[] {
   const hits: string[] = []
   for (const m of text.matchAll(PROFILES_EMBED)) {
     const hints = (m[1].match(/\w+/g) ?? []).filter((h) => !JOIN_MODIFIERS.has(h))
-    if (hints.length === 0) hits.push(m[0])
+    if (!hints.some((h) => FK_CONSTRAINT.test(h))) hits.push(m[0])
   }
   return hits
 }
@@ -80,6 +83,7 @@ describe('PostgREST embeds of profiles name their foreign key', () => {
       "supabase.from('posts').select('id, author:profiles!inner(id)')",
       "supabase.from('posts').select(\n  'id, content, ' +\n  'user:profiles(id, first_name)'\n)",
       'const S = `id, profiles ( id )`',
+      "supabase.from('posts').select('id, user:profiles!post_likes(id)')",
     ]
     for (const src of planted) {
       expect(scanSource('planted.ts', src), src).toHaveLength(1)
@@ -104,6 +108,15 @@ describe('PostgREST embeds of profiles name their foreign key', () => {
     expect(files.length).toBeGreaterThan(100) // the walk reached the tree
     const offenders = files.flatMap((f) =>
       scanSource(path.relative(SRC_ROOT, f), fs.readFileSync(f, 'utf8')),
+    )
+    expect(offenders).toEqual([])
+  })
+
+  it('every profiles embed under supabase/functions names an explicit FK', () => {
+    const files = sourceFiles(FUNCTIONS_ROOT)
+    expect(files.length).toBeGreaterThan(10) // the walk reached the edge functions
+    const offenders = files.flatMap((f) =>
+      scanSource(path.relative(FUNCTIONS_ROOT, f), fs.readFileSync(f, 'utf8')),
     )
     expect(offenders).toEqual([])
   })
