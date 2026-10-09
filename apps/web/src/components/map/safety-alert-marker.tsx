@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Severity colors:  1-2 = amber (low-medium risk), 3-4 = red-orange (high risk)
@@ -256,6 +257,17 @@ function SafetyAlertMarkerInner({ alert, onVote, currentUserId: _currentUserId, 
                 <ThumbsDown className="w-3 h-3 mr-1" />
                 {voting === 'clear' ? '...' : 'Gone now'}
               </Button>
+            </div>
+
+            {/* "Edit in admin" (moderators and up): the alert pinned in the Safety Alerts review. Inside
+                the popup dialog, so Tab reaches it and Escape still closes the popup. */}
+            <div className="mt-2 empty:hidden">
+              <ClientAdminEditLink
+                target={{ kind: 'safety_alert', id: alert.id }}
+                itemName={`${ALERT_LABELS[alert.alert_type] ?? 'Safety Alert'}, ${SEVERITY_LABELS[alert.severity] ?? `severity ${alert.severity}`}`}
+                source="map_popup"
+                data-testid={`admin-edit-alert-${alert.id}`}
+              />
             </div>
 
             {/* Owner controls */}

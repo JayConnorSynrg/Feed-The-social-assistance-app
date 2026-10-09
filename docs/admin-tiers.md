@@ -235,6 +235,72 @@ when none changed: the Businesses tab shows "Save failed: Nothing was saved …"
 with "Deactivate failed: …"), and the failure is written to `app_logs` (`business.admin.update.error` /
 `business.admin.set_active.error`, plus the tab's `admin.business.update` / `admin.business.set_active`
 error row).
+**Feed surfaces (PR-5b)** — every link renders through `ClientAdminEditLink`
+(`apps/web/src/components/admin/client-admin-edit-link.tsx`): nothing on the server or in the first
+hydrating render, then `AdminEditLink`, so no admin link is ever part of server HTML.
+
+| Surface | Item / id | `source` |
+|---|---|---|
+| Feed post card (`feed-panel.tsx` `PostCard`, beside Report; petitions are posts) | post `posts.id` | `feed_post` |
+| `/s/post/<id>` (server page; `components/feed/post-admin-edit-link.tsx` is its client island) | post | `post_page` |
+| Map safety-alert popup (inside the popup dialog: Tab reaches it, Escape still closes) | `safety_alerts.id` | `map_popup` |
+| Feed Active Alerts strip (`components/feed/safety-strip.tsx`, beside each alert button, never inside it) | `safety_alerts.id` | `feed_alert` |
+| Event card in the feed / in the Events tab (`components/feed/event-card.tsx`) | event `assistance_events.id` + `org_id` | `feed_event` / `events_panel` |
+
+Event cards carry `orgId` from the one hydration select (`EVENT_OCCURRENCE_SELECT` reads the event's
+own `org_id`). Cost: post and alert links share the one tier lookup; an event link of a viewer who is
+not a platform admin adds one `get_admin_org_list` per identity (an organization admin may hold no
+tier, so a signed-in member's feed with event cards asks once).
+
+**What the admin screen opens** — the tab that owns the kind claims `?focus=` on mount
+(`app/(admin)/moderation/use-admin-focus.ts`) and writes exactly one `admin.deeplink.resolve` row, then
+drops the param with `history.replaceState`:
+
+- **Post** → Moderation tab, **Linked post** panel above the reports queue (`focused-post.tsx`): the post
+  is read by id first (staff read any post, hidden or held; author embed `profiles!posts_user_id_fkey`),
+  then Remove / Hold / Authorize — Remove unless already removed, Hold while visible, Authorize while
+  hidden. It works for posts nobody reported. The RPCs accept any id and do not check it exists, so
+  the buttons render only for a post that was read and act on the id that was read. Remove / Hold /
+  Authorize have ONE client path, `moderatePost` (`post-moderation-actions.ts`), used by the reports
+  queue and this panel. `found` / `not_found` (no row, or the read failed).
+- **Safety alert** → Moderation tab opens on **Safety Alerts**; the alert is read by id while live
+  (`whereSafetyAlertLive`) and pinned first, once, marked "Opened from link", with Approve / Remove —
+  even when it is not among the newest 50. A removed or expired alert is unreadable (RLS
+  `safety_alerts_select` is `status = 'live'`) → `not_found` with "no longer live".
+- **Event** → the scheduler (main shell Events tab, or the organization page's Events tab) reads the
+  event by id with the list's embeds and opens its **edit dialog** when it manages it: an event of
+  this organization (organization page) or of one of `get_admin_org_list` (main shell: active,
+  non-business). Otherwise `not_found` with a translated line ("organization is inactive" when it is).
+  Closing the dialog returns focus to "New event".
+
+The shell writes the row when no tab will take the link (`admin-focus-session.ts`
+`adminFocusGateOutcome`, run once the tier and organization roles have loaded): `forbidden` when the
+viewer's tier does not show the owning tab (e.g. an organization admin on a post link), `invalid` for a
+malformed focus, a kind the screen never opens, or a `?tab=` that is not the kind's tab. A tab left
+before it resolved writes `abandoned`. A tab claims a focus only when `?tab=` names it — the gate's own rule — so when the
+shell falls back to another tab for a missing or different `?tab=`, only the gate writes (invalid): exactly one writer
+exists for any URL. For `forbidden` /
+`invalid` the shell also shows one plain line in the viewer's language (`admin-focus-gate-status.tsx`,
+`lib/i18n-admin-focus.ts`, 14 locales) in a `role="status"` region rendered from the first paint.
+
+**Stated exception — refused before any client code runs: no row.** A link the server turns away
+before the admin page's JavaScript loads writes no `admin.deeplink.resolve` row: a signed-out visitor
+(`proxy.ts` → `/login`), a signed-in user with no tier and no organization role (`(admin)/layout.tsx`
+→ `/`), and an organization page the viewer may not administer (`notFound()` in
+`moderation/org/[id]/page.tsx`, counted by `admin.org_page.load` with `outcome = not_found`). The link
+is shown only to viewers the screen accepts, so these arise only from a forwarded or stale link.
+
+**Screen details.** The Linked post panel has ONE `role="status"` line (loading → status → each
+action's result) and moves focus to its heading after an action and on load; buttons are
+`aria-disabled` while an action runs; Remove is red-700 (6.4:1, also in the reports queue and the
+Safety Alerts review); closing it returns focus to the selected sub-tab. Reports / Safety Alerts is a
+real tablist. When the reports queue changes a post, the Linked post panel re-reads it (and an action
+in the panel reloads the queue), so neither acts on a stale state. The scheduler renders the event
+edit dialog outside its loading / error / ready branches, so a `found` event link opens the dialog
+even when the event list failed to load; its not-found line is one `role="status"` region. On the
+feed, each Active Alerts item is a real `<button>` and its Edit in admin name adds the age and the
+start of the description (several alerts share a type); a hidden post card dims its content but not
+the action row; an image-only post's link is named "post by <author>, <date>" on the feed ("post by <author>" on `/s/post`, which shows one post and keeps its develop author read untouched). The Linked post panel reads the author's `first_name` only — no `username` / `avatar_url` / `bio`, which the pending Settings C2 change revokes.
 
 ## Facilitator code — retired
 

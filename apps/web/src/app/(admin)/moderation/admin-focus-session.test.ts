@@ -8,6 +8,9 @@
 //     forbidden (owner tab not shown to this tier); nothing when the owning tab is shown (it takes it).
 
 import { describe, it, expect } from 'vitest'
+import type { AdminFocusKind } from '@/lib/admin-url'
+import { resolveAdminTab, TAB_ORDER, type AdminTabId } from './admin-shell-tabs'
+import { readTabParam } from './admin-tab-url'
 import {
   adminFocusGateOutcome,
   claimAdminFocus,
@@ -38,6 +41,15 @@ function env(search: string) {
 }
 
 describe('claimAdminFocus — the owning tab writes exactly one row', () => {
+  it('claims only when ?tab= names this tab (the gate\'s rule): missing / other tab -> null', () => {
+    for (const search of [`?focus=post:${ID}`, `?tab=events&focus=post:${ID}`, `?tab=overview&focus=post:${ID}`]) {
+      const t = env(search)
+      expect(claimAdminFocus(t.e, ['post'], 'moderation')).toBeNull()
+      expect(t.rows).toEqual([])
+    }
+    expect(claimAdminFocus(env(`?tab=moderation&focus=post:${ID}`).e, ['post'], 'moderation')).not.toBeNull()
+  })
+
   it('claims only its own kind; none, malformed or another kind -> null and nothing written', () => {
     for (const search of ['', '?tab=moderation', '?tab=moderation&focus=post:nope', `?tab=events&focus=event:${ID}`]) {
       const t = env(search)
@@ -109,35 +121,57 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
 
   it('runAdminFocusGate writes its row once and strips the focus; nothing when a tab takes it', () => {
     const t = env(`?tab=moderation&focus=post:${ID}`)
-    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBe(true)
+    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toEqual({ kind: 'post', outcome: 'forbidden', tab: 'moderation' })
     expect(t.rows).toEqual([{ kind: 'post', outcome: 'forbidden', tab: 'moderation' }])
     expect(t.url()).toBe('?tab=moderation')
     // A second run finds no focus left.
-    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBe(false)
+    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBeNull()
     expect(t.rows).toHaveLength(1)
 
     const taken = env(`?tab=moderation&focus=post:${ID}`)
-    expect(runAdminFocusGate(taken.e, { visibleTabs: CM, ownerTab: shellOwnerTab })).toBe(false)
+    expect(runAdminFocusGate(taken.e, { visibleTabs: CM, ownerTab: shellOwnerTab })).toBeNull()
     expect(taken.rows).toEqual([])
     expect(taken.strips()).toBe(0)
   })
 
-  it('exactly one writer per URL: the gate is silent exactly when the owning tab claims', () => {
-    const searches = [
-      `?tab=moderation&focus=post:${ID}`,
-      `?tab=moderation&focus=safety_alert:${ID}`,
-      `?tab=events&focus=event:${ID}`,
-      `?tab=manage&focus=resource:${ID}`,
-      '?tab=moderation&focus=junk',
-    ]
-    for (const visible of [ALL, CM, ORG_ONLY]) {
-      for (const search of searches) {
-        const gateRow = gate(search, visible)
-        const owner = new URLSearchParams(search).get('focus')?.split(':')[0] ?? ''
-        const ownerTab = owner in { post: 1, safety_alert: 1, event: 1, resource: 1 } ? shellOwnerTab(owner as never) : null
-        const tabClaims = ownerTab !== null && visible.includes(ownerTab) && claimAdminFocus(env(search).e, [owner as never], ownerTab) !== null
-        expect([gateRow !== null, tabClaims].filter(Boolean)).toHaveLength(1)
+  // What the main shell mounts: resolveAdminTab(?tab= or 'overview', visible tabs) — a missing or
+  // unknown ?tab= falls back to the first tab the viewer has. The kinds each tab claims.
+  const CLAIMS: Record<string, AdminFocusKind[]> = { moderation: ['post', 'safety_alert'], events: ['event'], manage: ['resource'], businesses: ['business'] }
+  function writers(search: string, visible: AdminTabId[]) {
+    const mounted = resolveAdminTab(readTabParam(search, TAB_ORDER) ?? 'overview', visible)
+    const t = env(search)
+    runAdminFocusGate(t.e, { visibleTabs: visible, ownerTab: shellOwnerTab })
+    const claimEnv = env(search)
+    const claim = claimAdminFocus(claimEnv.e, CLAIMS[mounted] ?? [], mounted)
+    claim?.resolve('found')
+    return { mounted, rows: [...t.rows, ...claimEnv.rows] }
+  }
+
+  it('the four reviewer probe URLs (no / other ?tab=, fallback tab mounted): exactly one row each', () => {
+    const CM: AdminTabId[] = ['moderation']
+    const ORG_ADMIN: AdminTabId[] = ['events']
+    expect(writers(`?focus=post:${ID}`, CM)).toEqual({ mounted: 'moderation', rows: [{ kind: 'post', outcome: 'invalid', tab: 'unknown' }] })
+    expect(writers(`?tab=events&focus=post:${ID}`, CM)).toEqual({ mounted: 'moderation', rows: [{ kind: 'post', outcome: 'invalid', tab: 'unknown' }] })
+    expect(writers(`?focus=safety_alert:${ID}`, CM)).toEqual({ mounted: 'moderation', rows: [{ kind: 'safety_alert', outcome: 'invalid', tab: 'unknown' }] })
+    expect(writers(`?focus=event:${ID}`, ORG_ADMIN)).toEqual({ mounted: 'events', rows: [{ kind: 'event', outcome: 'invalid', tab: 'unknown' }] })
+  })
+
+  it('exactly one writer for every URL × viewer, with the tab the shell really mounts', () => {
+    const ALL_TABS = [...TAB_ORDER] as AdminTabId[]
+    const viewers: AdminTabId[][] = [ALL_TABS, ['moderation'], ['events'], ['events', 'moderation'], ['moderation', 'resources', 'businesses', 'manage', 'people']]
+    const tabs = [null, 'overview', 'events', 'moderation', 'manage', 'businesses', 'junk']
+    const focuses = ['post', 'safety_alert', 'event', 'resource', 'business'].map((k) => `${k}:${ID}`).concat(['post:junk', 'nope'])
+    let cases = 0
+    for (const visible of viewers) {
+      for (const tab of tabs) {
+        for (const focus of focuses) {
+          const search = `?${tab ? `tab=${tab}&` : ''}focus=${focus}`
+          const { rows } = writers(search, visible)
+          expect(rows, `${search} for [${visible}]`).toHaveLength(1)
+          cases++
+        }
       }
     }
+    expect(cases).toBe(5 * 7 * 7)
   })
 })

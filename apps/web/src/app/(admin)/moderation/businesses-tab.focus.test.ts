@@ -47,7 +47,13 @@ vi.mock('@/lib/logger', () => ({
     }
   },
 }))
-vi.mock('@/hooks/use-admin-viewer', () => ({ useAdminViewer: () => viewerRef.current }))
+// The tab reads the shell's shared tier lookup; tests set it as an AdminEditViewer-shaped value.
+vi.mock('@/hooks/use-admin-tier', () => ({
+  useAdminTier: () => {
+    const v = viewerRef.current as AdminEditViewer
+    return { tier: v.status === 'ready' ? v.tier : null, isFounder: false, loading: v.status === 'loading' }
+  },
+}))
 vi.mock('@/components/admin/member-view-link', () => ({ MemberViewLink: () => null }))
 vi.mock('@/lib/privileged-action', () => ({ privilegedRpc: vi.fn() }))
 vi.mock('@/components/ui/button', async () => {

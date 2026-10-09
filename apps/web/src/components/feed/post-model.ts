@@ -355,6 +355,8 @@ export interface EventCardItem {
   /** Occurrence id of the shown date — the card's key and the id the check-in RPC acts on. */
   occurrenceId: string
   eventId: string
+  /** assistance_events.org_id — whose admins may edit the event ("Edit in admin"). */
+  orgId: string
   title: string
   eventType: string
   orgName: string | null
@@ -393,11 +395,12 @@ export interface EventFeedItem extends EventCardItem {
 
 /** The occurrence + event columns both member surfaces hydrate (select on event_occurrences,
  *  by the occurrence ids the server returned). The organization is read by id through the
- *  normal RLS select; no profile column is read. */
+ *  normal RLS select; no profile column is read. org_id (NOT NULL) is the event's own column, so
+ *  "Edit in admin" knows the organization even when the organization embed is not readable. */
 export const EVENT_OCCURRENCE_SELECT = `
   id, starts_at, ends_at, status, notes, capacity, source,
   event:assistance_events(
-    id, title, event_type, location_name, city, state, requires_registration, time_zone, recurrence,
+    id, org_id, title, event_type, location_name, city, state, requires_registration, time_zone, recurrence,
     organization:organizations(name)
   )
 `
@@ -414,6 +417,7 @@ export interface EventOccurrenceRow {
   source?: string | null
   event: {
     id: string
+    org_id: string
     title: string
     event_type: string
     location_name: string | null
@@ -460,6 +464,7 @@ function toEventCardItem(o: EventOccurrenceRow): EventCardItem | null {
   return {
     occurrenceId: o.id,
     eventId: o.event.id,
+    orgId: o.event.org_id,
     title: o.event.title,
     eventType: o.event.event_type,
     orgName: o.event.organization?.name ?? null,

@@ -5,6 +5,7 @@ import { Heart, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
+import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -175,6 +176,12 @@ export default async function SharedPostPage({ params }: Props) {
             />
           </div>
         )}
+
+        {/* "Edit in admin" — a client island: moderators and up see it after hydration; it is never in
+            this page's server HTML (members, guests and logged-out visitors never get it). */}
+        <div className="flex justify-end px-4 pb-2 empty:hidden">
+          <PostAdminEditLink postId={post.id} content={post.content} author={displayName} source="post_page" />
+        </div>
 
         {/* Engagement stats */}
         <div className="flex items-center gap-6 px-4 py-3 border-t border-stone-100 text-stone-500 text-sm">

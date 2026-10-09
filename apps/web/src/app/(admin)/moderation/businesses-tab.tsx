@@ -55,7 +55,7 @@ import {
   type AdminBusinessEdit,
 } from '@/lib/business-data'
 import type { Business } from '@/lib/business'
-import { useAdminViewer } from '@/hooks/use-admin-viewer'
+import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canEditBusinesses } from '@/lib/admin-tier'
 import { useAdminFocusSession } from './use-admin-focus'
 import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
@@ -194,8 +194,8 @@ export function BusinessesTab() {
     setDraft((d) => (d ? { ...d, [key]: value } : d))
   }, [])
 
-  // "Edit in admin" landing. The viewer lookup is the page's shared one (no extra RPC).
-  const viewer = useAdminViewer(false)
+  // "Edit in admin" landing. The tier is the shell's shared lookup (useAdminTier: no extra RPC).
+  const { tier, loading: tierLoading } = useAdminTier()
   // The row a followed link opened: scrolled into view and its Name field focused once rendered.
   const [revealId, setRevealId] = useState<string | null>(null)
   // This tab claims ?focus=business:<uuid> (useAdminFocusSession) and, once the tier and the approved
@@ -205,8 +205,8 @@ export function BusinessesTab() {
   const focusSession = useAdminFocusSession('business', 'businesses')
   const [focusNotice, setFocusNotice] = useState<AdminFocusNotice | null>(null)
   useEffect(() => {
-    if (!focusSession?.isOpen() || viewer.status === 'loading' || loadingApproved) return
-    const editable = viewer.status === 'ready' && canEditBusinesses(viewer.tier)
+    if (!focusSession?.isOpen() || tierLoading || loadingApproved) return
+    const editable = canEditBusinesses(tier)
     const item = editable ? approved.find((b) => b.id.toLowerCase() === focusSession.focus.id) : undefined
     if (item) {
       focusSession.resolve('found')
@@ -216,7 +216,7 @@ export function BusinessesTab() {
       focusSession.resolve('not_found')
       setFocusNotice(editable ? 'not_found' : 'not_editable')
     }
-  }, [focusSession, viewer, loadingApproved, approved, startEdit])
+  }, [focusSession, tier, tierLoading, loadingApproved, approved, startEdit])
   useEffect(() => {
     // Waits for the row to be on screen (the pending queue's first load hides both sections).
     const field = revealId && !loading ? document.getElementById(`edit-name-${revealId}`) : null

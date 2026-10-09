@@ -45,6 +45,8 @@ export type AdminEditSource =
   | 'post_page'
   | 'feed_post'
   | 'feed_event'
+  | 'feed_alert'
+  | 'events_panel'
 
 /** The named browsing context every "Edit in admin" link reuses. */
 export const FEED_ADMIN_TARGET = 'feed-admin'

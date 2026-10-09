@@ -37,6 +37,7 @@ export type MemberViewSource =
   | 'event_scheduler'
   | 'org_admin_events'
   | 'safety_alerts'
+  | 'focused_post'
 
 /** The named browsing context every member view reuses. */
 export const FEED_PREVIEW_TARGET = 'feed-preview'

@@ -59,6 +59,8 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.checkin.kiosk.confirm': ['method', 'occurrence_id'],
   'admin.checkin.kiosk.walkin': ['household_size', 'occurrence_id'],
   'admin.community.tab.viewed': ['org_id'],
+  // The admin screen an "Edit in admin" link opened could not read the item (the row resolves not_found).
+  'admin.deeplink.load_failed': ['code', 'kind'],
   // An admin screen opened from an "Edit in admin" link: exactly one row per followed link.
   // outcome: found | not_found | forbidden | invalid | abandoned. Emitted by the admin screens (PR-5a/5b).
   'admin.deeplink.resolve': ['kind', 'outcome', 'tab'],
