@@ -27,6 +27,7 @@ import {
 import { readFocusResource, type ManageResourceRow } from './resource-focus-read'
 import { useAdminFocusSession } from './use-admin-focus'
 import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
+import { RESOURCE_EDIT_BUTTON_ATTR, restoreFocusAfterResourceEdit } from './admin-focus-return'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -192,7 +193,10 @@ export function ManageResourcesTab() {
   }, [])
 
   // ── Edit ────────────────────────────────────────────────────
+  // The resource the dialog last opened: where focus returns when it closes (see onCloseAutoFocus).
+  const editedIdRef = useRef<string | null>(null)
   const openEdit = useCallback((r: ResourceRow) => {
+    editedIdRef.current = r.id
     setEditing(r)
   }, [])
 
@@ -452,6 +456,7 @@ export function ManageResourcesTab() {
                   </div>
                   <button
                     type="button"
+                    {...{ [RESOURCE_EDIT_BUTTON_ATTR]: r.id }}
                     onClick={() => openEdit(r)}
                     className="shrink-0 text-lime-700 hover:text-lime-800 transition-colors"
                     aria-label="Edit resource"
@@ -530,6 +535,9 @@ export function ManageResourcesTab() {
         mode="edit"
         onOpenChange={(open) => { if (!open) closeEdit() }}
         onSaved={handleDialogSaved}
+        // A dialog an "Edit in admin" link opened has no trigger: without this, closing it drops focus
+        // to <body>. Its row's Edit button when listed, else the Manage tab trigger.
+        onCloseAutoFocus={(event) => restoreFocusAfterResourceEdit(event, editedIdRef.current, document)}
       />
     </div>
   )

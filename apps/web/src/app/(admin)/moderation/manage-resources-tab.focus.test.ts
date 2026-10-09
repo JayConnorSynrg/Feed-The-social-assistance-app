@@ -66,16 +66,31 @@ vi.mock('@/lib/supabase/client', () => {
       select: (columns: string) => {
         const rec = { table, columns, eq: [] as Array<[string, unknown]>, signal: false }
         reads.push(rec)
+        let signal: AbortSignal | null = null
         const q = {
           abortSignal: (s: AbortSignal) => {
             rec.signal = s instanceof AbortSignal
+            signal = s
             return q
           },
           eq: (c: string, v: unknown) => {
             rec.eq.push([c, v])
             return q
           },
-          maybeSingle: () => readResult.current!(),
+          // Like postgrest-js 2.106.2 (dist/index.cjs:293-330): an aborted request RESOLVES with
+          // data null and an AbortError-shaped error; it does not reject.
+          maybeSingle: () => {
+            const aborted = new Promise<{ data: unknown; error: unknown }>((resolve) => {
+              const settle = () =>
+                resolve({
+                  data: null,
+                  error: { message: 'AbortError: This operation was aborted', details: '', hint: 'Request was aborted (timeout or manual cancellation)', code: '' },
+                })
+              if (signal?.aborted) settle()
+              else signal?.addEventListener('abort', settle)
+            })
+            return Promise.race([readResult.current!(), aborted])
+          },
         }
         return q
       },
@@ -145,6 +160,7 @@ function setUrl(search: string) {
 
 const resolveRows = () => events.filter((e) => e.name === 'admin.deeplink.resolve').map((e) => e.attrs)
 const resourceReads = () => reads.filter((r) => r.table === 'resources')
+type CloseFocus = (event: { preventDefault: () => void }) => void
 const lastDialog = () => dialogProps[dialogProps.length - 1] as { open: boolean; resource: Record<string, unknown> | null }
 
 beforeEach(() => {
@@ -156,6 +172,10 @@ beforeEach(() => {
   replaceState.mockReset()
   readResult.current = async () => ({ data: FOCUS_ROW, error: null })
 })
+
+function fakeDoc(present: Record<string, { focus: () => void }>) {
+  ;(globalThis as unknown as { document: unknown }).document = { querySelector: (sel: string) => present[sel] ?? null }
+}
 
 describe('ManageResourcesTab — "Edit in admin" landing', () => {
   it('found: reads the resource by id (approved only) and opens THAT resource in the edit dialog', async () => {
@@ -179,9 +199,32 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     expect(resolveRows()).toEqual([{ kind: 'resource', outcome: 'found', tab: 'manage' }])
     expect(replaceState).toHaveBeenCalledTimes(1)
     expect(replaceState.mock.calls[0][2]).toBe('/moderation?tab=manage')
+    // Each listed row's Edit button carries its resource id (where focus returns after an edit).
+    expect(html).toContain(`data-resource-edit="${LIST_ROW.id}"`)
     // The list itself still loaded, page 1, unchanged.
     expect(rpcCalls.filter((c) => c.fn === 'admin_list_resources')).toHaveLength(1)
     expect(html).toContain('Aardvark Pantry (page 1)')
+  })
+
+  it('closing a link-opened dialog keeps focus in the tab: its row Edit button when listed, else the Manage tab trigger', async () => {
+    setUrl(`?tab=manage&focus=resource:${ID}`)
+    await harness.settle(h(ManageResourcesTab))
+    const onCloseAutoFocus = (lastDialog() as unknown as { onCloseAutoFocus?: CloseFocus }).onCloseAutoFocus
+    expect(typeof onCloseAutoFocus).toBe('function')
+
+    const tabTrigger = { focus: vi.fn() }
+    const rowEdit = { focus: vi.fn() }
+    // The linked resource is not on page 1: no row button -> the active tab trigger, never <body>.
+    fakeDoc({ '[role="tab"][aria-selected="true"]': tabTrigger })
+    const event = { preventDefault: vi.fn() }
+    onCloseAutoFocus!(event)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(tabTrigger.focus).toHaveBeenCalledTimes(1)
+    // Listed: its row's Edit button.
+    fakeDoc({ [`[data-resource-edit="${ID}"]`]: rowEdit, '[role="tab"][aria-selected="true"]': tabTrigger })
+    onCloseAutoFocus!({ preventDefault: vi.fn() })
+    expect(rowEdit.focus).toHaveBeenCalledTimes(1)
+    expect(tabTrigger.focus).toHaveBeenCalledTimes(1)
   })
 
   it('not_found (missing, pending or rejected): one row, a plain notice, dialog closed, list usable', async () => {
@@ -207,7 +250,7 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     expect(replaceState).not.toHaveBeenCalled()
   })
 
-  it('abandoned: the tab unmounts before the read returns -> one abandoned row, nothing opened', async () => {
+  it('abandoned: the tab unmounts before the read returns -> one abandoned row (the aborted read answers nothing)', async () => {
     let resolveRead!: (v: { data: unknown; error: unknown }) => void
     readResult.current = () => new Promise((r) => (resolveRead = r))
     setUrl(`?tab=manage&focus=resource:${ID}`)

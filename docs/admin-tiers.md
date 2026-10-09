@@ -218,7 +218,14 @@ or a focus whose kind is not the URL's tab) and `forbidden` (the tier does not s
 are written by the shell's gate, `useAdminFocusGate` in `admin-shell.tsx` (PR-5b), once the tier and
 organization roles are known — never by a tab, so a link never writes two rows. After the row, `focus`
 is removed with `history.replaceState`, so a reload does not reopen it. Misses show in an
-always-mounted status line (`admin-focus-notice.tsx`).
+always-mounted status line (`admin-focus-notice.tsx`), present from the tab's first render (through the
+Businesses loading spinner too) so a notice is announced.
+
+**Keyboard focus** (`admin-focus-return.ts`) never drops to `<body>`: closing a link-opened resource
+dialog returns focus to that resource's row Edit button when it is listed, else the active admin tab
+trigger; Dismiss on the notice moves focus to the active tab trigger before the button disappears. In
+the edit dialog every field label names its control, and a business row's focused Name field is
+described by the row heading.
 
 **Business saves fail loudly.** Edit and Deactivate/Reactivate are plain `organizations` UPDATEs under
 `orgs_admin_update` (platform admin only). For anyone else RLS filters the UPDATE to zero rows with no

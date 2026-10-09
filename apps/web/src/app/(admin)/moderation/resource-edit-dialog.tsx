@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useId } from 'react'
 import { AlertCircle, Loader2, Save, X, CheckCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -172,12 +172,18 @@ export interface ResourceEditDialogProps {
    *  Must resolve or throw; a throw surfaces in the dialog and does not close it
    *  or fire onSaved, so Confirm cannot double-approve. */
   onConfirm?: (resourceId: string) => Promise<void>
+  /** Where focus goes when the dialog closes (Radix onCloseAutoFocus). A dialog opened by a link has
+   *  no trigger to return to, so the caller decides instead of focus dropping to <body>. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 export function ResourceEditDialog({
-  open, resource, mode, onOpenChange, onSaved, onConfirm,
+  open, resource, mode, onOpenChange, onSaved, onConfirm, onCloseAutoFocus,
 }: ResourceEditDialogProps) {
   const supabase = createClient()
+  // Label ↔ field pairing: each Label's htmlFor names its control's id.
+  const fieldId = useId()
+  const idOf = (field: string) => `${fieldId}-${field}`
 
   const [form, setForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
@@ -353,7 +359,7 @@ export function ResourceEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent disableOutsideClose className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent disableOutsideClose onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isApprove ? 'Review and confirm resource' : 'Edit resource'}</DialogTitle>
           <DialogDescription>
@@ -366,21 +372,21 @@ export function ResourceEditDialog({
         {form && (
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs text-stone-500">Name</Label>
-              <Input value={form.name} onChange={(e) => setField('name', e.target.value)}
+              <Label htmlFor={idOf('name')} className="text-xs text-stone-500">Name</Label>
+              <Input id={idOf('name')} value={form.name} onChange={(e) => setField('name', e.target.value)}
                 className="text-stone-900" />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs text-stone-500">Description</Label>
-              <Textarea value={form.description} onChange={(e) => setField('description', e.target.value)}
+              <Label htmlFor={idOf('description')} className="text-xs text-stone-500">Description</Label>
+              <Textarea id={idOf('description')} value={form.description} onChange={(e) => setField('description', e.target.value)}
                 className="text-stone-900 min-h-[80px]" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Category</Label>
-                <select
+                <Label htmlFor={idOf('category')} className="text-xs text-stone-500">Category</Label>
+                <select id={idOf('category')}
                   value={form.category}
                   onChange={(e) => setField('category', e.target.value)}
                   className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
@@ -391,8 +397,8 @@ export function ResourceEditDialog({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Status</Label>
-                <select
+                <Label htmlFor={idOf('status')} className="text-xs text-stone-500">Status</Label>
+                <select id={idOf('status')}
                   value={form.status}
                   onChange={(e) => setField('status', e.target.value)}
                   className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
@@ -406,8 +412,8 @@ export function ResourceEditDialog({
 
             {/* Service mode — INV B: fixed 3-option selector, plain select. */}
             <div className="space-y-1">
-              <Label className="text-xs text-stone-500">Service mode</Label>
-              <select
+              <Label htmlFor={idOf('service_mode')} className="text-xs text-stone-500">Service mode</Label>
+              <select id={idOf('service_mode')}
                 value={form.service_mode}
                 onChange={(e) => setField('service_mode', e.target.value)}
                 className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
@@ -432,11 +438,11 @@ export function ResourceEditDialog({
             )}
 
             <div className="space-y-1">
-              <Label className="text-xs text-stone-500">Address</Label>
+              <Label htmlFor={idOf('address')} className="text-xs text-stone-500">Address</Label>
               {/* W2: live Mapbox v6 autocomplete. Typing shows suggestions;
                   picking one autofills City/State/ZIP below and stamps coords
                   on a strong match. Free typing still saves via on-save geocode. */}
-              <AddressAutocomplete
+              <AddressAutocomplete id={idOf('address')}
                 value={form.address_line1}
                 onChange={(v) => setAddressField('address_line1', v)}
                 onSelect={handleSelectSuggestion}
@@ -446,13 +452,13 @@ export function ResourceEditDialog({
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">City</Label>
-                <Input value={form.city} onChange={(e) => setAddressField('city', e.target.value)}
+                <Label htmlFor={idOf('city')} className="text-xs text-stone-500">City</Label>
+                <Input id={idOf('city')} value={form.city} onChange={(e) => setAddressField('city', e.target.value)}
                   className="text-stone-900" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">State</Label>
-                <select
+                <Label htmlFor={idOf('state')} className="text-xs text-stone-500">State</Label>
+                <select id={idOf('state')}
                   value={normalizeState(form.state) ?? ''}
                   onChange={(e) => setAddressField('state', e.target.value)}
                   className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
@@ -464,28 +470,28 @@ export function ResourceEditDialog({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">ZIP</Label>
-                <Input value={form.zip_code} onChange={(e) => setAddressField('zip_code', e.target.value)}
+                <Label htmlFor={idOf('zip')} className="text-xs text-stone-500">ZIP</Label>
+                <Input id={idOf('zip')} value={form.zip_code} onChange={(e) => setAddressField('zip_code', e.target.value)}
                   className="text-stone-900" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Phone</Label>
-                <Input value={form.phone} onChange={(e) => setField('phone', e.target.value)}
+                <Label htmlFor={idOf('phone')} className="text-xs text-stone-500">Phone</Label>
+                <Input id={idOf('phone')} value={form.phone} onChange={(e) => setField('phone', e.target.value)}
                   className="text-stone-900" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-stone-500">Email</Label>
-                <Input value={form.email} onChange={(e) => setField('email', e.target.value)}
+                <Label htmlFor={idOf('email')} className="text-xs text-stone-500">Email</Label>
+                <Input id={idOf('email')} value={form.email} onChange={(e) => setField('email', e.target.value)}
                   className="text-stone-900" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs text-stone-500">Website</Label>
-              <Input value={form.website} onChange={(e) => setField('website', e.target.value)}
+              <Label htmlFor={idOf('website')} className="text-xs text-stone-500">Website</Label>
+              <Input id={idOf('website')} value={form.website} onChange={(e) => setField('website', e.target.value)}
                 className="text-stone-900" />
             </div>
 

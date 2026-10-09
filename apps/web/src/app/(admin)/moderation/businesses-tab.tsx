@@ -277,16 +277,27 @@ export function BusinessesTab() {
     [supabase]
   )
 
+  // "Edit in admin" link that opened nothing. Rendered from the first render — through the loading
+  // spinner too — so its live region exists before a notice arrives and is announced. Both returns put
+  // it first inside the same root <div>, so React keeps the same DOM node when loading ends.
+  const focusNoticeLine = (
+    <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={() => setFocusNotice(null)} />
+  )
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-stone-600">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="space-y-8">
+        {focusNoticeLine}
+        <div className="flex items-center justify-center py-12 text-stone-600">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-8">
+      {focusNoticeLine}
       {/* Section 1 — pending queue (unchanged behavior). */}
       <div className="space-y-3">
         <h3 className="text-base font-semibold text-[#4a5d23]">Awaiting review</h3>
@@ -404,7 +415,6 @@ export function BusinessesTab() {
             {approvedError}
           </div>
         )}
-        <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={() => setFocusNotice(null)} />
 
         {loadingApproved ? (
           <div className="flex items-center gap-2 py-6 text-sm text-stone-500">
@@ -428,7 +438,7 @@ export function BusinessesTab() {
                       <Leaf className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-stone-800">{item.name}</h4>
+                      <h4 id={`business-title-${item.id}`} className="font-semibold text-stone-800">{item.name}</h4>
                       {item.description && (
                         <p className="mt-0.5 text-sm text-stone-600">{item.description}</p>
                       )}
@@ -512,6 +522,8 @@ export function BusinessesTab() {
                           </label>
                           <Input
                             id={`edit-name-${item.id}`}
+                            // Names the business being edited when this field takes focus (a followed link focuses it).
+                            aria-describedby={`business-title-${item.id}`}
                             value={draft.name}
                             onChange={(e) => setDraftField('name', e.target.value)}
                             placeholder="Business name"

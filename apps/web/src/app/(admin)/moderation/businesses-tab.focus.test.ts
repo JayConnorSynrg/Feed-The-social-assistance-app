@@ -30,7 +30,7 @@ const { events, metrics, errors, viewerRef, buttons, updates, updateResult, list
   buttons: [] as Array<{ label: string; onClick?: () => void }>,
   updates: [] as Array<{ patch: Record<string, unknown>; eq: [string, unknown]; select: string | null }>,
   updateResult: { current: { data: [{ id: 'x' }] as unknown, error: null as null | { message: string } } },
-  listCalls: { count: 0, gate: null as null | Promise<void> },
+  listCalls: { count: 0, gate: null as null | Promise<void>, pendingGate: null as null | Promise<void> },
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -91,7 +91,10 @@ vi.mock('@/lib/business-data', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/business-data')>()
   return {
     ...actual,
-    fetchPendingBusinesses: async () => [],
+    fetchPendingBusinesses: async () => {
+      if (listCalls.pendingGate) await listCalls.pendingGate
+      return []
+    },
     fetchAdminBusinessList: async () => {
       listCalls.count++
       if (listCalls.gate) await listCalls.gate
@@ -159,6 +162,7 @@ beforeEach(() => {
   updates.length = 0
   listCalls.count = 0
   listCalls.gate = null
+  listCalls.pendingGate = null
   replaceState.mockReset()
   getElementById.mockClear()
   field.scrollIntoView.mockClear()
@@ -173,6 +177,9 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     const html = await harness.settle(h(BusinessesTab))
     expect(editFormsOpen(html)).toEqual([ID])
     expect(html).toContain('value="Corner Cafe"')
+    // The focused Name field is described by its row's heading (the business being edited).
+    expect(html).toContain(`id="business-title-${ID}"`)
+    expect(html).toMatch(new RegExp(`id="edit-name-${ID}"[^>]*aria-describedby="business-title-${ID}"`))
     expect(getElementById).toHaveBeenCalledWith(`edit-name-${ID}`)
     expect(field.scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
     expect(field.focus).toHaveBeenCalledTimes(1)
@@ -203,6 +210,25 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     html = await harness.settle(h(BusinessesTab))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'found', tab: 'businesses' }])
     expect(editFormsOpen(html)).toEqual([ID])
+  })
+
+  it('the notice live region exists from the first render, through the loading spinner; a notice arriving then lands in it', async () => {
+    let releasePending!: () => void
+    listCalls.pendingGate = new Promise<void>((r) => (releasePending = r))
+    viewerRef.current = ready('resource_admin')
+    setUrl(`?tab=businesses&focus=business:${ID}`)
+    const first = await harness.render(h(BusinessesTab))
+    expect(first).toContain('animate-spin')
+    expect(first).toContain('<p role="status" class="sr-only"></p>')
+    // The approved list and tier are in while the pending queue still spins: the notice arrives now.
+    let html = await harness.settle(h(BusinessesTab))
+    expect(html).toContain('animate-spin')
+    expect(html).toMatch(/<p role="status" class="flex-1">Only platform admins can edit businesses\.<\/p>/)
+    releasePending()
+    html = await harness.settle(h(BusinessesTab))
+    expect(html).not.toContain('animate-spin')
+    expect(html).toMatch(/^<div class="space-y-8"><div class="[^"]*"><p role="status" class="flex-1">Only platform admins/)
+    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'not_found', tab: 'businesses' }])
   })
 
   it('not_found: an id not in the approved list -> one row, a notice, nothing opened', async () => {
