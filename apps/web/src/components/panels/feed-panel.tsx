@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, AlertTriangle, Cloud, Construction, Gauge, ShieldAlert, Plus, ArrowRight } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, ShieldAlert, Plus, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -57,6 +57,8 @@ import { EventCard } from '@/components/feed/event-card'
 import type { MyCheckinStatus } from '@/lib/event-checkin'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
+import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
+import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -208,98 +210,6 @@ function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeChange }
           </button>
         ))}
       </div>
-    </div>
-  )
-}
-
-// ============================================
-// SAFETY STRIP
-// ============================================
-// Alert-type icons and labels — mirrors safety-alert-marker.tsx constants
-const STRIP_ALERT_ICONS: Record<string, React.FC<{ className?: string }>> = {
-  weather: Cloud,
-  road_closure: Construction,
-  speeding: Gauge,
-  general: AlertTriangle,
-}
-
-const STRIP_ALERT_LABELS: Record<string, string> = {
-  weather: 'Weather Hazard',
-  road_closure: 'Road Closure',
-  speeding: 'Speeding Area',
-  general: 'Safety Alert',
-}
-
-interface SafetyStripProps {
-  alerts: SafetyAlert[]
-  onViewMap: () => void
-}
-
-function SafetyStrip({ alerts, onViewMap }: SafetyStripProps) {
-  return (
-    <div
-      data-testid="safety-strip"
-      className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2"
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 uppercase tracking-wide">
-          <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-          Active Alerts
-        </div>
-        <button
-          data-testid="safety-strip-view-map"
-          onClick={onViewMap}
-          className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 transition-colors"
-        >
-          View on map
-        </button>
-      </div>
-      <ul className="space-y-1.5">
-        {alerts.map((alert) => {
-          const Icon = STRIP_ALERT_ICONS[alert.alert_type] ?? AlertTriangle
-          const label = STRIP_ALERT_LABELS[alert.alert_type] ?? 'Safety Alert'
-          // Severity-scaled color: 1-2 amber, 3-4 red (matches safety-alert-marker.tsx)
-          const isHigh = alert.severity >= 3
-          return (
-            <li
-              key={alert.id}
-              data-testid={`safety-strip-item-${alert.id}`}
-              className="flex items-start gap-2 cursor-pointer group"
-              onClick={onViewMap}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onViewMap()}
-              aria-label={`${label} — tap to view on map`}
-            >
-              <span
-                className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
-                  isHigh ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                <Icon className="w-3 h-3" aria-hidden="true" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`text-xs font-semibold ${isHigh ? 'text-red-800' : 'text-amber-800'}`}>
-                    {label}
-                  </span>
-                  {alert.status === 'pending' && (
-                    <span className="text-[10px] text-stone-500 font-normal">
-                      Unverified — neighbor report
-                    </span>
-                  )}
-                </div>
-                {alert.description && (
-                  <p className="text-xs text-stone-700 line-clamp-1 mt-0.5">{alert.description}</p>
-                )}
-                <p className="text-[10px] text-stone-500 mt-0.5">
-                  {getRelativeTime(new Date(alert.created_at))}
-                </p>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
     </div>
   )
 }
@@ -1296,9 +1206,11 @@ function PostCard({
         reduce={reduce}
       />
 
-      {/* Report post — only shown to non-authors when authenticated */}
-      {currentUserId != null && !isAuthor && onReport && (
-        <div className="mt-2 flex justify-end">
+      {/* "Edit in admin" (moderators and up only, after hydration) + Report post (non-authors when
+          authenticated). The row collapses when neither renders. */}
+      <div className="mt-2 flex items-center justify-end gap-3 empty:hidden">
+        <PostAdminEditLink postId={post.id} content={post.content} source="feed_post" />
+        {currentUserId != null && !isAuthor && onReport && (
           <button
             data-testid={`report-btn-${post.id}`}
             onClick={() => {
@@ -1314,8 +1226,8 @@ function PostCard({
             <Flag className="w-3 h-3" />
             Report
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Report dialog */}
       <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
@@ -2681,6 +2593,7 @@ export function FeedPanel() {
             <SafetyStrip
               alerts={safetyAlerts}
               onViewMap={() => setActivePanel('map')}
+              formatAge={getRelativeTime}
             />
           )}
 

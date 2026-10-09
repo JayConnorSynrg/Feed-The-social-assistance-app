@@ -179,6 +179,50 @@ event links of a viewer who is not a platform admin, also once. Logged-out visit
 call (`useIsOrgAdmin` included). Each click writes one `admin.nav.edit_in_admin` row; each followed link
 writes one `admin.deeplink.resolve` row from the admin screen (see `docs/observability.md`).
 
+**Feed surfaces (PR-5b)** — every link renders through `ClientAdminEditLink`
+(`apps/web/src/components/admin/client-admin-edit-link.tsx`): nothing on the server or in the first
+hydrating render, then `AdminEditLink`, so no admin link is ever part of server HTML.
+
+| Surface | Item / id | `source` |
+|---|---|---|
+| Feed post card (`feed-panel.tsx` `PostCard`, beside Report; petitions are posts) | post `posts.id` | `feed_post` |
+| `/s/post/<id>` (server page; `components/feed/post-admin-edit-link.tsx` is its client island) | post | `post_page` |
+| Map safety-alert popup (inside the popup dialog: Tab reaches it, Escape still closes) | `safety_alerts.id` | `map_popup` |
+| Feed Active Alerts strip (`components/feed/safety-strip.tsx`, beside each alert button, never inside it) | `safety_alerts.id` | `feed_alert` |
+| Event card in the feed / in the Events tab (`components/feed/event-card.tsx`) | event `assistance_events.id` + `org_id` | `feed_event` / `events_panel` |
+
+Event cards carry `orgId` from the one hydration select (`EVENT_OCCURRENCE_SELECT` reads the event's
+own `org_id`). Cost: post and alert links share the one tier lookup; an event link of a viewer who is
+not a platform admin adds one `get_admin_org_list` per identity (an organization admin may hold no
+tier, so a signed-in member's feed with event cards asks once).
+
+**What the admin screen opens** — the tab that owns the kind claims `?focus=` on mount
+(`app/(admin)/moderation/use-admin-focus.ts`) and writes exactly one `admin.deeplink.resolve` row, then
+drops the param with `history.replaceState`:
+
+- **Post** → Moderation tab, **Linked post** panel above the reports queue (`focused-post.tsx`): the post
+  is read by id first (staff read any post, hidden or held; author embed `profiles!posts_user_id_fkey`),
+  then Remove / Hold / Authorize — Remove unless already removed, Hold while visible, Authorize while
+  hidden. It works for posts nobody reported. The RPCs accept any id and do not check it exists, so
+  the buttons render only for a post that was read and act on the id that was read. Remove / Hold /
+  Authorize have ONE client path, `moderatePost` (`post-moderation-actions.ts`), used by the reports
+  queue and this panel. `found` / `not_found` (no row, or the read failed).
+- **Safety alert** → Moderation tab opens on **Safety Alerts**; the alert is read by id while live
+  (`whereSafetyAlertLive`) and pinned first, once, marked "Opened from link", with Approve / Remove —
+  even when it is not among the newest 50. A removed or expired alert is unreadable (RLS
+  `safety_alerts_select` is `status = 'live'`) → `not_found` with "no longer live".
+- **Event** → the scheduler (main shell Events tab, or the organization page's Events tab) reads the
+  event by id with the list's embeds and opens its **edit dialog** when it manages it: an event of
+  this organization (organization page) or of one of `get_admin_org_list` (main shell: active,
+  non-business). Otherwise `not_found` with a translated line ("organization is inactive" when it is).
+  Closing the dialog returns focus to "New event".
+
+The shell writes the row when no tab will take the link (`admin-focus-session.ts`
+`adminFocusGateOutcome`, run once the tier and organization roles have loaded): `forbidden` when the
+viewer's tier does not show the owning tab (e.g. an organization admin on a post link), `invalid` for a
+malformed focus, a kind the screen never opens, or a `?tab=` that is not the kind's tab. A tab left
+before it resolved writes `abandoned`. Exactly one writer exists for any URL.
+
 ## Facilitator code — retired
 
 The `claim-facilitator-admin` edge function, its onboarding "Administrator" option and code input,

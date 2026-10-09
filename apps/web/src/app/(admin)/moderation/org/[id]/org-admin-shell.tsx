@@ -36,6 +36,8 @@ import { ORG_ADMIN_TABS, readTabParam, tabParamHref, type OrgAdminTab } from '..
 import { OrgMembers } from '../../orgs-section'
 import { OrgOverview } from '../org-overview'
 import { OrgEventsTab } from './org-events-tab'
+import { useAdminFocusGate } from '../../use-admin-focus'
+import { orgPageOwnerTab } from '../../admin-focus-session'
 
 export interface OrgAdminOrg {
   id: string
@@ -78,6 +80,9 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (requested) setTab(requested)
   }, [])
+  // "Edit in admin" (?focus=event:<id>) opens on the Events tab, which resolves it; any other focus
+  // here is reported invalid (every tab is shown, so there is no forbidden case on this page).
+  useAdminFocusGate(true, ORG_ADMIN_TABS, orgPageOwnerTab)
   const handleTabChange = useCallback((next: string) => {
     if (!(ORG_ADMIN_TABS as readonly string[]).includes(next)) return
     setTab(next as OrgAdminTab)

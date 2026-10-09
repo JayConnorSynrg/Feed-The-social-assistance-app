@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-08T00:00:00.000Z",
+  "lastUpdated": "2026-10-09T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -821,6 +821,14 @@
       "docs": "docs/observability.md (map focus outcomes, View on map funnel by kind) + docs/admin-tiers.md (View on map)",
       "note": "PR-3 of 3 (admin navigation). Admin rows (Manage resources, Businesses, Organizations More menu, org admin Profile, Safety Alerts Review) show View on map exactly when a member's map draws the pin (lib/member-visibility.ts map predicates mirror the four in-bounds readers), else the reason (no location / inactive / not approved / expired). /#map?focus=<kind>:<id> lands on the pin: by-id read under the member predicate (lib/map-focus.ts; a business-linked resource lands on its business pin), fly to zoom 17, camera lock against a later GPS fix/profile geocode, popup opened via the markers' focused prop; one nav.deeplink.resolve per followed link (found / not_found / abandoned), focus cleared on every path, polite translated miss line. safety-alerts-review a11y: role=alert error, role=status loading. Gates: tsc 0, eslint 0 errors/118 warnings, vitest 123 files/1568 passed (smoke excluded), node --test 62/62, build ok; 24 mutations, 23 red. Builds on PR-2 (#238, final head 8779612 merged); merge after PR-2. See checklist 1.6.21. No migration. Fix round: MapFocusSession owns the lifecycle (deadline from arrival, expire(target), drag = abandoned, StrictMode-safe unmount); safety_alerts_in_view loop fixed (SafetyAlertsFetchScheduler: per real bounds change, 60 s poll, refresh after place/edit; ~2/s -> 1/60 s per stationary map); whereSafetyAlertLive in lib; reduced-motion flights; marker popups as named focus-taking dialogs with Escape + focus return. Gates after fix round: tsc 0, eslint 0 errors/118 warnings, vitest 126 files/1601 passed, node --test 62/62, build ok; 32 mutations, 31 red (1 equivalent). Fix round 2: Mapbox marker wrapper role/label stripped (markerA11yRef), popup focus on Popup onOpen, Close button inside the dialog (Mapbox x off), latest-only alerts reads, visible-again read, comment-proof wiring guard. Gates: tsc 0, eslint 0 errors/118 warnings, vitest 126 files/1610 passed, node --test 62/62, build ok; 18/18 round-2 mutations red.",
       "recordedAt": "2026-10-08",
+      "pr": "(pending)"
+    },
+    "feed-admin-nav-edit-in-admin-feed": {
+      "status": "COMPLETE",
+      "branch": "feature/feed-pr5b-edit-in-admin-feed",
+      "docs": "docs/admin-tiers.md (Admin edit links: feed surfaces, single-post view, alert pinning, focus gate) + docs/observability.md (admin.deeplink.load_failed, sources feed_alert / events_panel / focused_post)",
+      "note": "PR-5b (Edit in admin, feed side). Stacked on the PR-5 foundation ba034ab; merge after PR-5a. Posts (feed card, /s/post client island), safety alerts (map popup, feed Active Alerts strip) and events (feed + Events tab cards, orgId from the hydration select) link to the one feed-admin tab for viewers canEditInAdmin accepts, never in server HTML. Landings: single-post Linked post panel (read by id first; Remove / Hold / Authorize through the shared moderatePost path also used by ReportsQueue), safety alert pinned in Safety Alerts review, event edit dialog in the scheduler. One admin.deeplink.resolve per followed link (owning tab: found / not_found / abandoned; shell gate: forbidden / invalid). Gates: tsc 0, eslint 0 errors/118 warnings, vitest 142 files/1819 passed (smoke excluded), node --test 62/62, build ok; 18 mutations, 18 red. See checklist 1.6.23. No migration.",
+      "recordedAt": "2026-10-09",
       "pr": "(pending)"
     }
   }

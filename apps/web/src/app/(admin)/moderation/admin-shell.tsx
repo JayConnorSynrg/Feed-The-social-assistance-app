@@ -5,10 +5,12 @@ import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, List
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { useAdminTier } from '@/hooks/use-admin-tier'
-import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
+import { useIsOrgAdminState } from '@/hooks/use-is-org-admin'
 import { canCreateOrganizations, tierLabel } from '@/lib/admin-tier'
 import { resolveAdminTab, TAB_ORDER, visibleTabs } from './admin-shell-tabs'
 import { readTabParam, tabParamHref } from './admin-tab-url'
+import { useAdminFocusGate } from './use-admin-focus'
+import { shellOwnerTab } from './admin-focus-session'
 import { logEvent } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
@@ -47,9 +49,12 @@ export function AdminShell() {
   const { orgs, loading: orgsLoading } = useAdminOrgs()
   // P3.1: each tier sees only the sections its tier is entitled to (§5). A non-tier org admin
   // (route-allowed by is_org_admin_any) sees ONLY the Events section, scoped to their orgs.
-  const { tier, isFounder } = useAdminTier()
-  const isOrgAdmin = useIsOrgAdmin()
+  const { tier, isFounder, loading: tierLoading } = useAdminTier()
+  const { isOrgAdmin, loaded: orgAdminLoaded } = useIsOrgAdminState()
   const tabs = visibleTabs(tier, isOrgAdmin)
+  // "Edit in admin" (?focus=): the tab that owns the item resolves it; once the tabs are final, a
+  // focus no shown tab will take is reported here (invalid / forbidden).
+  useAdminFocusGate(!tierLoading && orgAdminLoaded, tabs, shellOwnerTab)
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
   // Starts at 'overview' and the mount effect below applies a `?tab=` deep link, so a deep link

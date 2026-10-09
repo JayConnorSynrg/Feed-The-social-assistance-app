@@ -14,7 +14,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 type Call = [string, ...unknown[]]
-const rec = vi.hoisted(() => ({ rpc: [] as string[], queries: [] as Array<{ table: string; calls: Call[] }> }))
+const rec = vi.hoisted(() => ({
+  rpc: [] as string[],
+  queries: [] as Array<{ table: string; calls: Call[] }>,
+  // "Edit in admin": the claimed focus session (null = no ?focus=) and what the by-id read returns.
+  session: null as null | { focus: { kind: string; id: string }; isOpen: () => boolean; resolve: (o: string) => boolean },
+  resolved: [] as string[],
+  focusedRow: null as unknown,
+}))
+vi.mock('./use-admin-focus', () => ({ useAdminFocusSession: () => rec.session }))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>()
@@ -47,6 +55,10 @@ function recordingClient() {
         }
       }
       chain.then = () => undefined
+      chain.maybeSingle = () => {
+        q.calls.push(['maybeSingle'])
+        return { then: (res: (v: unknown) => unknown) => res({ data: rec.focusedRow, error: null }) }
+      }
       return chain
     },
     rpc: (name: string) => {
@@ -73,13 +85,21 @@ import {
   visibleCalendarLabel,
   windowDatesQuery,
   windowResult,
+  decideEventFocus,
+  eventFocusNotice,
+  toEditTarget,
 } from './event-scheduler'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const ORG = '705c100e-77f3-4807-9788-ff1ab4b26bb1'
 
 beforeEach(() => {
   rec.rpc.length = 0
   rec.queries.length = 0
+  rec.session = null
+  rec.resolved.length = 0
+  rec.focusedRow = null
 })
 
 const callsOf = (q: { calls: Call[] }, m: string) => q.calls.filter((c) => c[0] === m).map((c) => c.slice(1))
@@ -236,5 +256,81 @@ describe('a retry that fails again', () => {
       renderToStaticMarkup(h(CalendarWindowStatus, { result: { state: 'error', overLimit: false, retrying }, locale: 'en', onRetry: () => {} }))
     expect(render(true)).toMatch(/^<div role="alert"[^>]*><p class="text-sm text-red-700"><\/p><button type="button"[^>]*>Try again<\/button><\/div>$/)
     expect(render(false)).toContain('>The dates for this week could not be loaded.</p><button')
+  })
+})
+
+describe('"Edit in admin" event link (I2)', () => {
+  const EVENT = '9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a'
+  const OTHER_ORG = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const claim = () => {
+    rec.session = {
+      focus: { kind: 'event', id: EVENT },
+      isOpen: () => rec.resolved.length === 0,
+      resolve: (o: string) => (rec.resolved.length ? false : (rec.resolved.push(o), true)),
+    }
+  }
+
+  it("the organization's page: reads that event by id with the list's embeds, resolves found once", () => {
+    claim()
+    rec.focusedRow = { id: EVENT, org_id: ORG, org: { name: 'Pantry', is_active: true }, next: [], feed_next: [] }
+    EventScheduler({ selectedOrgId: ORG, source: 'org_admin_events' })
+    const byId = rec.queries.find((q) => callsOf(q, 'eq').some((c) => c[0] === 'id'))!
+    expect(byId.table).toBe('assistance_events')
+    expect(callsOf(byId, 'eq')).toContainEqual(['id', EVENT])
+    expect(String(callsOf(byId, 'select')[0][0])).toMatch(/next:event_occurrences\(.*\), feed_next:event_occurrences\(/)
+    expect(callsOf(byId, 'maybeSingle')).toHaveLength(1)
+    expect(rec.resolved).toEqual(['found'])
+  })
+
+  it("another organization's event on this page: not_found (no edit dialog for it)", () => {
+    claim()
+    rec.focusedRow = { id: EVENT, org_id: OTHER_ORG, org: { name: 'Other', is_active: true }, next: [], feed_next: [] }
+    EventScheduler({ selectedOrgId: ORG, source: 'org_admin_events' })
+    expect(rec.resolved).toEqual(['not_found'])
+  })
+
+  it('no readable event: not_found', () => {
+    claim()
+    rec.focusedRow = null
+    EventScheduler({ selectedOrgId: ORG })
+    expect(rec.resolved).toEqual(['not_found'])
+  })
+
+  it("main shell: waits for the caller's organization list before reading (no by-id read yet)", () => {
+    claim()
+    EventScheduler({ selectedOrgId: 'all' })
+    expect(rec.queries.some((q) => callsOf(q, 'eq').some((c) => c[0] === 'id'))).toBe(false)
+    expect(rec.resolved).toEqual([])
+  })
+
+  it('no link: no by-id read', () => {
+    EventScheduler({ selectedOrgId: ORG })
+    expect(rec.queries.some((q) => callsOf(q, 'eq').some((c) => c[0] === 'id'))).toBe(false)
+  })
+
+  it('decideEventFocus: found only for an event this scheduler manages', () => {
+    const orgScope = { kind: 'org' as const, orgId: ORG }
+    const allScope = { kind: 'orgs' as const, orgIds: [ORG.toUpperCase()] }
+    const ev = (org_id: string, is_active = true) => ({ org_id, org: { is_active } })
+    expect(decideEventFocus(ev(ORG), orgScope)).toEqual({ outcome: 'found' })
+    expect(decideEventFocus(ev(ORG), allScope)).toEqual({ outcome: 'found' })
+    expect(decideEventFocus(null, orgScope)).toEqual({ outcome: 'not_found', reason: 'missing' })
+    expect(decideEventFocus(ev(OTHER_ORG), orgScope)).toEqual({ outcome: 'not_found', reason: 'other_org' })
+    // get_admin_org_list lists active organizations only: an inactive organization's event is not here.
+    expect(decideEventFocus(ev(OTHER_ORG, false), allScope)).toEqual({ outcome: 'not_found', reason: 'org_inactive' })
+    expect(eventFocusNotice('org_inactive', 'en')).toMatch(/inactive/)
+    expect(eventFocusNotice('missing', 'en')).toMatch(/could not be opened/)
+    expect(eventFocusNotice('missing', 'es')).not.toBe(eventFocusNotice('missing', 'en'))
+  })
+
+  it('the link opens the SAME edit dialog target the Edit button builds (toEditTarget)', () => {
+    const event = {
+      id: EVENT, org_id: ORG, title: 'Pantry', event_type: 'pantry', description: null, location_name: 'Hall',
+      time_zone: 'America/New_York', is_active: true, recurrence: null, series_start_local: null, series_duration: null,
+      announce_days_before: 0, next: [{ starts_at: '2026-10-10T14:00:00Z', ends_at: '2026-10-10T16:00:00Z' }], feed_next: [],
+    } as never
+    expect(toEditTarget(event)).toMatchObject({ id: EVENT, org_id: ORG, title: 'Pantry', next: { starts_at: '2026-10-10T14:00:00Z', ends_at: '2026-10-10T16:00:00Z' } })
+    const src = readFileSync(fileURLToPath(new URL('./event-scheduler.tsx', import.meta.url)), 'utf8')
+    expect(src.match(/setEditTarget\(\{ key: \+\+dialogSeq\.current, \.\.\.toEditTarget\(event\) \}\)/g)).toHaveLength(2)
   })
 })

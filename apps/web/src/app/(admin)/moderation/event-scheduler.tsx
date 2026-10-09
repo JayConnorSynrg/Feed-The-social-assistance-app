@@ -67,6 +67,7 @@ import { restoreFocusAfterPanel } from './org-panel-focus'
 import { pickOpener } from './event-focus'
 import { ExtendSeriesButton } from './extend-series-button'
 import { EventFeedLink, EventStatusNotice } from '@/components/admin/event-feed-link'
+import { useAdminFocusSession } from './use-admin-focus'
 
 interface EventOccurrence {
   id: string
@@ -93,7 +94,7 @@ interface DateEvent {
   org?: { name: string } | null
 }
 
-interface AssistanceEvent extends DateEvent {
+export interface AssistanceEvent extends DateEvent {
   description: string | null
   location_name: string | null
   is_active: boolean
@@ -157,6 +158,51 @@ export function eventListQuery(supabase: Client, scope: SchedulerScope, nowIso: 
     .limit(EVENT_LIST_LIMIT)
     .limit(1, { referencedTable: 'next' })
     .limit(1, { referencedTable: 'feed_next' })
+}
+
+/** One event by id, with the same embeds as a list row ("Edit in admin" may name an event that is
+ *  not among the newest EVENT_LIST_LIMIT). Not scoped: decideEventFocus checks the scope. */
+export function focusedEventQuery(supabase: Client, eventId: string, nowIso: string) {
+  return supabase
+    .from('assistance_events')
+    .select(EVENT_SELECT)
+    .eq('id', eventId)
+    .eq('next.status', 'upcoming')
+    .gte('next.ends_at', nowIso)
+    .or(FEED_NEXT_STATUS, { referencedTable: 'feed_next' })
+    .gte('feed_next.ends_at', nowIso)
+    .order('starts_at', { referencedTable: 'next', ascending: true })
+    .order('starts_at', { referencedTable: 'feed_next', ascending: true })
+    .limit(1, { referencedTable: 'next' })
+    .limit(1, { referencedTable: 'feed_next' })
+    .maybeSingle()
+}
+
+export type EventFocusDecision =
+  | { outcome: 'found' }
+  | { outcome: 'not_found'; reason: 'missing' | 'org_inactive' | 'other_org' }
+
+/**
+ * May this scheduler open the linked event's edit dialog? Only for an event it manages: on an
+ * organization's page, an event of that organization; in the main shell, an event of one of the
+ * organizations listed for the caller (get_admin_org_list: active, non-business). `event` is null
+ * when the read returned nothing (no such event, or RLS hides it from this caller).
+ */
+export function decideEventFocus(
+  event: { org_id: string; org?: { is_active: boolean } | null } | null,
+  scope: SchedulerScope
+): EventFocusDecision {
+  if (!event) return { outcome: 'not_found', reason: 'missing' }
+  const orgId = event.org_id.toLowerCase()
+  const inScope =
+    scope.kind === 'org' ? scope.orgId.toLowerCase() === orgId : scope.orgIds.some((id) => id.toLowerCase() === orgId)
+  if (inScope) return { outcome: 'found' }
+  return { outcome: 'not_found', reason: event.org?.is_active === false ? 'org_inactive' : 'other_org' }
+}
+
+/** The plain line a not-found link leaves in the scheduler's status area. */
+export function eventFocusNotice(reason: 'missing' | 'org_inactive' | 'other_org' | 'error', locale: Locale): string {
+  return eventFormT(locale, reason === 'org_inactive' ? 'focusEventOrgInactive' : 'focusEventNotFound')
 }
 
 /** Every date (any status) starting in [fromIso, toIso), oldest first. */
@@ -275,6 +321,26 @@ export function calendarWindow(weekStart: Date, selectedDay: Date): { fromIso: s
   const from = Math.min(weekStart.getTime(), day.getTime())
   const to = Math.max(addDays(weekStart, 7).getTime(), addDays(day, 1).getTime())
   return { fromIso: addDays(new Date(from), -1).toISOString(), toIso: addDays(new Date(to), 1).toISOString() }
+}
+
+/** The edit dialog's target for an event row (the Edit button and an "Edit in admin" link). */
+export function toEditTarget(event: AssistanceEvent): EditTarget {
+  const next = event.next?.[0] ?? null
+  return {
+    id: event.id,
+    org_id: event.org_id,
+    title: event.title,
+    event_type: event.event_type,
+    description: event.description,
+    location_name: event.location_name,
+    time_zone: event.time_zone,
+    is_active: event.is_active,
+    recurrence: event.recurrence,
+    series_start_local: event.series_start_local,
+    series_duration: event.series_duration,
+    announce_days_before: event.announce_days_before,
+    next: next ? { starts_at: next.starts_at, ends_at: next.ends_at } : null,
+  }
 }
 
 function toScheduled(row: DateRow): ScheduledDate {
@@ -410,6 +476,38 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
           : { kind: 'orgs', orgIds: adminOrgs.map((o) => o.id) },
     [scoped, selectedOrgId, orgsLoading, adminOrgs],
   )
+
+  // "Edit in admin" (?focus=event:<id>): once the scope is known, read that event by id (it may be
+  // beyond the newest EVENT_LIST_LIMIT) and open its edit dialog when this scheduler manages it;
+  // otherwise leave a plain line and keep the calendar usable. One admin.deeplink.resolve row.
+  const focusSession = useAdminFocusSession('event', 'events')
+  useEffect(() => {
+    if (!focusSession || !scope || !focusSession.isOpen()) return
+    let active = true
+    void focusedEventQuery(supabase, focusSession.focus.id, new Date().toISOString()).then(({ data, error }) => {
+      if (!active || !focusSession.isOpen()) return
+      if (error) {
+        logger.warn('admin.deeplink.load_failed', { kind: 'event', code: error.code ?? 'unknown' })
+        focusSession.resolve('not_found')
+        setNotice(eventFocusNotice('error', locale))
+        return
+      }
+      const event = (data as unknown as AssistanceEvent | null) ?? null
+      const decision = decideEventFocus(event, scope)
+      focusSession.resolve(decision.outcome)
+      if (decision.outcome === 'found' && event) {
+        // No control opened it: closing returns focus to "New event".
+        openerRef.current = null
+        focusFallbackRef.current = false
+        setEditTarget({ key: ++dialogSeq.current, ...toEditTarget(event) })
+      } else if (decision.outcome === 'not_found') {
+        setNotice(eventFocusNotice(decision.reason, locale))
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [focusSession, scope, supabase, locale])
 
   // 1 + 3: the events (each with its next date) and the first page of past / cancelled dates.
   useEffect(() => {
@@ -842,22 +940,7 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
                       aria-label={formatMessage(eventFormT(locale, 'editAria'), { title: event.title })}
                       onClick={(e) => {
                         rememberOpener(e)
-                        setEditTarget({
-                          key: ++dialogSeq.current,
-                          id: event.id,
-                          org_id: event.org_id,
-                          title: event.title,
-                          event_type: event.event_type,
-                          description: event.description,
-                          location_name: event.location_name,
-                          time_zone: event.time_zone,
-                          is_active: event.is_active,
-                          recurrence: event.recurrence,
-                          series_start_local: event.series_start_local,
-                          series_duration: event.series_duration,
-                          announce_days_before: event.announce_days_before,
-                          next: next ? { starts_at: next.starts_at, ends_at: next.ends_at } : null,
-                        })
+                        setEditTarget({ key: ++dialogSeq.current, ...toEditTarget(event) })
                       }}
                     >
                       {eventFormT(locale, 'edit')}

@@ -19,6 +19,12 @@ import { logger } from '@/lib/logger'
 import { useAuth } from '@/hooks/use-auth'
 
 export function useIsOrgAdmin(): boolean {
+  return useIsOrgAdminState().isOrgAdmin
+}
+
+/** The answer plus whether it is known: `loaded` once is_org_admin_any settled for this user (a
+ *  failed call settles as false), immediately for a logged-out visitor or a guest. */
+export function useIsOrgAdminState(): { isOrgAdmin: boolean; loaded: boolean } {
   const { user } = useAuth()
   const userId = user?.id ?? null
   const isAnonymous = (user as { is_anonymous?: boolean } | null)?.is_anonymous === true
@@ -36,6 +42,7 @@ export function useIsOrgAdmin(): boolean {
         if (!active) return
         if (error) {
           logger.warn('org_admin.check.failed', { code: error.code })
+          setAnswer({ userId, isOrgAdmin: false })
           return
         }
         setAnswer({ userId, isOrgAdmin: data === true })
@@ -46,5 +53,6 @@ export function useIsOrgAdmin(): boolean {
     }
   }, [userId, isAnonymous])
 
-  return !!userId && !isAnonymous && answer?.userId === userId && answer.isOrgAdmin
+  if (!userId || isAnonymous) return { isOrgAdmin: false, loaded: true }
+  return answer?.userId === userId ? { isOrgAdmin: answer.isOrgAdmin, loaded: true } : { isOrgAdmin: false, loaded: false }
 }
