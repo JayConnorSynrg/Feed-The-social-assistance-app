@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { MapPin, Phone, Mail, Leaf, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { normalizeUrl } from '@/lib/utils/url'
 import {
@@ -250,6 +251,10 @@ export default async function SharedBusinessPage({ params }: Props) {
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
           <p className="text-xs text-stone-500">Local Business</p>
+        </div>
+        {/* Admins only, rendered in the browser after hydration — never part of this server HTML. */}
+        <div className="ml-auto">
+          <AdminEditLinkIsland target={{ kind: 'business', id: business.id }} itemName={business.name} source="business_page" />
         </div>
       </div>
 

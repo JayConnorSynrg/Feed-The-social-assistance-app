@@ -179,6 +179,55 @@ event links of a viewer who is not a platform admin, also once. Logged-out visit
 call (`useIsOrgAdmin` included). Each click writes one `admin.nav.edit_in_admin` row; each followed link
 writes one `admin.deeplink.resolve` row from the admin screen (see `docs/observability.md`).
 
+### Places (PR-5a): resources, businesses, organizations
+
+**Where the link appears.** Every surface renders `AdminEditLinkIsland`
+(`components/admin/admin-edit-link-island.tsx`): the link is rendered in the browser only, after
+hydration, so it is never part of server HTML (the `/s` pages, and the SPA shell the Capacitor static
+export bakes in). The target is always the entity the surface shows:
+
+| Surface | Item → target |
+|---|---|
+| Map popup — `components/map/resource-marker.tsx` (members' map only: the `adminEdit` prop; the admin tabs' own maps plot pending resources and get none) | resource |
+| Map side pane — `ResourceDetail` in `components/panels/map-panel.tsx` | resource |
+| Map popup — `components/map/business-marker.tsx` (also the business leaf that replaces a linked resource's pin) | business |
+| Map popup — `components/map/org-marker.tsx` | organization |
+| `/s/resource/[id]`, `/s/business/[id]`, `/s/organization/[id]` (header, right of the FEED wordmark) | resource / business / organization |
+| Community → Businesses showcase row, Community → Organizations row — a sibling of the whole-row link, never inside it | business / organization |
+
+Not on `/s/embed` (iframed by third parties). Inside a map popup the link sits in the popup's dialog, so
+Tab reaches it and Escape still closes the popup.
+
+**What the admin screen does.** Each tab reads its own `?focus=` on mount
+(`app/(admin)/moderation/use-admin-tab-focus.ts` → `AdminTabFocusSession` in `admin-tab-focus.ts`);
+`admin-shell.tsx` is unchanged.
+
+- **Manage** (`?tab=manage&focus=resource:<id>`): the resource is read by id — approved only, through
+  the public RLS policy (`resource-focus-read.ts`) — because the list is paged 100 by name and the item
+  is rarely on page 1; it opens in the edit dialog. The list, filters and paging are untouched. A
+  pending, rejected or missing id: "couldn't be found, or it isn't editable here".
+- **Businesses** (`?tab=businesses&focus=business:<id>`): once the tier and the approved list are
+  loaded, that row opens in edit mode, scrolled into view with its Name field focused. A resource admin
+  sees the tab but cannot save a business: "Only platform admins can edit businesses."
+- **Organizations**: the platform-admin link opens the shell's existing `?org=` panel; the
+  organization-admin link opens `/moderation/org/<id>?tab=profile` (gated by `can_admin_org`).
+- A Manage or Businesses link followed by a tier that does not see that tab (e.g. a community
+  moderator) is answered by `AdminFocusTabGate`, mounted next to the shell in
+  `app/(admin)/moderation/page.tsx`.
+
+Every followed Manage / Businesses link writes exactly one `admin.deeplink.resolve` row
+(`kind` resource|business, `tab` manage|businesses, `outcome` found | not_found | forbidden | invalid |
+abandoned), then `focus` is removed with `history.replaceState`, so a reload does not reopen it.
+
+**Business saves fail loudly.** Edit and Deactivate/Reactivate are plain `organizations` UPDATEs under
+`orgs_admin_update` (platform admin only). For anyone else RLS filters the UPDATE to zero rows with no
+error, which used to show as a success. `adminUpdateBusiness` / `adminSetBusinessActive`
+(`lib/business-data.ts`) now return the changed row (`.select('id')`) and throw `BusinessWriteError`
+when none changed: the Businesses tab shows "Save failed: Nothing was saved …" (or reverts the toggle
+with "Deactivate failed: …"), and the failure is written to `app_logs` (`business.admin.update.error` /
+`business.admin.set_active.error`, plus the tab's `admin.business.update` / `admin.business.set_active`
+error row).
+
 ## Facilitator code — retired
 
 The `claim-facilitator-admin` edge function, its onboarding "Administrator" option and code input,

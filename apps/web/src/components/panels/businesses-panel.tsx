@@ -32,6 +32,10 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { Button } from '@/components/ui/button'
@@ -148,6 +152,8 @@ function Section({
 
 export function BusinessesPanel() {
   const { user, isAnonymous } = useAuth()
+  // The admin-only "Edit in admin" link speaks the viewer's profile language (the panel is English).
+  const adminLocale = useProfileLocale()
   const { position } = useGeolocation()
   const { panelParams } = usePanelContext()
   const supabase = createClient()
@@ -940,7 +946,7 @@ export function BusinessesPanel() {
               const label = labelFor(b)
               const addr = [b.city, b.state].filter(Boolean).join(', ')
               return (
-                <li key={b.id}>
+                <li key={b.id} className="flex flex-col gap-1">
                   <a
                     href={`/s/business/${b.id}`}
                     className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4 transition-colors hover:border-lime-300 hover:bg-lime-50/40"
@@ -976,6 +982,17 @@ export function BusinessesPanel() {
                       </div>
                     </div>
                   </a>
+                  {/* Admins only (renders nothing for anyone else). A sibling of the row link, never
+                      inside it: an <a> may not contain another <a>. */}
+                  <AdminEditLinkIsland
+                    target={{ kind: 'business', id: b.id }}
+                    itemName={b.name}
+                    source="showcase_row"
+                    locale={adminLocale}
+                    lang={adminLocale}
+                    dir={dir(adminLocale)}
+                    className={`${ADMIN_EDIT_LINK_CLASS} self-end`}
+                  />
                 </li>
               )
             })}

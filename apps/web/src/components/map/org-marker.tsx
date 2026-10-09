@@ -17,11 +17,15 @@ import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import type { MappableOrg } from '@/hooks/use-viewport-organizations'
 import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
+import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { dir, type Locale } from '@/lib/i18n'
 
 interface OrgMarkerProps {
   organization: MappableOrg
   /** A followed map deep link landed on this pin: open its popup. */
   focused?: boolean
+  /** Language of the "Edit in admin" link (the viewer's profile locale). */
+  locale?: Locale
 }
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
@@ -29,7 +33,7 @@ function orgTypeLabel(orgType: string): string {
   return isNonBusinessOrgType(orgType) ? ORG_TYPE_LABELS[orgType] : orgType
 }
 
-export function OrgMarker({ organization, focused }: OrgMarkerProps) {
+export function OrgMarker({ organization, focused, locale = 'en' }: OrgMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
   const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
@@ -101,6 +105,16 @@ export function OrgMarker({ organization, focused }: OrgMarkerProps) {
                 <ExternalLink className="h-3.5 w-3.5" />
                 View details
               </a>
+              {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
+                  and Escape still closes the popup. */}
+              <AdminEditLinkIsland
+                target={{ kind: 'organization', id: organization.id }}
+                itemName={organization.name}
+                source="map_popup"
+                locale={locale}
+                lang={locale}
+                dir={dir(locale)}
+              />
             </CardContent>
           </Card>
           </MarkerPopupDialog>

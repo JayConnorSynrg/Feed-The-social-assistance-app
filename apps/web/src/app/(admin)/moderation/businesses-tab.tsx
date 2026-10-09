@@ -21,6 +21,15 @@
 // admin viewing a member surface sees what members see — only this admin reader projects is_active
 // and lists inactive rows. Each approved row offers "View public page" (/s/business/<id>) while active,
 // and says why members cannot see it while inactive.
+//
+// "Edit in admin" (?tab=businesses&focus=business:<uuid>, from a member surface): once the approved
+// list has loaded, that business's row opens in edit mode, scrolled into view with its Name field
+// focused. Only a platform admin can save a business (orgs_admin_update), so any other tier gets a
+// plain 'forbidden' line instead; an id not in the approved list gets 'not_found'. One
+// admin.deeplink.resolve row per followed link (use-admin-tab-focus.ts), then focus is stripped.
+//
+// Saves fail loudly: an UPDATE that RLS filtered to zero rows is an error (business-data.ts), never
+// a success, so the edit form stays open with the reason and the toggle reverts.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, X, Loader2, Leaf, MapPin, Pencil } from 'lucide-react'
@@ -45,6 +54,10 @@ import {
   type AdminBusinessEdit,
 } from '@/lib/business-data'
 import type { Business } from '@/lib/business'
+import { useAdminViewer } from '@/hooks/use-admin-viewer'
+import { canEditBusinesses } from '@/lib/admin-tier'
+import { useAdminTabFocus } from './use-admin-tab-focus'
+import { AdminFocusNoticeLine } from './admin-focus-notice'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -179,6 +192,37 @@ export function BusinessesTab() {
   const setDraftField = useCallback((key: keyof EditDraft, value: string) => {
     setDraft((d) => (d ? { ...d, [key]: value } : d))
   }, [])
+
+  // "Edit in admin" landing. The viewer lookup is the page's shared one (no extra RPC).
+  const viewer = useAdminViewer(false)
+  // The row a followed link opened: scrolled into view and its Name field focused once rendered.
+  const [revealId, setRevealId] = useState<string | null>(null)
+  const readFocus = useCallback(
+    async (id: string) => approved.find((b) => b.id.toLowerCase() === id) ?? null,
+    [approved]
+  )
+  const openFocused = useCallback(
+    (item: AdminBusiness) => {
+      startEdit(item)
+      setRevealId(item.id)
+    },
+    [startEdit]
+  )
+  const { notice: focusNotice, dismissNotice } = useAdminTabFocus<AdminBusiness>({
+    tab: 'businesses',
+    ready: viewer.status !== 'loading' && !loadingApproved,
+    access: viewer.status === 'ready' && canEditBusinesses(viewer.tier) ? 'allowed' : 'forbidden',
+    read: readFocus,
+    onFound: openFocused,
+  })
+  useEffect(() => {
+    // Waits for the row to be on screen (the pending queue's first load hides both sections).
+    const field = revealId && !loading ? document.getElementById(`edit-name-${revealId}`) : null
+    if (!field) return
+    field.scrollIntoView({ block: 'center' })
+    field.focus({ preventScroll: true })
+    setRevealId(null)
+  }, [revealId, loading])
 
   const handleSaveEdit = useCallback(
     async (item: Business) => {
@@ -358,6 +402,7 @@ export function BusinessesTab() {
             {approvedError}
           </div>
         )}
+        <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={dismissNotice} />
 
         {loadingApproved ? (
           <div className="flex items-center gap-2 py-6 text-sm text-stone-500">

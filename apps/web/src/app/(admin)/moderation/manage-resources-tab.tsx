@@ -24,32 +24,15 @@ import {
   type ResourceEditDialogInput,
   type ResourceEditDialogSavedRow,
 } from './resource-edit-dialog'
+import { readFocusResource, type ManageResourceRow } from './resource-focus-read'
+import { useAdminTabFocus } from './use-admin-tab-focus'
+import { AdminFocusNoticeLine } from './admin-focus-notice'
 
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
 
-interface ResourceRow {
-  id: string
-  name: string
-  description: string | null
-  category: string
-  address_line1: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  status: string
-  source: string | null
-  is_verified: boolean | null
-  moderated_at: string | null
-  lat: number | null
-  lng: number | null
-  service_mode: string
-  geocode_accuracy: string | null
-}
+type ResourceRow = ManageResourceRow
 
 // Normalizes a manage-list row into the shape <ResourceEditDialog> expects.
 function toDialogInputFromManageRow(r: ResourceRow): ResourceEditDialogInput {
@@ -216,6 +199,22 @@ export function ManageResourcesTab() {
   const closeEdit = useCallback(() => {
     setEditing(null)
   }, [])
+
+  // "Edit in admin" (?tab=manage&focus=resource:<uuid>): the linked resource is read by id (it is
+  // usually not on the first page of 100) and opened in the edit dialog; the list, its filters and
+  // paging are untouched. One admin.deeplink.resolve row per followed link; focus is then stripped.
+  const readFocus = useCallback(
+    (id: string, signal: AbortSignal) => readFocusResource(supabase, id, signal),
+    [supabase]
+  )
+  const { notice: focusNotice, dismissNotice } = useAdminTabFocus<ResourceRow>({
+    tab: 'manage',
+    // This tab mounts only for tiers that may edit resources (resource admin and up).
+    ready: true,
+    access: 'allowed',
+    read: readFocus,
+    onFound: openEdit,
+  })
 
   // <ResourceEditDialog> owns the admin_update_resource RPC call, geocoding, and
   // structured logging (INV A/B/C/E). This just merges the saved row back into
@@ -386,6 +385,9 @@ export function ManageResourcesTab() {
           )}
         </div>
       )}
+
+      {/* ── "Edit in admin" link that opened nothing ── */}
+      <AdminFocusNoticeLine notice={focusNotice} kind="resource" onDismiss={dismissNotice} />
 
       {/* ── Error ── */}
       {error && (
