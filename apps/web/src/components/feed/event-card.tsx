@@ -165,7 +165,7 @@ export function EventCard({
       lang={locale}
       dir={dir(locale)}
       data-event-id={event.eventId}
-      className={`bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700${highlighted ? ` ${EVENT_CARD_HIGHLIGHT}` : ''}`}
+      className={`bg-stone-50/95 border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700${highlighted ? ` ${EVENT_CARD_HIGHLIGHT}` : ''}`}
     >
       {showBadges && (
         <div className="flex flex-wrap items-center gap-2">
@@ -257,7 +257,7 @@ export function EventCard({
         <button
           type="button"
           onClick={openSheet}
-          className="self-start min-h-6 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
+          className="self-start min-h-6 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#4a5d23] hover:bg-[#3d4d1c] text-white transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
         >
           {checkinButtonLabel(btn.kind, btn.label, locale)}
         </button>

@@ -42,6 +42,8 @@ import { reloadEventCard } from '@/lib/event-card-data'
 import { mergeCheckinState, emptyCheckinState } from '@/lib/event-checkin-state'
 import {
   buildEventCards,
+  groupEventsByVenueDay,
+  keepFeedRank,
   orderByShownDate,
   replaceEventCard,
   type EventCardItem,
@@ -50,6 +52,7 @@ import {
   type UpcomingEventRow,
 } from '@/components/feed/post-model'
 import { useEventCardRefresh } from '@/hooks/use-event-card-refresh'
+import { withFeedSync } from '@/components/panels/events-panel'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -169,7 +172,13 @@ describe('replaceEventCard / orderByShownDate — in place, nothing else moves',
     { ...b, score: 7, distanceBucket: '2-5km' },
     { ...c, score: 5, distanceBucket: '>50km' },
   ]
-  const keepRank = (was: EventFeedItem, next: EventCardItem): EventFeedItem => ({ ...next, score: was.score, distanceBucket: was.distanceBucket })
+  const keepRank = keepFeedRank
+
+  it('keepFeedRank: the re-read card\'s fields with the score and bucket the feed placed it by', () => {
+    const was: EventFeedItem = { ...b, score: 7.5, distanceBucket: '2-5km' }
+    const next: EventCardItem = { ...b, title: 'Renamed', startsAt: '2026-12-01T14:00:00Z' }
+    expect(keepFeedRank(was, next)).toEqual({ ...next, score: 7.5, distanceBucket: '2-5km' })
+  })
 
   it('feed: the re-read card takes its place with its rank score + distance bucket; the others are the same objects', () => {
     const renamed = { ...b, title: 'Renamed', startsAt: '2026-11-30T14:00:00Z' }
@@ -222,26 +231,45 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     delete g.CSS
   })
 
+  /**
+   * A list with E1's card in it. `dom.card` is the mounted card (null once it left), `dom.trigger`
+   * its ⋯ button; `remount()` replaces both, as React does when the Events tab files the card under
+   * another day (the old elements are detached, focus falls to <body>).
+   */
   function harness() {
     const applied: Array<[string, EventCardItem | null]> = []
     const headingFocus = { calls: 0 }
-    const cardEl = { contains: (el: unknown) => el === cardChild }
-    const cardChild = { id: 'trigger' }
-    const root = () => ({ querySelector: (sel: string) => (sel.includes(E1) ? cardEl : null) }) as unknown as ParentNode
+    const makeCard = () => {
+      const trigger = { id: 'trigger', focus: vi.fn(() => { focused = trigger }) }
+      const card = { contains: (el: unknown) => el === trigger }
+      return { card, trigger }
+    }
+    const dom: { card: { contains: (el: unknown) => boolean } | null; trigger: { focus: () => void } | null } = makeCard()
+    const root = () =>
+      ({
+        querySelector: (sel: string) =>
+          !sel.includes(E1) ? null : sel.startsWith('[data-event-id=') ? dom.card : sel.startsWith('[data-testid="event-menu-') ? dom.trigger : null,
+      }) as unknown as ParentNode
+    const remount = () => Object.assign(dom, makeCard())
+    const leave = () => Object.assign(dom, { card: null, trigger: null })
+    let onApply: () => void = () => {}
     const m = mount(() =>
       useEventCardRefresh({
         supabase: {} as never,
-        surface: 'feed',
+        surface: 'events_tab',
         userId: 'u1',
         isGuest: false,
         locale: 'en',
         timeoutMs: 1000,
-        apply: (id, item) => applied.push([id, item]),
+        apply: (id, item) => {
+          applied.push([id, item])
+          onApply()
+        },
         root,
         focusHeading: () => headingFocus.calls++,
       }),
     )
-    return { m, applied, headingFocus, cardChild }
+    return { m, applied, headingFocus, dom, remount, leave, setOnApply: (f: () => void) => (onApply = f) }
   }
   const renamed = card('occ-1', E1, '2026-10-24T14:00:00Z', 'Renamed')
 
@@ -268,10 +296,45 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     expect(m.tree().notice).toBe('Dates added: 2.')
   })
 
+  it('Events tab: the card moves to another day group (remounted) — focus goes to its NEW ⋯ trigger', async () => {
+    // The scenario: the date moves from this week to later, so the card is filed under another group.
+    const before = card('occ-1', E1, '2026-10-24T14:00:00Z')
+    const after = { ...before, startsAt: '2026-11-20T14:00:00Z', endsAt: '2026-11-20T16:00:00Z' }
+    const now = Date.parse('2026-10-22T12:00:00Z')
+    expect(groupEventsByVenueDay([before], now).week).toHaveLength(1)
+    expect(groupEventsByVenueDay([after], now).later).toHaveLength(1)
+    h.reload = async () => ({ item: after, checkin: emptyCheckinState() })
+    const { m, dom, remount, setOnApply, headingFocus } = harness()
+    focused = dom.trigger // focus came back to the ⋯ trigger when the dialog closed
+    setOnApply(() => {
+      remount()
+      focused = null // the old trigger was detached with its card
+    })
+    await m.tree().onManaged(E1, { kind: 'updated' })
+    expect(dom.trigger!.focus).toHaveBeenCalledTimes(1)
+    expect(focused).toBe(dom.trigger)
+    expect(headingFocus.calls).toBe(0)
+  })
+
+  it('the card stays mounted (same day group / the feed): focus is left where it is', async () => {
+    h.reload = async () => ({ item: renamed, checkin: emptyCheckinState() })
+    const { m, dom, headingFocus } = harness()
+    const trigger = dom.trigger!
+    focused = trigger
+    await m.tree().onManaged(E1, { kind: 'updated' })
+    expect(trigger.focus).not.toHaveBeenCalled()
+    expect(focused).toBe(trigger)
+    expect(headingFocus.calls).toBe(0)
+  })
+
   it('the event is no longer listed: the card is removed, focus that was in it goes to the heading, the notice says so', async () => {
     h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
-    const { m, applied, headingFocus, cardChild } = harness()
-    focused = cardChild
+    const { m, applied, headingFocus, dom, leave, setOnApply } = harness()
+    focused = dom.trigger
+    setOnApply(() => {
+      leave()
+      focused = null
+    })
     await m.tree().onManaged(E1, { kind: 'retired' })
     await m.flush()
     expect(applied).toEqual([[E1, null]])
@@ -279,11 +342,24 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
   })
 
-  it('focus elsewhere when the card leaves: focus is not moved', async () => {
+  it('focus elsewhere when the card changes: focus is not moved', async () => {
     h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
-    const { m, headingFocus } = harness()
+    const { m, headingFocus, leave, setOnApply } = harness()
     focused = { id: 'somewhere-else' }
+    setOnApply(leave)
     await m.tree().onManaged(E1, { kind: 'date_cancelled' })
+    expect(headingFocus.calls).toBe(0)
+  })
+
+  it('quietly (the feed while the Events tab is on screen): same re-read and apply, no announcement, no focus move', async () => {
+    h.reload = async () => ({ item: { ...renamed, status: 'cancelled', cancelledShown: 'none', cancelledStartsAt: renamed.startsAt }, checkin: emptyCheckinState() })
+    const { m, applied, headingFocus, dom, leave, setOnApply } = harness()
+    focused = dom.trigger
+    setOnApply(leave)
+    await m.tree().refreshQuietly(E1, { kind: 'date_cancelled' })
+    await m.flush()
+    expect(applied).toEqual([[E1, expect.objectContaining({ cancelledShown: 'none' })]])
+    expect(m.tree().notice).toBe('')
     expect(headingFocus.calls).toBe(0)
   })
 
@@ -295,8 +371,35 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     await m.tree().onManaged(E1, { kind: 'date_cancelled' })
     await m.flush()
     expect(applied).toEqual([])
-    expect(h.warn).toEqual([['events.card.refresh_failed', { surface: 'feed', code: 'TimeoutError' }]])
+    expect(h.warn).toEqual([['events.card.refresh_failed', { surface: 'events_tab', code: 'TimeoutError' }]])
     expect(m.tree().notice).toBe('Date cancelled.')
+  })
+})
+
+describe('an Events-tab cancel also updates the feed copy of that event', () => {
+  it('the Events tab handler runs its own re-read, then the feed sync, with the same event and change', () => {
+    const calls: string[] = []
+    const handler = withFeedSync(
+      (id, c) => calls.push(`tab:${id}:${c.kind}`),
+      (id, c) => calls.push(`feed:${id}:${c.kind}`),
+    )
+    handler(E1, { kind: 'date_cancelled' })
+    expect(calls).toEqual([`tab:${E1}:date_cancelled`, `feed:${E1}:date_cancelled`])
+    // Without a feed (the tab mounted alone) it still works.
+    expect(() => withFeedSync(() => {})(E1, { kind: 'updated' })).not.toThrow()
+  })
+
+  it('the feed state: its card for that event becomes the re-read (cancelled) card, rank kept, others untouched', () => {
+    const shown = card('occ-1', E1, '2026-10-24T14:00:00Z')
+    const other = card('occ-2', E2, '2026-10-25T14:00:00Z')
+    const feed: EventFeedItem[] = [
+      { ...shown, score: 9, distanceBucket: '<2km' },
+      { ...other, score: 4, distanceBucket: '5-10km' },
+    ]
+    const reread = { ...shown, status: 'cancelled', cancelledShown: 'next' as const, cancelledStartsAt: shown.startsAt, startsAt: '2026-10-31T14:00:00Z' }
+    const out = replaceEventCard(feed, E1, reread, keepFeedRank)
+    expect(out[0]).toMatchObject({ eventId: E1, cancelledShown: 'next', startsAt: '2026-10-31T14:00:00Z', score: 9, distanceBucket: '<2km' })
+    expect(out[1]).toBe(feed[1])
   })
 })
 
@@ -315,17 +418,8 @@ describe('Events tab: the change is announced in its one status region', () => {
   })
 })
 
-describe('wiring — the panels re-read one card and never reload the list for a card change', () => {
+describe('wiring — the Events tab re-reads one card and never reloads the list for a card change', () => {
   const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
-
-  it('feed: the card change handler replaces the card in place (rank kept) and never calls refreshFeed', () => {
-    const src = read('../components/panels/feed-panel.tsx')
-    const start = src.indexOf('const applyEventCard = useCallback(')
-    const block = src.slice(start, src.indexOf('// Initial fetch + mode-change refetch', start))
-    expect(block).toContain('replaceEventCard(prev, eventId, item, (was, next) => ({ ...next, score: was.score, distanceBucket: was.distanceBucket }))')
-    expect(block).not.toMatch(/refreshFeed|fetchRankedPosts|fetchPosts|setLoading/)
-    expect(src).toMatch(/onManaged=\{handleEventManaged\}/)
-  })
 
   it('Events tab: the card change re-files the one card and never re-runs the list load', () => {
     const src = read('../components/panels/events-panel.tsx')

@@ -9,14 +9,14 @@
 //   - feed-panel.tsx: the panel root carries lang + dir, the tabs and prompt come from the
 //     dictionary, no English chrome literal is left, and the raw error text path is gone.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { messages, type Locale } from './i18n'
 import { feedChromeMessages, feedChromeT, type FeedChromeMessages } from './i18n-feed-chrome'
-import { FeedHeader, FeedListStatus, FeedLoadMore } from '@/components/feed/feed-chrome'
+import { FeedHeader, FeedListStatus, FeedLoadMore, feedStatusAnnouncement, nextTabIndex } from '@/components/feed/feed-chrome'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const EN_KEYS = Object.keys(feedChromeMessages.en).sort()
@@ -65,20 +65,91 @@ describe('the chrome renders in the viewer language', () => {
   })
 
   it('a timeout and any other failure each read as their translated sentence, with Retry', () => {
-    const timeout = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'error', error: 'timeout' }, locale: 'en', onRetry: () => {} }))
+    const timeout = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'error', error: 'timeout' }, locale: 'en', onRetry: () => {}, focusTitle: () => {} }))
     expect(timeout).toMatch(/role="alert"[^>]*>Feed timed out — please check your connection and retry\.</)
-    const failed = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'error', error: 'failed' }, locale: 'vi', onRetry: () => {} }))
+    const failed = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'error', error: 'failed' }, locale: 'vi', onRetry: () => {}, focusTitle: () => {} }))
     expect(failed).toContain('>Hiện không thể tải bảng tin. Hãy thử lại.</p>')
     expect(failed).toContain('>Thử lại</button>')
   })
 
   it('loading, empty and Load more', () => {
-    expect(renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'loading' }, locale: 'fr', onRetry: () => {} }))).toContain('Chargement des publications…')
-    const empty = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'empty' }, locale: 'ko', onRetry: () => {} }))
+    expect(renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'loading' }, locale: 'fr', onRetry: () => {}, focusTitle: () => {} }))).toContain('Chargement des publications…')
+    const empty = renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'empty' }, locale: 'ko', onRetry: () => {}, focusTitle: () => {} }))
     expect(empty).toContain('표시할 게시물이 없습니다')
     expect(empty).toContain('가장 먼저 무언가를 공유해 보세요!')
     expect(renderToStaticMarkup(h(FeedLoadMore, { locale: 'pt', loading: false, onLoadMore: () => {} }))).toContain('>Carregar mais publicações</button>')
     expect(renderToStaticMarkup(h(FeedLoadMore, { locale: 'pt', loading: true, onLoadMore: () => {} }))).toContain('Carregando…')
+  })
+})
+
+describe('announcements and keyboard (a11y fix round)', () => {
+  const g = globalThis as unknown as { requestAnimationFrame?: unknown }
+  afterEach(() => {
+    delete g.requestAnimationFrame
+  })
+  type El = { type: unknown; props: Record<string, unknown> }
+  const find = (node: unknown, type: string): El[] => {
+    const out: El[] = []
+    const walk = (n: unknown) => {
+      if (Array.isArray(n)) return n.forEach(walk)
+      const el = n as El | null
+      if (!el || typeof el !== 'object' || !el.props) return
+      if (el.type === type) out.push(el)
+      walk(el.props.children)
+    }
+    walk(node)
+    return out
+  }
+
+  it('the feed status region says the list is loading / empty, or the last card change; nothing for an error (its alert speaks)', () => {
+    const say = (s: Partial<{ loading: boolean; error: boolean; empty: boolean; notice: string }>, locale: Locale = 'en') =>
+      feedStatusAnnouncement({ loading: false, error: false, empty: false, notice: '', ...s }, locale)
+    expect(say({ loading: true, empty: true })).toBe('Loading posts…')
+    expect(say({ empty: true })).toBe('No posts to show')
+    expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar')
+    expect(say({ notice: 'Changes saved.' })).toBe('Changes saved.')
+    expect(say({ error: true, empty: true, loading: true })).toBe('')
+    expect(say({})).toBe('')
+  })
+
+  it('the visible loading / empty copy is hidden from assistive tech (announced once, by the region)', () => {
+    for (const kind of ['loading', 'empty'] as const) {
+      const html = renderToStaticMarkup(h(FeedListStatus, { state: { kind }, locale: 'en', onRetry: () => {}, focusTitle: () => {} }))
+      expect(html).toMatch(/^<div aria-hidden="true"/)
+    }
+    expect(renderToStaticMarkup(h(FeedListStatus, { state: { kind: 'error', error: 'failed' }, locale: 'en', onRetry: () => {}, focusTitle: () => {} }))).not.toMatch(/aria-hidden="true" class="text-center/)
+  })
+
+  it('Retry reads the feed again and moves focus to the feed title', () => {
+    g.requestAnimationFrame = (cb: () => void) => cb()
+    const calls: string[] = []
+    const tree = FeedListStatus({ state: { kind: 'error', error: 'failed' }, locale: 'en', onRetry: () => calls.push('retry'), focusTitle: () => calls.push('focus title') })
+    ;(find(tree, 'button')[0].props.onClick as () => void)()
+    expect(calls).toEqual(['retry', 'focus title'])
+  })
+
+  it('Load more stays focusable while busy (aria-disabled, not disabled) and ignores activation until the page loads', () => {
+    const onLoadMore = vi.fn()
+    const busy = find(FeedLoadMore({ locale: 'en', loading: true, onLoadMore }), 'button')[0]
+    expect(busy.props.disabled).toBeUndefined()
+    expect(busy.props['aria-disabled']).toBe(true)
+    ;(busy.props.onClick as () => void)()
+    expect(onLoadMore).not.toHaveBeenCalled()
+    const idle = find(FeedLoadMore({ locale: 'en', loading: false, onLoadMore }), 'button')[0]
+    expect(idle.props['aria-disabled']).toBeUndefined()
+    ;(idle.props.onClick as () => void)()
+    expect(onLoadMore).toHaveBeenCalledTimes(1)
+  })
+
+  it('sub-tab arrow keys follow the reading direction: Arabic swaps Left / Right', () => {
+    expect(nextTabIndex('ArrowRight', 0, 6, 'en')).toBe(1)
+    expect(nextTabIndex('ArrowLeft', 0, 6, 'en')).toBe(5)
+    expect(nextTabIndex('ArrowLeft', 0, 6, 'ar')).toBe(1)
+    expect(nextTabIndex('ArrowRight', 0, 6, 'ar')).toBe(5)
+    expect(nextTabIndex('ArrowLeft', 5, 6, 'ar')).toBe(0)
+    expect(nextTabIndex('Home', 3, 6, 'ar')).toBe(0)
+    expect(nextTabIndex('End', 3, 6, 'en')).toBe(5)
+    expect(nextTabIndex('Tab', 3, 6, 'en')).toBeNull()
   })
 })
 
@@ -96,8 +167,11 @@ describe('feed-panel.tsx wiring', () => {
     expect(panel).toContain('useState<FeedLoadError | null>(null)')
   })
 
-  it('a change from an event card menu is announced in one polite region under the heading', () => {
-    expect(panel).toMatch(/<p role="status" aria-live="polite" className="sr-only" data-testid="feed-status">\s*\{feedNotice\}\s*<\/p>/)
+  it('the feed status region is always mounted and speaks feedStatusAnnouncement (loading, empty, card changes)', () => {
+    expect(panel).toMatch(/<p role="status" aria-live="polite" className="sr-only" data-testid="feed-status">\s*\{announceReady\s*\?\s*feedStatusAnnouncement\(\{ loading, error: error !== null, empty: feedItems\.length === 0, notice: feedNotice \}, locale\)/)
+    expect(panel).toContain('nextTabIndex(e.key, currentIdx, tabs.length, locale)')
+    expect(panel).toContain('focusTitle={focusFeedTitle}')
+    expect(panel).toContain('<EventsPanel onEventChanged={syncFeedEventCard} />')
   })
 
   it('the panel root carries the viewer language and direction', () => {
@@ -125,5 +199,18 @@ describe('feed-panel.tsx wiring', () => {
     for (const id of ['messages', 'businesses', 'organizations', 'petitions']) {
       expect(panel).toMatch(new RegExp(`id="feed-panel-${id}"[\\s\\S]{0,200}lang="en"\\s+dir="ltr"`))
     }
+  })
+
+  it('inside the Feed tab, every part not translated yet is marked English, left-to-right', () => {
+    // The composer, the safety strip, the follow-error banner and each post card (its Report button
+    // and relative time included) — the translated chrome around them keeps the viewer language.
+    expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-composer-region">\s*<CreatePostCard\b/)
+    expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">\s*<SafetyStrip\b/)
+    expect(panel).toMatch(/<m\.div key=\{post\.id\} data-testid=\{`post-\$\{post\.id\}`\} lang="en" dir="ltr"[^>]*>\s*<PostCard\b/)
+    expect(panel).toMatch(/role="alert"[\s\S]{0,120}lang="en"\s+dir="ltr"[\s\S]{0,160}\{followError\}/)
+    // ...and nothing in the Feed tab renders them outside those marks.
+    expect(panel.match(/<CreatePostCard\b/g)).toHaveLength(1)
+    expect(panel.match(/<SafetyStrip\b/g)).toHaveLength(1)
+    expect(panel.match(/<PostCard\b/g)).toHaveLength(1)
   })
 })

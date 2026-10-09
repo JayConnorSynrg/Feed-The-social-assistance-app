@@ -254,6 +254,10 @@ export function EventCardAdminMenu({
           editTargets.prefetch()
         }}
       />
+      {/* Always mounted, so "Loading…" is announced while Edit event waits for the event read. */}
+      <span role="status" aria-live="polite" className="sr-only" data-testid={`event-menu-status-${event.eventId}`}>
+        {opening ? eventMemberT(locale, 'cardMenuLoading') : ''}
+      </span>
       {editError && (
         <p role="alert" className="max-w-[14rem] text-end text-xs text-red-700">
           {eventMemberT(locale, 'editLoadError')}

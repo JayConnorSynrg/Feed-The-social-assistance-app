@@ -610,6 +610,12 @@ export function replaceEventCard<T extends EventCardItem>(
   return out
 }
 
+/** The feed's `keep` for replaceEventCard: the re-read card, with the rank score and distance
+ *  bucket the feed placed the card by (an admin's change never moves a card in the feed). */
+export function keepFeedRank(was: EventFeedItem, next: EventCardItem): EventFeedItem {
+  return { ...next, score: was.score, distanceBucket: was.distanceBucket }
+}
+
 export type EventDayGroup = 'today' | 'week' | 'later'
 
 /** The instant a card is filed under: the cancelled date for a card whose shown date was

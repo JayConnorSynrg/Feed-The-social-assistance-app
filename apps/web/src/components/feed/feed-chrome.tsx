@@ -11,7 +11,7 @@
 
 import type { Ref } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { Locale } from '@/lib/i18n'
+import { dir, type Locale } from '@/lib/i18n'
 import { feedChromeT, type FeedChromeMessages } from '@/lib/i18n-feed-chrome'
 
 /** Ranked-feed ordering mode. Default 'ranked' (proximity/recency/engagement blend via the
@@ -49,7 +49,7 @@ export function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeC
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 ref={titleRef} tabIndex={-1} className="font-semibold text-lg rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">
+        <h2 ref={titleRef} tabIndex={-1} className="font-semibold text-lg rounded focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">
           {t('feedTitle')}
         </h2>
         {/* Ranked ↔ chronological toggle (default ranked). */}
@@ -93,9 +93,49 @@ export function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeC
 
 export type FeedListState = { kind: 'error'; error: FeedLoadError } | { kind: 'loading' } | { kind: 'empty' }
 
+/**
+ * What the feed's one always-mounted polite status region says: the list loading or empty, or what
+ * the last change from an event card's ⋯ menu did. A failed read is announced by its own
+ * role="alert" line instead (never twice).
+ */
+export function feedStatusAnnouncement(
+  { loading, error, empty, notice }: { loading: boolean; error: boolean; empty: boolean; notice: string },
+  locale: Locale,
+): string {
+  if (error) return ''
+  if (loading) return feedChromeT(locale, 'loadingPosts')
+  if (notice) return notice
+  return empty ? feedChromeT(locale, 'emptyTitle') : ''
+}
+
+/** The tab a sub-tab-list key moves to (null = not a moving key). ArrowRight / ArrowLeft follow
+ *  the reading direction: in a right-to-left locale ArrowLeft moves to the next tab. */
+export function nextTabIndex(key: string, current: number, count: number, locale: Locale): number | null {
+  const rtl = dir(locale) === 'rtl'
+  const forward = rtl ? 'ArrowLeft' : 'ArrowRight'
+  const back = rtl ? 'ArrowRight' : 'ArrowLeft'
+  if (key === forward) return (current + 1) % count
+  if (key === back) return (current - 1 + count) % count
+  if (key === 'Home') return 0
+  if (key === 'End') return count - 1
+  return null
+}
+
 /** The list's place-holder while it has no cards: the read failed (with Retry), is running, or
- *  returned nothing. */
-export function FeedListStatus({ state, locale, onRetry }: { state: FeedListState; locale: Locale; onRetry: () => void }) {
+ *  returned nothing. Loading / empty are announced by the feed's status region (feedStatusAnnouncement),
+ *  so their visible copy is hidden from assistive tech. Retry moves focus to the feed title (the
+ *  button itself leaves once the read starts). */
+export function FeedListStatus({
+  state,
+  locale,
+  onRetry,
+  focusTitle,
+}: {
+  state: FeedListState
+  locale: Locale
+  onRetry: () => void
+  focusTitle: () => void
+}) {
   const t = (key: keyof FeedChromeMessages) => feedChromeT(locale, key)
   if (state.kind === 'error') {
     return (
@@ -103,7 +143,14 @@ export function FeedListStatus({ state, locale, onRetry }: { state: FeedListStat
         <p role="alert" data-testid="feed-load-error" className="text-sm text-red-700">
           {t(state.error === 'timeout' ? 'loadTimeout' : 'loadFailed')}
         </p>
-        <button type="button" onClick={onRetry} className="min-h-6 text-sm text-stone-700 underline mt-2">
+        <button
+          type="button"
+          onClick={() => {
+            onRetry()
+            requestAnimationFrame(focusTitle)
+          }}
+          className="min-h-6 text-sm text-stone-700 underline mt-2"
+        >
           {t('retry')}
         </button>
       </div>
@@ -111,30 +158,33 @@ export function FeedListStatus({ state, locale, onRetry }: { state: FeedListStat
   }
   if (state.kind === 'loading') {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div aria-hidden="true" className="text-center py-12 text-muted-foreground">
         <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" aria-hidden="true" />
         <p className="text-sm">{t('loadingPosts')}</p>
       </div>
     )
   }
   return (
-    <div className="text-center py-12 text-muted-foreground">
+    <div aria-hidden="true" className="text-center py-12 text-muted-foreground">
       <p className="text-sm">{t('emptyTitle')}</p>
       <p className="text-xs mt-1">{t('emptyBody')}</p>
     </div>
   )
 }
 
-/** "Load more posts" (while the next page loads: a spinner and "Loading…"). */
+/** "Load more posts" (while the next page loads: a spinner and "Loading…"). It stays focusable
+ *  while busy (aria-disabled) and ignores activation until the page has loaded. */
 export function FeedLoadMore({ locale, loading, onLoadMore }: { locale: Locale; loading: boolean; onLoadMore: () => void }) {
   return (
     <div className="pt-2 pb-4 flex justify-center">
       <button
         type="button"
         data-testid="feed-load-more"
-        onClick={onLoadMore}
-        disabled={loading}
-        className="px-5 py-2 rounded-full text-sm font-medium bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700 disabled:opacity-60 flex items-center gap-2 transition-colors"
+        onClick={() => {
+          if (!loading) onLoadMore()
+        }}
+        aria-disabled={loading || undefined}
+        className="px-5 py-2 rounded-full text-sm font-medium bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700 aria-disabled:opacity-60 aria-disabled:cursor-wait flex items-center gap-2 transition-colors"
       >
         {loading ? (
           <>

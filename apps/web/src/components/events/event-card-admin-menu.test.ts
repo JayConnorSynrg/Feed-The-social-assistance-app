@@ -211,19 +211,23 @@ describe('Edit event', () => {
     expect(h.reads[0]).toEqual(expect.arrayContaining([['from', ['assistance_events']], ['select', [EDIT_TARGET_SELECT]], ['eq', ['id', EVENT]]]))
   })
 
-  it('choosing Edit twice while the read runs: one read, one dialog', async () => {
+  it('choosing Edit twice while the read runs: one read, one dialog; "Loading…" is announced meanwhile', async () => {
     h.release = () => {}
     const s = setup()
+    const status = () => findAll(s.m.tree(), (el) => el.props.role === 'status')
+    expect(status().map((el) => el.props.children)).toEqual([''])
     s.open()
     s.choose('edit')
     s.choose('edit')
     s.m.rerender()
     expect(s.menu()!.props.busy).toBe(true)
+    expect(status().map((el) => [el.props['aria-live'], el.props.children])).toEqual([['polite', 'Loading…']])
     h.release!()
     await s.m.flush()
     expect(h.reads).toHaveLength(1)
     expect(s.one(LazyEventEditDialog)).toHaveLength(1)
     expect(s.menu()!.props.busy).toBe(false)
+    expect(status().map((el) => el.props.children)).toEqual([''])
   })
 
   it('each menu open reads the event fresh (a save in between is reflected)', async () => {

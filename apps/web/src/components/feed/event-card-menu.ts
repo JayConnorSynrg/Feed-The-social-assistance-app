@@ -14,9 +14,12 @@
 //   Cancel date     the card's shown date, while it is upcoming and has not ended (the database
 //                   refuses an ended date). A shown date that is already cancelled, or has ended,
 //                   keeps the item with the reason, so the admin learns why;
-//   Edit in admin   the event's edit dialog in the admin screen ("feed-admin" tab).
+//   Edit in admin   the event's edit dialog in the admin screen ("feed-admin" tab) — offered only
+//                   when both ids are UUIDs, the link's own condition (admin-edit-link.tsx
+//                   hasValidIds), so the menu never holds an item that renders nothing.
 
 import { canEditInAdmin, type AdminEditViewer } from '@/lib/admin-editability'
+import { isUuid } from '@/lib/org-admin-paths'
 import type { EventCardItem } from './post-model'
 
 export type EventMenuEntry =
@@ -52,6 +55,6 @@ export function eventMenuEntries(
     { action: 'edit' },
     { action: 'add_dates' },
     { action: 'cancel_date', unavailable: cancelDateUnavailable(event, nowMs) },
-    { action: 'open_admin' },
+    ...(isUuid(event.eventId) && isUuid(event.orgId) ? [{ action: 'open_admin' } as const] : []),
   ]
 }

@@ -78,14 +78,14 @@ export interface CardActionsMenuProps {
   busy?: boolean
 }
 
-const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
+const FOCUS_RING = 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
 
 export const CARD_MENU_TRIGGER_CLASS =
   'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-200 data-[state=open]:bg-stone-200 ' +
   FOCUS_RING
 
 const ITEM_COMMON =
-  'flex min-h-9 select-none rounded-md px-3 py-1.5 text-sm outline-none ' +
+  'flex min-h-9 select-none rounded-md px-3 py-1.5 text-sm outline-hidden ' +
   'data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-brand'
 const ITEM_ROW = `${ITEM_COMMON} cursor-pointer items-center gap-2`
 

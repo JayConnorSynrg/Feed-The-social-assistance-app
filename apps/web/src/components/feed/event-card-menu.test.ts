@@ -39,6 +39,14 @@ describe('who gets the menu', () => {
   })
 })
 
+describe('Edit in admin needs the ids its link needs (never an item that renders nothing)', () => {
+  it('a non-UUID event or organization id: no Edit in admin item, the other items stay', () => {
+    const viewer = ready('platform_admin', null)
+    expect(eventMenuEntries({ ...upcoming, eventId: 'not-a-uuid' }, viewer, NOW).map((e) => e.action)).toEqual(['edit', 'add_dates', 'cancel_date'])
+    expect(eventMenuEntries({ ...upcoming, orgId: 'org-1' }, viewer, NOW).map((e) => e.action)).toEqual(['edit', 'add_dates', 'cancel_date'])
+  })
+})
+
 describe('Cancel date follows the scheduler rule for the card\'s shown date', () => {
   it.each([
     ['upcoming, not started', { endsAt: '2026-10-24T18:00:00Z' }, null],

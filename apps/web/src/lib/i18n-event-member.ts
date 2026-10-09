@@ -48,6 +48,8 @@ export interface EventMemberMessages {
   editLoadError: string
   /** Announced after a save when the event no longer appears (retired, or no announced date). */
   cardGoneNotice: string
+  /** Announced while "Edit event" waits for the event read. */
+  cardMenuLoading: string
 }
 
 export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
@@ -84,6 +86,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'This date has ended.',
     editLoadError: 'The event could not be opened for editing. Try again.',
     cardGoneNotice: 'This event is no longer listed.',
+    cardMenuLoading: 'Loading…',
   },
   es: {
     eventsTabTitle: 'Eventos de la comunidad',
@@ -118,6 +121,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Esta fecha ya terminó.',
     editLoadError: 'No se pudo abrir el evento para editarlo. Inténtalo de nuevo.',
     cardGoneNotice: 'Este evento ya no aparece en la lista.',
+    cardMenuLoading: 'Cargando…',
   },
   ht: {
     eventsTabTitle: 'Evènman kominote a',
@@ -152,6 +156,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Dat sa a fini deja.',
     editLoadError: 'Nou pa t kapab louvri evènman an pou modifye l. Eseye ankò.',
     cardGoneNotice: 'Evènman sa a pa parèt nan lis la ankò.',
+    cardMenuLoading: 'N ap chaje…',
   },
   vi: {
     eventsTabTitle: 'Sự kiện cộng đồng',
@@ -186,6 +191,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Ngày này đã kết thúc.',
     editLoadError: 'Không thể mở sự kiện để chỉnh sửa. Hãy thử lại.',
     cardGoneNotice: 'Sự kiện này không còn trong danh sách.',
+    cardMenuLoading: 'Đang tải…',
   },
   ar: {
     eventsTabTitle: 'فعاليات المجتمع',
@@ -220,6 +226,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'انتهى هذا الموعد.',
     editLoadError: 'تعذّر فتح الفعالية لتعديلها. حاول مرة أخرى.',
     cardGoneNotice: 'لم تعد هذه الفعالية مدرجة في القائمة.',
+    cardMenuLoading: 'جارٍ التحميل…',
   },
   zh: {
     eventsTabTitle: '社区活动',
@@ -254,6 +261,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: '此日期已结束。',
     editLoadError: '无法打开活动进行编辑。请重试。',
     cardGoneNotice: '此活动已不在列表中。',
+    cardMenuLoading: '正在加载…',
   },
   so: {
     eventsTabTitle: 'Dhacdooyinka bulshada',
@@ -288,6 +296,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Taariikhdan way dhammaatay.',
     editLoadError: 'Dhacdada lama furi karin si wax looga beddelo. Isku day mar kale.',
     cardGoneNotice: 'Dhacdadan kuma jirto liiska hadda.',
+    cardMenuLoading: 'Waa la soo shubayaa…',
   },
   fr: {
     eventsTabTitle: 'Événements de la communauté',
@@ -322,6 +331,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Cette date est passée.',
     editLoadError: 'Impossible d’ouvrir l’événement pour le modifier. Réessayez.',
     cardGoneNotice: 'Cet événement n’apparaît plus dans la liste.',
+    cardMenuLoading: 'Chargement…',
   },
   pt: {
     eventsTabTitle: 'Eventos da comunidade',
@@ -356,6 +366,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Esta data já terminou.',
     editLoadError: 'Não foi possível abrir o evento para edição. Tente novamente.',
     cardGoneNotice: 'Este evento não aparece mais na lista.',
+    cardMenuLoading: 'Carregando…',
   },
   ru: {
     eventsTabTitle: 'События сообщества',
@@ -390,6 +401,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Эта дата уже прошла.',
     editLoadError: 'Не удалось открыть мероприятие для изменения. Попробуйте ещё раз.',
     cardGoneNotice: 'Этого мероприятия больше нет в списке.',
+    cardMenuLoading: 'Загрузка…',
   },
   ko: {
     eventsTabTitle: '지역 행사',
@@ -424,6 +436,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: '이 날짜는 이미 끝났습니다.',
     editLoadError: '행사를 수정하려고 열 수 없습니다. 다시 시도하세요.',
     cardGoneNotice: '이 행사는 더 이상 목록에 없습니다.',
+    cardMenuLoading: '불러오는 중…',
   },
   tl: {
     eventsTabTitle: 'Mga event ng komunidad',
@@ -458,6 +471,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Tapos na ang petsang ito.',
     editLoadError: 'Hindi mabuksan ang event para i-edit. Subukang muli.',
     cardGoneNotice: 'Hindi na nakalista ang event na ito.',
+    cardMenuLoading: 'Nilo-load…',
   },
   am: {
     eventsTabTitle: 'የማህበረሰብ ዝግጅቶች',
@@ -492,6 +506,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'ይህ ቀን አልፏል።',
     editLoadError: 'ዝግጅቱን ለማስተካከል መክፈት አልተቻለም። እንደገና ይሞክሩ።',
     cardGoneNotice: 'ይህ ዝግጅት ከእንግዲህ በዝርዝሩ ውስጥ የለም።',
+    cardMenuLoading: 'በመጫን ላይ…',
   },
   hmn: {
     eventsTabTitle: 'Cov xwm txheej hauv zej zog',
@@ -526,6 +541,7 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     cancelUnavailableEnded: 'Hnub no twb xaus lawm.',
     editLoadError: 'Qhib tsis tau qhov xwm txheej los kho. Sim dua.',
     cardGoneNotice: 'Qhov xwm txheej no tsis nyob hauv daim ntawv teev lawm.',
+    cardMenuLoading: 'Tab tom thauj…',
   },
 }
 

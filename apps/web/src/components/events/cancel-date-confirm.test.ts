@@ -28,6 +28,7 @@ vi.mock('@/lib/event-admin-rpc', () => ({
 
 import { mount, findAll } from '@/test/mini-react'
 import { CancelDateConfirm, type CancelDateTarget } from './cancel-date-confirm'
+import { AlertDialog, AlertDialogCancel } from '@/components/ui/alert-dialog'
 
 const TARGET: CancelDateTarget = {
   occurrenceId: 'occ-1',
@@ -63,12 +64,29 @@ function setup(target: CancelDateTarget | null = TARGET) {
   )
   const buttons = () => findAll(m.tree(), (el) => el.type === 'button') as El[]
   const confirmButton = () => buttons().find((b) => JSON.stringify(b.props.children).includes('Cancel date'))!
-  const keepButton = () => buttons().find((b) => JSON.stringify(b.props.children).includes('Keep'))!
+  const keepButton = () => (findAll(m.tree(), (el) => el.type === AlertDialogCancel) as El[])[0]
+  // Choosing the dialog's Cancel (or Escape) closes it through the root's onOpenChange(false).
+  const dismiss = () => ((findAll(m.tree(), (el) => el.type === AlertDialog) as El[])[0].props.onOpenChange as (o: boolean) => void)(false)
   const alerts = () => findAll(m.tree(), (el) => el.props.role === 'alert') as El[]
-  return { m, events, props, confirmButton, keepButton, alerts }
+  return { m, events, props, confirmButton, keepButton, dismiss, alerts }
 }
 
 describe('CancelDateConfirm', () => {
+  it('"Keep date" is the dialog\'s Cancel (focus starts on it when the dialog opens), disabled while cancelling', async () => {
+    h.hold = () => {}
+    const s = setup()
+    const keep = s.keepButton()
+    expect(keep).toBeDefined()
+    expect(JSON.stringify(keep.props.children)).toContain('Keep')
+    expect(keep.props.disabled).toBe(false)
+    ;(s.confirmButton().props.onClick as () => void)()
+    s.m.rerender()
+    expect(s.keepButton().props.disabled).toBe(true)
+    // Escape / outside dismissal is ignored mid-call too.
+    s.dismiss()
+    expect(s.events).toEqual([])
+  })
+
   it('confirm: ONE call for this date with the surface label, then the owner hears it', async () => {
     const s = setup()
     ;(s.confirmButton().props.onClick as () => void)()
@@ -96,7 +114,7 @@ describe('CancelDateConfirm', () => {
     await s.m.flush()
     expect(s.alerts().map((a) => a.props.children)).toEqual([expect.stringMatching(/\S/)])
     expect(JSON.stringify(s.m.tree())).not.toContain('P0001')
-    ;(s.keepButton().props.onClick as () => void)()
+    s.dismiss()
     expect(s.events).toEqual(['close'])
     s.props.target = TARGET
     s.m.rerender()

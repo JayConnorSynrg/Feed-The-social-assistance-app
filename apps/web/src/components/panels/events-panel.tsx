@@ -190,7 +190,7 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
     <section ref={listRef} lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
       <div className="flex items-center gap-2 pb-1">
         <Calendar className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
-        <h2 id="events-tab-title" ref={titleRef} tabIndex={-1} className="text-lg font-bold text-stone-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">
+        <h2 id="events-tab-title" ref={titleRef} tabIndex={-1} className="text-lg font-bold text-stone-900 rounded focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2">
           {eventMemberT(locale, 'eventsTabTitle')}
         </h2>
       </div>
@@ -219,7 +219,7 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
           <button
             type="button"
             onClick={onRetry}
-            className="min-h-6 min-w-6 px-3 py-1.5 rounded-lg text-sm font-semibold text-lime-800 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
+            className="min-h-6 min-w-6 px-3 py-1.5 rounded-lg text-sm font-semibold text-lime-800 underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2"
           >
             {eventFormT(locale, 'retry')}
           </button>
@@ -263,7 +263,22 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
   )
 }
 
-export function EventsPanel() {
+/** The Events tab's card-change handler: its own re-read, then the feed's copy of the same event
+ *  (`onEventChanged`, when the feed holds one). */
+export function withFeedSync(
+  onManaged: (eventId: string, change: EventCardChange) => void,
+  onEventChanged?: (eventId: string, change: EventCardChange) => void,
+): (eventId: string, change: EventCardChange) => void {
+  return (eventId, change) => {
+    onManaged(eventId, change)
+    onEventChanged?.(eventId, change)
+  }
+}
+
+export function EventsPanel({ onEventChanged }: {
+  /** The community feed's quiet re-read of its copy of an event changed here. */
+  onEventChanged?: (eventId: string, change: EventCardChange) => void
+} = {}) {
   const supabase = createClient()
   const { loading: authLoading, user, isAnonymous } = useAuth()
   const locale = useProfileLocale()
@@ -459,7 +474,7 @@ export function EventsPanel() {
       focusMiss={focusMiss}
       highlightId={highlightId}
       listRef={listRef}
-      onManaged={onManaged}
+      onManaged={withFeedSync(onManaged, onEventChanged)}
       notice={notice}
     />
   )

@@ -52,9 +52,10 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, replaceEventCard, type EventCardItem, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, replaceEventCard, keepFeedRank, type EventCardItem, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
 import { useEventCardRefresh } from '@/hooks/use-event-card-refresh'
+import type { EventCardChange } from '@/components/events/event-card-admin-menu'
 import type { MyCheckinStatus } from '@/lib/event-checkin'
 import { emptyCheckinState, checkinResultEffect, type CheckinState } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
@@ -64,7 +65,7 @@ import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { FeedHeader, FeedListStatus, FeedLoadMore, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
+import { FeedHeader, FeedListStatus, FeedLoadMore, feedStatusAnnouncement, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
@@ -1356,17 +1357,15 @@ export function FeedPanel() {
     currentIdx: number
   ) => {
     const tabs: FeedSubtab[] = ['feed', 'events', 'businesses', 'organizations', 'petitions', 'messages']
-    let next = currentIdx
-    if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
-    else if (e.key === 'Home') { e.preventDefault(); next = 0 }
-    else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
-    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
-    else return
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
+    // Arrow keys follow the reading direction (right-to-left locales swap them).
+    const next = nextTabIndex(e.key, currentIdx, tabs.length, locale)
+    if (next === null) return
+    e.preventDefault()
     const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
     tabEls?.[next]?.focus()
     handleSubtabSwitch(tabs[next])
-  }, [handleSubtabSwitch])
+  }, [handleSubtabSwitch, locale])
 
   // ── Pagination constants ────────────────────────────────────────────────────
   // Keyset pagination uses (created_at, id) for a stable cursor. is_pinned desc
@@ -1831,14 +1830,21 @@ export function FeedPanel() {
   const feedTitleRef = useRef<HTMLHeadingElement>(null)
   const applyEventCard = useCallback((eventId: string, item: EventCardItem | null, checkin: CheckinState) => {
     setEventItems((prev) =>
-      replaceEventCard(prev, eventId, item, (was, next) => ({ ...next, score: was.score, distanceBucket: was.distanceBucket })),
+      replaceEventCard(prev, eventId, item, keepFeedRank),
     )
     setEventMyStatuses((prev) => ({ ...prev, ...checkin.statuses }))
     setEventAnonClaims((prev) => new Set([...prev, ...checkin.anonClaims]))
   }, [])
   const feedRoot = useCallback(() => (typeof document === 'undefined' ? null : document), [])
   const focusFeedTitle = useCallback(() => feedTitleRef.current?.focus(), [])
-  const { notice: feedNotice, onManaged: handleEventManaged } = useEventCardRefresh({
+  // The feed's status region starts empty and gets its first text a frame later, so that first
+  // message (the list loading) is announced.
+  const [announceReady, setAnnounceReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setAnnounceReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const { notice: feedNotice, onManaged: handleEventManaged, refreshQuietly: refreshFeedEventQuietly } = useEventCardRefresh({
     supabase,
     surface: 'feed',
     userId: user?.id ?? null,
@@ -1849,6 +1855,16 @@ export function FeedPanel() {
     root: feedRoot,
     focusHeading: focusFeedTitle,
   })
+
+  // An admin changed an event from its card in the Events tab: the feed (mounted, not on screen)
+  // re-reads ITS copy of that event too, quietly — no announcement, no focus move — so going back
+  // to the feed never shows the old card. Nothing is read when the feed does not list the event.
+  const eventItemsRef = useRef<EventFeedItem[]>([])
+  useEffect(() => { eventItemsRef.current = eventItems }, [eventItems])
+  const syncFeedEventCard = useCallback((eventId: string, change: EventCardChange) => {
+    if (!eventItemsRef.current.some((e) => e.eventId === eventId)) return
+    void refreshFeedEventQuietly(eventId, change)
+  }, [refreshFeedEventQuietly])
 
   // Initial fetch + mode-change refetch — wait for auth to reconcile (guest OR user)
   // before the first fetch so it runs against the reconciled session. Gate on
@@ -2458,7 +2474,7 @@ export function FeedPanel() {
           tabIndex={0}
           className="flex-1 overflow-y-auto p-1"
         >
-          <EventsPanel />
+          <EventsPanel onEventChanged={syncFeedEventCard} />
         </div>
       ) : activeSubtab === 'businesses' ? (
         <div
@@ -2516,21 +2532,27 @@ export function FeedPanel() {
             locale={locale}
             titleRef={feedTitleRef}
           />
-          {/* What the last change from an event card's ⋯ menu did (announced politely). */}
+          {/* The feed's one polite status region (mounted before its first text): the list loading or
+              empty, or what the last change from an event card's ⋯ menu did. */}
           <p role="status" aria-live="polite" className="sr-only" data-testid="feed-status">
-            {feedNotice}
+            {announceReady
+              ? feedStatusAnnouncement({ loading, error: error !== null, empty: feedItems.length === 0, notice: feedNotice }, locale)
+              : ''}
           </p>
 
           {/* Create Post Card — full users only; guests see account prompt */}
           {isAuthenticated && !isAnonymous && (
-            <CreatePostCard
-              onPost={handleCreatePost}
-              resourceOptions={resourceOptions}
-              onSafetyAlertClick={() => {
-                setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
-                setActivePanel('map')
-              }}
-            />
+            /* Not translated yet (Release 2): its English copy is marked English. */
+            <div lang="en" dir="ltr" data-testid="feed-composer-region">
+              <CreatePostCard
+                onPost={handleCreatePost}
+                resourceOptions={resourceOptions}
+                onSafetyAlertClick={() => {
+                  setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
+                  setActivePanel('map')
+                }}
+              />
+            </div>
           )}
           {isAnonymous && (
             <div className="mb-3">
@@ -2543,6 +2565,9 @@ export function FeedPanel() {
           {followError && (
             <div
               role="alert"
+              /* Not translated yet (Release 3: use-follows messages): marked English. */
+              lang="en"
+              dir="ltr"
               className="mx-2 mt-1 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
             >
               {followError}
@@ -2552,11 +2577,14 @@ export function FeedPanel() {
           {/* Safety alerts strip — active alerts (expires_at > now), max 5.
               Tap any card to navigate to the map panel for full details + voting. */}
           {safetyAlerts.length > 0 && (
-            <SafetyStrip
-              alerts={safetyAlerts}
-              onViewMap={() => setActivePanel('map')}
-              formatAge={getRelativeTime}
-            />
+            /* Not translated yet (Release 3): its English copy is marked English. */
+            <div lang="en" dir="ltr" data-testid="feed-safety-region">
+              <SafetyStrip
+                alerts={safetyAlerts}
+                onViewMap={() => setActivePanel('map')}
+                formatAge={getRelativeTime}
+              />
+            </div>
           )}
 
           {/* Scrollable Feed */}
@@ -2570,6 +2598,7 @@ export function FeedPanel() {
                 state={error ? { kind: 'error', error } : loading ? { kind: 'loading' } : { kind: 'empty' }}
                 locale={locale}
                 onRetry={() => { setError(null); refreshFeed() }}
+                focusTitle={focusFeedTitle}
               />
             ) : (
               // W1.5 — initial={false} so page-1 / first paint does NOT animate
@@ -2614,7 +2643,8 @@ export function FeedPanel() {
                 const postOptInStatus = optInMap.get(post.id)
 
                 return (
-                  <m.div key={post.id} data-testid={`post-${post.id}`} {...postEnterExit(reduce)}>
+                  // Post cards are not translated yet (Release 2): their English copy is marked English.
+                  <m.div key={post.id} data-testid={`post-${post.id}`} lang="en" dir="ltr" {...postEnterExit(reduce)}>
                     <PostCard
                       post={post}
                       currentUserId={user?.id ?? null}

@@ -54,7 +54,7 @@ export const FEED_ADMIN_TARGET = 'feed-admin'
 
 export const ADMIN_EDIT_LINK_CLASS =
   'inline-flex min-h-6 min-w-6 items-center gap-1 rounded-sm text-xs font-medium text-lime-800 underline underline-offset-2 ' +
-  'hover:text-lime-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-800 focus-visible:ring-offset-1'
+  'hover:text-lime-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-800 focus-visible:ring-offset-1'
 
 export interface AdminEditLinkProps
   extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel' | 'children'> {

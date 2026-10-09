@@ -20,6 +20,7 @@ import { cancelEventOccurrence, type EventWriteSurface } from '@/lib/event-admin
 import { createSubmitController, mintIdempotencyKey, type FieldError } from '@/lib/event-form-model'
 import {
   AlertDialog,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -108,9 +109,11 @@ export function CancelDateConfirm({
           </p>
         )}
         <AlertDialogFooter>
-          <button type="button" className={SECONDARY} onClick={close} disabled={cancelling}>
+          {/* The dialog's Cancel: focus starts here when it opens (the safe choice), and choosing it
+              closes the dialog through onOpenChange. */}
+          <AlertDialogCancel className={SECONDARY} disabled={cancelling}>
             {eventFormT(locale, 'keepDate')}
-          </button>
+          </AlertDialogCancel>
           <button type="button" className={DANGER} aria-disabled={cancelling || undefined} onClick={() => void confirm()}>
             {cancelling && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {eventFormT(locale, 'cancelDate')}

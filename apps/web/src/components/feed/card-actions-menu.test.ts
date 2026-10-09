@@ -111,6 +111,27 @@ describe('the open menu', () => {
   })
 })
 
+describe('an event menu without its admin item has no stray separator', () => {
+  it('manage | danger only: exactly one separator', async () => {
+    const { eventMenuSections } = await import('@/components/events/event-card-admin-menu')
+    const { eventMenuEntries } = await import('./event-card-menu')
+    const viewer = { status: 'ready' as const, tier: 'platform_admin' as const, adminOrgIds: null }
+    const event = { eventId: 'not-a-uuid', orgId: 'org', title: 'Pantry', cancelledShown: null, status: 'upcoming', endsAt: '2099-01-01T00:00:00Z' }
+    const sections = eventMenuSections({
+      entries: eventMenuEntries(event, viewer, 0),
+      event,
+      locale: 'en',
+      source: 'feed_event_menu',
+      onEdit: noop,
+      onAddDates: noop,
+      onCancelDate: noop,
+    })
+    const html = openMenu(sections)
+    expect(html.match(/role="separator"/g)).toHaveLength(1)
+    expect(html.match(/role="menuitem"/g)).toHaveLength(3)
+  })
+})
+
 describe('wiring the node renderer cannot show (the portal)', () => {
   const src = readFileSync(fileURLToPath(new URL('./card-actions-menu.tsx', import.meta.url)), 'utf8')
   it('the root takes the locale direction, the portalled content its language', () => {
