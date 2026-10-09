@@ -65,6 +65,7 @@ import {
   fetchApprovedBusinessById,
   adminSetBusinessActive,
   adminUpdateBusiness,
+  BUSINESS_NOT_SAVED_MESSAGE,
 } from './business-data'
 
 beforeEach(() => {
@@ -785,12 +786,19 @@ describe('photoSizeBucket + withPhotoUploadMetric', () => {
   })
 })
 
-// ---- update-recording client (update -> eq -> then) for the admin direct-UPDATE writers -----------
+// ---- update-recording client (update -> eq -> select -> then) for the admin direct-UPDATE writers ---
+// The default result is the one changed row a permitted UPDATE ... RETURNING id gives back.
 function makeUpdateClient(result: { data: unknown; error: { message: string } | null } = {
-  data: null,
+  data: [{ id: 'org-77' }],
   error: null,
 }) {
-  const state = { table: '', patch: null as Record<string, unknown> | null, eqCol: '', eqVal: undefined as unknown }
+  const state = {
+    table: '',
+    patch: null as Record<string, unknown> | null,
+    eqCol: '',
+    eqVal: undefined as unknown,
+    selected: null as string | null,
+  }
   const builder: Record<string, unknown> = {}
   Object.assign(builder, {
     update(patch: Record<string, unknown>) {
@@ -800,6 +808,10 @@ function makeUpdateClient(result: { data: unknown; error: { message: string } | 
     eq(col: string, val: unknown) {
       state.eqCol = col
       state.eqVal = val
+      return builder
+    },
+    select(cols: string) {
+      state.selected = cols
       return builder
     },
     then: (cb: (r: typeof result) => unknown) => Promise.resolve(cb(result)),
@@ -849,6 +861,20 @@ describe('adminSetBusinessActive — Deactivate↔Reactivate toggle, orgs_admin_
     await expect(adminSetBusinessActive(client, 'org-77', false)).rejects.toThrow('rls denied')
     expect(sinks).toHaveLength(1)
     expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.set_active.error' })
+  })
+
+  it('returns the changed row (select id) and FAILS LOUDLY when RLS filtered the UPDATE to 0 rows', async () => {
+    // orgs_admin_update is platform-admin only: for anyone else the UPDATE matches 0 rows with NO
+    // error. Success must be proven by the returned row, or a non-PA toggle "succeeds" while nothing changed.
+    const ok = makeUpdateClient()
+    await adminSetBusinessActive(ok, 'org-77', false)
+    expect(ok.state.selected).toBe('id')
+    sinks.length = 0
+    for (const data of [[], null]) {
+      const client = makeUpdateClient({ data, error: null })
+      await expect(adminSetBusinessActive(client, 'org-77', false)).rejects.toThrow(BUSINESS_NOT_SAVED_MESSAGE)
+    }
+    expect(sinks.map((s) => s.event)).toEqual(['business.admin.set_active.error', 'business.admin.set_active.error'])
   })
 })
 
@@ -928,6 +954,16 @@ describe('adminUpdateBusiness — descriptive/contact edit, normalized website (
         website: null,
       })
     ).rejects.toThrow('permission denied')
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.update.error' })
+  })
+
+  it('FAILS LOUDLY when the UPDATE changed 0 rows (a non-platform admin, or a missing id)', async () => {
+    const client = makeUpdateClient({ data: [], error: null })
+    await expect(
+      adminUpdateBusiness(client, 'org-77', { name: 'X', description: null, phone: null, email: null, website: null })
+    ).rejects.toThrow(BUSINESS_NOT_SAVED_MESSAGE)
+    expect(client.state.selected).toBe('id')
     expect(sinks).toHaveLength(1)
     expect(sinks[0]).toMatchObject({ level: 'error', event: 'business.admin.update.error' })
   })

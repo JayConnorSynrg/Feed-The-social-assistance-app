@@ -11,8 +11,9 @@
 //   business      /moderation?tab=businesses&focus=business:<uuid>
 //   safety_alert  /moderation?tab=moderation&focus=safety_alert:<uuid>
 //   post          /moderation?tab=moderation&focus=post:<uuid>
-//   organization  platform admin: /moderation?tab=organizations&org=<uuid>
-//                 organization admin: /moderation/org/<uuid>?tab=profile
+//   organization  platform admin: /moderation?tab=organizations&org=<uuid>&focus=organization:<uuid>
+//                 organization admin: /moderation/org/<uuid>?tab=profile&focus=organization:<uuid>
+//                 (`org` opens the setup panel; `focus` is what writes the one resolve row)
 //   event         platform admin: /moderation?tab=events&focus=event:<uuid>
 //                 organization admin: /moderation/org/<orgUuid>?tab=events&focus=event:<uuid>
 // The platform-admin / organization-admin split follows can_admin_org: the main shell's
@@ -38,17 +39,20 @@ export type AdminEditTarget =
 
 export type AdminEditKind = AdminEditTarget['kind']
 
-/** Kinds an admin screen opens through `?focus=<kind>:<uuid>` (organizations use `?org=` instead). */
-export const ADMIN_FOCUS_KINDS = ['resource', 'business', 'safety_alert', 'post', 'event'] as const
+/** Kinds an admin screen opens through `?focus=<kind>:<uuid>` (an organization also carries `?org=`,
+ *  which opens the main shell's setup panel). */
+export const ADMIN_FOCUS_KINDS = ['resource', 'business', 'safety_alert', 'post', 'event', 'organization'] as const
 export type AdminFocusKind = (typeof ADMIN_FOCUS_KINDS)[number]
 
-/** The `?tab=` each focus kind opens on (the org admin page uses 'events' for an event too). */
-export const ADMIN_FOCUS_TAB: Record<AdminFocusKind, 'manage' | 'businesses' | 'moderation' | 'events'> = {
+/** The main shell's `?tab=` each focus kind opens on (the org admin page uses 'events' for an event
+ *  too, and 'profile' for its organization). */
+export const ADMIN_FOCUS_TAB: Record<AdminFocusKind, 'manage' | 'businesses' | 'moderation' | 'events' | 'organizations'> = {
   resource: 'manage',
   business: 'businesses',
   safety_alert: 'moderation',
   post: 'moderation',
   event: 'events',
+  organization: 'organizations',
 }
 
 function focusHref(kind: AdminFocusKind, id: string): string {
@@ -69,8 +73,8 @@ export function adminEditUrl(target: AdminEditTarget, tier: AdminTier | null | u
       return focusHref(target.kind, target.id)
     case 'organization':
       return tier === 'platform_admin'
-        ? `/moderation?tab=organizations&org=${encodeURIComponent(target.id)}`
-        : `${orgAdminHref(target.id)}?tab=profile`
+        ? `/moderation?tab=organizations&org=${encodeURIComponent(target.id)}&focus=organization:${encodeURIComponent(target.id)}`
+        : `${orgAdminHref(target.id)}?tab=profile&focus=organization:${encodeURIComponent(target.id)}`
     case 'event':
       return tier === 'platform_admin'
         ? focusHref('event', target.id)

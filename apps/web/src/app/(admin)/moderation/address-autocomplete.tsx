@@ -30,10 +30,12 @@ export interface AddressAutocompleteProps {
   onSelect: (suggestion: AddressSuggestion) => void
   disabled?: boolean
   className?: string
+  /** The input's id, so a <Label htmlFor> names it. */
+  id?: string
 }
 
 export function AddressAutocomplete({
-  value, onChange, onSelect, disabled, className,
+  value, onChange, onSelect, disabled, className, id,
 }: AddressAutocompleteProps) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([])
@@ -165,6 +167,7 @@ export function AddressAutocomplete({
     <div ref={wrapRef} className="relative">
       <div className="relative">
         <Input
+          id={id}
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}

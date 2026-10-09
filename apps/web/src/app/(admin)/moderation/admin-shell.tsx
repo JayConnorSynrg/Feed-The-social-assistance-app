@@ -12,6 +12,7 @@ import { readTabParam, tabParamHref } from './admin-tab-url'
 import { useAdminFocusGate } from './use-admin-focus'
 import { shellOwnerTab } from './admin-focus-session'
 import { AdminFocusGateStatus } from './admin-focus-gate-status'
+import { OrgPanelFocus, type OrgPanelState } from './org-focus'
 import { logEvent } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
@@ -88,6 +89,13 @@ export function AdminShell() {
     kind: 'org',
   })
   const panelHandle = useRef<OrgFormPanelHandle>(null)
+  // The panel's own read of the organization it opened (an organization "Edit in admin" link resolves
+  // from it: OrgPanelFocus in org-focus.tsx).
+  const [orgLoad, setOrgLoad] = useState<OrgPanelState['load']>(null)
+  const orgPanelState = useMemo<OrgPanelState>(
+    () => ({ openOrgId: panel.open && panel.mode === 'edit' ? panel.orgId : null, load: orgLoad }),
+    [panel.open, panel.mode, panel.orgId, orgLoad]
+  )
   const [orgListKey, setOrgListKey] = useState(0)
   const [orgNotice, setOrgNotice] = useState<string | null>(null)
   const pushedRef = useRef(false)
@@ -242,6 +250,9 @@ export function AdminShell() {
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4">
         <AdminFocusGateStatus row={focusGateRow} locale={locale} />
+        {/* An organization link (?tab=organizations&org=<id>&focus=organization:<id>) is claimed, like a
+            tab's focus, only while the Organizations tab is shown; it resolves from the setup panel. */}
+        {tabs.includes('organizations') && <OrgPanelFocus panel={orgPanelState} />}
         <Tabs value={effectiveTab} onValueChange={handleTabChange}>
           {/* Tab bar — horizontally scrollable on mobile. Only entitled tabs render (§5). */}
           <div className="overflow-x-auto -mx-2 px-2 pb-1">
@@ -387,6 +398,7 @@ export function AdminShell() {
           ref={panelHandle}
           onCloseAutoFocus={(e) => restoreFocusAfterPanel(e, returnFocusRef.current)}
           onCloseRequestDeclined={restorePanelEntry}
+          onLoadResult={(orgId, ok) => setOrgLoad({ orgId, ok })}
         />
       )}
     </div>

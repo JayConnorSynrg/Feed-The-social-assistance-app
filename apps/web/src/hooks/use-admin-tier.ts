@@ -64,19 +64,6 @@ async function fetchAdminTier(supabase: TierRpcClient): Promise<AdminTierSnapsho
   }
 }
 
-/**
- * Resolve the viewer's tier + founder flag. Returns `{ tier: null, isFounder: false }` without
- * any RPC call when the viewer is logged out or a guest. Uncached; components use resolveAdminTier.
- */
-export async function loadAdminTier(
-  supabase: TierRpcClient,
-  user: TierUser
-): Promise<{ tier: AdminTier | null; isFounder: boolean }> {
-  if (!canHoldTier(user)) return { tier: null, isFounder: false }
-  const { tier, isFounder } = await fetchAdminTier(supabase)
-  return { tier, isFounder }
-}
-
 // ---- Shared single-flight (module scope = one per page load) -----------------------------------
 type TierEntry = { userId: string; promise: Promise<AdminTierSnapshot>; settled?: AdminTierSnapshot }
 let tierEntry: TierEntry | null = null

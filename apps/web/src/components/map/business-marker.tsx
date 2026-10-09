@@ -15,14 +15,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
+import { dir, type Locale } from '@/lib/i18n'
 
 interface BusinessMarkerProps {
   business: MappableBusiness
   /** A followed map deep link landed on this pin: open its popup. */
   focused?: boolean
+  /** Language of the "Edit in admin" link (the viewer's profile locale). */
+  locale?: Locale
 }
 
-export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
+export function BusinessMarker({ business, focused, locale = 'en' }: BusinessMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
   const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
@@ -94,6 +98,16 @@ export function BusinessMarker({ business, focused }: BusinessMarkerProps) {
                 <ExternalLink className="h-3.5 w-3.5" />
                 View details
               </a>
+              {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
+                  and Escape still closes the popup. */}
+              <ClientAdminEditLink
+                target={{ kind: 'business', id: business.id }}
+                itemName={business.name}
+                source="map_popup"
+                locale={locale}
+                lang={locale}
+                dir={dir(locale)}
+              />
             </CardContent>
           </Card>
           </MarkerPopupDialog>

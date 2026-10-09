@@ -25,7 +25,12 @@ vi.mock('@/lib/logger', () => ({
   logEvent: (name: string, attrs: Record<string, unknown>) => h.rows.push({ name, ...attrs }),
   withMetric: async (_op: string, _a: unknown, fn: () => Promise<unknown>) => fn(),
 }))
-vi.mock('@/hooks/use-admin-tier', () => ({ useAdminTier: () => h.tier }))
+// Partial: the shell's tabs import map markers whose "Edit in admin" link loads use-admin-viewer,
+// which registers with the tier cache at import (onAdminTierCacheReset).
+vi.mock('@/hooks/use-admin-tier', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/use-admin-tier')>()),
+  useAdminTier: () => h.tier,
+}))
 vi.mock('@/hooks/use-is-org-admin', () => ({ useIsOrgAdminState: () => h.org, useIsOrgAdmin: () => h.org.isOrgAdmin }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ profile: null, user: null, loading: false }) }))
 vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))

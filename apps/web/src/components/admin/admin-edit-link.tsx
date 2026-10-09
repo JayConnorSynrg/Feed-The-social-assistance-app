@@ -33,6 +33,12 @@ import { useAdminViewer } from '@/hooks/use-admin-viewer'
  *  Adding a surface: add its name here in the PR that renders the link there. */
 export type AdminEditSource =
   | 'map_popup'
+  /** The members' map side pane for a selected resource (map-panel ResourceDetail). */
+  | 'map_detail'
+  /** A row of the Community → Businesses showcase. */
+  | 'showcase_row'
+  /** A row of the Community → Organizations subtab. */
+  | 'organizations_row'
   | 'resource_page'
   | 'business_page'
   | 'organization_page'

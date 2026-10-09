@@ -9,6 +9,8 @@ import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
 import { isApproximateGeocode } from '@/lib/geocode-accuracy'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
+import { dir, type Locale } from '@/lib/i18n'
 
 interface Resource {
   id: string
@@ -32,9 +34,14 @@ interface ResourceMarkerProps {
   onClick?: (resource: Resource) => void
   /** A followed map deep link landed on this pin: open its popup. */
   focused?: boolean
+  /** The members' map: the popup offers admins "Edit in admin". Off for the admin tabs' own maps
+   *  (the Approve tab plots pending resources, which the Manage tab does not edit). */
+  adminEdit?: boolean
+  /** Language of the "Edit in admin" link (the viewer's profile locale). */
+  locale?: Locale
 }
 
-export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerProps) {
+export function ResourceMarker({ resource, onClick, focused, adminEdit = false, locale = 'en' }: ResourceMarkerProps) {
   // Opened by a click, or by a followed map deep link landing on this pin (#map?focus=…).
   const { open: showPopup, setOpen: setShowPopup, triggerRef, titleId, close: closePopup, onPopupOpen } = useMarkerPopup(focused)
 
@@ -180,6 +187,18 @@ export function ResourceMarker({ resource, onClick, focused }: ResourceMarkerPro
                   </Button>
                 )}
               </div>
+              {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
+                  and Escape still closes the popup. */}
+              {adminEdit && (
+                <ClientAdminEditLink
+                  target={{ kind: 'resource', id: resource.id }}
+                  itemName={resource.name}
+                  source="map_popup"
+                  locale={locale}
+                  lang={locale}
+                  dir={dir(locale)}
+                />
+              )}
             </CardContent>
           </Card>
           </MarkerPopupDialog>

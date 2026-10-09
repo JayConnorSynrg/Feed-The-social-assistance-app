@@ -44,16 +44,18 @@ describe('round trip: build -> read gives back the same kind and id', () => {
     expect(readTabParam(search, ORG_ADMIN_TABS)).toBe('events')
   })
 
-  it('organization (platform admin): the existing ?org= reader returns the id', () => {
+  it('organization (platform admin): the ?org= reader opens the panel; focus names the same organization', () => {
     const { search } = parse(adminEditUrl({ kind: 'organization', id: ORG }, 'platform_admin'))
     expect(readOrgPanelTarget(search)).toBe(ORG)
-    expect(readAdminFocus(search)).toBeNull()
+    expect(readAdminFocus(search)).toEqual({ kind: 'organization', id: ORG })
+    expect(readTabParam(search, TAB_ORDER)).toBe('organizations')
   })
 
   it('organization (organization admin): the page path carries the id, Profile tab', () => {
     const { pathname, search } = parse(adminEditUrl({ kind: 'organization', id: ORG }, null))
     expect(pathname).toBe(`/moderation/org/${ORG}`)
     expect(readTabParam(search, ORG_ADMIN_TABS)).toBe('profile')
+    expect(readAdminFocus(search)).toEqual({ kind: 'organization', id: ORG })
   })
 
   it('an upper-case id reads back lower-cased (the form Postgres prints)', () => {
@@ -72,7 +74,7 @@ describe('readAdminFocus — invalid input yields null (the screen reports outco
     ['empty', '?focus='],
     ['no separator', `?focus=${ID}`],
     ['unknown kind', `?focus=person:${ID}`],
-    ['organization is not a focus kind', `?focus=organization:${ID}`],
+    ['organization with a malformed id', '?focus=organization:42'],
     ['not a uuid', '?focus=post:123'],
     ['uuid with trailing junk', `?focus=post:${ID}x`],
     ['repeated focus', `?focus=post:${ID}&focus=post:${ID}`],

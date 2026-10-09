@@ -24,32 +24,16 @@ import {
   type ResourceEditDialogInput,
   type ResourceEditDialogSavedRow,
 } from './resource-edit-dialog'
+import { readFocusResource, type ManageResourceRow } from './resource-focus-read'
+import { useAdminFocusSession } from './use-admin-focus'
+import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
+import { RESOURCE_EDIT_BUTTON_ATTR, restoreFocusAfterResourceEdit } from './admin-focus-return'
 
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
 
-interface ResourceRow {
-  id: string
-  name: string
-  description: string | null
-  category: string
-  address_line1: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  status: string
-  source: string | null
-  is_verified: boolean | null
-  moderated_at: string | null
-  lat: number | null
-  lng: number | null
-  service_mode: string
-  geocode_accuracy: string | null
-}
+type ResourceRow = ManageResourceRow
 
 // Normalizes a manage-list row into the shape <ResourceEditDialog> expects.
 function toDialogInputFromManageRow(r: ResourceRow): ResourceEditDialogInput {
@@ -209,13 +193,45 @@ export function ManageResourcesTab() {
   }, [])
 
   // ── Edit ────────────────────────────────────────────────────
+  // The resource the dialog last opened: where focus returns when it closes (see onCloseAutoFocus).
+  const editedIdRef = useRef<string | null>(null)
   const openEdit = useCallback((r: ResourceRow) => {
+    editedIdRef.current = r.id
     setEditing(r)
   }, [])
 
   const closeEdit = useCallback(() => {
     setEditing(null)
   }, [])
+
+  // "Edit in admin" (?tab=manage&focus=resource:<uuid>): this tab claims the focus
+  // (useAdminFocusSession, admin-focus-session.ts), reads the resource by id — it is usually not on
+  // the first page of 100 — and opens it in the edit dialog; the list, its filters and paging are
+  // untouched. The tab writes found / not_found (or abandoned when it unmounts first), then focus is
+  // stripped; invalid / forbidden are the shell's gate (useAdminFocusGate). This tab mounts only for
+  // tiers that may edit resources (resource admin and up).
+  const focusSession = useAdminFocusSession('resource', 'manage')
+  const [focusNotice, setFocusNotice] = useState<AdminFocusNotice | null>(null)
+  useEffect(() => {
+    if (!focusSession?.isOpen()) return
+    let active = true
+    const read = new AbortController()
+    void readFocusResource(supabase, focusSession.focus.id, read.signal).then((row) => {
+      // An unmount (or React's development re-run) leaves the answer to the next run / abandoned.
+      if (!active || !focusSession.isOpen()) return
+      if (row) {
+        focusSession.resolve('found')
+        openEdit(row)
+      } else {
+        focusSession.resolve('not_found')
+        setFocusNotice('not_found')
+      }
+    })
+    return () => {
+      active = false
+      read.abort()
+    }
+  }, [focusSession, supabase, openEdit])
 
   // <ResourceEditDialog> owns the admin_update_resource RPC call, geocoding, and
   // structured logging (INV A/B/C/E). This just merges the saved row back into
@@ -387,6 +403,9 @@ export function ManageResourcesTab() {
         </div>
       )}
 
+      {/* ── "Edit in admin" link that opened nothing ── */}
+      <AdminFocusNoticeLine notice={focusNotice} kind="resource" onDismiss={() => setFocusNotice(null)} />
+
       {/* ── Error ── */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
@@ -437,6 +456,7 @@ export function ManageResourcesTab() {
                   </div>
                   <button
                     type="button"
+                    {...{ [RESOURCE_EDIT_BUTTON_ATTR]: r.id }}
                     onClick={() => openEdit(r)}
                     className="shrink-0 text-lime-700 hover:text-lime-800 transition-colors"
                     aria-label="Edit resource"
@@ -515,6 +535,9 @@ export function ManageResourcesTab() {
         mode="edit"
         onOpenChange={(open) => { if (!open) closeEdit() }}
         onSaved={handleDialogSaved}
+        // A dialog an "Edit in admin" link opened has no trigger: without this, closing it drops focus
+        // to <body>. Its row's Edit button when listed, else the Manage tab trigger.
+        onCloseAutoFocus={(event) => restoreFocusAfterResourceEdit(event, editedIdRef.current, document)}
       />
     </div>
   )

@@ -55,7 +55,8 @@ import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
-import { dir } from '@/lib/i18n'
+import { dir, type Locale } from '@/lib/i18n'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { mapMemberT } from '@/lib/i18n-map-member'
 import {
   MAP_FOCUS_ZOOM,
@@ -250,9 +251,11 @@ interface ResourceDetailProps {
   onGetHelp: (resourceName: string) => void
   onSaveResource?: (resource: MapResource) => void
   isSaved?: boolean
+  /** Language of the admin-only "Edit in admin" link. */
+  locale: Locale
 }
 
-function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveResource, isSaved }: ResourceDetailProps) {
+export function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveResource, isSaved, locale }: ResourceDetailProps) {
   const categoryColor = getCategoryTailwind(resource.category)
   const categoryLabel = getCategoryLabel(resource.category)
 
@@ -345,6 +348,15 @@ function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, onSaveR
         >
           {isSaved ? 'Saved' : 'Save Resource'}
         </Button>
+        {/* Admins only (renders nothing for anyone else): this resource in the Manage tab's editor. */}
+        <ClientAdminEditLink
+          target={{ kind: 'resource', id: resource.id }}
+          itemName={resource.name}
+          source="map_detail"
+          locale={locale}
+          lang={locale}
+          dir={dir(locale)}
+        />
       </div>
     </div>
   )
@@ -1102,6 +1114,8 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
                 resource={cluster.resource!}
                 onClick={() => handleResourceSelect(cluster.resource as MapResource)}
                 focused={isFocusedPin(focusedPin, 'resource', cluster.resource!.id)}
+                adminEdit
+                locale={locale}
               />
             )
           )}
@@ -1118,6 +1132,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               key={`business-${business.id}`}
               business={business}
               focused={isFocusedPin(focusedPin, 'business', business.id)}
+              locale={locale}
             />
           ))}
           {/* Org leaf layer — one unclustered indigo pin per active located non-business org,
@@ -1127,6 +1142,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               key={`org-${organization.id}`}
               organization={organization}
               focused={isFocusedPin(focusedPin, 'organization', organization.id)}
+              locale={locale}
             />
           ))}
           {/* Safety alert markers — rendered on top of resource markers */}
@@ -1215,6 +1231,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           ) : (
             <ResourceDetail
               resource={selectedResource}
+              locale={locale}
               onClose={() => setSelectedResource(null)}
               onGetDirections={handleGetDirections}
               onGetHelp={handleGetHelp}

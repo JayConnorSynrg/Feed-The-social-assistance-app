@@ -170,7 +170,7 @@ existing `readOrgPanelTarget` (`?org=`):
 | business | `/moderation?tab=businesses&focus=business:<uuid>` | — |
 | safety alert | `/moderation?tab=moderation&focus=safety_alert:<uuid>` | same |
 | post | `/moderation?tab=moderation&focus=post:<uuid>` | same |
-| organization | `/moderation?tab=organizations&org=<uuid>` | `/moderation/org/<uuid>?tab=profile` |
+| organization | `/moderation?tab=organizations&org=<uuid>&focus=organization:<uuid>` | `/moderation/org/<uuid>?tab=profile&focus=organization:<uuid>` |
 | event | `/moderation?tab=events&focus=event:<uuid>` | `/moderation/org/<orgUuid>?tab=events&focus=event:<uuid>` |
 
 **Cost**: the viewer's tier is looked up once per signed-in identity per page load, shared by every
@@ -179,6 +179,68 @@ event links of a viewer who is not a platform admin, also once. Logged-out visit
 call (`useIsOrgAdmin` included). Each click writes one `admin.nav.edit_in_admin` row; each followed link
 writes one `admin.deeplink.resolve` row from the admin screen (see `docs/observability.md`).
 
+### Places (PR-5a): resources, businesses, organizations
+
+**Where the link appears.** Every surface renders `ClientAdminEditLink`
+(`components/admin/client-admin-edit-link.tsx`, the same wrapper as the feed surfaces): the link is rendered in the browser only, after
+hydration, so it is never part of server HTML (the `/s` pages, and the SPA shell the Capacitor static
+export bakes in). The target is always the entity the surface shows:
+
+| Surface | Item → target |
+|---|---|
+| Map popup — `components/map/resource-marker.tsx` (members' map only: the `adminEdit` prop; the admin tabs' own maps plot pending resources and get none) | resource |
+| Map side pane — `ResourceDetail` in `components/panels/map-panel.tsx` | resource |
+| Map popup — `components/map/business-marker.tsx` (also the business leaf that replaces a linked resource's pin) | business |
+| Map popup — `components/map/org-marker.tsx` | organization |
+| `/s/resource/[id]`, `/s/business/[id]`, `/s/organization/[id]` (header, right of the FEED wordmark) | resource / business / organization |
+| Community → Businesses showcase row, Community → Organizations row — a sibling of the whole-row link, never inside it | business / organization |
+
+Not on `/s/embed` (iframed by third parties). Inside a map popup the link sits in the popup's dialog, so
+Tab reaches it and Escape still closes the popup.
+
+**What the admin screen does.** Each tab claims its own `?focus=` on mount with
+`useAdminFocusSession(kind, tab)` (`app/(admin)/moderation/use-admin-focus.ts` →
+`admin-focus-session.ts`, the contract shared with PR-5b); `admin-shell.tsx` is not changed by PR-5a.
+
+- **Manage** (`?tab=manage&focus=resource:<id>`): the resource is read by id — approved only, through
+  the public RLS policy (`resource-focus-read.ts`) — because the list is paged 100 by name and the item
+  is rarely on page 1; it opens in the edit dialog. The list, filters and paging are untouched. A
+  pending, rejected or missing id: "couldn't be found, or it isn't editable here".
+- **Businesses** (`?tab=businesses&focus=business:<id>`): once the tier and the approved list are
+  loaded, that row opens in edit mode, scrolled into view with its Name field focused. A resource admin
+  sees the tab but cannot save a business: "Only platform admins can edit businesses."
+- **Organizations**: the platform-admin link opens the shell's `?org=` setup panel; `focus` makes it
+  write its row. `OrgPanelFocus` (`org-focus.tsx`) is mounted while the Organizations tab is shown and
+  resolves from the panel's own read (`OrgFormPanel` `onLoadResult`): `found` once the panel has loaded
+  that organization, `not_found` when its read fails or finds nothing (or the panel is for another id),
+  `abandoned` when the panel is closed before it loaded. The organization-admin link opens
+  `/moderation/org/<id>?tab=profile`; the page is server-gated by `can_admin_org` and has already read
+  the organization, so `OrgProfileFocus` in the Profile tab writes `found` (or `not_found` when the focus
+  names another organization). A refused id is the server's `notFound()` — the stated exception below.
+
+**One row per followed link.** The tab writes `found` or `not_found` (a resource admin's business link
+is `not_found`, with the line above), or `abandoned` when it unmounts first. `invalid` (malformed focus,
+or a focus whose kind is not the URL's tab) and `forbidden` (the tier does not show the owning tab)
+are written by the shell's gate, `useAdminFocusGate` in `admin-shell.tsx` (PR-5b), once the tier and
+organization roles are known — never by a tab, so a link never writes two rows. After the row, `focus`
+is removed with `history.replaceState`, so a reload does not reopen it. Misses show in an
+always-mounted status line (`admin-focus-notice.tsx`), present from the tab's first render (through the
+Businesses loading spinner too) so a notice is announced.
+
+**Keyboard focus** (`admin-focus-return.ts`) never drops to `<body>`: closing a link-opened resource
+dialog returns focus to that resource's row Edit button when it is listed, else the active admin tab
+trigger; Dismiss on the notice moves focus to the active tab trigger before the button disappears. In
+the edit dialog every field label names its control, and a business row's focused Name field is
+described by the row heading.
+
+**Business saves fail loudly.** Edit and Deactivate/Reactivate are plain `organizations` UPDATEs under
+`orgs_admin_update` (platform admin only). For anyone else RLS filters the UPDATE to zero rows with no
+error, which used to show as a success. `adminUpdateBusiness` / `adminSetBusinessActive`
+(`lib/business-data.ts`) now return the changed row (`.select('id')`) and throw `BusinessWriteError`
+when none changed: the Businesses tab shows "Save failed: Nothing was saved …" (or reverts the toggle
+with "Deactivate failed: …"), and the failure is written to `app_logs` (`business.admin.update.error` /
+`business.admin.set_active.error`, plus the tab's `admin.business.update` / `admin.business.set_active`
+error row).
 **Feed surfaces (PR-5b)** — every link renders through `ClientAdminEditLink`
 (`apps/web/src/components/admin/client-admin-edit-link.tsx`): nothing on the server or in the first
 hydrating render, then `AdminEditLink`, so no admin link is ever part of server HTML.

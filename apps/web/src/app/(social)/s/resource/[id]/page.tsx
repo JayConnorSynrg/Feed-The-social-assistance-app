@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { MapPin, Phone, Globe, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 
 interface Props {
@@ -111,6 +112,10 @@ export default async function SharedResourcePage({ params }: Props) {
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
           <p className="text-xs text-stone-500">Community Resource</p>
+        </div>
+        {/* Admins only, rendered in the browser after hydration — never part of this server HTML. */}
+        <div className="ml-auto">
+          <ClientAdminEditLink target={{ kind: 'resource', id: resource.id }} itemName={resource.name} source="resource_page" />
         </div>
       </div>
 
