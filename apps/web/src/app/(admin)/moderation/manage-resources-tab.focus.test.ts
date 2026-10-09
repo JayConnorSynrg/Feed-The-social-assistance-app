@@ -1,12 +1,14 @@
 // apps/web/src/app/(admin)/moderation/manage-resources-tab.focus.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// I2 wiring — the REAL ManageResourcesTab (with the real useAdminTabFocus + session), driven through
-// mount → effects → re-render by the SSR hook harness, the Supabase client faked:
+// I2 wiring — the REAL ManageResourcesTab (with the real useAdminFocusSession from use-admin-focus.ts,
+// the contract shared with PR-5b), driven through mount → effects → re-render by the SSR hook harness,
+// the Supabase client faked:
 //   - /moderation?tab=manage&focus=resource:<id> reads that resource BY ID (approved only) and opens
 //     it in the edit dialog — not the list — even though it is not on the list's first page;
-//   - not_found / invalid each write exactly one admin.deeplink.resolve row and show a plain notice,
-//     with the list still loaded; an unmount mid-read writes one 'abandoned' row;
+//   - the tab writes only found / not_found / abandoned, exactly one admin.deeplink.resolve row each;
+//     not_found shows a plain notice with the list still loaded; a malformed focus is left to the
+//     shell's gate (useAdminFocusGate writes invalid), so the tab writes nothing for it;
 //   - the focus param is stripped (replaceState), the rest of the URL kept;
 //   - I3: without a focus param the list loads exactly as before and no resolve row is written.
 
@@ -193,25 +195,34 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     expect(replaceState.mock.calls[0][2]).toBe('/moderation?tab=manage')
   })
 
-  it('invalid: a malformed focus writes one invalid row and reads nothing', async () => {
-    setUrl('?tab=manage&focus=resource:12345')
-    const html = await harness.settle(h(ManageResourcesTab))
-    expect(resolveRows()).toEqual([{ kind: 'resource', outcome: 'invalid', tab: 'manage' }])
+  it('a malformed focus is the shell gate\'s (invalid): the tab reads nothing and writes no row', async () => {
+    for (const focus of ['resource:12345', `business:${ID}`]) {
+      harness.reset()
+      setUrl(`?tab=manage&focus=${focus}`)
+      const html = await harness.settle(h(ManageResourcesTab))
+      expect(html).toContain('<p role="status" class="sr-only"></p>')
+    }
+    expect(resolveRows()).toEqual([])
     expect(resourceReads()).toHaveLength(0)
-    expect(html).toContain('doesn&#x27;t name a resource')
-    expect(replaceState.mock.calls[0][2]).toBe('/moderation?tab=manage')
+    expect(replaceState).not.toHaveBeenCalled()
   })
 
   it('abandoned: the tab unmounts before the read returns -> one abandoned row, nothing opened', async () => {
     let resolveRead!: (v: { data: unknown; error: unknown }) => void
     readResult.current = () => new Promise((r) => (resolveRead = r))
     setUrl(`?tab=manage&focus=resource:${ID}`)
+    // Pass 1 claims the focus; pass 2 starts the by-id read; the tab unmounts while it is in flight.
     await harness.render(h(ManageResourcesTab))
+    await harness.render(h(ManageResourcesTab))
+    expect(resourceReads()).toHaveLength(1)
     harness.unmount()
     await new Promise((r) => setTimeout(r, 0))
     resolveRead({ data: FOCUS_ROW, error: null })
     await new Promise((r) => setTimeout(r, 0))
     expect(resolveRows()).toEqual([{ kind: 'resource', outcome: 'abandoned', tab: 'manage' }])
+    // The late answer set nothing: rendering the kept state again still shows the dialog closed.
+    const html = await harness.render(h(ManageResourcesTab))
+    expect(html).toContain('data-dialog-open="false"')
     expect(dialogProps.every((p) => p.open === false)).toBe(true)
   })
 

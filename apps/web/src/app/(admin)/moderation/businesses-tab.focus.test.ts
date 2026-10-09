@@ -1,13 +1,14 @@
 // apps/web/src/app/(admin)/moderation/businesses-tab.focus.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The REAL BusinessesTab (real useAdminTabFocus + session, real adminUpdateBusiness), driven by the
-// SSR hook harness with the Supabase client faked:
+// The REAL BusinessesTab (real useAdminFocusSession from use-admin-focus.ts — the contract shared
+// with PR-5b — and real adminUpdateBusiness), driven by the SSR hook harness, Supabase faked:
 //   I2 — /moderation?tab=businesses&focus=business:<id> waits for the viewer's tier and the approved
 //        list, then opens THAT row in edit mode, scrolled into view with its Name field focused; one
-//        admin.deeplink.resolve row; focus stripped. not_found (not in the approved list) and
-//        forbidden (a resource admin: orgs_admin_update is platform-admin only) each write one row
-//        and show a plain notice, nothing opened.
+//        admin.deeplink.resolve row; focus stripped. The tab writes only found / not_found /
+//        abandoned: an id not in the approved list, or a resource admin (orgs_admin_update is
+//        platform-admin only), is one not_found row with a plain line saying why, nothing opened. A
+//        malformed focus is the shell gate's (invalid): the tab writes nothing.
 //   I3 — a save that RLS filtered to zero rows reports failure (the form stays open with the reason,
 //        an error row is written, no reload); a save that changed the row closes the form. No focus
 //        param: nothing opens, no row.
@@ -29,7 +30,7 @@ const { events, metrics, errors, viewerRef, buttons, updates, updateResult, list
   buttons: [] as Array<{ label: string; onClick?: () => void }>,
   updates: [] as Array<{ patch: Record<string, unknown>; eq: [string, unknown]; select: string | null }>,
   updateResult: { current: { data: [{ id: 'x' }] as unknown, error: null as null | { message: string } } },
-  listCalls: { count: 0 },
+  listCalls: { count: 0, gate: null as null | Promise<void> },
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -93,6 +94,7 @@ vi.mock('@/lib/business-data', async (importOriginal) => {
     fetchPendingBusinesses: async () => [],
     fetchAdminBusinessList: async () => {
       listCalls.count++
+      if (listCalls.gate) await listCalls.gate
       return [row(OTHER, 'Bakery'), row(ID, 'Corner Cafe')]
     },
   }
@@ -156,6 +158,7 @@ beforeEach(() => {
   buttons.length = 0
   updates.length = 0
   listCalls.count = 0
+  listCalls.gate = null
   replaceState.mockReset()
   getElementById.mockClear()
   field.scrollIntoView.mockClear()
@@ -189,6 +192,19 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     expect(editFormsOpen(html)).toEqual([ID])
   })
 
+  it('waits for the approved list: nothing settles while it loads, then that row opens', async () => {
+    let release!: () => void
+    listCalls.gate = new Promise<void>((r) => (release = r))
+    setUrl(`?tab=businesses&focus=business:${ID}`)
+    let html = await harness.settle(h(BusinessesTab))
+    expect(resolveRows()).toEqual([])
+    expect(editFormsOpen(html)).toEqual([])
+    release()
+    html = await harness.settle(h(BusinessesTab))
+    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'found', tab: 'businesses' }])
+    expect(editFormsOpen(html)).toEqual([ID])
+  })
+
   it('not_found: an id not in the approved list -> one row, a notice, nothing opened', async () => {
     setUrl('?tab=businesses&focus=business:33333333-3333-4333-8333-333333333333')
     const html = await harness.settle(h(BusinessesTab))
@@ -197,20 +213,31 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     expect(editFormsOpen(html)).toEqual([])
   })
 
-  it('forbidden: a resource admin sees the tab but cannot save a business -> one row, a notice, nothing opened', async () => {
+  it('a resource admin sees the tab but cannot save a business -> one not_found row, a plain line, nothing opened', async () => {
     viewerRef.current = ready('resource_admin')
     setUrl(`?tab=businesses&focus=business:${ID}`)
     const html = await harness.settle(h(BusinessesTab))
-    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'forbidden', tab: 'businesses' }])
+    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'not_found', tab: 'businesses' }])
     expect(html).toContain('Only platform admins can edit businesses.')
     expect(editFormsOpen(html)).toEqual([])
     expect(replaceState.mock.calls.map((c) => c[2])).toEqual(['/moderation?tab=businesses'])
   })
 
-  it('invalid: a malformed focus -> one invalid row', async () => {
+  it('a malformed focus is the shell gate\'s (invalid): the tab writes nothing', async () => {
     setUrl('?tab=businesses&focus=business:nope')
+    const html = await harness.settle(h(BusinessesTab))
+    expect(resolveRows()).toEqual([])
+    expect(editFormsOpen(html)).toEqual([])
+    expect(replaceState).not.toHaveBeenCalled()
+  })
+
+  it('abandoned: the tab unmounts while still waiting for the tier -> one abandoned row', async () => {
+    viewerRef.current = { status: 'loading', tier: null, adminOrgIds: null }
+    setUrl(`?tab=businesses&focus=business:${ID}`)
     await harness.settle(h(BusinessesTab))
-    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'invalid', tab: 'businesses' }])
+    harness.unmount()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'abandoned', tab: 'businesses' }])
   })
 
   it('I3 — no focus param: nothing opens, no row, URL untouched', async () => {

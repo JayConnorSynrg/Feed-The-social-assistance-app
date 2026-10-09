@@ -25,8 +25,8 @@ import {
   type ResourceEditDialogSavedRow,
 } from './resource-edit-dialog'
 import { readFocusResource, type ManageResourceRow } from './resource-focus-read'
-import { useAdminTabFocus } from './use-admin-tab-focus'
-import { AdminFocusNoticeLine } from './admin-focus-notice'
+import { useAdminFocusSession } from './use-admin-focus'
+import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -200,21 +200,34 @@ export function ManageResourcesTab() {
     setEditing(null)
   }, [])
 
-  // "Edit in admin" (?tab=manage&focus=resource:<uuid>): the linked resource is read by id (it is
-  // usually not on the first page of 100) and opened in the edit dialog; the list, its filters and
-  // paging are untouched. One admin.deeplink.resolve row per followed link; focus is then stripped.
-  const readFocus = useCallback(
-    (id: string, signal: AbortSignal) => readFocusResource(supabase, id, signal),
-    [supabase]
-  )
-  const { notice: focusNotice, dismissNotice } = useAdminTabFocus<ResourceRow>({
-    tab: 'manage',
-    // This tab mounts only for tiers that may edit resources (resource admin and up).
-    ready: true,
-    access: 'allowed',
-    read: readFocus,
-    onFound: openEdit,
-  })
+  // "Edit in admin" (?tab=manage&focus=resource:<uuid>): this tab claims the focus
+  // (useAdminFocusSession, admin-focus-session.ts), reads the resource by id — it is usually not on
+  // the first page of 100 — and opens it in the edit dialog; the list, its filters and paging are
+  // untouched. The tab writes found / not_found (or abandoned when it unmounts first), then focus is
+  // stripped; invalid / forbidden are the shell's gate (useAdminFocusGate). This tab mounts only for
+  // tiers that may edit resources (resource admin and up).
+  const focusSession = useAdminFocusSession('resource', 'manage')
+  const [focusNotice, setFocusNotice] = useState<AdminFocusNotice | null>(null)
+  useEffect(() => {
+    if (!focusSession?.isOpen()) return
+    let active = true
+    const read = new AbortController()
+    void readFocusResource(supabase, focusSession.focus.id, read.signal).then((row) => {
+      // An unmount (or React's development re-run) leaves the answer to the next run / abandoned.
+      if (!active || !focusSession.isOpen()) return
+      if (row) {
+        focusSession.resolve('found')
+        openEdit(row)
+      } else {
+        focusSession.resolve('not_found')
+        setFocusNotice('not_found')
+      }
+    })
+    return () => {
+      active = false
+      read.abort()
+    }
+  }, [focusSession, supabase, openEdit])
 
   // <ResourceEditDialog> owns the admin_update_resource RPC call, geocoding, and
   // structured logging (INV A/B/C/E). This just merges the saved row back into
@@ -387,7 +400,7 @@ export function ManageResourcesTab() {
       )}
 
       {/* ── "Edit in admin" link that opened nothing ── */}
-      <AdminFocusNoticeLine notice={focusNotice} kind="resource" onDismiss={dismissNotice} />
+      <AdminFocusNoticeLine notice={focusNotice} kind="resource" onDismiss={() => setFocusNotice(null)} />
 
       {/* ── Error ── */}
       {error && (

@@ -198,9 +198,9 @@ export bakes in). The target is always the entity the surface shows:
 Not on `/s/embed` (iframed by third parties). Inside a map popup the link sits in the popup's dialog, so
 Tab reaches it and Escape still closes the popup.
 
-**What the admin screen does.** Each tab reads its own `?focus=` on mount
-(`app/(admin)/moderation/use-admin-tab-focus.ts` → `AdminTabFocusSession` in `admin-tab-focus.ts`);
-`admin-shell.tsx` is unchanged.
+**What the admin screen does.** Each tab claims its own `?focus=` on mount with
+`useAdminFocusSession(kind, tab)` (`app/(admin)/moderation/use-admin-focus.ts` →
+`admin-focus-session.ts`, the contract shared with PR-5b); `admin-shell.tsx` is not changed by PR-5a.
 
 - **Manage** (`?tab=manage&focus=resource:<id>`): the resource is read by id — approved only, through
   the public RLS policy (`resource-focus-read.ts`) — because the list is paged 100 by name and the item
@@ -211,13 +211,14 @@ Tab reaches it and Escape still closes the popup.
   sees the tab but cannot save a business: "Only platform admins can edit businesses."
 - **Organizations**: the platform-admin link opens the shell's existing `?org=` panel; the
   organization-admin link opens `/moderation/org/<id>?tab=profile` (gated by `can_admin_org`).
-- A Manage or Businesses link followed by a tier that does not see that tab (e.g. a community
-  moderator) is answered by `AdminFocusTabGate`, mounted next to the shell in
-  `app/(admin)/moderation/page.tsx`.
 
-Every followed Manage / Businesses link writes exactly one `admin.deeplink.resolve` row
-(`kind` resource|business, `tab` manage|businesses, `outcome` found | not_found | forbidden | invalid |
-abandoned), then `focus` is removed with `history.replaceState`, so a reload does not reopen it.
+**One row per followed link.** The tab writes `found` or `not_found` (a resource admin's business link
+is `not_found`, with the line above), or `abandoned` when it unmounts first. `invalid` (malformed focus,
+or a focus whose kind is not the URL's tab) and `forbidden` (the tier does not show the owning tab)
+are written by the shell's gate, `useAdminFocusGate` in `admin-shell.tsx` (PR-5b), once the tier and
+organization roles are known — never by a tab, so a link never writes two rows. After the row, `focus`
+is removed with `history.replaceState`, so a reload does not reopen it. Misses show in an
+always-mounted status line (`admin-focus-notice.tsx`).
 
 **Business saves fail loudly.** Edit and Deactivate/Reactivate are plain `organizations` UPDATEs under
 `orgs_admin_update` (platform admin only). For anyone else RLS filters the UPDATE to zero rows with no

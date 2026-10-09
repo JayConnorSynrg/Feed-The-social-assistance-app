@@ -3,12 +3,28 @@
 // apps/web/src/app/(admin)/moderation/admin-focus-notice.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The line a Manage / Businesses tab shows when an "Edit in admin" link opened nothing (not found,
-// forbidden, invalid). The status paragraph is always mounted (empty and sr-only until needed), so the
-// line is announced politely when it appears; the Dismiss button sits outside the live region.
+// The line the Manage / Businesses tab shows when an "Edit in admin" link it claimed opened nothing
+// (the tab logged not_found). The status paragraph is always mounted (empty and sr-only until needed),
+// so the line is announced politely when it appears; the Dismiss button sits outside the live region.
+// Malformed links and tabs this tier does not see are the shell's (useAdminFocusGate), not this line's.
 
 import { Button } from '@/components/ui/button'
-import { ADMIN_FOCUS_NOTICE_TEXT, type AdminFocusNotice, type PlaceFocusKind } from './admin-tab-focus'
+
+/** not_found: missing / not approved / not readable. not_editable: shown, but this tier cannot save it. */
+export type AdminFocusNotice = 'not_found' | 'not_editable'
+export type PlaceFocusKind = 'resource' | 'business'
+
+/** The plain line each miss shows (the Manage and Businesses tabs are English). */
+export const ADMIN_FOCUS_NOTICE_TEXT: Record<AdminFocusNotice, Record<PlaceFocusKind, string>> = {
+  not_found: {
+    resource: "That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage).",
+    business: "That business couldn't be found, or it isn't editable here (only approved businesses can be edited).",
+  },
+  not_editable: {
+    resource: "Your admin role can't edit resources.",
+    business: 'Only platform admins can edit businesses.',
+  },
+}
 
 export function AdminFocusNoticeLine({
   notice,

@@ -24,9 +24,10 @@
 //
 // "Edit in admin" (?tab=businesses&focus=business:<uuid>, from a member surface): once the approved
 // list has loaded, that business's row opens in edit mode, scrolled into view with its Name field
-// focused. Only a platform admin can save a business (orgs_admin_update), so any other tier gets a
-// plain 'forbidden' line instead; an id not in the approved list gets 'not_found'. One
-// admin.deeplink.resolve row per followed link (use-admin-tab-focus.ts), then focus is stripped.
+// focused. Only a platform admin can save a business (orgs_admin_update), so for any other tier, or
+// an id not in the approved list, the tab writes 'not_found' with a plain line saying why. One
+// admin.deeplink.resolve row per followed link (use-admin-focus.ts), then focus is stripped; a
+// malformed link or a tier that does not see this tab is the shell gate's row.
 //
 // Saves fail loudly: an UPDATE that RLS filtered to zero rows is an error (business-data.ts), never
 // a success, so the edit form stays open with the reason and the toggle reverts.
@@ -56,8 +57,8 @@ import {
 import type { Business } from '@/lib/business'
 import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { canEditBusinesses } from '@/lib/admin-tier'
-import { useAdminTabFocus } from './use-admin-tab-focus'
-import { AdminFocusNoticeLine } from './admin-focus-notice'
+import { useAdminFocusSession } from './use-admin-focus'
+import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -197,24 +198,25 @@ export function BusinessesTab() {
   const viewer = useAdminViewer(false)
   // The row a followed link opened: scrolled into view and its Name field focused once rendered.
   const [revealId, setRevealId] = useState<string | null>(null)
-  const readFocus = useCallback(
-    async (id: string) => approved.find((b) => b.id.toLowerCase() === id) ?? null,
-    [approved]
-  )
-  const openFocused = useCallback(
-    (item: AdminBusiness) => {
+  // This tab claims ?focus=business:<uuid> (useAdminFocusSession) and, once the tier and the approved
+  // list are known, writes found (that row opens in edit mode) or not_found; invalid / forbidden are
+  // the shell's gate. The tab is shown to resource admins, but only a platform admin can save a
+  // business: for anyone else the link is not_found with a plain "only platform admins" line.
+  const focusSession = useAdminFocusSession('business', 'businesses')
+  const [focusNotice, setFocusNotice] = useState<AdminFocusNotice | null>(null)
+  useEffect(() => {
+    if (!focusSession?.isOpen() || viewer.status === 'loading' || loadingApproved) return
+    const editable = viewer.status === 'ready' && canEditBusinesses(viewer.tier)
+    const item = editable ? approved.find((b) => b.id.toLowerCase() === focusSession.focus.id) : undefined
+    if (item) {
+      focusSession.resolve('found')
       startEdit(item)
       setRevealId(item.id)
-    },
-    [startEdit]
-  )
-  const { notice: focusNotice, dismissNotice } = useAdminTabFocus<AdminBusiness>({
-    tab: 'businesses',
-    ready: viewer.status !== 'loading' && !loadingApproved,
-    access: viewer.status === 'ready' && canEditBusinesses(viewer.tier) ? 'allowed' : 'forbidden',
-    read: readFocus,
-    onFound: openFocused,
-  })
+    } else {
+      focusSession.resolve('not_found')
+      setFocusNotice(editable ? 'not_found' : 'not_editable')
+    }
+  }, [focusSession, viewer, loadingApproved, approved, startEdit])
   useEffect(() => {
     // Waits for the row to be on screen (the pending queue's first load hides both sections).
     const field = revealId && !loading ? document.getElementById(`edit-name-${revealId}`) : null
@@ -402,7 +404,7 @@ export function BusinessesTab() {
             {approvedError}
           </div>
         )}
-        <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={dismissNotice} />
+        <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={() => setFocusNotice(null)} />
 
         {loadingApproved ? (
           <div className="flex items-center gap-2 py-6 text-sm text-stone-500">
