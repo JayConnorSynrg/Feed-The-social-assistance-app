@@ -242,7 +242,7 @@ edit dialog outside its loading / error / ready branches, so a `found` event lin
 even when the event list failed to load; its not-found line is one `role="status"` region. On the
 feed, each Active Alerts item is a real `<button>` and its Edit in admin name adds the age and the
 start of the description (several alerts share a type); a hidden post card dims its content but not
-the action row; an image-only post's link is named "post by <author>, <date>".
+the action row; an image-only post's link is named "post by <author>, <date>" on the feed ("post by <author>" on `/s/post`, which shows one post and keeps its develop author read untouched). The Linked post panel reads the author's `first_name` only — no `username` / `avatar_url` / `bio`, which the pending Settings C2 change revokes.
 
 ## Facilitator code — retired
 

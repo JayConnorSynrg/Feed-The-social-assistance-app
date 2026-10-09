@@ -37,7 +37,7 @@ function post(extra: Partial<FocusedPostRow> = {}): FocusedPostRow {
     is_hidden: false,
     hidden_reason: null,
     hidden_at: null,
-    author: { first_name: 'Ada', username: 'ada' },
+    author: { first_name: 'Ada' },
     ...extra,
   }
 }
@@ -70,6 +70,12 @@ describe('loadFocusedPost — read by id first', () => {
     expect(r.calls).toEqual([['from', 'posts'], ['select', FOCUSED_POST_SELECT], ['eq', 'id', ID]])
     expect(FOCUSED_POST_SELECT).toMatch(/profiles!posts_user_id_fkey\(/)
     expect(FOCUSED_POST_SELECT).not.toMatch(/location/)
+  })
+
+  it('reads no profiles column Settings C2 revokes (username / avatar_url / bio): first_name only', () => {
+    const embed = FOCUSED_POST_SELECT.match(/profiles!posts_user_id_fkey\(([^)]*)\)/)
+    expect(embed?.[1]).toBe('first_name')
+    expect(FOCUSED_POST_SELECT).not.toMatch(/\b(username|avatar_url|bio)\b/)
   })
 
   it('no row -> not_found; a failed or thrown read -> error (logged, no id in the row)', async () => {

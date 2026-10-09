@@ -292,7 +292,7 @@ describe('wiring: each surface renders its link through the hydration-gated comp
   it('/s/post (a server component) renders the client island, with the page source', () => {
     const src = read('../../app/(social)/s/post/[id]/page.tsx')
     expect(src).not.toMatch(/^'use client'/)
-    expect(src).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={displayName} createdAt={post.created_at} source="post_page" />')
+    expect(src).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={displayName} source="post_page" />')
   })
 
   it.each([

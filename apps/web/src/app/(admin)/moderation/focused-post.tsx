@@ -32,9 +32,10 @@ import {
 } from './post-moderation-actions'
 
 /** Columns of the linked post (no location). The author embed names its FK: posts reach profiles
- *  two ways (lib/supabase/embed-fk-hint.test.ts). */
+ *  two ways (lib/supabase/embed-fk-hint.test.ts). It reads first_name only — never username /
+ *  avatar_url / bio, which Settings C2 revokes from anon and authenticated. */
 export const FOCUSED_POST_SELECT =
-  'id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, author:profiles!posts_user_id_fkey(first_name, username)'
+  'id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, author:profiles!posts_user_id_fkey(first_name)'
 
 export interface FocusedPostRow extends ModeratedPostState {
   id: string
@@ -42,7 +43,7 @@ export interface FocusedPostRow extends ModeratedPostState {
   post_type: string | null
   created_at: string
   hidden_at: string | null
-  author: { first_name: string | null; username: string | null } | null
+  author: { first_name: string | null } | null
 }
 
 export type FocusedPostState =
@@ -173,7 +174,7 @@ function FoundPost({
   error: string | null
   onAction: (action: PostModerationAction) => void
 }) {
-  const author = post.author?.first_name || (post.author?.username ? `@${post.author.username}` : null)
+  const author = post.author?.first_name || null
   const text = (post.content ?? '').replace(/\s+/g, ' ').trim()
   return (
     <div className="mt-2 space-y-3">

@@ -78,7 +78,7 @@ export default async function SharedPostPage({ params }: Props) {
   // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, image_url, created_at, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
+    .select('id, content, image_url, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -180,7 +180,7 @@ export default async function SharedPostPage({ params }: Props) {
         {/* "Edit in admin" — a client island: moderators and up see it after hydration; it is never in
             this page's server HTML (members, guests and logged-out visitors never get it). */}
         <div className="flex justify-end px-4 pb-2 empty:hidden">
-          <PostAdminEditLink postId={post.id} content={post.content} author={displayName} createdAt={post.created_at} source="post_page" />
+          <PostAdminEditLink postId={post.id} content={post.content} author={displayName} source="post_page" />
         </div>
 
         {/* Engagement stats */}
