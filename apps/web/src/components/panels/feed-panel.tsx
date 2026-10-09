@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react'
-import { Heart, MessageCircle, Share2, Code, Send, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, ShieldAlert, Plus, ArrowRight } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, ShieldAlert, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {

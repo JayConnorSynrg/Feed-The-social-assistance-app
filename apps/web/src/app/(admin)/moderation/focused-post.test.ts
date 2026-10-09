@@ -44,7 +44,16 @@ function post(extra: Partial<FocusedPostRow> = {}): FocusedPostRow {
 
 const view = (state: FocusedPostState, extra: Partial<Parameters<typeof FocusedPostView>[0]> = {}) =>
   renderToStaticMarkup(h(FocusedPostView, { state, processing: null, error: null, onAction: () => {}, onDismiss: () => {}, ...extra }))
-const statusRegions = (html: string) => [...html.matchAll(/<p role="status"[^>]*>([\s\S]*?)<\/p>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''))
+const stripTags = (fragment: string) => {
+  let text = fragment
+  let previous: string
+  do {
+    previous = text
+    text = text.replace(/<[^>]*>/g, '')
+  } while (text !== previous)
+  return text
+}
+const statusRegions = (html: string) => [...html.matchAll(/<p role="status"[^>]*>([\s\S]*?)<\/p>/g)].map((m) => stripTags(m[1]))
 
 function postsReader(result: { data: unknown; error: unknown } | Error) {
   const calls: Array<[string, ...unknown[]]> = []
