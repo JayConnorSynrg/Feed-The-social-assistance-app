@@ -60,7 +60,8 @@ vi.mock('@/components/map/marker-popup', async (orig) => {
 })
 
 import { PostAdminEditLink, postAdminItemName } from '@/components/feed/post-admin-edit-link'
-import { SafetyStrip } from '@/components/feed/safety-strip'
+import { SafetyStrip, safetyStripItemName } from '@/components/feed/safety-strip'
+import { postCardFrameClass } from '@/components/feed/post-card-frame'
 import { EventCard, eventAdminSource } from '@/components/feed/event-card'
 import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { MarkerPopupDialog } from '@/components/map/marker-popup'
@@ -198,15 +199,40 @@ describe('I1 — present exactly for the viewers the admin screen accepts', () =
 })
 
 describe('surface details', () => {
-  it('the feed strip link is a sibling of the alert button, never inside it', () => {
+  it('the feed strip: each alert is a real <button> named by its visible text; the link is its sibling', () => {
     viewerRef.current = VIEWERS.community_moderator
     const html = renderToStaticMarkup(SURFACES.alert_feed_strip())
     const button = html.indexOf(`data-testid="safety-strip-item-${ALERT}"`)
     const link = html.indexOf(`data-testid="admin-edit-alert-${ALERT}"`)
     expect(button).toBeGreaterThan(-1)
     expect(link).toBeGreaterThan(button)
-    // The role=button element closes before the link opens: </div></div><a …
-    expect(html.slice(button, link)).toMatch(/<\/div><\/div><a [^>]*$/)
+    // A <button> element (no div role=button, no aria-label overriding its text) that closes before the link.
+    const open = html.slice(html.lastIndexOf('<', button), html.indexOf('>', button) + 1)
+    expect(open).toMatch(/^<button type="button"/)
+    expect(open).not.toMatch(/aria-label|role=/)
+    expect(html.slice(button, link)).toMatch(/<\/button><a [^>]*$/)
+    expect(html.slice(button, link)).not.toMatch(/<(div|p)\b/)
+  })
+
+  it('the feed strip: 5 alerts of 4 types get 5 distinct link names (age + description start)', () => {
+    viewerRef.current = VIEWERS.community_moderator
+    const alerts = [
+      { ...alert, id: '22222222-2222-4222-8222-000000000001', alert_type: 'road_closure' as const, description: 'Bridge out on Main Street near the old mill and the river crossing' },
+      { ...alert, id: '22222222-2222-4222-8222-000000000002', alert_type: 'road_closure' as const, description: 'Route 4 closed' },
+      { ...alert, id: '22222222-2222-4222-8222-000000000003', alert_type: 'weather' as const, description: null },
+      { ...alert, id: '22222222-2222-4222-8222-000000000004', alert_type: 'speeding' as const, description: null },
+      { ...alert, id: '22222222-2222-4222-8222-000000000005', alert_type: 'general' as const, description: 'Downed line' },
+    ]
+    const ages = ['5m ago', '1h ago', '2h ago', '3h ago', '4h ago']
+    let i = 0
+    const html = renderToStaticMarkup(h(SafetyStrip, { alerts, onViewMap: () => {}, formatAge: () => ages[i++ % 5] }))
+    const names = [...html.matchAll(/aria-label="Edit in admin: ([^"]*) \(opens/g)].map((m) => m[1])
+    expect(names).toHaveLength(5)
+    expect(new Set(names).size).toBe(5)
+    expect(names[0]).toMatch(/^Road Closure, 5m ago: Bridge out on Main Street/)
+    expect(names[0].split(': ')[1]).toHaveLength(40) // 39 characters + …
+    expect(names[2]).toBe('Weather Hazard, 2h ago')
+    expect(safetyStripItemName('Road Closure', '  Route   4 closed ', '1h ago')).toBe('Road Closure, 1h ago: Route 4 closed')
   })
 
   it('map popup: the link is inside the dialog, Tab-reachable, and Escape on the dialog still closes it', () => {
@@ -238,7 +264,14 @@ describe('surface details', () => {
   it('post item name: the start of the text, collapsed and capped', () => {
     expect(postAdminItemName('  Need\n a   ride ')).toBe('Need a ride')
     expect(postAdminItemName('x'.repeat(80))).toHaveLength(58)
-    expect(postAdminItemName(null)).toBe('')
+    // An image-only post: "post by <author>, <date>" instead of an empty name.
+    expect(postAdminItemName(null, 'Ada', '2026-10-01T12:00:00Z')).toBe('post by Ada, Oct 1, 2026')
+    expect(postAdminItemName('   ', 'Ada', new Date('2026-10-01T12:00:00Z'))).toBe('post by Ada, Oct 1, 2026')
+    expect(postAdminItemName(null)).toBe('post by a member')
+    viewerRef.current = VIEWERS.community_moderator
+    expect(renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: '', author: 'Ada', createdAt: '2026-10-01T12:00:00Z', source: 'post_page' }))).toContain(
+      'aria-label="Edit in admin: post by Ada, Oct 1, 2026 (opens in the admin tab)"'
+    )
   })
 })
 
@@ -249,14 +282,17 @@ describe('wiring: each surface renders its link through the hydration-gated comp
     const src = read('../panels/feed-panel.tsx')
     const start = src.indexOf('function PostCard(')
     const card = src.slice(start, src.indexOf('\nexport function FeedPanel(', start))
-    expect(card).toContain('<PostAdminEditLink postId={post.id} content={post.content} source="feed_post" />')
+    expect(card).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={post.author.name} createdAt={post.timestamp} source="feed_post" />')
+    // The action row is exempt from the hidden-post dimming.
+    expect(card).toMatch(/<div data-card-actions="" [^>]*>\s*<PostAdminEditLink/)
+    expect(card).toContain('<div className={postCardFrameClass(effectivelyHidden)}>')
     expect(src).toMatch(/<SafetyStrip\s+alerts=\{safetyAlerts\}/)
   })
 
   it('/s/post (a server component) renders the client island, with the page source', () => {
     const src = read('../../app/(social)/s/post/[id]/page.tsx')
     expect(src).not.toMatch(/^'use client'/)
-    expect(src).toContain('<PostAdminEditLink postId={post.id} content={post.content} source="post_page" />')
+    expect(src).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={displayName} createdAt={post.created_at} source="post_page" />')
   })
 
   it.each([
@@ -274,3 +310,13 @@ describe('wiring: each surface renders its link through the hydration-gated comp
     expect(read('../panels/events-panel.tsx')).toMatch(/<EventCard\b[\s\S]*surface="events-tab"/)
   })
 })
+
+describe('hidden-post card: dim the content, not the action row', () => {
+  it('a hidden card dims every child except [data-card-actions]; no whole-card opacity', () => {
+    const hidden = postCardFrameClass(true).split(/\s+/)
+    expect(hidden).toContain('[&>*:not([data-card-actions])]:opacity-70')
+    expect(hidden).not.toContain('opacity-70')
+    expect(postCardFrameClass(false)).not.toMatch(/opacity/)
+  })
+})
+

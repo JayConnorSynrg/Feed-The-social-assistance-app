@@ -58,6 +58,7 @@ import type { MyCheckinStatus } from '@/lib/event-checkin'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
+import { postCardFrameClass } from '@/components/feed/post-card-frame'
 import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { PostTypeWizard } from './post-type-wizard'
@@ -818,13 +819,7 @@ function PostCard({
   }
 
   return (
-    <div
-      className={`p-4 rounded-xl bg-[#faf9f6] border transition-all ${
-        effectivelyHidden
-          ? 'border-orange-200 opacity-70'
-          : 'border-stone-200 hover:border-primary/30'
-      }`}
-    >
+    <div className={postCardFrameClass(effectivelyHidden)}>
       {/* Hidden-pending-review banner — shown to post author only */}
       {effectivelyHidden && isAuthor && (
         <div className="mb-3 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs font-medium text-orange-700">
@@ -1208,8 +1203,8 @@ function PostCard({
 
       {/* "Edit in admin" (moderators and up only, after hydration) + Report post (non-authors when
           authenticated). The row collapses when neither renders. */}
-      <div className="mt-2 flex items-center justify-end gap-3 empty:hidden">
-        <PostAdminEditLink postId={post.id} content={post.content} source="feed_post" />
+      <div data-card-actions="" className="mt-2 flex items-center justify-end gap-3 empty:hidden">
+        <PostAdminEditLink postId={post.id} content={post.content} author={post.author.name} createdAt={post.timestamp} source="feed_post" />
         {currentUserId != null && !isAuthor && onReport && (
           <button
             data-testid={`report-btn-${post.id}`}

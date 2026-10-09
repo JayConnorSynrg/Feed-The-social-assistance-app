@@ -18,6 +18,9 @@ import { logger } from '@/lib/logger'
 
 export type PostModerationAction = 'remove' | 'hold' | 'authorize'
 
+/** The destructive (Remove) buttons: white on red-700, 6.4:1 (the theme's destructive red is 3.6:1). */
+export const DESTRUCTIVE_BUTTON_CLASS = 'bg-red-700 text-white hover:bg-red-800'
+
 /** The admin_actions / admin.denied action label of each. */
 const ACTION_LABEL: Record<PostModerationAction, string> = {
   remove: 'post.remove',

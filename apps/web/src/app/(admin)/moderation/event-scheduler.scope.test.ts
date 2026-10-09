@@ -87,6 +87,7 @@ import {
   windowResult,
   decideEventFocus,
   eventFocusNotice,
+  focusedEventQuery,
   toEditTarget,
 } from './event-scheduler'
 import { readFileSync } from 'node:fs'
@@ -270,30 +271,20 @@ describe('"Edit in admin" event link (I2)', () => {
     }
   }
 
-  it("the organization's page: reads that event by id with the list's embeds, resolves found once", () => {
-    claim()
-    rec.focusedRow = { id: EVENT, org_id: ORG, org: { name: 'Pantry', is_active: true }, next: [], feed_next: [] }
-    EventScheduler({ selectedOrgId: ORG, source: 'org_admin_events' })
-    const byId = rec.queries.find((q) => callsOf(q, 'eq').some((c) => c[0] === 'id'))!
-    expect(byId.table).toBe('assistance_events')
-    expect(callsOf(byId, 'eq')).toContainEqual(['id', EVENT])
-    expect(String(callsOf(byId, 'select')[0][0])).toMatch(/next:event_occurrences\(.*\), feed_next:event_occurrences\(/)
-    expect(callsOf(byId, 'maybeSingle')).toHaveLength(1)
-    expect(rec.resolved).toEqual(['found'])
+  it("focusedEventQuery: that event by id, with the same next / feed_next embeds as a list row", () => {
+    focusedEventQuery(recordingClient() as never, EVENT, '2026-10-07T12:00:00.000Z')
+    const q = rec.queries[0]
+    expect(q.table).toBe('assistance_events')
+    expect(callsOf(q, 'eq')).toContainEqual(['id', EVENT])
+    expect(String(callsOf(q, 'select')[0][0])).toMatch(/next:event_occurrences\(.*\), feed_next:event_occurrences\(/)
+    expect(callsOf(q, 'limit')).toEqual([[1, { referencedTable: 'next' }], [1, { referencedTable: 'feed_next' }]])
+    expect(callsOf(q, 'maybeSingle')).toHaveLength(1)
   })
 
-  it("another organization's event on this page: not_found (no edit dialog for it)", () => {
+  it('while the list is still loading: no by-id read yet (the dialog opens over a settled screen)', () => {
     claim()
-    rec.focusedRow = { id: EVENT, org_id: OTHER_ORG, org: { name: 'Other', is_active: true }, next: [], feed_next: [] }
-    EventScheduler({ selectedOrgId: ORG, source: 'org_admin_events' })
-    expect(rec.resolved).toEqual(['not_found'])
-  })
-
-  it('no readable event: not_found', () => {
-    claim()
-    rec.focusedRow = null
     EventScheduler({ selectedOrgId: ORG })
-    expect(rec.resolved).toEqual(['not_found'])
+    expect(rec.queries.some((q) => callsOf(q, 'eq').some((c) => c[0] === 'id'))).toBe(false)
   })
 
   it("main shell: waits for the caller's organization list before reading (no by-id read yet)", () => {

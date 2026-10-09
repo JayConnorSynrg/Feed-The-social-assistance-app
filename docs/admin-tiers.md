@@ -221,7 +221,28 @@ The shell writes the row when no tab will take the link (`admin-focus-session.ts
 `adminFocusGateOutcome`, run once the tier and organization roles have loaded): `forbidden` when the
 viewer's tier does not show the owning tab (e.g. an organization admin on a post link), `invalid` for a
 malformed focus, a kind the screen never opens, or a `?tab=` that is not the kind's tab. A tab left
-before it resolved writes `abandoned`. Exactly one writer exists for any URL.
+before it resolved writes `abandoned`. Exactly one writer exists for any URL. For `forbidden` /
+`invalid` the shell also shows one plain line in the viewer's language (`admin-focus-gate-status.tsx`,
+`lib/i18n-admin-focus.ts`, 14 locales) in a `role="status"` region rendered from the first paint.
+
+**Stated exception — refused before any client code runs: no row.** A link the server turns away
+before the admin page's JavaScript loads writes no `admin.deeplink.resolve` row: a signed-out visitor
+(`proxy.ts` → `/login`), a signed-in user with no tier and no organization role (`(admin)/layout.tsx`
+→ `/`), and an organization page the viewer may not administer (`notFound()` in
+`moderation/org/[id]/page.tsx`, counted by `admin.org_page.load` with `outcome = not_found`). The link
+is shown only to viewers the screen accepts, so these arise only from a forwarded or stale link.
+
+**Screen details.** The Linked post panel has ONE `role="status"` line (loading → status → each
+action's result) and moves focus to its heading after an action and on load; buttons are
+`aria-disabled` while an action runs; Remove is red-700 (6.4:1, also in the reports queue and the
+Safety Alerts review); closing it returns focus to the selected sub-tab. Reports / Safety Alerts is a
+real tablist. When the reports queue changes a post, the Linked post panel re-reads it (and an action
+in the panel reloads the queue), so neither acts on a stale state. The scheduler renders the event
+edit dialog outside its loading / error / ready branches, so a `found` event link opens the dialog
+even when the event list failed to load; its not-found line is one `role="status"` region. On the
+feed, each Active Alerts item is a real `<button>` and its Edit in admin name adds the age and the
+start of the description (several alerts share a type); a hidden post card dims its content but not
+the action row; an image-only post's link is named "post by <author>, <date>".
 
 ## Facilitator code — retired
 

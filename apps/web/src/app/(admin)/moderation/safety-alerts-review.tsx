@@ -37,6 +37,7 @@ import { adminNavT } from '@/lib/i18n-admin-nav'
 import { safetyAlertMapVisibility } from '@/lib/member-visibility'
 import { whereSafetyAlertLive } from '@/lib/safety-alert-live'
 import { useAdminFocusSession } from './use-admin-focus'
+import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -287,17 +288,34 @@ export function SafetyAlertsReviewView({
   pinnedId = null,
   focusNotice = null,
 }: SafetyAlertsReviewViewProps) {
+  // ONE region for the linked alert's outcome, rendered in every state (before its text arrives), so
+  // "no longer live" is announced when it appears.
+  const focusRegion = (
+    <p
+      role="status"
+      data-testid="focused-alert-notice"
+      className={focusNotice ? 'mb-4 rounded-md border border-stone-300 bg-stone-50 p-3 text-sm text-stone-800' : 'sr-only'}
+    >
+      {focusNotice}
+    </p>
+  )
+
   if (loading) {
     return (
-      <div role="status" className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
-        {/* A live region announces its text content (an aria-label on it is not read out). */}
-        <span className="sr-only">Loading safety alerts</span>
-      </div>
+      <>
+        {focusRegion}
+        <div role="status" className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
+          {/* A live region announces its text content (an aria-label on it is not read out). */}
+          <span className="sr-only">Loading safety alerts</span>
+        </div>
+      </>
     )
   }
 
   return (
+    <>
+    {focusRegion}
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Safety Alerts Review</h2>
@@ -308,12 +326,6 @@ export function SafetyAlertsReviewView({
       <p className="text-sm text-muted-foreground">
         Pins are live immediately (publish-then-review). Remove alerts that violate community guidelines.
       </p>
-
-      {focusNotice && (
-        <p role="status" data-testid="focused-alert-notice" className="rounded-md border border-stone-300 bg-stone-50 p-3 text-sm text-stone-800">
-          {focusNotice}
-        </p>
-      )}
 
       {error && (
         <div role="alert" className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
@@ -389,6 +401,7 @@ export function SafetyAlertsReviewView({
                   <Button
                     size="sm"
                     variant="destructive"
+                    className={DESTRUCTIVE_BUTTON_CLASS}
                     disabled={removingId === alert.id}
                     onClick={() => onRemove(alert.id)}
                     data-testid={`admin-remove-alert-${alert.id}`}
@@ -414,5 +427,6 @@ export function SafetyAlertsReviewView({
         })
       )}
     </div>
+    </>
   )
 }

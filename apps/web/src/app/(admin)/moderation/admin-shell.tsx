@@ -11,6 +11,7 @@ import { resolveAdminTab, TAB_ORDER, visibleTabs } from './admin-shell-tabs'
 import { readTabParam, tabParamHref } from './admin-tab-url'
 import { useAdminFocusGate } from './use-admin-focus'
 import { shellOwnerTab } from './admin-focus-session'
+import { AdminFocusGateStatus } from './admin-focus-gate-status'
 import { logEvent } from '@/lib/logger'
 import { OverviewTab } from './overview-tab'
 import { EventScheduler } from './event-scheduler'
@@ -54,7 +55,7 @@ export function AdminShell() {
   const tabs = visibleTabs(tier, isOrgAdmin)
   // "Edit in admin" (?focus=): the tab that owns the item resolves it; once the tabs are final, a
   // focus no shown tab will take is reported here (invalid / forbidden).
-  useAdminFocusGate(!tierLoading && orgAdminLoaded, tabs, shellOwnerTab)
+  const focusGateRow = useAdminFocusGate(!tierLoading && orgAdminLoaded, tabs, shellOwnerTab)
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>('all')
   // Starts at 'overview' and the mount effect below applies a `?tab=` deep link, so a deep link
@@ -240,6 +241,7 @@ export function AdminShell() {
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4">
+        <AdminFocusGateStatus row={focusGateRow} locale={locale} />
         <Tabs value={effectiveTab} onValueChange={handleTabChange}>
           {/* Tab bar — horizontally scrollable on mobile. Only entitled tabs render (§5). */}
           <div className="overflow-x-auto -mx-2 px-2 pb-1">

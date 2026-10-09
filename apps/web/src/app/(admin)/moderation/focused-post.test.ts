@@ -23,7 +23,7 @@ vi.mock('@/lib/logger', () => ({
 }))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 
-import { FocusedPostView, FOCUSED_POST_SELECT, applyPostAction, loadFocusedPost, postStatusLabel, type FocusedPostRow, type FocusedPostState } from './focused-post'
+import { FocusedPostView, FOCUSED_POST_SELECT, applyPostAction, focusedPostStatusText, loadFocusedPost, postStatusLabel, type FocusedPostRow, type FocusedPostState } from './focused-post'
 import { moderatePost, postActionsFor } from './post-moderation-actions'
 
 const ID = '11111111-1111-4111-8111-111111111111'
@@ -42,8 +42,9 @@ function post(extra: Partial<FocusedPostRow> = {}): FocusedPostRow {
   }
 }
 
-const view = (state: FocusedPostState) =>
-  renderToStaticMarkup(h(FocusedPostView, { state, processing: null, error: null, onAction: () => {}, onDismiss: () => {} }))
+const view = (state: FocusedPostState, extra: Partial<Parameters<typeof FocusedPostView>[0]> = {}) =>
+  renderToStaticMarkup(h(FocusedPostView, { state, processing: null, error: null, onAction: () => {}, onDismiss: () => {}, ...extra }))
+const statusRegions = (html: string) => [...html.matchAll(/<p role="status"[^>]*>([\s\S]*?)<\/p>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''))
 
 function postsReader(result: { data: unknown; error: unknown } | Error) {
   const calls: Array<[string, ...unknown[]]> = []
@@ -179,3 +180,38 @@ describe('one shared actions module (no second copy)', () => {
     expect(read('./post-moderation-actions.ts').match(/'admin_(remove|hold|authorize)_post'/g)).toHaveLength(3)
   })
 })
+
+describe('a11y: one status region announces every step; focus and contrast', () => {
+  it.each([
+    [{ status: 'loading' } as FocusedPostState, 'Loading the linked post…'],
+    [{ status: 'not_found' } as FocusedPostState, 'This post was not found. It may have been deleted.'],
+    [{ status: 'error' } as FocusedPostState, 'The linked post could not be loaded. The reports queue below still works.'],
+    [{ status: 'found', post: post() } as FocusedPostState, 'Status: Visible to members.'],
+  ])('%o: exactly ONE role=status region, same element, text only changes', (state, text) => {
+    expect(statusRegions(view(state))).toEqual([text])
+  })
+
+  it('after an action the region says what happened and the new status', () => {
+    const removed = { status: 'found', post: applyPostAction(post(), 'remove') } as FocusedPostState
+    expect(statusRegions(view(removed, { lastAction: 'remove' }))).toEqual(['Post removed. Status: Removed.'])
+    expect(focusedPostStatusText({ status: 'found', post: applyPostAction(post(), 'hold') }, 'hold')).toBe('Post held for review. Status: Held for review.')
+  })
+
+  it('Remove is red-700 (6.4:1), not the 3.6:1 theme red', () => {
+    expect(view({ status: 'found', post: post() })).toMatch(/<button[^>]*class="[^"]*bg-red-700[^"]*"[^>]*data-testid="focused-remove-post"/)
+  })
+
+  it('while an action runs, the buttons are aria-disabled (not disabled), so the pressed one keeps focus; clicks are ignored', () => {
+    const calls: string[] = []
+    const html = view({ status: 'found', post: post() }, { processing: 'hold' })
+    expect(html).toMatch(/aria-disabled="true"[^>]*data-testid="focused-hold-post"/)
+    expect(html).not.toMatch(/<button[^>]*\sdisabled=""[^>]*data-testid="focused-/)
+    const el = FocusedPostView({ state: { status: 'found', post: post() }, processing: 'hold', error: null, onAction: (a) => calls.push(a), onDismiss: () => {} })
+    const found = (el as { props: { children: unknown[] } }).props.children[2] as { type: (p: unknown) => unknown; props: unknown }
+    const tree = found.type(found.props) as { props: { children: unknown[] } }
+    const buttons = (tree.props.children[3] as { props: { children: Array<{ props: { onClick: () => void } }> } }).props.children
+    buttons.forEach((b) => b.props.onClick())
+    expect(calls).toEqual([])
+  })
+})
+

@@ -155,6 +155,23 @@ describe('pinning', () => {
   })
 })
 
+describe('the linked-alert region exists before its text (announced when it appears)', () => {
+  const region = (html: string) => html.match(/<p role="status" data-testid="focused-alert-notice"[^>]*>([^<]*)<\/p>/)
+  it('rendered — empty — while loading, and first in both states (same position, so it is not remounted)', () => {
+    const loading = view({ loading: true })
+    expect(region(loading)?.[1]).toBe('')
+    expect(loading.indexOf('focused-alert-notice')).toBeLessThan(loading.indexOf('Loading safety alerts'))
+    const settled = view({ alerts: [alert(A)], focusNotice: focusedAlertNotice({ status: 'not_found' }) })
+    expect(region(settled)?.[1]).toMatch(/no longer live/)
+    expect(settled.match(/data-testid="focused-alert-notice"/g)).toHaveLength(1)
+    expect(settled.indexOf('focused-alert-notice')).toBeLessThan(settled.indexOf('Safety Alerts Review'))
+  })
+
+  it('Remove alert is red-700 (6.4:1)', () => {
+    expect(view({ alerts: [alert(A)] })).toMatch(/<button[^>]*class="[^"]*bg-red-700[^"]*"[^>]*data-testid="admin-remove-alert-/)
+  })
+})
+
 describe('SafetyAlertsReview wiring (mocked client)', () => {
   async function run() {
     harness = true

@@ -28,6 +28,16 @@ const STRIP_ALERT_LABELS: Record<string, string> = {
   general: 'Safety Alert',
 }
 
+/**
+ * The "Edit in admin" name of one strip alert: up to 5 alerts share 4 types, so the type alone
+ * collides — add the age and the start of the description ("Road Closure, 5m ago: Bridge out on…").
+ */
+export function safetyStripItemName(label: string, description: string | null, age: string): string {
+  const text = (description ?? '').replace(/\s+/g, ' ').trim()
+  const start = text.length > 40 ? `${text.slice(0, 39)}…` : text
+  return start ? `${label}, ${age}: ${start}` : `${label}, ${age}`
+}
+
 export interface SafetyStripProps {
   alerts: SafetyAlert[]
   onViewMap: () => void
@@ -60,16 +70,15 @@ export function SafetyStrip({ alerts, onViewMap, formatAge }: SafetyStripProps) 
           const label = STRIP_ALERT_LABELS[alert.alert_type] ?? 'Safety Alert'
           // Severity-scaled color: 1-2 amber, 3-4 red (matches safety-alert-marker.tsx)
           const isHigh = alert.severity >= 3
+          const age = formatAge(new Date(alert.created_at))
           return (
             <li key={alert.id} className="flex items-start gap-2">
-              <div
+              {/* A real button: its visible text (type, status, description, age) is its name. */}
+              <button
+                type="button"
                 data-testid={`safety-strip-item-${alert.id}`}
-                className="flex flex-1 min-w-0 items-start gap-2 cursor-pointer group"
+                className="flex flex-1 min-w-0 items-start gap-2 text-left cursor-pointer group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700"
                 onClick={onViewMap}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onViewMap()}
-                aria-label={`${label} — tap to view on map`}
               >
                 <span
                   className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
@@ -78,8 +87,8 @@ export function SafetyStrip({ alerts, onViewMap, formatAge }: SafetyStripProps) 
                 >
                   <Icon className="w-3 h-3" aria-hidden="true" />
                 </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="block flex-1 min-w-0">
+                  <span className="flex items-center gap-1.5 flex-wrap">
                     <span className={`text-xs font-semibold ${isHigh ? 'text-red-800' : 'text-amber-800'}`}>
                       {label}
                     </span>
@@ -88,18 +97,16 @@ export function SafetyStrip({ alerts, onViewMap, formatAge }: SafetyStripProps) 
                         Unverified — neighbor report
                       </span>
                     )}
-                  </div>
+                  </span>
                   {alert.description && (
-                    <p className="text-xs text-stone-700 line-clamp-1 mt-0.5">{alert.description}</p>
+                    <span className="block text-xs text-stone-700 line-clamp-1 mt-0.5">{alert.description}</span>
                   )}
-                  <p className="text-[10px] text-stone-500 mt-0.5">
-                    {formatAge(new Date(alert.created_at))}
-                  </p>
-                </div>
-              </div>
+                  <span className="block text-[10px] text-stone-500 mt-0.5">{age}</span>
+                </span>
+              </button>
               <ClientAdminEditLink
                 target={{ kind: 'safety_alert', id: alert.id }}
-                itemName={label}
+                itemName={safetyStripItemName(label, alert.description, age)}
                 source="feed_alert"
                 data-testid={`admin-edit-alert-${alert.id}`}
               />

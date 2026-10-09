@@ -54,17 +54,22 @@ export function useAdminFocusSession(kind: AdminFocusKind, tab: string): AdminFo
 
 /**
  * The shell's half: once `ready` (tier and organization roles loaded, so `visibleTabs` is final),
- * write invalid / forbidden for a focus no shown tab will take. Runs once per mount.
+ * write invalid / forbidden for a focus no shown tab will take. Runs once per mount. Returns that
+ * row (the shell shows AdminFocusGateStatus for it), or null.
  */
 export function useAdminFocusGate(
   ready: boolean,
   visibleTabs: readonly string[],
   ownerTab: (kind: AdminFocusKind) => string | null
-): void {
+): AdminDeeplinkRow | null {
   const ranRef = useRef(false)
+  const [row, setRow] = useState<AdminDeeplinkRow | null>(null)
   useEffect(() => {
     if (!ready || ranRef.current) return
     ranRef.current = true
-    runAdminFocusGate(browserAdminFocusEnv(emitResolve), { visibleTabs, ownerTab })
+    const written = runAdminFocusGate(browserAdminFocusEnv(emitResolve), { visibleTabs, ownerTab })
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (written) setRow(written)
   }, [ready, visibleTabs, ownerTab])
+  return row
 }

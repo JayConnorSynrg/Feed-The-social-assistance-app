@@ -49,8 +49,9 @@ const render = (over: Partial<SafetyAlertsReviewViewProps> = {}) => renderToStat
 describe('SafetyAlertsReviewView — a11y', () => {
   it('loading is a status region whose announced text is in the region (not an aria-label)', () => {
     const html = render({ loading: true })
-    expect(html).toMatch(/^<div role="status"[^>]*>/)
-    expect(html).not.toMatch(/^<div role="status"[^>]*aria-label/)
+    // After the (empty) linked-alert region, which is rendered in every state.
+    expect(html).toMatch(/<\/p><div role="status"[^>]*>/)
+    expect(html).not.toMatch(/<div role="status"[^>]*aria-label/)
     expect(html).toMatch(/<span class="sr-only">Loading safety alerts<\/span><\/div>$/)
     expect(html).toMatch(/<svg[^>]*aria-hidden="true"/)
   })

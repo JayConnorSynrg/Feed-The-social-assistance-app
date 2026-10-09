@@ -109,15 +109,15 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
 
   it('runAdminFocusGate writes its row once and strips the focus; nothing when a tab takes it', () => {
     const t = env(`?tab=moderation&focus=post:${ID}`)
-    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBe(true)
+    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toEqual({ kind: 'post', outcome: 'forbidden', tab: 'moderation' })
     expect(t.rows).toEqual([{ kind: 'post', outcome: 'forbidden', tab: 'moderation' }])
     expect(t.url()).toBe('?tab=moderation')
     // A second run finds no focus left.
-    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBe(false)
+    expect(runAdminFocusGate(t.e, { visibleTabs: ORG_ONLY, ownerTab: shellOwnerTab })).toBeNull()
     expect(t.rows).toHaveLength(1)
 
     const taken = env(`?tab=moderation&focus=post:${ID}`)
-    expect(runAdminFocusGate(taken.e, { visibleTabs: CM, ownerTab: shellOwnerTab })).toBe(false)
+    expect(runAdminFocusGate(taken.e, { visibleTabs: CM, ownerTab: shellOwnerTab })).toBeNull()
     expect(taken.rows).toEqual([])
     expect(taken.strips()).toBe(0)
   })

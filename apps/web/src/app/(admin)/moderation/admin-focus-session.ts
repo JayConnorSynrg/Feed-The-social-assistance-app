@@ -114,13 +114,13 @@ export function orgPageOwnerTab(kind: AdminFocusKind): string | null {
   return kind === 'event' ? 'events' : null
 }
 
-/** Write the shell's row when it has one (then drop the param). True when a row was written. */
-export function runAdminFocusGate(env: AdminFocusEnv, input: Omit<AdminFocusGateInput, 'search'>): boolean {
+/** Write the shell's row when it has one (then drop the param). Returns the row written, or null. */
+export function runAdminFocusGate(env: AdminFocusEnv, input: Omit<AdminFocusGateInput, 'search'>): AdminDeeplinkRow | null {
   const row = adminFocusGateOutcome({ ...input, search: env.search() })
-  if (!row) return false
+  if (!row) return null
   env.emit(row)
   env.strip()
-  return true
+  return row
 }
 
 /** The browser binding: window.location, history.replaceState, and the persisted row. */

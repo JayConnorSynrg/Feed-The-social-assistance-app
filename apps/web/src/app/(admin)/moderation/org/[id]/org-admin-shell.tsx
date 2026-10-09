@@ -38,6 +38,7 @@ import { OrgOverview } from '../org-overview'
 import { OrgEventsTab } from './org-events-tab'
 import { useAdminFocusGate } from '../../use-admin-focus'
 import { orgPageOwnerTab } from '../../admin-focus-session'
+import { AdminFocusGateStatus } from '../../admin-focus-gate-status'
 
 export interface OrgAdminOrg {
   id: string
@@ -82,7 +83,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   }, [])
   // "Edit in admin" (?focus=event:<id>) opens on the Events tab, which resolves it; any other focus
   // here is reported invalid (every tab is shown, so there is no forbidden case on this page).
-  useAdminFocusGate(true, ORG_ADMIN_TABS, orgPageOwnerTab)
+  const focusGateRow = useAdminFocusGate(true, ORG_ADMIN_TABS, orgPageOwnerTab)
   const handleTabChange = useCallback((next: string) => {
     if (!(ORG_ADMIN_TABS as readonly string[]).includes(next)) return
     setTab(next as OrgAdminTab)
@@ -135,6 +136,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
       </header>
 
       <main className="mx-auto max-w-7xl px-2 py-4 sm:px-4">
+        <AdminFocusGateStatus row={focusGateRow} locale={locale} />
         {/* Always rendered (no empty:hidden) so screen readers announce the saved notice. */}
         <p aria-live="polite" className="mb-3 min-h-5 text-sm font-medium text-brand">
           {notice}

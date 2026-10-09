@@ -9,7 +9,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
-import { moderatePost, type PostModerationAction } from './post-moderation-actions'
+import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
@@ -38,7 +38,8 @@ function postItemName(content: string | null): string {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
-export function ReportsQueue() {
+/** onPostChanged: a Remove / Hold / Authorize here succeeded (the linked-post panel above re-reads). */
+export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: string) => void } = {}) {
   const [groups, setGroups] = useState<ContentGroup[]>([])
   const [heldPosts, setHeldPosts] = useState<HeldPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -152,12 +153,15 @@ export function ReportsQueue() {
       setError(null)
       const result = await moderatePost(supabase, action, postId)
       if (!result.ok) setError(result.message)
-      else if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
-      else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
+      else {
+        if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
+        else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
+        onPostChanged?.(postId)
+      }
       setProcessingId(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [onPostChanged]
   )
 
   if (loading) {
@@ -267,7 +271,7 @@ export function ReportsQueue() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="h-9 min-h-[44px] text-xs"
+                    className={`h-9 min-h-[44px] text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                     disabled={processingId === group.content_id}
                     onClick={() => handlePostAction('remove', group.content_id)}
                     data-testid={`remove-post-${group.content_id}`}

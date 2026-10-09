@@ -24,6 +24,7 @@ import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
 import { useAdminFocusSession } from './use-admin-focus'
 import {
+  DESTRUCTIVE_BUTTON_CLASS,
   moderatePost,
   postActionsFor,
   type ModeratedPostState,
@@ -93,16 +94,40 @@ const ACTION_LABELS: Record<PostModerationAction, string> = {
   authorize: 'Authorize Post',
 }
 
+const ACTION_DONE: Record<PostModerationAction, string> = {
+  remove: 'Post removed.',
+  hold: 'Post held for review.',
+  authorize: 'Post authorized.',
+}
+
+/** The text of the panel's one status region (always rendered, so each change is announced). */
+export function focusedPostStatusText(state: FocusedPostState, lastAction: PostModerationAction | null): string {
+  switch (state.status) {
+    case 'loading':
+      return 'Loading the linked post…'
+    case 'not_found':
+      return 'This post was not found. It may have been deleted.'
+    case 'error':
+      return 'The linked post could not be loaded. The reports queue below still works.'
+    case 'found': {
+      const status = `Status: ${postStatusLabel(state.post)}.`
+      return lastAction ? `${ACTION_DONE[lastAction]} ${status}` : status
+    }
+  }
+}
+
 export interface FocusedPostViewProps {
   state: FocusedPostState
   processing: PostModerationAction | null
+  /** The action that last succeeded (announced in the status region). */
+  lastAction?: PostModerationAction | null
   error: string | null
   onAction: (action: PostModerationAction) => void
   onDismiss: () => void
   headingRef?: React.Ref<HTMLHeadingElement>
 }
 
-export function FocusedPostView({ state, processing, error, onAction, onDismiss, headingRef }: FocusedPostViewProps) {
+export function FocusedPostView({ state, processing, lastAction = null, error, onAction, onDismiss, headingRef }: FocusedPostViewProps) {
   return (
     <section
       aria-labelledby="focused-post-title"
@@ -110,7 +135,7 @@ export function FocusedPostView({ state, processing, error, onAction, onDismiss,
       className="mb-4 rounded-xl border-2 border-lime-700 bg-white p-4"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 id="focused-post-title" ref={headingRef} tabIndex={-1} className="text-base font-semibold text-stone-900 focus:outline-none">
+        <h2 id="focused-post-title" ref={headingRef} tabIndex={-1} className="text-base font-semibold text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">
           Linked post
         </h2>
         <button
@@ -123,21 +148,13 @@ export function FocusedPostView({ state, processing, error, onAction, onDismiss,
         </button>
       </div>
 
-      {state.status === 'loading' && (
-        <p role="status" className="mt-2 flex items-center gap-2 text-sm text-stone-700">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading the linked post…
-        </p>
-      )}
-      {state.status === 'not_found' && (
-        <p role="status" className="mt-2 text-sm text-stone-800">
-          This post was not found. It may have been deleted.
-        </p>
-      )}
-      {state.status === 'error' && (
-        <p role="alert" className="mt-2 text-sm text-red-700">
-          The linked post could not be loaded. The reports queue below still works.
-        </p>
-      )}
+      {/* ONE status region, present from the first render: loading → found / not found → each
+          action's result change only its text, so screen readers announce every step. */}
+      <p role="status" data-testid="focused-post-status" className="mt-2 flex items-center gap-2 text-sm font-medium text-stone-800">
+        {state.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        {focusedPostStatusText(state, lastAction)}
+      </p>
+
       {state.status === 'found' && (
         <FoundPost post={state.post} processing={processing} error={error} onAction={onAction} />
       )}
@@ -161,9 +178,6 @@ function FoundPost({
   return (
     <div className="mt-2 space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-stone-700">
-        <span data-testid="focused-post-status" className="rounded bg-stone-100 px-2 py-0.5 font-medium text-stone-800">
-          {postStatusLabel(post)}
-        </span>
         {author && <span>Author: {author}</span>}
         <span>{new Date(post.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
         <MemberViewLink
@@ -186,9 +200,12 @@ function FoundPost({
             key={action}
             size="sm"
             variant={action === 'remove' ? 'destructive' : 'outline'}
-            className="h-9 min-h-[44px] text-xs"
-            disabled={processing !== null}
-            onClick={() => onAction(action)}
+            className={`h-9 min-h-[44px] text-xs${action === 'remove' ? ` ${DESTRUCTIVE_BUTTON_CLASS}` : ''}`}
+            // aria-disabled (not disabled) while an action runs: the pressed button keeps focus.
+            aria-disabled={processing !== null || undefined}
+            onClick={() => {
+              if (processing === null) onAction(action)
+            }}
             data-testid={`focused-${action}-post`}
           >
             {processing === action && <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />}
@@ -201,17 +218,30 @@ function FoundPost({
 }
 
 /**
- * The linked post, when the URL carries `focus=post:<id>`; nothing otherwise. `onChanged` runs after
- * an action succeeded (the moderation tab reloads the queue below).
+ * The linked post, when the URL carries `focus=post:<id>`; nothing otherwise.
+ *   - onChanged: an action here succeeded (the moderation tab reloads the queue below);
+ *   - reloadKey: bumped when the queue below changed a post, so this panel re-reads its post and
+ *     never offers an action on a stale state;
+ *   - onDismissed: the panel was closed (the tab moves focus to its active sub-tab).
  */
-export function FocusedPost({ onChanged }: { onChanged?: () => void }) {
+export function FocusedPost({
+  onChanged,
+  reloadKey = 0,
+  onDismissed,
+}: {
+  onChanged?: () => void
+  reloadKey?: number
+  onDismissed?: () => void
+}) {
   const session = useAdminFocusSession('post', 'moderation')
   const supabase = useMemo(() => createClient(), [])
   const [state, setState] = useState<FocusedPostState>({ status: 'loading' })
   const [dismissed, setDismissed] = useState(false)
   const [processing, setProcessing] = useState<PostModerationAction | null>(null)
+  const [lastAction, setLastAction] = useState<PostModerationAction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inFlight = useRef(false)
+  const loadedOnce = useRef(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -219,14 +249,22 @@ export function FocusedPost({ onChanged }: { onChanged?: () => void }) {
     let active = true
     void loadFocusedPost(supabase, session.focus.id).then((next) => {
       if (!active) return
-      session.resolve(next.status === 'found' ? 'found' : 'not_found')
+      if (!loadedOnce.current) {
+        // The first read decides the link's one row and lands focus on the panel.
+        loadedOnce.current = true
+        session.resolve(next.status === 'found' ? 'found' : 'not_found')
+        setState(next)
+        requestAnimationFrame(() => headingRef.current?.focus())
+        return
+      }
+      // A re-read after the queue changed a post: take its answer, drop the stale action line.
       setState(next)
-      requestAnimationFrame(() => headingRef.current?.focus())
+      setLastAction(null)
     })
     return () => {
       active = false
     }
-  }, [session, supabase])
+  }, [session, supabase, reloadKey])
 
   if (!session || dismissed) return null
 
@@ -240,7 +278,10 @@ export function FocusedPost({ onChanged }: { onChanged?: () => void }) {
     const result = await moderatePost(supabase, action, post.id)
     if (result.ok) {
       setState({ status: 'found', post: applyPostAction(post, action) })
+      setLastAction(action)
       onChanged?.()
+      // The pressed button may be gone (the actions change with the status): focus the heading.
+      requestAnimationFrame(() => headingRef.current?.focus())
     } else {
       setError(result.message)
     }
@@ -252,9 +293,13 @@ export function FocusedPost({ onChanged }: { onChanged?: () => void }) {
     <FocusedPostView
       state={state}
       processing={processing}
+      lastAction={lastAction}
       error={error}
       onAction={(a) => void act(a)}
-      onDismiss={() => setDismissed(true)}
+      onDismiss={() => {
+        setDismissed(true)
+        onDismissed?.()
+      }}
       headingRef={headingRef}
     />
   )

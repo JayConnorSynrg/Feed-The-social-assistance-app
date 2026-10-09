@@ -26,7 +26,7 @@
 // more months"; a hand-added date outside the pattern is marked "Extra date"; a cancelled date of
 // a series stays on the calendar as a "Cancelled" chip so the gap is explained.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { addDays, addWeeks, format, isSameDay, startOfDay, startOfWeek, subWeeks } from 'date-fns'
@@ -433,6 +433,7 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
   // was cancelled, will be gone once the list refreshes).
   const openerRef = useRef<HTMLElement | null>(null)
   const newEventRef = useRef<HTMLButtonElement>(null)
+  const retryRef = useRef<HTMLButtonElement>(null)
   const pastHeadingRef = useRef<HTMLHeadingElement>(null)
   // After "Try again" on the calendar's own error, focus its label once the reload settles (the
   // button is gone on success) — the same rule as the org Overview's retry.
@@ -461,7 +462,8 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
   }
   const restoreFocus = (e: Event) => {
     const opener = focusFallbackRef.current ? null : openerRef.current
-    restoreFocusAfterPanel(e, opener, { querySelector: () => newEventRef.current })
+    // "New event" when the calendar is on screen; Try again when the list failed to load.
+    restoreFocusAfterPanel(e, opener, { querySelector: () => newEventRef.current ?? retryRef.current })
   }
   const [kiosk, setKiosk] = useState<ScheduledDate | null>(null)
   const [attendance, setAttendance] = useState<AttendanceView | null>(null)
@@ -481,33 +483,38 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
   // beyond the newest EVENT_LIST_LIMIT) and open its edit dialog when this scheduler manages it;
   // otherwise leave a plain line and keep the calendar usable. One admin.deeplink.resolve row.
   const focusSession = useAdminFocusSession('event', 'events')
+  // Why a linked event did not open (one status region, rendered from mount, so the line is announced).
+  const [focusNotice, setFocusNotice] = useState<string | null>(null)
   useEffect(() => {
-    if (!focusSession || !scope || !focusSession.isOpen()) return
+    // Waits for the list read to settle (ready or failed): the dialog then opens over a settled
+    // screen, and it renders whatever that read's outcome (B1: the dialog is outside the branches).
+    if (!focusSession || !scope || listState === 'loading' || !focusSession.isOpen()) return
     let active = true
     void focusedEventQuery(supabase, focusSession.focus.id, new Date().toISOString()).then(({ data, error }) => {
       if (!active || !focusSession.isOpen()) return
       if (error) {
         logger.warn('admin.deeplink.load_failed', { kind: 'event', code: error.code ?? 'unknown' })
         focusSession.resolve('not_found')
-        setNotice(eventFocusNotice('error', locale))
+        setFocusNotice(eventFocusNotice('error', locale))
         return
       }
       const event = (data as unknown as AssistanceEvent | null) ?? null
       const decision = decideEventFocus(event, scope)
-      focusSession.resolve(decision.outcome)
       if (decision.outcome === 'found' && event) {
-        // No control opened it: closing returns focus to "New event".
+        // No control opened it: closing returns focus to "New event" (or Try again).
         openerRef.current = null
         focusFallbackRef.current = false
         setEditTarget({ key: ++dialogSeq.current, ...toEditTarget(event) })
-      } else if (decision.outcome === 'not_found') {
-        setNotice(eventFocusNotice(decision.reason, locale))
+        focusSession.resolve('found')
+      } else {
+        focusSession.resolve('not_found')
+        setFocusNotice(eventFocusNotice(decision.outcome === 'not_found' ? decision.reason : 'missing', locale))
       }
     })
     return () => {
       active = false
     }
-  }, [focusSession, scope, supabase, locale])
+  }, [focusSession, scope, supabase, locale, listState])
 
   // 1 + 3: the events (each with its next date) and the first page of past / cancelled dates.
   useEffect(() => {
@@ -703,26 +710,50 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
     )
   }
 
+  // The edit dialog sits OUTSIDE the loading / error / ready branches, at a fixed position, so an
+  // "Edit in admin" link that resolved `found` always shows it (and it never remounts when the list
+  // settles). The focus status region is likewise rendered from mount.
+  const editDialog = editTarget && (
+    <EventEditDialog
+      key={editTarget.key}
+      open
+      onOpenChange={(open) => {
+        if (!open) setEditTarget(null)
+      }}
+      locale={locale}
+      event={editTarget}
+      onCloseAutoFocus={restoreFocus}
+      onSaved={(action) => {
+        setNotice(eventFormT(locale, action === 'retire' ? 'retiredNotice' : 'savedNotice'))
+        refresh()
+      }}
+    />
+  )
+  const focusStatus = (
+    <p role="status" lang={locale} dir={dir(locale)} data-testid="event-focus-status" className={focusNotice ? 'mb-2 text-sm text-stone-800' : 'sr-only'}>
+      {focusNotice}
+    </p>
+  )
+
+  let view: ReactNode
   if (loadState === 'loading') {
-    return (
+    view = (
       <div lang={locale} dir={dir(locale)} className="flex h-48 items-center justify-center text-stone-600" role="status">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
         <span className="text-sm">{eventFormT(locale, 'loading')}</span>
       </div>
     )
-  }
-  if (loadState === 'error') {
-    return (
+  } else if (loadState === 'error') {
+    view = (
       <div lang={locale} dir={dir(locale)} className="flex h-48 flex-col items-center justify-center gap-3" role="alert">
         <p className="text-sm text-stone-800">{eventFormT(locale, 'loadError')}</p>
-        <button type="button" className={SECONDARY} onClick={retry}>
+        <button ref={retryRef} type="button" className={SECONDARY} onClick={retry}>
           {eventFormT(locale, 'retry')}
         </button>
       </div>
     )
-  }
-
-  return (
+  } else {
+    view = (
     <div lang={locale} dir={dir(locale)} className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#4a5d23]">{eventFormT(locale, 'calendarTitle')}</h2>
@@ -1069,23 +1100,6 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
         />
       )}
 
-      {editTarget && (
-        <EventEditDialog
-          key={editTarget.key}
-          open
-          onOpenChange={(open) => {
-            if (!open) setEditTarget(null)
-          }}
-          locale={locale}
-          event={editTarget}
-          onCloseAutoFocus={restoreFocus}
-          onSaved={(action) => {
-            setNotice(eventFormT(locale, action === 'retire' ? 'retiredNotice' : 'savedNotice'))
-            refresh()
-          }}
-        />
-      )}
-
       <AlertDialog
         open={cancelTarget !== null}
         onOpenChange={(open) => {
@@ -1217,5 +1231,14 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
         </EventDialog>
       )}
     </div>
+    )
+  }
+
+  return (
+    <>
+      {focusStatus}
+      {view}
+      {editDialog}
+    </>
   )
 }

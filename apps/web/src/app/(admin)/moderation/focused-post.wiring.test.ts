@@ -1,40 +1,19 @@
 // apps/web/src/app/(admin)/moderation/focused-post.wiring.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// FocusedPost (the component) wired end to end against a mocked Supabase client (I2):
-//   - a post link: the post is read by id, the session resolves `found` exactly once, and an action
-//     calls the moderation RPC once on the id that was READ;
-//   - a not-found id: the session resolves `not_found`, and no action can reach an RPC — not even
-//     one invoked directly through the view's handler;
+// FocusedPost (the component) wired end to end against a mocked Supabase client (I2), on the mini
+// hook runtime:
+//   - a post link: the post is read by id, the session resolves `found` exactly once, an action calls
+//     the moderation RPC once on the id that was READ, and focus then lands on the panel heading;
+//   - a not-found id or a post still loading: no action reaches an RPC, even through the handler;
+//   - L1: when the queue below changes the same post (reloadKey bumps), the panel re-reads it — it
+//     never offers Hold on a post the queue just removed (which would overwrite admin_removal);
+//   - closing the panel tells the tab (which moves focus to the selected sub-tab);
 //   - no post link: nothing renders and nothing is read.
-// React is replaced by a minimal synchronous harness (state slots, refs, effects run on mount).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-type Instance = { state: unknown[]; refs: Array<{ current: unknown }>; i: number; r: number; effects: Array<() => unknown> }
-let current: Instance | null = null
-vi.mock('react', async (orig) => {
-  const actual = await orig<typeof import('react')>()
-  return {
-    ...actual,
-    useState: (init: unknown) => {
-      const inst = current as Instance
-      const i = inst.i++
-      if (inst.state.length <= i) inst.state.push(typeof init === 'function' ? (init as () => unknown)() : init)
-      return [inst.state[i], (v: unknown) => (inst.state[i] = typeof v === 'function' ? (v as (p: unknown) => unknown)(inst.state[i]) : v)]
-    },
-    useRef: (init: unknown) => {
-      const inst = current as Instance
-      const r = inst.r++
-      if (inst.refs.length <= r) inst.refs.push({ current: init })
-      return inst.refs[r]
-    },
-    useMemo: (fn: () => unknown) => fn(),
-    useEffect: (fn: () => unknown) => {
-      ;(current as Instance).effects.push(fn)
-    },
-  }
-})
+vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const h = vi.hoisted(() => ({
   session: null as null | { focus: { kind: string; id: string }; resolve: (o: string) => boolean; isOpen: () => boolean },
@@ -66,36 +45,27 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }))
 
+import { mount } from '@/test/mini-react'
 import { FocusedPost, type FocusedPostViewProps } from './focused-post'
+import { postActionsFor } from './post-moderation-actions'
 
 const LINKED = '11111111-1111-4111-8111-111111111111'
+const visible = { id: LINKED, content: 'x', post_type: 'request', created_at: '2026-10-01T00:00:00Z', is_hidden: false, hidden_reason: null, hidden_at: null, author: null }
 
-function mountFocusedPost() {
-  const inst: Instance = { state: [], refs: [], i: 0, r: 0, effects: [] }
-  const render = () => {
-    inst.i = 0
-    inst.r = 0
-    inst.effects = []
-    current = inst
-    try {
-      return FocusedPost({}) as { props: FocusedPostViewProps } | null
-    } finally {
-      current = null
-    }
-  }
-  render()
-  inst.effects.forEach((fn) => fn())
-  return { render }
-}
+type View = { props: FocusedPostViewProps } | null
+let props: { reloadKey: number; onChanged: () => void; onDismissed: () => void }
+const changed: string[] = []
 
-const flush = async () => {
-  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0))
+function mountPanel() {
+  return mount(() => FocusedPost(props) as unknown as View)
 }
 
 beforeEach(() => {
   h.resolved.length = 0
   h.reads.length = 0
   h.rpcs.length = 0
+  changed.length = 0
+  props = { reloadKey: 0, onChanged: () => changed.push('changed'), onDismissed: () => changed.push('dismissed') }
   h.session = {
     focus: { kind: 'post', id: LINKED },
     isOpen: () => h.resolved.length === 0,
@@ -105,46 +75,74 @@ beforeEach(() => {
 })
 
 describe('FocusedPost wiring', () => {
-  it('found: resolves found once; Remove calls admin_remove_post once on the id that was read', async () => {
-    h.postRow = { id: LINKED, content: 'x', post_type: 'request', created_at: '2026-10-01T00:00:00Z', is_hidden: false, hidden_reason: null, hidden_at: null, author: null }
-    const c = mountFocusedPost()
-    expect(c.render()?.props.state).toEqual({ status: 'loading' })
-    await flush()
+  it('found: one found; Remove → admin_remove_post once on the read id, focus to the heading, onChanged', async () => {
+    h.postRow = visible
+    const c = mountPanel()
+    expect(c.tree()?.props.state).toEqual({ status: 'loading' })
+    const view = (await c.flush())!
     expect(h.reads).toEqual([LINKED])
     expect(h.resolved).toEqual(['found'])
-    const view = c.render()!
     expect(view.props.state.status).toBe('found')
+    const heading = { focus: vi.fn() }
+    ;(view.props.headingRef as { current: unknown }).current = heading
+    heading.focus.mockClear()
     view.props.onAction('remove')
-    await flush()
+    const after = (await c.flush())!
     expect(h.rpcs).toEqual([{ fn: 'admin_remove_post', args: { p_post_id: LINKED } }])
-    expect(c.render()!.props.state).toMatchObject({ status: 'found', post: { is_hidden: true, hidden_reason: 'admin_removal' } })
+    expect(after.props.state).toMatchObject({ status: 'found', post: { is_hidden: true, hidden_reason: 'admin_removal' } })
+    expect(after.props.lastAction).toBe('remove')
+    expect(heading.focus).toHaveBeenCalledTimes(1)
+    expect(changed).toEqual(['changed'])
   })
 
-  it('not found: resolves not_found; every action is refused before any RPC', async () => {
+  it('not found: one not_found; every action is refused before any RPC', async () => {
     h.postRow = null
-    const c = mountFocusedPost()
-    await flush()
+    const c = mountPanel()
+    const view = (await c.flush())!
     expect(h.resolved).toEqual(['not_found'])
-    const view = c.render()!
     expect(view.props.state).toEqual({ status: 'not_found' })
     for (const a of ['remove', 'hold', 'authorize'] as const) view.props.onAction(a)
-    await flush()
+    await c.flush()
     expect(h.rpcs).toEqual([])
   })
 
   it('while loading, an action is refused too', async () => {
     h.postRow = null
-    const c = mountFocusedPost()
-    c.render()!.props.onAction('hold')
-    await flush()
+    const c = mountPanel()
+    c.tree()!.props.onAction('hold')
+    await c.flush()
     expect(h.rpcs).toEqual([])
+  })
+
+  it('L1: the queue removed the same post → reloadKey bump → re-read; Hold is no longer offered; still one row', async () => {
+    h.postRow = visible
+    const c = mountPanel()
+    await c.flush()
+    expect(postActionsFor((c.tree()!.props.state as { post: typeof visible }).post)).toEqual(['remove', 'hold'])
+    // The reports queue below removed it.
+    h.postRow = { ...visible, is_hidden: true, hidden_reason: 'admin_removal' }
+    props = { ...props, reloadKey: 1 }
+    c.rerender()
+    const view = (await c.flush())!
+    expect(h.reads).toEqual([LINKED, LINKED])
+    expect(view.props.state).toMatchObject({ status: 'found', post: { hidden_reason: 'admin_removal' } })
+    expect(postActionsFor((view.props.state as { post: typeof visible }).post)).toEqual(['authorize'])
+    expect(h.resolved).toEqual(['found'])
+  })
+
+  it('closing the panel hides it and tells the tab', async () => {
+    h.postRow = visible
+    const c = mountPanel()
+    const view = (await c.flush())!
+    view.props.onDismiss()
+    expect(c.rerender()).toBeNull()
+    expect(changed).toEqual(['dismissed'])
   })
 
   it('no post link: renders nothing and reads nothing', async () => {
     h.session = null
-    const c = mountFocusedPost()
-    await flush()
-    expect(c.render()).toBeNull()
+    const c = mountPanel()
+    expect(await c.flush()).toBeNull()
     expect(h.reads).toEqual([])
   })
 })
