@@ -2,7 +2,7 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // I1 on the members' map — the REAL markers, island and AdminEditLink (only the viewer lookup and
-// react-map-gl are stubbed; the island is put in its browser state, see admin-edit-link-island.test.ts
+// react-map-gl are stubbed; ClientAdminEditLink is put in its browser state, see client-admin-edit-link.test.ts
 // for its server state):
 //   - each popup (resource, business, organization) and the resource detail pane carries "Edit in
 //     admin" for exactly the viewers whose admin screen accepts that item, built from the entity the
@@ -17,7 +17,7 @@ import type { AdminEditViewer } from '@/lib/admin-editability'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>()
-  // The browser snapshot (after hydration), so the island renders its link.
+  // The browser snapshot (after hydration), so ClientAdminEditLink renders its link.
   return { ...actual, useSyncExternalStore: (_s: unknown, getSnapshot: () => unknown) => getSnapshot() }
 })
 vi.mock('react-map-gl/mapbox', () => ({
@@ -123,10 +123,10 @@ describe('map surfaces — the target is the entity shown there (I2)', () => {
   })
   it('organization popup -> the shell panel for a platform admin, the organization page for its admin', () => {
     expect(adminLinks(render('organization_popup', VIEWERS.platform_admin))[0]).toContain(
-      `href="/moderation?tab=organizations&amp;org=${OID}"`
+      `href="/moderation?tab=organizations&amp;org=${OID}&amp;focus=organization:${OID}"`
     )
     expect(adminLinks(render('organization_popup', VIEWERS.org_admin_of_this_org))[0]).toContain(
-      `href="/moderation/org/${OID}?tab=profile"`
+      `href="/moderation/org/${OID}?tab=profile&amp;focus=organization:${OID}"`
     )
   })
   it('an organization admin of ANOTHER organization gets no link', () => {

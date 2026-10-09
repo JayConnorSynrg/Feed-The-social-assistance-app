@@ -23,10 +23,12 @@ describe('adminEditUrl — the contract', () => {
     expect(adminEditUrl({ kind: 'post', id: ID }, 'community_moderator')).toBe(`/moderation?tab=moderation&focus=post:${ID}`)
   })
 
-  it('organization: platform admin -> the shell panel (?org=); anyone else -> the organization admin page Profile tab', () => {
-    expect(adminEditUrl({ kind: 'organization', id: ORG }, 'platform_admin')).toBe(`/moderation?tab=organizations&org=${ORG}`)
-    expect(adminEditUrl({ kind: 'organization', id: ORG }, null)).toBe(`/moderation/org/${ORG}?tab=profile`)
-    expect(adminEditUrl({ kind: 'organization', id: ORG }, 'resource_admin')).toBe(`/moderation/org/${ORG}?tab=profile`)
+  it('organization: platform admin -> the shell panel (?org=); anyone else -> the organization admin page Profile tab; both carry focus', () => {
+    expect(adminEditUrl({ kind: 'organization', id: ORG }, 'platform_admin')).toBe(
+      `/moderation?tab=organizations&org=${ORG}&focus=organization:${ORG}`
+    )
+    expect(adminEditUrl({ kind: 'organization', id: ORG }, null)).toBe(`/moderation/org/${ORG}?tab=profile&focus=organization:${ORG}`)
+    expect(adminEditUrl({ kind: 'organization', id: ORG }, 'resource_admin')).toBe(`/moderation/org/${ORG}?tab=profile&focus=organization:${ORG}`)
   })
 
   it('event: platform admin -> the shell Events tab; anyone else -> their organization page Events tab', () => {

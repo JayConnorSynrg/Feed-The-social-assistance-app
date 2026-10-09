@@ -38,6 +38,7 @@ import { OrgOverview } from '../org-overview'
 import { OrgEventsTab } from './org-events-tab'
 import { useAdminFocusGate } from '../../use-admin-focus'
 import { orgPageOwnerTab } from '../../admin-focus-session'
+import { OrgProfileFocus } from '../../org-focus'
 import { AdminFocusGateStatus } from '../../admin-focus-gate-status'
 
 export interface OrgAdminOrg {
@@ -174,6 +175,8 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
             <OrgEventsTab orgId={org.id} />
           </TabsContent>
           <TabsContent value="profile" className="mt-4">
+            {/* "Edit in admin" for this organization (?tab=profile&focus=organization:<id>): one resolve row. */}
+            <OrgProfileFocus orgId={org.id} />
             <section lang="en" dir="ltr" aria-labelledby="org-profile-heading" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
               <h2 id="org-profile-heading" className="text-base font-semibold text-stone-900">
                 Public profile

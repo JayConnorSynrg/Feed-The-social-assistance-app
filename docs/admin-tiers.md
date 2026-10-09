@@ -170,7 +170,7 @@ existing `readOrgPanelTarget` (`?org=`):
 | business | `/moderation?tab=businesses&focus=business:<uuid>` | — |
 | safety alert | `/moderation?tab=moderation&focus=safety_alert:<uuid>` | same |
 | post | `/moderation?tab=moderation&focus=post:<uuid>` | same |
-| organization | `/moderation?tab=organizations&org=<uuid>` | `/moderation/org/<uuid>?tab=profile` |
+| organization | `/moderation?tab=organizations&org=<uuid>&focus=organization:<uuid>` | `/moderation/org/<uuid>?tab=profile&focus=organization:<uuid>` |
 | event | `/moderation?tab=events&focus=event:<uuid>` | `/moderation/org/<orgUuid>?tab=events&focus=event:<uuid>` |
 
 **Cost**: the viewer's tier is looked up once per signed-in identity per page load, shared by every
@@ -181,8 +181,8 @@ writes one `admin.deeplink.resolve` row from the admin screen (see `docs/observa
 
 ### Places (PR-5a): resources, businesses, organizations
 
-**Where the link appears.** Every surface renders `AdminEditLinkIsland`
-(`components/admin/admin-edit-link-island.tsx`): the link is rendered in the browser only, after
+**Where the link appears.** Every surface renders `ClientAdminEditLink`
+(`components/admin/client-admin-edit-link.tsx`, the same wrapper as the feed surfaces): the link is rendered in the browser only, after
 hydration, so it is never part of server HTML (the `/s` pages, and the SPA shell the Capacitor static
 export bakes in). The target is always the entity the surface shows:
 
@@ -209,8 +209,14 @@ Tab reaches it and Escape still closes the popup.
 - **Businesses** (`?tab=businesses&focus=business:<id>`): once the tier and the approved list are
   loaded, that row opens in edit mode, scrolled into view with its Name field focused. A resource admin
   sees the tab but cannot save a business: "Only platform admins can edit businesses."
-- **Organizations**: the platform-admin link opens the shell's existing `?org=` panel; the
-  organization-admin link opens `/moderation/org/<id>?tab=profile` (gated by `can_admin_org`).
+- **Organizations**: the platform-admin link opens the shell's `?org=` setup panel; `focus` makes it
+  write its row. `OrgPanelFocus` (`org-focus.tsx`) is mounted while the Organizations tab is shown and
+  resolves from the panel's own read (`OrgFormPanel` `onLoadResult`): `found` once the panel has loaded
+  that organization, `not_found` when its read fails or finds nothing (or the panel is for another id),
+  `abandoned` when the panel is closed before it loaded. The organization-admin link opens
+  `/moderation/org/<id>?tab=profile`; the page is server-gated by `can_admin_org` and has already read
+  the organization, so `OrgProfileFocus` in the Profile tab writes `found` (or `not_found` when the focus
+  names another organization). A refused id is the server's `notFound()` — the stated exception below.
 
 **One row per followed link.** The tab writes `found` or `not_found` (a resource admin's business link
 is `not_found`, with the line above), or `abandoned` when it unmounts first. `invalid` (malformed focus,

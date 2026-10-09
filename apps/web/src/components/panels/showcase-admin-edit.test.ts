@@ -2,7 +2,7 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // I1 on the Community showcase rows — the REAL OrganizationsPanel / BusinessesPanel with the REAL
-// viewer lookups (useAdminTier, useAdminViewer, the island in its browser state); only auth, the list
+// viewer lookups (useAdminTier, useAdminViewer, ClientAdminEditLink in its browser state); only auth, the list
 // readers and Supabase RPCs are faked; driven through mount → effects → re-render by the harness:
 //   - each row carries "Edit in admin" exactly for the viewers whose admin screen accepts that item
 //     (organizations: platform admin -> shell panel, organization admin -> that organization's page;
@@ -112,11 +112,11 @@ describe('Organizations subtab rows (I1)', () => {
     member: { hrefs: [], rpcs: ['current_user_tier', 'get_admin_org_list', 'is_founder'] },
     resource_admin: { hrefs: [], rpcs: ['current_user_tier', 'get_admin_org_list', 'is_founder'] },
     org_admin_O1: {
-      hrefs: [`/moderation/org/${O1}?tab=profile`],
+      hrefs: [`/moderation/org/${O1}?tab=profile&focus=organization:${O1}`],
       rpcs: ['current_user_tier', 'get_admin_org_list', 'is_founder'],
     },
     platform_admin: {
-      hrefs: [O1, O2, O3].map((o) => `/moderation?tab=organizations&org=${o}`),
+      hrefs: [O1, O2, O3].map((o) => `/moderation?tab=organizations&org=${o}&focus=organization:${o}`),
       rpcs: ['current_user_tier', 'is_founder'],
     },
   }
