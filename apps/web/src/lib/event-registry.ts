@@ -59,6 +59,11 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.checkin.kiosk.confirm': ['method', 'occurrence_id'],
   'admin.checkin.kiosk.walkin': ['household_size', 'occurrence_id'],
   'admin.community.tab.viewed': ['org_id'],
+  // The admin screen an "Edit in admin" link opened could not read the item (the row resolves not_found).
+  'admin.deeplink.load_failed': ['code', 'kind'],
+  // An admin screen opened from an "Edit in admin" link: exactly one row per followed link.
+  // outcome: found | not_found | forbidden | invalid | abandoned. Emitted by the admin screens (PR-5a/5b).
+  'admin.deeplink.resolve': ['kind', 'outcome', 'tab'],
   'admin.denied': ['action', 'code', 'request_id'],
   'admin.error.boundary': ['digest', 'surface'],
   'admin.event.add_dates.complete': ['date_count', 'event_id', 'org_id', 'request_id'],
@@ -79,6 +84,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.form_template.approve.error': ['action', 'request_id', 'target_id'],
   'admin.hours.invalid': ['kind'],
   'admin.nav.back_to_feed': ['source'],
+  'admin.nav.edit_in_admin': ['kind', 'source'],
   'admin.nav.member_view': ['kind', 'source', 'view'],
   'admin.notes.add.complete': ['request_id'],
   'admin.notes.add.error': ['request_id'],

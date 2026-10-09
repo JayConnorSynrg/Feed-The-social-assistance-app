@@ -30,6 +30,7 @@ import { dir, type Locale } from '@/lib/i18n'
 import { formatEventWhen } from '@/lib/event-time'
 import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
 import { eventMemberT } from '@/lib/i18n-event-member'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 
 export interface EventCardProps {
   event: EventCardItem
@@ -59,6 +60,11 @@ export interface EventCardProps {
 /** The deep-link highlight: a lime-700 ring outside the card (4.96:1 on the white offset, 4.75:1 on
  *  stone-50 — WCAG 1.4.11), fading in only when motion is allowed. */
 export const EVENT_CARD_HIGHLIGHT = 'ring-4 ring-lime-700 ring-offset-2 motion-safe:transition-shadow motion-safe:duration-300'
+
+/** The admin.nav.edit_in_admin source of an event card's "Edit in admin". */
+export function eventAdminSource(surface: EventCardProps['surface']): 'feed_event' | 'events_panel' {
+  return surface === 'feed' ? 'feed_event' : 'events_panel'
+}
 
 export function EventCard({
   event,
@@ -249,6 +255,18 @@ export function EventCard({
           {checkinButtonLabel(btn.kind, btn.label, locale)}
         </span>
       )}
+
+      {/* "Edit in admin" (platform admins, and admins of this event's organization): the event's edit
+          dialog in the scheduler. Rendered after hydration only. */}
+      <div className="self-start empty:hidden">
+        <ClientAdminEditLink
+          target={{ kind: 'event', id: event.eventId, orgId: event.orgId }}
+          itemName={event.title}
+          source={eventAdminSource(surface)}
+          locale={locale}
+          data-testid={`admin-edit-event-${event.eventId}`}
+        />
+      </div>
 
       {checkinOccurrence && (
         <CheckinSheet

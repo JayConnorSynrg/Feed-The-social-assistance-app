@@ -21,7 +21,8 @@ describe('event dialogs', () => {
   it('every dialog the scheduler opens restores focus to its opener (or New event)', () => {
     // create, add dates, edit, cancel-date confirm, kiosk, attendance
     expect(scheduler.match(/onCloseAutoFocus=\{restoreFocus\}/g)?.length).toBe(6)
-    expect(scheduler).toMatch(/restoreFocusAfterPanel\(e, opener, \{ querySelector: \(\) => newEventRef\.current \}\)/)
+    // New event, or Try again when the list failed (the edit dialog can open over that state).
+    expect(scheduler).toMatch(/restoreFocusAfterPanel\(e, opener, \{ querySelector: \(\) => newEventRef\.current \?\? retryRef\.current \}\)/)
     expect(ui).toMatch(/onCloseAutoFocus=\{onCloseAutoFocus\}/)
   })
 

@@ -9,6 +9,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
+import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
@@ -37,7 +38,8 @@ function postItemName(content: string | null): string {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
-export function ReportsQueue() {
+/** onPostChanged: a Remove / Hold / Authorize here succeeded (the linked-post panel above re-reads). */
+export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: string) => void } = {}) {
   const [groups, setGroups] = useState<ContentGroup[]>([])
   const [heldPosts, setHeldPosts] = useState<HeldPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,73 +144,24 @@ export function ReportsQueue() {
     []
   )
 
-  const handleRemove = useCallback(
-    async (postId: string) => {
+  // Remove / Hold / Authorize: the shared post moderation path (post-moderation-actions.ts), the
+  // same one the single-post view uses. Remove and Hold take the post out of the reports list;
+  // Authorize takes it out of "Removed & Held Posts".
+  const handlePostAction = useCallback(
+    async (action: PostModerationAction, postId: string) => {
       setProcessingId(postId)
       setError(null)
-      try {
-        const { error: rpcError, requestId } = await privilegedRpc(
-          supabase, 'admin.post.remove', 'admin_remove_post', { p_post_id: postId }, { action: 'post.remove', target_id: postId },
-        )
-        if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.remove', code: rpcError.code ?? 'unknown', request_id: requestId })
-          throw rpcError
-        }
-        setGroups((prev) => prev.filter((g) => g.content_id !== postId))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setProcessingId(null)
+      const result = await moderatePost(supabase, action, postId)
+      if (!result.ok) setError(result.message)
+      else {
+        if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
+        else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
+        onPostChanged?.(postId)
       }
+      setProcessingId(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  )
-
-  const handleHold = useCallback(
-    async (postId: string) => {
-      setProcessingId(postId)
-      setError(null)
-      try {
-        const { error: rpcError, requestId } = await privilegedRpc(
-          supabase, 'admin.post.hold', 'admin_hold_post', { p_post_id: postId }, { action: 'post.hold', target_id: postId },
-        )
-        if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.hold', code: rpcError.code ?? 'unknown', request_id: requestId })
-          throw rpcError
-        }
-        setGroups((prev) => prev.filter((g) => g.content_id !== postId))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setProcessingId(null)
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  )
-
-  const handleAuthorize = useCallback(
-    async (postId: string) => {
-      setProcessingId(postId)
-      setError(null)
-      try {
-        const { error: rpcError, requestId } = await privilegedRpc(
-          supabase, 'admin.post.authorize', 'admin_authorize_post', { p_post_id: postId }, { action: 'post.authorize', target_id: postId },
-        )
-        if (rpcError) {
-          logger.warn('admin.denied', { action: 'post.authorize', code: rpcError.code ?? 'unknown', request_id: requestId })
-          throw rpcError
-        }
-        setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setProcessingId(null)
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [onPostChanged]
   )
 
   if (loading) {
@@ -318,9 +271,9 @@ export function ReportsQueue() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="h-9 min-h-[44px] text-xs"
+                    className={`h-9 min-h-[44px] text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                     disabled={processingId === group.content_id}
-                    onClick={() => handleRemove(group.content_id)}
+                    onClick={() => handlePostAction('remove', group.content_id)}
                     data-testid={`remove-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -335,7 +288,7 @@ export function ReportsQueue() {
                     variant="outline"
                     className="h-9 min-h-[44px] text-xs"
                     disabled={processingId === group.content_id}
-                    onClick={() => handleHold(group.content_id)}
+                    onClick={() => handlePostAction('hold', group.content_id)}
                     data-testid={`hold-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -424,7 +377,7 @@ export function ReportsQueue() {
                       variant="outline"
                       size="sm"
                       data-testid={`authorize-post-${post.id}`}
-                      onClick={() => handleAuthorize(post.id)}
+                      onClick={() => handlePostAction('authorize', post.id)}
                       disabled={processingId === post.id}
                     >
                       {processingId === post.id ? (

@@ -35,6 +35,10 @@ export interface AdminNavMessages {
   reasonNoLocation: string
   /** Map rows: the safety alert is past its expiry. */
   reasonExpired: string
+  /** Member surfaces (admins only): the link that opens the item in the admin screen. */
+  editInAdmin: string
+  /** Appended to the "Edit in admin" accessible name: where the link opens. */
+  opensInAdminTab: string
 }
 
 export const adminNavMessages: Record<Locale, AdminNavMessages> = {
@@ -54,6 +58,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'View on map',
     reasonNoLocation: 'No location — not on the map',
     reasonExpired: 'Expired — not on the map',
+    editInAdmin: 'Edit in admin',
+    opensInAdminTab: '(opens in the admin tab)',
   },
   es: {
     backToFeed: 'Volver al feed',
@@ -71,6 +77,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Ver en el mapa',
     reasonNoLocation: 'Sin ubicación: no aparece en el mapa',
     reasonExpired: 'Vencida: no aparece en el mapa',
+    editInAdmin: 'Editar en administración',
+    opensInAdminTab: '(se abre en la pestaña de administración)',
   },
   ht: {
     backToFeed: 'Retounen nan fil la',
@@ -88,6 +96,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Gade sou kat la',
     reasonNoLocation: 'Pa gen kote — pa sou kat la',
     reasonExpired: 'Ekspire — pa sou kat la',
+    editInAdmin: 'Modifye nan administrasyon an',
+    opensInAdminTab: '(ap louvri nan onglè administrasyon an)',
   },
   vi: {
     backToFeed: 'Quay lại bảng tin',
@@ -105,6 +115,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Xem trên bản đồ',
     reasonNoLocation: 'Không có vị trí — không có trên bản đồ',
     reasonExpired: 'Đã hết hạn — không có trên bản đồ',
+    editInAdmin: 'Chỉnh sửa trong trang quản trị',
+    opensInAdminTab: '(mở trong thẻ quản trị)',
   },
   ar: {
     backToFeed: 'العودة إلى الموجز',
@@ -122,6 +134,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'عرض على الخريطة',
     reasonNoLocation: 'لا يوجد موقع — غير ظاهر على الخريطة',
     reasonExpired: 'منتهي الصلاحية — غير ظاهر على الخريطة',
+    editInAdmin: 'تعديل في لوحة الإدارة',
+    opensInAdminTab: '(يُفتح في علامة تبويب الإدارة)',
   },
   zh: {
     backToFeed: '返回动态',
@@ -139,6 +153,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: '在地图上查看',
     reasonNoLocation: '没有位置 — 不在地图上',
     reasonExpired: '已过期 — 不在地图上',
+    editInAdmin: '在管理后台编辑',
+    opensInAdminTab: '（在管理标签页中打开）',
   },
   so: {
     backToFeed: 'Ku noqo bogga bulshada',
@@ -156,6 +172,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Ka eeg khariidadda',
     reasonNoLocation: 'Goob ma leh — kuma jiro khariidadda',
     reasonExpired: 'Wuu dhacay — kuma jiro khariidadda',
+    editInAdmin: 'Ka beddel maamulka',
+    opensInAdminTab: '(waxay ka furmaysaa tabka maamulka)',
   },
   fr: {
     backToFeed: 'Retour au fil',
@@ -173,6 +191,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Voir sur la carte',
     reasonNoLocation: 'Aucun emplacement — absent de la carte',
     reasonExpired: 'Expirée — absente de la carte',
+    editInAdmin: 'Modifier dans l’administration',
+    opensInAdminTab: '(s’ouvre dans l’onglet d’administration)',
   },
   pt: {
     backToFeed: 'Voltar ao feed',
@@ -190,6 +210,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Ver no mapa',
     reasonNoLocation: 'Sem localização — fora do mapa',
     reasonExpired: 'Expirado — fora do mapa',
+    editInAdmin: 'Editar na administração',
+    opensInAdminTab: '(abre na aba de administração)',
   },
   ru: {
     backToFeed: 'Назад к ленте',
@@ -207,6 +229,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Показать на карте',
     reasonNoLocation: 'Нет местоположения — нет на карте',
     reasonExpired: 'Истёк срок — нет на карте',
+    editInAdmin: 'Изменить в панели администратора',
+    opensInAdminTab: '(откроется во вкладке администратора)',
   },
   ko: {
     backToFeed: '피드로 돌아가기',
@@ -224,6 +248,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: '지도에서 보기',
     reasonNoLocation: '위치 없음 — 지도에 없음',
     reasonExpired: '만료됨 — 지도에 없음',
+    editInAdmin: '관리자에서 편집',
+    opensInAdminTab: '(관리자 탭에서 열림)',
   },
   tl: {
     backToFeed: 'Bumalik sa feed',
@@ -241,6 +267,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Tingnan sa mapa',
     reasonNoLocation: 'Walang lokasyon — wala sa mapa',
     reasonExpired: 'Nag-expire na — wala sa mapa',
+    editInAdmin: 'I-edit sa admin',
+    opensInAdminTab: '(magbubukas sa admin tab)',
   },
   am: {
     backToFeed: 'ወደ ማህበረሰብ ገጽ ተመለስ',
@@ -258,6 +286,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'በካርታ ላይ ይመልከቱ',
     reasonNoLocation: 'አካባቢ የለውም — በካርታው ላይ የለም',
     reasonExpired: 'ጊዜው አልፎበታል — በካርታው ላይ የለም',
+    editInAdmin: 'በአስተዳደር ውስጥ ያርትዑ',
+    opensInAdminTab: '(በአስተዳደር ትር ይከፈታል)',
   },
   hmn: {
     backToFeed: 'Rov qab mus rau zej zog',
@@ -275,6 +305,8 @@ export const adminNavMessages: Record<Locale, AdminNavMessages> = {
     viewOnMap: 'Saib ntawm daim ntawv qhia',
     reasonNoLocation: 'Tsis muaj qhov chaw — tsis nyob ntawm daim ntawv qhia',
     reasonExpired: 'Tas sij hawm lawm — tsis nyob ntawm daim ntawv qhia',
+    editInAdmin: 'Kho hauv admin',
+    opensInAdminTab: '(qhib rau hauv lub tab admin)',
   },
 }
 

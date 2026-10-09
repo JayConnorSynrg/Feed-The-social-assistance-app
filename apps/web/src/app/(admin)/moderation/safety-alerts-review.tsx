@@ -15,12 +15,20 @@
  * rule. The list already holds only live, unexpired alerts, so today every row links; the predicate
  * stays so a list change can never hand an admin a link to a pin members do not see.
  * SafetyAlertsReviewView is the stateless rendering (tested with react-dom/server).
+ *
+ * "Edit in admin" on an alert (/moderation?tab=moderation&focus=safety_alert:<id>) opens this sub-tab
+ * with that alert read by id and pinned at the top (marked "Opened from link"), once, even when it is
+ * beyond the newest 50. Only a live, unexpired alert can be read (RLS safety_alerts_select is
+ * status='live'; the expiry filter is lib/safety-alert-live.ts), so a removed or expired one is
+ * not_found and says so. One admin.deeplink.resolve row per link (use-admin-focus.ts).
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { AlertTriangle, CheckCircle2, Cloud, Construction, Gauge, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@feed/database'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
@@ -28,6 +36,8 @@ import { MemberViewLink } from '@/components/admin/member-view-link'
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { safetyAlertMapVisibility } from '@/lib/member-visibility'
 import { whereSafetyAlertLive } from '@/lib/safety-alert-live'
+import { useAdminFocusSession } from './use-admin-focus'
+import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -62,6 +72,51 @@ const ALERT_LABELS: Record<string, string> = {
 
 const SEVERITY_LABELS: Record<number, string> = { 1: 'Low', 2: 'Moderate', 3: 'High', 4: 'Critical' }
 
+const ALERT_COLUMNS = 'id, status, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'
+
+/** The linked alert, read by id while it is live: found, not_found (removed, expired or no such
+ *  alert — none of them is readable), or error. Same query shape as the list, narrowed to one id. */
+export async function loadFocusedAlert(
+  supabase: SupabaseClient<Database>,
+  alertId: string,
+  now: Date
+): Promise<{ status: 'found'; alert: LiveAlert } | { status: 'not_found' } | { status: 'error' }> {
+  try {
+    const { data, error } = await whereSafetyAlertLive(
+      supabase.from('safety_alerts').select(ALERT_COLUMNS).eq('id', alertId),
+      now,
+    ).maybeSingle()
+    if (error) {
+      logger.warn('admin.deeplink.load_failed', { kind: 'safety_alert', code: error.code ?? 'unknown' })
+      return { status: 'error' }
+    }
+    return data ? { status: 'found', alert: data as LiveAlert } : { status: 'not_found' }
+  } catch {
+    logger.warn('admin.deeplink.load_failed', { kind: 'safety_alert', code: 'exception' })
+    return { status: 'error' }
+  }
+}
+
+/** The list with the linked alert first (once — not repeated where the list also has it). */
+export function pinFocusedAlert(alerts: LiveAlert[], focused: LiveAlert | null): LiveAlert[] {
+  if (!focused) return alerts
+  return [focused, ...alerts.filter((a) => a.id !== focused.id)]
+}
+
+type FocusedAlert =
+  | { status: 'none' }
+  | { status: 'loading' }
+  | { status: 'found'; alert: LiveAlert }
+  | { status: 'not_found' }
+  | { status: 'error' }
+
+/** The line shown above the list for a linked alert that is not pinned. */
+export function focusedAlertNotice(focused: { status: string }): string | null {
+  if (focused.status === 'not_found') return 'The linked safety alert is no longer live (it was removed or has expired).'
+  if (focused.status === 'error') return 'The linked safety alert could not be loaded. The list below still works.'
+  return null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +130,24 @@ export function SafetyAlertsReview() {
   const [error, setError] = useState<string | null>(null)
   // The clock the list was read with (the map-visibility check uses the same instant).
   const [loadedAt, setLoadedAt] = useState(() => new Date())
+  // "Edit in admin" on an alert: read it by id and pin it.
+  const session = useAdminFocusSession('safety_alert', 'moderation')
+  const [focused, setFocused] = useState<FocusedAlert>({ status: 'none' })
+
+  useEffect(() => {
+    if (!session) return
+    let active = true
+    setFocused({ status: 'loading' })
+    void loadFocusedAlert(supabase, session.focus.id, new Date()).then((res) => {
+      if (!active) return
+      session.resolve(res.status === 'found' ? 'found' : 'not_found')
+      setFocused(res)
+    })
+    return () => {
+      active = false
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
 
   // Fetch live alerts for admin review
   useEffect(() => {
@@ -121,6 +194,7 @@ export function SafetyAlertsReview() {
           throw rpcErr
         }
         setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, verified: true } : a))
+        setFocused((f) => (f.status === 'found' && f.alert.id === alertId ? { ...f, alert: { ...f.alert, verified: true } } : f))
         logger.info('pin.verified', { alertId, request_id: requestId })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Approve failed')
@@ -149,6 +223,7 @@ export function SafetyAlertsReview() {
           throw rpcErr
         }
         setAlerts((prev) => prev.filter((a) => a.id !== alertId))
+        setFocused((f) => (f.status === 'found' && f.alert.id === alertId ? { status: 'none' } : f))
         logger.info('pin.removed', { alertId, request_id: requestId })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Remove failed')
@@ -160,9 +235,14 @@ export function SafetyAlertsReview() {
     []
   )
 
+  const pinned = focused.status === 'found' ? focused.alert : null
+  const shown = useMemo(() => pinFocusedAlert(alerts, pinned), [alerts, pinned])
+
   return (
     <SafetyAlertsReviewView
-      alerts={alerts}
+      alerts={shown}
+      pinnedId={pinned?.id ?? null}
+      focusNotice={focusedAlertNotice(focused)}
       loading={loading}
       error={error}
       approvingId={approvingId}
@@ -184,6 +264,10 @@ export interface SafetyAlertsReviewViewProps {
   now: Date
   onApprove: (alertId: string) => void
   onRemove: (alertId: string) => void
+  /** The alert an "Edit in admin" link opened (listed first, marked). */
+  pinnedId?: string | null
+  /** Why a linked alert is not pinned (no longer live / could not be loaded). */
+  focusNotice?: string | null
 }
 
 const formatDate = (d: string) =>
@@ -201,18 +285,37 @@ export function SafetyAlertsReviewView({
   now,
   onApprove,
   onRemove,
+  pinnedId = null,
+  focusNotice = null,
 }: SafetyAlertsReviewViewProps) {
+  // ONE region for the linked alert's outcome, rendered in every state (before its text arrives), so
+  // "no longer live" is announced when it appears.
+  const focusRegion = (
+    <p
+      role="status"
+      data-testid="focused-alert-notice"
+      className={focusNotice ? 'mb-4 rounded-md border border-stone-300 bg-stone-50 p-3 text-sm text-stone-800' : 'sr-only'}
+    >
+      {focusNotice}
+    </p>
+  )
+
   if (loading) {
     return (
-      <div role="status" className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
-        {/* A live region announces its text content (an aria-label on it is not read out). */}
-        <span className="sr-only">Loading safety alerts</span>
-      </div>
+      <>
+        {focusRegion}
+        <div role="status" className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" aria-hidden="true" />
+          {/* A live region announces its text content (an aria-label on it is not read out). */}
+          <span className="sr-only">Loading safety alerts</span>
+        </div>
+      </>
     )
   }
 
   return (
+    <>
+    {focusRegion}
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Safety Alerts Review</h2>
@@ -239,9 +342,17 @@ export function SafetyAlertsReviewView({
       ) : (
         alerts.map((alert) => {
           const Icon = ALERT_ICONS[alert.alert_type] ?? AlertTriangle
+          const isPinned = alert.id === pinnedId
           return (
-            <Card key={alert.id}>
+            <Card
+              key={alert.id}
+              data-testid={isPinned ? 'focused-alert' : undefined}
+              className={isPinned ? 'border-2 border-lime-700' : undefined}
+            >
               <CardHeader className="pb-2">
+                {isPinned && (
+                  <p className="mb-1 text-xs font-semibold text-lime-800">Opened from link</p>
+                )}
                 <div className="flex items-center gap-2">
                   <Icon className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <CardTitle className="text-base">
@@ -290,6 +401,7 @@ export function SafetyAlertsReviewView({
                   <Button
                     size="sm"
                     variant="destructive"
+                    className={DESTRUCTIVE_BUTTON_CLASS}
                     disabled={removingId === alert.id}
                     onClick={() => onRemove(alert.id)}
                     data-testid={`admin-remove-alert-${alert.id}`}
@@ -315,5 +427,6 @@ export function SafetyAlertsReviewView({
         })
       )}
     </div>
+    </>
   )
 }

@@ -8,15 +8,31 @@
 // admin org admin. This gates VISIBILITY only; the authoritative access gate remains the
 // server-side route guard at (admin)/layout.tsx, and every org-scoped write is enforced by
 // the SECDEF RPCs (is_org_admin) at the Postgres layer.
+//
+// The RPC runs only for a signed-in, non-anonymous user: anon has no EXECUTE (every logged-out view
+// got a 42501 and an org_admin.check.failed row) and a guest cannot administer an organization
+// (can_admin_org / org_event_write_gate refuse guests), so both resolve to false with no call.
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { useAuth } from '@/hooks/use-auth'
 
 export function useIsOrgAdmin(): boolean {
-  const [isOrgAdmin, setIsOrgAdmin] = useState(false)
+  return useIsOrgAdminState().isOrgAdmin
+}
+
+/** The answer plus whether it is known: `loaded` once is_org_admin_any settled for this user (a
+ *  failed call settles as false), immediately for a logged-out visitor or a guest. */
+export function useIsOrgAdminState(): { isOrgAdmin: boolean; loaded: boolean } {
+  const { user } = useAuth()
+  const userId = user?.id ?? null
+  const isAnonymous = (user as { is_anonymous?: boolean } | null)?.is_anonymous === true
+  // The answer, tagged with the user it is for: a new identity reads false until its own call lands.
+  const [answer, setAnswer] = useState<{ userId: string; isOrgAdmin: boolean } | null>(null)
 
   useEffect(() => {
+    if (!userId || isAnonymous) return
     let active = true
     const supabase = createClient()
 
@@ -26,15 +42,17 @@ export function useIsOrgAdmin(): boolean {
         if (!active) return
         if (error) {
           logger.warn('org_admin.check.failed', { code: error.code })
+          setAnswer({ userId, isOrgAdmin: false })
           return
         }
-        setIsOrgAdmin(data === true)
+        setAnswer({ userId, isOrgAdmin: data === true })
       })
 
     return () => {
       active = false
     }
-  }, [])
+  }, [userId, isAnonymous])
 
-  return isOrgAdmin
+  if (!userId || isAnonymous) return { isOrgAdmin: false, loaded: true }
+  return answer?.userId === userId ? { isOrgAdmin: answer.isOrgAdmin, loaded: true } : { isOrgAdmin: false, loaded: false }
 }

@@ -107,3 +107,15 @@ export function decideUserAction(
 export function canCreateOrganizations(tier: AdminTier | null | undefined): boolean {
   return tier === 'platform_admin'
 }
+
+/**
+ * Who may edit a local business in admin (the Businesses tab's Edit / Deactivate on an approved
+ * business): platform admins only today. Those writes go through orgs_admin_update
+ * (is_current_user_admin()), and the tab's approved-business list reads under orgs_admin_select (also
+ * platform admin), so a lower tier would open the tab without the business in it. Every client
+ * decision about business editing reads THIS function, so widening it (PR-6: resource admins) is
+ * this one line plus the matching server change.
+ */
+export function canEditBusinesses(tier: AdminTier | null | undefined): boolean {
+  return tier === 'platform_admin'
+}
