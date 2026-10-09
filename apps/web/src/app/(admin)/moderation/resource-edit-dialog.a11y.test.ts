@@ -69,6 +69,8 @@ beforeEach(() => {
   contentProps.length = 0
 })
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 describe('ResourceEditDialog accessibility', () => {
   it('all 12 labels name their control (for = id), each id unique', async () => {
     const html = await harness.settle(
@@ -80,7 +82,7 @@ describe('ResourceEditDialog accessibility', () => {
     ])
     expect(new Set(labels.map((l) => l.id)).size).toBe(12)
     for (const { id, text } of labels) {
-      const controls = html.match(new RegExp(`<(input|textarea|select)[^>]*\\bid="${id.replace(/[:]/g, '\\:')}"`, 'g')) ?? []
+      const controls = html.match(new RegExp(`<(input|textarea|select)[^>]*\\bid="${escapeRegExp(id)}"`, 'g')) ?? []
       expect(controls, text).toHaveLength(1)
     }
     expect(html).toMatch(/<input[^>]*id="[^"]*-name"[^>]*value="Riverside Pantry"/)
