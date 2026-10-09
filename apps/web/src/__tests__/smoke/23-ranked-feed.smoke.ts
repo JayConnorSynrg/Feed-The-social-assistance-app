@@ -1,10 +1,13 @@
 // 23-ranked-feed.smoke.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 // Mission: 23 — Ranked Community Feed (W1.3)
-// Surface: apps/web/src/components/panels/feed-panel.tsx (ranked path) → RPC public.ranked_feed
+// Surface: apps/web/src/components/panels/feed-panel.tsx (ranked path) → RPC public.ranked_feed_v2
 // Upstream: Feed (M5), W0.3 ranking spine | Downstream: none
 //
-// Structural + behavioral contract for the ranked_feed RPC. Most assertions use the
+// The W1.3 ranking lives in the posts branch of ranked_feed_v2 (kind = 'post'); ranked_feed (v1)
+// was dropped in 20261026000000 (post editing), so this contract targets v2, which exists on both
+// sides of that migration.
+// Structural + behavioral contract for the ranked-feed RPC. Most assertions use the
 // read-only prod client (WRITE_GUARD). The distance-oracle test needs data, so it
 // seeds inside a DO block that RAISEs → the whole tx rolls back (net-zero writes).
 // These assertions survive mutation: they fail if the function loses SECURITY DEFINER,
@@ -18,7 +21,7 @@ import { queryProd, isTokenAvailable } from './prod-client'
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
-const SIG = "public.ranked_feed(double precision,double precision,integer,real,uuid)"
+const SIG = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid)"
 const MGMT_URL = 'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
 
 function loadTokenForProbe(): string {
@@ -58,14 +61,14 @@ async function probeRolledBack(doBlockSql: string): Promise<string> {
 }
 
 maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
-  it('ranked_feed is SECURITY DEFINER with a pinned (non-mutable) search_path', async () => {
+  it('ranked_feed_v2 is SECURITY DEFINER with a pinned (non-mutable) search_path', async () => {
     // INV-D: SECDEF owned by postgres, search_path = public, pg_temp.
     const rows = await queryProd(`
       SELECT p.prosecdef,
              (SELECT array_agg(c) FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%') AS search_path_cfg
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed'
+      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed_v2'
     `)
     expect(rows.length).toBe(1)
     expect(rows[0].prosecdef).toBe(true)
@@ -76,14 +79,14 @@ maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
     expect(joined).toContain('pg_temp')
   })
 
-  it('emits ONLY id + score + distance_bucket — never a raw coordinate/distance (INV-A)', async () => {
+  it('emits ONLY id + kind + score + distance_bucket — never a raw coordinate/distance (INV-A)', async () => {
     // The RETURNS TABLE signature is the contract the client depends on and the
     // privacy guarantee: no lat/lng/location/coordinate ever leaves the RPC.
     const rows = await queryProd(`
       SELECT pg_get_function_result(p.oid) AS result_sig
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed'
+      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed_v2'
     `)
     expect(rows.length).toBe(1)
     const sig = String(rows[0].result_sig).toLowerCase()
@@ -114,21 +117,20 @@ maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
       SELECT p.proacl::text AS acl
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed'
+      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed_v2'
     `)
     const acl = String(rows[0].acl ?? '')
     // No bare "=X" entry (PUBLIC). Explicit role grants look like "anon=X/postgres".
     expect(acl).not.toMatch(/(^|,|\{)=X/)
   })
 
-  it('a live call runs without error and returns the 3-key row shape', async () => {
-    // posts has 0 rows in the clean window, so this returns 0 rows — the assertion
-    // is that the function EXECUTES against prod and its columns are exactly the
-    // contract. jsonb_object_keys of a probe row would be empty on 0 rows, so we
-    // assert the call succeeds and, if any row exists, carries only the 3 keys.
+  it('a live call runs without error (posts branch)', async () => {
+    // The assertion is that the function EXECUTES against prod (the posts branch may return
+    // 0 rows in a clean window); the column contract is pinned by the signature test above.
     const rows = await queryProd(`
       SELECT count(*)::int AS n
-      FROM ranked_feed(44.26, -72.58, 25) r
+      FROM ranked_feed_v2(44.26, -72.58, 25) r
+      WHERE r.kind = 'post'
     `)
     expect(typeof rows[0].n).toBe('number')
     expect(rows[0].n).toBeGreaterThanOrEqual(0)
@@ -162,8 +164,8 @@ maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
         SELECT jsonb_object_agg(k, v) INTO result FROM (
           SELECT CASE r.id WHEN a_id THEN 'A' WHEN b_id THEN 'B' ELSE 'C' END AS k,
                  jsonb_build_object('score', r.score, 'bucket', r.distance_bucket) AS v
-          FROM ranked_feed(44.2600, -72.5800, 25, NULL, NULL) r
-          WHERE r.id IN (a_id, b_id, c_id)
+          FROM ranked_feed_v2(44.2600, -72.5800, 25, NULL, NULL) r
+          WHERE r.kind = 'post' AND r.id IN (a_id, b_id, c_id)
         ) t;
         RAISE EXCEPTION 'ORACLE=%|decay=%', result::text, decay;
       END $$;`

@@ -627,6 +627,7 @@ export type Database = {
           details: string | null
           id: string
           reason: Database["public"]["Enums"]["report_reason"]
+          reported_version: number | null
           reporter_id: string
           status: string
         }
@@ -637,6 +638,7 @@ export type Database = {
           details?: string | null
           id?: string
           reason: Database["public"]["Enums"]["report_reason"]
+          reported_version?: number | null
           reporter_id: string
           status?: string
         }
@@ -647,6 +649,7 @@ export type Database = {
           details?: string | null
           id?: string
           reason?: Database["public"]["Enums"]["report_reason"]
+          reported_version?: number | null
           reporter_id?: string
           status?: string
         }
@@ -2193,36 +2196,86 @@ export type Database = {
           },
         ]
       }
+      post_comment_revisions: {
+        Row: {
+          comment_id: string
+          content: string | null
+          edited_at: string
+          id: number
+          redacted_at: string | null
+          redactor_role: string | null
+          version: number
+        }
+        Insert: {
+          comment_id: string
+          content?: string | null
+          edited_at?: string
+          id?: never
+          redacted_at?: string | null
+          redactor_role?: string | null
+          version: number
+        }
+        Update: {
+          comment_id?: string
+          content?: string | null
+          edited_at?: string
+          id?: never
+          redacted_at?: string | null
+          redactor_role?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comment_revisions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           content: string
           created_at: string | null
+          deleted_at: string | null
+          edit_count: number
+          edited_at: string | null
           id: string
           is_hidden: boolean | null
           parent_id: string | null
           post_id: string
           updated_at: string | null
           user_id: string
+          version: number
         }
         Insert: {
           content: string
           created_at?: string | null
+          deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
           id?: string
           is_hidden?: boolean | null
           parent_id?: string | null
           post_id: string
           updated_at?: string | null
           user_id: string
+          version?: number
         }
         Update: {
           content?: string
           created_at?: string | null
+          deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
           id?: string
           is_hidden?: boolean | null
           parent_id?: string | null
           post_id?: string
           updated_at?: string | null
           user_id?: string
+          version?: number
         }
         Relationships: [
           {
@@ -2295,69 +2348,134 @@ export type Database = {
           },
         ]
       }
+      post_revisions: {
+        Row: {
+          edited_at: string
+          fields_changed: string[] | null
+          id: number
+          post_id: string
+          reason: string | null
+          redacted_at: string | null
+          redactor_role: string | null
+          snapshot: Json | null
+          version: number
+        }
+        Insert: {
+          edited_at?: string
+          fields_changed?: string[] | null
+          id?: never
+          post_id: string
+          reason?: string | null
+          redacted_at?: string | null
+          redactor_role?: string | null
+          snapshot?: Json | null
+          version: number
+        }
+        Update: {
+          edited_at?: string
+          fields_changed?: string[] | null
+          id?: never
+          post_id?: string
+          reason?: string | null
+          redacted_at?: string | null
+          redactor_role?: string | null
+          snapshot?: Json | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_revisions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           comment_count: number
           content: string
           created_at: string | null
+          deleted_at: string | null
+          edit_count: number
+          edited_at: string | null
           hidden_at: string | null
           hidden_reason: string | null
           id: string
+          image_alt: string | null
           image_url: string | null
           is_hidden: boolean | null
           is_pinned: boolean | null
+          lang: string | null
           like_count: number
           location: unknown
           max_seekers: number | null
           metadata: Json | null
+          needs_review_at: string | null
           petition_id: string | null
           post_type: Database["public"]["Enums"]["post_type"]
           resource_id: string | null
           slots_remaining: number | null
           updated_at: string | null
           user_id: string
+          version: number
         }
         Insert: {
           comment_count?: number
           content: string
           created_at?: string | null
+          deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
           hidden_at?: string | null
           hidden_reason?: string | null
           id?: string
+          image_alt?: string | null
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          lang?: string | null
           like_count?: number
           location?: unknown
           max_seekers?: number | null
           metadata?: Json | null
+          needs_review_at?: string | null
           petition_id?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
           updated_at?: string | null
           user_id: string
+          version?: number
         }
         Update: {
           comment_count?: number
           content?: string
           created_at?: string | null
+          deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
           hidden_at?: string | null
           hidden_reason?: string | null
           id?: string
+          image_alt?: string | null
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          lang?: string | null
           like_count?: number
           location?: unknown
           max_seekers?: number | null
           metadata?: Json | null
+          needs_review_at?: string | null
           petition_id?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
           updated_at?: string | null
           user_id?: string
+          version?: number
         }
         Relationships: [
           {
@@ -3843,7 +3961,10 @@ export type Database = {
         Args: { p_note: string; p_user_id: string }
         Returns: string
       }
-      admin_authorize_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_authorize_post: {
+        Args: { p_expected_version?: number; p_post_id: string }
+        Returns: Json
+      }
       admin_delete_user_note: {
         Args: { p_note_id: string }
         Returns: undefined
@@ -3857,7 +3978,10 @@ export type Database = {
           note: string
         }[]
       }
-      admin_hold_post: { Args: { p_post_id: string }; Returns: Json }
+      admin_hold_post: {
+        Args: { p_expected_version?: number; p_post_id: string }
+        Returns: Json
+      }
       admin_list_pending_resources: {
         Args: never
         Returns: {
@@ -3939,7 +4063,11 @@ export type Database = {
         }[]
       }
       admin_remove_post: {
-        Args: { p_post_id: string; p_reason?: string }
+        Args: {
+          p_expected_version?: number
+          p_post_id: string
+          p_reason?: string
+        }
         Returns: Json
       }
       admin_remove_safety_alert: {
@@ -3968,11 +4096,19 @@ export type Database = {
         }
       }
       admin_resolve_report: {
-        Args: { p_action: string; p_report_id: string }
+        Args: {
+          p_action: string
+          p_expected_version?: number
+          p_report_id: string
+        }
         Returns: Json
       }
       admin_save_organization: {
         Args: { p_org_id: string; p_payload: Json }
+        Returns: Json
+      }
+      admin_set_comment_hidden: {
+        Args: { p_comment_id: string; p_hidden: boolean; p_reason?: string }
         Returns: Json
       }
       admin_set_org_active: {
@@ -4172,6 +4308,7 @@ export type Database = {
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       cleanup_old_login_attempts: { Args: never; Returns: undefined }
       cleanup_old_webhook_logs: { Args: never; Returns: number }
+      comment_is_readable: { Args: { p_comment_id: string }; Returns: boolean }
       community_people_fed: {
         Args: { p_end_date?: string; p_start_date?: string }
         Returns: {
@@ -4204,6 +4341,15 @@ export type Database = {
           p_time_zone: string
           p_title: string
           p_zip_code?: string
+        }
+        Returns: string
+      }
+      create_post: {
+        Args: {
+          p_fields: Json
+          p_post_type: Database["public"]["Enums"]["post_type"]
+          p_lang?: string
+          p_resource_id?: string
         }
         Returns: string
       }
@@ -4260,6 +4406,8 @@ export type Database = {
           resource_count: number
         }[]
       }
+      delete_own_comment: { Args: { p_comment_id: string }; Returns: Json }
+      delete_own_post: { Args: { p_post_id: string }; Returns: Json }
       delete_safety_alert: { Args: { p_alert_id: string }; Returns: undefined }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
@@ -4293,6 +4441,23 @@ export type Database = {
         | { Args: { schema_name: string; table_name: string }; Returns: string }
         | { Args: { table_name: string }; Returns: string }
       earth: { Args: never; Returns: number }
+      edit_comment: {
+        Args: {
+          p_comment_id: string
+          p_content: string
+          p_expected_version: number
+        }
+        Returns: Json
+      }
+      edit_post: {
+        Args: {
+          p_changes: Json
+          p_expected_version: number
+          p_post_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       enablelongtransactions: { Args: never; Returns: string }
       engagement_category_family: {
         Args: { p_category: Database["public"]["Enums"]["resource_category"] }
@@ -4907,6 +5072,63 @@ export type Database = {
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
+      poll_is_open: { Args: { p_poll_id: string }; Returns: boolean }
+      post_accepts_engagement: { Args: { p_post_id: string }; Returns: boolean }
+      post_assert_event: { Args: { p_meta: Json }; Returns: undefined }
+      post_image_url_ok: {
+        Args: { p_author: string; p_url: string }
+        Returns: boolean
+      }
+      post_is_readable: { Args: { p_post_id: string }; Returns: boolean }
+      post_lock_for_moderation: {
+        Args: {
+          p_expected_version: number
+          p_post_id: string
+          p_publishes: boolean
+        }
+        Returns: {
+          comment_count: number
+          content: string
+          created_at: string | null
+          deleted_at: string | null
+          edit_count: number
+          edited_at: string | null
+          hidden_at: string | null
+          hidden_reason: string | null
+          id: string
+          image_alt: string | null
+          image_url: string | null
+          is_hidden: boolean | null
+          is_pinned: boolean | null
+          lang: string | null
+          like_count: number
+          location: unknown
+          max_seekers: number | null
+          metadata: Json | null
+          needs_review_at: string | null
+          petition_id: string | null
+          post_type: Database["public"]["Enums"]["post_type"]
+          resource_id: string | null
+          slots_remaining: number | null
+          updated_at: string | null
+          user_id: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "posts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      post_normalize_fields: {
+        Args: {
+          p_author: string
+          p_fields: Json
+          p_type: Database["public"]["Enums"]["post_type"]
+        }
+        Returns: Json
+      }
       postgis_constraint_dims: {
         Args: { geomcolumn: string; geomschema: string; geomtable: string }
         Returns: number
@@ -4973,20 +5195,6 @@ export type Database = {
           suppressed: boolean
         }[]
       }
-      ranked_feed: {
-        Args: {
-          p_cursor_id?: string
-          p_cursor_score?: number
-          p_lat?: number
-          p_limit?: number
-          p_lng?: number
-        }
-        Returns: {
-          distance_bucket: string
-          id: string
-          score: number
-        }[]
-      }
       ranked_feed_v2: {
         Args: {
           p_cursor_id?: string
@@ -5038,6 +5246,14 @@ export type Database = {
           p_verified: boolean
         }
         Returns: undefined
+      }
+      redact_comment_revision: {
+        Args: { p_reason?: string; p_revision_id: number }
+        Returns: Json
+      }
+      redact_post_revision: {
+        Args: { p_reason?: string; p_revision_id: number }
+        Returns: Json
       }
       refresh_community_stats: { Args: never; Returns: undefined }
       refresh_federation_trust_overview: { Args: never; Returns: undefined }

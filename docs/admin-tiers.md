@@ -11,9 +11,9 @@ Backend: `supabase/migrations/20261010000000_p3_1_admin_tiers.sql`.
 
 | Tier | Value (`profiles.admin_tier`) | Public marker | Can do |
 |---|---|---|---|
-| Community Moderator | `community_moderator` | "Moderator" | Post moderation (remove / hold / authorize), report handling, safety-alert verify + remove. Sees hidden posts. |
+| Community Moderator | `community_moderator` | "Moderator" | Post moderation (remove / hold / authorize), report handling, comment hide / unhide, safety-alert verify + remove. Sees hidden and deleted posts and hidden comments. Never edits anyone's text. |
 | Resource Admin | `resource_admin` | "Resource Admin" | Everything a CM can, **plus** the resource review queue: list pending, approve, reject, update, set location, list resources. |
-| Platform Admin | `platform_admin` | "Admin" | Everything. Discovery, form templates, SNAP, dashboards, user notes, events cross-org, AI summary, users (ban/delete), federation, organizations, and granting/revoking tiers. |
+| Platform Admin | `platform_admin` | "Admin" | Everything. Redacts private details from post / comment edit history (reason required). Discovery, form templates, SNAP, dashboards, user notes, events cross-org, AI summary, users (ban/delete), federation, organizations, and granting/revoking tiers. |
 
 Org admins (`organization_members.role='admin'`) are a **separate** axis: they get the Events tab
 for their own active org only, regardless of tier.
@@ -260,8 +260,17 @@ supabase secrets unset FACILITATOR_ADMIN_CODE_HASH FACILITATOR_ADMIN_CODE_PEPPER
 The `profiles.user_role='facilitator'` label value is kept (still referenced by a few UI heuristics)
 but is no longer selectable in onboarding.
 
-## Follow-up
+## Post editing and comment moderation (20261026000000)
 
-Comment moderation is **not** built in P3.1 (there are no comments in prod and it is new scope). When
-built, `admin_remove_comment` / `admin_restore_comment` should be CM+ and audited like the post
-moderation RPCs.
+Authors edit and delete their own posts and comments; no tier rewrites someone else's text
+(contract: `specs/post-editing-contract.md`). Staff actions, each writing exactly one audit row:
+
+| Action (`admin_actions.action`) | RPC | Tier |
+|---|---|---|
+| `comment.hide` / `comment.unhide` | `admin_set_comment_hidden(p_comment_id, p_hidden, p_reason)` | CM+ |
+| `post.hold` / `post.remove` / `post.authorize` / `report.resolve` | the post moderation RPCs, now with an optional `p_expected_version`; `details.version` records the version acted on | CM+ |
+| `post_revision.redact` / `comment_revision.redact` | `redact_post_revision` / `redact_comment_revision` (reason required) | PA |
+
+Moderation clients send the `posts.version` the moderator is looking at: a stale one returns 409
+(`PT409 edit_conflict`). Without a version, an author's edit to a held / community-hidden post that no
+moderator has seen cannot be published (authorize → 409 with `needs_review: true`).
