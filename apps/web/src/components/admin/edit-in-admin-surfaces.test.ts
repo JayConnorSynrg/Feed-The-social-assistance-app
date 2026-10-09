@@ -279,14 +279,14 @@ describe('wiring: each surface renders its link through the hydration-gated comp
   const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 
   it('the feed PostCard renders PostAdminEditLink for its post; the strip is SafetyStrip', () => {
-    const src = read('../panels/feed-panel.tsx')
-    const start = src.indexOf('function PostCard(')
-    const card = src.slice(start, src.indexOf('\nexport function FeedPanel(', start))
-    expect(card).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={post.author.name} createdAt={post.timestamp} source="feed_post" />')
+    // The card moved to components/feed/feed-post-card.tsx (post editing, PR-2). Until the card's ⋯ menu
+    // renders, the link stays in the footer action row, in the member's language.
+    const card = read('../feed/feed-post-card.tsx')
+    expect(card).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={authorName} createdAt={post.timestamp} source="feed_post" locale={locale} />')
     // The action row is exempt from the hidden-post dimming.
     expect(card).toMatch(/<div data-card-actions="" [^>]*>\s*<PostAdminEditLink/)
-    expect(card).toContain('<div className={postCardFrameClass(effectivelyHidden)}>')
-    expect(src).toMatch(/<SafetyStrip\s+alerts=\{safetyAlerts\}/)
+    expect(card).toContain('className={`${postCardFrameClass(post.isHidden)} ')
+    expect(read('../panels/feed-panel.tsx')).toMatch(/<SafetyStrip\s+alerts=\{safetyAlerts\}/)
   })
 
   it('/s/post (a server component) renders the client island, with the page source', () => {

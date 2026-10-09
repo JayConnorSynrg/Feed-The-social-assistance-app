@@ -32,6 +32,9 @@ import { createClient } from '@/lib/supabase/client'
 import { CATEGORY_DISPLAY, hasApplicationForm, getFormTypesForCategory } from '@/lib/category-form-map'
 import { US_STATES, STATE_TO_ABBR } from '@/lib/us-states'
 import { logger } from '@/lib/logger'
+import { createPost } from '@/lib/post-rpc'
+import { failureText } from '@/lib/i18n-feed-edit'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
 
 function CategoryBadge({ category }: { category: string }) {
@@ -61,26 +64,27 @@ function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDialogPro
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  const locale = useProfileLocale()
   const handleShare = async () => {
     if (!user || !content.trim()) return
     setIsSubmitting(true)
     setErrorMsg(null)
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          content: content.trim(),
-          resource_id: resource.id,
-        })
-      if (error) throw error
+      // The one checked server write for posts (create_post): raw text, linked to this resource,
+      // stored with the member's language.
+      const res = await createPost(createClient(), {
+        postType: 'feed',
+        fields: { content: content.trim() },
+        resourceId: resource.id,
+        lang: locale,
+      })
+      if (!res.ok) {
+        setErrorMsg(failureText(locale, res.failure))
+        logger.error('programs.share.error', { programId: resource.id, error: res.failure.kind })
+        return
+      }
       logger.info('programs.share.success', { programId: resource.id })
       onShared()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to share. Please try again.'
-      setErrorMsg(msg)
-      logger.error('programs.share.error', { programId: resource.id, error: msg })
     } finally {
       setIsSubmitting(false)
     }

@@ -830,6 +830,21 @@
       "note": "PR-5b (Edit in admin, feed side). Stacked on the PR-5 foundation ba034ab; merges FIRST (carries the shell gate), PR-5a (#241) after. Posts (feed card, /s/post client island), safety alerts (map popup, feed Active Alerts strip) and events (feed + Events tab cards, orgId from the hydration select) link to the one feed-admin tab for viewers canEditInAdmin accepts, never in server HTML. Landings: single-post Linked post panel (read by id first; Remove / Hold / Authorize through the shared moderatePost path also used by ReportsQueue), safety alert pinned in Safety Alerts review, event edit dialog in the scheduler. One admin.deeplink.resolve per followed link (owning tab: found / not_found / abandoned; shell gate: forbidden / invalid). Gates: tsc 0, eslint 0 errors/118 warnings, vitest 142 files/1819 passed (smoke excluded), node --test 62/62, build ok; 18 mutations, 18 red. See checklist 1.6.23. No migration. Fix round: event dialog outside the scheduler branches (B1) + real-component focus test (H1); queue/panel re-read (L1); behavioural wiring (L3); a11y (status regions, heading focus, red-700 Remove, Radix sub-tabs, real strip buttons, unique names, gate line in 14 locales). vitest 146 files/1849 passed, build ok; 24 fix-round mutations red.",
       "recordedAt": "2026-10-09",
       "pr": "(pending)"
+    },
+    "feed-post-editing-r2": {
+      "status": "IN_PROGRESS",
+      "branch": "feature/feed-post-editing-foundation",
+      "migrations": [
+        "20261026000000_post_editing_foundation",
+        "20261026500000_post_editing_contract"
+      ],
+      "deployOrder": "apply 20261026000000 -> deploy the client -> apply 20261026500000",
+      "docs": "specs/post-editing-contract.md, specs/post-editing-model.md, docs/observability.md (Post editing events)",
+      "note": "Release 2 client: create/edit/delete posts and comments through the post-editing RPCs, public edit history, edit conflict comparison, comment soft delete, moderator comment hide, versioned moderation, realtime classifier, 14-locale card/composer/wizard/comments/dialogs. See checklist 1.6.24.",
+      "open": [
+        "post card \u22ef menu wiring after Release 1 merges",
+        "logged-in browser verification"
+      ]
     }
   }
 }

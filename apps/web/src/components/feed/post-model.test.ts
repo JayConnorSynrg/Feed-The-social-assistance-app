@@ -27,6 +27,7 @@ import {
   postBodyKind,
   POST_TYPE_VALUES,
   orderByRankAndAttachBucket,
+  memberEventWhen,
   type FeedPostRow,
   type PostType,
   type PollVoteState,
@@ -373,5 +374,53 @@ describe('ranked feed client re-sort + distance-bucket attach (W1.3)', () => {
 
   it('returns empty when the RPC returned no rows', () => {
     expect(orderByRankAndAttachBucket([], [post('a')])).toEqual([])
+  })
+})
+
+// PR-2 (post editing): the edit state every card reads, and the member event time line.
+describe('rowToPost — edit state (PR-2)', () => {
+  it('FEED_POST_SELECT reads the edit columns anyone may read, and never the member-only ones', () => {
+    for (const col of ['version', 'edited_at', 'edit_count', 'image_alt', 'hidden_reason']) {
+      expect(FEED_POST_SELECT).toContain(col)
+    }
+    // deleted_at / needs_review_at are not readable by anon: selecting them would fail the whole read.
+    expect(FEED_POST_SELECT).not.toMatch(/deleted_at|needs_review_at/)
+  })
+
+  it('an edited post carries its version, Edited time and count; a never-edited one has no Edited time', () => {
+    const edited = rowToPost(makeRow({ version: 4, edited_at: '2026-10-09T21:53:18Z', edit_count: 2, image_alt: 'Apples' }), { isLiked: false })
+    expect(edited).toMatchObject({ version: 4, editCount: 2, imageAlt: 'Apples' })
+    expect(edited.editedAt?.toISOString()).toBe('2026-10-09T21:53:18.000Z')
+    const plain = rowToPost(makeRow(), { isLiked: false })
+    expect(plain).toMatchObject({ version: 1, editedAt: null, editCount: 0 })
+  })
+})
+
+describe('memberEventWhen — member event times (PR-2)', () => {
+  // A resolver standing in for checkLocalTime: New York wall clock = UTC-4 in October.
+  const ny = (date: string, time: string) => ({ kind: 'ok', instant: new Date(`${date}T${time}:00-04:00`) })
+
+  it('a zoned event resolves its wall times in the venue zone', () => {
+    expect(memberEventWhen({ startsAt: '2026-10-10T10:00', endsAt: '2026-10-10T12:00', timeZone: 'America/New_York' }, ny)).toEqual({
+      kind: 'zoned',
+      startIso: '2026-10-10T14:00:00.000Z',
+      endIso: '2026-10-10T16:00:00.000Z',
+      timeZone: 'America/New_York',
+    })
+  })
+
+  it('a legacy event (no zone) is shown as entered, and an end before its start is not shown', () => {
+    expect(memberEventWhen({ startsAt: '2026-10-10T18:00', endsAt: '2026-10-10T09:00', timeZone: null }, ny)).toEqual({
+      kind: 'local',
+      start: '2026-10-10T18:00',
+      end: null,
+    })
+    expect(memberEventWhen({ startsAt: '2026-10-10T18:00', endsAt: '2026-10-10T19:00', timeZone: null }, ny)).toMatchObject({
+      end: '2026-10-10T19:00',
+    })
+  })
+
+  it('parseEventMeta reads the venue zone', () => {
+    expect(rowToPost(makeRow({ post_type: 'event_post', metadata: { starts_at: '2026-10-10T10:00', time_zone: 'America/Chicago' } }), { isLiked: false }).eventMeta?.timeZone).toBe('America/Chicago')
   })
 })

@@ -35,7 +35,7 @@ import {
  *  two ways (lib/supabase/embed-fk-hint.test.ts). It reads first_name only — never username /
  *  avatar_url / bio, which Settings C2 revokes from anon and authenticated. */
 export const FOCUSED_POST_SELECT =
-  'id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, author:profiles!posts_user_id_fkey(first_name)'
+  'id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, version, author:profiles!posts_user_id_fkey(first_name)'
 
 export interface FocusedPostRow extends ModeratedPostState {
   id: string
@@ -276,8 +276,14 @@ export function FocusedPost({
     const post = state.post
     setProcessing(action)
     setError(null)
-    const result = await moderatePost(supabase, action, post.id)
-    if (result.ok) {
+    // The version on screen: if the author edited the post since, the RPC refuses (conflict) and the
+    // panel re-reads it so the moderator decides on what members would actually see.
+    const result = await moderatePost(supabase, action, post.id, post.version ?? null)
+    if (!result.ok && (result.conflict || result.gone)) {
+      const next = await loadFocusedPost(supabase, post.id)
+      setState(next)
+      setError(result.message)
+    } else if (result.ok) {
       setState({ status: 'found', post: applyPostAction(post, action) })
       setLastAction(action)
       onChanged?.()

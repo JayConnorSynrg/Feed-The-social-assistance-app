@@ -6,7 +6,9 @@
 // to an /api/admin route, is a bypass.
 
 // Names that write a public.admin_actions row (audited privileged actions). set_resource_location_by_id
-// is audited on its admin branch; approve_form_template writes a form_template.approve row.
+// is audited on its admin branch; approve_form_template writes a form_template.approve row. The post
+// editing writes (create_post … admin_set_comment_hidden) are listed so each one stays a single
+// privilegedRpc call: its app_logs row and its post_revisions / admin_actions row share request_id.
 export const AUDITED_PRIVILEGED = [
   'admin_remove_post',
   'admin_hold_post',
@@ -27,6 +29,15 @@ export const AUDITED_PRIVILEGED = [
   'cancel_event_occurrence',
   'admin_update_event',
   'extend_event_series',
+  // Post editing (PR-2): every post / comment write and redaction goes through lib/post-rpc.ts.
+  'create_post',
+  'edit_post',
+  'delete_own_post',
+  'edit_comment',
+  'delete_own_comment',
+  'redact_post_revision',
+  'redact_comment_revision',
+  'admin_set_comment_hidden',
 ]
 
 const QUOTE = "[`'\"]"

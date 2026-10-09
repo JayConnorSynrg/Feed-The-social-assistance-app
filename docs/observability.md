@@ -264,6 +264,32 @@ order by 1, 4 desc;
 
 ---
 
+## Post editing (member writes)
+
+Every post and comment write a member makes goes through `apps/web/src/lib/post-rpc.ts`: one `privilegedRpc` call per action, so each action persists exactly one `<op>.complete` or `<op>.error` row whose `request_id` is also the `x-request-id` the database saw (it joins a moderator's `admin_actions` row; author writes keep their own `post_revisions` / `post_comment_revisions` rows). Labels are ids and enums only — never post or comment text, never names.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `feed.post.create.complete` / `.error` | `post_type`, `has_image`, `has_resource`, `lang`, `request_id` | `create_post` (composer, wizard, Programs "Share to feed"); `lang` = the member's app locale stored as `posts.lang` |
+| `feed.post.edit.complete` / `.error` | `post_type`, `fields_count`, `has_reason`, `request_id`, `target_id` | `edit_post` with the version the dialog opened with; a stale version is an `.error` row with `error_code` `PT409` |
+| `feed.post.edit.conflict` | `post_type`, `resolution` | the edit-conflict comparison was resolved: `keep_mine` · `take_theirs` · `combine` |
+| `feed.post.delete.complete` / `.error` | `post_type`, `request_id`, `target_id` | `delete_own_post` (soft delete) |
+| `feed.post.history.open` | `post_type`, `revision_count`, `target` | the public edit history was opened (`target` `post` · `comment`) |
+| `feed.post.revision.redact.complete` / `.error`, `feed.comment.revision.redact.complete` / `.error` | `has_reason`, `request_id`, `target_id` | private details removed from a past version (author, or a platform admin with a reason — that branch also writes `admin_actions`) |
+| `feed.comment.edit.complete` / `.error`, `feed.comment.delete.complete` / `.error` | `request_id`, `target_id` | `edit_comment` / `delete_own_comment` |
+| `admin.comment.hide.complete` / `.error` | `action` (`comment.hide` · `comment.unhide`), `request_id`, `target_id` | `admin_set_comment_hidden` (moderators; one `admin_actions` row) |
+
+Conflict rate (edits refused because another tab saved first):
+
+```sql
+select count(*) filter (where event = 'feed.post.edit.error' and context->>'error_code' = 'PT409') as conflicts,
+       count(*) filter (where event = 'feed.post.edit.complete') as saves
+from public.app_logs
+where created_at > now() - interval '7 days';
+```
+
+---
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

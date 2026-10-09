@@ -31,6 +31,14 @@ interface Post {
   like_count: number | null
   comment_count: number | null
   slots_remaining: number | null
+  // Post-editing columns (PR-2, in the posts publication): the version guard, the Edited label,
+  // the photo description, the hide reason and the author's soft delete.
+  version: number | null
+  edited_at: string | null
+  edit_count: number | null
+  image_alt: string | null
+  hidden_reason: string | null
+  deleted_at: string | null
 }
 
 interface UseRealtimeFeedOptions {
@@ -45,6 +53,8 @@ interface UseRealtimeFeedOptions {
   onResubscribe?: () => void
   enabled?: boolean
 }
+
+export type RealtimePostRow = Post
 
 export function useRealtimeFeed({
   onInsert,
@@ -83,15 +93,10 @@ export function useRealtimeFeed({
           }
           break
         case 'UPDATE':
-          if (payload.new) {
-            // When is_hidden flips true (admin remove/hold), treat as a DELETE
-            // so all connected clients instantly remove the post from their feed.
-            if (payload.new.is_hidden === true) {
-              onDeleteRef.current?.(payload.new.id)
-            } else {
-              onUpdateRef.current?.(payload.new as Post)
-            }
-          }
+          // Every UPDATE (an edit, a count tick, a hold, the author's delete) goes to the consumer,
+          // which classifies it (post-model classifyPostUpdate): the author's own held post keeps
+          // its banner instead of vanishing, a hidden or deleted post leaves other viewers' feeds.
+          if (payload.new) onUpdateRef.current?.(payload.new as Post)
           break
         case 'DELETE':
           if (payload.old?.id) {

@@ -98,6 +98,9 @@ export interface EventMeta {
   endsAt: string | null
   location: string | null
   isOnline: boolean
+  /** The venue's IANA zone (create_post / edit_post require it since PR-2). null on a legacy
+   *  member event posted before zones existed: its times are shown exactly as entered. */
+  timeZone: string | null
 }
 
 function asRecord(metadata: unknown): Record<string, unknown> | null {
@@ -123,6 +126,7 @@ export function parseEventMeta(metadata: unknown): EventMeta | null {
     endsAt: typeof m.ends_at === 'string' ? m.ends_at : null,
     location: typeof m.location === 'string' ? m.location : null,
     isOnline: m.is_online === true,
+    timeZone: typeof m.time_zone === 'string' && m.time_zone ? m.time_zone : null,
   }
 }
 
@@ -176,6 +180,17 @@ export interface Post {
   isHidden: boolean
   /** Public URL of an attached photo (W1.2), or null when the post has none. */
   imageUrl: string | null
+  /** The author's description of the photo (posts.image_alt), or null. */
+  imageAlt: string | null
+  /** posts.version — the concurrency token every edit sends; it moves only on content edits. */
+  version: number
+  /** When the post was last visibly edited (posts.edited_at); null = never ("Edited" label hidden). */
+  editedAt: Date | null
+  /** Number of recorded edits (posts.edit_count). */
+  editCount: number
+  /** Why a hidden post is hidden ('hold_for_review' | 'admin_removal' | 'community_reports_threshold'
+   *  | 'author_deleted'), or null. Only its author (and staff) can read a hidden post. */
+  hiddenReason: string | null
   /** Parsed event fields (event_post only; null otherwise). */
   eventMeta: EventMeta | null
   /** Category chips (seeker_request / source_offer). */
@@ -208,6 +223,7 @@ export interface Post {
 export const FEED_POST_SELECT =
   'id, user_id, content, created_at, is_pinned, is_hidden, image_url, ' +
   'max_seekers, slots_remaining, post_type, petition_id, resource_id, ' +
+  'version, edited_at, edit_count, image_alt, hidden_reason, ' +
   'metadata, like_count, comment_count, ' +
   'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, admin_tier, harmony_score, harmony_reviews_count, badge_summary), ' +
   'resource:resources(id, name, category)'
@@ -226,6 +242,12 @@ export interface FeedPostRow {
   petition_id: string | null
   resource_id: string | null
   metadata: unknown
+  /** Post-editing columns (PR-2). Optional: a row read before the columns existed has none. */
+  version?: number | null
+  edited_at?: string | null
+  edit_count?: number | null
+  image_alt?: string | null
+  hidden_reason?: string | null
   like_count: number | null
   comment_count: number | null
   user: {
@@ -291,6 +313,11 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
     petitionId: row.petition_id ?? null,
     isHidden: row.is_hidden ?? false,
     imageUrl: row.image_url ?? null,
+    imageAlt: row.image_alt ?? null,
+    version: row.version ?? 1,
+    editedAt: row.edited_at ? new Date(row.edited_at) : null,
+    editCount: row.edit_count ?? 0,
+    hiddenReason: row.hidden_reason ?? null,
     eventMeta: postType === 'event_post' ? parseEventMeta(row.metadata) : null,
     requestCategories:
       postType === 'seeker_request' || postType === 'source_offer'
@@ -782,7 +809,7 @@ export function distanceBucketLabel(bucket: string | null | undefined, locale: L
 }
 
 // ---------------------------------------------------------------------------
-// Realtime count patch (W1.4)
+// Realtime patch (W1.4) + post-editing classification (PR-2)
 // ---------------------------------------------------------------------------
 
 /**
@@ -793,36 +820,47 @@ export function distanceBucketLabel(bucket: string | null | undefined, locale: L
  */
 export interface PostRowPatch {
   id: string
+  user_id?: string | null
   content?: string | null
   is_pinned?: boolean | null
   post_type?: string | null
   metadata?: unknown
   image_url?: string | null
+  image_alt?: string | null
   petition_id?: string | null
   max_seekers?: number | null
   like_count?: number | null
   comment_count?: number | null
   slots_remaining?: number | null
+  is_hidden?: boolean | null
+  hidden_reason?: string | null
+  version?: number | null
+  edited_at?: string | null
+  edit_count?: number | null
+  deleted_at?: string | null
 }
 
 /**
- * Patch a single post in place from a posts realtime UPDATE row (W1.4).
+ * Patch a single post in place from a posts realtime UPDATE row (W1.4), or from the
+ * row the author's own edit settled with (PR-2).
  *
  * A posts WAL UPDATE carries the full posts row, so this refreshes every on-row
  * view field — content, category (from is_pinned), postType, the metadata-derived
- * eventMeta / requestCategories, imageUrl, petitionId, maxSeekers — and takes the
- * SERVER's absolute counts (like_count -> likes, comment_count -> comments). No
- * client-side arithmetic, so a dropped or duplicated event cannot drift a count.
+ * eventMeta / requestCategories, imageUrl / imageAlt, petitionId, maxSeekers, the
+ * edit state (version, editedAt, editCount) — and takes the SERVER's absolute counts
+ * (like_count -> likes, comment_count -> comments). No client-side arithmetic, so a
+ * dropped or duplicated event cannot drift a count.
+ *
+ * VERSION GUARD (PR-2): `version` moves only on content edits, never on likes,
+ * comments or opt-ins. A row whose version is LOWER than the one already shown is a
+ * stale echo (e.g. the realtime copy of an edit the author's dialog already settled
+ * past): it is ignored entirely, so the card never reverts to older text.
  *
  * PRESERVED (not on the WAL row): author/profile, the joined resource name and
- * category, and distanceBucket (a ranked-feed-only derived value). The post is
- * matched by id; every other post is returned untouched and list ORDER is
- * preserved (an update must never re-rank the feed under the reader). When the
- * row's id is not present the original array is returned unchanged — a true no-op
- * (same reference); the caller handles the not-present case (e.g. an unhide
- * restore) separately.
- *
- * Generic over the view model so it stays pure and unit-testable without React.
+ * category, and distanceBucket / score (ranked-feed-only). The post is matched by id;
+ * every other post is returned untouched and list ORDER is preserved (an edit is
+ * never a bump). When the row's id is not present, or the row is stale, the original
+ * array is returned unchanged — a true no-op (same reference).
  */
 export function applyPostRowPatch<
   T extends {
@@ -836,16 +874,23 @@ export function applyPostRowPatch<
     maxSeekers: number | null
     petitionId: string | null
     imageUrl: string | null
+    imageAlt: string | null
+    version: number
+    editedAt: Date | null
+    editCount: number
+    isHidden: boolean
+    hiddenReason: string | null
     eventMeta: EventMeta | null
     requestCategories: string[]
   }
 >(posts: readonly T[], row: PostRowPatch): T[] {
-  if (!posts.some((p) => p.id === row.id)) {
-    return posts as T[]
-  }
+  const current = posts.find((p) => p.id === row.id)
+  if (!current) return posts as T[]
+  if (row.version != null && row.version < current.version) return posts as T[]
   return posts.map((p) => {
     if (p.id !== row.id) return p
     const postType = row.post_type != null ? coercePostType(row.post_type) : p.postType
+    const metadata = 'metadata' in row ? row.metadata : undefined
     return {
       ...p,
       content: row.content ?? p.content,
@@ -854,18 +899,151 @@ export function applyPostRowPatch<
       comments: row.comment_count ?? p.comments,
       category: row.is_pinned != null ? (row.is_pinned ? 'announcement' : 'update') : p.category,
       postType,
-      imageUrl: row.image_url ?? null,
+      imageUrl: 'image_url' in row ? row.image_url ?? null : p.imageUrl,
+      imageAlt: 'image_alt' in row ? row.image_alt ?? null : p.imageAlt,
       petitionId: row.petition_id ?? p.petitionId,
-      maxSeekers: row.max_seekers ?? p.maxSeekers,
+      // max_seekers may be set back to null (unlimited) by an edit: take the row's value when it carries the key.
+      maxSeekers: 'max_seekers' in row ? row.max_seekers ?? null : p.maxSeekers,
       // Forward-safe: keep the prior cap when the row omits slots_remaining.
-      slotsRemaining: row.slots_remaining ?? p.slotsRemaining,
-      eventMeta: postType === 'event_post' ? parseEventMeta(row.metadata) : null,
+      slotsRemaining: 'slots_remaining' in row ? row.slots_remaining ?? null : p.slotsRemaining,
+      version: row.version ?? p.version,
+      editedAt: 'edited_at' in row ? (row.edited_at ? new Date(row.edited_at) : null) : p.editedAt,
+      editCount: row.edit_count ?? p.editCount,
+      isHidden: row.is_hidden ?? p.isHidden,
+      hiddenReason: 'hidden_reason' in row ? row.hidden_reason ?? null : p.hiddenReason,
+      eventMeta:
+        postType === 'event_post' ? (metadata !== undefined ? parseEventMeta(metadata) : p.eventMeta) : null,
       requestCategories:
         postType === 'seeker_request' || postType === 'source_offer'
-          ? parseCategories(row.metadata)
+          ? metadata !== undefined
+            ? parseCategories(metadata)
+            : p.requestCategories
           : [],
     }
   })
+}
+
+/** A FEED_POST_SELECT row as a patch (settle a card from a fresh read of its row). */
+export function rowPatchFromFeedRow(row: FeedPostRow): PostRowPatch {
+  return {
+    id: row.id,
+    user_id: row.user?.id ?? null,
+    content: row.content,
+    is_pinned: row.is_pinned,
+    post_type: row.post_type,
+    metadata: row.metadata,
+    image_url: row.image_url,
+    image_alt: row.image_alt ?? null,
+    petition_id: row.petition_id,
+    max_seekers: row.max_seekers,
+    like_count: row.like_count,
+    comment_count: row.comment_count,
+    slots_remaining: row.slots_remaining,
+    is_hidden: row.is_hidden,
+    hidden_reason: row.hidden_reason ?? null,
+    version: row.version ?? null,
+    edited_at: row.edited_at ?? null,
+    edit_count: row.edit_count ?? null,
+  }
+}
+
+/** When the re-read after a save failed: the saved changes + the server's new version / edit time. */
+export function editFallbackPatch(
+  postId: string,
+  result: { version: number; editedAt: string | null; editCount: number },
+  changes: Record<string, unknown>,
+): PostRowPatch {
+  const patch: PostRowPatch = { id: postId, version: result.version, edited_at: result.editedAt, edit_count: result.editCount }
+  if (typeof changes.content === 'string') patch.content = changes.content
+  if ('image_url' in changes) patch.image_url = (changes.image_url as string | null) ?? null
+  if ('image_alt' in changes) patch.image_alt = (changes.image_alt as string | null) ?? null
+  if ('max_seekers' in changes) patch.max_seekers = (changes.max_seekers as number | null) ?? null
+  return patch
+}
+
+/** What the feed does with one posts realtime UPDATE (classifyPostUpdate). */
+export type PostUpdateAction =
+  /** The post is listed and still readable: patch it in place (version-guarded, no re-rank). */
+  | 'patch'
+  /** The viewer's OWN post was held / hidden: keep it with its "Hidden pending review" banner. */
+  | 'mark_held'
+  /** Deleted by its author, or hidden for a viewer who is not its author: take the card out. */
+  | 'remove'
+  /** A post this session took out because it was hidden is visible again: read it and put it back. */
+  | 'restore'
+  /** Anything else (a like, comment or edit on a post that is not listed): nothing to do. Never a reload. */
+  | 'ignore'
+
+export interface PostUpdateContext {
+  /** The id is in the rendered list. */
+  inList: boolean
+  /** The signed-in viewer's id (null when logged out). */
+  viewerId: string | null
+  /** Ids this session removed because they became hidden (candidates for 'restore'). */
+  removedHiddenIds: ReadonlySet<string>
+}
+
+/**
+ * Decide what a posts realtime UPDATE does to the feed. Replaces "any UPDATE for a post not on
+ * screen reloads the whole feed": every like and comment fires a posts UPDATE (counter triggers),
+ * so that rule reloaded every connected feed on every interaction anywhere.
+ *
+ * Realtime delivers a row only to viewers who can still read it (RLS): a post that becomes hidden
+ * reaches its author and staff; a deleted one reaches staff only (and the author's other tabs see
+ * the delete through their own list). Staff do not keep hidden posts in the feed — the moderation
+ * queue is their review surface.
+ */
+export function classifyPostUpdate(row: PostRowPatch, ctx: PostUpdateContext): PostUpdateAction {
+  const deleted = row.deleted_at != null
+  const hidden = row.is_hidden === true || deleted
+  const isAuthor = ctx.viewerId != null && row.user_id === ctx.viewerId
+  if (hidden) {
+    if (!ctx.inList) return 'ignore'
+    if (isAuthor && !deleted) return 'mark_held'
+    return 'remove'
+  }
+  if (ctx.inList) return 'patch'
+  return ctx.removedHiddenIds.has(row.id) ? 'restore' : 'ignore'
+}
+
+// ---------------------------------------------------------------------------
+// Member event time line (PR-2)
+// ---------------------------------------------------------------------------
+
+/** A member event's when line, as data the card renders. */
+export type MemberEventWhen =
+  /** Zoned: start/end are instants; render with formatEventWhen (viewer time + venue time). */
+  | { kind: 'zoned'; startIso: string; endIso: string | null; timeZone: string }
+  /** Legacy (no zone): the wall-clock text exactly as entered, labelled "local time". The end is
+   *  shown only when it is after the start (production's legacy row ends before it starts). */
+  | { kind: 'local'; start: string; end: string | null }
+
+const LOCAL_WALL_CLOCK = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?$/
+
+/**
+ * Turn an event_post's stored wall-clock times into what the card shows. Zoned: each wall time is
+ * resolved in the venue zone (checkLocalTime, the same DST rule as the server); a time that does
+ * not resolve falls back to the legacy reading. Legacy: shown as entered.
+ */
+export function memberEventWhen(
+  meta: Pick<EventMeta, 'startsAt' | 'endsAt' | 'timeZone'>,
+  resolve: (date: string, time: string, tz: string) => { kind: string; instant?: Date },
+): MemberEventWhen {
+  const toInstant = (local: string, tz: string): string | null => {
+    const m = LOCAL_WALL_CLOCK.exec(local)
+    if (!m) return null
+    const r = resolve(m[1], m[2], tz)
+    return r.kind === 'ok' && r.instant ? r.instant.toISOString() : null
+  }
+  const endAfterStart = (a: string, b: string | null) => (b != null && b > a ? b : null)
+  if (meta.timeZone) {
+    const startIso = toInstant(meta.startsAt, meta.timeZone)
+    if (startIso) {
+      const endIsoRaw = meta.endsAt ? toInstant(meta.endsAt, meta.timeZone) : null
+      return { kind: 'zoned', startIso, endIso: endAfterStart(startIso, endIsoRaw), timeZone: meta.timeZone }
+    }
+  }
+  return { kind: 'local', start: meta.startsAt, end: endAfterStart(meta.startsAt, meta.endsAt) }
 }
 
 // ---------------------------------------------------------------------------

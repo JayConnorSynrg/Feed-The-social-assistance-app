@@ -174,6 +174,25 @@ describe('moderatePost — one privileged RPC per action', () => {
     expect(r.calls[0].header?.[0]).toBe('x-request-id')
   })
 
+  // Post editing (PR-2): the version is optional. A caller without it sends p_post_id ONLY (the wire
+  // body has no p_expected_version key — the legacy shape the server accepts); a caller with it sends
+  // both. The server answers {success: true} either way.
+  const wire = (args: unknown) => JSON.parse(JSON.stringify(args)) as Record<string, unknown>
+  it.each(['remove', 'hold', 'authorize'] as const)('%s without a version: the p_post_id-only call shape', async (action) => {
+    const r = rpcClient({ data: { success: true }, error: null })
+    expect(await moderatePost(r.client, action, ID)).toEqual({ ok: true })
+    expect(wire(r.calls[0].args)).toEqual({ p_post_id: ID })
+  })
+  it.each(['remove', 'hold', 'authorize'] as const)('%s with the version on screen: p_post_id + p_expected_version', async (action) => {
+    const r = rpcClient({ data: { success: true }, error: null })
+    expect(await moderatePost(r.client, action, ID, 4)).toEqual({ ok: true })
+    expect(wire(r.calls[0].args)).toEqual({ p_post_id: ID, p_expected_version: 4 })
+  })
+  it('the author edited since the moderator read it (PT409): a conflict the caller re-reads on', async () => {
+    const r = rpcClient({ data: null, error: { code: 'PT409', message: 'edit_conflict', details: '{"current_version": 5, "edited_at": null, "needs_review": true}' } as never })
+    expect(await moderatePost(r.client, 'authorize', ID, 4)).toMatchObject({ ok: false, conflict: { currentVersion: 5, needsReview: true } })
+  })
+
   it('a refusal: the queue\'s generic line, and one admin.denied row', async () => {
     const r = rpcClient({ data: null, error: { code: '42501', message: 'p3_denied:insufficient_tier' } })
     expect(await moderatePost(r.client, 'hold', ID)).toEqual({ ok: false, message: 'An error occurred' })

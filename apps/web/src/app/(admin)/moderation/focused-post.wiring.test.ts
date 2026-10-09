@@ -75,6 +75,15 @@ beforeEach(() => {
 })
 
 describe('FocusedPost wiring', () => {
+  it('acts on the version it read: Hold sends p_expected_version (posts.version)', async () => {
+    h.postRow = { ...visible, version: 3 }
+    const c = mountPanel()
+    const view = (await c.flush())!
+    view.props.onAction('hold')
+    await c.flush()
+    expect(h.rpcs).toEqual([{ fn: 'admin_hold_post', args: { p_post_id: LINKED, p_expected_version: 3 } }])
+  })
+
   it('found: one found; Remove → admin_remove_post once on the read id, focus to the heading, onChanged', async () => {
     h.postRow = visible
     const c = mountPanel()

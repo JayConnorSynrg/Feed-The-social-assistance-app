@@ -9,7 +9,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
-import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, type PostModerationAction } from './post-moderation-actions'
+import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
@@ -24,6 +24,7 @@ const REASON_LABELS: Record<string, string> = {
 
 interface HeldPost {
   id: string
+  version: number | null
   is_hidden: boolean
   content: string | null
   created_at: string
@@ -70,7 +71,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         if (contentIds.length > 0) {
           const { data: posts, error: postsError } = await supabase
             .from('posts')
-            .select('id, content, user_id, is_hidden')
+            .select('id, content, user_id, is_hidden, version')
             .in('id', contentIds)
           // A failed read must not pass for "post deleted" (post_hidden stays null only when the
           // read succeeded without that row), so it surfaces like a failed reports read.
@@ -84,7 +85,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         // Load removed & held posts
         const { data: hiddenPostsData } = await supabase
           .from('posts')
-          .select('id, is_hidden, content, created_at, hidden_at, hidden_reason, user_id')
+          .select('id, is_hidden, content, created_at, hidden_at, hidden_reason, user_id, version')
           .eq('is_hidden', true)
           .in('hidden_reason', ['admin_removal', 'hold_for_review'])
           .order('hidden_at', { ascending: false })
@@ -109,7 +110,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
     })
 
   const handleResolve = useCallback(
-    async (reportId: string, action: 'dismiss' | 'uphold') => {
+    async (reportId: string, action: 'dismiss' | 'uphold', expectedVersion: number | null) => {
       setProcessingId(reportId)
       setError(null)
       try {
@@ -117,11 +118,14 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
           supabase,
           'admin.report.resolve',
           'admin_resolve_report',
-          { p_report_id: reportId, p_action: action },
+          // The version on screen: an author edit since the queue loaded is refused (PT409) instead of
+          // being published by a dismissal nobody reviewed.
+          { p_report_id: reportId, p_action: action, p_expected_version: expectedVersion ?? undefined },
           { action: `report.${action}`, target_id: reportId },
         )
         if (rpcError) {
           logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
+          if (rpcError.code === 'PT409' || rpcError.code === 'PT404') throw new Error(moderationFailure(rpcError).message)
           throw rpcError
         }
 
@@ -148,10 +152,10 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   // same one the single-post view uses. Remove and Hold take the post out of the reports list;
   // Authorize takes it out of "Removed & Held Posts".
   const handlePostAction = useCallback(
-    async (action: PostModerationAction, postId: string) => {
+    async (action: PostModerationAction, postId: string, expectedVersion: number | null) => {
       setProcessingId(postId)
       setError(null)
-      const result = await moderatePost(supabase, action, postId)
+      const result = await moderatePost(supabase, action, postId, expectedVersion)
       if (!result.ok) setError(result.message)
       else {
         if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
@@ -273,7 +277,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                     variant="destructive"
                     className={`h-9 min-h-[44px] text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                     disabled={processingId === group.content_id}
-                    onClick={() => handlePostAction('remove', group.content_id)}
+                    onClick={() => handlePostAction('remove', group.content_id, group.post_version)}
                     data-testid={`remove-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -288,7 +292,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                     variant="outline"
                     className="h-9 min-h-[44px] text-xs"
                     disabled={processingId === group.content_id}
-                    onClick={() => handlePostAction('hold', group.content_id)}
+                    onClick={() => handlePostAction('hold', group.content_id, group.post_version)}
                     data-testid={`hold-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -319,7 +323,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                           variant="outline"
                           className="h-9 min-h-[44px] text-xs"
                           disabled={processingId === report.id}
-                          onClick={() => handleResolve(report.id, 'dismiss')}
+                          onClick={() => handleResolve(report.id, 'dismiss', group.post_version)}
                           data-testid={`dismiss-report-${report.id}`}
                         >
                           {processingId === report.id ? (
@@ -377,7 +381,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                       variant="outline"
                       size="sm"
                       data-testid={`authorize-post-${post.id}`}
-                      onClick={() => handlePostAction('authorize', post.id)}
+                      onClick={() => handlePostAction('authorize', post.id, post.version)}
                       disabled={processingId === post.id}
                     >
                       {processingId === post.id ? (
