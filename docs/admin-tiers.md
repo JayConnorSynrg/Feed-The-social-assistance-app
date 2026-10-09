@@ -135,6 +135,50 @@ to the founder. It never exposes email or ban data (those stay in the PA-only `a
   not include opens your first tab instead. Switching tabs replaces the address without adding Back
   entries.
 
+## Admin edit links ("Edit in admin")
+
+An admin looking at an item in the member app gets an **Edit in admin** link that opens the admin
+screen with that item open, in one reused tab named `feed-admin`. Members, logged-out visitors and
+guests never see it, nor does anyone while the admin lookup is loading or after it failed. The shared
+pieces (PR-5 foundation) are wired into member surfaces by PR-5a (map popups, `/s` pages) and PR-5b
+(feed posts, events).
+
+**Who sees the link** — `canEditInAdmin` (`apps/web/src/lib/admin-editability.ts`), the same rule the
+admin screen and its RPCs enforce:
+
+| Item | Link shown to | Server gate |
+|---|---|---|
+| post | community moderator and up | `admin_remove_post` / `admin_hold_post` / `admin_authorize_post` (`current_user_tier_at_least('community_moderator')`) |
+| safety alert | community moderator and up | `admin_verify_safety_alert` / `admin_remove_safety_alert` (same) |
+| resource | resource admin and up | `admin_update_resource` (`current_user_tier_at_least('resource_admin')`) |
+| business | platform admin (`canEditBusinesses` in `lib/admin-tier.ts` — the one line PR-6 widens) | `orgs_admin_update` / `orgs_admin_select` (`is_current_user_admin()`) |
+| organization | platform admin, or an admin of that organization | `can_admin_org` |
+| event | platform admin, or an admin of the event's organization | `org_event_write_gate(assistance_events.org_id)` |
+
+"An admin of that organization" = the organization is in the viewer's `get_admin_org_list` (active,
+non-business, `organization_members.role = 'admin'`), which is exactly the organization-admin branch of
+`can_admin_org`. Resource rows that are form templates (`discovery_metadata.content_type = 'form'`) are
+platform-admin-only in `admin_update_resource`; none exist among `resources` today.
+
+**URL contract** — `adminEditUrl` (`apps/web/src/lib/admin-url.ts`); the admin screens read it back
+with `readAdminFocus` / `stripAdminFocusHref` (`app/(admin)/moderation/admin-focus-url.ts`) or the
+existing `readOrgPanelTarget` (`?org=`):
+
+| Item | Platform admin | Anyone else allowed |
+|---|---|---|
+| resource | `/moderation?tab=manage&focus=resource:<uuid>` | same |
+| business | `/moderation?tab=businesses&focus=business:<uuid>` | — |
+| safety alert | `/moderation?tab=moderation&focus=safety_alert:<uuid>` | same |
+| post | `/moderation?tab=moderation&focus=post:<uuid>` | same |
+| organization | `/moderation?tab=organizations&org=<uuid>` | `/moderation/org/<uuid>?tab=profile` |
+| event | `/moderation?tab=events&focus=event:<uuid>` | `/moderation/org/<orgUuid>?tab=events&focus=event:<uuid>` |
+
+**Cost**: the viewer's tier is looked up once per signed-in identity per page load, shared by every
+`useAdminTier()` and every link (`resolveAdminTier`); the organization list only for organization or
+event links of a viewer who is not a platform admin, also once. Logged-out visitors and guests cost no
+call (`useIsOrgAdmin` included). Each click writes one `admin.nav.edit_in_admin` row; each followed link
+writes one `admin.deeplink.resolve` row from the admin screen (see `docs/observability.md`).
+
 ## Facilitator code — retired
 
 The `claim-facilitator-admin` edge function, its onboarding "Administrator" option and code input,
