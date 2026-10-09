@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MappableBusiness } from '@/hooks/use-viewport-businesses'
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { dir, type Locale } from '@/lib/i18n'
 
 interface BusinessMarkerProps {
@@ -100,7 +100,7 @@ export function BusinessMarker({ business, focused, locale = 'en' }: BusinessMar
               </a>
               {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
                   and Escape still closes the popup. */}
-              <AdminEditLinkIsland
+              <ClientAdminEditLink
                 target={{ kind: 'business', id: business.id }}
                 itemName={business.name}
                 source="map_popup"

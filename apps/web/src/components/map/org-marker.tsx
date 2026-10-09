@@ -17,7 +17,7 @@ import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import type { MappableOrg } from '@/hooks/use-viewport-organizations'
 import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { dir, type Locale } from '@/lib/i18n'
 
 interface OrgMarkerProps {
@@ -107,7 +107,7 @@ export function OrgMarker({ organization, focused, locale = 'en' }: OrgMarkerPro
               </a>
               {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
                   and Escape still closes the popup. */}
-              <AdminEditLinkIsland
+              <ClientAdminEditLink
                 target={{ kind: 'organization', id: organization.id }}
                 itemName={organization.name}
                 source="map_popup"

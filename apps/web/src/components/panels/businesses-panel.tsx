@@ -34,7 +34,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
 import { usePanelContext } from '@/components/layout/feed-shell'
@@ -984,7 +984,7 @@ export function BusinessesPanel() {
                   </a>
                   {/* Admins only (renders nothing for anyone else). A sibling of the row link, never
                       inside it: an <a> may not contain another <a>. */}
-                  <AdminEditLinkIsland
+                  <ClientAdminEditLink
                     target={{ kind: 'business', id: b.id }}
                     itemName={b.name}
                     source="showcase_row"

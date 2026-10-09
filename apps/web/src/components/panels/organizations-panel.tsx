@@ -30,7 +30,7 @@ import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canCreateOrganizations } from '@/lib/admin-tier'
 import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
@@ -183,7 +183,7 @@ export function OrganizationsPanel() {
                   </a>
                   {/* Admins only: platform admins, and admins of this organization. A sibling of the row
                       link, never inside it: an <a> may not contain another <a>. */}
-                  <AdminEditLinkIsland
+                  <ClientAdminEditLink
                     target={{ kind: 'organization', id: o.id }}
                     itemName={o.name}
                     source="organizations_row"

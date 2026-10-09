@@ -4,7 +4,7 @@
 // I1/I3 — the public /s/resource, /s/business and /s/organization pages (server components) place
 // the client-only "Edit in admin" island for the entity they show (its database id, its name), and
 // their server HTML holds no admin link — even when the viewer lookup would allow one (a platform
-// admin). The island's browser half is proven in components/admin/admin-edit-link-island.test.ts.
+// admin). The island's browser half is proven in components/admin/client-admin-edit-link.test.ts.
 
 import { describe, it, expect, vi } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
@@ -59,7 +59,7 @@ vi.mock('@/lib/org-data', () => ({
   fetchOrgResources: async () => [],
 }))
 
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import ResourcePage from './resource/[id]/page'
 import BusinessPage from './business/[id]/page'
 import OrganizationPage from './organization/[id]/page'
@@ -67,7 +67,7 @@ import OrganizationPage from './organization/[id]/page'
 function islands(node: ReactNode, found: ReactElement[] = []): ReactElement[] {
   if (Array.isArray(node)) node.forEach((n) => islands(n, found))
   else if (isValidElement(node)) {
-    if (node.type === AdminEditLinkIsland) found.push(node)
+    if (node.type === ClientAdminEditLink) found.push(node)
     islands((node.props as { children?: ReactNode }).children, found)
   }
   return found

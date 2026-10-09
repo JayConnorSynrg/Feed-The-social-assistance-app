@@ -56,7 +56,7 @@ import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir, type Locale } from '@/lib/i18n'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { mapMemberT } from '@/lib/i18n-map-member'
 import {
   MAP_FOCUS_ZOOM,
@@ -349,7 +349,7 @@ export function ResourceDetail({ resource, onClose, onGetDirections, onGetHelp, 
           {isSaved ? 'Saved' : 'Save Resource'}
         </Button>
         {/* Admins only (renders nothing for anyone else): this resource in the Manage tab's editor. */}
-        <AdminEditLinkIsland
+        <ClientAdminEditLink
           target={{ kind: 'resource', id: resource.id }}
           itemName={resource.name}
           source="map_detail"

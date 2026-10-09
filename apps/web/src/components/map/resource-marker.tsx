@@ -9,7 +9,7 @@ import { openDirections, formatAddress } from '@/lib/directions'
 import { getCategoryHex } from '@/lib/resource-categories'
 import { isApproximateGeocode } from '@/lib/geocode-accuracy'
 import { MARKER_BUTTON_FOCUS, MarkerPopupDialog, markerA11yRef, useMarkerPopup } from './marker-popup'
-import { AdminEditLinkIsland } from '@/components/admin/admin-edit-link-island'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { dir, type Locale } from '@/lib/i18n'
 
 interface Resource {
@@ -190,7 +190,7 @@ export function ResourceMarker({ resource, onClick, focused, adminEdit = false, 
               {/* Admins only (renders nothing for anyone else); inside the dialog, so Tab reaches it
                   and Escape still closes the popup. */}
               {adminEdit && (
-                <AdminEditLinkIsland
+                <ClientAdminEditLink
                   target={{ kind: 'resource', id: resource.id }}
                   itemName={resource.name}
                   source="map_popup"
