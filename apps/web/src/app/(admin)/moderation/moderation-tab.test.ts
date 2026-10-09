@@ -48,6 +48,18 @@ describe('sub-tabs are a tablist (not colour alone)', () => {
   })
 })
 
+describe('the selected-tab underline is not clipped', () => {
+  it('the tablist is as tall as its 44px tabs (h-9 overridden) and is not a scroll container', () => {
+    const html = renderToStaticMarkup(h(ModerationTab, { selectedOrgId: 'all' }))
+    const list = html.match(/<div[^>]*role="tablist"[^>]*>/)?.[0] ?? ''
+    const cls = (list.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/)
+    expect(cls).toContain('group-data-[orientation=horizontal]/tabs:h-auto')
+    expect(cls).not.toContain('group-data-[orientation=horizontal]/tabs:h-9')
+    expect(cls.filter((c) => /overflow/.test(c))).toEqual([])
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*class="[^"]*min-h-\[44px\]/)
+  })
+})
+
 describe('Moderation tab wiring', () => {
   const run = () => mount(() => ModerationTab({ selectedOrgId: 'all' }))
   const one = (tree: unknown, type: unknown) => {

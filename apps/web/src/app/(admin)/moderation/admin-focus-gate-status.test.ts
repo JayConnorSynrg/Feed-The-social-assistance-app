@@ -13,7 +13,7 @@ import { adminFocusMessages, adminFocusT } from '@/lib/i18n-admin-focus'
 import { messages, type Locale } from '@/lib/i18n'
 
 const LOCALES = Object.keys(messages) as Locale[]
-const region = (html: string) => html.match(/^<p role="status" data-testid="admin-focus-gate-status" class="([^"]*)">([^<]*)<\/p>$/)
+const region = (html: string) => html.match(/^<p role="status" lang="[^"]*" dir="[^"]*" data-testid="admin-focus-gate-status" class="([^"]*)">([^<]*)<\/p>$/)
 
 describe('AdminFocusGateStatus', () => {
   it('no row: the region is rendered, empty and visually hidden (so a later line is announced)', () => {
@@ -29,6 +29,19 @@ describe('AdminFocusGateStatus', () => {
     expect(adminFocusGateText({ kind: 'unknown', outcome: 'invalid', tab: 'unknown' }, 'en')).toBe('This admin link is incomplete or broken, so nothing was opened.')
     expect(adminFocusGateText({ kind: 'event', outcome: 'invalid', tab: 'events' }, 'es')).toBe(adminFocusMessages.es.invalid)
     expect(adminFocusGateText({ kind: 'post', outcome: 'found', tab: 'moderation' }, 'en')).toBeNull()
+  })
+})
+
+describe('the line carries its own language and direction (the admin shell has no lang wrapper)', () => {
+  it.each([
+    ['en', 'ltr'],
+    ['es', 'ltr'],
+    ['ar', 'rtl'],
+    ['hmn', 'ltr'],
+  ] as const)('%s → lang="%s" dir="%s"', (locale, direction) => {
+    const html = renderToStaticMarkup(h(AdminFocusGateStatus, { row: { kind: 'post', outcome: 'forbidden', tab: 'moderation' }, locale }))
+    expect(html).toMatch(new RegExp(`^<p role="status" lang="${locale}" dir="${direction}"`))
+    expect(html).toContain(adminFocusMessages[locale].forbidden.replace(/'/g, '&#x27;'))
   })
 })
 

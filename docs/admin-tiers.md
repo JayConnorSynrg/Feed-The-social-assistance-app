@@ -221,7 +221,9 @@ The shell writes the row when no tab will take the link (`admin-focus-session.ts
 `adminFocusGateOutcome`, run once the tier and organization roles have loaded): `forbidden` when the
 viewer's tier does not show the owning tab (e.g. an organization admin on a post link), `invalid` for a
 malformed focus, a kind the screen never opens, or a `?tab=` that is not the kind's tab. A tab left
-before it resolved writes `abandoned`. Exactly one writer exists for any URL. For `forbidden` /
+before it resolved writes `abandoned`. A tab claims a focus only when `?tab=` names it — the gate's own rule — so when the
+shell falls back to another tab for a missing or different `?tab=`, only the gate writes (invalid): exactly one writer
+exists for any URL. For `forbidden` /
 `invalid` the shell also shows one plain line in the viewer's language (`admin-focus-gate-status.tsx`,
 `lib/i18n-admin-focus.ts`, 14 locales) in a `role="status"` region rendered from the first paint.
 

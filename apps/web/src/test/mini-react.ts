@@ -4,7 +4,9 @@
 // Test-only: a tiny hook runtime for driving ONE component function in vitest's node environment
 // (this repo has no DOM renderer). Hooks keep their slots across renders, effects run after each
 // render when their deps changed (cleanup first), and setState marks the instance for a re-render.
-// Child components in the returned tree are NOT rendered — tests read their props.
+// Child components in the returned tree are NOT rendered — tests read their props. Out of scope: the
+// ordering of effects ACROSS components (each mount() is one component; React's parent/child commit
+// order is not modelled), context, and concurrent rendering.
 //
 // Use in a test file:
 //   vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))

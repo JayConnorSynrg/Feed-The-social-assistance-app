@@ -201,7 +201,7 @@ function FoundPost({
             key={action}
             size="sm"
             variant={action === 'remove' ? 'destructive' : 'outline'}
-            className={`h-9 min-h-[44px] text-xs${action === 'remove' ? ` ${DESTRUCTIVE_BUTTON_CLASS}` : ''}`}
+            className={`h-9 min-h-[44px] text-xs aria-disabled:cursor-not-allowed aria-disabled:opacity-50${action === 'remove' ? ` ${DESTRUCTIVE_BUTTON_CLASS}` : ''}`}
             // aria-disabled (not disabled) while an action runs: the pressed button keeps focus.
             aria-disabled={processing !== null || undefined}
             onClick={() => {

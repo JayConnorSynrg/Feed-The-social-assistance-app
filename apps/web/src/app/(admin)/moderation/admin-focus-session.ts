@@ -12,7 +12,10 @@
 //   - the shell (adminFocusGateOutcome) when no tab will take it: invalid (malformed focus, or a
 //     focus whose kind this screen never opens or whose ?tab= is not its tab) or forbidden (the
 //     viewer's tier does not show the owning tab).
-// Exactly one of the two applies to any URL, so a followed link never writes two rows.
+// Both use the same rule: a focus belongs to its owner tab only when `?tab=` names that tab (every
+// adminEditUrl URL does, the organization page's included). So the tab claims exactly when the gate
+// stays silent — even when the shell shows a fallback tab for a missing or other `?tab=` — and a
+// followed link writes exactly one row.
 
 import { ADMIN_FOCUS_TAB, type AdminFocusKind } from '@/lib/admin-url'
 import { hasAdminFocusParam, readAdminFocus, stripAdminFocusHref, type AdminFocus } from './admin-focus-url'
@@ -60,16 +63,20 @@ function settleOnce(env: AdminFocusEnv, row: () => AdminDeeplinkRow) {
 }
 
 /**
- * The focus in the URL when it is one of `kinds`, as a session that writes exactly one row; null
- * when there is no focus, it is malformed (the shell reports that), or it names another kind.
+ * The focus in the URL when it is one of `kinds` AND `?tab=` names this tab, as a session that writes
+ * exactly one row; null when there is no focus, it is malformed, it names another kind, or `?tab=`
+ * is missing / names another tab (the shell's gate reports those as invalid).
  */
 export function claimAdminFocus(
   env: AdminFocusEnv,
   kinds: readonly AdminFocusKind[],
   tab: string
 ): AdminFocusSession | null {
-  const focus = readAdminFocus(env.search())
+  const search = env.search()
+  const focus = readAdminFocus(search)
   if (!focus || !kinds.includes(focus.kind)) return null
+  // The gate's rule: the shell may show this tab as a fallback for a missing or other ?tab=.
+  if (new URLSearchParams(search).get('tab') !== tab) return null
   const once = settleOnce(env, () => ({ kind: focus.kind, outcome: 'found', tab }))
   return {
     focus,

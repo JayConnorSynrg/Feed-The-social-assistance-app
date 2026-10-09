@@ -16,6 +16,14 @@ const SUBTAB_LABELS: Record<SubTab, string> = {
   safety: 'Safety Alerts',
 }
 
+/**
+ * The sub-tab list: as tall as its 44px triggers (the primitive's own group-…:h-9 is overridden at
+ * the same specificity) and NOT a scroll container (overflow-x-auto would force overflow-y:auto and
+ * clip the selected tab's underline, drawn 5px below the trigger).
+ */
+export const MODERATION_TABLIST_CLASS =
+  'mb-4 w-full justify-start rounded-none border-b border-stone-200 p-0 group-data-[orientation=horizontal]/tabs:h-auto'
+
 /** The sub-tab the tab opens on: Safety Alerts for an "Edit in admin" safety-alert link, else Reports. */
 export function initialModerationSubtab(search: string): SubTab {
   return readAdminFocus(search)?.kind === 'safety_alert' ? 'safety' : 'reports'
@@ -59,7 +67,7 @@ export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
         <TabsList
           variant="line"
           aria-label="Moderation"
-          className="mb-4 h-auto w-full justify-start rounded-none border-b border-stone-200 p-0 overflow-x-auto"
+          className={MODERATION_TABLIST_CLASS}
         >
           {SUBTABS.map((tab) => (
             <TabsTrigger

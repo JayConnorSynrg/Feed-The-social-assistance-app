@@ -211,6 +211,8 @@ describe('a11y: one status region announces every step; focus and contrast', () 
     const calls: string[] = []
     const html = view({ status: 'found', post: post() }, { processing: 'hold' })
     expect(html).toMatch(/aria-disabled="true"[^>]*data-testid="focused-hold-post"/)
+    // A busy button looks busy (dimmed, not-allowed cursor), not enabled.
+    expect(html).toMatch(/class="[^"]*aria-disabled:opacity-50[^"]*aria-disabled:cursor-not-allowed|class="[^"]*aria-disabled:cursor-not-allowed[^"]*aria-disabled:opacity-50/)
     expect(html).not.toMatch(/<button[^>]*\sdisabled=""[^>]*data-testid="focused-/)
     const el = FocusedPostView({ state: { status: 'found', post: post() }, processing: 'hold', error: null, onAction: (a) => calls.push(a), onDismiss: () => {} })
     const found = (el as { props: { children: unknown[] } }).props.children[2] as { type: (p: unknown) => unknown; props: unknown }
