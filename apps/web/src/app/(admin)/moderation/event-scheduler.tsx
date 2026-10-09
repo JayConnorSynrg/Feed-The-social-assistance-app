@@ -37,32 +37,22 @@ import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir, type Locale } from '@/lib/i18n'
 import { eventFormT, eventTypeColor, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
 import { browserTimeZone, dateTimeFormat, formatCalendarDate, formatEventWhen, venueDateKey } from '@/lib/event-time'
-import { cancelEventOccurrence } from '@/lib/event-admin-rpc'
 import {
   canExtendSeries,
-  createSubmitController,
   isExtraDate,
-  mintIdempotencyKey,
   seriesState,
-  type FieldError,
 } from '@/lib/event-form-model'
 import { WEEK_START } from '@/lib/event-recurrence'
 import { formatRecurrence, formatSeriesEnd } from '@/lib/event-recurrence-format'
 import { formatRatePct } from '@/lib/event-checkin'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { OrganizerCheckinDisplay } from './organizer-checkin-display'
 import { useAdminOrgs } from './use-admin-orgs'
 import { EventCreateDialog, type OrgChoice } from './event-create-dialog'
-import { EventDatesDialog, type DatesTarget } from './event-dates-dialog'
-import { EventEditDialog, type EditTarget } from './event-edit-dialog'
-import { DANGER, EventDialog, FOCUS_RING, PRIMARY, SECONDARY, errorText } from './event-form-ui'
+import { EventDatesDialog, type DatesTarget } from '@/components/events/event-dates-dialog'
+import { EventEditDialog, type EditTarget } from '@/components/events/event-edit-dialog'
+import { toEditTarget } from '@/lib/event-edit-target'
+import { EventDialog, FOCUS_RING, PRIMARY, SECONDARY } from '@/components/events/event-form-ui'
+import { CancelDateConfirm, type CancelDateTarget } from '@/components/events/cancel-date-confirm'
 import { restoreFocusAfterPanel } from './org-panel-focus'
 import { pickOpener } from './event-focus'
 import { ExtendSeriesButton } from './extend-series-button'
@@ -323,23 +313,16 @@ export function calendarWindow(weekStart: Date, selectedDay: Date): { fromIso: s
   return { fromIso: addDays(new Date(from), -1).toISOString(), toIso: addDays(new Date(to), 1).toISOString() }
 }
 
-/** The edit dialog's target for an event row (the Edit button and an "Edit in admin" link). */
-export function toEditTarget(event: AssistanceEvent): EditTarget {
-  const next = event.next?.[0] ?? null
+/** What the cancel confirmation needs from a calendar date. */
+function toCancelDateTarget(occ: ScheduledDate): CancelDateTarget {
   return {
-    id: event.id,
-    org_id: event.org_id,
-    title: event.title,
-    event_type: event.event_type,
-    description: event.description,
-    location_name: event.location_name,
-    time_zone: event.time_zone,
-    is_active: event.is_active,
-    recurrence: event.recurrence,
-    series_start_local: event.series_start_local,
-    series_duration: event.series_duration,
-    announce_days_before: event.announce_days_before,
-    next: next ? { starts_at: next.starts_at, ends_at: next.ends_at } : null,
+    occurrenceId: occ.id,
+    eventId: occ.event_id,
+    orgId: occ.org_id,
+    title: occ.event_title,
+    startsAt: occ.starts_at,
+    endsAt: occ.ends_at,
+    timeZone: occ.time_zone,
   }
 }
 
@@ -425,9 +408,6 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
   const [datesTarget, setDatesTarget] = useState<(DatesTarget & { key: number }) | null>(null)
   const [editTarget, setEditTarget] = useState<(EditTarget & { key: number }) | null>(null)
   const [cancelTarget, setCancelTarget] = useState<ScheduledDate | null>(null)
-  const [cancelError, setCancelError] = useState<FieldError | null>(null)
-  const [cancelling, setCancelling] = useState(false)
-  const [cancelController] = useState(() => createSubmitController(mintIdempotencyKey))
   // Every dialog here is opened without a DialogTrigger: remember the control that opened it and
   // return focus there on close, or to "New event" when that control is gone (or, after a date
   // was cancelled, will be gone once the list refreshes).
@@ -636,27 +616,6 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
     logger.info('admin.event.scheduler.kiosk_opened', { occurrence_id: occ.id, event_id: occ.event_id })
   }
 
-  async function confirmCancel() {
-    if (!cancelTarget || cancelController.inFlight) return
-    setCancelError(null)
-    setCancelling(true)
-    const target = cancelTarget
-    const outcome = await cancelController.submit(() =>
-      cancelEventOccurrence(supabase, { occurrenceId: target.id, eventId: target.event_id, orgId: target.org_id })
-    )
-    setCancelling(false)
-    if (outcome.status === 'busy') return
-    if (outcome.result.ok) {
-      // The cancelled date leaves the calendar on refresh, taking its button with it.
-      focusFallbackRef.current = true
-      setCancelTarget(null)
-      setNotice(eventFormT(locale, 'dateCancelled'))
-      refresh()
-    } else {
-      setCancelError({ key: outcome.result.errorKey })
-    }
-  }
-
   const orgChoice: OrgChoice = scoped ? { kind: 'fixed', orgId: selectedOrgId } : { kind: 'pick', orgs: adminOrgs }
 
   /** Ids of one calendar entry's title / day / time, so each action names the date it acts on. */
@@ -698,7 +657,6 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
             aria-describedby={describedBy}
             onClick={(e) => {
               rememberOpener(e)
-              setCancelError(null)
               setCancelTarget(occ)
             }}
             className={`${cls} bg-white/40 text-red-700 hover:bg-red-50`}
@@ -1100,39 +1058,19 @@ export function EventScheduler({ selectedOrgId, source = 'event_scheduler' }: Pr
         />
       )}
 
-      <AlertDialog
-        open={cancelTarget !== null}
-        onOpenChange={(open) => {
-          if (!open && !cancelling) setCancelTarget(null)
+      <CancelDateConfirm
+        target={cancelTarget && toCancelDateTarget(cancelTarget)}
+        locale={locale}
+        onClose={() => setCancelTarget(null)}
+        onCloseAutoFocus={restoreFocus}
+        onCancelled={() => {
+          // The cancelled date leaves the calendar on refresh, taking its button with it.
+          focusFallbackRef.current = true
+          setCancelTarget(null)
+          setNotice(eventFormT(locale, 'dateCancelled'))
+          refresh()
         }}
-      >
-        <AlertDialogContent lang={locale} dir={dir(locale)} onCloseAutoFocus={restoreFocus}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{eventFormT(locale, 'cancelConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {cancelTarget &&
-                formatMessage(eventFormT(locale, 'cancelConfirmBody'), {
-                  title: cancelTarget.event_title,
-                  when: formatEventWhen(cancelTarget.starts_at, cancelTarget.ends_at, cancelTarget.time_zone, locale).text,
-                })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {cancelError && (
-            <p role="alert" className="text-sm text-red-700">
-              {errorText(locale, cancelError)}
-            </p>
-          )}
-          <AlertDialogFooter>
-            <button type="button" className={SECONDARY} onClick={() => setCancelTarget(null)} disabled={cancelling}>
-              {eventFormT(locale, 'keepDate')}
-            </button>
-            <button type="button" className={DANGER} aria-disabled={cancelling || undefined} onClick={() => void confirmCancel()}>
-              {cancelling && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {eventFormT(locale, 'cancelDate')}
-            </button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      />
 
       {kiosk && (
         <OrganizerCheckinDisplay

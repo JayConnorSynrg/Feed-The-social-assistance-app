@@ -18,7 +18,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 
 import { ExtendSeriesButton, extendButtonName, runExtend } from './extend-series-button'
-import { StopRepeatConfirm, focusAfterFailedSave, initialEditDraft, placeSaveError, type EditTarget } from './event-edit-dialog'
+import { StopRepeatConfirm, focusAfterFailedSave, initialEditDraft, placeSaveError, type EditTarget } from '@/components/events/event-edit-dialog'
 import { EDIT_FIELD_ORDER, firstErrorField } from '@/lib/event-form-model'
 import { EndingSoonView } from './org/org-overview'
 import { createSubmitController } from '@/lib/event-form-model'

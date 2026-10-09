@@ -44,9 +44,10 @@ export type AdminEditSource =
   | 'organization_page'
   | 'post_page'
   | 'feed_post'
-  | 'feed_event'
   | 'feed_alert'
-  | 'events_panel'
+  /** The ⋯ menu of an event card in the community feed / in the Events tab. */
+  | 'feed_event_menu'
+  | 'events_panel_menu'
 
 /** The named browsing context every "Edit in admin" link reuses. */
 export const FEED_ADMIN_TARGET = 'feed-admin'

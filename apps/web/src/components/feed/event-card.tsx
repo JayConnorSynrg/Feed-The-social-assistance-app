@@ -8,7 +8,9 @@
 // Saturday · Next: Sat, Oct 24"), the cancelled date that comes before it ("Sat, Oct 10
 // cancelled — next: Sat, Oct 24"), and reuses the W1.6a check-in logic end-to-end: the button
 // state comes from computeCheckinButton and tapping opens the CheckinSheet, which calls the
-// check_in SECDEF RPC and shows guests the create-account prompt.
+// check_in SECDEF RPC and shows guests the create-account prompt. A platform admin or an admin of
+// the event's organization also gets the card's ⋯ menu (edit the event, add dates, cancel this
+// date, Edit in admin — components/events/event-card-admin-menu.tsx); everyone else sees no menu.
 
 import { useId, useRef, useState } from 'react'
 import { Calendar, CalendarClock, CalendarX, MapPin, Repeat, Users } from 'lucide-react'
@@ -30,7 +32,7 @@ import { dir, type Locale } from '@/lib/i18n'
 import { formatEventWhen } from '@/lib/event-time'
 import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
 import { eventMemberT } from '@/lib/i18n-event-member'
-import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
+import { EventCardAdminMenu, type EventCardChange, type EventMenuSource } from '@/components/events/event-card-admin-menu'
 
 export interface EventCardProps {
   event: EventCardItem
@@ -55,15 +57,25 @@ export interface EventCardProps {
   viewerTz?: string
   /** A deep link (#events?focus=event:<id>) brought this card into view: a lime ring marks it. */
   highlighted?: boolean
+  /** Its admin changed the event from the card's ⋯ menu: the owner re-reads this card. */
+  onManaged?: (eventId: string, change: EventCardChange) => void
 }
 
 /** The deep-link highlight: a lime-700 ring outside the card (4.96:1 on the white offset, 4.75:1 on
  *  stone-50 — WCAG 1.4.11), fading in only when motion is allowed. */
 export const EVENT_CARD_HIGHLIGHT = 'ring-4 ring-lime-700 ring-offset-2 motion-safe:transition-shadow motion-safe:duration-300'
 
-/** The admin.nav.edit_in_admin source of an event card's "Edit in admin". */
-export function eventAdminSource(surface: EventCardProps['surface']): 'feed_event' | 'events_panel' {
-  return surface === 'feed' ? 'feed_event' : 'events_panel'
+/** True when focus is inside the event's card under `root` (a re-read that removes the card must
+ *  then move focus somewhere that still exists). */
+export function eventCardHasFocus(root: ParentNode | null, eventId: string, active: Element | null): boolean {
+  if (!root || !active) return false
+  const card = root.querySelector(`[data-event-id="${CSS.escape(eventId)}"]`)
+  return card?.contains(active) ?? false
+}
+
+/** The admin.nav.edit_in_admin source of "Edit in admin" in an event card's ⋯ menu. */
+export function eventAdminSource(surface: EventCardProps['surface']): EventMenuSource {
+  return surface === 'feed' ? 'feed_event_menu' : 'events_panel_menu'
 }
 
 export function EventCard({
@@ -78,6 +90,7 @@ export function EventCard({
   now,
   viewerTz,
   highlighted = false,
+  onManaged,
 }: EventCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [checkinOccurrence, setCheckinOccurrence] = useState<CheckinOccurrence | null>(null)
@@ -178,9 +191,13 @@ export function EventCard({
 
       <div className="flex items-start justify-between gap-3">
         <Title id={titleId} className="text-base font-semibold text-stone-900 leading-snug">{event.title}</Title>
-        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${eventTypeColor(event.eventType)}`}>
-          {typeLabel}
-        </span>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${eventTypeColor(event.eventType)}`}>
+            {typeLabel}
+          </span>
+          {/* Organization / platform admins only (after hydration); nothing for anyone else. */}
+          <EventCardAdminMenu event={event} locale={locale} source={eventAdminSource(surface)} onChanged={onManaged} />
+        </div>
       </div>
 
       {repeatLine && (
@@ -255,18 +272,6 @@ export function EventCard({
           {checkinButtonLabel(btn.kind, btn.label, locale)}
         </span>
       )}
-
-      {/* "Edit in admin" (platform admins, and admins of this event's organization): the event's edit
-          dialog in the scheduler. Rendered after hydration only. */}
-      <div className="self-start empty:hidden">
-        <ClientAdminEditLink
-          target={{ kind: 'event', id: event.eventId, orgId: event.orgId }}
-          itemName={event.title}
-          source={eventAdminSource(surface)}
-          locale={locale}
-          data-testid={`admin-edit-event-${event.eventId}`}
-        />
-      </div>
 
       {checkinOccurrence && (
         <CheckinSheet

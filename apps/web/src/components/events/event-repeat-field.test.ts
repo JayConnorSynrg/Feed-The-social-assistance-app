@@ -1,4 +1,4 @@
-// apps/web/src/app/(admin)/moderation/event-repeat-field.test.ts
+// apps/web/src/components/events/event-repeat-field.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // The repeat + lead part of the event forms, as the admin meets it:

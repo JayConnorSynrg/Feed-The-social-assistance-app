@@ -17,15 +17,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { logger } from './logger'
-import { loadCheckinState, type CheckinState, type CheckinStateSurface } from './event-checkin-state'
+import { emptyCheckinState, loadCheckinState, type CheckinState, type CheckinStateSurface } from './event-checkin-state'
 import {
   applyNextDates,
   buildEventCards,
   EVENT_OCCURRENCE_SELECT,
+  upcomingEventRefs,
   type EventCardItem,
   type EventOccurrenceRow,
   type NextDateRow,
   type ShownEventRef,
+  type UpcomingEventRow,
 } from '@/components/feed/post-model'
 
 export const EVENT_CARD_TIMEOUT_MS = 12_000
@@ -120,4 +122,37 @@ export async function loadEventCards(
   ])
 
   return { items: applyNextDates(cards, nextByEvent), checkin }
+}
+
+/** upcoming_events has no upper clamp on p_limit; reading one event's row needs every shown event
+ *  (the rule is computed over all of them either way; each row is ids and times only). */
+const ALL_SHOWN_EVENTS = 10_000
+
+export interface ReloadedEventCard {
+  /** The event's card as the feed / Events tab would now show it; null = the event is no longer
+   *  shown (retired, or no announced, not-ended date). */
+  item: EventCardItem | null
+  checkin: CheckinState
+}
+
+/**
+ * Re-read ONE event's card after its admin changed it from that card (edit, add dates, cancel a
+ * date), without reloading the list it sits in. Which date the card shows is the server's rule
+ * (event_feed_next, through upcoming_events — the same rows ranked_feed_v2 places in the feed);
+ * the card is then hydrated exactly as a list load hydrates it (loadEventCards with that one shown
+ * date). Throws when a read fails (the caller keeps the card it has and logs).
+ */
+export async function reloadEventCard(
+  supabase: SupabaseClient<Database>,
+  eventId: string,
+  options: LoadEventCardsOptions,
+): Promise<ReloadedEventCard> {
+  const { data, error } = await supabase
+    .rpc('upcoming_events', { p_limit: ALL_SHOWN_EVENTS })
+    .abortSignal(AbortSignal.timeout(options.timeoutMs ?? EVENT_CARD_TIMEOUT_MS))
+  if (error) throw error
+  const row = ((data ?? []) as UpcomingEventRow[]).find((r) => r.event_id === eventId)
+  if (!row) return { item: null, checkin: emptyCheckinState() }
+  const { items, checkin } = await loadEventCards(supabase, upcomingEventRefs([row]), options)
+  return { item: items[0] ?? null, checkin }
 }

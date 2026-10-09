@@ -589,12 +589,45 @@ export function appendNewEvents(
   return out
 }
 
+/**
+ * Put an event's re-read card in place of its current one (after its admin changed it from the
+ * card), matched by event id; `next` null removes the card (the event is no longer shown). Every
+ * other card keeps its object and its position. `keep` copies what only the list knows (the feed's
+ * rank score and distance bucket) from the card being replaced, so the change never moves the card.
+ * Returns the same array when the event is not in the list.
+ */
+export function replaceEventCard<T extends EventCardItem>(
+  items: T[],
+  eventId: string,
+  next: EventCardItem | null,
+  keep: (prev: T, next: EventCardItem) => T,
+): T[] {
+  const i = items.findIndex((item) => item.eventId === eventId)
+  if (i === -1) return items
+  if (next === null) return items.filter((_, j) => j !== i)
+  const out = [...items]
+  out[i] = keep(items[i], next)
+  return out
+}
+
 export type EventDayGroup = 'today' | 'week' | 'later'
 
 /** The instant a card is filed under: the cancelled date for a card whose shown date was
  *  cancelled (that is the date the notice is about), else the date it times. */
 export function eventCardDay(item: Pick<EventCardItem, 'startsAt' | 'cancelledShown' | 'cancelledStartsAt'>): string {
   return item.cancelledShown !== null && item.cancelledStartsAt ? item.cancelledStartsAt : item.startsAt
+}
+
+/** The Events tab's order — upcoming_events' ORDER BY (the shown date's start, then its id) — so a
+ *  card whose date an admin just changed moves to where a fresh load would put it. Stable. */
+export function orderByShownDate<T extends Pick<EventCardItem, 'occurrenceId' | 'startsAt' | 'cancelledShown' | 'cancelledStartsAt'>>(
+  items: readonly T[],
+): T[] {
+  return [...items].sort(
+    (a, b) =>
+      Date.parse(eventCardDay(a)) - Date.parse(eventCardDay(b)) ||
+      (a.occurrenceId < b.occurrenceId ? -1 : a.occurrenceId > b.occurrenceId ? 1 : 0),
+  )
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-form-ui.tsx
+// apps/web/src/components/events/event-form-ui.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Building blocks shared by the event create / add-dates / edit dialogs: the dialog frame (Radix

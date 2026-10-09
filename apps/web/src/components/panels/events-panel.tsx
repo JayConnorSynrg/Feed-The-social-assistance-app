@@ -15,6 +15,11 @@
 // into view, focused and ringed in lime (4 s or until it loses focus), one nav.deeplink.resolve row
 // records found / not_found, and the focus is cleared. An event not in the list gets a polite
 // status line and nothing else moves.
+//
+// An organization / platform admin manages an event from its card's ⋯ menu (edit, add dates, cancel
+// this date, Edit in admin). After a save only that card is re-read (lib/event-card-data.ts
+// reloadEventCard) and put back in date order — the list stays on screen and the change is
+// announced; a card that is no longer listed leaves, and focus moves to the tab heading if it was in it.
 
 import { useState, useEffect, useCallback, useRef, type Ref } from 'react'
 import { Calendar, Loader2, AlertCircle } from 'lucide-react'
@@ -28,11 +33,15 @@ import { usePanelContext } from '@/components/layout/feed-shell'
 import { dir, type Locale } from '@/lib/i18n'
 import { eventFormT } from '@/lib/i18n-event-forms'
 import { eventMemberT } from '@/lib/i18n-event-member'
-import { applyCheckinResult, checkinResultEffect, type CheckinState } from '@/lib/event-checkin-state'
+import { applyCheckinResult, checkinResultEffect, mergeCheckinState, type CheckinState } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
+import { useEventCardRefresh } from '@/hooks/use-event-card-refresh'
 import { EventCard } from '@/components/feed/event-card'
+import type { EventCardChange } from '@/components/events/event-card-admin-menu'
 import {
   groupEventsByVenueDay,
+  orderByShownDate,
+  replaceEventCard,
   upcomingEventRefs,
   type EventCardItem,
   type EventDayGroup,
@@ -75,6 +84,10 @@ export interface EventsTabViewProps {
   highlightId?: string | null
   /** The list section (the deep-link focus looks for the card inside it). */
   listRef?: Ref<HTMLElement>
+  /** An admin changed an event from its card's ⋯ menu (the panel re-reads that card). */
+  onManaged?: (eventId: string, change: EventCardChange) => void
+  /** What the last change from a card menu did (announced politely). */
+  notice?: string
 }
 
 export type EventFocusDecision = { outcome: 'found'; eventId: string } | { outcome: 'not_found' }
@@ -156,20 +169,23 @@ export function takeSettledFocus(
 }
 
 /** The Events tab's rendering for one load state (pure; EventsPanel owns the loading). */
-export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz, focusMiss = false, highlightId = null, listRef }: EventsTabViewProps) {
+export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz, focusMiss = false, highlightId = null, listRef, onManaged, notice = '' }: EventsTabViewProps) {
   const showMiss = focusMiss && state.status === 'ready'
-  // One status region, always mounted, so every load / reload outcome is announced.
+  // One status region, always mounted, so every load / reload outcome is announced — and what the
+  // last change from a card's ⋯ menu did.
   const announcement = !announce
     ? ''
     : state.status === 'loading'
       ? eventFormT(locale, 'loading')
       : state.status === 'error'
         ? eventFormT(locale, 'loadError')
-        : showMiss
-          ? eventMemberT(locale, 'focusNotListed')
-          : state.items.length === 0
-            ? eventFormT(locale, 'eventsTabEmpty')
-            : ''
+        : notice
+          ? notice
+          : showMiss
+            ? eventMemberT(locale, 'focusNotListed')
+            : state.items.length === 0
+              ? eventFormT(locale, 'eventsTabEmpty')
+              : ''
   return (
     <section ref={listRef} lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
       <div className="flex items-center gap-2 pb-1">
@@ -237,6 +253,7 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
                 now={now}
                 viewerTz={viewerTz}
                 highlighted={item.eventId === highlightId}
+                onManaged={onManaged}
               />
             ))}
           </section>
@@ -304,11 +321,42 @@ export function EventsPanel() {
     }
   }, [state.status])
 
+  // ---- A change from a card's ⋯ menu: re-read that one card ------------------------------------------
+  // The list section: deep-link focus and a re-read card look for their card inside it.
+  const listRef = useRef<HTMLElement>(null)
+  const applyCard = useCallback((eventId: string, item: EventCardItem | null, checkin: CheckinState) => {
+    setState((prev) =>
+      prev.status !== 'ready'
+        ? prev
+        : {
+            ...prev,
+            // Back where a fresh load would put it (its date may have moved).
+            items: orderByShownDate(replaceEventCard(prev.items, eventId, item, (_was, next) => next)),
+            checkin: mergeCheckinState(prev.checkin, checkin),
+          },
+    )
+  }, [])
+  const listRoot = useCallback(() => listRef.current, [])
+  const focusTitle = useCallback(() => titleRef.current?.focus(), [])
+  const { notice, setNotice, onManaged } = useEventCardRefresh({
+    supabase,
+    surface: 'events_tab',
+    userId,
+    isGuest: isAnonymous,
+    locale,
+    timeoutMs: QUERY_TIMEOUT_MS,
+    apply: applyCard,
+    root: listRoot,
+    focusHeading: focusTitle,
+  })
+
   const reload = useCallback(() => {
+    // A new load replaces what the last card change announced.
+    setNotice('')
     focusTitleAfterLoad.current = true
     setState({ status: 'loading' })
     void load()
-  }, [load])
+  }, [load, setNotice])
 
   // Apply the server's check_in answer to that card in place (the list, the member's place and
   // focus stay); re-read only when the answer is unknown.
@@ -327,7 +375,6 @@ export function EventsPanel() {
   // ---- Deep-link focus (#events?focus=event:<id>) ------------------------------------------------
   // Keyed on the focus object itself, not on mount: the feed panel and this subtab stay mounted
   // when a hashchange (a re-click in the reused preview tab) delivers a new focus.
-  const listRef = useRef<HTMLElement>(null)
   const pendingFocus = useRef<PendingFocus | null>(null)
   // The latest state for the arrival effect (synced first, in effect order, every commit).
   const stateRef = useRef(state)
@@ -350,12 +397,13 @@ export function EventsPanel() {
     // A link arriving from the URL (an external system) replaces the last miss line and highlight.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocusMiss(false)
+    setNotice('')
     setHighlightId(null)
     if (reread) {
       setState({ status: 'loading' })
       void load()
     }
-  }, [focus, load])
+  }, [focus, load, setNotice])
 
   // Leaving the tab with a focus still waiting: one `abandoned` row, so every followed link writes
   // exactly one nav.deeplink.resolve row.
@@ -411,6 +459,8 @@ export function EventsPanel() {
       focusMiss={focusMiss}
       highlightId={highlightId}
       listRef={listRef}
+      onManaged={onManaged}
+      notice={notice}
     />
   )
 }

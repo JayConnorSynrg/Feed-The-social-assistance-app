@@ -1,0 +1,150 @@
+'use client'
+
+// apps/web/src/components/feed/feed-chrome.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The community feed's chrome around the cards, in the viewer's language (lib/i18n-feed-chrome.ts):
+// the heading with the Ranked / Recent toggle and the post filters, the list's error / loading /
+// empty state, and "Load more posts". A failed read shows a translated sentence chosen by kind
+// (timeout, or anything else) — the server's text never reaches the member. FeedPanel
+// (components/panels/feed-panel.tsx) owns the state; these only render it.
+
+import type { Ref } from 'react'
+import { Loader2 } from 'lucide-react'
+import type { Locale } from '@/lib/i18n'
+import { feedChromeT, type FeedChromeMessages } from '@/lib/i18n-feed-chrome'
+
+/** Ranked-feed ordering mode. Default 'ranked' (proximity/recency/engagement blend via the
+ *  ranked_feed RPC); 'recent' is the legacy chronological keyset query. */
+export type FeedRankMode = 'ranked' | 'recent'
+
+export type FilterType = 'all' | 'following' | 'mine' | 'announcements'
+
+/** Why the feed could not be read: a timeout, or anything else (permission, server, network). */
+export type FeedLoadError = 'timeout' | 'failed'
+
+const FILTERS: ReadonlyArray<{ key: FilterType; label: keyof FeedChromeMessages }> = [
+  { key: 'all', label: 'filterAll' },
+  { key: 'following', label: 'filterFollowing' },
+  { key: 'mine', label: 'filterMine' },
+  { key: 'announcements', label: 'filterAnnouncements' },
+]
+const RANK_MODES: ReadonlyArray<{ key: FeedRankMode; label: keyof FeedChromeMessages }> = [
+  { key: 'ranked', label: 'rankRanked' },
+  { key: 'recent', label: 'rankRecent' },
+]
+
+export interface FeedHeaderProps {
+  activeFilter: FilterType
+  onFilterChange: (filter: FilterType) => void
+  rankMode: FeedRankMode
+  onRankModeChange: (mode: FeedRankMode) => void
+  locale: Locale
+  /** The heading (focus lands here when the card that held it leaves the feed). */
+  titleRef?: Ref<HTMLHeadingElement>
+}
+
+export function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeChange, locale, titleRef }: FeedHeaderProps) {
+  const t = (key: keyof FeedChromeMessages) => feedChromeT(locale, key)
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 ref={titleRef} tabIndex={-1} className="font-semibold text-lg rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">
+          {t('feedTitle')}
+        </h2>
+        {/* Ranked ↔ chronological toggle (default ranked). */}
+        <div role="group" aria-label={t('orderingAria')} className="flex items-center rounded-full bg-[#f0ede6] p-0.5 shrink-0">
+          {RANK_MODES.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={rankMode === m.key}
+              data-testid={`feed-rankmode-${m.key}`}
+              onClick={() => onRankModeChange(m.key)}
+              className={`min-h-6 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                rankMode === m.key ? 'bg-[#4a5d23] text-white' : 'text-stone-700 hover:text-stone-900'
+              }`}
+            >
+              {t(m.label)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* The post filters: one is on at a time (aria-pressed says which). */}
+      <div role="group" aria-label={t('filtersAria')} className="flex gap-2 overflow-x-auto">
+        {FILTERS.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            aria-pressed={activeFilter === filter.key}
+            data-testid={`feed-filter-${filter.key}`}
+            onClick={() => onFilterChange(filter.key)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+              activeFilter === filter.key ? 'bg-[#4a5d23] text-white' : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
+            }`}
+          >
+            {t(filter.label)}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export type FeedListState = { kind: 'error'; error: FeedLoadError } | { kind: 'loading' } | { kind: 'empty' }
+
+/** The list's place-holder while it has no cards: the read failed (with Retry), is running, or
+ *  returned nothing. */
+export function FeedListStatus({ state, locale, onRetry }: { state: FeedListState; locale: Locale; onRetry: () => void }) {
+  const t = (key: keyof FeedChromeMessages) => feedChromeT(locale, key)
+  if (state.kind === 'error') {
+    return (
+      <div className="text-center py-8">
+        <p role="alert" data-testid="feed-load-error" className="text-sm text-red-700">
+          {t(state.error === 'timeout' ? 'loadTimeout' : 'loadFailed')}
+        </p>
+        <button type="button" onClick={onRetry} className="min-h-6 text-sm text-stone-700 underline mt-2">
+          {t('retry')}
+        </button>
+      </div>
+    )
+  }
+  if (state.kind === 'loading') {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" aria-hidden="true" />
+        <p className="text-sm">{t('loadingPosts')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <p className="text-sm">{t('emptyTitle')}</p>
+      <p className="text-xs mt-1">{t('emptyBody')}</p>
+    </div>
+  )
+}
+
+/** "Load more posts" (while the next page loads: a spinner and "Loading…"). */
+export function FeedLoadMore({ locale, loading, onLoadMore }: { locale: Locale; loading: boolean; onLoadMore: () => void }) {
+  return (
+    <div className="pt-2 pb-4 flex justify-center">
+      <button
+        type="button"
+        data-testid="feed-load-more"
+        onClick={onLoadMore}
+        disabled={loading}
+        className="px-5 py-2 rounded-full text-sm font-medium bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700 disabled:opacity-60 flex items-center gap-2 transition-colors"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+            {feedChromeT(locale, 'loadingMore')}
+          </>
+        ) : (
+          feedChromeT(locale, 'loadMore')
+        )}
+      </button>
+    </div>
+  )
+}

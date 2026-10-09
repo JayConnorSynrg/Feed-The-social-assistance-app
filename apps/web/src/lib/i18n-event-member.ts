@@ -39,6 +39,15 @@ export interface EventMemberMessages {
   errAlreadyCounted: string
   errHousehold: string
   errGeneric: string
+  /** The ⋯ menu trigger of an event card (organization / platform admins only). */
+  cardMenuAria: string
+  /** "Cancel date" in the card menu when the card's date cannot be cancelled. */
+  cancelUnavailableCancelled: string
+  cancelUnavailableEnded: string
+  /** The edit dialog could not be opened (the event read failed). */
+  editLoadError: string
+  /** Announced after a save when the event no longer appears (retired, or no announced date). */
+  cardGoneNotice: string
 }
 
 export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
@@ -70,6 +79,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'You are already counted for this event.',
     errHousehold: 'Household size must be between 1 and 20.',
     errGeneric: 'The check-in did not go through. Try again.',
+    cardMenuAria: 'Manage event: {title}',
+    cancelUnavailableCancelled: 'This date is already cancelled.',
+    cancelUnavailableEnded: 'This date has ended.',
+    editLoadError: 'The event could not be opened for editing. Try again.',
+    cardGoneNotice: 'This event is no longer listed.',
   },
   es: {
     eventsTabTitle: 'Eventos de la comunidad',
@@ -99,6 +113,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Ya está contado para este evento.',
     errHousehold: 'El tamaño del hogar debe estar entre 1 y 20.',
     errGeneric: 'No se pudo completar el registro. Inténtelo de nuevo.',
+    cardMenuAria: 'Gestionar evento: {title}',
+    cancelUnavailableCancelled: 'Esta fecha ya está cancelada.',
+    cancelUnavailableEnded: 'Esta fecha ya terminó.',
+    editLoadError: 'No se pudo abrir el evento para editarlo. Inténtalo de nuevo.',
+    cardGoneNotice: 'Este evento ya no aparece en la lista.',
   },
   ht: {
     eventsTabTitle: 'Evènman kominote a',
@@ -128,6 +147,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Yo deja konte ou pou evènman sa a.',
     errHousehold: 'Kantite moun nan kay la dwe ant 1 ak 20.',
     errGeneric: 'Siyen an pa pase. Eseye ankò.',
+    cardMenuAria: 'Jere evènman: {title}',
+    cancelUnavailableCancelled: 'Dat sa a deja anile.',
+    cancelUnavailableEnded: 'Dat sa a fini deja.',
+    editLoadError: 'Nou pa t kapab louvri evènman an pou modifye l. Eseye ankò.',
+    cardGoneNotice: 'Evènman sa a pa parèt nan lis la ankò.',
   },
   vi: {
     eventsTabTitle: 'Sự kiện cộng đồng',
@@ -157,6 +181,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Bạn đã được tính cho sự kiện này.',
     errHousehold: 'Số người trong hộ phải từ 1 đến 20.',
     errGeneric: 'Không điểm danh được. Hãy thử lại.',
+    cardMenuAria: 'Quản lý sự kiện: {title}',
+    cancelUnavailableCancelled: 'Ngày này đã bị hủy.',
+    cancelUnavailableEnded: 'Ngày này đã kết thúc.',
+    editLoadError: 'Không thể mở sự kiện để chỉnh sửa. Hãy thử lại.',
+    cardGoneNotice: 'Sự kiện này không còn trong danh sách.',
   },
   ar: {
     eventsTabTitle: 'فعاليات المجتمع',
@@ -186,6 +215,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'أنت محتسب بالفعل في هذه الفعالية.',
     errHousehold: 'يجب أن يكون عدد أفراد الأسرة بين 1 و20.',
     errGeneric: 'لم يكتمل تسجيل الحضور. حاول مرة أخرى.',
+    cardMenuAria: 'إدارة الفعالية: {title}',
+    cancelUnavailableCancelled: 'أُلغي هذا الموعد بالفعل.',
+    cancelUnavailableEnded: 'انتهى هذا الموعد.',
+    editLoadError: 'تعذّر فتح الفعالية لتعديلها. حاول مرة أخرى.',
+    cardGoneNotice: 'لم تعد هذه الفعالية مدرجة في القائمة.',
   },
   zh: {
     eventsTabTitle: '社区活动',
@@ -215,6 +249,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: '您已计入此活动。',
     errHousehold: '家庭人数必须在 1 到 20 之间。',
     errGeneric: '签到未成功，请重试。',
+    cardMenuAria: '管理活动：{title}',
+    cancelUnavailableCancelled: '此日期已取消。',
+    cancelUnavailableEnded: '此日期已结束。',
+    editLoadError: '无法打开活动进行编辑。请重试。',
+    cardGoneNotice: '此活动已不在列表中。',
   },
   so: {
     eventsTabTitle: 'Dhacdooyinka bulshada',
@@ -244,6 +283,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Horay ayaa laguugu tiriyey dhacdadan.',
     errHousehold: 'Tirada qoysku waa inay u dhexeysaa 1 ilaa 20.',
     errGeneric: 'Diiwaangelintu ma dhicin. Isku day mar kale.',
+    cardMenuAria: 'Maamul dhacdada: {title}',
+    cancelUnavailableCancelled: 'Taariikhdan horey ayaa loo joojiyey.',
+    cancelUnavailableEnded: 'Taariikhdan way dhammaatay.',
+    editLoadError: 'Dhacdada lama furi karin si wax looga beddelo. Isku day mar kale.',
+    cardGoneNotice: 'Dhacdadan kuma jirto liiska hadda.',
   },
   fr: {
     eventsTabTitle: 'Événements de la communauté',
@@ -273,6 +317,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Vous êtes déjà compté pour cet événement.',
     errHousehold: 'La taille du foyer doit être comprise entre 1 et 20.',
     errGeneric: 'L’enregistrement n’a pas abouti. Réessayez.',
+    cardMenuAria: 'Gérer l’événement : {title}',
+    cancelUnavailableCancelled: 'Cette date est déjà annulée.',
+    cancelUnavailableEnded: 'Cette date est passée.',
+    editLoadError: 'Impossible d’ouvrir l’événement pour le modifier. Réessayez.',
+    cardGoneNotice: 'Cet événement n’apparaît plus dans la liste.',
   },
   pt: {
     eventsTabTitle: 'Eventos da comunidade',
@@ -302,6 +351,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Você já foi contado neste evento.',
     errHousehold: 'O tamanho da família deve ser entre 1 e 20.',
     errGeneric: 'Não foi possível fazer o check-in. Tente novamente.',
+    cardMenuAria: 'Gerenciar evento: {title}',
+    cancelUnavailableCancelled: 'Esta data já foi cancelada.',
+    cancelUnavailableEnded: 'Esta data já terminou.',
+    editLoadError: 'Não foi possível abrir o evento para edição. Tente novamente.',
+    cardGoneNotice: 'Este evento não aparece mais na lista.',
   },
   ru: {
     eventsTabTitle: 'События сообщества',
@@ -331,6 +385,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Вы уже учтены на этом событии.',
     errHousehold: 'Число членов семьи должно быть от 1 до 20.',
     errGeneric: 'Не удалось отметиться. Попробуйте ещё раз.',
+    cardMenuAria: 'Управление мероприятием: {title}',
+    cancelUnavailableCancelled: 'Эта дата уже отменена.',
+    cancelUnavailableEnded: 'Эта дата уже прошла.',
+    editLoadError: 'Не удалось открыть мероприятие для изменения. Попробуйте ещё раз.',
+    cardGoneNotice: 'Этого мероприятия больше нет в списке.',
   },
   ko: {
     eventsTabTitle: '지역 행사',
@@ -360,6 +419,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: '이미 이 행사의 인원에 포함되어 있습니다.',
     errHousehold: '가구원 수는 1~20명이어야 합니다.',
     errGeneric: '체크인되지 않았습니다. 다시 시도하세요.',
+    cardMenuAria: '행사 관리: {title}',
+    cancelUnavailableCancelled: '이 날짜는 이미 취소되었습니다.',
+    cancelUnavailableEnded: '이 날짜는 이미 끝났습니다.',
+    editLoadError: '행사를 수정하려고 열 수 없습니다. 다시 시도하세요.',
+    cardGoneNotice: '이 행사는 더 이상 목록에 없습니다.',
   },
   tl: {
     eventsTabTitle: 'Mga event ng komunidad',
@@ -389,6 +453,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Nabilang ka na sa event na ito.',
     errHousehold: 'Dapat 1 hanggang 20 ang bilang ng tao sa sambahayan.',
     errGeneric: 'Hindi natuloy ang check-in. Subukan ulit.',
+    cardMenuAria: 'Pamahalaan ang event: {title}',
+    cancelUnavailableCancelled: 'Nakansela na ang petsang ito.',
+    cancelUnavailableEnded: 'Tapos na ang petsang ito.',
+    editLoadError: 'Hindi mabuksan ang event para i-edit. Subukang muli.',
+    cardGoneNotice: 'Hindi na nakalista ang event na ito.',
   },
   am: {
     eventsTabTitle: 'የማህበረሰብ ዝግጅቶች',
@@ -418,6 +487,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'ለዚህ ዝግጅት አስቀድመው ተቆጥረዋል።',
     errHousehold: 'የቤተሰብ ብዛት ከ1 እስከ 20 መሆን አለበት።',
     errGeneric: 'ምዝገባው አልተሳካም። እንደገና ይሞክሩ።',
+    cardMenuAria: 'ዝግጅቱን ያስተዳድሩ፦ {title}',
+    cancelUnavailableCancelled: 'ይህ ቀን አስቀድሞ ተሰርዟል።',
+    cancelUnavailableEnded: 'ይህ ቀን አልፏል።',
+    editLoadError: 'ዝግጅቱን ለማስተካከል መክፈት አልተቻለም። እንደገና ይሞክሩ።',
+    cardGoneNotice: 'ይህ ዝግጅት ከእንግዲህ በዝርዝሩ ውስጥ የለም።',
   },
   hmn: {
     eventsTabTitle: 'Cov xwm txheej hauv zej zog',
@@ -447,6 +521,11 @@ export const eventMemberMessages: Record<Locale, EventMemberMessages> = {
     errAlreadyCounted: 'Koj twb raug suav rau qhov xwm txheej no lawm.',
     errHousehold: 'Tus naj npawb neeg hauv tsev yuav tsum yog 1 txog 20.',
     errGeneric: 'Kev sau npe tsis tiav. Sim dua.',
+    cardMenuAria: 'Tswj qhov xwm txheej: {title}',
+    cancelUnavailableCancelled: 'Hnub no twb raug tshem lawm.',
+    cancelUnavailableEnded: 'Hnub no twb xaus lawm.',
+    editLoadError: 'Qhib tsis tau qhov xwm txheej los kho. Sim dua.',
+    cardGoneNotice: 'Qhov xwm txheej no tsis nyob hauv daim ntawv teev lawm.',
   },
 }
 

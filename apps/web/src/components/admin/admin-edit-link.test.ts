@@ -124,7 +124,7 @@ describe('AdminEditLink — the link (I2, I4)', () => {
     const org = { target: { kind: 'organization', id: ORG }, itemName: 'Riverside Pantry', source: 'organization_page' } as const
     expect(render(org, ready('platform_admin', null))).toContain(`href="/moderation?tab=organizations&amp;org=${ORG}&amp;focus=organization:${ORG}"`)
     expect(render(org, ready(null, [ORG]))).toContain(`href="/moderation/org/${ORG}?tab=profile&amp;focus=organization:${ORG}"`)
-    const ev = { target: { kind: 'event', id: ID, orgId: ORG }, itemName: 'Food drive', source: 'feed_event' } as const
+    const ev = { target: { kind: 'event', id: ID, orgId: ORG }, itemName: 'Food drive', source: 'feed_event_menu' } as const
     expect(render(ev, ready('platform_admin', null))).toContain(`href="/moderation?tab=events&amp;focus=event:${ID}"`)
     expect(render(ev, ready(null, [ORG]))).toContain(`href="/moderation/org/${ORG}?tab=events&amp;focus=event:${ID}"`)
   })
