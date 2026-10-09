@@ -96,6 +96,12 @@ describe('commentActions', () => {
   it('a deleted comment offers nothing', () => {
     expect(commentActions(viewer({ id: 'author' }), { ...c, deletedAt: '2026-10-09T00:00:00Z' })).toEqual([])
   })
+  it('a hidden comment: staff get Unhide only; a member — its author included — gets nothing', () => {
+    const hidden = { ...c, isHidden: true }
+    expect(commentActions(viewer({ tier: 'community_moderator' }), hidden)).toEqual(['unhide'])
+    expect(commentActions(viewer(), hidden)).toEqual([])
+    expect(commentActions(viewer({ id: 'author' }), hidden)).toEqual([])
+  })
   it('a guest gets nothing on someone else’s comment', () => {
     expect(commentActions(viewer({ id: 'g', isGuest: true }), c)).toEqual([])
   })

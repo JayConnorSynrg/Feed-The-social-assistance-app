@@ -48,6 +48,9 @@ export interface CommentsMessages {
   errReplyFailed: string
   errClosed: string
   errSignedOut: string
+  hiddenMarker: string
+  unhide: string
+  statusUnhidden: string
 }
 
 export const commentsMessages: Record<Locale, CommentsMessages> = {
@@ -89,6 +92,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: "Couldn't post your reply. Please try again.",
     errClosed: 'Comments are closed on this post.',
     errSignedOut: 'Sign in to comment.',
+    hiddenMarker: 'Hidden by a moderator',
+    unhide: 'Unhide',
+    statusUnhidden: 'Comment visible again.',
   },
   es: {
     anonymous: 'Anónimo',
@@ -128,6 +134,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'No se pudo publicar tu respuesta. Inténtalo de nuevo.',
     errClosed: 'Los comentarios están cerrados en esta publicación.',
     errSignedOut: 'Inicia sesión para comentar.',
+    hiddenMarker: 'Ocultado por un moderador',
+    unhide: 'Mostrar',
+    statusUnhidden: 'El comentario vuelve a estar visible.',
   },
   ht: {
     anonymous: 'Anonim',
@@ -167,6 +176,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Nou pa t ka pibliye repons ou. Tanpri eseye ankò.',
     errClosed: 'Kòmantè yo fèmen sou piblikasyon sa a.',
     errSignedOut: 'Konekte pou fè kòmantè.',
+    hiddenMarker: 'Yon moderatè kache l',
+    unhide: 'Montre l ankò',
+    statusUnhidden: 'Kòmantè a parèt ankò.',
   },
   vi: {
     anonymous: 'Ẩn danh',
@@ -206,6 +218,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Không đăng được trả lời của bạn. Vui lòng thử lại.',
     errClosed: 'Bài đăng này đã đóng bình luận.',
     errSignedOut: 'Đăng nhập để bình luận.',
+    hiddenMarker: 'Đã bị người kiểm duyệt ẩn',
+    unhide: 'Bỏ ẩn',
+    statusUnhidden: 'Bình luận đã hiển thị lại.',
   },
   ar: {
     anonymous: 'مجهول',
@@ -245,6 +260,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'تعذّر نشر ردك. حاول مرة أخرى.',
     errClosed: 'التعليقات مغلقة على هذا المنشور.',
     errSignedOut: 'سجّل الدخول للتعليق.',
+    hiddenMarker: 'أخفاه مشرف',
+    unhide: 'إظهار',
+    statusUnhidden: 'أصبح التعليق ظاهرًا مرة أخرى.',
   },
   zh: {
     anonymous: '匿名',
@@ -284,6 +302,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: '无法发布你的回复，请重试。',
     errClosed: '此帖子已关闭评论。',
     errSignedOut: '登录后才能评论。',
+    hiddenMarker: '已被版主隐藏',
+    unhide: '取消隐藏',
+    statusUnhidden: '评论已重新显示。',
   },
   so: {
     anonymous: 'Aan la magacaabin',
@@ -323,6 +344,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Jawaabtaada lama dhejin karin. Fadlan isku day mar kale.',
     errClosed: 'Faallooyinka waa ka xiran yihiin qoraalkan.',
     errSignedOut: 'Gal si aad faallo u bixiso.',
+    hiddenMarker: 'Maamule ayaa qariyay',
+    unhide: 'Muuji',
+    statusUnhidden: 'Faallada mar kale way muuqataa.',
   },
   fr: {
     anonymous: 'Anonyme',
@@ -362,6 +386,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Impossible de publier votre réponse. Veuillez réessayer.',
     errClosed: 'Les commentaires sont fermés pour cette publication.',
     errSignedOut: 'Connectez-vous pour commenter.',
+    hiddenMarker: 'Masqué par un modérateur',
+    unhide: 'Réafficher',
+    statusUnhidden: 'Le commentaire est de nouveau visible.',
   },
   pt: {
     anonymous: 'Anônimo',
@@ -401,6 +428,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Não foi possível publicar sua resposta. Tente novamente.',
     errClosed: 'Os comentários estão fechados nesta publicação.',
     errSignedOut: 'Entre para comentar.',
+    hiddenMarker: 'Ocultado por um moderador',
+    unhide: 'Mostrar',
+    statusUnhidden: 'O comentário está visível novamente.',
   },
   ru: {
     anonymous: 'Аноним',
@@ -440,6 +470,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Не удалось опубликовать ответ. Попробуйте снова.',
     errClosed: 'Комментарии к этой публикации закрыты.',
     errSignedOut: 'Войдите, чтобы комментировать.',
+    hiddenMarker: 'Скрыто модератором',
+    unhide: 'Показать',
+    statusUnhidden: 'Комментарий снова виден.',
   },
   ko: {
     anonymous: '익명',
@@ -479,6 +512,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: '답글을 게시하지 못했습니다. 다시 시도하세요.',
     errClosed: '이 게시물은 댓글이 닫혀 있습니다.',
     errSignedOut: '댓글을 달려면 로그인하세요.',
+    hiddenMarker: '운영자가 숨김',
+    unhide: '숨김 해제',
+    statusUnhidden: '댓글이 다시 표시됩니다.',
   },
   tl: {
     anonymous: 'Hindi kilala',
@@ -518,6 +554,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Hindi mai-post ang iyong sagot. Pakisubukang muli.',
     errClosed: 'Sarado na ang mga komento sa post na ito.',
     errSignedOut: 'Mag-sign in para magkomento.',
+    hiddenMarker: 'Itinago ng moderator',
+    unhide: 'Ipakita',
+    statusUnhidden: 'Nakikita na muli ang komento.',
   },
   am: {
     anonymous: 'ስም አልባ',
@@ -557,6 +596,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'መልስዎን መለጠፍ አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
     errClosed: 'በዚህ ልጥፍ ላይ አስተያየት ተዘግቷል።',
     errSignedOut: 'አስተያየት ለመስጠት ይግቡ።',
+    hiddenMarker: 'በአወያይ ተደብቋል',
+    unhide: 'አሳይ',
+    statusUnhidden: 'አስተያየቱ እንደገና ይታያል።',
   },
   hmn: {
     anonymous: 'Tsis qhia npe',
@@ -596,6 +638,9 @@ export const commentsMessages: Record<Locale, CommentsMessages> = {
     errReplyFailed: 'Tshaj tawm tsis tau koj lus teb. Thov sim dua.',
     errClosed: 'Cov lus tawm tswv yim raug kaw rau qhov tshaj tawm no.',
     errSignedOut: 'Nkag mus kom tawm tswv yim tau.',
+    hiddenMarker: 'Raug tus saib xyuas zais',
+    unhide: 'Qhia dua',
+    statusUnhidden: 'Lus tawm tswv yim pom tau dua lawm.',
   },
 }
 

@@ -6,6 +6,10 @@
  * Collapsible per-post comment thread, in the member's language (lib/i18n-feed-comments.ts).
  * - A flat → tree list (one level of replies). A comment its author deleted stays as "Comment
  *   deleted" while it has replies (they are kept); with no replies it is left out.
+ * - A comment a moderator hid is shown to staff only, marked "Hidden by a moderator", with Unhide
+ *   (admin_set_comment_hidden false); members and guests — its author included — never see it.
+ * - The header and the card's comment button show one number: live, visible comments (replies
+ *   included) — never a deleted or hidden one.
  * - Under each comment, inline actions decided by commentActions (post-actions.ts): Reply; for its
  *   author Edit (inline, saved through edit_comment with its version — single-flight, settles from a
  *   re-read; a stale version shows the current text and keeps the draft) and Delete (confirmation,
@@ -20,7 +24,7 @@ import { MessageCircle, Send, User, Loader2, ChevronDown, ChevronUp, CornerDownR
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { useComments, type Comment } from '@/hooks/use-comments'
+import { useComments, commentThreadView, liveCommentCount, type Comment } from '@/hooks/use-comments'
 import { useRealtimeComments } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminViewer } from '@/hooks/use-admin-viewer'
@@ -30,6 +34,7 @@ import { formatMessage } from '@/lib/i18n-event-forms'
 import { relativeTimeText } from '@/lib/event-time'
 import { commentsT, commentErrorText } from '@/lib/i18n-feed-comments'
 import { roleLabel } from '@/lib/i18n-feed-card'
+import { tierAtLeast } from '@/lib/admin-tier'
 import { editT, failureText } from '@/lib/i18n-feed-edit'
 import { deleteOwnComment, editComment, setCommentHidden } from '@/lib/post-rpc'
 import { createSingleFlight } from './composer-guards'
@@ -56,7 +61,12 @@ export function commentAge(iso: string, locale: Locale, now: number = Date.now()
   return pick(Math.round(hours / 24), 'day')
 }
 
-interface RowContext {
+/** A moderator's Hide / Unhide on one comment: admin_set_comment_hidden(true | false). */
+export function moderateComment(supabase: Parameters<typeof setCommentHidden>[0], commentId: string, action: 'hide' | 'unhide') {
+  return setCommentHidden(supabase, commentId, action === 'hide')
+}
+
+export interface RowContext {
   locale: Locale
   viewer: ActionViewer
   isAuthenticated: boolean
@@ -73,7 +83,7 @@ interface RowContext {
   editNotice: { commentId: string; current: string } | null
 }
 
-function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: number; ctx: RowContext }) {
+export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: number; ctx: RowContext }) {
   const { locale } = ctx
   const replyOpen = ctx.replyOpenIds.has(comment.id)
   const replyText = ctx.replyTexts.get(comment.id) ?? ''
@@ -99,7 +109,8 @@ function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: num
     .slice(0, 2)
     .join('')
     .toUpperCase()
-  const actions = commentActions(ctx.viewer, { authorId: comment.user_id, editedAt: comment.edited_at, deletedAt: comment.deleted_at })
+  const actions = commentActions(ctx.viewer, { authorId: comment.user_id, editedAt: comment.edited_at, deletedAt: comment.deleted_at, isHidden: comment.is_hidden })
+  const hidden = comment.is_hidden && !deleted
 
   const handleSubmitReply = async () => {
     if (!replyText.trim() || localSubmitting) return
@@ -163,6 +174,11 @@ function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: num
                   </button>
                 )}
               </div>
+              {hidden && (
+                <p className="mb-1 inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-950" data-testid={`comment-hidden-${comment.id}`}>
+                  {commentsT(locale, 'hiddenMarker')}
+                </p>
+              )}
               {editing ? (
                 <div className="mt-1 flex flex-col gap-2">
                   {ctx.editNotice?.commentId === comment.id && (
@@ -209,7 +225,7 @@ function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: num
                   </div>
                 </div>
               ) : (
-                <p dir="auto" className="whitespace-pre-wrap break-words text-sm leading-snug text-stone-800">
+                <p dir="auto" className={`whitespace-pre-wrap break-words text-sm leading-snug ${hidden ? 'text-stone-600' : 'text-stone-800'}`}>
                   {comment.content}
                 </p>
               )}
@@ -218,7 +234,7 @@ function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: num
 
           {!editing && (
             <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
-              {ctx.isAuthenticated && depth === 0 && !deleted && (
+              {ctx.isAuthenticated && depth === 0 && !deleted && !hidden && (
                 <button
                   type="button"
                   data-testid={`reply-btn-${comment.id}`}
@@ -238,9 +254,9 @@ function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; depth?: num
                     type="button"
                     data-testid={`comment-${a}-${comment.id}`}
                     onClick={(e) => ctx.onAction(comment, a, e.currentTarget)}
-                    className={a === 'delete' || a === 'hide' ? 'text-red-800 hover:underline' : 'text-stone-600 hover:text-[#4a5d23]'}
+                    className={a === 'delete' || a === 'hide' ? 'text-red-800 hover:underline' : 'text-stone-700 hover:text-[#4a5d23]'}
                   >
-                    {commentsT(locale, a === 'edit' ? 'edit' : a === 'delete' ? 'delete' : 'hide')}
+                    {commentsT(locale, a === 'edit' ? 'edit' : a === 'delete' ? 'delete' : a === 'unhide' ? 'unhide' : 'hide')}
                   </button>
                 ))}
             </div>
@@ -293,7 +309,7 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
   const { user, isAuthenticated, isAnonymous } = useAuth()
   const adminViewer = useAdminViewer(false)
   const supabase = useMemo(() => createClient(), [])
-  const { comments, loading, error, submitting, fetchComments, addComment, addReply } = useComments(postId)
+  const { rows, loading, error, submitting, fetchComments, addComment, addReply } = useComments(postId)
 
   const [newComment, setNewComment] = useState('')
   const [showAll, setShowAll] = useState(false)
@@ -315,6 +331,11 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
     isGuest: isAnonymous,
     tier: adminViewer.status === 'ready' ? adminViewer.tier : null,
   }
+  const isStaff = !isAnonymous && tierAtLeast(viewer.tier, 'community_moderator')
+  // Staff see hidden comments (to unhide them); everyone else never does.
+  const comments = useMemo(() => commentThreadView(rows, { includeHidden: isStaff }), [rows, isStaff])
+  const liveCount = liveCommentCount(rows)
+  const loadedRef = useRef(false)
 
   const handleToggleReply = useCallback((id: string) => {
     setReplyOpenIds((prev) => {
@@ -333,15 +354,21 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
     fetchComments()
   }, [fetchComments])
 
-  const handleRealtimeChange = useCallback(
-    (count: number) => {
-      fetchComments()
-      onCountChange?.(count)
-    },
-    [fetchComments, onCountChange],
-  )
+  // A post_comments change anywhere re-reads the thread; the count follows from the re-read (below).
+  const handleRealtimeChange = useCallback(() => {
+    fetchComments()
+  }, [fetchComments])
 
   useRealtimeComments({ postId, onCommentChange: handleRealtimeChange, enabled: true })
+
+  // After every read, the card's comment button shows the same number as this header.
+  useEffect(() => {
+    if (loading) return
+    if (!loadedRef.current && rows.length === 0) return
+    loadedRef.current = true
+    onCountChange?.(liveCount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, loading])
 
   const handleSubmitComment = async () => {
     if (!newComment.trim() || submitting) return
@@ -392,10 +419,11 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
         })
         return
       case 'hide':
+      case 'unhide':
         void hideGate.current.run(async () => {
-          const res = await setCommentHidden(supabase, comment.id, true)
+          const res = await moderateComment(supabase, comment.id, action)
           if (res.ok) {
-            setStatus(commentsT(locale, 'statusHidden'))
+            setStatus(commentsT(locale, action === 'hide' ? 'statusHidden' : 'statusUnhidden'))
             await fetchComments()
           } else setActionError(failureText(locale, res.failure))
         })
@@ -434,7 +462,7 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
       <div className="mb-2 flex items-center gap-1.5">
         <MessageCircle className="h-3.5 w-3.5 text-stone-600" aria-hidden="true" />
         <span className="text-xs font-medium text-stone-700">
-          {loading ? commentsT(locale, 'loadingShort') : formatMessage(commentsT(locale, 'commentCount'), { n: comments.length })}
+          {loading ? commentsT(locale, 'loadingShort') : formatMessage(commentsT(locale, 'commentCount'), { n: liveCount })}
         </span>
       </div>
 

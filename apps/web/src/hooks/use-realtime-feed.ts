@@ -206,6 +206,8 @@ export function useRealtimeComments({
         .select('*', { count: 'exact', head: true })
         .eq('post_id', postId)
         .eq('is_hidden', false)
+        // A comment its author deleted stays as a row (soft delete) but is no longer counted.
+        .is('deleted_at', null)
 
       onCommentChange?.(count || 0)
     }

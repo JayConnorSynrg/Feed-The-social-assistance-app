@@ -93,18 +93,22 @@ export function postMenuItems(viewer: ActionViewer, post: ActionPost): PostMenuI
 }
 
 /** The actions on one comment (shown inline under it). */
-export type CommentActionId = 'edit' | 'delete' | 'history' | 'hide'
+export type CommentActionId = 'edit' | 'delete' | 'history' | 'hide' | 'unhide'
 
 export interface ActionComment {
   authorId: string
   editedAt: string | null
   deletedAt: string | null
+  /** Hidden by a moderator (only staff are shown such a comment in the thread). */
+  isHidden?: boolean
 }
 
 export function commentActions(viewer: ActionViewer, comment: ActionComment): CommentActionId[] {
   const signedIn = viewer.id != null && !viewer.isGuest
   const isAuthor = signedIn && viewer.id === comment.authorId
   if (comment.deletedAt) return []
+  // A hidden comment reaches the thread for staff only; they can make it visible again.
+  if (comment.isHidden) return isStaff(viewer) ? ['unhide'] : []
   const out: CommentActionId[] = []
   if (isAuthor) out.push('edit')
   if (comment.editedAt) out.push('history')

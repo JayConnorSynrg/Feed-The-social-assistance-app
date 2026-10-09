@@ -16,8 +16,13 @@ vi.mock('@/lib/logger', () => ({
   withMetric: (_op: string, _a: unknown, fn: () => unknown) => fn(),
 }))
 
-import { buildCommentTree, visibleCommentTree, type Comment } from '@/hooks/use-comments'
-import { commentAge } from './comment-thread'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { buildCommentTree, commentThreadView, liveCommentCount, visibleCommentTree, type Comment } from '@/hooks/use-comments'
+import { CommentRow, commentAge, moderateComment, type RowContext } from './comment-thread'
+import type { ActionViewer } from './post-actions'
+
+const noop = () => {}
 
 const SRC = path.resolve(__dirname, '../..')
 function sources(dir: string, acc: string[] = []): string[] {
@@ -118,5 +123,70 @@ describe('comment time in the member’s language', () => {
     expect(commentAge('2026-10-09T11:55:00Z', 'en', now)).toBe('5 minutes ago')
     expect(commentAge('2026-10-09T09:00:00Z', 'es', now)).toBe('Hace 3 horas')
     expect(commentAge('2026-10-07T12:00:00Z', 'en', now)).toBe('2 days ago')
+  })
+})
+
+// Moderators hide comments, so they unhide them where they hid them: staff see a hidden comment in
+// the thread, marked, with Unhide (admin_set_comment_hidden false); members and guests never see it.
+describe('hidden comments: staff only, with Unhide', () => {
+  const flat = () => [c('v'), c('h', { is_hidden: true, content: 'rude' }), c('hr', { parent_id: 'h' })]
+
+  it('a member gets no row for a hidden comment (its reply still shows); staff get the row', () => {
+    expect(commentThreadView(flat(), { includeHidden: false }).map((t) => t.id).sort()).toEqual(['hr', 'v'])
+    const staff = commentThreadView(flat(), { includeHidden: true })
+    expect(staff.map((t) => t.id).sort()).toEqual(['h', 'v'])
+    expect(staff.find((t) => t.id === 'h')!.replies.map((r) => r.id)).toEqual(['hr'])
+  })
+
+  const ctx = (viewer: ActionViewer): RowContext => ({
+    locale: 'es',
+    viewer,
+    isAuthenticated: true,
+    submitting: false,
+    onReply: async () => true,
+    replyOpenIds: new Set(),
+    onToggleReply: noop,
+    replyTexts: new Map(),
+    onReplyTextChange: noop,
+    editingId: null,
+    onAction: noop,
+    onSaveEdit: async () => {},
+    onCancelEdit: noop,
+    editNotice: null,
+  })
+  const row = (viewer: ActionViewer) =>
+    renderToStaticMarkup(h(CommentRow, { comment: c('h', { is_hidden: true, content: 'rude', user_id: 'someone' }), ctx: ctx(viewer) }))
+
+  it('staff see the translated "Hidden by a moderator" marker and an Unhide action (no Reply)', () => {
+    const html = row({ id: 'mod', isGuest: false, tier: 'community_moderator' })
+    expect(html).toContain('data-testid="comment-hidden-h"')
+    expect(html).toContain('Ocultado por un moderador')
+    expect(html).toMatch(/data-testid="comment-unhide-h"[^>]*>Mostrar</)
+    expect(html).not.toContain('reply-btn-h')
+  })
+
+  it('Unhide calls admin_set_comment_hidden with p_hidden false; Hide with true', async () => {
+    const calls: Array<[string, Record<string, unknown>]> = []
+    const client = {
+      rpc: (n: string, a: Record<string, unknown>) => ({ setHeader: () => (calls.push([n, a]), Promise.resolve({ data: {}, error: null })) }),
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await moderateComment(client as any, 'h', 'unhide')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await moderateComment(client as any, 'v', 'hide')
+    expect(calls).toEqual([
+      ['admin_set_comment_hidden', { p_comment_id: 'h', p_hidden: false }],
+      ['admin_set_comment_hidden', { p_comment_id: 'v', p_hidden: true }],
+    ])
+  })
+
+  it('the thread shows hidden rows exactly to staff (community moderator and up, never a guest)', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components/feed/comment-thread.tsx'), 'utf8')
+    expect(src).toContain("const isStaff = !isAnonymous && tierAtLeast(viewer.tier, 'community_moderator')")
+    expect(src).toContain('commentThreadView(rows, { includeHidden: isStaff })')
+  })
+
+  it('the count everyone sees leaves out deleted and hidden comments (replies included)', () => {
+    expect(liveCommentCount([c('a'), c('b', { deleted_at: 'x' }), c('d', { is_hidden: true }), c('r', { parent_id: 'a' })])).toBe(2)
   })
 })

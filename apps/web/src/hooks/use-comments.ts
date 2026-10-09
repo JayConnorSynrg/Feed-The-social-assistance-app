@@ -101,6 +101,24 @@ export function visibleCommentTree(roots: Comment[]): Comment[] {
   return roots.map(keep).filter((c): c is Comment => c !== null)
 }
 
+/**
+ * What one viewer's thread shows, from the flat rows. Hidden comments are shown to staff only (the
+ * database returns them to staff and to their own author; members and guests — the author included —
+ * never see them in the thread). For everyone else they are dropped BEFORE the tree is built, so a
+ * reply under a hidden comment still shows (as a root), exactly as when the read excluded them.
+ */
+export function commentThreadView(flat: readonly Comment[], opts: { includeHidden: boolean }): Comment[] {
+  return visibleCommentTree(buildCommentTree(flat.filter((c) => opts.includeHidden || !c.is_hidden)))
+}
+
+/**
+ * The number of comments a post has, as everyone counts them: live (not deleted) and not hidden,
+ * replies included. The comment button and the thread header both show this number.
+ */
+export function liveCommentCount(flat: readonly Pick<Comment, 'deleted_at' | 'is_hidden'>[]): number {
+  return flat.filter((c) => c.deleted_at == null && !c.is_hidden).length
+}
+
 /** The hook's error, as a token the thread translates (lib/i18n-feed-comments.ts commentErrorText).
  *  'closed': the server refused a new comment because the post is hidden or deleted (post_comments RLS). */
 export type CommentError = 'load_timeout' | 'load_failed' | 'post_failed' | 'reply_failed' | 'closed' | 'signed_out'
@@ -113,7 +131,9 @@ export const COMMENTS_CLOSED: CommentError = 'closed'
 export function useComments(postId: string) {
   const supabase = createClient()
 
-  const [comments, setComments] = useState<Comment[]>([])
+  // Flat rows as the database returned them (RLS: visible comments, plus hidden ones for staff and
+  // their author); the thread builds its view with commentThreadView.
+  const [rows, setRows] = useState<Comment[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<CommentError | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -128,13 +148,12 @@ export function useComments(postId: string) {
         .from('post_comments')
         .select('*, user:profiles!post_comments_user_id_fkey(id, first_name, avatar_url, admin_tier)')
         .eq('post_id', postId)
-        .eq('is_hidden', false)
         .order('created_at', { ascending: true })
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
 
       if (fetchError) throw fetchError
       const flat = (data ?? []) as unknown as Comment[]
-      setComments(visibleCommentTree(buildCommentTree(flat)))
+      setRows(flat)
     } catch (err: unknown) {
       setError(isQueryTimeout(err) ? 'load_timeout' : 'load_failed')
     } finally {
@@ -211,5 +230,5 @@ export function useComments(postId: string) {
     [supabase, postId, fetchComments]
   )
 
-  return { comments, loading, error, submitting, fetchComments, addComment, addReply }
+  return { rows, loading, error, submitting, fetchComments, addComment, addReply }
 }

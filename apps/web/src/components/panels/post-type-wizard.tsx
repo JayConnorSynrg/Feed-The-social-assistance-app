@@ -42,6 +42,7 @@ import type { Locale } from '@/lib/i18n'
 import { dir } from '@/lib/i18n'
 import { browserTimeZone } from '@/lib/event-time'
 import { createPost, type PostType } from '@/lib/post-rpc'
+import { petitionBodyHash } from '@/lib/petition-hash'
 import { composerT, type ComposerMessages } from '@/lib/i18n-feed-composer'
 import { failureText } from '@/lib/i18n-feed-edit'
 import { createSingleFlight } from '@/components/feed/composer-guards'
@@ -307,7 +308,7 @@ function PetitionDraftForm({ locale, onDone }: { locale: Locale; onDone: () => v
         if (!user) throw new Error('Not authenticated')
         // Raw text, like posts: React escapes on render. The draft hash covers the body as stored.
         const body = description.trim()
-        const bodyVersionHash = btoa(unescape(encodeURIComponent(body))).slice(0, 32)
+        const bodyVersionHash = petitionBodyHash(body)
         const { error: insertError } = await supabase
           .from('petitions')
           .insert({ created_by: user.id, status: 'draft', title: title.trim(), body, body_version_hash: bodyVersionHash, summary: summary.trim() })

@@ -114,6 +114,36 @@ allowed. Staff hide / unhide is unchanged. A hard delete that still happens (acc
 cascade) keeps other people's replies: they lose their parent link (`parent_id` → `NULL`) instead of
 being deleted.
 
+### OPEN — `posts.comment_count` must count live, visible comments (for feed-db-migrations-expert)
+
+**Observed** (DB harness, prod-catalog dump with 20261026000000 applied, and with 20261026000000 + 20261026500000;
+probe `scratchpad/edit-build/db/probe/comment_count.sql`, identical output in both states).
+`sync_post_comment_count` recounts `count(*)` of **every** `post_comments` row of the post, so a soft delete or a hide
+never changes the number:
+
+| step | `posts.comment_count` | rows | live (not deleted) | rows the thread renders | live and not hidden |
+|---|---|---|---|---|---|
+| 4 comments (one a reply) | 4 | 4 | 4 | 4 | 4 |
+| a leaf soft-deleted (no replies) | **4** | 4 | 3 | 3 | 3 |
+| a parent soft-deleted (it has a reply) | **4** | 4 | 2 | 3 (2 + its "Comment deleted" placeholder) | 2 |
+| one comment hidden by a moderator | **4** | 4 | 2 | 2 | 1 |
+
+The client's number (comment button + thread header) is **live and not hidden, replies included**
+(`liveCommentCount`, `apps/web/src/hooks/use-comments.ts`). While a thread is open the client already pushes that
+number to the card; a closed card shows `posts.comment_count`, which over-counts deleted and hidden comments.
+
+**Required change** (new migration; 20261026000000 is committed):
+- `sync_post_comment_count`: `count(*) FROM post_comments pc WHERE pc.post_id = target AND pc.deleted_at IS NULL AND NOT pc.is_hidden`
+  (same for the `OLD.post_id` branch). The trigger already fires AFTER INSERT OR UPDATE OR DELETE, so soft delete
+  (`deleted_at`) and hide / unhide (`is_hidden`) recount.
+- One-time backfill of `posts.comment_count` with the same predicate.
+- `edit_post` grace (`p.comment_count = 0`, foundation line 584) must keep meaning "nobody has engaged": replace with
+  `NOT EXISTS (SELECT 1 FROM post_comments WHERE post_id = p.id)` (any row, deleted or hidden included), or deleting
+  the only comment re-opens quiet edits.
+- `ranked_feed_v2` (`cfg.comment_weight * v.comment_count`) then ranks on live, visible comments — intended.
+- Smoke: the four rows above (count 4 → 3 → 2 → 1); grace stays closed after the only comment is deleted.
+- No client change is needed when this lands (`comment_count` is already in the posts publication and patched).
+
 ## Moderator RPCs (community moderator and up)
 
 | RPC | Change in PR-2 |
