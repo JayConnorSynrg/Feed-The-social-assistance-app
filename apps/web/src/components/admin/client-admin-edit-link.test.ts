@@ -20,6 +20,8 @@ import { AdminEditLink } from './admin-edit-link'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 import { EventCardAdminMenu } from '@/components/events/event-card-admin-menu'
 import { buildEventCards } from '@/components/feed/post-model'
+import { PostCardActions } from '@/components/feed/post-card-actions'
+import { postMenuItems } from '@/components/feed/post-actions'
 
 const ID = '11111111-1111-4111-8111-111111111111'
 
@@ -31,6 +33,17 @@ describe('ClientAdminEditLink — never in server HTML', () => {
   it('server render of the gated link and of the /s/post island: empty', () => {
     expect(renderToStaticMarkup(h(ClientAdminEditLink, { target: { kind: 'post', id: ID }, itemName: 'x', source: 'post_page' }))).toBe('')
     expect(renderToStaticMarkup(h(PostAdminEditLink, { postId: ID, content: 'x', source: 'post_page' }))).toBe('')
+  })
+
+  it("a post card's ⋯ menu (which holds the post's link): nothing in server HTML either", () => {
+    const items = postMenuItems(
+      { id: 'pa', isGuest: false, tier: 'platform_admin' },
+      { id: ID, authorId: 'a', postType: 'feed', isHidden: false, hiddenReason: null, editedAt: null },
+    )
+    expect(items.some((i) => i.id === 'edit_in_admin')).toBe(true)
+    expect(
+      renderToStaticMarkup(h(PostCardActions, { postId: ID, items, locale: 'en', onSelect: () => {}, adminItem: { content: 'x', author: 'Ada', createdAt: new Date(0) } })),
+    ).toBe('')
   })
 
   it("an event card's ⋯ menu (which holds the event's link): nothing in server HTML either", () => {

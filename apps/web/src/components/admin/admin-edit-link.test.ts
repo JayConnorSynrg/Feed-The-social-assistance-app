@@ -125,6 +125,8 @@ describe('AdminEditLink — the link (I2, I4)', () => {
     expect(render(org, ready('platform_admin', null))).toContain(`href="/moderation?tab=organizations&amp;org=${ORG}&amp;focus=organization:${ORG}"`)
     expect(render(org, ready(null, [ORG]))).toContain(`href="/moderation/org/${ORG}?tab=profile&amp;focus=organization:${ORG}"`)
     const ev = { target: { kind: 'event', id: ID, orgId: ORG }, itemName: 'Food drive', source: 'feed_event_menu' } as const
+    // A post card's ⋯ menu item opens the same single-post URL as every other post link.
+    expect(render({ target: { kind: 'post', id: ID }, itemName: 'x', source: 'feed_post_menu' }, ready('community_moderator'))).toContain(`href="/moderation?tab=moderation&amp;focus=post:${ID}"`)
     expect(render(ev, ready('platform_admin', null))).toContain(`href="/moderation?tab=events&amp;focus=event:${ID}"`)
     expect(render(ev, ready(null, [ORG]))).toContain(`href="/moderation/org/${ORG}?tab=events&amp;focus=event:${ID}"`)
   })
@@ -175,6 +177,14 @@ describe('AdminEditLink — logging (I4)', () => {
     expect(events).toHaveLength(0)
     a.props.onAuxClick({ button: 1 })
     expect(events).toEqual([{ name: 'admin.nav.edit_in_admin', attrs: { kind: 'post', source: 'post_page' } }])
+  })
+
+  it("a post card's ⋯ menu item: the menu's own click handler runs and exactly one row says feed_post_menu", () => {
+    const menuSelect = vi.fn()
+    const a = renderedAnchor({ target: { kind: 'post', id: ID }, itemName: 'Need a ride', source: 'feed_post_menu', onClick: menuSelect, role: 'menuitem' }, ready('community_moderator'))
+    a.props.onClick({})
+    expect(menuSelect).toHaveBeenCalledTimes(1)
+    expect(events).toEqual([{ name: 'admin.nav.edit_in_admin', attrs: { kind: 'post', source: 'feed_post_menu' } }])
   })
 
   it("a wrapper's own onClick still runs, with one row", () => {

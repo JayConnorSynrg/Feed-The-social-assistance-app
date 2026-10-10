@@ -220,7 +220,7 @@ function StructuredForm({
             value={resourceId}
             onChange={(e) => setResourceId(e.target.value)}
             required
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]"
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23]"
           >
             <option value="">{composerT(locale, 'selectResource')}</option>
             {resourceOptions.map((r) => (
@@ -261,7 +261,7 @@ function StructuredForm({
             id="wizard-offer-resource"
             value={resourceId}
             onChange={(e) => setResourceId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]"
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23]"
           >
             <option value="">{composerT(locale, 'none')}</option>
             {resourceOptions.map((r) => (
@@ -443,7 +443,7 @@ export function PostTypeWizard({ open, onClose, onCreated, resourceOptions, onSa
                     type="button"
                     data-testid={`wizard-type-${card.key}`}
                     onClick={() => handleCardClick(card)}
-                    className={`rounded-xl border border-stone-200 bg-white p-5 text-start transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] ${
+                    className={`rounded-xl border border-stone-200 bg-white p-5 text-start transition-colors focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] ${
                       isAmber ? 'hover:border-amber-500 hover:bg-stone-50' : 'hover:border-[#4a5d23] hover:bg-stone-50'
                     }`}
                   >

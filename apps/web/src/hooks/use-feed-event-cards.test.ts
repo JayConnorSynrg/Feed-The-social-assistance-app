@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ isAnonymous: false, user: null, loading: false, profile: null }) }))
 
 import { mount } from '@/test/mini-react'
-import { useFeedEventCards } from './use-feed-event-cards'
+import { createCardNoticeAnnouncer, useFeedEventCards } from './use-feed-event-cards'
 import { buildEventCards, type EventFeedItem, type EventOccurrenceRow } from '@/components/feed/post-model'
 
 const E1 = '11111111-1111-4111-8111-111111111111'
@@ -190,5 +190,63 @@ describe('useFeedEventCards', () => {
     noticeContext = 'businesses|'
     m.rerender()
     expect(m.tree().feedNotice).toBe('')
+  })
+})
+
+// Release 2: the post cards announce through the SAME card-notice region, by the same rules.
+describe('createCardNoticeAnnouncer — post card notices share the card-notice region', () => {
+  function harness() {
+    const log: string[] = []
+    const frames: Array<() => void> = []
+    const a = createCardNoticeAnnouncer(
+      (t) => log.push(`notice:${t}`),
+      (fn) => frames.push(fn),
+    )
+    return { a, log, frames, runFrames: () => frames.splice(0).forEach((f) => f()) }
+  }
+
+  it('empty first, then the sentence set once (the same sentence twice is announced twice)', () => {
+    const { a, log, runFrames } = harness()
+    a.announce('Post updated.')
+    expect(log).toEqual(['notice:'])
+    runFrames()
+    a.announce('Post updated.')
+    runFrames()
+    expect(log).toEqual(['notice:', 'notice:Post updated.', 'notice:', 'notice:Post updated.'])
+  })
+
+  it('when focus moves: in one frame, focus first, then the notice', () => {
+    const { a, log, runFrames } = harness()
+    a.announce('Post deleted.', () => log.push('focus:next card'))
+    runFrames()
+    expect(log).toEqual(['notice:', 'focus:next card', 'notice:Post deleted.'])
+  })
+
+  it('a newer announcement (or an event-card change) supersedes one still waiting for its frame', () => {
+    const { a, log, runFrames } = harness()
+    a.announce('Link copied.', () => log.push('focus:old'))
+    a.announce('Post held for review.')
+    runFrames()
+    expect(log).toEqual(['notice:', 'notice:', 'notice:Post held for review.'])
+    const h2 = harness()
+    h2.a.announce('Post restored.')
+    h2.a.supersede()
+    h2.runFrames()
+    expect(h2.log).toEqual(['notice:'])
+  })
+
+  it('one region: no feed post surface renders its own polite status region', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const src = (rel: string) => fs.readFileSync(path.resolve(__dirname, rel), 'utf8')
+    for (const rel of ['../components/panels/feed-panel.tsx', '../components/feed/feed-post-card.tsx', '../components/feed/comment-thread.tsx']) {
+      expect(src(rel), rel).not.toMatch(/role="status"/)
+    }
+    const panel = src('../components/panels/feed-panel.tsx')
+    expect(panel).toContain('<FeedStatusRegions')
+    // Both announcers in the feed — the composer and every comment thread — use the card notice.
+    expect(panel).toMatch(/<CommentThread[\s\S]{0,200}onAnnounce=\{announceCardNotice\}/)
+    expect(panel).toMatch(/<CreatePostCard[\s\S]{0,300}onAnnounce=\{announceCardNotice\}/)
+    expect(panel).not.toMatch(/\bannounce\(/)
   })
 })

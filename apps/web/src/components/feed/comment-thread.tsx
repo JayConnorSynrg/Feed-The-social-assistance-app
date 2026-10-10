@@ -31,7 +31,7 @@ import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { createClient } from '@/lib/supabase/client'
 import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage } from '@/lib/i18n-event-forms'
-import { relativeTimeText } from '@/lib/event-time'
+import { relativeAge } from '@/lib/relative-age'
 import { commentsT, commentErrorText } from '@/lib/i18n-feed-comments'
 import { roleLabel } from '@/lib/i18n-feed-card'
 import { tierAtLeast } from '@/lib/admin-tier'
@@ -48,17 +48,18 @@ interface CommentThreadProps {
   locale: Locale
   /** Called when realtime fires so the card can update its comment count badge */
   onCountChange?: (count: number) => void
+  /** Announce a result in the feed's card-notice region (moveFocus runs first, in the same frame). */
+  onAnnounce?: (text: string, moveFocus?: () => void) => void
 }
 
-/** "3 hours ago" in the viewer's language (Intl), or the translated short form where Intl has none. */
+/** Focus the element with this data-testid (a control that replaced the one focus was on). */
+function focusTestId(testId: string) {
+  document.querySelector<HTMLElement>(`[data-testid="${CSS.escape(testId)}"]`)?.focus()
+}
+
+/** "3 hours ago" in the viewer's language (lib/relative-age.ts). */
 export function commentAge(iso: string, locale: Locale, now: number = Date.now()): string {
-  const mins = Math.max(0, Math.round((now - Date.parse(iso)) / 60000))
-  if (mins < 1) return commentsT(locale, 'justNow')
-  const pick = (n: number, unit: 'minute' | 'hour' | 'day') => relativeTimeText(-n, unit, locale) ?? formatMessage(commentsT(locale, unit === 'minute' ? 'minutesAgo' : unit === 'hour' ? 'hoursAgo' : 'daysAgo'), { n })
-  if (mins < 60) return pick(mins, 'minute')
-  const hours = Math.round(mins / 60)
-  if (hours < 24) return pick(hours, 'hour')
-  return pick(Math.round(hours / 24), 'day')
+  return relativeAge(iso, locale, now)
 }
 
 /** A moderator's Hide / Unhide on one comment: admin_set_comment_hidden(true | false). */
@@ -305,7 +306,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
   )
 }
 
-export function CommentThread({ postId, locale, onCountChange }: CommentThreadProps) {
+export function CommentThread({ postId, locale, onCountChange, onAnnounce }: CommentThreadProps) {
   const { user, isAuthenticated, isAnonymous } = useAuth()
   const adminViewer = useAdminViewer(false)
   const supabase = useMemo(() => createClient(), [])
@@ -320,7 +321,8 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
   const [editNotice, setEditNotice] = useState<{ commentId: string; current: string } | null>(null)
   const [deleting, setDeleting] = useState<Comment | null>(null)
   const [history, setHistory] = useState<HistoryTarget | null>(null)
-  const [status, setStatus] = useState('')
+  // The delete's announcement, made once its dialog has closed (the modal hides the notice region).
+  const pendingNoticeRef = useRef<(() => void) | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
   const editGate = useRef(createSingleFlight())
@@ -383,8 +385,9 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
       if (res.ok) {
         setEditingId(null)
         setEditNotice(null)
-        setStatus(commentsT(locale, 'statusEdited'))
         await fetchComments()
+        // The editor closed: focus goes back to the comment's Edit button, then the notice.
+        onAnnounce?.(commentsT(locale, 'statusEdited'), () => focusTestId(`comment-edit-${comment.id}`))
         return
       }
       if (res.failure.kind === 'conflict') {
@@ -423,8 +426,11 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
         void hideGate.current.run(async () => {
           const res = await moderateComment(supabase, comment.id, action)
           if (res.ok) {
-            setStatus(commentsT(locale, action === 'hide' ? 'statusHidden' : 'statusUnhidden'))
             await fetchComments()
+            // The pressed button is replaced by its opposite (Hide ↔ Unhide): focus it, then the notice.
+            onAnnounce?.(commentsT(locale, action === 'hide' ? 'statusHidden' : 'statusUnhidden'), () =>
+              focusTestId(`comment-${action === 'hide' ? 'unhide' : 'hide'}-${comment.id}`),
+            )
           } else setActionError(failureText(locale, res.failure))
         })
         return
@@ -466,9 +472,6 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
         </span>
       </div>
 
-      <p role="status" className="sr-only">
-        {status}
-      </p>
 
       {(errorText || actionError) && (
         <p data-testid="comment-error" role="alert" className="mb-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">
@@ -554,12 +557,20 @@ export function CommentThread({ postId, locale, onCountChange }: CommentThreadPr
         locale={locale}
         returnFocusRef={triggerRef}
         onClose={() => setDeleting(null)}
+        onClosed={() => {
+          const pending = pendingNoticeRef.current
+          pendingNoticeRef.current = null
+          pending?.()
+        }}
         onConfirm={async () => {
           if (!deleting) return null
           const res = await deleteOwnComment(supabase, deleting.id)
           if (!res.ok && res.failure.kind !== 'not_found') return failureText(locale, res.failure)
-          setStatus(commentsT(locale, 'statusDeleted'))
           await fetchComments()
+          // Its Delete button is gone: focus goes to the post's comment button, then the notice.
+          triggerRef.current = null
+          const text = commentsT(locale, 'statusDeleted')
+          pendingNoticeRef.current = () => onAnnounce?.(text, () => focusTestId(`comment-btn-${postId}`))
           return null
         }}
       />

@@ -74,7 +74,7 @@ export function EditConflictView({ postType, locale, base, mine, theirs, theirsW
   return (
     <div className="flex flex-col gap-4" data-testid="edit-conflict">
       <div>
-        <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold text-stone-900 focus:outline-none">
+        <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold text-stone-900 focus:outline-hidden">
           {editT(locale, 'conflictTitle')}
         </h3>
         <p className="mt-1 text-sm text-stone-700">

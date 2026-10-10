@@ -9,7 +9,8 @@
 // view /moderation?tab=moderation&focus=post:<id>, which works for any post, reported or not.
 
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
-import type { AdminEditSource } from '@/components/admin/admin-edit-link'
+import type { AdminEditLinkProps, AdminEditSource } from '@/components/admin/admin-edit-link'
+import type { ReactNode } from 'react'
 import type { Locale } from '@/lib/i18n'
 
 /** The post's accessible name in the link: the start of its text; for a post with no text (an
@@ -28,6 +29,9 @@ export function postAdminItemName(
   return [`post by ${author?.trim() || 'a member'}`, when].filter(Boolean).join(', ')
 }
 
+type PassThrough = Omit<AdminEditLinkProps, 'target' | 'itemName' | 'source' | 'locale' | 'icon'>
+
+/** Extra props (the menu item's role, class, roving handlers and ref from Radix Slot) reach the <a>. */
 export function PostAdminEditLink({
   postId,
   content,
@@ -35,22 +39,28 @@ export function PostAdminEditLink({
   createdAt,
   source,
   locale = 'en',
+  icon,
+  ...rest
 }: {
   postId: string
   content: string | null | undefined
   /** Author display name and post time: the link's name when the post has no text. */
   author?: string | null
   createdAt?: string | Date | null
-  source: Extract<AdminEditSource, 'feed_post' | 'post_page'>
+  source: Extract<AdminEditSource, 'feed_post' | 'feed_post_menu' | 'post_page'>
   locale?: Locale
-}) {
+  /** Leading icon (the menu item shows one, like the other items). */
+  icon?: ReactNode
+} & PassThrough) {
   return (
     <ClientAdminEditLink
+      data-testid={`admin-edit-post-${postId}`}
+      {...rest}
       target={{ kind: 'post', id: postId }}
       itemName={postAdminItemName(content, author, createdAt)}
       source={source}
       locale={locale}
-      data-testid={`admin-edit-post-${postId}`}
+      icon={icon}
     />
   )
 }

@@ -100,15 +100,16 @@ describe('the post card', () => {
     expect(html).toContain('Publicación de Ada')
     expect(html).toContain('Miembro de la comunidad')
     expect(html).toContain('>Editado</time>')
-    expect(html).toContain('>Denunciar<')
     expect(html).toContain('>Novedad<')
   })
 
-  it('a member who is not the author sees Report; the author and a guest do not', () => {
+  it('no footer action row: Report and Edit in admin live in the ⋯ menu (post-card-actions.tsx)', () => {
     const post = rowToPost(row(), { isLiked: false })
-    expect(card(post)).toContain('data-testid="report-btn-p1"')
-    expect(card(post, { currentUserId: 'author', viewer: { id: 'author', isGuest: false, tier: null } })).not.toContain('report-btn-p1')
-    expect(card(post, { currentUserId: 'guest', currentUserIsGuest: true, viewer: { id: 'guest', isGuest: true, tier: null } })).not.toContain('report-btn-p1')
+    for (const html of [card(post), card(post, { viewer: { id: 'mod', isGuest: false, tier: 'platform_admin' }, currentUserId: 'mod' })]) {
+      expect(html).not.toContain('report-btn-p1')
+      expect(html).not.toContain('admin-edit-post-p1')
+      expect(html).not.toContain('Edit in admin')
+    }
   })
 
   it("the author's held post keeps its banner; a removed one says a moderator removed it; anyone else sees nothing", () => {

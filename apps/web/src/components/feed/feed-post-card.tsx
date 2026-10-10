@@ -7,13 +7,13 @@
 // own). An <article> named by a visually hidden heading; the author's text is rendered as React text
 // (raw storage, React escapes) with dir="auto" and its line breaks kept; the type body comes from the
 // post-type registry (post-type-body.tsx). Edit state: an "Edited" button (accessible name "Edited
-// <time>. View edit history") opens the public history. Actions: the ⋯ menu (post-card-actions.tsx,
-// rendered once the shared menu primitive is on this branch) and, until then, the footer "Edit in
-// admin" link + Report button. Chrome is translated (lib/i18n-feed-card.ts).
+// <time>. View edit history") opens the public history. Actions: the ⋯ menu (post-card-actions.tsx —
+// edit, history, copy link, report or the create-account prompt, delete, and for moderators hold /
+// remove / restore / Edit in admin). Chrome is translated (lib/i18n-feed-card.ts).
 
 import React, { useId, useState } from 'react'
 import { m, useReducedMotion } from 'motion/react'
-import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, ScrollText, CheckCircle2, Flag, ShieldAlert } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, ScrollText, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { Locale } from '@/lib/i18n'
 import { formatMessage } from '@/lib/i18n-event-forms'
 import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'
@@ -23,12 +23,11 @@ import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { resolveFollowGate } from '@/lib/follow-gate'
 import { likeTap } from './feed-motion'
 import { PostTypeBody } from './post-type-body'
-import { PostAdminEditLink } from './post-admin-edit-link'
 import { postCardFrameClass } from './post-card-frame'
 import { HarmonyBadge } from './harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
 import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
-import { PostCardActions, POST_MENU_RENDERS } from './post-card-actions'
+import { PostCardActions } from './post-card-actions'
 import { postMenuItems, type ActionViewer, type PostMenuItemId } from './post-actions'
 import type { Post } from './post-model'
 
@@ -232,7 +231,6 @@ export function FeedPostCard({
   const headingId = useId()
   const categoryColor = CATEGORY_COLORS[post.category]
   const isAuthor = currentUserId != null && post.author.id === currentUserId
-  const signedIn = currentUserId != null && !currentUserIsGuest
   // Follow affordance decision (shared with the author profile sheet). A guest resolves to
   // 'guest-prompt' so a tap opens the account prompt instead of a refused follows insert.
   const followGate = resolveFollowGate({
@@ -262,7 +260,7 @@ export function FeedPostCard({
   })
 
   return (
-    <article aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
+    <article aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
       <h3 id={headingId} className="sr-only">
         {formatMessage(cardT(locale, 'postHeading'), { name: authorName })}
       </h3>
@@ -273,14 +271,15 @@ export function FeedPostCard({
         </div>
       )}
 
-      {/* Author Row */}
-      <div className="mb-3 flex items-start gap-3">
+      {/* Author Row — holds the ⋯ menu, so it keeps full contrast on the author's hidden post
+          (post-card-frame dims every child but [data-card-actions]). */}
+      <div data-card-actions="" className="mb-3 flex items-start gap-3">
         <button
           type="button"
           onClick={() => setProfileSheetOpen(true)}
           aria-label={formatMessage(cardT(locale, 'viewProfile'), { name: authorName })}
           data-testid={`author-open-${post.author.id}`}
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4a5d23] focus:outline-none focus:ring-2 focus:ring-lime-700"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4a5d23] focus:outline-hidden focus:ring-2 focus:ring-lime-700"
         >
           {post.author.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -295,7 +294,7 @@ export function FeedPostCard({
             <button
               type="button"
               onClick={() => setProfileSheetOpen(true)}
-              className="truncate text-sm font-medium hover:underline focus:underline focus:outline-none"
+              className="truncate text-sm font-medium hover:underline focus:underline focus:outline-hidden"
               data-testid={`author-name-${post.author.id}`}
               dir="auto"
             >
@@ -317,7 +316,7 @@ export function FeedPostCard({
                   data-testid={`post-edited-${post.id}`}
                   aria-label={formatMessage(cardT(locale, 'editedAria'), { time: formatEditedTime(post.editedAt, locale) })}
                   onClick={(e) => onAction(post, 'history', e.currentTarget)}
-                  className="rounded-sm underline underline-offset-2 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23]"
+                  className="rounded-sm underline underline-offset-2 hover:text-stone-900 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]"
                 >
                   <time dateTime={post.editedAt.toISOString()}>{cardT(locale, 'edited')}</time>
                 </button>
@@ -625,25 +624,6 @@ export function FeedPostCard({
         locale={locale}
       />
 
-      {/* Until the ⋯ menu renders: "Edit in admin" (moderators and up, after hydration) + Report
-          (signed-in members who are not the author). The row collapses when neither renders. */}
-      {!POST_MENU_RENDERS && (
-        <div data-card-actions="" className="mt-2 flex items-center justify-end gap-3 empty:hidden">
-          <PostAdminEditLink postId={post.id} content={post.content} author={authorName} createdAt={post.timestamp} source="feed_post" locale={locale} />
-          {signedIn && !isAuthor && (
-            <button
-              type="button"
-              data-testid={`report-btn-${post.id}`}
-              onClick={(e) => onAction(post, 'report', e.currentTarget)}
-              className="flex items-center gap-1 text-xs text-stone-600 transition-colors hover:text-orange-800"
-              aria-label={cardT(locale, 'reportAria')}
-            >
-              <Flag className="h-3 w-3" aria-hidden="true" />
-              {cardT(locale, 'report')}
-            </button>
-          )}
-        </div>
-      )}
     </article>
   )
 }

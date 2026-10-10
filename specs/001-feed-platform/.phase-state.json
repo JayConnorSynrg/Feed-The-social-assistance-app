@@ -854,9 +854,10 @@
       ],
       "deployOrder": "apply 20261026000000 -> deploy the client -> apply 20261026500000",
       "docs": "specs/post-editing-contract.md, specs/post-editing-model.md, docs/observability.md (Post editing events)",
-      "note": "Release 2 client: create/edit/delete posts and comments through the post-editing RPCs, public edit history, edit conflict comparison, comment soft delete, moderator comment hide, versioned moderation, realtime classifier, 14-locale card/composer/wizard/comments/dialogs. See checklist 1.6.24.",
+      "note": "Release 2 client: create/edit/delete posts and comments through the post-editing RPCs, public edit history, edit conflict comparison, comment soft delete, moderator comment hide, versioned moderation, realtime classifier, 14-locale card/composer/wizard/comments/dialogs. See checklist 1.6.24. Menu wired on Release 1's CardActionsMenu after the plain merge of develop 52f6dee (#242); see checklist 1.6.25.",
       "open": [
-        "post card \u22ef menu wiring after Release 1 merges",
+        "adversarial and a11y reviews",
+        "release (apply 026 -> deploy -> apply 0265)",
         "logged-in browser verification"
       ]
     }

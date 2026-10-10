@@ -221,7 +221,7 @@ export function PostHistoryDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1} className="focus:outline-none">
+          <DialogTitle ref={titleRef} tabIndex={-1} className="focus:outline-hidden">
             {editT(locale, 'historyTitle')}
           </DialogTitle>
         </DialogHeader>

@@ -247,7 +247,7 @@ hydrating render, then `AdminEditLink`, so no admin link is ever part of server 
 
 | Surface | Item / id | `source` |
 |---|---|---|
-| Feed post card (`feed-panel.tsx` `PostCard`, beside Report; petitions are posts) | post `posts.id` | `feed_post` |
+| Feed post card — an item of the card's ⋯ menu (`components/feed/post-card-actions.tsx`; petitions are posts) | post `posts.id` | `feed_post_menu` (before Release 2: `feed_post`, a standalone footer link beside Report) |
 | `/s/post/<id>` (server page; `components/feed/post-admin-edit-link.tsx` is its client island) | post | `post_page` |
 | Map safety-alert popup (inside the popup dialog: Tab reaches it, Escape still closes) | `safety_alerts.id` | `map_popup` |
 | Feed Active Alerts strip (`components/feed/safety-strip.tsx`, beside each alert button, never inside it) | `safety_alerts.id` | `feed_alert` |

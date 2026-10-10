@@ -151,7 +151,7 @@ export function CategoryChips({
               aria-pressed={on}
               disabled={disabled}
               onClick={() => toggle(cat)}
-              className={`min-h-8 rounded-full border px-3 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23] ${
+              className={`min-h-8 rounded-full border px-3 py-1 text-xs transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23] ${
                 on ? 'border-[#4a5d23] bg-[#4a5d23] text-white' : 'border-stone-300 text-stone-700 hover:border-[#4a5d23]'
               }`}
             >
@@ -180,7 +180,7 @@ function ZoneSelect({ id, value, onChange, locale, error, describedBy }: {
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]"
+      className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23]"
       {...describe(id, error, describedBy)}
     >
       {!value && <option value="">{composerT(locale, 'zonePlaceholder')}</option>}
@@ -357,7 +357,7 @@ export function PostFormFields({
               aria-checked={draft.isOnline}
               aria-labelledby={`${id('is_online')}-label`}
               onClick={() => set({ isOnline: !draft.isOnline })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23] ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23] ${
                 draft.isOnline ? 'bg-[#4a5d23]' : 'bg-stone-400'
               }`}
             >
@@ -411,7 +411,7 @@ export function PostFormFields({
                   <button
                     type="button"
                     onClick={() => set({ options: draft.options.filter((_, j) => j !== i) })}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded text-stone-600 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded text-stone-600 hover:text-red-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]"
                     aria-label={formatMessage(composerT(locale, 'removeOptionN'), { n: i + 1 })}
                   >
                     <X className="h-4 w-4" aria-hidden="true" />

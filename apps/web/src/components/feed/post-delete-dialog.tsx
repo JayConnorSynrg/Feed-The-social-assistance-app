@@ -31,6 +31,7 @@ export function ConfirmDeleteDialog({
   onConfirm,
   onClose,
   returnFocusRef,
+  onClosed,
 }: {
   open: boolean
   kind: 'post' | 'comment'
@@ -39,6 +40,8 @@ export function ConfirmDeleteDialog({
   onConfirm: () => Promise<string | null>
   onClose: () => void
   returnFocusRef?: React.RefObject<HTMLElement | null>
+  /** The dialog has closed and focus is back: the moment to announce the result. */
+  onClosed?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +79,8 @@ export function ConfirmDeleteDialog({
           if (returnFocusRef?.current) {
             e.preventDefault()
             returnFocusRef.current.focus()
-          }
+          } else e.preventDefault()
+          onClosed?.()
         }}
       >
         <AlertDialogHeader>

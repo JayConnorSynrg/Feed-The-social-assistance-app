@@ -58,6 +58,9 @@ export interface PostEditDialogProps {
   onSaved: (postId: string, row: FeedPostRow | null, result: EditPostResult, changes: Record<string, unknown>) => void
   /** The post no longer exists for this member (deleted, or never readable). */
   onGone: (postId: string) => void
+  /** The dialog has closed and focus is back (announce what happened only now: while the modal is
+   *  open the rest of the page — the feed's notice region included — is hidden from assistive tech). */
+  onClosed?: () => void
 }
 
 type Phase =
@@ -92,7 +95,7 @@ function formatWhen(iso: string | null, locale: Locale): string | null {
   return dateTimeFormat(locale, browserTimeZone(), { dateStyle: 'medium', timeStyle: 'short' }).format(d)
 }
 
-export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved, onGone }: PostEditDialogProps) {
+export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved, onGone, onClosed }: PostEditDialogProps) {
   const supabase = useMemo(() => createClient(), [])
   const viewerTz = useMemo(() => browserTimeZone(), [])
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' })
@@ -344,6 +347,7 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
             e.preventDefault()
             returnFocusRef.current.focus()
           }
+          onClosed?.()
         }}
       >
         <DialogHeader>
