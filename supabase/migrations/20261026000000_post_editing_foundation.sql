@@ -50,7 +50,8 @@
 --       every engagement path: the post row first, then profiles (no like / comment / vote deadlock).
 --   (f2) Engagement on hidden posts: likes, comments (and replies) and poll votes are refused on any
 --       hidden (held, removed, community-hidden or deleted) post, for everyone, like opt-ins.
---   (g) Moderation integrity: reports snapshot the version; admin_hold / remove / authorize /
+--   (g) Moderation integrity: no one lifts or clears moderation on their own content (authorize, resolving a
+--       report, unhiding a comment: 42501 self_moderation_refused; hold / remove / hide stay allowed); reports snapshot the version; admin_hold / remove / authorize /
 --       resolve_report take an OPTIONAL p_expected_version (NULL = legacy caller, accepted); a
 --       dismissal lifts only a community_reports_threshold hide; publishing an author's edit
 --       that no moderator has seen needs the version, and only a versioned decision clears the
@@ -884,11 +885,15 @@ BEGIN
   IF char_length(v_reason) > 500 THEN
     RAISE EXCEPTION 'post_field_invalid:reason' USING ERRCODE = '22023';
   END IF;
-  UPDATE public.post_comments SET is_hidden = p_hidden WHERE id = p_comment_id
-  RETURNING post_id, user_id INTO v_post, v_author;
+  SELECT post_id, user_id INTO v_post, v_author FROM public.post_comments WHERE id = p_comment_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'comment_not_found' USING ERRCODE = 'PT404';
   END IF;
+  -- no one unhides their own comment (hiding it stays allowed: it only restricts)
+  IF NOT p_hidden AND v_author = auth.uid() THEN
+    RAISE EXCEPTION 'self_moderation_refused' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.post_comments SET is_hidden = p_hidden WHERE id = p_comment_id;
   PERFORM public.record_admin_action(auth.uid(), CASE WHEN p_hidden THEN 'comment.hide' ELSE 'comment.unhide' END,
     'comment', p_comment_id::text, 'ok', v_reason, jsonb_build_object('post_id', v_post, 'author_id', v_author),
     public.request_id());
@@ -1124,6 +1129,10 @@ BEGIN
   IF p.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'post_deleted' USING ERRCODE = 'PT404';
   END IF;
+  -- no one lifts moderation on their own content (authorize unhides and dismisses every open report)
+  IF p.user_id = auth.uid() THEN
+    RAISE EXCEPTION 'self_moderation_refused' USING ERRCODE = '42501';
+  END IF;
 
   UPDATE public.posts
   SET is_hidden = false, hidden_at = NULL, hidden_reason = NULL, needs_review_at = NULL
@@ -1172,6 +1181,11 @@ BEGIN
   -- lock the reported post (a hard-deleted post leaves nothing to lock; the report still resolves)
   IF v_content_type = 'post' AND EXISTS (SELECT 1 FROM public.posts WHERE id = v_content_id) THEN
     p := public.post_lock_for_moderation(v_content_id, p_expected_version, false);
+  END IF;
+  -- no one resolves reports on their own content: 'dismiss' clears the report and can lift the community hide;
+  -- 'uphold' also takes it out of the open count that submit_content_report's 3-report auto-hide counts
+  IF p.user_id = auth.uid() THEN
+    RAISE EXCEPTION 'self_moderation_refused' USING ERRCODE = '42501';
   END IF;
 
   IF p_action = 'uphold' THEN

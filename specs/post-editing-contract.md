@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (195 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (203 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
 
 ## Release: expand / contract
 
@@ -30,7 +30,7 @@ Branch on `code` + `message` (the message is a stable token, never prose).
 |---|---|---|---|
 | `PT409` | 409 | `edit_conflict` | Stale `p_expected_version`. `details` is JSON (below). |
 | `PT404` | 404 | `post_not_found`, `comment_not_found`, `comment_deleted`, `revision_not_found`, `poll_not_found`, `post_deleted` | Missing, or deleted by its author. |
-| `42501` | 403 (401 anon) | `guest_refused`, `not_authenticated`, `not_author`, `post_removed`, `comment_hidden`, `comments_closed`, `revision_under_report`, `p3_denied:insufficient_tier`, `permission denied for table …`, `new row violates row-level security policy …` | Not allowed. |
+| `42501` | 403 (401 anon) | `guest_refused`, `not_authenticated`, `not_author`, `post_removed`, `comment_hidden`, `comments_closed`, `revision_under_report`, `p3_denied:insufficient_tier`, `self_moderation_refused`, `permission denied for table …`, `new row violates row-level security policy …` | Not allowed. |
 | `22023` | 400 | `post_field_not_editable:<key>`, `post_field_invalid:<key>`, `post_field_required:<key>`, `post_field_locked:<key>` (+ `hint`), `capacity_below_committed` (+ `details` `{"committed": n}`), `post_fields_not_object`, `comment_invalid:content`, `comment_field_required:<key>`, `reason_required` | Bad input / locked field. |
 | `0A000` | 400 | `post_type_not_creatable:<type>`, `post_type_not_editable:petition` | Type not handled by this path. |
 
@@ -220,6 +220,13 @@ G8b (every post in the database matches, including rows that existed before 026)
 | `admin_authorize_post(p_post_id uuid, p_expected_version integer DEFAULT NULL)` | + optional version; `PT404 post_deleted` on a deleted post. |
 | `admin_resolve_report(p_report_id uuid, p_action text, p_expected_version integer DEFAULT NULL)` | + optional version; returns `{"report_id","action","unhidden","needs_review"}`. |
 
+- **No one lifts or clears moderation on their own content** (platform admins included):
+  `42501 self_moderation_refused` for `admin_authorize_post` on one's own post, `admin_resolve_report` on a report
+  against one's own post (both `p_action` values: `dismiss` clears the report and can lift the community hide;
+  `uphold` takes it out of the open count that the 3-report auto-hide counts), and `admin_set_comment_hidden(…, false)`
+  on one's own comment. Raised after the guest, tier and existing checks, before any write; no audit row. Holding,
+  removing or hiding one's own content stays allowed. Another moderator or a platform admin clears it (production
+  2026-10-10: 2 staff accounts, both `platform_admin`). Legacy (version-less) calls follow the same rule.
 - **Send the version the moderator is looking at** (`posts.version`). A stale one → `PT409`.
 - `NULL` = legacy caller (accepted during the client rollout). A legacy caller **cannot publish**
   (authorize, or the dismissal that lifts a community hide) a post whose author edited it since it
