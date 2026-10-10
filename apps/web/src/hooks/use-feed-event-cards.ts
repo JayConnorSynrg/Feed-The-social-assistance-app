@@ -46,7 +46,7 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
   }, [])
   const feedRoot = useCallback(() => (typeof document === 'undefined' ? null : document), [])
 
-  const { notice, onManaged, refreshQuietly } = useEventCardRefresh({
+  const { notice, setNotice, onManaged, refreshQuietly } = useEventCardRefresh({
     supabase,
     surface: 'feed',
     userId,
@@ -71,6 +71,10 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     [refreshQuietly],
   )
 
+  // A new first page replaces what the last card change announced (the feed's status region would
+  // otherwise keep speaking it — e.g. "Changes saved." over an empty result).
+  const clearNotice = useCallback(() => setNotice(''), [setNotice])
+
   return {
     eventItems,
     setEventItems,
@@ -80,6 +84,7 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     setEventAnonClaims,
     /** What the last change from an event card's ⋯ menu did (for the feed's status region). */
     feedNotice: notice,
+    clearNotice,
     handleEventManaged: onManaged,
     syncFeedEventCard,
   }

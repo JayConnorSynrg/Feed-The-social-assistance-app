@@ -22,6 +22,7 @@ vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ isAnonymous: false, user:
 import { mount } from '@/test/mini-react'
 import { useFeedEventCards } from './use-feed-event-cards'
 import { buildEventCards, type EventFeedItem, type EventOccurrenceRow } from '@/components/feed/post-model'
+import { feedStatusAnnouncement } from '@/components/feed/feed-chrome'
 
 const E1 = '11111111-1111-4111-8111-111111111111'
 const E2 = '22222222-2222-4222-8222-222222222222'
@@ -125,5 +126,23 @@ describe('useFeedEventCards', () => {
     expect(m.tree().eventItems[0]).toMatchObject({ title: 'Saturday pantry (renamed)', score: 0.42 })
     // Quiet: the feed is not on screen, so nothing is announced there.
     expect(m.tree().feedNotice).toBe('')
+  })
+
+  it('a new first page clears the card notice: the region then says loading, then the empty sentence — never the old notice', async () => {
+    const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
+    await m.tree().handleEventManaged(E1, { kind: 'updated' })
+    await m.flush()
+    expect(m.tree().feedNotice).toBe('Changes saved.')
+    // FeedPanel's first-page branch (any filter / order / Retry / realtime refresh).
+    m.tree().clearNotice()
+    m.rerender()
+    const notice = m.tree().feedNotice
+    const said = [
+      feedStatusAnnouncement({ loading: true, error: false, empty: true, notice }, 'en'),
+      feedStatusAnnouncement({ loading: false, error: false, empty: true, notice }, 'en'),
+      feedStatusAnnouncement({ loading: false, error: false, empty: false, notice }, 'en'),
+    ]
+    expect(said).toEqual(['Loading posts…', 'No posts to show. Be the first to share something!', ''])
+    expect(said).not.toContain('Changes saved.')
   })
 })

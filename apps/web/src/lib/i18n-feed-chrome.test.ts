@@ -37,6 +37,10 @@ describe('feedChromeMessages parity', () => {
     }
   })
 
+  it.each(LOCALES)('%s: the empty-state title ends a sentence (announced right before its second line, so it needs the pause)', (locale) => {
+    expect(feedChromeMessages[locale].emptyTitle).toMatch(/[.。።!?！？]$/)
+  })
+
   it('every non-English locale is translated (not an English copy) for the sentences a member reads', () => {
     const sentences: Array<keyof FeedChromeMessages> = ['feedTitle', 'guestPrompt', 'loadTimeout', 'loadFailed', 'loadingPosts', 'emptyTitle', 'emptyBody', 'loadMore', 'sectionsAria', 'filtersAria']
     for (const locale of LOCALES.filter((l) => l !== 'en')) {
@@ -106,8 +110,8 @@ describe('announcements and keyboard (a11y fix round)', () => {
       feedStatusAnnouncement({ loading: false, error: false, empty: false, notice: '', ...s }, locale)
     expect(say({ loading: true, empty: true })).toBe('Loading posts…')
     // The empty state is announced whole: its title and its second line.
-    expect(say({ empty: true })).toBe('No posts to show Be the first to share something!')
-    expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar ¡Sé la primera persona en compartir algo!')
+    expect(say({ empty: true })).toBe('No posts to show. Be the first to share something!')
+    expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar. ¡Sé la primera persona en compartir algo!')
     expect(say({ notice: 'Changes saved.' })).toBe('Changes saved.')
     expect(say({ error: true, empty: true, loading: true })).toBe('')
     expect(say({})).toBe('')
@@ -179,6 +183,21 @@ describe('feed-panel.tsx wiring', () => {
     // given the feed's reload — hooks/use-feed-event-cards.test.ts proves what that handler reads).
     expect(panel).toMatch(/<EventCard\b[\s\S]{0,1200}onManaged=\{handleEventManaged\}\s*\/>/)
     expect(panel).toContain('} = useFeedEventCards({')
+    // Not re-bindable: the handler is only destructured from the hook and handed to the cards, and
+    // profileSettled only destructured from useAuth() and passed to the gate.
+    expect(src.match(/\bhandleEventManaged\b/g)).toHaveLength(2)
+    expect(panel).toMatch(/\n\s+handleEventManaged,\n[\s\S]{0,80}\} = useFeedEventCards\(\{/)
+    expect(src.match(/\bprofileSettled\b/g)).toHaveLength(2)
+    expect(panel).toMatch(/const \{ user, profileSettled, [^}]*\} = useAuth\(\)/)
+    expect(src).not.toMatch(/\b(const|let|var)\s+profileSettled\b|\bprofileSettled\s*=[^=]/)
+  })
+
+  it('every first page (order, filter, Retry, realtime refresh) clears the last card notice', () => {
+    for (const fn of ['const fetchPosts = useCallback(', 'const fetchRankedPosts = useCallback(']) {
+      const body = panel.slice(panel.indexOf(fn))
+      const firstPage = body.slice(body.indexOf('if (cursor === null) {'), body.indexOf('} else {'))
+      expect(firstPage, fn).toContain('clearNotice()')
+    }
   })
 
   it('the panel root carries the viewer language and direction', () => {

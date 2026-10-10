@@ -1314,6 +1314,7 @@ export function FeedPanel() {
     eventAnonClaims,
     setEventAnonClaims,
     feedNotice,
+    clearNotice,
     handleEventManaged,
     syncFeedEventCard,
   } = useFeedEventCards({ supabase, userId: user?.id ?? null, isGuest: isAnonymous, locale, timeoutMs: QUERY_TIMEOUT_MS, focusHeading: focusFeedTitle })
@@ -1456,6 +1457,8 @@ export function FeedPanel() {
   const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null) => {
     if (cursor === null) {
       setLoading(true)
+      // A new first page replaces the last card-change announcement.
+      clearNotice()
       // Recent (chronological) mode shows posts only (W1.6b): drop any events held
       // from a prior ranked page so nothing stale lingers behind the render gate.
       setEventItems([])
@@ -1630,7 +1633,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
+  }, [supabase, user, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims, clearNotice])
 
   // Ranked feed (W1.3): fetch a page via the hardened ranked_feed RPC, then hydrate
   // full rows with the SAME explicit FEED_POST_SELECT + rowToPost transform the
@@ -1640,6 +1643,8 @@ export function FeedPanel() {
   const fetchRankedPosts = useCallback(async (cursor: { score: number; id: string } | null = null) => {
     if (cursor === null) {
       setLoading(true)
+      // A new first page replaces the last card-change announcement.
+      clearNotice()
     } else {
       setLoadingMore(true)
     }
@@ -1821,7 +1826,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, isAnonymous, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
+  }, [supabase, user, isAnonymous, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims, clearNotice])
 
   // Refresh the feed in the CURRENT ordering mode — used by the initial load, the
   // mode toggle, the retry button, and realtime UPDATE/DELETE reconciliation.

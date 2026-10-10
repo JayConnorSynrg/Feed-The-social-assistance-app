@@ -47,7 +47,7 @@ export interface EventCardRefreshOptions {
 
 /** Where focus goes once a re-read card is on screen, when it was inside that card before:
  *  'stay' (still inside it), 'trigger' (the card was mounted anew: its ⋯ button), or 'heading'. */
-export function restoreCardFocus(root: ParentNode | null, eventId: string, active: Element | null, focusHeading: () => void): 'stay' | 'trigger' | 'heading' {
+function restoreCardFocus(root: ParentNode | null, eventId: string, active: Element | null, focusHeading: () => void): 'stay' | 'trigger' | 'heading' {
   if (eventCardHasFocus(root, eventId, active)) return 'stay'
   const trigger = root?.querySelector<HTMLElement>(`[data-testid="event-menu-${CSS.escape(eventId)}"]`)
   if (trigger) {
@@ -59,7 +59,7 @@ export function restoreCardFocus(root: ParentNode | null, eventId: string, activ
 }
 
 /** After the re-read is applied, for focus that was inside the card (see the header). */
-export function scheduleCardFocus(gone: boolean, root: () => ParentNode | null, eventId: string, focusHeading: () => void): void {
+function scheduleCardFocus(gone: boolean, root: () => ParentNode | null, eventId: string, focusHeading: () => void): void {
   if (gone) {
     requestAnimationFrame(() => focusHeading())
     return

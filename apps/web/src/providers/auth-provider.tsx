@@ -125,6 +125,10 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   const [profile, setProfile] = useState<Profile | null>(null)
   // The user id whose background profile read last finished (see profileSettled).
   const [profileSettledFor, setProfileSettledFor] = useState<string | null>(null)
+  // The user id the latest background profile read is for (null after sign-out). An older read that
+  // answers late — another account's — is ignored, so it can never put that account's profile on
+  // the current user or change the current user's profileSettled.
+  const readForRef = useRef<string | null>(null)
   // Always gate data-fetching until a session is CONFIRMED by
   // onAuthStateChange/reconciliation. The `user` seed (above) lets the shell
   // render authenticated on first paint, while data components gate on `loading`
@@ -159,12 +163,20 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     }
 
     // Non-blocking profile load — a slow accessor must never gate `loading`. When it finishes, by
-    // any path, the read for `userId` is settled.
+    // any path, the read for `userId` is settled — unless a newer read (or a sign-out) superseded it.
     const loadProfileInBackground = (userId: string) => {
+      readForRef.current = userId
+      const current = () => readForRef.current === userId
       fetchProfile()
-        .then((p) => setProfile(p))
-        .catch(() => setProfile(null))
-        .finally(() => setProfileSettledFor(userId))
+        .then((p) => {
+          if (current()) setProfile(p)
+        })
+        .catch(() => {
+          if (current()) setProfile(null)
+        })
+        .finally(() => {
+          if (current()) setProfileSettledFor(userId)
+        })
     }
 
     const mountTime = Date.now()
@@ -174,13 +186,16 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     // the data gate after 10s so the spinner is never permanent. Cleared on first
     // resolution (below) and on unmount so it never fights a normal resolution.
     // This is a pure upper-bound timer — not a getSession()-vs-timeout race.
-    const valve = setTimeout(
-      () => setLoading((c) => {
+    const valve = setTimeout(() => {
+      setLoading((c) => {
         if (c) logger.warn('auth.safetyValve', { bound_ms: 10000 })
         return false
-      }),
-      10000
-    )
+      })
+      // No auth event resolved, so no profile read ever ran for the server-seeded user: count its
+      // (absent) profile as settled, so profile-gated UI (the feed's announcements) is not silent
+      // all session. A read started later by an auth event still applies its profile.
+      setProfileSettledFor(initialUser?.id ?? null)
+    }, 10000)
     const clearValve = () => clearTimeout(valve)
 
     // Listen for auth changes (single listener for the whole app). This also
@@ -251,6 +266,8 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             loadProfileInBackground(clientUser.id)
           }
         } else {
+          // Signed out: a profile read still running for the previous user is dropped.
+          readForRef.current = null
           setUser(null)
           setSession(null)
           setProfile(null)
