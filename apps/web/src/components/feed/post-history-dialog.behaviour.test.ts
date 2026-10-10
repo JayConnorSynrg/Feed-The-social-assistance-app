@@ -40,7 +40,7 @@ vi.mock('@/lib/post-rpc', async (orig) => ({
 import { mount, findAll } from '@/test/mini-react'
 import { HistoryList, PostHistoryDialog, redactRole, type HistoryViewer } from './post-history-dialog'
 import { DiffText } from './diff-text'
-import { DialogContent } from '@/components/ui/dialog'
+import { DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { editT } from '@/lib/i18n-feed-edit'
 
 const AUTHOR = 'author-1'
@@ -156,6 +156,14 @@ describe('the confirmation', () => {
     expect(statusText(c.tree())).toBe('')
     release(REVS.map((r) => ({ ...r, snapshot: null, redacted_at: '2026-10-03T00:00:00Z', redactor_role: 'author' })))
     await c.flush()
+    // Nothing is announced until the frame that moves focus to the title; then focus, then status.
+    expect(statusText(c.tree())).toBe('')
+    const title = findAll(c.tree(), (e) => e.type === DialogTitle)[0] as El
+    ;(title.props.ref as { current: unknown }).current = { focus: () => void h.focused.push(`title(status="${statusText(c.tree())}")`) }
+    h.focused.length = 0
+    runFrames()
+    c.rerender()
+    expect(h.focused).toEqual(['title(status="")'])
     expect(statusText(c.tree())).toBe(editT('en', 'redactDone'))
   })
 })

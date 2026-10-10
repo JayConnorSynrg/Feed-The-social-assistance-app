@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { createClient } from '@/lib/supabase/client'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
-import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
+import { DESTRUCTIVE_BUTTON_CLASS, localizeModeration, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
@@ -49,6 +50,8 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
+  // The moderator's language, for the messages from the shared moderation path.
+  const locale = useProfileLocale()
 
   useEffect(() => {
     const load = async () => {
@@ -151,6 +154,11 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         )
         if (rpcError) {
           logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
+          if (rpcError.code === '42501' && /self_moderation_refused/.test(rpcError.message)) {
+            // Dismissing reports on their own content: another moderator has to review it.
+            setError(moderationFailure(rpcError, locale).message)
+            return
+          }
           if (rpcError.code === 'PT409' || rpcError.code === 'PT404') {
             // Show the post as it is now (or that it is gone) before the moderator decides again.
             const failure = moderationFailure(rpcError)
@@ -177,7 +185,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [locale]
   )
 
   // Remove / Hold / Authorize: the shared post moderation path (post-moderation-actions.ts), the
@@ -187,7 +195,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
     async (action: PostModerationAction, postId: string, expectedVersion: number | null) => {
       setProcessingId(postId)
       setError(null)
-      const result = await moderatePost(supabase, action, postId, expectedVersion)
+      const result = localizeModeration(await moderatePost(supabase, action, postId, expectedVersion), locale)
       if (!result.ok) {
         if (result.conflict || result.gone) await rereadPost(postId)
         setError(result.message)
@@ -199,7 +207,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
       setProcessingId(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onPostChanged]
+    [onPostChanged, locale]
   )
 
   if (loading) {

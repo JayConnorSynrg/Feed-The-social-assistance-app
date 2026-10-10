@@ -154,7 +154,7 @@ describe('the ⋯ menu content (Release 1 CardMenuSection shape)', () => {
     const items = postMenuItems({ id: 'mod', isGuest: false, tier: 'community_moderator' }, { id: 'p1', authorId: 'author', postType: 'feed', isHidden: false, hiddenReason: null, editedAt: null })
     const link = h('a', { href: '/moderation' }, 'Edit in admin')
     const mod = buildPostMenuSections(items, { locale: 'en', onSelect: noop, adminLink: link }).find((s) => s.id === 'moderation')!
-    expect(mod.items.map((i) => (i.kind === 'action' ? `${i.label}${i.destructive ? '!' : ''}` : i.element === link ? 'LINK' : '?'))).toEqual(['Hold for review', 'Remove!', 'LINK'])
+    expect(mod.items.map((i) => (i.kind === 'action' ? `${i.label}${i.destructive ? '!' : ''}` : i.element === link ? 'LINK' : '?'))).toEqual(['Hold for review', 'Remove…!', 'LINK'])
   })
 
   it('selecting an item runs its handler with its id', () => {
@@ -283,7 +283,8 @@ describe('language marking: English-only pieces say so; translated pieces do not
     const plain = es(rowToPost(row({ edited_at: '2026-10-09T21:53:18Z' }), { isLiked: false }))
     // The only English piece of a plain card: the author badges (not translated yet).
     expect(plain.match(/lang="en"/g)).toHaveLength(1)
-    expect(plain).toContain('<span lang="en" dir="ltr" class="contents" data-testid="author-badges-en">')
+    expect(plain).toMatch(/<span lang="en" dir="ltr" data-testid="harmony-badge-author"/)
+    expect(plain).not.toContain('class="contents"')
     const capped = es(rowToPost(row({ max_seekers: 5, slots_remaining: 2 }), { isLiked: false }))
     expect(capped).toMatch(/<div lang="en" dir="ltr" data-testid="capacity-row-p1"/)
     const petition = es(rowToPost(row({ post_type: 'petition', petition_id: 'pt' }), { isLiked: false }), {

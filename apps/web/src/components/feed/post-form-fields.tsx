@@ -450,9 +450,9 @@ export function PostFormFields({
 
       {has('ends_at') && postType === 'poll' && (
         <div>
-          <Label htmlFor={id('poll_ends')}>{composerT(locale, 'fieldPollEnds')}</Label>
+          <Label htmlFor={id('ends_at')}>{composerT(locale, 'fieldPollEnds')}</Label>
           <Input
-            id={id('poll_ends')}
+            id={id('ends_at')}
             type="datetime-local"
             value={draft.pollEndsAt}
             readOnly={endLocked || draft.pollCloseNow}

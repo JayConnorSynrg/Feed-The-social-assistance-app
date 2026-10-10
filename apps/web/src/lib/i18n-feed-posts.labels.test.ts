@@ -10,7 +10,9 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import { messages, type Locale } from './i18n'
-import { cardT } from './i18n-feed-card'
+import { cardT, menuItemLabel } from './i18n-feed-card'
+import { editT, failureText } from './i18n-feed-edit'
+import { moderationFailure } from '@/app/(admin)/moderation/post-moderation-actions'
 import { commentsT } from './i18n-feed-comments'
 import { postMenuTriggerLabel } from '@/components/feed/post-card-actions'
 import { postAdminItemName } from '@/components/feed/post-admin-edit-link'
@@ -33,20 +35,29 @@ describe('⋯ button names', () => {
   const c = { author: 'Ada', content: '', createdAt: new Date('2026-10-08T10:00:00Z') }
 
   it.each(LOCALES)('%s: posts by the same author get different names (time and start of the text)', (l) => {
-    const names = [a, b, c].map((p) => postMenuTriggerLabel(l, p, now))
+    const names = [a, b, c].map((p) => postMenuTriggerLabel(l, p, now, 'UTC'))
     expect(new Set(names).size).toBe(3)
     for (const n of names) expect(n).toContain('Ada')
     expect(names.join('')).not.toMatch(/\{\w+\}/)
   })
 
   it('the excerpt is at most 40 characters', () => {
-    const name = postMenuTriggerLabel('en', a, now)
+    const name = postMenuTriggerLabel('en', a, now, 'UTC')
     expect(name).toBe('Actions for the post by Ada, 2 hours ago: Free bread at the church hall, Saturday…')
     expect(name.split(': ')[1].length).toBeLessThanOrEqual(40)
   })
 
-  it('a post with no text ends at the time (no empty excerpt)', () => {
-    expect(postMenuTriggerLabel('en', c, now)).toBe('Actions for the post by Ada, 1 day ago')
+  it('a post with no text is named by its exact posting time (no empty excerpt)', () => {
+    expect(postMenuTriggerLabel('en', c, now, 'UTC')).toBe('Actions for the post by Ada, Oct 8, 2026, 10:00:00 AM')
+  })
+
+  it.each(LOCALES)('%s: two posts with no text, seconds apart, have different names', (l) => {
+    const photo1 = { author: 'Ada', content: '', createdAt: new Date('2026-10-09T11:59:10Z') }
+    const photo2 = { author: 'Ada', content: '  ', createdAt: new Date('2026-10-09T11:59:40Z') }
+    const n1 = postMenuTriggerLabel(l, photo1, now, 'UTC')
+    const n2 = postMenuTriggerLabel(l, photo2, now, 'UTC')
+    expect(n1).not.toBe(n2)
+    expect(n1).not.toMatch(/\{\w+\}/)
   })
 })
 
@@ -62,5 +73,21 @@ describe('"Edit in admin" name for an image-only post', () => {
     expect(postAdminItemName(null, 'Ada', '2026-10-01T12:00:00Z')).toBe('post by Ada, Oct 1, 2026')
     expect(postAdminItemName(null)).toBe('post by a member')
     expect(postAdminItemName(null, null, null, 'es')).toBe('publicación de un miembro')
+  })
+})
+
+describe('menu and moderation copy', () => {
+  it.each(LOCALES)('%s: "Remove" ends with "…" (it opens a confirmation)', (l) => {
+    expect(menuItemLabel('remove', l).endsWith('…')).toBe(true)
+  })
+
+  it.each(LOCALES)("%s: a refused self-moderation is explained, not a generic error", (l) => {
+    const text = editT(l, 'failSelfModeration')
+    expect(text.length).toBeGreaterThan(10)
+    if (l !== 'en') expect(text).not.toBe(editT('en', 'failSelfModeration'))
+    const refused = moderationFailure({ code: '42501', message: 'self_moderation_refused' }, l)
+    expect(refused).toMatchObject({ ok: false, message: text, selfModeration: true })
+    expect(failureText(l, { kind: 'forbidden', token: 'self_moderation_refused' })).toBe(text)
+    expect(text).not.toBe(failureText(l, { kind: 'forbidden', token: 'permission' }))
   })
 })

@@ -15,7 +15,10 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: 
 
 import { mount, findAll } from '@/test/mini-react'
 import { FeedPostCard, type FeedPostCardProps } from './feed-post-card'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { HarmonyBadge } from './harmony-badge'
+import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
 import { rowToPost, type FeedPostRow } from './post-model'
 
 type El = { type: unknown; props: Record<string, unknown> }
@@ -47,11 +50,15 @@ function render() {
 }
 
 describe('language marks on the card', () => {
-  it('the author badges sit in an English-marked span', () => {
+  it('each author badge marks its own root English (no display:contents wrapper)', () => {
     const tree = render()
-    const wrap = findAll(tree, (e) => e.props['data-testid'] === 'author-badges-en')[0] as El
-    expect(wrap.props).toMatchObject({ lang: 'en', dir: 'ltr' })
-    expect(findAll(wrap.props.children, (e) => e.type === HarmonyBadge)).toHaveLength(1)
+    expect(findAll(tree, (e) => e.props['data-testid'] === 'author-badges-en')).toHaveLength(0)
+    expect(findAll(tree, (e) => e.type === HarmonyBadge && e.props.userId === 'me')).toHaveLength(1)
+    expect(findAll(tree, (e) => e.type === AuthorBadgeStrip)).toHaveLength(1)
+    const harmony = renderToStaticMarkup(createElement(HarmonyBadge, { score: 4.5, count: 3, userId: 'u' }))
+    const strip = renderToStaticMarkup(createElement(AuthorBadgeStrip, { summary: { families: { food: { level: 2 } } }, userId: 'u' }))
+    expect(harmony).toMatch(/^<span lang="en" dir="ltr"/)
+    expect(strip).toMatch(/^<span lang="en" dir="ltr"/)
   })
 
   it.each(['petition-title', 'petition-summary', 'seeker-name'])("a member's text (%s) has lang=\"\" and dir=\"auto\"", (kind) => {

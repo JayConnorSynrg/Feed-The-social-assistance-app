@@ -128,6 +128,7 @@ export interface EditMessages {
   failClosed: string
   failGuest: string
   failPermission: string
+  failSelfModeration: string
   failLocked: string
   failInvalid: string
   failResource: string
@@ -255,6 +256,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: "This post isn't open for changes right now.",
     failGuest: 'Create a free account to do this.',
     failPermission: "You don't have permission to do this.",
+    failSelfModeration: 'You can\'t moderate your own content — another moderator needs to review it.',
     failLocked: 'People have already voted, so that part is locked. Your other changes are kept.',
     failInvalid: "Some details weren't accepted. Check the highlighted fields.",
     failResource: "That resource can't be linked. Choose another one.",
@@ -380,6 +382,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Esta publicación no admite cambios por ahora.',
     failGuest: 'Crea una cuenta gratuita para hacer esto.',
     failPermission: 'No tienes permiso para hacer esto.',
+    failSelfModeration: 'No puedes moderar tu propio contenido: otro moderador debe revisarlo.',
     failLocked: 'Ya hay votos, así que esa parte está bloqueada. Tus otros cambios se conservan.',
     failInvalid: 'Algunos datos no se aceptaron. Revisa los campos marcados.',
     failResource: 'Ese recurso no se puede vincular. Elige otro.',
@@ -505,6 +508,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Piblikasyon sa a pa louvri pou chanjman kounye a.',
     failGuest: 'Kreye yon kont gratis pou fè sa.',
     failPermission: 'Ou pa gen pèmisyon pou fè sa.',
+    failSelfModeration: 'Ou pa ka modere pwòp kontni ou — yon lòt moderatè dwe revize l.',
     failLocked: 'Moun deja vote, kidonk pati sa a bloke. Lòt chanjman ou yo rete.',
     failInvalid: 'Kèk detay pa t aksepte. Tcheke chan ki make yo.',
     failResource: 'Ou pa ka konekte resous sa a. Chwazi yon lòt.',
@@ -630,6 +634,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Bài đăng này hiện không cho phép thay đổi.',
     failGuest: 'Tạo tài khoản miễn phí để làm việc này.',
     failPermission: 'Bạn không có quyền làm việc này.',
+    failSelfModeration: 'Bạn không thể kiểm duyệt nội dung của chính mình — một người kiểm duyệt khác cần xem xét.',
     failLocked: 'Đã có người bình chọn nên phần đó bị khóa. Các thay đổi khác của bạn vẫn được giữ.',
     failInvalid: 'Một số thông tin không được chấp nhận. Hãy kiểm tra các ô được đánh dấu.',
     failResource: 'Không thể liên kết tài nguyên đó. Hãy chọn tài nguyên khác.',
@@ -755,6 +760,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'هذا المنشور غير مفتوح للتغييرات حاليًا.',
     failGuest: 'أنشئ حسابًا مجانيًا للقيام بذلك.',
     failPermission: 'ليس لديك إذن للقيام بذلك.',
+    failSelfModeration: 'لا يمكنك الإشراف على محتواك الخاص — يجب أن يراجعه مشرف آخر.',
     failLocked: 'صوّت أشخاص بالفعل، لذا هذا الجزء مقفل. تبقى تغييراتك الأخرى.',
     failInvalid: 'لم تُقبل بعض التفاصيل. تحقّق من الحقول المحدّدة.',
     failResource: 'لا يمكن ربط هذا المورد. اختر موردًا آخر.',
@@ -880,6 +886,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: '这条帖子目前不能更改。',
     failGuest: '创建免费账户后才能这样做。',
     failPermission: '你没有权限这样做。',
+    failSelfModeration: '你不能审核自己的内容——需要由另一位版主审核。',
     failLocked: '已经有人投票，所以那部分已锁定。你的其他更改会保留。',
     failInvalid: '部分信息未被接受，请检查标出的字段。',
     failResource: '无法关联该资源，请选择其他资源。',
@@ -1005,6 +1012,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Qoraalkan hadda uma furna isbeddel.',
     failGuest: 'Samee akoon bilaash ah si aad tan u sameyso.',
     failPermission: 'Ogolaansho uma lihid inaad tan sameyso.',
+    failSelfModeration: 'Ma maamuli kartid waxyaabahaaga — maamule kale ayaa dib u eegi doona.',
     failLocked: 'Dad ayaa horey u codeeyay, sidaa darteed qaybtaas waa xiran tahay. Isbeddeladaada kale way hadhayaan.',
     failInvalid: 'Faahfaahinta qaar lama aqbalin. Hubi meelaha la calaamadeeyay.',
     failResource: 'Kheyraadkaas lama xiri karo. Dooro mid kale.',
@@ -1130,6 +1138,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Cette publication n’accepte pas de modification pour le moment.',
     failGuest: 'Créez un compte gratuit pour faire cela.',
     failPermission: 'Vous n’avez pas l’autorisation de faire cela.',
+    failSelfModeration: 'Vous ne pouvez pas modérer votre propre contenu — un autre modérateur doit l’examiner.',
     failLocked: 'Des personnes ont déjà voté, cette partie est donc verrouillée. Vos autres changements sont conservés.',
     failInvalid: 'Certaines informations n’ont pas été acceptées. Vérifiez les champs signalés.',
     failResource: 'Cette ressource ne peut pas être associée. Choisissez-en une autre.',
@@ -1255,6 +1264,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Esta publicação não aceita alterações no momento.',
     failGuest: 'Crie uma conta gratuita para fazer isso.',
     failPermission: 'Você não tem permissão para fazer isso.',
+    failSelfModeration: 'Você não pode moderar o seu próprio conteúdo — outro moderador precisa revisá-lo.',
     failLocked: 'Já há votos, então essa parte está bloqueada. Suas outras alterações foram mantidas.',
     failInvalid: 'Alguns dados não foram aceitos. Confira os campos destacados.',
     failResource: 'Esse recurso não pode ser vinculado. Escolha outro.',
@@ -1380,6 +1390,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Сейчас эту публикацию нельзя изменить.',
     failGuest: 'Создайте бесплатный аккаунт, чтобы сделать это.',
     failPermission: 'У вас нет прав на это действие.',
+    failSelfModeration: 'Нельзя модерировать собственный контент — его должен проверить другой модератор.',
     failLocked: 'Голоса уже есть, поэтому эта часть заблокирована. Остальные изменения сохранены.',
     failInvalid: 'Некоторые данные не приняты. Проверьте отмеченные поля.',
     failResource: 'Этот ресурс нельзя привязать. Выберите другой.',
@@ -1505,6 +1516,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: '이 게시물은 지금 바꿀 수 없습니다.',
     failGuest: '이 작업을 하려면 무료 계정을 만드세요.',
     failPermission: '이 작업을 할 권한이 없습니다.',
+    failSelfModeration: '자신의 콘텐츠는 직접 관리할 수 없습니다. 다른 운영자의 검토가 필요합니다.',
     failLocked: '이미 투표가 있어 그 부분은 잠겨 있습니다. 다른 변경 사항은 유지됩니다.',
     failInvalid: '일부 정보가 허용되지 않았습니다. 표시된 항목을 확인하세요.',
     failResource: '그 자원은 연결할 수 없습니다. 다른 자원을 고르세요.',
@@ -1630,6 +1642,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Hindi bukas sa pagbabago ang post na ito sa ngayon.',
     failGuest: 'Gumawa ng libreng account para gawin ito.',
     failPermission: 'Wala kang pahintulot na gawin ito.',
+    failSelfModeration: 'Hindi mo puwedeng i-moderate ang sarili mong content — kailangang suriin ito ng ibang moderator.',
     failLocked: 'May bumoto na kaya naka-lock ang bahaging iyon. Itinabi ang iba mo pang pagbabago.',
     failInvalid: 'Hindi tinanggap ang ilang detalye. Tingnan ang mga minarkahang field.',
     failResource: 'Hindi mai-link ang resource na iyon. Pumili ng iba.',
@@ -1755,6 +1768,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'ይህ ልጥፍ አሁን ለለውጦች ክፍት አይደለም።',
     failGuest: 'ይህን ለማድረግ ነፃ መለያ ይፍጠሩ።',
     failPermission: 'ይህን ለማድረግ ፈቃድ የለዎትም።',
+    failSelfModeration: 'የራስዎን ይዘት ማወያየት አይችሉም — ሌላ አወያይ መገምገም አለበት።',
     failLocked: 'ሰዎች አስቀድመው መርጠዋል፤ ስለዚህ ያ ክፍል ተቆልፏል። ሌሎች ለውጦችዎ ተቀምጠዋል።',
     failInvalid: 'አንዳንድ ዝርዝሮች ተቀባይነት አላገኙም። ምልክት የተደረገባቸውን መስኮች ያረጋግጡ።',
     failResource: 'ያንን ሀብት ማገናኘት አይቻልም። ሌላ ይምረጡ።',
@@ -1880,6 +1894,7 @@ export const editMessages: Record<Locale, EditMessages> = {
     failClosed: 'Tam sim no qhov tshaj tawm no tsis qhib rau kev hloov.',
     failGuest: 'Tsim ib tus account dawb thiaj ua tau qhov no.',
     failPermission: 'Koj tsis muaj cai ua qhov no.',
+    failSelfModeration: 'Koj saib xyuas tsis tau koj tus kheej cov ntsiab lus — yuav tsum tau lwm tus neeg saib xyuas tshuaj xyuas.',
     failLocked: 'Twb muaj neeg xaiv lawm, yog li qhov ntawd raug xauv. Koj lwm cov kev hloov tseem nyob.',
     failInvalid: 'Qee cov ntsiab lus tsis raug txais. Kuaj cov chaw uas muaj cim.',
     failResource: 'Txuas tsis tau qhov kev pab ntawd. Xaiv lwm qhov.',
@@ -1981,6 +1996,8 @@ export function failureText(locale: Locale, failure: PostRpcFailure): string {
         case 'guest_refused':
         case 'not_authenticated':
           return editT(locale, 'failGuest')
+        case 'self_moderation_refused':
+          return editT(locale, 'failSelfModeration')
         default:
           return editT(locale, 'failPermission')
       }

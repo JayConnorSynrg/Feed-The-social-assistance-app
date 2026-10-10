@@ -18,6 +18,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
+import type { Locale } from '@/lib/i18n'
+import { editT } from '@/lib/i18n-feed-edit'
 
 export type PostModerationAction = 'remove' | 'hold' | 'authorize'
 
@@ -54,14 +56,22 @@ export interface ModerationConflict {
 
 export type PostModerationResult =
   | { ok: true }
-  | { ok: false; message: string; conflict?: ModerationConflict; gone?: true }
+  | { ok: false; message: string; conflict?: ModerationConflict; gone?: true; selfModeration?: true }
 
 /** The moderator-facing line for a version conflict (the admin screens are English). */
 export const MODERATION_CONFLICT_MESSAGE =
   'The author changed this post since you opened it. The latest version is shown — review it and choose again.'
 
 /** Map a moderation RPC error to the result (exported for the reports queue's resolve path). */
-export function moderationFailure(error: { code?: string; message: string; details?: string | null }): Exclude<PostModerationResult, { ok: true }> {
+export function moderationFailure(
+  error: { code?: string; message: string; details?: string | null },
+  locale: Locale = 'en',
+): Exclude<PostModerationResult, { ok: true }> {
+  // A moderator lifting moderation on their own content (the database refuses it): another
+  // moderator has to review it. Said in the moderator's language.
+  if (error.code === '42501' && /self_moderation_refused/.test(error.message)) {
+    return { ok: false, message: editT(locale, 'failSelfModeration'), selfModeration: true }
+  }
   if (error.code === 'PT409') {
     let d: Record<string, unknown> = {}
     try {
@@ -101,6 +111,11 @@ export async function moderatePost(
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : 'An error occurred' }
   }
+}
+
+/** A refused self-moderation, said in the moderator's language (the other messages stay English). */
+export function localizeModeration(result: PostModerationResult, locale: Locale): PostModerationResult {
+  return !result.ok && result.selfModeration ? { ...result, message: editT(locale, 'failSelfModeration') } : result
 }
 
 /** The post state the single-post view needs to offer actions. */

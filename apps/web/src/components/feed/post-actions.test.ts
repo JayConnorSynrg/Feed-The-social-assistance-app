@@ -76,6 +76,20 @@ describe('postMenuItems', () => {
     expect(ids(viewer({ id: 'author', tier: 'platform_admin' }), post())).toEqual(['edit', 'copy_link', 'delete', 'edit_in_admin'])
   })
 
+  it.each(['community_moderator', 'resource_admin', 'platform_admin'] as const)(
+    'no self-moderation: a %s gets no Restore / Hold / Remove on their own post, hidden or not (Edit / Delete instead)',
+    (tier) => {
+      const me = viewer({ id: 'author', tier })
+      for (const p of [post(), post({ isHidden: true, hiddenReason: 'hold_for_review' }), post({ isHidden: true, hiddenReason: 'admin_removal' })]) {
+        const got = ids(me, p)
+        expect(got.filter((i) => i === 'restore' || i === 'hold' || i === 'remove')).toEqual([])
+        expect(got).toContain('delete')
+      }
+      // Another moderator still can.
+      expect(ids(viewer({ id: 'other-mod', tier }), post({ isHidden: true, hiddenReason: 'hold_for_review' }))).toContain('restore')
+    },
+  )
+
   it('each item carries a stable test id', () => {
     expect(postMenuItems(viewer(), post()).map((i) => i.testId)).toEqual(['post-menu-copy_link-p1', 'post-menu-report-p1'])
   })
@@ -102,6 +116,15 @@ describe('commentActions', () => {
     expect(commentActions(viewer(), hidden)).toEqual([])
     expect(commentActions(viewer({ id: 'author' }), hidden)).toEqual([])
   })
+  it.each(['community_moderator', 'resource_admin', 'platform_admin'] as const)(
+    'no self-moderation: a %s gets no Hide on their own comment and no Unhide on their own hidden comment',
+    (tier) => {
+      const me = viewer({ id: 'author', tier })
+      expect(commentActions(me, c)).toEqual(['edit', 'delete'])
+      expect(commentActions(me, { ...c, isHidden: true })).toEqual([])
+      expect(commentActions(viewer({ id: 'other-mod', tier }), { ...c, isHidden: true })).toEqual(['unhide'])
+    },
+  )
   it('a guest gets nothing on someone else’s comment', () => {
     expect(commentActions(viewer({ id: 'g', isGuest: true }), c)).toEqual([])
   })

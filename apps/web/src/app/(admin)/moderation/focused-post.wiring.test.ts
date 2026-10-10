@@ -13,6 +13,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => h.locale }))
+
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const h = vi.hoisted(() => ({
@@ -21,6 +23,8 @@ const h = vi.hoisted(() => ({
   postRow: null as unknown,
   reads: [] as string[],
   rpcs: [] as Array<{ fn: string; args: Record<string, unknown> }>,
+  locale: 'en' as string,
+  rpcError: null as null | { code: string; message: string },
 }))
 vi.mock('./use-admin-focus', () => ({ useAdminFocusSession: () => h.session }))
 vi.mock('@/lib/logger', () => ({
@@ -40,7 +44,7 @@ vi.mock('@/lib/supabase/client', () => ({
     },
     rpc: (fn: string, args: Record<string, unknown>) => {
       h.rpcs.push({ fn, args })
-      return Promise.resolve({ data: { success: true }, error: null })
+      return Promise.resolve(h.rpcError ? { data: null, error: h.rpcError } : { data: { success: true }, error: null })
     },
   }),
 }))
@@ -48,6 +52,7 @@ vi.mock('@/lib/supabase/client', () => ({
 import { mount } from '@/test/mini-react'
 import { FocusedPost, type FocusedPostViewProps } from './focused-post'
 import { postActionsFor } from './post-moderation-actions'
+import { editT } from '@/lib/i18n-feed-edit'
 
 const LINKED = '11111111-1111-4111-8111-111111111111'
 const visible = { id: LINKED, content: 'x', post_type: 'request', created_at: '2026-10-01T00:00:00Z', is_hidden: false, hidden_reason: null, hidden_at: null, author: null }
@@ -64,6 +69,8 @@ beforeEach(() => {
   h.resolved.length = 0
   h.reads.length = 0
   h.rpcs.length = 0
+  h.locale = 'en'
+  h.rpcError = null
   changed.length = 0
   props = { reloadKey: 0, onChanged: () => changed.push('changed'), onDismissed: () => changed.push('dismissed') }
   h.session = {
@@ -75,6 +82,18 @@ beforeEach(() => {
 })
 
 describe('FocusedPost wiring', () => {
+  it("a moderator restoring their own post: the refusal is explained in the moderator's language", async () => {
+    h.locale = 'es'
+    h.rpcError = { code: '42501', message: 'self_moderation_refused' }
+    h.postRow = { ...visible, is_hidden: true, hidden_reason: 'hold_for_review', version: 2 }
+    const c = mountPanel()
+    const view = (await c.flush())!
+    view.props.onAction('authorize')
+    const after = (await c.flush())!
+    expect(after.props.error).toBe(editT('es', 'failSelfModeration'))
+    expect(changed).toEqual([])
+  })
+
   it('acts on the version it read: Hold sends p_expected_version (posts.version)', async () => {
     h.postRow = { ...visible, version: 3 }
     const c = mountPanel()

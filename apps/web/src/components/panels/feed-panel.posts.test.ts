@@ -161,6 +161,7 @@ import { ReportDialog } from '@/components/feed/report-dialog'
 import { ConfirmDeleteDialog } from '@/components/feed/post-delete-dialog'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { FEED_POST_SELECT } from '@/components/feed/post-model'
+import { cardT } from '@/lib/i18n-feed-card'
 import { FeedHeader } from '@/components/feed/feed-chrome'
 
 const AUTHOR = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -316,6 +317,25 @@ describe('moderation from the card', () => {
     expect(h.focused).toEqual(['post-card-p3'])
     expect(h.notices).toEqual(['Post removed.'])
     expect(cardIds(c.tree())).toEqual(['p3'])
+  })
+
+  it('Remove refused: the card stays, and the notice waits for the dialog to close, then focus returns to its ⋯ button', async () => {
+    signIn('cm')
+    h.rpcReply = (fn) => (fn === 'admin_remove_post' ? { data: null, error: { code: '42501', message: 'denied' } } : { data: null, error: null })
+    const c = await feed()
+    const trigger = el('post-menu-p1')
+    const card = cardsOf(c.tree())[0]
+    ;(card.props.onAction as (p: unknown, id: string, t: unknown) => void)(card.props.post, 'remove', trigger)
+    c.rerender()
+    const dialog = one(c.tree(), ConfirmDeleteDialog, (e) => e.props.kind === 'remove')
+    await (dialog.props.onConfirm as () => Promise<unknown>)()
+    await c.flush()
+    expect(h.notices).toEqual([])
+    ;(dialog.props.onClosed as () => void)()
+    await c.flush()
+    expect(h.focused).toEqual(['post-menu-p1'])
+    expect(h.notices).toEqual([cardT('en', 'statusModerationFailed')])
+    expect(cardIds(c.tree())).toEqual(['p1', 'p3'])
   })
 
   it('Hold sends the version on screen', async () => {

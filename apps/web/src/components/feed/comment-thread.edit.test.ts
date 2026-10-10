@@ -105,6 +105,48 @@ describe('editing a comment while the thread refreshes', () => {
   })
 })
 
+describe('a refetch keeps the list mounted (focus and text stay where they are)', () => {
+  it('the comment being edited and the open reply box stay mounted through the whole refetch', async () => {
+    h.rows = [comment(), comment({ id: 'c2', user_id: 'other', content: 'Thanks!' })]
+    const c = mount(() => CommentThread({ postId: 'p1', locale: 'en' }))
+    await c.flush()
+    ctxOf(c.tree()).onAction(comment(), 'edit', { focus() {} } as HTMLElement)
+    c.rerender()
+    ctxOf(c.tree()).onEditDraftChange('See you at 6')
+    ctxOf(c.tree()).onToggleReply('c2')
+    ctxOf(c.tree()).onReplyTextChange('c2', 'On my way')
+    c.rerender()
+    const rowKeys = (tree: unknown) => findAll(tree, (e) => e.type === CommentRow).map((e) => (e as unknown as { key: string }).key)
+    const list = (tree: unknown) => findAll(tree, (e) => e.props['data-testid'] === 'comment-list')
+    const spinner = (tree: unknown) => findAll(tree, (e) => e.props.children === 'Loading comments…')
+    // The refetch starts (loading) and ends (fresh row objects): the list and both rows never leave
+    // the tree, so React keeps their DOM nodes — the focused textarea keeps focus.
+    h.loading = true
+    let tree = c.rerender()
+    expect(list(tree)).toHaveLength(1)
+    expect(rowKeys(tree)).toEqual(['c1', 'c2'])
+    expect(spinner(tree)).toHaveLength(0)
+    h.loading = false
+    h.rows = [comment(), comment({ id: 'c2', user_id: 'other', content: 'Thanks!' })]
+    tree = c.rerender()
+    expect(rowKeys(tree)).toEqual(['c1', 'c2'])
+    const ctx = ctxOf(tree)
+    expect(ctx.editingId).toBe('c1')
+    expect(ctx.editDraft).toBe('See you at 6')
+    expect(ctx.replyOpenIds.has('c2')).toBe(true)
+    expect(ctx.replyTexts.get('c2')).toBe('On my way')
+  })
+
+  it('the first read still shows the spinner (nothing to keep yet)', async () => {
+    h.rows = []
+    h.loading = true
+    const c = mount(() => CommentThread({ postId: 'p1', locale: 'en' }))
+    const tree = c.tree()
+    expect(findAll(tree, (e) => e.props.children === 'Loading comments…')).toHaveLength(1)
+    expect(findAll(tree, (e) => e.props['data-testid'] === 'comment-list')).toHaveLength(0)
+  })
+})
+
 describe('Save', () => {
   const ctxWith = (draft: string, saved: string[]): RowContext => ({
     locale: 'en',

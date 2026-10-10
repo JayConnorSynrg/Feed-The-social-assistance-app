@@ -59,7 +59,7 @@ export function ReportDialog({
       try {
         await onSubmit(postId, reason, details.trim() || null)
         setDone(true)
-        // The form is replaced by the confirmation: focus moves to it (it is also announced).
+        // The form is replaced by the confirmation: focus moves to it (focus is what announces it).
         requestAnimationFrame(() => doneRef.current?.focus())
       } catch {
         setError(cardT(locale, 'reportFailed'))
@@ -88,9 +88,13 @@ export function ReportDialog({
         <DialogHeader>
           <DialogTitle>{cardT(locale, 'reportTitle')}</DialogTitle>
         </DialogHeader>
-        <p role="status" ref={doneRef} tabIndex={-1} data-testid="report-done" className={done ? 'py-4 text-center text-sm text-stone-800 focus:outline-hidden' : 'sr-only'}>
-          {done ? cardT(locale, 'reportThanks') : ''}
-        </p>
+        {/* The confirmation replaces the form and takes focus, which reads it once (no live region:
+            a role="status" here would announce it a second time). */}
+        {done && (
+          <p ref={doneRef} tabIndex={-1} data-testid="report-done" className="py-4 text-center text-sm text-stone-800 focus:outline-hidden">
+            {cardT(locale, 'reportThanks')}
+          </p>
+        )}
         {!done && (
           <div className="space-y-4 py-2">
             <div className="space-y-2">

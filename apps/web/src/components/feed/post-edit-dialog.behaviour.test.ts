@@ -41,7 +41,8 @@ vi.mock('./post-image-picker', async (orig) => ({
 import { mount, findAll } from '@/test/mini-react'
 import { PostEditDialog } from './post-edit-dialog'
 import { PostFormFields } from './post-form-fields'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { EditConflictView } from './post-edit-conflict'
 import { fieldLabel, lockReasonText } from '@/lib/i18n-feed-edit'
 
 const POLL = {
@@ -63,7 +64,7 @@ const NOTE = { ...POLL, post_type: 'feed', content: 'Soup at 5', poll: undefined
 const found = (source: unknown, pollVotes = 0) => ({ status: 'found', source, facts: { pollVotes, committedOptIns: 0, pollEndsAt: null } })
 
 type El = { type: unknown; props: Record<string, unknown> }
-const calls = { saved: [] as unknown[], gone: [] as string[], closed: 0 }
+const calls = { saved: [] as unknown[], gone: [] as string[], closed: 0, closedAfter: 0 }
 
 beforeEach(() => {
   h.sources.length = 0
@@ -82,13 +83,16 @@ beforeEach(() => {
   calls.saved = []
   calls.gone = []
   calls.closed = 0
+  calls.closedAfter = 0
 })
 
-async function open(postType: string) {
+async function open(postType: string, returnFocusRef?: { current: unknown }) {
   const c = mount(() =>
     PostEditDialog({
       post: { id: 'p1', postType: postType as 'poll' },
       locale: 'en',
+      returnFocusRef: returnFocusRef as never,
+      onClosed: () => void calls.closedAfter++,
       onClose: () => void calls.closed++,
       onSaved: (...a: unknown[]) => void calls.saved.push(a),
       onGone: (id: string) => void calls.gone.push(id),
@@ -156,6 +160,38 @@ describe('PostEditDialog', () => {
     submit(c.tree())
     await c.flush()
     expect(h.edits.map((e) => Object.keys(e.changes))).toEqual([['content']])
+  })
+
+  it('a gone post: when the dialog closes, focus is not sent back to the leaving card (the feed moves it)', async () => {
+    h.sources.push(found(NOTE))
+    h.editReplies.push(async () => ({ ok: false, failure: { kind: 'not_found', token: 'post_not_found' } }))
+    const focused: string[] = []
+    const c = await open('feed', { current: { focus: () => void focused.push('trigger') } })
+    type(c, { content: 'Soup at 6' })
+    submit(c.tree())
+    await c.flush()
+    let prevented = 0
+    ;((findAll(c.tree(), (e) => e.type === DialogContent)[0] as El).props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: () => void prevented++ })
+    expect(prevented).toBe(1)
+    expect(focused).toEqual([])
+    expect(calls.closedAfter).toBe(1)
+  })
+
+  it('"Use the current version" tells the feed nothing was saved (result null)', async () => {
+    h.sources.push(found(NOTE), found({ ...NOTE, content: 'Soup at 7', version: 5 }))
+    h.editReplies.push(async () => ({ ok: false, failure: { kind: 'conflict', currentVersion: 5, editedAt: null, needsReview: false } }))
+    const c = await open('feed')
+    type(c, { content: 'Soup at 6' })
+    submit(c.tree())
+    await c.flush()
+    const view = findAll(c.tree(), (e) => e.type === EditConflictView)[0] as El
+    ;(view.props.onChoice as (x: string) => void)('take_theirs')
+    c.rerender()
+    const resolve = findAll(c.tree(), (e) => e.props['data-testid'] === 'conflict-continue')[0] as El
+    ;(resolve.props.onClick as () => void)()
+    await c.flush()
+    expect(calls.saved).toEqual([['p1', null, null, {}]])
+    expect(h.edits).toHaveLength(1)
   })
 
   it('nothing is sent while a photo is uploading', async () => {

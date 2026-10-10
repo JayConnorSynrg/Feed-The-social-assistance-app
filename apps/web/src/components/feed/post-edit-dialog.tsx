@@ -355,10 +355,10 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
         className="max-h-[90vh] max-w-xl overflow-y-auto"
         data-testid="post-edit-dialog"
         onCloseAutoFocus={(e) => {
-          if (returnFocusRef?.current) {
+          if (returnFocusRef?.current && phase.kind !== 'gone') {
             e.preventDefault()
             returnFocusRef.current.focus()
-          }
+          } else e.preventDefault() // the post is gone: onClosed moves focus (next card or the heading)
           onClosed?.()
         }}
       >

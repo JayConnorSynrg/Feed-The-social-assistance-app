@@ -47,6 +47,9 @@ describe('ReportDialog', () => {
     const tree = await c.flush()
     const done = one(tree, (e) => e.props['data-testid'] === 'report-done')
     expect(done.props.tabIndex).toBe(-1)
+    // Announced once: by the focus move, not also by a live region.
+    expect(done.props.role).toBeUndefined()
+    expect(findAll(tree, (e) => e.props.role === 'status' || e.props['aria-live'] != null)).toHaveLength(0)
     ;(done.props.ref as { current: unknown }).current = { focus: () => void h.focused.push('report-done') }
     while (h.frames.length) h.frames.shift()!()
     expect(h.focused).toEqual(['report-done'])

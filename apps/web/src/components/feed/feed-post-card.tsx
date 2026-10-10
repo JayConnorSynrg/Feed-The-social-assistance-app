@@ -300,11 +300,9 @@ export function FeedPostCard({
             >
               {authorName}
             </button>
-            {/* The badges' labels are still English-only: marked so a screen reader reads them as English. */}
-            <span lang="en" dir="ltr" className="contents" data-testid="author-badges-en">
-              <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} />
-              <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
-            </span>
+            {/* Each badge marks its own (English-only) root lang="en" dir="ltr". */}
+            <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} />
+            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${categoryColor}`}>{categoryChipLabel(post.category, locale)}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">

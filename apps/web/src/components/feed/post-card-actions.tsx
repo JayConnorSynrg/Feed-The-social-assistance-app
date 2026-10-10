@@ -19,6 +19,7 @@ import type { Locale } from '@/lib/i18n'
 import { formatMessage } from '@/lib/i18n-event-forms'
 import { cardT } from '@/lib/i18n-feed-card'
 import { relativeAge } from '@/lib/relative-age'
+import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'
 import { useHydrated } from '@/components/admin/client-admin-edit-link'
 import { CardActionsMenu } from './card-actions-menu'
 import { PostAdminEditLink } from './post-admin-edit-link'
@@ -36,19 +37,20 @@ export interface PostCardActionsProps {
 }
 
 /** The ⋯ trigger's accessible name: author, relative time and the start of the text (≤ 40
- *  characters), so two posts by one author have distinct buttons. */
+ *  characters), so two posts by one author have distinct buttons. A post with no text (a photo)
+ *  is named by its exact posting time instead (to the second), so two of them never share a name. */
 export function postMenuTriggerLabel(
   locale: Locale,
   item: { content: string; author: string; createdAt: Date },
-  now: number = Date.now()
+  now: number = Date.now(),
+  tz: string = browserTimeZone(),
 ): string {
   const text = item.content.replace(/\s+/g, ' ').trim()
   const excerpt = text.length > 40 ? `${text.slice(0, 39)}…` : text
-  const label = formatMessage(cardT(locale, 'menuTriggerAria'), {
-    name: item.author,
-    when: relativeAge(item.createdAt.toISOString(), locale, now),
-    excerpt,
-  })
+  const when = excerpt
+    ? relativeAge(item.createdAt.toISOString(), locale, now)
+    : dateTimeFormat(locale, tz, { dateStyle: 'medium', timeStyle: 'medium' }).format(item.createdAt)
+  const label = formatMessage(cardT(locale, 'menuTriggerAria'), { name: item.author, when, excerpt })
   return excerpt ? label : label.replace(/[\s:：፦]+$/u, '')
 }
 

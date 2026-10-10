@@ -226,10 +226,14 @@ export function PostHistoryDialog({
     }
     setRedacting(null)
     setRedactReason('')
-    // Reload in place, then announce once and move focus to the title.
+    // Reload in place; then, in one frame, focus the title first and set the status (the focus move
+    // is read before the polite announcement, which is made once).
     await load(true)
-    setStatus(editT(locale, 'redactDone'))
-    requestAnimationFrame(() => titleRef.current?.focus())
+    const done = editT(locale, 'redactDone')
+    requestAnimationFrame(() => {
+      titleRef.current?.focus()
+      setStatus(done)
+    })
   }
 
   return (

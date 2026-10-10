@@ -20,11 +20,13 @@ import type { Database } from '@feed/database'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
 import { useAdminFocusSession } from './use-admin-focus'
 import {
   DESTRUCTIVE_BUTTON_CLASS,
+  localizeModeration,
   moderatePost,
   postActionsFor,
   type ModeratedPostState,
@@ -236,6 +238,8 @@ export function FocusedPost({
 }) {
   const session = useAdminFocusSession('post', 'moderation')
   const supabase = useMemo(() => createClient(), [])
+  // The moderator's language, for the messages from the shared moderation path.
+  const locale = useProfileLocale()
   const [state, setState] = useState<FocusedPostState>({ status: 'loading' })
   const [dismissed, setDismissed] = useState(false)
   const [processing, setProcessing] = useState<PostModerationAction | null>(null)
@@ -278,7 +282,7 @@ export function FocusedPost({
     setError(null)
     // The version on screen: if the author edited the post since, the RPC refuses (conflict) and the
     // panel re-reads it so the moderator decides on what members would actually see.
-    const result = await moderatePost(supabase, action, post.id, post.version ?? null)
+    const result = localizeModeration(await moderatePost(supabase, action, post.id, post.version ?? null), locale)
     if (!result.ok && (result.conflict || result.gone)) {
       const next = await loadFocusedPost(supabase, post.id)
       setState(next)

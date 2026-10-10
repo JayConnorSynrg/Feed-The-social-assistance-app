@@ -86,7 +86,8 @@ export function postMenuItems(viewer: ActionViewer, post: ActionPost): PostMenuI
   if (isStaff(viewer)) {
     if (!isAuthor && !post.isHidden) out.push(item('hold', 'moderation'))
     if (!isAuthor && !removed) out.push(item('remove', 'moderation'))
-    if (post.isHidden && !deleted) out.push(item('restore', 'moderation'))
+    // Never on your own post (another moderator reviews it; the database refuses a self-restore).
+    if (!isAuthor && post.isHidden && !deleted) out.push(item('restore', 'moderation'))
     out.push(item('edit_in_admin', 'moderation'))
   }
   return out
@@ -108,7 +109,8 @@ export function commentActions(viewer: ActionViewer, comment: ActionComment): Co
   const isAuthor = signedIn && viewer.id === comment.authorId
   if (comment.deletedAt) return []
   // A hidden comment reaches the thread for staff only; they can make it visible again.
-  if (comment.isHidden) return isStaff(viewer) ? ['unhide'] : []
+  // Never on your own comment: another moderator reviews it (the database refuses a self-unhide).
+  if (comment.isHidden) return isStaff(viewer) && !isAuthor ? ['unhide'] : []
   const out: CommentActionId[] = []
   if (isAuthor) out.push('edit')
   if (comment.editedAt) out.push('history')

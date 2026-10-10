@@ -450,6 +450,9 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
   const visibleComments = showAll ? comments : comments.slice(0, INITIAL_SHOW)
   const hiddenCount = comments.length - INITIAL_SHOW
   const errorText = error ? commentErrorText(locale, error) : null
+  // Only the first read shows the spinner. A refetch (realtime, after an edit) keeps the list
+  // mounted, so a comment being edited or a reply being written keeps its focus and its text.
+  const firstLoad = loading && rows.length === 0
 
   const ctx: RowContext = {
     locale,
@@ -484,7 +487,7 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
       <div className="mb-2 flex items-center gap-1.5">
         <MessageCircle className="h-3.5 w-3.5 text-stone-600" aria-hidden="true" />
         <span className="text-xs font-medium text-stone-700">
-          {loading ? commentsT(locale, 'loadingShort') : formatMessage(commentsT(locale, 'commentCount'), { n: liveCount })}
+          {firstLoad ? commentsT(locale, 'loadingShort') : formatMessage(commentsT(locale, 'commentCount'), { n: liveCount })}
         </span>
       </div>
 
@@ -495,14 +498,14 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
         </p>
       )}
 
-      {loading && (
+      {firstLoad && (
         <div className="flex items-center gap-2 py-3 text-stone-600">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           <span className="text-xs">{commentsT(locale, 'loadingComments')}</span>
         </div>
       )}
 
-      {!loading && (
+      {(rows.length > 0 || !loading) && (
         <div data-testid="comment-list" className="divide-y divide-stone-100">
           {visibleComments.map((comment) => (
             <CommentRow key={comment.id} comment={comment} ctx={ctx} />
@@ -510,7 +513,7 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
         </div>
       )}
 
-      {!loading && hiddenCount > 0 && !showAll && (
+      {!firstLoad && hiddenCount > 0 && !showAll && (
         <button
           type="button"
           data-testid="show-more-comments"
@@ -521,7 +524,7 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
           {formatMessage(commentsT(locale, 'showMore'), { n: hiddenCount })}
         </button>
       )}
-      {!loading && showAll && comments.length > INITIAL_SHOW && (
+      {!firstLoad && showAll && comments.length > INITIAL_SHOW && (
         <button type="button" onClick={() => setShowAll(false)} className="mt-1 flex items-center gap-1 text-xs text-stone-600 transition-colors hover:text-[#4a5d23]">
           <ChevronUp className="h-3 w-3" aria-hidden="true" />
           {commentsT(locale, 'showFewer')}
