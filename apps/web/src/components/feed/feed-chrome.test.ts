@@ -29,10 +29,10 @@ const nextFrame = () => frames.splice(0).forEach((f) => f())
 
 describe('feedLocaleSettled', () => {
   it.each([
-    [{ authLoading: true, user: null, profile: null }, false],
-    [{ authLoading: false, user: null, profile: null }, true],
-    [{ authLoading: false, user: { id: 'u' }, profile: null }, false],
-    [{ authLoading: false, user: { id: 'u' }, profile: { preferred_language: 'es' } }, true],
+    [{ authLoading: true, user: null, profileSettled: false }, false],
+    [{ authLoading: false, user: null, profileSettled: false }, true],
+    [{ authLoading: false, user: { id: 'u' }, profileSettled: false }, false],
+    [{ authLoading: false, user: { id: 'u' }, profileSettled: true }, true],
   ])('%j → %s', (state, want) => {
     expect(feedLocaleSettled(state)).toBe(want)
   })
@@ -40,7 +40,7 @@ describe('feedLocaleSettled', () => {
 
 describe('the feed status region waits for the settled language', () => {
   it('a Spanish member: empty while the profile loads, then "Cargando publicaciones…" once — never English', () => {
-    const input = { authLoading: true, user: { id: 'u' } as unknown, profile: null as unknown, locale: 'en' as Locale }
+    const input = { authLoading: true, user: { id: 'u' } as unknown, profileSettled: false, locale: 'en' as Locale }
     const said: string[] = []
     const m = mount(() => {
       const ready = useFeedAnnounceReady(feedLocaleSettled(input))
@@ -58,7 +58,7 @@ describe('the feed status region waits for the settled language', () => {
     m.rerender()
     record()
     // The profile arrives: Spanish.
-    input.profile = { preferred_language: 'es' }
+    input.profileSettled = true
     input.locale = 'es'
     m.rerender()
     record()
@@ -69,8 +69,29 @@ describe('the feed status region waits for the settled language', () => {
     expect(said.filter(Boolean)).toHaveLength(1)
   })
 
+  it('the profile read failed (or timed out): the language stays English — announced once, in English, not never', () => {
+    const input = { authLoading: false, user: { id: 'u' } as unknown, profileSettled: false, locale: 'en' as Locale }
+    const said: string[] = []
+    const m = mount(() => {
+      const ready = useFeedAnnounceReady(feedLocaleSettled(input))
+      return ready ? feedStatusAnnouncement({ loading: true, error: false, empty: true, notice: '' }, input.locale) : ''
+    })
+    said.push(m.tree())
+    nextFrame()
+    m.rerender()
+    said.push(m.tree())
+    // The read ends without a profile (profile stays null; profileSettled true).
+    input.profileSettled = true
+    m.rerender()
+    said.push(m.tree())
+    nextFrame()
+    m.rerender()
+    said.push(m.tree())
+    expect(said).toEqual(['', '', '', 'Loading posts…'])
+  })
+
   it('a logged-out visitor (no profile to wait for): announced on the next frame', () => {
-    const m = mount(() => (useFeedAnnounceReady(feedLocaleSettled({ authLoading: false, user: null, profile: null })) ? 'ready' : ''))
+    const m = mount(() => (useFeedAnnounceReady(feedLocaleSettled({ authLoading: false, user: null, profileSettled: false })) ? 'ready' : ''))
     expect(m.tree()).toBe('')
     nextFrame()
     m.rerender()

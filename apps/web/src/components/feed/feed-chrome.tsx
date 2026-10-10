@@ -108,9 +108,6 @@ export function feedStatusAnnouncement(
   return empty ? `${feedChromeT(locale, 'emptyTitle')} ${feedChromeT(locale, 'emptyBody')}` : ''
 }
 
-/** True once the viewer's language will not change any more: auth has resolved, and a signed-in
- *  viewer's profile (which carries the language; every account, guests included, has one) has
- *  loaded. Until then useProfileLocale reads 'en', so announcing earlier would speak English first. */
 /** True from the first frame after `settled` turned true: the status region is mounted empty and
  *  only then speaks, so its first message is announced — once, in the settled language. */
 export function useFeedAnnounceReady(settled: boolean): boolean {
@@ -123,8 +120,12 @@ export function useFeedAnnounceReady(settled: boolean): boolean {
   return ready
 }
 
-export function feedLocaleSettled({ authLoading, user, profile }: { authLoading: boolean; user: unknown; profile: unknown }): boolean {
-  return !authLoading && (!user || profile !== null)
+/** True once the viewer's language will not change any more: auth has resolved, and a signed-in
+ *  viewer's profile read (the profile carries the language) has finished — loaded, failed or timed
+ *  out (then the language stays English). Until then useProfileLocale reads 'en', so announcing
+ *  earlier could speak English first and the member's language second. */
+export function feedLocaleSettled({ authLoading, user, profileSettled }: { authLoading: boolean; user: unknown; profileSettled: boolean }): boolean {
+  return !authLoading && (!user || profileSettled)
 }
 
 /** The tab a sub-tab-list key moves to (null = not a moving key). ArrowRight / ArrowLeft follow

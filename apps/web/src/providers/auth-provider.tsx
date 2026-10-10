@@ -18,6 +18,10 @@ interface AuthContextType {
   isAuthenticated: boolean
   /** True when the active session is an anonymous (guest) session created via signInAnonymously(). */
   isAnonymous: boolean
+  /** True once the background profile read for the CURRENT user has finished — loaded, failed or
+   *  timed out (profile may still be null). False while it runs, before any user, and again
+   *  whenever the user changes, until that user's read finishes. */
+  profileSettled: boolean
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
   updateProfile: (updates: ProfileUpdate) => Promise<void>
@@ -119,6 +123,8 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   )
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  // The user id whose background profile read last finished (see profileSettled).
+  const [profileSettledFor, setProfileSettledFor] = useState<string | null>(null)
   // Always gate data-fetching until a session is CONFIRMED by
   // onAuthStateChange/reconciliation. The `user` seed (above) lets the shell
   // render authenticated on first paint, while data components gate on `loading`
@@ -152,11 +158,13 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       return Object.assign({}, data, coords) as unknown as Profile
     }
 
-    // Non-blocking profile load — a slow accessor must never gate `loading`.
-    const loadProfileInBackground = () => {
+    // Non-blocking profile load — a slow accessor must never gate `loading`. When it finishes, by
+    // any path, the read for `userId` is settled.
+    const loadProfileInBackground = (userId: string) => {
       fetchProfile()
         .then((p) => setProfile(p))
         .catch(() => setProfile(null))
+        .finally(() => setProfileSettledFor(userId))
     }
 
     const mountTime = Date.now()
@@ -214,7 +222,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             setSession(refreshed)
             clearValve()
             setLoading(false)
-            loadProfileInBackground()
+            loadProfileInBackground(refreshed.user.id)
           } else {
             // Still divergent — clear only the local guest session (scope:'local'
             // leaves other sessions intact) so the client re-adopts the server
@@ -240,7 +248,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
           // TOKEN_REFRESHED fires every ~hour and doesn't change the user —
           // re-fetching the profile on each refresh is unnecessary DB load.
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            loadProfileInBackground()
+            loadProfileInBackground(clientUser.id)
           }
         } else {
           setUser(null)
@@ -320,6 +328,8 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     // is_anonymous is a first-class field on the Supabase User object (supabase-js 2.105+).
     // Cast through unknown because the generated types may not include it yet.
     isAnonymous: (user as unknown as { is_anonymous?: boolean })?.is_anonymous ?? false,
+    // Keyed by user id, so a new user (sign-in, account switch) reads false until its own read ends.
+    profileSettled: user !== null && profileSettledFor === user.id,
     signOut,
     refreshSession,
     updateProfile,

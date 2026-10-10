@@ -1297,7 +1297,7 @@ export function FeedPanel() {
   // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
   const unblockGateRef = useRef(createSingleFlight())
 
-  const { user, profile, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
+  const { user, profileSettled, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
   // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
   // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
@@ -1836,7 +1836,7 @@ export function FeedPanel() {
   // The feed's status region starts empty and gets its first text a frame after the viewer's
   // language has settled (useProfileLocale reads 'en' until the profile has loaded), so its first
   // message (the list loading) is announced once, in the viewer's language.
-  const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profile }))
+  const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profileSettled }))
 
   // Initial fetch + mode-change refetch — wait for auth to reconcile (guest OR user)
   // before the first fetch so it runs against the reconciled session. Gate on

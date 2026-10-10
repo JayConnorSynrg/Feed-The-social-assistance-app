@@ -174,7 +174,7 @@ describe('feed-panel.tsx wiring', () => {
     expect(panel).toContain('focusTitle={focusFeedTitle}')
     expect(panel).toContain('<EventsPanel onEventChanged={syncFeedEventCard} />')
     // The region speaks only once the viewer's language has settled (feed-chrome.test.ts).
-    expect(panel).toContain('const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profile }))')
+    expect(panel).toContain('const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profileSettled }))')
     // Fallback wiring check: the feed hands its cards the hook's handler as is (the hook is never
     // given the feed's reload — hooks/use-feed-event-cards.test.ts proves what that handler reads).
     expect(panel).toMatch(/<EventCard\b[\s\S]{0,1200}onManaged=\{handleEventManaged\}\s*\/>/)
