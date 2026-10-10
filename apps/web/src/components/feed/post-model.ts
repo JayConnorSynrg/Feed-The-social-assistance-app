@@ -1000,6 +1000,15 @@ export function editFallbackPatch(
   return patch
 }
 
+/**
+ * Whether a post read from the database belongs in this viewer's FEED. A hidden post (held, removed,
+ * community-hidden) is shown only to its author, with its banner; staff read hidden posts too (RLS)
+ * but review them in moderation (the reports queue, the single-post view), never in the feed.
+ */
+export function visibleInFeed(post: Pick<Post, 'isHidden' | 'author'>, viewerId: string | null): boolean {
+  return !post.isHidden || (viewerId != null && post.author.id === viewerId)
+}
+
 /** What the feed does with one posts realtime UPDATE (classifyPostUpdate). */
 export type PostUpdateAction =
   /** The post is listed and still readable: patch it in place (version-guarded, no re-rank). */

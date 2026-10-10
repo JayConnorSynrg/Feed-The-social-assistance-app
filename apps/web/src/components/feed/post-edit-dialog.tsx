@@ -26,7 +26,7 @@ import { logEvent } from '@/lib/logger'
 import { dir, type Locale } from '@/lib/i18n'
 import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'
 import { editPost, type EditPostResult, type PostRpcFailure } from '@/lib/post-rpc'
-import { editT, failureText, editTitleKey } from '@/lib/i18n-feed-edit'
+import { editT, failureText, editTitleKey, fieldLabel, lockReasonText } from '@/lib/i18n-feed-edit'
 import { usePostImagePicker, PostImagePickerField } from './post-image-picker'
 import { createSingleFlight } from './composer-guards'
 import { PostFormFields } from './post-form-fields'
@@ -43,6 +43,8 @@ import {
   type DraftErrors,
   type EditFacts,
   type EditField,
+  resetLockedFields,
+  withoutLockedChanges,
   type PostDraft,
 } from './post-edit-model'
 import type { FeedPostRow, Post } from './post-model'
@@ -54,8 +56,9 @@ export interface PostEditDialogProps {
   onClose: () => void
   /** Where focus returns when the dialog closes (the menu trigger that opened it). */
   returnFocusRef?: React.RefObject<HTMLElement | null>
-  /** The save landed: `row` is the post re-read with the feed's columns (null if that read failed). */
-  onSaved: (postId: string, row: FeedPostRow | null, result: EditPostResult, changes: Record<string, unknown>) => void
+  /** The save landed: `row` is the post re-read with the feed's columns (null if that read failed).
+   *  `result` is null when nothing was saved (the member chose the current version in a conflict). */
+  onSaved: (postId: string, row: FeedPostRow | null, result: EditPostResult | null, changes: Record<string, unknown>) => void
   /** The post no longer exists for this member (deleted, or never readable). */
   onGone: (postId: string) => void
   /** The dialog has closed and focus is back (announce what happened only now: while the modal is
@@ -153,8 +156,10 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
   const close = useCallback(() => {
     // A photo uploaded in this dialog and never saved is deleted (a committed one never is).
     picker.clearImage()
+    // The post is gone: however the dialog closes (Close, Escape, the X), its card leaves the feed.
+    if (phase.kind === 'gone' && postId) onGone(postId)
     onClose()
-  }, [onClose, picker])
+  }, [onClose, picker, phase.kind, postId, onGone])
 
   const editing = phase.kind === 'editing' ? phase : null
   const effective: PostDraft | null = draft && picker.imageUrl ? { ...draft, imageUrl: picker.imageUrl } : draft
@@ -182,10 +187,20 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
           if (failure.token === 'post_removed') return setPhase({ kind: 'blocked', reason: 'removed' })
           return setBanner(failureText(locale, failure))
         case 'locked': {
-          // Someone voted since the dialog opened: refresh the locks, keep the draft.
+          // Someone voted since the dialog opened: refresh the locks, put every now-locked field back
+          // to its saved value (that text can no longer be saved), keep the rest of the draft, and say
+          // which field locked and why.
           const res = await loadEditSource(supabase, current.source.id)
-          if (res.status === 'found') setPhase({ ...current, facts: res.facts })
-          return setBanner(failureText(locale, failure))
+          const facts = res.status === 'found' ? res.facts : { ...current.facts, pollVotes: Math.max(1, current.facts.pollVotes) }
+          const locks = fieldLocks(current.source.post_type, facts)
+          setPhase({ ...current, facts })
+          setDraft(resetLockedFields(current.source.post_type, mine, current.original, locks))
+          const reason = locks[failure.field as EditField]
+          return setBanner(
+            reason
+              ? `${failureText(locale, failure)} ${fieldLabel(locale, current.source.post_type, failure.field as EditField)}: ${lockReasonText(reason, locale)}`
+              : failureText(locale, failure),
+          )
         }
         case 'capacity':
           setPhase({ ...current, facts: { ...current.facts, committedOptIns: failure.committed ?? current.facts.committedOptIns } })
@@ -219,7 +234,8 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
           setBanner(editT(locale, 'fixErrors'))
           return
         }
-        const toSend = diffDraft(current.source.post_type, current.original, mine, viewerTz)
+        // A field that is locked now is never sent (the server would refuse the whole save).
+        const toSend = withoutLockedChanges(diffDraft(current.source.post_type, current.original, mine, viewerTz), fieldLocks(current.source.post_type, current.facts))
         // A legacy event's first edit must carry its zone even when the member changed nothing else.
         if (current.needsZone && !('time_zone' in toSend)) Object.assign(toSend, { time_zone: mine.timeZone })
         if (Object.keys(toSend).length === 0) return
@@ -254,13 +270,9 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
     const { editing: before, mine, theirs, choice } = phase
     logEvent('feed.post.edit.conflict', { post_type: before.source.post_type, resolution: choice })
     if (choice === 'take_theirs') {
+      // Nothing was saved: the card shows the current version (from a fresh read) and nothing is announced.
       const row = await loadFeedRow(supabase, theirs.source.id)
-      onSaved(
-        theirs.source.id,
-        row,
-        { version: theirs.source.version, editedAt: theirs.source.edited_at, editCount: 0, grace: false, changed: [] },
-        {},
-      )
+      onSaved(theirs.source.id, row, null, {})
       picker.clearImage()
       onClose()
       return
@@ -382,7 +394,8 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
             noValidate
             onSubmit={(e) => {
               e.preventDefault()
-              if (!saving && hasChanges) void save(editing, effective)
+              // Nothing is sent while a photo is still uploading (the save would point at no photo).
+              if (!saving && hasChanges && !picker.imageUploading) void save(editing, effective)
             }}
             className="flex flex-col gap-4"
           >
@@ -483,10 +496,7 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                if (phase.kind === 'gone' && postId) onGone(postId)
-                close()
-              }}
+              onClick={close}
             >
               {editT(locale, 'close')}
             </Button>

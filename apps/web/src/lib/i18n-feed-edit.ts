@@ -12,7 +12,7 @@ import { translate, type Locale } from './i18n'
 import { formatMessage } from './i18n-event-forms'
 import { composerT } from './i18n-feed-composer'
 import type { PostRpcFailure, PostType } from './post-rpc'
-import type { EditField, FieldError } from '@/components/feed/post-edit-model'
+import type { EditField, FieldError, LockReason } from '@/components/feed/post-edit-model'
 
 export interface EditMessages {
   editTitlePost: string
@@ -103,6 +103,9 @@ export interface EditMessages {
   deleteCommentTitle: string
   deleteCommentBody: string
   deleteConfirm: string
+  removePostTitle: string
+  removePostBody: string
+  removeConfirm: string
   errRequired: string
   errTooLong: string
   errTooShort: string
@@ -227,6 +230,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Delete this comment?',
     deleteCommentBody: 'Its text is removed. Replies to it stay.',
     deleteConfirm: 'Delete',
+    removePostTitle: 'Remove this post?',
+    removePostBody: 'Members will no longer see it and its open reports are upheld. It can be restored from moderation.',
+    removeConfirm: 'Remove',
     errRequired: 'This is required.',
     errTooLong: 'Use {max} characters or fewer.',
     errTooShort: 'Use at least {min} characters.',
@@ -349,6 +355,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: '¿Eliminar este comentario?',
     deleteCommentBody: 'Se quita su texto. Las respuestas se conservan.',
     deleteConfirm: 'Eliminar',
+    removePostTitle: '¿Retirar esta publicación?',
+    removePostBody: 'Los miembros dejarán de verla y sus denuncias abiertas se confirman. Se puede restaurar desde moderación.',
+    removeConfirm: 'Retirar',
     errRequired: 'Este campo es obligatorio.',
     errTooLong: 'Usa {max} caracteres o menos.',
     errTooShort: 'Usa al menos {min} caracteres.',
@@ -471,6 +480,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Efase kòmantè sa a?',
     deleteCommentBody: 'Tèks li retire. Repons yo rete.',
     deleteConfirm: 'Efase',
+    removePostTitle: 'Retire piblikasyon sa a?',
+    removePostBody: 'Manm yo p ap wè l ankò epi siyalman ki louvri yo konfime. Ou ka remèt li nan moderasyon.',
+    removeConfirm: 'Retire',
     errRequired: 'Sa a obligatwa.',
     errTooLong: 'Sèvi ak {max} karaktè oswa mwens.',
     errTooShort: 'Sèvi ak omwen {min} karaktè.',
@@ -593,6 +605,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Xóa bình luận này?',
     deleteCommentBody: 'Nội dung sẽ bị xóa. Các trả lời vẫn được giữ.',
     deleteConfirm: 'Xóa',
+    removePostTitle: 'Gỡ bài đăng này?',
+    removePostBody: 'Thành viên sẽ không thấy bài này nữa và các báo cáo đang mở được xác nhận. Có thể khôi phục trong phần kiểm duyệt.',
+    removeConfirm: 'Gỡ bỏ',
     errRequired: 'Mục này là bắt buộc.',
     errTooLong: 'Dùng tối đa {max} ký tự.',
     errTooShort: 'Dùng ít nhất {min} ký tự.',
@@ -715,6 +730,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'حذف هذا التعليق؟',
     deleteCommentBody: 'يُزال نصه. تبقى الردود عليه.',
     deleteConfirm: 'حذف',
+    removePostTitle: 'إزالة هذا المنشور؟',
+    removePostBody: 'لن يراه الأعضاء بعد الآن وتُعتمد بلاغاته المفتوحة. يمكن استعادته من الإشراف.',
+    removeConfirm: 'إزالة',
     errRequired: 'هذا الحقل مطلوب.',
     errTooLong: 'استخدم {max} حرفًا أو أقل.',
     errTooShort: 'استخدم {min} أحرف على الأقل.',
@@ -837,6 +855,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: '删除这条评论？',
     deleteCommentBody: '评论文字会被移除，回复会保留。',
     deleteConfirm: '删除',
+    removePostTitle: '移除这条帖子？',
+    removePostBody: '成员将无法再看到它，其未处理的举报将被确认。可在审核中恢复。',
+    removeConfirm: '移除',
     errRequired: '此项为必填。',
     errTooLong: '最多 {max} 个字符。',
     errTooShort: '至少 {min} 个字符。',
@@ -959,6 +980,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Tirtir faalladan?',
     deleteCommentBody: 'Qoraalkeeda waa la saarayaa. Jawaabaha way hadhayaan.',
     deleteConfirm: 'Tirtir',
+    removePostTitle: 'Ka saar qoraalkan?',
+    removePostBody: 'Xubnaha mar dambe ma arki doonaan, warbixinnadiisa furanna waa la ansixiyay. Waxaa laga soo celin karaa maamulka.',
+    removeConfirm: 'Ka saar',
     errRequired: 'Kani waa waajib.',
     errTooLong: 'Isticmaal {max} xaraf ama ka yar.',
     errTooShort: 'Isticmaal ugu yaraan {min} xaraf.',
@@ -1081,6 +1105,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Supprimer ce commentaire ?',
     deleteCommentBody: 'Son texte est retiré. Les réponses restent.',
     deleteConfirm: 'Supprimer',
+    removePostTitle: 'Retirer cette publication ?',
+    removePostBody: 'Les membres ne la verront plus et ses signalements en cours sont confirmés. Elle peut être rétablie depuis la modération.',
+    removeConfirm: 'Retirer',
     errRequired: 'Ce champ est obligatoire.',
     errTooLong: 'Utilisez {max} caractères au maximum.',
     errTooShort: 'Utilisez au moins {min} caractères.',
@@ -1203,6 +1230,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Excluir este comentário?',
     deleteCommentBody: 'O texto é removido. As respostas permanecem.',
     deleteConfirm: 'Excluir',
+    removePostTitle: 'Remover esta publicação?',
+    removePostBody: 'Os membros não a verão mais e as denúncias abertas são confirmadas. Ela pode ser restaurada na moderação.',
+    removeConfirm: 'Remover',
     errRequired: 'Este campo é obrigatório.',
     errTooLong: 'Use até {max} caracteres.',
     errTooShort: 'Use pelo menos {min} caracteres.',
@@ -1325,6 +1355,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Удалить этот комментарий?',
     deleteCommentBody: 'Его текст будет удалён. Ответы останутся.',
     deleteConfirm: 'Удалить',
+    removePostTitle: 'Убрать эту публикацию?',
+    removePostBody: 'Участники больше её не увидят, открытые жалобы будут подтверждены. Её можно восстановить в модерации.',
+    removeConfirm: 'Убрать',
     errRequired: 'Обязательное поле.',
     errTooLong: 'Не более {max} символов.',
     errTooShort: 'Не менее {min} символов.',
@@ -1447,6 +1480,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: '이 댓글을 삭제할까요?',
     deleteCommentBody: '내용은 삭제되고 답글은 남습니다.',
     deleteConfirm: '삭제',
+    removePostTitle: '이 게시물을 삭제 처리할까요?',
+    removePostBody: '회원에게 더 이상 보이지 않고 처리 중인 신고는 인정됩니다. 관리 화면에서 복원할 수 있습니다.',
+    removeConfirm: '삭제 처리',
     errRequired: '필수 항목입니다.',
     errTooLong: '{max}자 이하로 입력하세요.',
     errTooShort: '{min}자 이상 입력하세요.',
@@ -1569,6 +1605,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Burahin ang komentong ito?',
     deleteCommentBody: 'Aalisin ang teksto nito. Mananatili ang mga sagot.',
     deleteConfirm: 'Burahin',
+    removePostTitle: 'Alisin ang post na ito?',
+    removePostBody: 'Hindi na ito makikita ng mga miyembro at kukumpirmahin ang mga bukas na report. Maibabalik ito mula sa moderation.',
+    removeConfirm: 'Alisin',
     errRequired: 'Kailangan ito.',
     errTooLong: 'Gumamit ng hanggang {max} karakter.',
     errTooShort: 'Gumamit ng hindi bababa sa {min} karakter.',
@@ -1691,6 +1730,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'ይህ አስተያየት ይሰረዝ?',
     deleteCommentBody: 'ጽሑፉ ይወገዳል። መልሶቹ ይቆያሉ።',
     deleteConfirm: 'ሰርዝ',
+    removePostTitle: 'ይህ ልጥፍ ይወገድ?',
+    removePostBody: 'አባላት ከዚህ በኋላ አያዩትም፣ ክፍት ሪፖርቶቹም ይጸድቃሉ። ከአወያይነት ገጽ ሊመለስ ይችላል።',
+    removeConfirm: 'አስወግድ',
     errRequired: 'ይህ ግዴታ ነው።',
     errTooLong: '{max} ፊደላት ወይም ከዚያ በታች ይጠቀሙ።',
     errTooShort: 'ቢያንስ {min} ፊደላት ይጠቀሙ።',
@@ -1813,6 +1855,9 @@ export const editMessages: Record<Locale, EditMessages> = {
     deleteCommentTitle: 'Rho lus tawm tswv yim no tawm?',
     deleteCommentBody: 'Nws cov ntawv yuav raug tshem. Cov lus teb tseem nyob.',
     deleteConfirm: 'Rho tawm',
+    removePostTitle: 'Tshem qhov tshaj tawm no?',
+    removePostBody: 'Cov neeg yuav tsis pom nws lawm thiab nws cov kev qhia uas tseem qhib yuav raug lees. Muab rov qab tau ntawm kev saib xyuas.',
+    removeConfirm: 'Tshem tawm',
     errRequired: 'Qhov no yuav tsum muaj.',
     errTooLong: 'Siv {max} tus ntawv los yog tsawg dua.',
     errTooShort: 'Siv tsawg kawg {min} tus ntawv.',
@@ -1867,6 +1912,18 @@ export function editTitleKey(postType: PostType): keyof EditMessages {
       return 'editTitleNote'
     default:
       return 'editTitlePost'
+  }
+}
+
+/** Why a field is locked (the edit form's note under it, and the banner after a refused save). */
+export function lockReasonText(reason: LockReason, locale: Locale): string {
+  switch (reason) {
+    case 'poll_voted':
+      return editT(locale, 'lockPollVoted')
+    case 'poll_extend_only':
+      return editT(locale, 'lockPollExtendOnly')
+    case 'poll_closed':
+      return editT(locale, 'lockPollClosed')
   }
 }
 

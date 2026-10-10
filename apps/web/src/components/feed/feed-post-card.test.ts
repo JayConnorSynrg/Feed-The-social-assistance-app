@@ -234,8 +234,8 @@ describe('the edit-conflict comparison', () => {
     expect(html).toContain('Your edit')
     expect(html).toContain('Current version')
     expect(html).toContain('<ins class=')
-    expect(html).toContain('<span class="sr-only">added: </span> 9am')
-    expect(html).toContain('<span class="sr-only">removed: </span>open')
+    expect(html).toContain('<bdi class="sr-only">added: </bdi> 9am')
+    expect(html).toContain('<bdi class="sr-only">removed: </bdi>open')
     expect(html.match(/type="radio"/g)).toHaveLength(3)
   })
 })
@@ -253,7 +253,7 @@ describe('the public edit history', () => {
     expect(html.indexOf('Current version')).toBeLessThan(html.indexOf('Original'))
     expect(html).toContain('Edited by the author')
     expect(html).toContain('Posted by the author')
-    expect(html).toContain('<span class="sr-only">added: </span>6')
+    expect(html).toContain('<bdi class="sr-only">added: </bdi>6')
     expect(html).not.toContain('Remove private details')
   })
 
@@ -281,7 +281,9 @@ describe('language marking: English-only pieces say so; translated pieces do not
 
   it('the translated card itself carries no lang="en"; its English-only opt-in row and petition embed do', () => {
     const plain = es(rowToPost(row({ edited_at: '2026-10-09T21:53:18Z' }), { isLiked: false }))
-    expect(plain).not.toContain('lang="en"')
+    // The only English piece of a plain card: the author badges (not translated yet).
+    expect(plain.match(/lang="en"/g)).toHaveLength(1)
+    expect(plain).toContain('<span lang="en" dir="ltr" class="contents" data-testid="author-badges-en">')
     const capped = es(rowToPost(row({ max_seekers: 5, slots_remaining: 2 }), { isLiked: false }))
     expect(capped).toMatch(/<div lang="en" dir="ltr" data-testid="capacity-row-p1"/)
     const petition = es(rowToPost(row({ post_type: 'petition', petition_id: 'pt' }), { isLiked: false }), {

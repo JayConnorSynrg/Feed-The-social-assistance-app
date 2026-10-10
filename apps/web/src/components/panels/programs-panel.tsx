@@ -56,7 +56,8 @@ interface ShareToFeedDialogProps {
   onShared: () => void
 }
 
-function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDialogProps) {
+/** "Share to Feed" for a program (exported for its behaviour tests). */
+export function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDialogProps) {
   const { user } = useAuth()
   const [content, setContent] = useState(
     `Check out ${resource.name}${resource.description ? ` — ${resource.description.slice(0, 120)}${resource.description.length > 120 ? '…' : ''}` : ''}`
@@ -135,7 +136,7 @@ function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDialogPro
             className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]/30 focus:border-[#4a5d23]"
           />
           {errorMsg && (
-            <p role="alert" className="mt-2 text-xs text-red-600">{errorMsg}</p>
+            <p role="alert" lang={locale} dir="auto" className="mt-2 text-xs text-red-600">{errorMsg}</p>
           )}
         </div>
 

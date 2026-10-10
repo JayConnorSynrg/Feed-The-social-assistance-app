@@ -46,7 +46,7 @@ import { petitionBodyHash } from '@/lib/petition-hash'
 import { composerT, type ComposerMessages } from '@/lib/i18n-feed-composer'
 import { failureText } from '@/lib/i18n-feed-edit'
 import { createSingleFlight } from '@/components/feed/composer-guards'
-import { PostFormFields } from '@/components/feed/post-form-fields'
+import { PostFormFields, firstInvalidControl } from '@/components/feed/post-form-fields'
 import { EMPTY_DRAFT, createFields, validateDraft, type DraftErrors, type PostDraft } from '@/components/feed/post-edit-model'
 
 // ---------------------------------------------------------------------------
@@ -145,7 +145,8 @@ const ERROR_BOX = 'rounded-md border border-amber-300 bg-amber-50 p-2 text-sm te
 // Structured post form (general / request / offer / resource / poll / event)
 // ---------------------------------------------------------------------------
 
-function StructuredForm({
+/** One post type's form (exported for its behaviour tests). */
+export function StructuredForm({
   kind,
   locale,
   resourceOptions,
@@ -181,7 +182,12 @@ function StructuredForm({
       if (!canSubmit) return
       const found = validateDraft(postType, submitDraft, { original: null, facts: { pollVotes: 0, committedOptIns: 0, pollEndsAt: null }, viewerTz })
       setErrors(found)
-      if (Object.keys(found).length > 0) return
+      if (Object.keys(found).length > 0) {
+        // Focus the first field with an error (its message is linked by aria-describedby).
+        const target = kind === 'resource' ? 'resource_post' : postType
+        requestAnimationFrame(() => firstInvalidControl(target, `wizard-${kind}`, found)?.focus())
+        return
+      }
       await gate.current.run(async () => {
         setSubmitting(true)
         setError(null)

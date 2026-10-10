@@ -24,6 +24,7 @@ export function ReportDialog({
   onSubmit,
   onClose,
   returnFocusRef,
+  onClosed,
 }: {
   /** The post to report; open while non-null. */
   postId: string | null
@@ -32,6 +33,8 @@ export function ReportDialog({
   onSubmit: (postId: string, reason: string, details: string | null) => Promise<unknown>
   onClose: () => void
   returnFocusRef?: React.RefObject<HTMLElement | null>
+  /** The dialog has closed and focus is back. */
+  onClosed?: () => void
 }) {
   const [reason, setReason] = useState('')
   const [details, setDetails] = useState('')
@@ -39,6 +42,7 @@ export function ReportDialog({
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const gate = useRef(createSingleFlight())
+  const doneRef = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
     setReason('')
@@ -55,6 +59,8 @@ export function ReportDialog({
       try {
         await onSubmit(postId, reason, details.trim() || null)
         setDone(true)
+        // The form is replaced by the confirmation: focus moves to it (it is also announced).
+        requestAnimationFrame(() => doneRef.current?.focus())
       } catch {
         setError(cardT(locale, 'reportFailed'))
       } finally {
@@ -70,25 +76,27 @@ export function ReportDialog({
         lang={locale}
         dir={dir(locale)}
         className="max-w-sm"
+        aria-describedby={undefined}
         onCloseAutoFocus={(e) => {
           if (returnFocusRef?.current) {
             e.preventDefault()
             returnFocusRef.current.focus()
-          }
+          } else e.preventDefault()
+          onClosed?.()
         }}
       >
         <DialogHeader>
           <DialogTitle>{cardT(locale, 'reportTitle')}</DialogTitle>
         </DialogHeader>
-        <p role="status" className={done ? 'py-4 text-center text-sm text-stone-800' : 'sr-only'}>
+        <p role="status" ref={doneRef} tabIndex={-1} data-testid="report-done" className={done ? 'py-4 text-center text-sm text-stone-800 focus:outline-hidden' : 'sr-only'}>
           {done ? cardT(locale, 'reportThanks') : ''}
         </p>
         {!done && (
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor={`report-reason-${id}`}>{cardT(locale, 'reportReason')}</Label>
-              <Select value={reason} onValueChange={setReason}>
-                <SelectTrigger id={`report-reason-${id}`} data-testid={`report-reason-select-${id}`}>
+              <Select value={reason} onValueChange={setReason} required>
+                <SelectTrigger id={`report-reason-${id}`} data-testid={`report-reason-select-${id}`} aria-required="true">
                   <SelectValue placeholder={cardT(locale, 'reportReasonPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>

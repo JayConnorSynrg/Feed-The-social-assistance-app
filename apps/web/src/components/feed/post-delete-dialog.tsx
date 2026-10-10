@@ -6,7 +6,8 @@
 // "Delete this post?" / "Delete this comment?" — an explicit confirmation (AlertDialog: no outside
 // click, focus starts on Cancel, Escape cancels). The delete runs once (single-flight) and the dialog
 // stays open with a spinner until the server answers; a refusal is shown in the dialog. A post or
-// comment that is already gone counts as deleted. Focus then returns to the opener.
+// comment that is already gone counts as deleted. Focus then returns to the opener. kind "remove" is
+// the same confirmation for a moderator's Remove on a post card.
 
 import React, { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -34,7 +35,7 @@ export function ConfirmDeleteDialog({
   onClosed,
 }: {
   open: boolean
-  kind: 'post' | 'comment'
+  kind: 'post' | 'comment' | 'remove'
   locale: Locale
   /** Runs the delete; resolves to an error message to show, or null when it is done. */
   onConfirm: () => Promise<string | null>
@@ -46,6 +47,9 @@ export function ConfirmDeleteDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const gate = useRef(createSingleFlight())
+  const title = kind === 'remove' ? 'removePostTitle' : kind === 'post' ? 'deletePostTitle' : 'deleteCommentTitle'
+  const body = kind === 'remove' ? 'removePostBody' : kind === 'post' ? 'deletePostBody' : 'deleteCommentBody'
+  const testId = kind === 'remove' ? 'post-remove' : `${kind}-delete`
 
   const confirm = async () => {
     await gate.current.run(async () => {
@@ -74,7 +78,7 @@ export function ConfirmDeleteDialog({
       <AlertDialogContent
         lang={locale}
         dir={dir(locale)}
-        data-testid={`${kind}-delete-dialog`}
+        data-testid={`${testId}-dialog`}
         onCloseAutoFocus={(e) => {
           if (returnFocusRef?.current) {
             e.preventDefault()
@@ -84,8 +88,8 @@ export function ConfirmDeleteDialog({
         }}
       >
         <AlertDialogHeader>
-          <AlertDialogTitle>{editT(locale, kind === 'post' ? 'deletePostTitle' : 'deleteCommentTitle')}</AlertDialogTitle>
-          <AlertDialogDescription>{editT(locale, kind === 'post' ? 'deletePostBody' : 'deleteCommentBody')}</AlertDialogDescription>
+          <AlertDialogTitle>{editT(locale, title)}</AlertDialogTitle>
+          <AlertDialogDescription>{editT(locale, body)}</AlertDialogDescription>
         </AlertDialogHeader>
         {error && (
           <p role="alert" className="text-sm text-red-800">
@@ -99,10 +103,10 @@ export function ConfirmDeleteDialog({
             onClick={() => void confirm()}
             aria-disabled={busy || undefined}
             className="min-h-10 bg-red-700 text-white hover:bg-red-800"
-            data-testid={`${kind}-delete-confirm`}
+            data-testid={`${testId}-confirm`}
           >
             {busy && <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {editT(locale, 'deleteConfirm')}
+            {editT(locale, kind === 'remove' ? 'removeConfirm' : 'deleteConfirm')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

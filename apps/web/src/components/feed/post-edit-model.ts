@@ -424,6 +424,26 @@ export function mergeDrafts(
   return { draft, conflicts }
 }
 
+/** A field the member cannot change at all now ('poll_extend_only' still lets the deadline move later). */
+export function isHardLocked(reason: LockReason | undefined): boolean {
+  return reason === 'poll_voted' || reason === 'poll_closed'
+}
+
+/** The draft with every hard-locked field put back to the value the dialog opened with (a vote
+ *  landed while the member was editing: their text for that field can no longer be saved). */
+export function resetLockedFields(postType: PostType, draft: PostDraft, original: PostDraft, locks: Partial<Record<EditField, LockReason>>): PostDraft {
+  let out = draft
+  for (const f of EDITABLE_FIELDS[postType]) if (isHardLocked(locks[f])) out = withSlice(f, out, original)
+  return out
+}
+
+/** edit_post p_changes without any hard-locked key (the server would refuse the whole save). */
+export function withoutLockedChanges(changes: PostFields, locks: Partial<Record<EditField, LockReason>>): PostFields {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(changes)) if (!isHardLocked(locks[k as EditField])) out[k] = v
+  return out as PostFields
+}
+
 /** The fields whose text differs between two drafts (the conflict comparison lists these). */
 export function changedFields(postType: PostType, a: PostDraft, b: PostDraft): EditField[] {
   return EDITABLE_FIELDS[postType].filter((f) => !same(draftSlice(f, a), draftSlice(f, b)))

@@ -100,6 +100,32 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // After a conflict (the author edited) or a gone post: read the post again so the queue shows the
+  // version the next decision is made on (its text, hidden state and version), or that it is gone.
+  const rereadPost = async (postId: string) => {
+    const { data, error: readError } = await supabase
+      .from('posts')
+      .select('id, content, is_hidden, version')
+      .eq('id', postId)
+      .maybeSingle()
+    if (readError) return
+    const row = data as ReportedPostRow | null
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.content_id !== postId
+          ? g
+          : row
+            ? { ...g, post_content: row.content?.slice(0, 200) ?? null, post_hidden: row.is_hidden !== false, post_version: row.version ?? null }
+            : { ...g, post_content: null, post_hidden: null, post_version: null },
+      ),
+    )
+    setHeldPosts((prev) =>
+      row
+        ? prev.map((p) => (p.id === postId ? { ...p, content: row.content, is_hidden: row.is_hidden !== false, version: row.version ?? null } : p))
+        : prev.filter((p) => p.id !== postId),
+    )
+  }
+
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -110,7 +136,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
     })
 
   const handleResolve = useCallback(
-    async (reportId: string, action: 'dismiss' | 'uphold', expectedVersion: number | null) => {
+    async (reportId: string, action: 'dismiss' | 'uphold', expectedVersion: number | null, postId: string) => {
       setProcessingId(reportId)
       setError(null)
       try {
@@ -125,7 +151,13 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         )
         if (rpcError) {
           logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
-          if (rpcError.code === 'PT409' || rpcError.code === 'PT404') throw new Error(moderationFailure(rpcError).message)
+          if (rpcError.code === 'PT409' || rpcError.code === 'PT404') {
+            // Show the post as it is now (or that it is gone) before the moderator decides again.
+            const failure = moderationFailure(rpcError)
+            await rereadPost(postId)
+            setError(failure.message)
+            return
+          }
           throw rpcError
         }
 
@@ -156,8 +188,10 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
       setProcessingId(postId)
       setError(null)
       const result = await moderatePost(supabase, action, postId, expectedVersion)
-      if (!result.ok) setError(result.message)
-      else {
+      if (!result.ok) {
+        if (result.conflict || result.gone) await rereadPost(postId)
+        setError(result.message)
+      } else {
         if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
         else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
         onPostChanged?.(postId)
@@ -195,7 +229,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+        <div role="alert" data-testid="reports-queue-error" className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -323,7 +357,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                           variant="outline"
                           className="h-9 min-h-[44px] text-xs"
                           disabled={processingId === report.id}
-                          onClick={() => handleResolve(report.id, 'dismiss', group.post_version)}
+                          onClick={() => handleResolve(report.id, 'dismiss', group.post_version, group.content_id)}
                           data-testid={`dismiss-report-${report.id}`}
                         >
                           {processingId === report.id ? (

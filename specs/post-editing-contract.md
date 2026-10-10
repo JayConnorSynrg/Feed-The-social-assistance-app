@@ -194,7 +194,7 @@ Readers of `posts.comment_count` and what the new meaning changes:
 | `edit_post` grace | No longer reads it (`engaged_at` instead). |
 | Feed list select (`FEED_POST_SELECT` in `post-model.ts`), `rowToPost`, card comment button (`post-card.tsx`) | Shows live, visible comments: the number the open thread shows. |
 | Realtime `posts` column list (`comment_count` already published) + `applyPostRowPatch` (`post-model.ts`, absolute value) | Delete, hide and unhide now emit a `posts` UPDATE carrying the new number; a content edit no longer emits one. |
-| `/s/post/[id]` share page | Does not read `comment_count`: it counts `post_comments` rows under RLS (`count: 'exact'`), which still includes soft-deleted comments (and, for the author and staff, hidden ones). Client builder's item. |
+| `/s/post/[id]` share page | Reads `posts.comment_count` (and `like_count`) in its explicit column list, so it shows the same live, visible number as the feed card. It no longer counts `post_comments` rows (that count included soft-deleted comments). |
 
 Probe (`scratchpad/edit-build/db/probe/comment_count.sql`, identical for 026 alone and 026 + 0265):
 

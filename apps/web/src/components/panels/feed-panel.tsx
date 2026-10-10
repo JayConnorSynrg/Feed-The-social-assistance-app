@@ -52,7 +52,7 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, classifyPostUpdate, rowPatchFromFeedRow, editFallbackPatch, assertNever, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, visibleInFeed, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, classifyPostUpdate, rowPatchFromFeedRow, editFallbackPatch, assertNever, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
 import { useFeedEventCards } from '@/hooks/use-feed-event-cards'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
@@ -148,7 +148,8 @@ interface CreatePostCardProps {
 const GEO_RADIUS_OPTIONS = [5, 10, 25, 50] as const
 type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 
-function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick, locale, onAnnounce }: CreatePostCardProps) {
+/** The feed composer card (exported for its behaviour tests). */
+export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick, locale, onAnnounce }: CreatePostCardProps) {
   const supabase = createClient()
   const [content, setContent] = useState('')
   const {
@@ -414,7 +415,7 @@ function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick
           {/* Geo-outreach controls — shown only when a resource is linked */}
           {selectedResourceId && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <div className="flex items-center gap-1.5 text-xs text-stone-700 select-none">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-stone-700 select-none">
                 <button
                   type="button"
                   role="switch"
@@ -423,18 +424,18 @@ function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick
                   data-testid="geo-outreach-toggle"
                   onClick={() => setGeoNotify((v) => !v)}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1 ${
-                    geoNotify ? 'bg-[#4a5d23]' : 'bg-stone-400'
+                    geoNotify ? 'bg-[#4a5d23]' : 'bg-stone-500'
                   }`}
                 >
                   <span
                     className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                      geoNotify ? 'translate-x-4.5' : 'translate-x-0.5'
+                      geoNotify ? 'translate-x-4.5 rtl:-translate-x-4.5' : 'translate-x-0.5 rtl:-translate-x-0.5'
                     }`}
                   />
                 </button>
                 <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
                 <span id="geo-outreach-label">{composerT(locale, 'notifyNearby')}</span>
-              </div>
+              </label>
 
               {geoNotify && (
                 <select
@@ -558,6 +559,7 @@ export function FeedPanel() {
   const [cardDialog, setCardDialog] = useState<
     | { kind: 'edit'; post: Post }
     | { kind: 'delete'; post: Post }
+    | { kind: 'remove'; post: Post }
     | { kind: 'report'; post: Post }
     | { kind: 'history'; post: Post }
     | { kind: 'signup' }
@@ -860,9 +862,10 @@ export function FeedPanel() {
       // Transform to Post via the shared rowToPost (runs even when postIds is
       // empty). Counts read straight from like_count/comment_count; the
       // discriminant + metadata are preserved for every type.
-      const transformed: Post[] = rows.map((row) =>
-        rowToPost(row, { isLiked: userLikes.has(row.id) })
-      )
+      // A hidden post is the author's alone in the feed (staff review it in moderation).
+      const transformed: Post[] = rows
+        .map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+        .filter((p) => visibleInFeed(p, user?.id ?? null))
 
       // Update pagination cursor: last row's created_at + id becomes the next-page cursor.
       // hasMore is true when the page returned exactly PAGE_SIZE rows (there may be more).
@@ -1037,7 +1040,10 @@ export function FeedPanel() {
         // Transform via the shared rowToPost, then re-order to the RPC's score order
         // and attach each row's distance bucket + score by id. The RPC already places
         // pinned posts first (via the score boost), so NO client-side pinned re-sort.
-        const transformed = rows.map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+        // A hidden post is the author's alone in the feed (staff review it in moderation).
+        const transformed = rows
+          .map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+          .filter((p) => visibleInFeed(p, user?.id ?? null))
         const ordered = orderByRankAndAttachBucket(postRankRows, transformed)
 
         // W1.6b: build the event cards in RPC rank order through the loader the Events tab
@@ -1506,15 +1512,8 @@ export function FeedPanel() {
     })
     if (error) throw new Error(getFriendlyErrorMessage(error))
     const result = data as { report_count: number; hidden: boolean }
-    if (result.hidden) {
-      // Remove hidden post from the feed list for non-authors
-      // (PostCard itself will handle the author's own hidden post with a badge)
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, isHidden: true } : p
-        )
-      )
-    }
+    // A report that hides the post: its card leaves the reporter's feed once the dialog closes
+    // (ReportDialog onSubmit below), the same way as every other card that leaves.
     return { hidden: result.hidden }
   }
 
@@ -1569,7 +1568,18 @@ export function FeedPanel() {
   // Moderators act from the card with the version they are looking at (p_expected_version). A
   // conflict (the author edited since) re-reads the post and says so; hold / remove take it out of
   // the feed (staff review hidden posts in the moderation queue); restore re-reads it in place.
-  const moderateFromCard = async (post: Post, action: PostModerationAction) => {
+  // `fromDialog`: run from Remove's confirmation — the notice (and a leaving card's focus move) waits
+  // until the dialog has closed (the modal hides the notice region).
+  const moderateFromCard = async (post: Post, action: PostModerationAction, fromDialog = false) => {
+    const say = (text: string) => {
+      if (fromDialog) pendingNoticeRef.current = () => announceCardNotice(text, () => focusCardTrigger(post.id))
+      else announceCardNotice(text)
+    }
+    const leave = (text: string) => {
+      if (!fromDialog) return cardLeaves(post.id, text)
+      dialogTriggerRef.current = null
+      pendingNoticeRef.current = () => cardLeaves(post.id, text)
+    }
     await moderationGateRef.current.run(async () => {
       const result = await moderatePost(supabase, action, post.id, post.version)
       if (!result.ok) {
@@ -1577,19 +1587,19 @@ export function FeedPanel() {
           const row = await loadFeedRow(supabase, post.id)
           if (row) {
             setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
-            announceCardNotice(cardT(locale, result.gone ? 'statusPostGone' : 'statusModerationConflict'))
-          } else cardLeaves(post.id, cardT(locale, 'statusPostGone'))
-        } else announceCardNotice(cardT(locale, 'statusModerationFailed'))
+            say(cardT(locale, result.gone ? 'statusPostGone' : 'statusModerationConflict'))
+          } else leave(cardT(locale, 'statusPostGone'))
+        } else say(cardT(locale, 'statusModerationFailed'))
         return
       }
       if (action === 'authorize') {
         const row = await loadFeedRow(supabase, post.id)
         if (row) setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
         // The card stays (focus stays on its ⋯ button): announce only.
-        announceCardNotice(cardT(locale, 'statusRestored'))
+        say(cardT(locale, 'statusRestored'))
       } else {
         removedHiddenIdsRef.current.add(post.id)
-        cardLeaves(post.id, cardT(locale, action === 'hold' ? 'statusHeld' : 'statusRemoved'))
+        leave(cardT(locale, action === 'hold' ? 'statusHeld' : 'statusRemoved'))
       }
     })
   }
@@ -1614,7 +1624,8 @@ export function FeedPanel() {
         void moderateFromCard(post, 'hold')
         return
       case 'remove':
-        void moderateFromCard(post, 'remove')
+        // Removing upholds the post's reports: confirmed first, like Delete.
+        setCardDialog({ kind: 'remove', post })
         return
       case 'restore':
         void moderateFromCard(post, 'authorize')
@@ -1699,8 +1710,19 @@ export function FeedPanel() {
       locale={locale}
       returnFocusRef={dialogTriggerRef}
       onClose={() => setCardDialog(null)}
-      onGone={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
+      onGone={(postId) => {
+        // The post no longer exists: once the dialog has closed, its card leaves (focus to the next
+        // card or the heading — the card's own ⋯ button is going), then "This post was deleted".
+        dialogTriggerRef.current = null
+        pendingNoticeRef.current = () => cardLeaves(postId, cardT(locale, 'statusPostGone'))
+      }}
       onSaved={(postId, row, result, changes) => {
+        if (!result) {
+          // "Use the current version": nothing was saved, so nothing is announced; the card shows the
+          // current version when it could be read.
+          if (row) setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
+          return
+        }
         const patch = row ? rowPatchFromFeedRow(row) : editFallbackPatch(postId, result, changes)
         setPosts((prev) => applyPostRowPatch(prev, patch))
         const text = cardT(locale, 'statusPostUpdated')
@@ -1751,20 +1773,40 @@ export function FeedPanel() {
         return null
       }}
     />
+    <ConfirmDeleteDialog
+      open={cardDialog?.kind === 'remove'}
+      kind="remove"
+      locale={locale}
+      returnFocusRef={dialogTriggerRef}
+      onClose={() => setCardDialog(null)}
+      onClosed={flushPendingNotice}
+      onConfirm={async () => {
+        if (cardDialog?.kind !== 'remove') return null
+        await moderateFromCard(cardDialog.post, 'remove', true)
+        return null
+      }}
+    />
     <ReportDialog
       postId={cardDialog?.kind === 'report' ? cardDialog.post.id : null}
       locale={locale}
       returnFocusRef={dialogTriggerRef}
       onClose={() => setCardDialog(null)}
-      // The dialog itself shows and announces its confirmation (the feed's region is hidden while it is open).
+      onClosed={flushPendingNotice}
+      // The dialog itself shows and announces its confirmation (the feed's region is hidden while it is
+      // open). When the report hid the post, the card leaves after the dialog closed.
       onSubmit={async (postId, reason, details) => {
-        await handleReport(postId, reason, details)
+        const { hidden } = await handleReport(postId, reason, details)
+        if (hidden) {
+          dialogTriggerRef.current = null
+          pendingNoticeRef.current = () => cardLeaves(postId, cardT(locale, 'statusReportHidden'))
+        }
       }}
     />
     {cardDialog?.kind === 'signup' && (
       <Dialog open onOpenChange={(o) => !o && setCardDialog(null)}>
         <DialogContent
           className="max-w-sm"
+          aria-describedby={undefined}
           lang={locale}
           dir={dir(locale)}
           onCloseAutoFocus={(e) => {
@@ -1777,7 +1819,7 @@ export function FeedPanel() {
           <DialogHeader>
             <DialogTitle>{cardT(locale, 'signupToReportTitle')}</DialogTitle>
           </DialogHeader>
-          <CreateAccountPrompt message={cardT(locale, 'signupToReportBody')} />
+          <CreateAccountPrompt message={cardT(locale, 'signupToReportBody')} linkLabel={feedChromeT(locale, 'createAccount')} />
         </DialogContent>
       </Dialog>
     )}

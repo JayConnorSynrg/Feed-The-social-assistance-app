@@ -18,7 +18,7 @@ import type { Locale } from '@/lib/i18n'
 import type { PostType } from '@/lib/post-rpc'
 import { timeZoneOptions } from '@/lib/event-time'
 import { composerT, requestCategoryLabel, REQUEST_CATEGORIES } from '@/lib/i18n-feed-composer'
-import { editT, fieldErrorText } from '@/lib/i18n-feed-edit'
+import { editT, fieldErrorText, lockReasonText } from '@/lib/i18n-feed-edit'
 import { formatMessage } from '@/lib/i18n-event-forms'
 import {
   EDITABLE_FIELDS,
@@ -54,18 +54,25 @@ export interface PostFormFieldsProps {
   photoSlot?: React.ReactNode
 }
 
-const INPUT = 'mt-1 bg-white text-stone-900 placeholder:text-stone-500 read-only:bg-stone-100 read-only:text-stone-700'
-
-function lockText(reason: LockReason, locale: Locale): string {
-  switch (reason) {
-    case 'poll_voted':
-      return editT(locale, 'lockPollVoted')
-    case 'poll_extend_only':
-      return editT(locale, 'lockPollExtendOnly')
-    case 'poll_closed':
-      return editT(locale, 'lockPollClosed')
-  }
+/** The control for the first field (in form order) with an error: its input, its first option, or
+ *  the first chip of its group. */
+export function firstInvalidControl(
+  postType: PostType,
+  idPrefix: string,
+  errors: DraftErrors,
+  doc: Pick<Document, 'getElementById' | 'querySelector'> = document,
+): HTMLElement | null {
+  const f = EDITABLE_FIELDS[postType].find((k) => errors[k])
+  if (!f) return null
+  const base = `${idPrefix}-${f}`
+  return (
+    (doc.getElementById(`${base}-0`) as HTMLElement | null) ??
+    (doc.getElementById(base) as HTMLElement | null) ??
+    doc.querySelector<HTMLElement>(`[aria-labelledby="${base}-legend"] button`)
+  )
 }
+
+const INPUT = 'mt-1 bg-white text-stone-900 placeholder:text-stone-500 read-only:bg-stone-100 read-only:text-stone-700'
 
 /** aria wiring for a field: its error and/or lock / hint text. */
 function describe(id: string, error: FieldError | undefined, extra: Array<string | null>) {
@@ -225,7 +232,7 @@ export function PostFormFields({
   const err = (f: EditField) => errors[f]
   const errNote = (f: EditField) =>
     errors[f] ? <FieldNote id={`${id(f)}-err`} text={fieldErrorText(locale, errors[f]!)} tone="error" /> : null
-  const lockNote = (f: EditField) => (locks[f] ? <FieldNote id={`${id(f)}-lock`} text={lockText(locks[f]!, locale)} /> : null)
+  const lockNote = (f: EditField) => (locks[f] ? <FieldNote id={`${id(f)}-lock`} text={lockReasonText(locks[f]!, locale)} /> : null)
   const currentNote = (f: EditField) =>
     currentText[f] !== undefined ? (
       <FieldNote id={`${id(f)}-current`} text={formatMessage(editT(locale, 'currentSays'), { text: currentText[f]! })} tone="current" />
@@ -248,6 +255,8 @@ export function PostFormFields({
               dir="auto"
               value={draft.content}
               readOnly={contentLocked}
+              required
+              aria-required="true"
               maxLength={postType === 'poll' ? LIMITS.pollQuestionMax : LIMITS.contentMax}
               onChange={(e) => set({ content: e.target.value })}
               placeholder={composerT(locale, contentPlaceholderKey(postType))}
@@ -261,6 +270,8 @@ export function PostFormFields({
               dir="auto"
               value={draft.content}
               readOnly={contentLocked}
+              required={postType !== 'resource_post'}
+              aria-required={postType !== 'resource_post' || undefined}
               maxLength={LIMITS.contentMax}
               onChange={(e) => set({ content: e.target.value })}
               placeholder={composerT(locale, contentPlaceholderKey(postType))}
@@ -358,10 +369,10 @@ export function PostFormFields({
               aria-labelledby={`${id('is_online')}-label`}
               onClick={() => set({ isOnline: !draft.isOnline })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23] ${
-                draft.isOnline ? 'bg-[#4a5d23]' : 'bg-stone-400'
+                draft.isOnline ? 'bg-[#4a5d23]' : 'bg-stone-500'
               }`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${draft.isOnline ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${draft.isOnline ? 'translate-x-6 rtl:-translate-x-6' : 'translate-x-1 rtl:-translate-x-1'}`} />
             </button>
             <span id={`${id('is_online')}-label`} className="text-sm font-medium text-stone-800">
               {composerT(locale, 'fieldOnline')}
@@ -400,6 +411,8 @@ export function PostFormFields({
                   dir="auto"
                   value={opt}
                   readOnly={optionsLocked}
+                  required
+                  aria-required="true"
                   maxLength={LIMITS.optionMax}
                   aria-label={formatMessage(composerT(locale, 'optionN'), { n: i + 1 })}
                   placeholder={formatMessage(composerT(locale, 'optionN'), { n: i + 1 })}

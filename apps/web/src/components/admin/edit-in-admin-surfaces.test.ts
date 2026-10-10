@@ -334,7 +334,8 @@ describe('surface details', () => {
     const trigger = html.match(new RegExp(`<button[^>]*data-testid="post-menu-${POST}"[^>]*>`))?.[0] ?? ''
     expect(trigger).toMatch(/aria-haspopup="menu"/)
     expect(trigger).toMatch(/aria-expanded="false"/)
-    expect(trigger).toMatch(/aria-label="Actions for the post by Ada"/)
+    // Named after the post: author, time and the start of its text (two posts by Ada differ).
+    expect(trigger).toMatch(/aria-label="Actions for the post by Ada, [^"]+: Need a ride"/)
   })
 
   it('post item name: the start of the text, collapsed and capped', () => {

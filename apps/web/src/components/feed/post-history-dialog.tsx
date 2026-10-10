@@ -78,7 +78,7 @@ export function HistoryList({ entries, locale, postType, redactAs, onRedact, tz 
     <ol className="flex flex-col gap-3" data-testid="history-list">
       {entries.map((e) => (
         <li key={e.key} className="rounded-lg border border-stone-200 p-3" data-testid={`history-entry-${e.version}`}>
-          <p className="text-sm font-semibold text-stone-900">
+          <p id={`history-entry-title-${e.version}`} className="text-sm font-semibold text-stone-900">
             {entryTitle(e, locale)} · <time dateTime={e.publishedAt}>{formatHistoryTime(e.publishedAt, locale, tz)}</time>
           </p>
           <p className="text-xs text-stone-700">{e.isOriginal ? editT(locale, 'historyPostedByAuthor') : editT(locale, 'historyEditedByAuthor')}</p>
@@ -112,6 +112,7 @@ export function HistoryList({ entries, locale, postType, redactAs, onRedact, tz 
                 <button
                   type="button"
                   onClick={() => onRedact(e)}
+                  aria-describedby={`history-entry-title-${e.version}`}
                   className="mt-2 text-xs font-medium text-red-800 underline underline-offset-2 hover:text-red-900"
                   data-testid={`history-redact-${e.version}`}
                 >
@@ -147,12 +148,16 @@ export function PostHistoryDialog({
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
+  const redactHeadingRef = useRef<HTMLHeadingElement>(null)
+  // Single-flight: a second click before the first answer is ignored (set before the first await).
+  const redactInFlight = useRef(false)
   const targetKey = target ? `${target.kind}:${target.id}` : null
   const redactAs = target ? redactRole(viewer, target.authorId) : null
 
-  const load = useCallback(async () => {
+  /** `quiet`: reload in place (after a redaction) — the list stays and nothing says "Loading". */
+  const load = useCallback(async (quiet = false) => {
     if (!target) return
-    setState({ kind: 'loading' })
+    if (!quiet) setState({ kind: 'loading' })
     if (target.kind === 'post') {
       const rows = await loadPostRevisions(supabase, target.id)
       if (!rows) return setState({ kind: 'error' })
@@ -174,19 +179,43 @@ export function PostHistoryDialog({
     void load()
   }, [load])
 
+  // The confirmation opens with focus on its heading; Cancel returns focus to that version's button.
+  const redactingVersion = redacting?.version ?? null
+  useEffect(() => {
+    if (redactingVersion === null) return
+    const raf = requestAnimationFrame(() => redactHeadingRef.current?.focus())
+    return () => cancelAnimationFrame(raf)
+  }, [redactingVersion])
+
+  const cancelRedact = () => {
+    const version = redacting?.version
+    setRedacting(null)
+    setRedactError(null)
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-testid="history-redact-${version}"]`)?.focus(),
+    )
+  }
+
   const confirmRedact = async () => {
-    if (!target || !redacting || redacting.revisionId === null || busy) return
+    if (!target || !redacting || redacting.revisionId === null || redactInFlight.current) return
     if (redactAs === 'platform_admin' && !redactReason.trim()) {
       setRedactError(editT(locale, 'redactReasonRequired'))
       return
     }
+    redactInFlight.current = true
     setBusy(true)
     setRedactError(null)
-    const res =
-      target.kind === 'post'
-        ? await redactPostRevision(supabase, redacting.revisionId, target.id, redactReason || null)
-        : await redactCommentRevision(supabase, redacting.revisionId, target.id, redactReason || null)
-    setBusy(false)
+    setStatus('')
+    let res: Awaited<ReturnType<typeof redactPostRevision>>
+    try {
+      res =
+        target.kind === 'post'
+          ? await redactPostRevision(supabase, redacting.revisionId, target.id, redactReason || null)
+          : await redactCommentRevision(supabase, redacting.revisionId, target.id, redactReason || null)
+    } finally {
+      redactInFlight.current = false
+      setBusy(false)
+    }
     if (!res.ok) {
       setRedactError(
         res.failure.kind === 'forbidden' && res.failure.token === 'revision_under_report'
@@ -197,8 +226,9 @@ export function PostHistoryDialog({
     }
     setRedacting(null)
     setRedactReason('')
+    // Reload in place, then announce once and move focus to the title.
+    await load(true)
     setStatus(editT(locale, 'redactDone'))
-    await load()
     requestAnimationFrame(() => titleRef.current?.focus())
   }
 
@@ -208,6 +238,7 @@ export function PostHistoryDialog({
         lang={locale}
         dir={dir(locale)}
         className="max-h-[90vh] max-w-xl overflow-y-auto"
+        aria-describedby={undefined}
         data-testid="post-history-dialog"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
@@ -260,7 +291,7 @@ export function PostHistoryDialog({
         )}
         {redacting && (
           <section aria-labelledby="redact-heading" className="rounded-lg border border-red-200 bg-red-50/40 p-3">
-            <h3 id="redact-heading" className="text-sm font-semibold text-stone-900">
+            <h3 id="redact-heading" ref={redactHeadingRef} tabIndex={-1} className="text-sm font-semibold text-stone-900 focus:outline-hidden" data-testid="redact-heading">
               {formatMessage(editT(locale, 'redactTitle'), { n: redacting.version })}
             </h3>
             <p className="mt-1 text-xs text-stone-700">{editT(locale, 'redactBody')}</p>
@@ -285,7 +316,7 @@ export function PostHistoryDialog({
               </p>
             )}
             <div className="mt-2 flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setRedacting(null)}>
+              <Button type="button" variant="outline" size="sm" onClick={cancelRedact} data-testid="history-redact-cancel">
                 {editT(locale, 'cancel')}
               </Button>
               <Button type="button" size="sm" onClick={() => void confirmRedact()} aria-disabled={busy || undefined} className="bg-red-700 text-white hover:bg-red-800" data-testid="history-redact-confirm">

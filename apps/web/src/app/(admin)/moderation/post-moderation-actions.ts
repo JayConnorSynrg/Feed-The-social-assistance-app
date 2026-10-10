@@ -75,7 +75,7 @@ export function moderationFailure(error: { code?: string; message: string; detai
       conflict: { currentVersion: typeof d.current_version === 'number' ? d.current_version : null, needsReview: d.needs_review === true },
     }
   }
-  if (error.code === 'PT404') return { ok: false, message: 'This post was deleted by its author.', gone: true }
+  if (error.code === 'PT404') return { ok: false, message: 'This post is gone — its author deleted it. Nothing was changed.', gone: true }
   // The queue has always shown this generic line for a refused RPC (its error is not an Error).
   return { ok: false, message: 'An error occurred' }
 }

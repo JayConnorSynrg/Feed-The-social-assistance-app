@@ -99,7 +99,7 @@ export function SafetyStrip({ alerts, onViewMap, formatAge }: SafetyStripProps) 
                     )}
                   </span>
                   {alert.description && (
-                    <span className="block text-xs text-stone-700 line-clamp-1 mt-0.5">{alert.description}</span>
+                    <span className="block text-xs text-stone-700 line-clamp-1 mt-0.5" lang="" dir="auto">{alert.description}</span>
                   )}
                   <span className="block text-[10px] text-stone-500 mt-0.5">{age}</span>
                 </span>

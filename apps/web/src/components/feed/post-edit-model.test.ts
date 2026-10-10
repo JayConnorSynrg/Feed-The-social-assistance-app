@@ -17,7 +17,9 @@ import {
   instantToInput,
   isEditableType,
   mergeDrafts,
+  resetLockedFields,
   validateDraft,
+  withoutLockedChanges,
   type EditFacts,
   type PostDraft,
 } from './post-edit-model'
@@ -126,6 +128,22 @@ describe('locks: key fields lock once people act', () => {
     const opts = { original: d({ maxSeekers: '5' }), facts: { ...NO_FACTS, committedOptIns: 3 }, viewerTz: NY }
     expect(validateDraft('feed', d({ content: 'x', maxSeekers: '2' }), opts).max_seekers).toEqual({ code: 'capacity_range', min: 3, max: 1000 })
     expect(validateDraft('feed', d({ content: 'x', maxSeekers: '3' }), opts).max_seekers).toBeUndefined()
+  })
+})
+
+describe('a field that locked while the dialog was open (the reviewer proof: a vote landed)', () => {
+  const src = { post_type: 'poll' as const, content: 'Which day works?', metadata: {}, image_url: null, image_alt: null, max_seekers: null, poll: { question: 'Which day works?', options: ['Sat', 'Sun'], ends_at: null } }
+  const original = draftFromSource(src, 'UTC')
+  const mine = { ...original, content: 'Which weekend day works?', options: ['Sat', 'Sun', 'Mon'] }
+  const locks = fieldLocks('poll', { ...NO_FACTS, pollVotes: 1 })
+
+  it('the locked fields go back to their saved values; the rest of the draft stays', () => {
+    expect(resetLockedFields('poll', { ...mine, endsAt: '2026-12-01T10:00' }, original, locks)).toEqual({ ...original, endsAt: '2026-12-01T10:00' })
+  })
+  it('a locked field is never sent', () => {
+    const sent = withoutLockedChanges(diffDraft('poll', original, mine, 'UTC'), locks)
+    expect(Object.keys(sent)).toEqual([])
+    expect(withoutLockedChanges({ content: 'x', ends_at: null }, { content: 'poll_voted', ends_at: 'poll_extend_only' })).toEqual({ ends_at: null })
   })
 })
 

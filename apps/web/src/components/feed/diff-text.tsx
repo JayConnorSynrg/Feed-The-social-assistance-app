@@ -3,7 +3,8 @@
 //
 // Renders a word diff (lib/text-diff.ts) so a change is never shown by colour alone: removed words are
 // <del> with a visible "−" and screen-reader text "removed", added words <ins> with "+" and "added".
-// Colours meet AA (red-900 on red-50, green-900 on green-50). The member's text keeps dir="auto".
+// Colours meet AA (red-900 on red-50, green-900 on green-50). The member's text keeps dir="auto"; the
+// screen-reader labels are <bdi> so a label in the viewer's script never reorders the member's words.
 
 import React from 'react'
 import type { DiffPart } from '@/lib/text-diff'
@@ -17,7 +18,7 @@ export function DiffText({ parts, addedLabel, removedLabel }: { parts: readonly 
           return (
             <del key={i} className="rounded-sm bg-red-50 px-0.5 text-red-900 line-through decoration-red-900">
               <span aria-hidden="true" className="font-semibold no-underline">−</span>
-              <span className="sr-only">{removedLabel}: </span>
+              <bdi className="sr-only">{removedLabel}: </bdi>
               {p.text}
             </del>
           )
@@ -25,7 +26,7 @@ export function DiffText({ parts, addedLabel, removedLabel }: { parts: readonly 
         return (
           <ins key={i} className="rounded-sm bg-green-50 px-0.5 text-green-900 no-underline">
             <span aria-hidden="true" className="font-semibold">+</span>
-            <span className="sr-only">{addedLabel}: </span>
+            <bdi className="sr-only">{addedLabel}: </bdi>
             {p.text}
           </ins>
         )

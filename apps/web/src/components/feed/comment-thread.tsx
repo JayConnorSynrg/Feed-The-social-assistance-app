@@ -78,6 +78,11 @@ export interface RowContext {
   replyTexts: Map<string, string>
   onReplyTextChange: (id: string, text: string) => void
   editingId: string | null
+  /** The open editor's draft — held by the thread so a refetch (which remounts rows) keeps it. */
+  editDraft: string
+  onEditDraftChange: (text: string) => void
+  /** True once, right after Edit was chosen: the editor takes focus then, never on a remount. */
+  takeEditFocus: () => boolean
   onAction: (comment: Comment, action: CommentActionId, trigger: HTMLElement) => void
   onSaveEdit: (comment: Comment, text: string) => Promise<void>
   onCancelEdit: () => void
@@ -89,16 +94,13 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
   const replyOpen = ctx.replyOpenIds.has(comment.id)
   const replyText = ctx.replyTexts.get(comment.id) ?? ''
   const [localSubmitting, setLocalSubmitting] = useState(false)
-  const [editText, setEditText] = useState(comment.content)
   const [saving, setSaving] = useState(false)
   const editing = ctx.editingId === comment.id
+  const editText = ctx.editDraft
   const editRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    if (editing) {
-      setEditText((t) => (ctx.editNotice?.commentId === comment.id ? t : comment.content))
-      requestAnimationFrame(() => editRef.current?.focus())
-    }
+    if (editing && ctx.takeEditFocus()) requestAnimationFrame(() => editRef.current?.focus())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
 
@@ -125,7 +127,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
   }
 
   const saveEdit = async () => {
-    if (saving) return
+    if (saving || !editText.trim() || editText.trim() === comment.content) return
     setSaving(true)
     try {
       await ctx.onSaveEdit(comment, editText)
@@ -156,7 +158,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
           ) : (
             <>
               <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
-                <span className="text-xs font-semibold text-stone-800" dir="auto">
+                <span id={`comment-author-${comment.id}`} className="text-xs font-semibold text-stone-800" dir="auto">
                   {authorName}
                 </span>
                 {tierText && <span className="rounded-full bg-lime-100 px-1.5 py-0.5 text-[10px] font-medium text-lime-900">{tierText}</span>}
@@ -197,7 +199,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
                     rows={2}
                     maxLength={LIMITS.commentMax}
                     value={editText}
-                    onChange={(e) => setEditText(e.target.value)}
+                    onChange={(e) => ctx.onEditDraftChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') ctx.onCancelEdit()
                       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -239,6 +241,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
                 <button
                   type="button"
                   data-testid={`reply-btn-${comment.id}`}
+                  aria-describedby={`comment-author-${comment.id}`}
                   onClick={() => ctx.onToggleReply(comment.id)}
                   aria-expanded={replyOpen}
                   className="flex items-center gap-1 text-stone-600 transition-colors hover:text-[#4a5d23]"
@@ -254,6 +257,7 @@ export function CommentRow({ comment, depth = 0, ctx }: { comment: Comment; dept
                     key={a}
                     type="button"
                     data-testid={`comment-${a}-${comment.id}`}
+                    aria-describedby={`comment-author-${comment.id}`}
                     onClick={(e) => ctx.onAction(comment, a, e.currentTarget)}
                     className={a === 'delete' || a === 'hide' ? 'text-red-800 hover:underline' : 'text-stone-700 hover:text-[#4a5d23]'}
                   >
@@ -318,6 +322,9 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
   const [replyOpenIds, setReplyOpenIds] = useState<Set<string>>(new Set())
   const [replyTexts, setReplyTexts] = useState<Map<string, string>>(new Map())
   const [editingId, setEditingId] = useState<string | null>(null)
+  // The edit draft lives here with replyTexts: a realtime refetch remounts the rows and keeps it.
+  const [editDraft, setEditDraft] = useState('')
+  const editFocusPending = useRef(false)
   const [editNotice, setEditNotice] = useState<{ commentId: string; current: string } | null>(null)
   const [deleting, setDeleting] = useState<Comment | null>(null)
   const [history, setHistory] = useState<HistoryTarget | null>(null)
@@ -408,6 +415,8 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
     switch (action) {
       case 'edit':
         setEditNotice(null)
+        setEditDraft(comment.content)
+        editFocusPending.current = true
         setEditingId(comment.id)
         return
       case 'delete':
@@ -453,6 +462,13 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
     replyTexts,
     onReplyTextChange: handleReplyTextChange,
     editingId,
+    editDraft,
+    onEditDraftChange: setEditDraft,
+    takeEditFocus: () => {
+      const take = editFocusPending.current
+      editFocusPending.current = false
+      return take
+    },
     onAction,
     onSaveEdit,
     onCancelEdit: () => {
