@@ -359,21 +359,72 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
         isGuest: false,
         locale: 'en',
         timeoutMs: 1000,
-        apply: () => {},
+        apply: (id, item) => order.push(`apply ${id} ${item === null ? 'removed' : 'kept'} (notice: "${m.rerender().notice}")`),
         root,
         focusHeading: () => order.push(`focus heading (notice: "${m.rerender().notice}")`),
       }),
     )
     await m.tree().onManaged(E1, { kind: 'retired' })
     await m.flush()
-    // Before the frame: nothing announced yet, focus not moved.
+    // Before the frame: the card is still listed, nothing announced, focus not moved.
     expect(m.tree().notice).toBe('')
     expect(order).toEqual([])
     expect(frames).toHaveLength(1)
     frames.splice(0).forEach((f) => f())
     m.rerender()
-    expect(order).toEqual(['focus heading (notice: "")'])
+    // In the frame: heading first, then the list update, then the notice.
+    expect(order).toEqual(['focus heading (notice: "")', `apply ${E1} removed (notice: "")`])
     expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
+  })
+
+  it('a newer save on the same card wins over an older save\'s pending frame (no stale notice, no focus move)', async () => {
+    const frames: Array<() => void> = []
+    g.requestAnimationFrame = (cb: () => void) => frames.push(cb)
+    const answers = [
+      { item: null, checkin: emptyCheckinState() }, // save A: the card left
+      { item: card('occ-1', E1, '2026-10-24T14:00:00Z', 'Back again'), checkin: emptyCheckinState() }, // save B
+    ]
+    h.reload = async () => answers.shift()!
+    const { m, applied, headingFocus, dom } = harness()
+    focused = dom.trigger
+    await m.tree().onManaged(E1, { kind: 'retired' }) // A resolves gone; its frame is pending
+    expect(frames).toHaveLength(1)
+    await m.tree().onManaged(E1, { kind: 'updated' }) // B resolves, still listed
+    await m.flush()
+    // A's frame, then B's two frames.
+    while (frames.length) frames.splice(0).forEach((f) => f())
+    m.rerender()
+    expect(m.tree().notice).toBe('Changes saved.')
+    expect(headingFocus.calls).toBe(0)
+    expect(applied.map(([, i]) => i?.title ?? null)).toEqual(['Back again'])
+  })
+
+  it('a still-listed card re-filed under another day: the notice stays empty until focus has landed on its new ⋯ trigger', async () => {
+    const frames: Array<() => void> = []
+    g.requestAnimationFrame = (cb: () => void) => frames.push(cb)
+    h.reload = async () => ({ item: renamed, checkin: emptyCheckinState() })
+    const { m, dom, remount, setOnApply } = harness()
+    focused = dom.trigger
+    setOnApply(() => {
+      remount()
+      focused = null
+    })
+    const noticeAtFocus: string[] = []
+    await m.tree().onManaged(E1, { kind: 'updated' })
+    await m.flush()
+    const newTrigger = dom.trigger as { focus: ReturnType<typeof vi.fn> }
+    newTrigger.focus.mockImplementation(() => {
+      focused = newTrigger
+      noticeAtFocus.push(m.rerender().notice)
+    })
+    expect(m.tree().notice).toBe('')
+    frames.splice(0).forEach((f) => f()) // first frame: React commits
+    m.rerender()
+    expect(m.tree().notice).toBe('')
+    frames.splice(0).forEach((f) => f()) // second frame: focus, then the notice
+    m.rerender()
+    expect(noticeAtFocus).toEqual([''])
+    expect(m.tree().notice).toBe('Changes saved.')
   })
 
   it('feed: the card left but its exit animation still holds it in the DOM — focus goes to the heading anyway', async () => {

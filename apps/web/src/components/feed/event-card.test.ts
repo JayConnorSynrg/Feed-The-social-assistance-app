@@ -347,6 +347,9 @@ describe('the Events tab (render)', () => {
     const first = renderToStaticMarkup(h(EventsTabView, { state: { status: 'loading' }, locale: 'en', onRetry: () => {}, onCheckedIn: () => {}, announce: false }))
     expect(statusRegion(first)).toBe('')
     expect(statusRegion(tab({ status: 'loading' }))).toBe('Loading events…')
+    // M06 (break-it): the card-notice region also waits for the first paint.
+    const firstWithNotice = renderToStaticMarkup(h(EventsTabView, { state: { status: 'loading' }, locale: 'en', onRetry: () => {}, onCheckedIn: () => {}, announce: false, notice: 'x' }))
+    expect(firstWithNotice).toMatch(/data-testid="events-tab-notice"><\/p>/)
     const panel = readFileSync(fileURLToPath(new URL('../panels/events-panel.tsx', import.meta.url)), 'utf8')
     expect(panel).toMatch(/useState\(false\)\s+useEffect\(\(\) => \{\s+const id = requestAnimationFrame\(\(\) => setAnnounce\(true\)\)/)
     expect(panel).toMatch(/announce=\{announce\}/)

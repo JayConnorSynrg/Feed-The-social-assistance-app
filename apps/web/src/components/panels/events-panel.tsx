@@ -173,8 +173,9 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
   const showMiss = focusMiss && state.status === 'ready'
   // Two status regions, always mounted: the list's (every load / reload outcome, a deep-link miss,
   // empty) and, separately, what the last change from a card's ⋯ menu did — so a save that removes
-  // the last card still lets "No upcoming events yet." be announced, and a reload never cuts the
-  // notice. Both stay empty on the first paint (`announce`), so their first text is announced.
+  // the last card still lets "No upcoming events yet." be announced; a load's status text never
+  // replaces the notice; a new load (Retry) clears it. Both stay empty on the first paint
+  // (`announce`), so their first text is announced.
   const announcement = !announce
     ? ''
     : state.status === 'loading'
@@ -367,6 +368,13 @@ export function EventsPanel({ onEventChanged }: {
     root: listRoot,
     focusHeading: focusTitle,
   })
+  // The notice belongs to the signed-in account: another account (sign-in / switch) never finds the
+  // previous one's sentence. Cleared during render (the "previous value" pattern), silently.
+  const [noticeUser, setNoticeUser] = useState(userId)
+  if (noticeUser !== userId) {
+    setNoticeUser(userId)
+    setNotice('')
+  }
 
   const reload = useCallback(() => {
     // A new load replaces what the last card change announced.

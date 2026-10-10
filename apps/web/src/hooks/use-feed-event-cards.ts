@@ -94,8 +94,6 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     /** What the last change from an event card's ⋯ menu did (the feed's card-notice region). Each
      *  save clears it before setting it, so the same sentence twice is announced twice. */
     feedNotice: notice,
-    /** Clear the card notice now (removing the text announces nothing). */
-    clearNotice,
     handleEventManaged: onManaged,
     syncFeedEventCard,
   }

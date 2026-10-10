@@ -14,7 +14,7 @@ vi.mock('@/lib/logger', () => ({
   logEvent: vi.fn(),
   withMetric: (_op: string, _a: unknown, fn: () => unknown) => fn(),
 }))
-const h = vi.hoisted(() => ({ rpcs: [] as Array<[string, Record<string, unknown>]>, client: null as unknown }))
+const h = vi.hoisted(() => ({ rpcs: [] as Array<[string, Record<string, unknown>]>, client: null as unknown, user: null as null | { id: string } }))
 // The app's createClient is a singleton: one object for every render.
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => (h.client ??= {
@@ -31,7 +31,7 @@ vi.mock('@/lib/supabase/client', () => ({
     },
   }),
 }))
-vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ isAnonymous: false, user: null, loading: false, profile: null }) }))
+vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ isAnonymous: false, user: h.user, loading: false, profile: null }) }))
 vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))
 vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: {}, setPanelParams: () => {} }) }))
 
@@ -44,6 +44,7 @@ const g = globalThis as unknown as { requestAnimationFrame?: unknown; cancelAnim
 
 beforeEach(() => {
   h.rpcs = []
+  h.user = null
   g.requestAnimationFrame = () => 0
   g.cancelAnimationFrame = () => {}
 })
@@ -75,5 +76,20 @@ describe('EventsPanel — a card save reaches both the tab and the feed', () => 
     ;(m.tree() as { props: { onManaged: (id: string, c: EventCardChange) => void } }).props.onManaged(E1, { kind: 'updated' })
     await m.flush()
     expect(h.rpcs).toHaveLength(2)
+  })
+
+  it('another account never finds the previous account\'s card notice (cleared, silently, on user change)', async () => {
+    h.user = { id: 'u1' }
+    const m = mount(() => EventsPanel())
+    await m.flush()
+    const view = () => (m.tree() as { props: { onManaged: (id: string, c: EventCardChange) => void; notice: string } }).props
+    view().onManaged(E1, { kind: 'date_cancelled' })
+    await m.flush()
+    expect(view().notice).toBe('Date cancelled. This event is no longer listed.')
+    m.rerender()
+    expect(view().notice).toBe('Date cancelled. This event is no longer listed.')
+    h.user = { id: 'u2' }
+    m.rerender()
+    expect(view().notice).toBe('')
   })
 })

@@ -180,11 +180,14 @@ describe('useFeedEventCards', () => {
     expect(m.tree().feedNotice).toBe('')
   })
 
-  it('clearNotice empties the notice on demand', async () => {
+  it('the clear is not exposed: only a context change empties the notice; a same-context rerender keeps it', async () => {
     const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
     await m.tree().handleEventManaged(E1, { kind: 'updated' })
     await m.flush()
-    m.tree().clearNotice()
+    expect('clearNotice' in m.tree()).toBe(false)
+    m.rerender()
+    expect(m.tree().feedNotice).toBe('Changes saved.')
+    noticeContext = 'businesses|'
     m.rerender()
     expect(m.tree().feedNotice).toBe('')
   })
