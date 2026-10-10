@@ -42,7 +42,8 @@
 --   (f1) Counters: comment_count counts only comments that are neither deleted nor hidden; comment_count
 --       and like_count are recounted after taking the post row lock (the old recount lost one of two
 --       concurrent changes); submit_content_report locks the post before counting open reports.
---       posts.engaged_at (server-only) marks the first engagement. Backfills for all three.
+--       posts.engaged_at (server-only) marks the first engagement. Backfills for all three. Lock order on
+--       every engagement path: the post row first, then profiles (no like / comment / vote deadlock).
 --   (f2) Engagement on hidden posts: likes, comments (and replies) and poll votes are refused on any
 --       hidden (held, removed, community-hidden or deleted) post, for everyone, like opt-ins.
 --   (g) Moderation integrity: reports snapshot the version; admin_hold / remove / authorize /
@@ -898,6 +899,11 @@ END $fn$;
 -- unlike a relative +-1, rewrites the true value on every change, so a stale number cannot outlive the
 -- next change to its post. posts.engaged_at is set once (COALESCE) by the first like, vote, comment or
 -- opt-in, in the same statement / under the same post lock, and never cleared.
+-- Lock order: the post row, then profiles. The engagement triggers (engagement_on_post_like / _comment /
+-- _poll_vote / _opt_in_insert) lock the engager's and the author's profiles; every insert path below takes
+-- the post first (BEFORE INSERT, ahead of the foreign-key check and those AFTER triggers), and opt_in_to_post /
+-- withdraw_opt_in / unblock_opt_in lock the post before touching opt-ins. The post lock is FOR NO KEY UPDATE
+-- (what an UPDATE of posts takes): it does not conflict with another insert's foreign-key share lock.
 
 -- posts.comment_count = the post's comments that are neither deleted nor hidden (replies included; a
 -- deleted parent's "Comment deleted" placeholder is not a comment). Same trigger (AFTER INSERT OR UPDATE
@@ -916,7 +922,7 @@ BEGIN
     RETURN NULL;
   END IF;
   v_posts := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[OLD.post_id, NEW.post_id]) x WHERE x IS NOT NULL ORDER BY x);
-  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR UPDATE;
+  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR NO KEY UPDATE;
   UPDATE public.posts p
      SET comment_count = (SELECT count(*) FROM public.post_comments pc
                            WHERE pc.post_id = p.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden),
@@ -940,7 +946,7 @@ BEGIN
     RETURN NULL;
   END IF;
   v_posts := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[OLD.post_id, NEW.post_id]) x WHERE x IS NOT NULL ORDER BY x);
-  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR UPDATE;
+  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR NO KEY UPDATE;
   UPDATE public.posts p
      SET like_count = (SELECT count(*) FROM public.post_likes pl WHERE pl.post_id = p.id),
          engaged_at = CASE WHEN p.id = NEW.post_id AND NEW.post_id IS DISTINCT FROM OLD.post_id  -- insert, or moved here
@@ -948,6 +954,24 @@ BEGIN
    WHERE p.id = ANY (v_posts);
   RETURN NULL;
 END $fn$;
+
+-- likes and comments: lock the post before the engagement triggers lock profiles (lock order above). Without
+-- it a like held the post's foreign-key share lock and the author's profile and then waited for the post,
+-- while a second like / comment / first vote held the post and waited for the profile: deadlock.
+CREATE FUNCTION public.lock_post_for_engagement()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  PERFORM 1 FROM public.posts WHERE id = NEW.post_id FOR NO KEY UPDATE;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER trg_post_likes_lock_post BEFORE INSERT ON public.post_likes
+  FOR EACH ROW EXECUTE FUNCTION public.lock_post_for_engagement();
+CREATE TRIGGER trg_post_comments_lock_post BEFORE INSERT ON public.post_comments
+  FOR EACH ROW EXECUTE FUNCTION public.lock_post_for_engagement();
 
 -- poll votes and opt-ins carry no count on posts: the first one sets engaged_at. BEFORE INSERT, so the
 -- post row is locked before the row's foreign-key checks lock polls / posts: the same order as edit_post
@@ -1565,7 +1589,7 @@ BEGIN
   -- internal helpers / trigger function: no client EXECUTE
   FOREACH f IN ARRAY ARRAY[
     'post_revisions_append_only()', 'post_image_url_ok(text,uuid)', 'post_normalize_fields(public.post_type,uuid,jsonb)',
-    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)', 'sync_post_comment_count()', 'sync_post_like_count()', 'mark_post_engaged()'] LOOP
+    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)', 'sync_post_comment_count()', 'sync_post_like_count()', 'mark_post_engaged()', 'lock_post_for_engagement()'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon, authenticated', f);
   END LOOP;
 END

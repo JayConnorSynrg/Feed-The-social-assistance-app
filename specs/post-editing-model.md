@@ -61,7 +61,7 @@ visible ──report x3──▶ hidden(community_reports_threshold) ──dismi
 
 Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and races in
 `supabase/tests/posts_editing.race.sh` (C…). Every guard has a mutant that turns its test red
-(126 / 126 killed on the prod-identical harness).
+(128 / 128 killed on the prod-identical harness).
 
 | # | Invariant | Proof |
 |---|---|---|
@@ -94,8 +94,9 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 | I24 | Realtime posts list = previous 18 columns + 6 new; other members unchanged | Q4 |
 | I25 | No function reads/returns profile display columns; `posts_user_id_fkey` kept | Q2, Q5 |
 | I26 | `posts.comment_count` = comments with `deleted_at IS NULL AND NOT is_hidden` after insert, hard delete, soft delete (with and without replies), hide, unhide, un-delete, `post_id` change, the 026 backfill, and two concurrent changes on one post (recount under the post row lock) | N1–N9, N11, N12, E13, C9, C9b |
-| I27 | `posts.like_count` = like rows after the backfill and under concurrent likes; two concurrent reports cannot both miss the 3-report threshold | G8a, C10, C11 |
+| I27 | `posts.like_count` = like rows after the backfill and under concurrent likes / unlikes; two concurrent reports cannot both miss the 3-report threshold | G8a, C10, C10b, C11 |
 | I28 | `engaged_at` is server-only: no client UPDATE / SELECT grant (column `attacl` NULL, no client table UPDATE), not published; client INSERT only between 026 and 0265 (closes the author's own grace only); backfilled from the earliest like / vote / comment / opt-in | G6, G7, G8b, Q4 |
+| I29 | Lock order on every engagement path: the post row, then profiles (likes and comments lock the post BEFORE INSERT; trigger post locks are FOR NO KEY UPDATE), so no like / comment / vote / opt-in pair deadlocks | C13–C16 |
 
 ## Prototype → PR-2 changes (found while building)
 
@@ -130,6 +131,11 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 13. **`like_count` lost concurrent likes** (same pre-wait recount; reproduced: the author's own like plus another
     member's like left 1 with 2 rows) and **two concurrent reports could both count 2** and leave a post with 3 open
     reports visible. Both now lock the post row before counting.
+14. **The fix for 13 introduced a deadlock** (found while auditing lock order). The recount's `FOR UPDATE` conflicts
+    with another like's or comment's foreign-key share lock. That like or comment already held the author's profile, so
+    like + like, comment + like and like + a poll's first vote deadlocked (reproduced; the production base does not).
+    Likes and comments now lock the post BEFORE INSERT, ahead of the profile locks, and trigger post locks are
+    FOR NO KEY UPDATE.
 
 ## Out of PR-2 (later PRs)
 

@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (182 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (15 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (182 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
 
 ## Release: expand / contract
 
@@ -152,13 +152,31 @@ deleted parent's "Comment deleted" placeholder is not a comment. This is the cli
   0 count drift, so the counts change 0 rows and `engaged_at` is set on the engaged posts.
 - **`post_id` re-point:** no client role has UPDATE on `post_comments` (revoked in 026), and no function changes
   `post_id`. Only the table owner / `service_role` can, and the trigger recounts both posts (smoke N9).
+- **Lock order: the post row, then profiles.** The engagement triggers (outside 026, unchanged) lock the engager's and
+  the author's profiles. `lock_post_for_engagement` (`BEFORE INSERT` on `post_likes` and `post_comments`) locks the
+  post first, ahead of the foreign-key check and those triggers. All post locks taken by triggers are
+  `FOR NO KEY UPDATE`, the mode a posts UPDATE takes, which never conflicts with another insert's foreign-key share
+  lock. Before this, a like or comment held the post's foreign-key share lock and the author's profile, then waited
+  for the post. A second like, comment or first vote held the post and waited for the profile, and Postgres aborted
+  one with `40P01 deadlock detected`. That was a regression from the earlier `FOR UPDATE` recount lock and the vote
+  marker; the production base does not deadlock. Races C13–C16.
+
+| Path | Locks, in order (before → after) | Status |
+|---|---|---|
+| like insert | post FK share → profiles → post update lock (`FOR UPDATE`) → **post (BEFORE) → FK → profiles → recount** | Fixed (C14, C16) |
+| comment / reply insert | post FK share → profiles → post update lock → **post (BEFORE) → FK → profiles → recount** | Fixed (C15) |
+| poll vote insert | post (BEFORE, first vote only) → polls FK → profiles; later votes: profiles only | Already post-first (C16) |
+| `opt_in_to_post` | post `FOR UPDATE` → opt-in insert → author profile (`credit_post_created` → `recompute_badge_summary`) | Already post-first (C13) |
+| `withdraw_opt_in`, `unblock_opt_in` | post `FOR UPDATE` → opt-in delete → slots; no profile lock | Post only |
+| opt-in accept / complete (author's direct UPDATE) | opt-in row → profiles (`engagement_on_opt_in`); no post lock | Profiles only |
+| unlike, comment edit / delete / hide, `submit_content_report`, `edit_post`, `delete_own_post`, moderation RPCs | post only (no profile lock; `record_admin_action` only inserts) | Post only |
 
 Counter audit (every stored count maintained on the tables 026 touches):
 
 | Counter | Writer | Status |
 |---|---|---|
 | `posts.comment_count` | `sync_post_comment_count` | **Fixed**: lock, then recount; live + visible meaning (C9, C9b) |
-| `posts.like_count` | `sync_post_like_count` | **Fixed**: lock, then recount (C10) |
+| `posts.like_count` | `sync_post_like_count` | **Fixed**: lock, then recount (C10, C10b) |
 | open-report threshold (`report_count`, auto-hide at 3) | `submit_content_report` | **Fixed**: post locked before the count (C11) |
 | `posts.slots_remaining` | `opt_in_to_post` (−1), `withdraw_opt_in` / `unblock_opt_in` (+1), `edit_post` reconcile | Already safe: each locks the post `FOR UPDATE` first; relative ±1 in a later statement, reconcile counts after the lock (C3, C3b) |
 | `posts.version`, `edit_count`; `post_comments.version`, `edit_count` | `edit_post`, `edit_comment` | Already safe: row locked `FOR UPDATE`, version token (C1, C4) |
@@ -188,7 +206,7 @@ Probe (`scratchpad/edit-build/db/probe/comment_count.sql`, identical for 026 alo
 Smoke: N1–N9 (each comment transition), N10a–c (the only comment deleted / hidden: grace stays closed), N11 + G8a +
 G8b (every post in the database matches, including rows that existed before 026), N12 (trigger hygiene), G1–G7
 (no engagement → quiet; like/unlike, vote/unvote, opt-in/withdraw → closed; later engagement never moves
-`engaged_at`; clients cannot write it), E13. Races: C9, C9b, C10, C11, C12.
+`engaged_at`; clients cannot write it), E13. Races: C9, C9b, C10, C10b, C11, C12, C13–C16 (lock order).
 
 ## Moderator RPCs (community moderator and up)
 

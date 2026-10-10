@@ -547,11 +547,11 @@ SELECT pg_temp.t('N10c', 'only comment hidden: the quiet edit stays closed (reco
 SELECT pg_temp.ck('N11', 'backfill + trigger: 0 posts whose comment_count differs from its live, visible comments (|posts checked)', '^0\|[0-9]+$',
   (SELECT count(*) FILTER (WHERE p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden))
           || '|' || count(*) FROM public.posts p));
-SELECT pg_temp.ck('N12', 'counter / marker trigger functions: SECURITY DEFINER, pinned search_path, no PUBLIC / anon / authenticated EXECUTE', '^(t\|t\|f\|f\|f;){3}$',
+SELECT pg_temp.ck('N12', 'counter / marker / lock-order trigger functions: SECURITY DEFINER, pinned search_path, no PUBLIC / anon / authenticated EXECUTE', '^(t\|t\|f\|f\|f;){4}$',
   (SELECT string_agg(p.prosecdef::char || '|' || EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')::char || '|' ||
           EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0)::char || '|' ||
           has_function_privilege('anon', p.oid, 'EXECUTE')::char || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::char || ';', '' ORDER BY p.proname)
-   FROM pg_proc p WHERE p.oid IN ('public.sync_post_comment_count()'::regprocedure, 'public.sync_post_like_count()'::regprocedure, 'public.mark_post_engaged()'::regprocedure)));
+   FROM pg_proc p WHERE p.oid IN ('public.sync_post_comment_count()'::regprocedure, 'public.sync_post_like_count()'::regprocedure, 'public.mark_post_engaged()'::regprocedure, 'public.lock_post_for_engagement()'::regprocedure)));
 
 -- ===================== G: grace ends at the first engagement, for good (posts.engaged_at) =====================
 SELECT pg_temp.as_(pg_temp.u('A'), false, x) FROM unnest(ARRAY[
