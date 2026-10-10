@@ -17,6 +17,9 @@
 #   C7  two deletes of one post at once: exactly one succeeds, the other gets post_not_found;
 #       deleted_at is the winner's.
 #   C8  two deletes of one comment at once: exactly one succeeds, the other gets PT404.
+#   C9  two members soft-delete DIFFERENT comments of one post at once: posts.comment_count ends equal to
+#       the comments neither deleted nor hidden (the second recount waits for the first's post lock).
+#   C9b a soft delete in flight while a moderator hides another comment of the same post: same invariant.
 #
 # Usage: PSQL=<psql wrapper> TEMPLATE_DB=<db with the migration applied> posts_editing.race.sh
 #   PSQL is called as `DB=<name> $PSQL <psql args>` (the FEED PG17 harness `p` wrapper).
@@ -32,9 +35,10 @@ A=a0000000-0000-4000-8000-0000000000a1; B=b0000000-0000-4000-8000-0000000000b2; 
 CM=e0000000-0000-4000-8000-0000000000e5
 P1=00000000-0000-4000-a000-0000000000f1; P3=00000000-0000-4000-a000-0000000000f3; P5=00000000-0000-4000-a000-0000000000f5
 P6=00000000-0000-4000-a000-0000000000f6; P7=00000000-0000-4000-a000-0000000000f7; P8=00000000-0000-4000-a000-0000000000f8
-P9=00000000-0000-4000-a000-0000000000f9
+P9=00000000-0000-4000-a000-0000000000f9; P10=00000000-0000-4000-a000-0000000000fa; P11=00000000-0000-4000-a000-0000000000fb
 POLL=0b000000-0000-4000-8000-0000000000f5; POLL2=0b000000-0000-4000-8000-0000000000f6; K1=0d000000-0000-4000-8000-0000000000f1
-K2=0d000000-0000-4000-8000-0000000000f2
+K2=0d000000-0000-4000-8000-0000000000f2; K3=0d000000-0000-4000-8000-0000000000f3; K4=0d000000-0000-4000-8000-0000000000f4
+K5=0d000000-0000-4000-8000-0000000000f5; K6=0d000000-0000-4000-8000-0000000000f6; K7=0d000000-0000-4000-8000-0000000000f7
 q "INSERT INTO auth.users (id, email) VALUES ('$A','race-a@t'), ('$B','race-b@t'), ('$C','race-c@t'), ('$CM','race-cm@t');
    INSERT INTO public.profiles (id) SELECT id FROM auth.users WHERE email LIKE 'race-%' ON CONFLICT (id) DO NOTHING;
    SELECT set_config('feed.tier_write', 'on', false);
@@ -46,11 +50,15 @@ q "INSERT INTO auth.users (id, email) VALUES ('$A','race-a@t'), ('$B','race-b@t'
      ('$P6', '$A', 'Race poll 2?', 'poll', NULL, now() - interval '1 hour'),
      ('$P7', '$A', 'held post', 'feed', NULL, now() - interval '1 hour'),
      ('$P8', '$A', 'to delete', 'feed', NULL, now() - interval '1 hour'),
-     ('$P9', '$A', 'delete twice', 'feed', NULL, now() - interval '1 hour');
+     ('$P9', '$A', 'delete twice', 'feed', NULL, now() - interval '1 hour'),
+     ('$P10', '$A', 'count race', 'feed', NULL, now() - interval '1 hour'),
+     ('$P11', '$A', 'count race 2', 'feed', NULL, now() - interval '1 hour');
    INSERT INTO public.polls (id, post_id, question, options) VALUES ('$POLL', '$P5', 'Race poll?', '[\"Sat\",\"Sun\"]'),
                                                                      ('$POLL2', '$P6', 'Race poll 2?', '[\"Sat\",\"Sun\"]');
    INSERT INTO public.post_comments (id, post_id, user_id, content, created_at) VALUES ('$K1', '$P1', '$B', 'race comment', now() - interval '1 hour'),
-                                                                                    ('$K2', '$P1', '$B', 'delete me twice', now() - interval '1 hour');
+                                                                                    ('$K2', '$P1', '$B', 'delete me twice', now() - interval '1 hour'),
+     ('$K3', '$P10', '$B', 'b on p10', now()), ('$K4', '$P10', '$C', 'c on p10', now()), ('$K5', '$P10', '$A', 'a on p10', now()),
+     ('$K6', '$P11', '$B', 'b on p11', now()), ('$K7', '$P11', '$C', 'c on p11', now());
    UPDATE public.posts SET is_hidden = true, hidden_at = now(), hidden_reason = 'hold_for_review' WHERE id = '$P7';" >/dev/null || { echo "FAIL race setup"; exit 1; }
 AS() { echo "SELECT set_config('request.jwt.claims', '{\"sub\":\"$1\",\"role\":\"authenticated\"}', false); SET ROLE authenticated;"; }
 # first line that is a value or an ERROR from a session's output
@@ -151,4 +159,25 @@ F8=$(q "SELECT (deleted_at IS NOT NULL) || '|' || content || '|' || (SELECT coun
 if grep -q '^true$' "$D/c8a" && grep -q 'comment_not_found' "$D/c8b" && [ "$F8" = "true||1" ]; then ok C8 "one comment delete, the second PT404; row kept, text removed"
 else bad C8 "a=$(r "$D/c8a") b=$(r "$D/c8b") final=$F8"; fi
 
-if [ $fail = 0 ]; then echo "PASS posts_editing race: C1 C2 C2b C3 C3b C4 C5 C6 C7 C8"; else echo "FAIL posts_editing race"; exit 1; fi
+# posts.comment_count vs the comments neither deleted nor hidden: 'count|truth'
+CC() { q "SELECT comment_count || '|' || (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden) FROM public.posts p WHERE id = '$1'"; }
+
+# ---- C9: two soft deletes of different comments of one post at once
+(DB=$RDB $PSQL -At -c "BEGIN" -c "$(AS $B)" -c "SELECT public.delete_own_comment('$K3')->>'deleted'" -c "SELECT pg_sleep(2)" -c "COMMIT" > "$D/c9a" 2>&1) &
+sleep 0.7
+DB=$RDB $PSQL -At -c "$(AS $C)" -c "SELECT public.delete_own_comment('$K4')->>'deleted'" > "$D/c9b" 2>&1
+wait
+F9=$(CC $P10)
+if grep -q '^true$' "$D/c9a" && grep -q '^true$' "$D/c9b" && [ "$F9" = "1|1" ]; then ok C9 "both deletes landed; count|truth $F9"
+else bad C9 "a=$(r "$D/c9a") b=$(r "$D/c9b") count|truth=$F9"; fi
+
+# ---- C9b: a soft delete in flight while a moderator hides another comment of the same post
+(DB=$RDB $PSQL -At -c "BEGIN" -c "$(AS $B)" -c "SELECT public.delete_own_comment('$K6')->>'deleted'" -c "SELECT pg_sleep(2)" -c "COMMIT" > "$D/c9c" 2>&1) &
+sleep 0.7
+DB=$RDB $PSQL -At -c "$(AS $CM)" -c "SELECT public.admin_set_comment_hidden('$K7', true)->>'is_hidden'" > "$D/c9d" 2>&1
+wait
+F9b=$(CC $P11)
+if grep -q '^true$' "$D/c9c" && grep -q '^true$' "$D/c9d" && [ "$F9b" = "0|0" ]; then ok C9b "delete and hide both landed; count|truth $F9b"
+else bad C9b "delete=$(r "$D/c9c") hide=$(r "$D/c9d") count|truth=$F9b"; fi
+
+if [ $fail = 0 ]; then echo "PASS posts_editing race: C1 C2 C2b C3 C3b C4 C5 C6 C7 C8 C9 C9b"; else echo "FAIL posts_editing race"; exit 1; fi

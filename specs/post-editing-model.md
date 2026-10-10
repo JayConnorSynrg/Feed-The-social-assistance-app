@@ -16,7 +16,7 @@ RPC contract: [post-editing-contract.md](post-editing-contract.md).
 
 | Entity | New in PR-2 | Notes |
 |---|---|---|
-| `posts` | `version`, `edited_at`, `edit_count`, `image_alt`, `deleted_at`, `needs_review_at`, `lang` (author's app locale at posting, 14 codes or NULL); `hidden_reason` gains `author_deleted` | `version` is the concurrency token; `updated_at` stays polluted by counter triggers (likes / comments / slots) and is not an edit signal. |
+| `posts` | `version`, `edited_at`, `edit_count`, `image_alt`, `deleted_at`, `needs_review_at`, `lang` (author's app locale at posting, 14 codes or NULL); `hidden_reason` gains `author_deleted` | `version` is the concurrency token; `updated_at` stays polluted by counter triggers (likes / comments / slots) and is not an edit signal. `comment_count` = comments neither deleted nor hidden (replies included). |
 | `post_revisions` | new | One row per recorded edit = the superseded version (`version`, `snapshot`, `fields_changed`, `reason`). Append-only; redaction blanks `snapshot`/`reason`/`fields_changed`. |
 | `post_comments` | `version`, `edited_at`, `edit_count`, `deleted_at` | UPDATE and DELETE revoked for clients; soft delete via `delete_own_comment`; parent FK `ON DELETE SET NULL` (a hard delete never removes replies). |
 | `post_comment_revisions` | new | Superseded comment text per recorded edit; append-only; redactable. |
@@ -38,7 +38,7 @@ RPC contract: [post-editing-contract.md](post-editing-contract.md).
 | like / unlike | direct `post_likes` INSERT / DELETE (RLS) | member; INSERT only on a visible post |
 | hide / unhide a comment | `admin_set_comment_hidden` | community moderator+ (audit) |
 | hold / remove / authorize / resolve report | `admin_*` RPCs (+ optional `p_expected_version`) | community moderator+ (audit, version in details) |
-| like_count / comment_count / slots / updated_at | triggers and opt-in RPCs | system |
+| like_count / comment_count / slots / updated_at | triggers and opt-in RPCs (`sync_post_comment_count`: lock the post row, then recount live + visible comments) | system |
 | petitions, resource posts | their own server paths | system |
 
 Org admins have no post write path (org content is org events, edited through the event RPCs).
@@ -61,7 +61,7 @@ visible ──report x3──▶ hidden(community_reports_threshold) ──dismi
 
 Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and races in
 `supabase/tests/posts_editing.race.sh` (C…). Every guard has a mutant that turns its test red
-(106 / 106 killed on the prod-identical harness).
+(113 / 113 killed on the prod-identical harness).
 
 | # | Invariant | Proof |
 |---|---|---|
@@ -72,7 +72,7 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 | I5 | Per-type whitelist; protected fields (type, author, pin, counts, created_at, petition, resource, hidden, version) never change | E4, E5b, E10, E13, P2 |
 | I6 | `version` moves only on content edits (never on likes, comments, opt-ins, reports, moderation) | M4, M4d, K1c, X3, X6b, N/A for grace |
 | I7 | Exactly one history row per recorded edit; none in grace or for a no-op | E3, E11c, E11e, E14, K1c, K6 |
-| I8 | Grace ends at 5 min or at the first like / comment / vote / opt-in / report | E11b–f, K1a, K6 |
+| I8 | Grace ends at 5 min or at the first like / comment / vote / opt-in / report; a comment closes it for good (deleting or hiding the only comment does not reopen it). An unlike / unvote inside the 5 minutes does reopen it (hard-deleted rows, no marker) | E11b–f, N10a–c, K1a, K6 |
 | I9 | Capacity never drops below held opt-ins; slots reconciled | E6a–d, C3, C3b |
 | I10 | Poll: question/options lock after the first vote; deadline only extended / removed / closed now; no votes after close or on a deleted poll | E8a–e, D5c, C2, C2b |
 | I11 | Member events carry a server-known venue zone after create and after every edit; every problem (zone, end before start) is reported at once; legacy rows stay untouched until edited | E7a–h, P4, P4b, P6 |
@@ -93,6 +93,7 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 | I23 | Grants: anon reads version/edited_at/edit_count/image_alt only; SECDEF pinned; helpers not client-callable | M2, F1, F1b, Q1, Q1b, Q1c |
 | I24 | Realtime posts list = previous 18 columns + 6 new; other members unchanged | Q4 |
 | I25 | No function reads/returns profile display columns; `posts_user_id_fkey` kept | Q2, Q5 |
+| I26 | `posts.comment_count` = comments with `deleted_at IS NULL AND NOT is_hidden` after insert, hard delete, soft delete (with and without replies), hide, unhide, un-delete, `post_id` change, the 026 backfill, and two concurrent changes on one post (recount under the post row lock) | N1–N9, N11, N12, E13, C9, C9b |
 
 ## Prototype → PR-2 changes (found while building)
 
@@ -119,6 +120,10 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 10. **Deleting a comment deleted other people's replies** (hard DELETE + `ON DELETE CASCADE`). Soft
     delete + parent FK `SET NULL`.
 11. **Likes and votes were accepted on hidden posts.** RESTRICTIVE policies.
+12. **`comment_count` counted deleted and hidden comments**, so a closed card over-counted (the trigger recounted every
+    row), and two concurrent comment changes on one post could lose one (recount inside the locking UPDATE used the
+    pre-wait snapshot). The count now covers live, visible comments, recounted after taking the post row lock, with a
+    backfill. The grace check reads "any comment row" so a deleted comment still counts as engagement.
 
 ## Out of PR-2 (later PRs)
 

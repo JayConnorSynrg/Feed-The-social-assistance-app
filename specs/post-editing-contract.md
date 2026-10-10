@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (156 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (10 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (172 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (12 races).
 
 ## Release: expand / contract
 
@@ -78,7 +78,7 @@ Returns:
 {"grace": false, "changed": ["content"], "post_id": "…", "version": 3, "edited_at": "…", "edit_count": 2, "revision_id": 17}
 ```
 - `version` is the new token; send it with the next edit. `changed` is `[]` for a no-op (version unchanged, nothing written).
-- `grace: true` = a quiet edit: within 5 min of creation, post visible, no likes / comments / votes / opt-ins / reports. No history row; `edited_at` / `edit_count` unchanged (no "Edited" label). `version` still increments.
+- `grace: true` = a quiet edit: within 5 min of creation, post visible, no likes / votes / opt-ins / reports, and no comment ever written (a deleted or hidden comment still closes the window; `comment_count` is not used). No history row; `edited_at` / `edit_count` unchanged (no "Edited" label). `version` still increments.
 - Order of checks: guest → `p_expected_version` present → found & not deleted (`PT404`) → author → not removed (`post_removed`) → not a petition → version (`PT409`) → fields.
 - Held / community-hidden post: editable; it stays hidden and is re-queued for moderators (`needs_review_at`).
 
@@ -114,35 +114,53 @@ allowed. Staff hide / unhide is unchanged. A hard delete that still happens (acc
 cascade) keeps other people's replies: they lose their parent link (`parent_id` → `NULL`) instead of
 being deleted.
 
-### OPEN — `posts.comment_count` must count live, visible comments (for feed-db-migrations-expert)
+### `posts.comment_count` — live, visible comments (implemented in 20261026000000)
 
-**Observed** (DB harness, prod-catalog dump with 20261026000000 applied, and with 20261026000000 + 20261026500000;
-probe `scratchpad/edit-build/db/probe/comment_count.sql`, identical output in both states).
-`sync_post_comment_count` recounts `count(*)` of **every** `post_comments` row of the post, so a soft delete or a hide
-never changes the number:
+`posts.comment_count` = the post's comments with `deleted_at IS NULL AND NOT is_hidden`, replies included; a
+deleted parent's "Comment deleted" placeholder is not a comment. This is the client's `liveCommentCount`
+(`apps/web/src/hooks/use-comments.ts`), so a closed card and an open thread show the same number. No client change.
+
+- **Trigger** `sync_post_comment_count` (same `AFTER INSERT OR UPDATE OR DELETE` trigger on `post_comments`, new body;
+  `SECURITY DEFINER`, `search_path = public, pg_temp`, no client EXECUTE). It locks the post row(s), then recounts in a
+  separate statement on: insert, hard delete, soft delete, hide, unhide, un-delete, and a `post_id` change (both posts,
+  locked in id order). An UPDATE that leaves the comment on the same post in the same counted / not-counted state
+  (a content edit) does not touch the post row.
+- **Concurrency:** recount under the post row lock. Under READ COMMITTED the recount statement takes its snapshot
+  after the lock is granted, so it sees the change of the session that held the lock before. The previous body
+  recounted inside the locking UPDATE (snapshot from before the wait) and lost one of two concurrent changes. A
+  recount, unlike a relative ±1, rewrites the true value on every change, so a stale number never outlives the next
+  change to its post. Proof: races C9 (two soft deletes) and C9b (soft delete + hide); the mutant without the lock
+  fails C9 / C9b.
+- **Backfill:** 026 sets every post's count to the same rule (rows whose number changes only). Production on
+  2026-10-09: 2 posts, 0 comments, so 0 rows change; the backfill still runs in case comments arrive before apply.
+- **Grace:** `edit_post` keys on `NOT EXISTS (SELECT 1 FROM post_comments WHERE post_id = p.id)`: any comment row, deleted
+  or hidden included. Deleting or hiding the only comment does not reopen quiet edits. Likes and poll votes keep
+  their rule (`like_count = 0`, no vote row). Both are hard-deleted on unlike / unvote, so an unlike or unvote inside
+  the 5 minutes reopens quiet edits. There is no row left to key on, so closing that needs a stored first-engagement marker.
+- **`post_id` re-point:** no client role has UPDATE on `post_comments` (revoked in 026), and no function changes
+  `post_id`. Only the table owner / `service_role` can, and the trigger recounts both posts (smoke N9).
+
+Readers of `posts.comment_count` and what the new meaning changes:
+
+| Reader | Effect |
+|---|---|
+| `ranked_feed_v2` (`log10(1 + like_count + comment_weight * comment_count)`) | Ranks on live, visible comments. A post whose comments were deleted or hidden ranks slightly lower than before. This is intended. `ranked_feed` (v1) is dropped in 026. |
+| `edit_post` grace | No longer reads it (any comment row instead). |
+| Feed list select (`FEED_POST_SELECT` in `post-model.ts`), `rowToPost`, card comment button (`post-card.tsx`) | Shows live, visible comments: the number the open thread shows. |
+| Realtime `posts` column list (`comment_count` already published) + `applyPostRowPatch` (`post-model.ts`, absolute value) | Delete, hide and unhide now emit a `posts` UPDATE carrying the new number; a content edit no longer emits one. |
+| `/s/post/[id]` share page | Does not read `comment_count`: it counts `post_comments` rows under RLS (`count: 'exact'`), which still includes soft-deleted comments (and, for the author and staff, hidden ones). Unchanged here. |
+
+Probe (`scratchpad/edit-build/db/probe/comment_count.sql`, identical for 026 alone and 026 + 0265):
 
 | step | `posts.comment_count` | rows | live (not deleted) | rows the thread renders | live and not hidden |
 |---|---|---|---|---|---|
 | 4 comments (one a reply) | 4 | 4 | 4 | 4 | 4 |
-| a leaf soft-deleted (no replies) | **4** | 4 | 3 | 3 | 3 |
-| a parent soft-deleted (it has a reply) | **4** | 4 | 2 | 3 (2 + its "Comment deleted" placeholder) | 2 |
-| one comment hidden by a moderator | **4** | 4 | 2 | 2 | 1 |
+| a leaf soft-deleted (no replies) | 3 | 4 | 3 | 3 | 3 |
+| a parent soft-deleted (it has a reply) | 2 | 4 | 2 | 3 (2 + its "Comment deleted" placeholder) | 2 |
+| one comment hidden by a moderator | 1 | 4 | 2 | 2 | 1 |
 
-The client's number (comment button + thread header) is **live and not hidden, replies included**
-(`liveCommentCount`, `apps/web/src/hooks/use-comments.ts`). While a thread is open the client already pushes that
-number to the card; a closed card shows `posts.comment_count`, which over-counts deleted and hidden comments.
-
-**Required change** (new migration; 20261026000000 is committed):
-- `sync_post_comment_count`: `count(*) FROM post_comments pc WHERE pc.post_id = target AND pc.deleted_at IS NULL AND NOT pc.is_hidden`
-  (same for the `OLD.post_id` branch). The trigger already fires AFTER INSERT OR UPDATE OR DELETE, so soft delete
-  (`deleted_at`) and hide / unhide (`is_hidden`) recount.
-- One-time backfill of `posts.comment_count` with the same predicate.
-- `edit_post` grace (`p.comment_count = 0`, foundation line 584) must keep meaning "nobody has engaged": replace with
-  `NOT EXISTS (SELECT 1 FROM post_comments WHERE post_id = p.id)` (any row, deleted or hidden included), or deleting
-  the only comment re-opens quiet edits.
-- `ranked_feed_v2` (`cfg.comment_weight * v.comment_count`) then ranks on live, visible comments — intended.
-- Smoke: the four rows above (count 4 → 3 → 2 → 1); grace stays closed after the only comment is deleted.
-- No client change is needed when this lands (`comment_count` is already in the posts publication and patched).
+Smoke: N1–N9 (each transition), N10a–c (the only comment deleted / hidden: grace stays closed), N11 (every post in
+the database matches, including rows that existed before 026), N12 (trigger hygiene), E13.
 
 ## Moderator RPCs (community moderator and up)
 

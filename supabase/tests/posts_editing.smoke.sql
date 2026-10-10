@@ -2,7 +2,8 @@
 -- Behavioural smoke for 20261026000000_post_editing_foundation.sql: create_post (every creatable type,
 -- atomic poll, image rules), edit_post (author only, version token / PT409, per-type whitelist,
 -- grace, capacity, poll locks + close, venue time zone, held re-queue, removed refusal), soft delete,
--- history + RLS + redaction, comments (edit / version / grace / history / hide), moderation integrity
+-- history + RLS + redaction, comments (edit / version / grace / history / hide), posts.comment_count
+-- (comments neither deleted nor hidden, every transition + backfill), moderation integrity
 -- (report snapshot, dismiss scope, optional p_expected_version, unseen-edit guard), the audit
 -- ledger (exactly one row per staff action), ranked_feed_v2 / v1 drop, grants, publication, hygiene.
 -- Concurrency (two edits, vote vs options edit, opt-in vs capacity cut, moderator vs author) lives
@@ -329,7 +330,7 @@ SELECT pg_temp.ck('E13', 'never changed by edits: type, petition, resource, auth
    WHERE (s.post_type, s.petition_id, s.resource_id, s.user_id, s.is_pinned, s.created_at)
          IS DISTINCT FROM (p.post_type, p.petition_id, p.resource_id, p.user_id, p.is_pinned, p.created_at)
       OR p.like_count <> (SELECT count(*) FROM public.post_likes l WHERE l.post_id = p.id)
-      OR p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id)));
+      OR p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden)));
 SELECT pg_temp.t('E14', 'no-op edit: nothing changes, no version bump, no revision', '"changed": \[\].*"version": 1', 'A',
   $q$SELECT public.edit_post('00000000-0000-4000-a000-000000000007', 1, '{"content":"resource share"}')::text$q$);
 SELECT pg_temp.ck('E15', 'image_url: foreign host, other user folder, missing object, gif refused; own object ok; alt needs image',
@@ -481,6 +482,75 @@ SELECT pg_temp.ck('R9', 'comment history redaction: member refused; author ok; p
   || '|' || pg_temp.audited('PA', $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c2'), 'address')::text$q$));
 SELECT pg_temp.ck('R9b', 'redacted comment revision keeps who/when only', '^t\|author$',
   (SELECT (content IS NULL)::char || '|' || redactor_role FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c1'));
+
+-- ===================== N: posts.comment_count = comments neither deleted nor hidden =====================
+-- cc(post) = 'posts.comment_count|comments with deleted_at IS NULL AND NOT is_hidden'
+CREATE FUNCTION pg_temp.cc(p_post uuid) RETURNS text LANGUAGE sql AS $f$
+  SELECT comment_count || '|' || (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p_post AND c.deleted_at IS NULL AND NOT c.is_hidden)
+  FROM public.posts WHERE id = p_post
+$f$;
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"count post"}')::text$q$);
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"count post 2"}')::text$q$);
+CREATE TEMP TABLE nid AS SELECT (SELECT id FROM public.posts WHERE content = 'count post') AS p, (SELECT id FROM public.posts WHERE content = 'count post 2') AS p2;
+GRANT SELECT ON nid TO PUBLIC;
+-- e1 leaf (B), e2 parent (B), e3 reply to e2 (A), e4 (C), e5 (C)
+SELECT pg_temp.run(w, format($q$INSERT INTO public.post_comments (id, post_id, user_id, content, parent_id) VALUES (%L, (SELECT p FROM nid), auth.uid(), %L, %L) RETURNING 'x'$q$, k, txt, par))
+FROM (VALUES ('B', '0e000000-0000-4000-8000-0000000000e1', 'leaf', NULL), ('B', '0e000000-0000-4000-8000-0000000000e2', 'parent', NULL),
+             ('A', '0e000000-0000-4000-8000-0000000000e3', 'reply', '0e000000-0000-4000-8000-0000000000e2'),
+             ('C', '0e000000-0000-4000-8000-0000000000e4', 'to hide', NULL), ('C', '0e000000-0000-4000-8000-0000000000e5', 'hide then delete', NULL)) v(w, k, txt, par)
+ORDER BY k;
+SELECT pg_temp.ck('N1', 'insert: five member comments (one a reply) -> 5', '^5\|5$', pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.run('B', $q$SELECT public.delete_own_comment('0e000000-0000-4000-8000-0000000000e1')::text$q$);
+SELECT pg_temp.ck('N2', 'soft delete of a leaf (no replies) -> 4', '^4\|4$', pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.run('B', $q$SELECT public.delete_own_comment('0e000000-0000-4000-8000-0000000000e2')::text$q$);
+SELECT pg_temp.ck('N3', 'soft delete of a parent with a live reply -> 3; the reply stays and still counts', '^3\|3\|reply\|t$',
+  pg_temp.cc((SELECT p FROM nid)) || '|' || (SELECT content || '|' || (deleted_at IS NULL)::char FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000e3'));
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000e4', true)::text$q$);
+SELECT pg_temp.ck('N4', 'moderator hides a comment -> 2', '^2\|2$', pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000e4', false)::text$q$);
+SELECT pg_temp.ck('N5', 'moderator unhides it -> 3', '^3\|3$', pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000e5', true)::text$q$);
+SELECT pg_temp.ck('N6a', 'a second comment hidden -> 2', '^2\|2$', pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.run('C', $q$SELECT public.delete_own_comment('0e000000-0000-4000-8000-0000000000e5')::text$q$);
+SELECT pg_temp.ck('N6b', 'its author deletes the hidden comment -> still 2', '^2\|2\|t$',
+  pg_temp.cc((SELECT p FROM nid)) || '|' || (SELECT (deleted_at IS NOT NULL AND is_hidden)::char FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000e5'));
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000e5', false)::text$q$);
+SELECT pg_temp.ck('N6c', 'unhiding a deleted comment does not count it -> still 2', '^2\|2\|f$',
+  pg_temp.cc((SELECT p FROM nid)) || '|' || (SELECT is_hidden::char FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000e5'));
+SELECT pg_temp.ck('N7', 'un-delete (owner path; no RPC un-deletes) counts the comment again -> 3', '^OK x\|3\|3$',
+  pg_temp.pg($q$UPDATE public.post_comments SET deleted_at = NULL, content = 'leaf back' WHERE id = '0e000000-0000-4000-8000-0000000000e1' RETURNING 'x'$q$) || '|' || pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.ck('N8', 'hard delete (owner path; members have no DELETE) of a live comment -> 2', '^OK x\|2\|2$',
+  pg_temp.pg($q$DELETE FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000e3' RETURNING 'x'$q$) || '|' || pg_temp.cc((SELECT p FROM nid)));
+SELECT pg_temp.ck('N9', 'post_id: no client role may re-point a comment; the owner path recounts both posts (1|1 ; 1|1)', '^ff\|OK x\|1\|1;1\|1$',
+  has_column_privilege('authenticated', 'public.post_comments', 'post_id', 'UPDATE')::char || has_column_privilege('anon', 'public.post_comments', 'post_id', 'UPDATE')::char || '|' ||
+  pg_temp.pg($q$UPDATE public.post_comments SET post_id = (SELECT p2 FROM nid) WHERE id = '0e000000-0000-4000-8000-0000000000e4' RETURNING 'x'$q$) || '|' ||
+  pg_temp.cc((SELECT p FROM nid)) || ';' || pg_temp.cc((SELECT p2 FROM nid)));
+-- grace: a comment closes the quiet-edit window for good, even after it is deleted or hidden (count 0)
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"grace deleted comment"}')::text$q$);
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"grace hidden comment"}')::text$q$);
+CREATE TEMP TABLE gid AS SELECT (SELECT id FROM public.posts WHERE content = 'grace deleted comment') AS d, (SELECT id FROM public.posts WHERE content = 'grace hidden comment') AS h;
+GRANT SELECT ON gid TO PUBLIC;
+SELECT pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000f1', (SELECT d FROM gid), auth.uid(), 'only comment') RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$SELECT public.delete_own_comment('0e000000-0000-4000-8000-0000000000f1')::text$q$);
+SELECT pg_temp.run('C', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000f2', (SELECT h FROM gid), auth.uid(), 'only comment') RETURNING 'x'$q$);
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000f2', true)::text$q$);
+SELECT pg_temp.ck('N10a', 'the only comment deleted / hidden: both posts count 0, fresh and visible', '^0\|0;0\|0\|t\|t$',
+  pg_temp.cc((SELECT d FROM gid)) || ';' || pg_temp.cc((SELECT h FROM gid)) || '|' ||
+  (SELECT bool_and(created_at > now() - interval '5 minutes' AND NOT is_hidden)::char FROM public.posts WHERE id IN ((SELECT d FROM gid), (SELECT h FROM gid))) || '|' ||
+  (SELECT bool_and(like_count = 0)::char FROM public.posts WHERE id IN ((SELECT d FROM gid), (SELECT h FROM gid))));
+SELECT pg_temp.t('N10b', 'only comment deleted: the quiet edit stays closed (recorded edit)', '"grace": false', 'A',
+  $q$SELECT public.edit_post((SELECT d FROM gid), 1, '{"content":"grace deleted comment!"}')::text$q$);
+SELECT pg_temp.t('N10c', 'only comment hidden: the quiet edit stays closed (recorded edit)', '"grace": false', 'A',
+  $q$SELECT public.edit_post((SELECT h FROM gid), 1, '{"content":"grace hidden comment!"}')::text$q$);
+-- backfill: every post in the database, including rows that existed before 20261026000000
+SELECT pg_temp.ck('N11', 'backfill + trigger: 0 posts whose comment_count differs from its live, visible comments (|posts checked)', '^0\|[0-9]+$',
+  (SELECT count(*) FILTER (WHERE p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden))
+          || '|' || count(*) FROM public.posts p));
+SELECT pg_temp.ck('N12', 'sync_post_comment_count: SECURITY DEFINER, pinned search_path, no PUBLIC / anon / authenticated EXECUTE', '^t\|t\|f\|f\|f$',
+  (SELECT p.prosecdef::char || '|' || EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')::char || '|' ||
+          EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0)::char || '|' ||
+          has_function_privilege('anon', p.oid, 'EXECUTE')::char || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::char
+   FROM pg_proc p WHERE p.oid = 'public.sync_post_comment_count()'::regprocedure));
 
 -- ===================== D: delete_own_post (soft) =====================
 INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0d000000-0000-4000-8000-0000000000c4', '00000000-0000-4000-a000-000000000003', pg_temp.u('C'), 'c on offer');

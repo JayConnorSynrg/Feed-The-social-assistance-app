@@ -25,7 +25,8 @@
 --       it); set once by create_post, never edited.
 --   (d) edit_post: author only, p_expected_version -> SQLSTATE PT409 (HTTP 409) with
 --       DETAIL {"current_version":n,"edited_at":...}; a per-type whitelist for every post type;
---       grace = first 5 minutes before anyone engaged; capacity reconcile; poll locks; venue time
+--       grace = first 5 minutes before anyone engaged (a comment closes it for good: deleted and hidden
+--       comments still count as engagement); capacity reconcile; poll locks; venue time
 --       zone for member events (every problem reported at once in DETAIL; legacy zone-less rows are
 --       untouched until their first edit); a held / community-hidden post stays hidden and is re-queued; a
 --       removed post is refused; a petition post is refused.
@@ -36,7 +37,10 @@
 --       "deleted"), admin_set_comment_hidden (community moderator+, audited); client UPDATE and DELETE
 --       on comments revoked (post_id / parent_id / user_id can no longer be re-pointed); a hard delete
 --       (account deletion) re-roots replies instead of deleting them (parent FK ON DELETE SET NULL);
---       comments of a post readable only while the post is readable.
+--       comments of a post readable only while the post is readable. posts.comment_count counts only
+--       comments that are neither deleted nor hidden (sync_post_comment_count recounts under the post
+--       row lock on insert, hard delete, delete / hide / unhide / un-delete and post_id change), with a
+--       one-time backfill.
 --   (f2) Engagement on hidden posts: likes, comments (and replies) and poll votes are refused on any
 --       hidden (held, removed, community-hidden or deleted) post, for everyone, like opt-ins.
 --   (g) Moderation integrity: reports snapshot the version; admin_hold / remove / authorize /
@@ -581,7 +585,9 @@ BEGIN
 
   -- grace: the first 5 minutes, while nobody has engaged and the post is visible -> a quiet edit
   v_grace := p.created_at > v_now - interval '5 minutes' AND NOT p.is_hidden
-             AND p.like_count = 0 AND p.comment_count = 0 AND v_votes = 0
+             AND p.like_count = 0 AND v_votes = 0
+             -- any comment ever written, deleted or hidden included (comment_count counts live, visible ones only)
+             AND NOT EXISTS (SELECT 1 FROM public.post_comments WHERE post_id = p.id)
              AND NOT EXISTS (SELECT 1 FROM public.resource_opt_ins WHERE post_id = p.id)
              AND NOT EXISTS (SELECT 1 FROM public.content_reports WHERE content_type = 'post' AND content_id = p.id);
 
@@ -878,6 +884,45 @@ BEGIN
     public.request_id());
   RETURN jsonb_build_object('comment_id', p_comment_id, 'is_hidden', p_hidden);
 END $fn$;
+
+-- posts.comment_count = the post's comments that are neither deleted nor hidden (replies included; a
+-- deleted parent's "Comment deleted" placeholder is not a comment). Same trigger (AFTER INSERT OR UPDATE
+-- OR DELETE on post_comments), new body. Concurrency: lock the post row(s) first, then recount in a
+-- SEPARATE statement. Under READ COMMITTED every statement takes a fresh snapshot, so the recount sees
+-- each change committed by the session that held the lock before us. (The previous body recounted
+-- inside the locking UPDATE, whose snapshot predates the wait: two sessions changing different comments
+-- of one post left the count one short or one over.) A recount, unlike a relative +-1, rewrites the
+-- true value on every change, so a stale count cannot outlive the next change to its post.
+CREATE OR REPLACE FUNCTION public.sync_post_comment_count()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_posts uuid[];
+BEGIN
+  -- an edit that leaves the comment on the same post and in the same counted / not-counted state
+  IF TG_OP = 'UPDATE' AND NEW.post_id IS NOT DISTINCT FROM OLD.post_id
+     AND (NEW.deleted_at IS NULL AND NOT NEW.is_hidden) IS NOT DISTINCT FROM (OLD.deleted_at IS NULL AND NOT OLD.is_hidden) THEN
+    RETURN NULL;
+  END IF;
+  v_posts := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[OLD.post_id, NEW.post_id]) x WHERE x IS NOT NULL ORDER BY x);
+  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR UPDATE;
+  UPDATE public.posts p
+     SET comment_count = (SELECT count(*) FROM public.post_comments pc
+                           WHERE pc.post_id = p.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden)
+   WHERE p.id = ANY (v_posts);
+  RETURN NULL;
+END $fn$;
+
+-- One-time backfill to the same rule (this transaction holds ACCESS EXCLUSIVE on posts and post_comments
+-- from section 2, so no comment changes underneath it). Only rows whose number changes are written.
+UPDATE public.posts p
+   SET comment_count = c.n
+  FROM (SELECT p2.id, (SELECT count(*) FROM public.post_comments pc
+                        WHERE pc.post_id = p2.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden) AS n
+          FROM public.posts p2) c
+ WHERE c.id = p.id AND p.comment_count IS DISTINCT FROM c.n;
 
 -- ============================================================================
 -- 4e. Moderation RPCs: + optional p_expected_version (DROP first: a new defaulted argument would
@@ -1438,7 +1483,7 @@ BEGIN
   -- internal helpers / trigger function: no client EXECUTE
   FOREACH f IN ARRAY ARRAY[
     'post_revisions_append_only()', 'post_image_url_ok(text,uuid)', 'post_normalize_fields(public.post_type,uuid,jsonb)',
-    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)'] LOOP
+    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)', 'sync_post_comment_count()'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon, authenticated', f);
   END LOOP;
 END
