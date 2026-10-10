@@ -3,7 +3,8 @@
 -- atomic poll, image rules), edit_post (author only, version token / PT409, per-type whitelist,
 -- grace, capacity, poll locks + close, venue time zone, held re-queue, removed refusal), soft delete,
 -- history + RLS + redaction, comments (edit / version / grace / history / hide), posts.comment_count
--- (comments neither deleted nor hidden, every transition + backfill), moderation integrity
+-- (comments neither deleted nor hidden, every transition + backfill), posts.engaged_at (grace ends at the
+-- first like / vote / comment / opt-in, for good), moderation integrity
 -- (report snapshot, dismiss scope, optional p_expected_version, unseen-edit guard), the audit
 -- ledger (exactly one row per staff action), ranked_feed_v2 / v1 drop, grants, publication, hygiene.
 -- Concurrency (two edits, vote vs options edit, opt-in vs capacity cut, moderator vs author) lives
@@ -546,11 +547,76 @@ SELECT pg_temp.t('N10c', 'only comment hidden: the quiet edit stays closed (reco
 SELECT pg_temp.ck('N11', 'backfill + trigger: 0 posts whose comment_count differs from its live, visible comments (|posts checked)', '^0\|[0-9]+$',
   (SELECT count(*) FILTER (WHERE p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden))
           || '|' || count(*) FROM public.posts p));
-SELECT pg_temp.ck('N12', 'sync_post_comment_count: SECURITY DEFINER, pinned search_path, no PUBLIC / anon / authenticated EXECUTE', '^t\|t\|f\|f\|f$',
-  (SELECT p.prosecdef::char || '|' || EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')::char || '|' ||
+SELECT pg_temp.ck('N12', 'counter / marker trigger functions: SECURITY DEFINER, pinned search_path, no PUBLIC / anon / authenticated EXECUTE', '^(t\|t\|f\|f\|f;){3}$',
+  (SELECT string_agg(p.prosecdef::char || '|' || EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')::char || '|' ||
           EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0)::char || '|' ||
-          has_function_privilege('anon', p.oid, 'EXECUTE')::char || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::char
-   FROM pg_proc p WHERE p.oid = 'public.sync_post_comment_count()'::regprocedure));
+          has_function_privilege('anon', p.oid, 'EXECUTE')::char || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::char || ';', '' ORDER BY p.proname)
+   FROM pg_proc p WHERE p.oid IN ('public.sync_post_comment_count()'::regprocedure, 'public.sync_post_like_count()'::regprocedure, 'public.mark_post_engaged()'::regprocedure)));
+
+-- ===================== G: grace ends at the first engagement, for good (posts.engaged_at) =====================
+SELECT pg_temp.as_(pg_temp.u('A'), false, x) FROM unnest(ARRAY[
+  $q$SELECT public.create_post('feed', '{"content":"g quiet"}')::text$q$,
+  $q$SELECT public.create_post('feed', '{"content":"g like"}')::text$q$,
+  $q$SELECT public.create_post('poll', '{"content":"G poll?","options":["x","y"]}')::text$q$,
+  $q$SELECT public.create_post('source_offer', '{"content":"g offer","max_seekers":3}')::text$q$,
+  $q$SELECT public.create_post('feed', '{"content":"g sticky"}')::text$q$]) x;
+CREATE TEMP TABLE gp AS SELECT content AS k, id FROM public.posts WHERE content IN ('g quiet', 'g like', 'G poll?', 'g offer', 'g sticky');
+GRANT SELECT ON gp TO PUBLIC;
+CREATE FUNCTION pg_temp.g(k text) RETURNS uuid LANGUAGE sql AS $f$ SELECT id FROM gp WHERE gp.k = $1 $f$;
+GRANT EXECUTE ON FUNCTION pg_temp.g(text) TO PUBLIC;
+SELECT pg_temp.ck('G1', 'no engagement: engaged_at NULL and the edit is quiet', '^t\|OK .*"grace": true',
+  (SELECT (engaged_at IS NULL)::char FROM public.posts WHERE id = pg_temp.g('g quiet')) || '|' ||
+  pg_temp.run('A', $q$SELECT public.edit_post(pg_temp.g('g quiet'), 1, '{"content":"g quiet!"}')::text$q$));
+-- like then unlike / vote then unvote / opt-in then withdraw (each as its own statement, then one check reads the result)
+SELECT pg_temp.run('B', $q$INSERT INTO public.post_likes (post_id, user_id) VALUES (pg_temp.g('g like'), auth.uid()) RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$DELETE FROM public.post_likes WHERE post_id = pg_temp.g('g like') AND user_id = auth.uid() RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$INSERT INTO public.poll_votes (poll_id, user_id, option_index) VALUES ((SELECT id FROM public.polls WHERE post_id = pg_temp.g('G poll?')), auth.uid(), 0) RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$DELETE FROM public.poll_votes WHERE poll_id = (SELECT id FROM public.polls WHERE post_id = pg_temp.g('G poll?')) AND user_id = auth.uid() RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$SELECT (public.opt_in_to_post(pg_temp.g('g offer'))).status$q$);
+SELECT pg_temp.run('B', $q$SELECT public.withdraw_opt_in(pg_temp.g('g offer'))::text$q$);
+SELECT pg_temp.ck('G2a', 'after like+unlike, vote+unvote, opt-in+withdraw: no row left, engaged_at kept on all three', '^0\|t;0\|t;0\|t$',
+  (SELECT like_count || '|' || (engaged_at IS NOT NULL)::char FROM public.posts WHERE id = pg_temp.g('g like')) || ';' ||
+  (SELECT (SELECT count(*) FROM public.poll_votes v JOIN public.polls pl ON pl.id = v.poll_id WHERE pl.post_id = p.id) || '|' || (engaged_at IS NOT NULL)::char FROM public.posts p WHERE id = pg_temp.g('G poll?')) || ';' ||
+  (SELECT (SELECT count(*) FROM public.resource_opt_ins o WHERE o.post_id = p.id) || '|' || (engaged_at IS NOT NULL)::char FROM public.posts p WHERE id = pg_temp.g('g offer')));
+SELECT pg_temp.t('G2', 'like then unlike within 5 min: the quiet edit stays closed', '"grace": false', 'A',
+  $q$SELECT public.edit_post(pg_temp.g('g like'), 1, '{"content":"g like!"}')::text$q$);
+SELECT pg_temp.t('G3', 'vote then unvote within 5 min: the quiet edit stays closed', '"grace": false', 'A',
+  $q$SELECT public.edit_post(pg_temp.g('G poll?'), 1, '{"content":"G poll changed?"}')::text$q$);
+SELECT pg_temp.t('G4', 'opt-in then withdraw (row deleted) within 5 min: the quiet edit stays closed', '"grace": false', 'A',
+  $q$SELECT public.edit_post(pg_temp.g('g offer'), 1, '{"content":"g offer!"}')::text$q$);
+-- (the only comment deleted / hidden: N10b, N10c)
+-- a later like, comment, vote or opt-in never moves engaged_at (set once)
+UPDATE public.posts SET engaged_at = '2026-01-01 00:00:00+00' WHERE id IN (pg_temp.g('g sticky'), pg_temp.g('G poll?'), pg_temp.g('g offer'));
+SELECT pg_temp.run('B', $q$INSERT INTO public.post_likes (post_id, user_id) VALUES (pg_temp.g('g sticky'), auth.uid()) RETURNING 'x'$q$);
+SELECT pg_temp.run('C', $q$INSERT INTO public.post_comments (post_id, user_id, content) VALUES (pg_temp.g('g sticky'), auth.uid(), 'later') RETURNING 'x'$q$);
+SELECT pg_temp.run('C', $q$INSERT INTO public.poll_votes (poll_id, user_id, option_index) VALUES ((SELECT id FROM public.polls WHERE post_id = pg_temp.g('G poll?')), auth.uid(), 1) RETURNING 'x'$q$);
+SELECT pg_temp.run('C', $q$SELECT (public.opt_in_to_post(pg_temp.g('g offer'))).status$q$);
+SELECT pg_temp.ck('G5', 'later like + comment, vote, opt-in: engaged_at unchanged (|engagement landed)', '^3\|1\|1\|1\|1$',
+  (SELECT count(*) FILTER (WHERE engaged_at = '2026-01-01 00:00:00+00') FROM public.posts WHERE id IN (pg_temp.g('g sticky'), pg_temp.g('G poll?'), pg_temp.g('g offer'))) || '|' ||
+  (SELECT like_count || '|' || comment_count FROM public.posts WHERE id = pg_temp.g('g sticky')) || '|' ||
+  (SELECT count(*) FROM public.poll_votes v JOIN public.polls pl ON pl.id = v.poll_id WHERE pl.post_id = pg_temp.g('G poll?')) || '|' ||
+  (SELECT count(*) FROM public.resource_opt_ins WHERE post_id = pg_temp.g('g offer')));
+SELECT pg_temp.ck('G6', 'clients cannot write engaged_at: author and anon UPDATE refused; no column / table UPDATE or SELECT grant; INSERT only for authenticated between 026 and 0265',
+  CASE WHEN pg_temp.contract() THEN '^A=>ERR 42501 permission denied for table posts;anon=>ERR 42501 permission denied for table posts;\|ffff\|ff\|<null>$'
+       ELSE '^A=>ERR 42501 permission denied for table posts;anon=>ERR 42501 permission denied for table posts;\|ffff\|ft\|<null>$' END,
+  pg_temp.who(ARRAY['A','anon'], $q$UPDATE public.posts SET engaged_at = NULL WHERE id = pg_temp.g('g like') RETURNING 'x'$q$) || '|' ||
+  has_column_privilege('anon', 'public.posts', 'engaged_at', 'UPDATE')::char || has_column_privilege('authenticated', 'public.posts', 'engaged_at', 'UPDATE')::char ||
+  has_column_privilege('anon', 'public.posts', 'engaged_at', 'SELECT')::char || has_column_privilege('authenticated', 'public.posts', 'engaged_at', 'SELECT')::char || '|' ||
+  has_column_privilege('anon', 'public.posts', 'engaged_at', 'INSERT')::char || has_column_privilege('authenticated', 'public.posts', 'engaged_at', 'INSERT')::char || '|' ||
+  COALESCE((SELECT array_to_string(attacl, ' ') FROM pg_attribute WHERE attrelid = 'public.posts'::regclass AND attname = 'engaged_at'), '<null>'));
+SELECT pg_temp.ck('G7', 'between 026 and 0265 a direct client INSERT may preset engaged_at: it only closes the author''s own grace; after 0265 refused',
+  CASE WHEN pg_temp.contract() THEN '^ERR 42501' ELSE '^OK x\|OK .*"grace": false' END,
+  pg_temp.run('A', $q$INSERT INTO public.posts (id, user_id, content, engaged_at) VALUES ('0e000000-0000-4000-a000-0000000000a1', auth.uid(), 'preset', now()) RETURNING 'x'$q$)
+  || CASE WHEN pg_temp.contract() THEN '' ELSE '|' || pg_temp.run('A', $q$SELECT public.edit_post('0e000000-0000-4000-a000-0000000000a1', 1, '{"content":"preset!"}')::text$q$) END);
+-- backfill: every post in the database, including rows that existed before 20261026000000
+SELECT pg_temp.ck('G8a', 'backfill + trigger: 0 posts whose like_count differs from its like rows (|posts checked)', '^0\|[0-9]+$',
+  (SELECT count(*) FILTER (WHERE p.like_count <> (SELECT count(*) FROM public.post_likes l WHERE l.post_id = p.id)) || '|' || count(*) FROM public.posts p));
+SELECT pg_temp.ck('G8b', 'backfill + triggers: 0 posts with a like, vote, comment or opt-in row and no engaged_at (|engaged posts)', '^0\|[0-9]+$',
+  (SELECT count(*) FILTER (WHERE p.engaged_at IS NULL) || '|' || count(*) FROM public.posts p
+   WHERE EXISTS (SELECT 1 FROM public.post_likes l WHERE l.post_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.poll_votes v JOIN public.polls pl ON pl.id = v.poll_id WHERE pl.post_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.post_comments c WHERE c.post_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.resource_opt_ins o WHERE o.post_id = p.id)));
 
 -- ===================== D: delete_own_post (soft) =====================
 INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0d000000-0000-4000-8000-0000000000c4', '00000000-0000-4000-a000-000000000003', pg_temp.u('C'), 'c on offer');

@@ -25,8 +25,9 @@
 --       it); set once by create_post, never edited.
 --   (d) edit_post: author only, p_expected_version -> SQLSTATE PT409 (HTTP 409) with
 --       DETAIL {"current_version":n,"edited_at":...}; a per-type whitelist for every post type;
---       grace = first 5 minutes before anyone engaged (a comment closes it for good: deleted and hidden
---       comments still count as engagement); capacity reconcile; poll locks; venue time
+--       grace = first 5 minutes before anyone engaged (posts.engaged_at: set once by the first like,
+--       vote, comment or opt-in, never cleared; an unlike / unvote / withdraw / comment delete or hide
+--       does not reopen it); capacity reconcile; poll locks; venue time
 --       zone for member events (every problem reported at once in DETAIL; legacy zone-less rows are
 --       untouched until their first edit); a held / community-hidden post stays hidden and is re-queued; a
 --       removed post is refused; a petition post is refused.
@@ -37,10 +38,11 @@
 --       "deleted"), admin_set_comment_hidden (community moderator+, audited); client UPDATE and DELETE
 --       on comments revoked (post_id / parent_id / user_id can no longer be re-pointed); a hard delete
 --       (account deletion) re-roots replies instead of deleting them (parent FK ON DELETE SET NULL);
---       comments of a post readable only while the post is readable. posts.comment_count counts only
---       comments that are neither deleted nor hidden (sync_post_comment_count recounts under the post
---       row lock on insert, hard delete, delete / hide / unhide / un-delete and post_id change), with a
---       one-time backfill.
+--       comments of a post readable only while the post is readable.
+--   (f1) Counters: comment_count counts only comments that are neither deleted nor hidden; comment_count
+--       and like_count are recounted after taking the post row lock (the old recount lost one of two
+--       concurrent changes); submit_content_report locks the post before counting open reports.
+--       posts.engaged_at (server-only) marks the first engagement. Backfills for all three.
 --   (f2) Engagement on hidden posts: likes, comments (and replies) and poll votes are refused on any
 --       hidden (held, removed, community-hidden or deleted) post, for everyone, like opt-ins.
 --   (g) Moderation integrity: reports snapshot the version; admin_hold / remove / authorize /
@@ -64,6 +66,9 @@ SET LOCAL lock_timeout = '5s';
 -- ============================================================================
 -- 2. Columns + constraints on existing tables
 -- ============================================================================
+-- No like, vote or opt-in lands under the old triggers while this runs, so the backfills in 4d see every
+-- row (taken before posts: a like in flight finishes first instead of deadlocking against us).
+LOCK TABLE public.post_likes, public.poll_votes, public.resource_opt_ins IN SHARE MODE;
 ALTER TABLE public.posts
   ADD COLUMN version         integer NOT NULL DEFAULT 1,
   ADD COLUMN edited_at       timestamptz,
@@ -71,7 +76,8 @@ ALTER TABLE public.posts
   ADD COLUMN image_alt       text,
   ADD COLUMN deleted_at      timestamptz,
   ADD COLUMN needs_review_at timestamptz,
-  ADD COLUMN lang            text;
+  ADD COLUMN lang            text,
+  ADD COLUMN engaged_at      timestamptz;
 ALTER TABLE public.posts
   ADD CONSTRAINT posts_lang_check CHECK (lang IS NULL OR lang IN ('en', 'es', 'ht', 'vi', 'ar', 'zh', 'so', 'fr', 'pt', 'ru', 'ko', 'tl', 'am', 'hmn')),
   ADD CONSTRAINT posts_version_check CHECK (version >= 1 AND edit_count >= 0 AND edit_count < version),
@@ -99,6 +105,7 @@ COMMENT ON COLUMN public.posts.version IS 'Optimistic-concurrency token: 1 at cr
 COMMENT ON COLUMN public.posts.edited_at IS 'Last recorded (non-grace) edit; NULL = never shown as Edited.';
 COMMENT ON COLUMN public.posts.deleted_at IS 'Soft delete by the author (delete_own_post); implies is_hidden.';
 COMMENT ON COLUMN public.posts.lang IS 'The author''s app language when posting (lib/i18n.ts Locale; NULL = unknown). Set by create_post, never edited; share previews use it.';
+COMMENT ON COLUMN public.posts.engaged_at IS 'First like, poll vote or comment (set once by triggers, never cleared: an unlike, unvote, comment delete or hide keeps it). Ends the quiet-edit grace. Server-only: no client grant.';
 COMMENT ON COLUMN public.posts.needs_review_at IS 'The author edited this held / community-hidden post at this time; cleared by any moderation decision.';
 COMMENT ON COLUMN public.post_comments.deleted_at IS 'Soft delete by the author (delete_own_comment): content is emptied, the row and its replies stay.';
 COMMENT ON COLUMN public.content_reports.reported_version IS 'posts.version the reporter saw (NULL = filed before 20261026000000).';
@@ -585,9 +592,7 @@ BEGIN
 
   -- grace: the first 5 minutes, while nobody has engaged and the post is visible -> a quiet edit
   v_grace := p.created_at > v_now - interval '5 minutes' AND NOT p.is_hidden
-             AND p.like_count = 0 AND v_votes = 0
-             -- any comment ever written, deleted or hidden included (comment_count counts live, visible ones only)
-             AND NOT EXISTS (SELECT 1 FROM public.post_comments WHERE post_id = p.id)
+             AND p.engaged_at IS NULL  -- no like, vote or comment ever (an unlike / unvote / delete / hide keeps it set)
              AND NOT EXISTS (SELECT 1 FROM public.resource_opt_ins WHERE post_id = p.id)
              AND NOT EXISTS (SELECT 1 FROM public.content_reports WHERE content_type = 'post' AND content_id = p.id);
 
@@ -885,14 +890,18 @@ BEGIN
   RETURN jsonb_build_object('comment_id', p_comment_id, 'is_hidden', p_hidden);
 END $fn$;
 
+-- Engagement counters + the first-engagement marker. Every counter below follows one pattern: lock the
+-- post row(s) first, then recount in a SEPARATE statement. Under READ COMMITTED every statement takes a
+-- fresh snapshot, so the recount sees each change committed by the session that held the lock before
+-- us. (The previous bodies recounted inside the locking UPDATE, whose snapshot predates the wait: two
+-- sessions changing one post's comments or likes left the number one short or one over.) A recount,
+-- unlike a relative +-1, rewrites the true value on every change, so a stale number cannot outlive the
+-- next change to its post. posts.engaged_at is set once (COALESCE) by the first like, vote, comment or
+-- opt-in, in the same statement / under the same post lock, and never cleared.
+
 -- posts.comment_count = the post's comments that are neither deleted nor hidden (replies included; a
 -- deleted parent's "Comment deleted" placeholder is not a comment). Same trigger (AFTER INSERT OR UPDATE
--- OR DELETE on post_comments), new body. Concurrency: lock the post row(s) first, then recount in a
--- SEPARATE statement. Under READ COMMITTED every statement takes a fresh snapshot, so the recount sees
--- each change committed by the session that held the lock before us. (The previous body recounted
--- inside the locking UPDATE, whose snapshot predates the wait: two sessions changing different comments
--- of one post left the count one short or one over.) A recount, unlike a relative +-1, rewrites the
--- true value on every change, so a stale count cannot outlive the next change to its post.
+-- OR DELETE on post_comments), new body.
 CREATE OR REPLACE FUNCTION public.sync_post_comment_count()
   RETURNS trigger
   LANGUAGE plpgsql
@@ -910,19 +919,88 @@ BEGIN
   PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR UPDATE;
   UPDATE public.posts p
      SET comment_count = (SELECT count(*) FROM public.post_comments pc
-                           WHERE pc.post_id = p.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden)
+                           WHERE pc.post_id = p.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden),
+         engaged_at    = CASE WHEN p.id = NEW.post_id AND NEW.post_id IS DISTINCT FROM OLD.post_id  -- insert, or moved here
+                               THEN COALESCE(p.engaged_at, now()) ELSE p.engaged_at END
    WHERE p.id = ANY (v_posts);
   RETURN NULL;
 END $fn$;
 
--- One-time backfill to the same rule (this transaction holds ACCESS EXCLUSIVE on posts and post_comments
--- from section 2, so no comment changes underneath it). Only rows whose number changes are written.
+-- posts.like_count = the post's like rows (unchanged meaning). Same trigger (AFTER INSERT OR UPDATE OR
+-- DELETE on post_likes), new body: lock, then recount; the first like sets engaged_at.
+CREATE OR REPLACE FUNCTION public.sync_post_like_count()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public, pg_temp
+AS $fn$
+DECLARE v_posts uuid[];
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.post_id IS NOT DISTINCT FROM OLD.post_id THEN
+    RETURN NULL;
+  END IF;
+  v_posts := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[OLD.post_id, NEW.post_id]) x WHERE x IS NOT NULL ORDER BY x);
+  PERFORM 1 FROM public.posts WHERE id = ANY (v_posts) ORDER BY id FOR UPDATE;
+  UPDATE public.posts p
+     SET like_count = (SELECT count(*) FROM public.post_likes pl WHERE pl.post_id = p.id),
+         engaged_at = CASE WHEN p.id = NEW.post_id AND NEW.post_id IS DISTINCT FROM OLD.post_id  -- insert, or moved here
+                            THEN COALESCE(p.engaged_at, now()) ELSE p.engaged_at END
+   WHERE p.id = ANY (v_posts);
+  RETURN NULL;
+END $fn$;
+
+-- poll votes and opt-ins carry no count on posts: the first one sets engaged_at. BEFORE INSERT, so the
+-- post row is locked before the row's foreign-key checks lock polls / posts: the same order as edit_post
+-- (post, then poll), so a vote and an options edit cannot deadlock. A refused insert rolls this back.
+CREATE FUNCTION public.mark_post_engaged()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+  IF TG_TABLE_NAME = 'poll_votes' THEN
+    UPDATE public.posts p SET engaged_at = COALESCE(p.engaged_at, now())
+      FROM public.polls pl WHERE pl.id = NEW.poll_id AND p.id = pl.post_id AND p.engaged_at IS NULL;
+  ELSE
+    UPDATE public.posts p SET engaged_at = COALESCE(p.engaged_at, now())
+     WHERE p.id = NEW.post_id AND p.engaged_at IS NULL;
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER trg_poll_votes_mark_post_engaged BEFORE INSERT ON public.poll_votes
+  FOR EACH ROW EXECUTE FUNCTION public.mark_post_engaged();
+CREATE TRIGGER trg_resource_opt_ins_mark_post_engaged BEFORE INSERT ON public.resource_opt_ins
+  FOR EACH ROW EXECUTE FUNCTION public.mark_post_engaged();
+
+-- One-time backfills (this transaction holds ACCESS EXCLUSIVE on posts and post_comments and SHARE on
+-- post_likes and poll_votes from section 2, so nothing changes underneath). Counts: rows whose number
+-- changes only. engaged_at: every post with a like, vote, comment or opt-in row, at the earliest such
+-- created_at (now() when none of them carries one).
 UPDATE public.posts p
    SET comment_count = c.n
   FROM (SELECT p2.id, (SELECT count(*) FROM public.post_comments pc
                         WHERE pc.post_id = p2.id AND pc.deleted_at IS NULL AND NOT pc.is_hidden) AS n
           FROM public.posts p2) c
  WHERE c.id = p.id AND p.comment_count IS DISTINCT FROM c.n;
+UPDATE public.posts p
+   SET like_count = c.n
+  FROM (SELECT p2.id, (SELECT count(*) FROM public.post_likes pl WHERE pl.post_id = p2.id) AS n
+          FROM public.posts p2) c
+ WHERE c.id = p.id AND p.like_count IS DISTINCT FROM c.n;
+UPDATE public.posts p
+   SET engaged_at = COALESCE(e.first_at, now())
+  FROM (SELECT p2.id,
+               LEAST((SELECT min(l.created_at) FROM public.post_likes l WHERE l.post_id = p2.id),
+                     (SELECT min(v.created_at) FROM public.poll_votes v JOIN public.polls pl ON pl.id = v.poll_id WHERE pl.post_id = p2.id),
+                     (SELECT min(c.created_at) FROM public.post_comments c WHERE c.post_id = p2.id),
+                     (SELECT min(o.created_at) FROM public.resource_opt_ins o WHERE o.post_id = p2.id)) AS first_at
+          FROM public.posts p2
+         WHERE EXISTS (SELECT 1 FROM public.post_likes l WHERE l.post_id = p2.id)
+            OR EXISTS (SELECT 1 FROM public.poll_votes v JOIN public.polls pl ON pl.id = v.poll_id WHERE pl.post_id = p2.id)
+            OR EXISTS (SELECT 1 FROM public.post_comments c WHERE c.post_id = p2.id)
+            OR EXISTS (SELECT 1 FROM public.resource_opt_ins o WHERE o.post_id = p2.id)) e
+ WHERE e.id = p.id AND p.engaged_at IS NULL;
 
 -- ============================================================================
 -- 4e. Moderation RPCs: + optional p_expected_version (DROP first: a new defaulted argument would
@@ -1170,7 +1248,8 @@ BEGIN
 END;
 $function$;
 
--- submit_content_report: snapshot the version the reporter saw; a deleted post is not reportable
+-- submit_content_report: snapshot the version the reporter saw; a deleted post is not reportable; the post
+-- row is locked before the open-report count (two concurrent reports cannot both miss the threshold)
 CREATE OR REPLACE FUNCTION public.submit_content_report(p_content_type text, p_content_id uuid, p_reason report_reason, p_details text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1198,10 +1277,13 @@ BEGIN
     RAISE EXCEPTION 'unsupported content_type: %', p_content_type;
   END IF;
 
-  -- Verify the post exists (and is not deleted) and capture author + the version reported
+  -- Verify the post exists (and is not deleted) and capture author + the version reported. FOR UPDATE:
+  -- the open-report count below runs after this lock, so of two concurrent reports the second counts
+  -- the first (without it both counted 2 and a post with 3 open reports stayed visible).
   SELECT user_id, version INTO v_post_author, v_post_version
   FROM public.posts
-  WHERE id = p_content_id AND deleted_at IS NULL;
+  WHERE id = p_content_id AND deleted_at IS NULL
+  FOR UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'post not found';
@@ -1483,7 +1565,7 @@ BEGIN
   -- internal helpers / trigger function: no client EXECUTE
   FOREACH f IN ARRAY ARRAY[
     'post_revisions_append_only()', 'post_image_url_ok(text,uuid)', 'post_normalize_fields(public.post_type,uuid,jsonb)',
-    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)', 'sync_post_comment_count()'] LOOP
+    'post_lock_for_moderation(uuid,integer,boolean)', 'post_assert_event(jsonb)', 'sync_post_comment_count()', 'sync_post_like_count()', 'mark_post_engaged()'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon, authenticated', f);
   END LOOP;
 END

@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (172 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (12 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (182 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (15 races).
 
 ## Release: expand / contract
 
@@ -78,7 +78,7 @@ Returns:
 {"grace": false, "changed": ["content"], "post_id": "…", "version": 3, "edited_at": "…", "edit_count": 2, "revision_id": 17}
 ```
 - `version` is the new token; send it with the next edit. `changed` is `[]` for a no-op (version unchanged, nothing written).
-- `grace: true` = a quiet edit: within 5 min of creation, post visible, no likes / votes / opt-ins / reports, and no comment ever written (a deleted or hidden comment still closes the window; `comment_count` is not used). No history row; `edited_at` / `edit_count` unchanged (no "Edited" label). `version` still increments.
+- `grace: true` = a quiet edit: within 5 min of creation, post visible, nobody has ever engaged (`posts.engaged_at IS NULL`: no like, poll vote, comment or opt-in, ever; an unlike, unvote, withdrawn opt-in, deleted or hidden comment keeps the window closed) and no report. No history row; `edited_at` / `edit_count` unchanged (no "Edited" label). `version` still increments.
 - Order of checks: guest → `p_expected_version` present → found & not deleted (`PT404`) → author → not removed (`post_removed`) → not a petition → version (`PT409`) → fields.
 - Held / community-hidden post: editable; it stays hidden and is re-queued for moderators (`needs_review_at`).
 
@@ -114,41 +114,67 @@ allowed. Staff hide / unhide is unchanged. A hard delete that still happens (acc
 cascade) keeps other people's replies: they lose their parent link (`parent_id` → `NULL`) instead of
 being deleted.
 
-### `posts.comment_count` — live, visible comments (implemented in 20261026000000)
+### Counters and the first-engagement marker (implemented in 20261026000000)
 
-`posts.comment_count` = the post's comments with `deleted_at IS NULL AND NOT is_hidden`, replies included; a
+**`posts.comment_count`** = the post's comments with `deleted_at IS NULL AND NOT is_hidden`, replies included; a
 deleted parent's "Comment deleted" placeholder is not a comment. This is the client's `liveCommentCount`
 (`apps/web/src/hooks/use-comments.ts`), so a closed card and an open thread show the same number. No client change.
+**`posts.like_count`** = the post's like rows (meaning unchanged).
 
-- **Trigger** `sync_post_comment_count` (same `AFTER INSERT OR UPDATE OR DELETE` trigger on `post_comments`, new body;
-  `SECURITY DEFINER`, `search_path = public, pg_temp`, no client EXECUTE). It locks the post row(s), then recounts in a
-  separate statement on: insert, hard delete, soft delete, hide, unhide, un-delete, and a `post_id` change (both posts,
-  locked in id order). An UPDATE that leaves the comment on the same post in the same counted / not-counted state
-  (a content edit) does not touch the post row.
+- **Triggers** `sync_post_comment_count` / `sync_post_like_count` (same `AFTER INSERT OR UPDATE OR DELETE` triggers, new
+  bodies; `SECURITY DEFINER`, `search_path = public, pg_temp`, no client EXECUTE) lock the post row(s), then recount in
+  a separate statement. Comments recount on insert, hard delete, soft delete, hide, unhide, un-delete and a `post_id`
+  change (both posts, locked in id order). An update that leaves the comment on the same post and in the same
+  counted / not-counted state (a content edit) does not touch the post row.
 - **Concurrency:** recount under the post row lock. Under READ COMMITTED the recount statement takes its snapshot
-  after the lock is granted, so it sees the change of the session that held the lock before. The previous body
-  recounted inside the locking UPDATE (snapshot from before the wait) and lost one of two concurrent changes. A
-  recount, unlike a relative ±1, rewrites the true value on every change, so a stale number never outlives the next
-  change to its post. Proof: races C9 (two soft deletes) and C9b (soft delete + hide); the mutant without the lock
-  fails C9 / C9b.
-- **Backfill:** 026 sets every post's count to the same rule (rows whose number changes only). Production on
-  2026-10-09: 2 posts, 0 comments, so 0 rows change; the backfill still runs in case comments arrive before apply.
-- **Grace:** `edit_post` keys on `NOT EXISTS (SELECT 1 FROM post_comments WHERE post_id = p.id)`: any comment row, deleted
-  or hidden included. Deleting or hiding the only comment does not reopen quiet edits. Likes and poll votes keep
-  their rule (`like_count = 0`, no vote row). Both are hard-deleted on unlike / unvote, so an unlike or unvote inside
-  the 5 minutes reopens quiet edits. There is no row left to key on, so closing that needs a stored first-engagement marker.
+  after the lock is granted, so it sees the change of the session that held the lock before. The previous bodies
+  recounted inside the locking UPDATE (snapshot from before the wait) and lost one of two concurrent changes:
+  reproduced for likes when the author likes their own post while another member likes it (`like_count` 1, 2 rows).
+  The like path is serialized by the engagement trigger's profile lock in every other case. A recount, unlike a relative ±1,
+  rewrites the true value on every change, so a stale number never outlives the next change to its post.
+- **`posts.engaged_at`** (`timestamptz NULL`): the first like, poll vote, comment or opt-in, set once
+  (`COALESCE(engaged_at, now())`) and never cleared. Likes and comments set it in the count trigger's UPDATE, under the
+  post lock. Votes and opt-ins set it in `mark_post_engaged`, a `BEFORE INSERT` trigger. It runs BEFORE so the post is
+  locked ahead of the vote's foreign-key lock on `polls`: that is `edit_post`'s order (post, then poll), so a vote and
+  an options edit cannot deadlock. A comment moved onto a post (`post_id` change, owner path only) also sets it there.
+  Server-only: no SELECT, UPDATE or INSERT column grant, not in the realtime column list.
+  Between 026 and 0265 the deployed client keeps table-level INSERT on `posts`, so a direct insert can preset
+  `engaged_at` on the author's own new post: that only closes the author's own grace (harmless). 0265 revokes it.
+- **Grace:** `edit_post` keys on `p.engaged_at IS NULL` (plus the unchanged "no report" term). An unlike, unvote,
+  withdrawn opt-in, deleted or hidden comment does not reopen quiet edits. A like in flight makes a concurrent edit wait
+  and then record (race C12).
+- **Report threshold:** `submit_content_report` locks the post row before counting open reporters. Two concurrent
+  reports (the 2nd and 3rd) no longer both count 2 and leave a 3-report post visible (reproduced before the fix).
+- **Backfills** (026 takes SHARE on `post_likes`, `poll_votes`, `resource_opt_ins` and holds ACCESS EXCLUSIVE on
+  `posts` / `post_comments`, so nothing lands under the old triggers): `comment_count` and `like_count` recounted
+  (changed rows only); `engaged_at` set for every post with a like, vote, comment or opt-in row, at the earliest
+  such `created_at` (`now()` when none carries one). Production on 2026-10-09: 2 posts, 0 comments, 1 like, 1 vote,
+  0 count drift, so the counts change 0 rows and `engaged_at` is set on the engaged posts.
 - **`post_id` re-point:** no client role has UPDATE on `post_comments` (revoked in 026), and no function changes
   `post_id`. Only the table owner / `service_role` can, and the trigger recounts both posts (smoke N9).
+
+Counter audit (every stored count maintained on the tables 026 touches):
+
+| Counter | Writer | Status |
+|---|---|---|
+| `posts.comment_count` | `sync_post_comment_count` | **Fixed**: lock, then recount; live + visible meaning (C9, C9b) |
+| `posts.like_count` | `sync_post_like_count` | **Fixed**: lock, then recount (C10) |
+| open-report threshold (`report_count`, auto-hide at 3) | `submit_content_report` | **Fixed**: post locked before the count (C11) |
+| `posts.slots_remaining` | `opt_in_to_post` (−1), `withdraw_opt_in` / `unblock_opt_in` (+1), `edit_post` reconcile | Already safe: each locks the post `FOR UPDATE` first; relative ±1 in a later statement, reconcile counts after the lock (C3, C3b) |
+| `posts.version`, `edit_count`; `post_comments.version`, `edit_count` | `edit_post`, `edit_comment` | Already safe: row locked `FOR UPDATE`, version token (C1, C4) |
+| `user_engagement_counters.count` | `record_engagement_event` (via the like / vote / comment / opt-in engagement triggers) | Already safe: `INSERT … ON CONFLICT DO UPDATE SET count = count + n` applies to the latest row version. Out of 026's tables. |
+| badge summaries, `profiles.harmony_*` | `recompute_*` (profile locked first), `submit_review` | Out of scope: not on 026's tables (badges recompute from source under `lock_two_profiles`) |
+| poll results | none stored | No counter: read from `poll_votes` |
 
 Readers of `posts.comment_count` and what the new meaning changes:
 
 | Reader | Effect |
 |---|---|
 | `ranked_feed_v2` (`log10(1 + like_count + comment_weight * comment_count)`) | Ranks on live, visible comments. A post whose comments were deleted or hidden ranks slightly lower than before. This is intended. `ranked_feed` (v1) is dropped in 026. |
-| `edit_post` grace | No longer reads it (any comment row instead). |
+| `edit_post` grace | No longer reads it (`engaged_at` instead). |
 | Feed list select (`FEED_POST_SELECT` in `post-model.ts`), `rowToPost`, card comment button (`post-card.tsx`) | Shows live, visible comments: the number the open thread shows. |
 | Realtime `posts` column list (`comment_count` already published) + `applyPostRowPatch` (`post-model.ts`, absolute value) | Delete, hide and unhide now emit a `posts` UPDATE carrying the new number; a content edit no longer emits one. |
-| `/s/post/[id]` share page | Does not read `comment_count`: it counts `post_comments` rows under RLS (`count: 'exact'`), which still includes soft-deleted comments (and, for the author and staff, hidden ones). Unchanged here. |
+| `/s/post/[id]` share page | Does not read `comment_count`: it counts `post_comments` rows under RLS (`count: 'exact'`), which still includes soft-deleted comments (and, for the author and staff, hidden ones). Client builder's item. |
 
 Probe (`scratchpad/edit-build/db/probe/comment_count.sql`, identical for 026 alone and 026 + 0265):
 
@@ -159,8 +185,10 @@ Probe (`scratchpad/edit-build/db/probe/comment_count.sql`, identical for 026 alo
 | a parent soft-deleted (it has a reply) | 2 | 4 | 2 | 3 (2 + its "Comment deleted" placeholder) | 2 |
 | one comment hidden by a moderator | 1 | 4 | 2 | 2 | 1 |
 
-Smoke: N1–N9 (each transition), N10a–c (the only comment deleted / hidden: grace stays closed), N11 (every post in
-the database matches, including rows that existed before 026), N12 (trigger hygiene), E13.
+Smoke: N1–N9 (each comment transition), N10a–c (the only comment deleted / hidden: grace stays closed), N11 + G8a +
+G8b (every post in the database matches, including rows that existed before 026), N12 (trigger hygiene), G1–G7
+(no engagement → quiet; like/unlike, vote/unvote, opt-in/withdraw → closed; later engagement never moves
+`engaged_at`; clients cannot write it), E13. Races: C9, C9b, C10, C11, C12.
 
 ## Moderator RPCs (community moderator and up)
 
@@ -228,6 +256,7 @@ instant → `ends_at = now()`); shortening to a future time or reopening a close
 | `is_hidden`, `hidden_at`, `hidden_reason` | ✓ | ✓ | moderation RPCs, report threshold, `delete_own_post` |
 | `user_id`, `post_type`, `resource_id`, `petition_id`, `created_at`, `is_pinned` | ✓ | ✓ | set once by `create_post` / server paths; never edited |
 | `like_count`, `comment_count`, `updated_at` | ✓ | ✓ | triggers |
+| `engaged_at` | — | — | triggers only (first like / vote / comment / opt-in; never cleared) |
 | `location` | — | — | (unchanged) |
 
 Row visibility (`posts_select_public`): visible posts to everyone; a hidden (held / removed /
@@ -262,7 +291,7 @@ Fetch: `.from('post_revisions').select('id, version, edited_at, reason, fields_c
 ## Realtime
 
 `supabase_realtime` → `posts` now also carries `version, edited_at, edit_count, image_alt, deleted_at,
-needs_review_at` (not `lang`: no realtime consumer) (other members unchanged: `post_comments (id, post_id)` and `poll_votes (id, poll_id)` stay
+needs_review_at` (not `lang`: no realtime consumer; not `engaged_at`: server-only) (other members unchanged: `post_comments (id, post_id)` and `poll_votes (id, poll_id)` stay
 doorbells — re-read on UPDATE). A post that becomes hidden/deleted is not delivered to viewers who can
 no longer read it: drop it locally on the author's own delete and re-read on the doorbells.
 

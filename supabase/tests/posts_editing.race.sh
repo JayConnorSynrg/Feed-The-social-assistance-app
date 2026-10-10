@@ -4,8 +4,10 @@
 #   C1  two edits of one post with the same expected version: exactly one wins, the other gets PT409
 #       (never a silent overwrite); one history row.
 #   C2  a vote in flight, then an options edit: the edit waits for the vote, sees it, and is refused
-#       (post_field_locked:options); the vote stands.
-#   C2b an options edit in flight, then a vote: the vote waits, then lands on the edited options.
+#       (post_field_locked:options); the vote stands. The poll is already engaged (engaged_at set), so the
+#       vote takes no post lock and only edit_post's polls row lock orders the two.
+#   C2b an options edit in flight, then a vote (the poll's first engagement: the vote's BEFORE trigger waits
+#       on the post lock): the vote waits, then lands on the edited options.
 #   C3  capacity cut to the committed count while another opt-in is in flight behind it: the opt-in
 #       waits and is refused 'This offer is full'; max/slots/rows stay consistent.
 #   C3b an opt-in in flight, then a capacity cut below the new count: the cut waits, then is refused
@@ -20,6 +22,12 @@
 #   C9  two members soft-delete DIFFERENT comments of one post at once: posts.comment_count ends equal to
 #       the comments neither deleted nor hidden (the second recount waits for the first's post lock).
 #   C9b a soft delete in flight while a moderator hides another comment of the same post: same invariant.
+#   C10 the author likes their own post (no profile lock on that path) while another member likes it:
+#       like_count ends equal to the like rows.
+#   C11 two members report a post that already has one open report: the second report waits for the
+#       first, counts 3 and hides the post (without the post lock both counted 2 and it stayed visible).
+#   C12 a like in flight on a fresh post while its author edits: the edit waits for the like, sees
+#       engaged_at and is recorded (no quiet edit after someone engaged).
 #
 # Usage: PSQL=<psql wrapper> TEMPLATE_DB=<db with the migration applied> posts_editing.race.sh
 #   PSQL is called as `DB=<name> $PSQL <psql args>` (the FEED PG17 harness `p` wrapper).
@@ -36,6 +44,7 @@ CM=e0000000-0000-4000-8000-0000000000e5
 P1=00000000-0000-4000-a000-0000000000f1; P3=00000000-0000-4000-a000-0000000000f3; P5=00000000-0000-4000-a000-0000000000f5
 P6=00000000-0000-4000-a000-0000000000f6; P7=00000000-0000-4000-a000-0000000000f7; P8=00000000-0000-4000-a000-0000000000f8
 P9=00000000-0000-4000-a000-0000000000f9; P10=00000000-0000-4000-a000-0000000000fa; P11=00000000-0000-4000-a000-0000000000fb
+P12=00000000-0000-4000-a000-0000000000fc; P13=00000000-0000-4000-a000-0000000000fd; P14=00000000-0000-4000-a000-0000000000fe
 POLL=0b000000-0000-4000-8000-0000000000f5; POLL2=0b000000-0000-4000-8000-0000000000f6; K1=0d000000-0000-4000-8000-0000000000f1
 K2=0d000000-0000-4000-8000-0000000000f2; K3=0d000000-0000-4000-8000-0000000000f3; K4=0d000000-0000-4000-8000-0000000000f4
 K5=0d000000-0000-4000-8000-0000000000f5; K6=0d000000-0000-4000-8000-0000000000f6; K7=0d000000-0000-4000-8000-0000000000f7
@@ -52,14 +61,19 @@ q "INSERT INTO auth.users (id, email) VALUES ('$A','race-a@t'), ('$B','race-b@t'
      ('$P8', '$A', 'to delete', 'feed', NULL, now() - interval '1 hour'),
      ('$P9', '$A', 'delete twice', 'feed', NULL, now() - interval '1 hour'),
      ('$P10', '$A', 'count race', 'feed', NULL, now() - interval '1 hour'),
-     ('$P11', '$A', 'count race 2', 'feed', NULL, now() - interval '1 hour');
+     ('$P11', '$A', 'count race 2', 'feed', NULL, now() - interval '1 hour'),
+     ('$P12', '$A', 'like race', 'feed', NULL, now() - interval '1 hour'),
+     ('$P13', '$A', 'report race', 'feed', NULL, now() - interval '1 hour'),
+     ('$P14', '$A', 'fresh post', 'feed', NULL, now());
+   INSERT INTO public.content_reports (reporter_id, content_type, content_id, reason) VALUES ('$CM', 'post', '$P13', 'spam');
    INSERT INTO public.polls (id, post_id, question, options) VALUES ('$POLL', '$P5', 'Race poll?', '[\"Sat\",\"Sun\"]'),
                                                                      ('$POLL2', '$P6', 'Race poll 2?', '[\"Sat\",\"Sun\"]');
    INSERT INTO public.post_comments (id, post_id, user_id, content, created_at) VALUES ('$K1', '$P1', '$B', 'race comment', now() - interval '1 hour'),
                                                                                     ('$K2', '$P1', '$B', 'delete me twice', now() - interval '1 hour'),
      ('$K3', '$P10', '$B', 'b on p10', now()), ('$K4', '$P10', '$C', 'c on p10', now()), ('$K5', '$P10', '$A', 'a on p10', now()),
      ('$K6', '$P11', '$B', 'b on p11', now()), ('$K7', '$P11', '$C', 'c on p11', now());
-   UPDATE public.posts SET is_hidden = true, hidden_at = now(), hidden_reason = 'hold_for_review' WHERE id = '$P7';" >/dev/null || { echo "FAIL race setup"; exit 1; }
+   UPDATE public.posts SET is_hidden = true, hidden_at = now(), hidden_reason = 'hold_for_review' WHERE id = '$P7';
+   UPDATE public.posts SET engaged_at = now() - interval '1 hour' WHERE id = '$P5';" >/dev/null || { echo "FAIL race setup"; exit 1; }
 AS() { echo "SELECT set_config('request.jwt.claims', '{\"sub\":\"$1\",\"role\":\"authenticated\"}', false); SET ROLE authenticated;"; }
 # first line that is a value or an ERROR from a session's output
 r() { grep -E '^[0-9a-z{]|ERROR' "$1" | grep -v '^set_config' | tail -1; }
@@ -180,4 +194,31 @@ F9b=$(CC $P11)
 if grep -q '^true$' "$D/c9c" && grep -q '^true$' "$D/c9d" && [ "$F9b" = "0|0" ]; then ok C9b "delete and hide both landed; count|truth $F9b"
 else bad C9b "delete=$(r "$D/c9c") hide=$(r "$D/c9d") count|truth=$F9b"; fi
 
-if [ $fail = 0 ]; then echo "PASS posts_editing race: C1 C2 C2b C3 C3b C4 C5 C6 C7 C8 C9 C9b"; else echo "FAIL posts_editing race"; exit 1; fi
+# ---- C10: the author's own like in flight, another member's like
+(DB=$RDB $PSQL -At -c "BEGIN" -c "$(AS $A)" -c "INSERT INTO public.post_likes (post_id, user_id) VALUES ('$P12', '$A') RETURNING 'liked'" -c "SELECT pg_sleep(2)" -c "COMMIT" > "$D/c10a" 2>&1) &
+sleep 0.7
+DB=$RDB $PSQL -At -c "$(AS $B)" -c "INSERT INTO public.post_likes (post_id, user_id) VALUES ('$P12', '$B') RETURNING 'liked'" > "$D/c10b" 2>&1
+wait
+F10=$(q "SELECT like_count || '|' || (SELECT count(*) FROM public.post_likes l WHERE l.post_id = p.id) FROM public.posts p WHERE id = '$P12'")
+if grep -q '^liked$' "$D/c10a" && grep -q '^liked$' "$D/c10b" && [ "$F10" = "2|2" ]; then ok C10 "both likes landed; like_count|rows $F10"
+else bad C10 "a=$(r "$D/c10a") b=$(r "$D/c10b") like_count|rows=$F10"; fi
+
+# ---- C11: reports 2 and 3 at once
+(DB=$RDB $PSQL -At -c "BEGIN" -c "$(AS $B)" -c "SELECT public.submit_content_report('post', '$P13', 'spam')->>'report_count'" -c "SELECT pg_sleep(2)" -c "COMMIT" > "$D/c11a" 2>&1) &
+sleep 0.7
+DB=$RDB $PSQL -At -c "$(AS $C)" -c "SELECT public.submit_content_report('post', '$P13', 'spam')::text" > "$D/c11b" 2>&1
+wait
+F11=$(q "SELECT (SELECT count(*) FROM public.content_reports WHERE content_id = p.id AND status = 'open') || '|' || is_hidden || '|' || COALESCE(hidden_reason, '-') FROM public.posts p WHERE id = '$P13'")
+if grep -q '^2$' "$D/c11a" && grep -q '"hidden": true, "report_count": 3' "$D/c11b" && [ "$F11" = "3|true|community_reports_threshold" ]; then ok C11 "the second report counted 3 and hid the post; open|hidden|reason $F11"
+else bad C11 "a=$(r "$D/c11a") b=$(r "$D/c11b") open|hidden|reason=$F11"; fi
+
+# ---- C12: a like in flight on a fresh post, then the author's edit
+(DB=$RDB $PSQL -At -c "BEGIN" -c "$(AS $B)" -c "INSERT INTO public.post_likes (post_id, user_id) VALUES ('$P14', '$B') RETURNING 'liked'" -c "SELECT pg_sleep(2)" -c "COMMIT" > "$D/c12a" 2>&1) &
+sleep 0.7
+DB=$RDB $PSQL -At -c "$(AS $A)" -c "SELECT public.edit_post('$P14', 1, '{\"content\":\"fresh post!\"}')->>'grace'" > "$D/c12b" 2>&1
+wait
+F12=$(q "SELECT (engaged_at IS NOT NULL) || '|' || edit_count || '|' || (SELECT count(*) FROM public.post_revisions WHERE post_id = p.id) FROM public.posts p WHERE id = '$P14'")
+if grep -q '^liked$' "$D/c12a" && grep -q '^false$' "$D/c12b" && [ "$F12" = "true|1|1" ]; then ok C12 "the edit waited for the like and was recorded; engaged|edit_count|revisions $F12"
+else bad C12 "like=$(r "$D/c12a") edit=$(r "$D/c12b") engaged|edit_count|revisions=$F12"; fi
+
+if [ $fail = 0 ]; then echo "PASS posts_editing race: C1 C2 C2b C3 C3b C4 C5 C6 C7 C8 C9 C9b C10 C11 C12"; else echo "FAIL posts_editing race"; exit 1; fi

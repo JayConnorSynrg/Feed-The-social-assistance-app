@@ -2400,6 +2400,7 @@ export type Database = {
           deleted_at: string | null
           edit_count: number
           edited_at: string | null
+          engaged_at: string | null
           hidden_at: string | null
           hidden_reason: string | null
           id: string
@@ -2428,6 +2429,7 @@ export type Database = {
           deleted_at?: string | null
           edit_count?: number
           edited_at?: string | null
+          engaged_at?: string | null
           hidden_at?: string | null
           hidden_reason?: string | null
           id?: string
@@ -2456,6 +2458,7 @@ export type Database = {
           deleted_at?: string | null
           edit_count?: number
           edited_at?: string | null
+          engaged_at?: string | null
           hidden_at?: string | null
           hidden_reason?: string | null
           id?: string
