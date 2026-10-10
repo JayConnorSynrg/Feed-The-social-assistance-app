@@ -1299,6 +1299,10 @@ export function FeedPanel() {
 
   const { user, profileSettled, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
+  const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
+  // Resolve active subtab from panelParams (set by alias routing in feed-shell).
+  // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
+  const activeSubtab: FeedSubtab = resolveFeedSubtab(panelParams?.subtab)
   // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
   // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
   // (own rows only, exactly as the Events panel loads them). All three are empty in
@@ -1316,8 +1320,17 @@ export function FeedPanel() {
     feedNotice,
     handleEventManaged,
     syncFeedEventCard,
-  } = useFeedEventCards({ supabase, userId: user?.id ?? null, isGuest: isAnonymous, locale, timeoutMs: QUERY_TIMEOUT_MS, focusHeading: focusFeedTitle })
-  const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
+  } = useFeedEventCards({
+    supabase,
+    userId: user?.id ?? null,
+    isGuest: isAnonymous,
+    locale,
+    timeoutMs: QUERY_TIMEOUT_MS,
+    focusHeading: focusFeedTitle,
+    // A card notice belongs to this sub-tab visit and this account: leaving the sub-tab or
+    // switching accounts clears it (silently); a reload keeps it.
+    noticeContext: `${activeSubtab}|${user?.id ?? ''}`,
+  })
   // Saved resources for the resource-link selector in the composer
   const { savedResources } = useSavedResources()
   const resourceOptions: ResourceOption[] = savedResources
@@ -1328,9 +1341,6 @@ export function FeedPanel() {
   const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
   const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
-  // Resolve active subtab from panelParams (set by alias routing in feed-shell).
-  // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
-  const activeSubtab: FeedSubtab = resolveFeedSubtab(panelParams?.subtab)
 
   // Sync subtab when panelParams.subtab changes (e.g. back-button hash navigation)
   // No local state needed — activeSubtab is derived directly from panelParams.

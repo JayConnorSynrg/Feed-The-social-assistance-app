@@ -342,6 +342,40 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
   })
 
+  it('the focused card left: focus moves to the heading FIRST, and the notice is set in that same frame, right after', async () => {
+    h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
+    const frames: Array<() => void> = []
+    g.requestAnimationFrame = (cb: () => void) => frames.push(cb)
+    const trigger = { id: 'trigger' }
+    focused = trigger
+    const order: string[] = []
+    const root = () =>
+      ({ querySelector: (sel: string) => (sel.includes(E1) && sel.startsWith('[data-event-id=') ? { contains: (el: unknown) => el === trigger } : null) }) as unknown as ParentNode
+    const m = mount(() =>
+      useEventCardRefresh({
+        supabase: {} as never,
+        surface: 'feed',
+        userId: 'u1',
+        isGuest: false,
+        locale: 'en',
+        timeoutMs: 1000,
+        apply: () => {},
+        root,
+        focusHeading: () => order.push(`focus heading (notice: "${m.rerender().notice}")`),
+      }),
+    )
+    await m.tree().onManaged(E1, { kind: 'retired' })
+    await m.flush()
+    // Before the frame: nothing announced yet, focus not moved.
+    expect(m.tree().notice).toBe('')
+    expect(order).toEqual([])
+    expect(frames).toHaveLength(1)
+    frames.splice(0).forEach((f) => f())
+    m.rerender()
+    expect(order).toEqual(['focus heading (notice: "")'])
+    expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
+  })
+
   it('feed: the card left but its exit animation still holds it in the DOM — focus goes to the heading anyway', async () => {
     h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
     const { m, applied, headingFocus, dom, setOnApply } = harness()
@@ -415,18 +449,30 @@ describe('an Events-tab cancel also updates the feed copy of that event', () => 
   })
 })
 
-describe('Events tab: the change is announced in its one status region', () => {
-  it('the notice is the status text once the list is ready (a load or a failure keeps its own message)', async () => {
+describe('Events tab: the list status and the card notice are two regions', () => {
+  const render = async (state: Parameters<typeof import('@/components/panels/events-panel').EventsTabView>[0]['state'], notice: string) => {
     const { createElement } = await import('react')
     const { renderToStaticMarkup } = await import('react-dom/server')
     const { EventsTabView } = await import('@/components/panels/events-panel')
+    const html = renderToStaticMarkup(createElement(EventsTabView, { state, locale: 'en', onRetry: () => {}, onCheckedIn: () => {}, notice }))
+    const region = (id: string) => html.match(new RegExp(`data-testid="${id}">([^<]*)<`))?.[1]
+    return { status: region('events-tab-status'), notice: region('events-tab-notice') }
+  }
+
+  it('a save removed the last card: the status says the empty sentence AND the notice region holds the notice', async () => {
+    expect(await render({ status: 'ready', items: [], checkin: emptyCheckinState(), loadedAt: 0 }, 'Event retired. This event is no longer listed.')).toEqual({
+      status: 'No upcoming events yet.',
+      notice: 'Event retired. This event is no longer listed.',
+    })
+  })
+
+  it('a load after a save: the status says loading, the notice is untouched', async () => {
+    expect(await render({ status: 'loading' }, 'Date cancelled.')).toEqual({ status: 'Loading events…', notice: 'Date cancelled.' })
+  })
+
+  it('cards on screen: the status is quiet, the notice speaks', async () => {
     const items = [card('occ-a', E1, '2099-10-20T14:00:00Z')]
-    const view = (state: Parameters<typeof EventsTabView>[0]['state']) =>
-      renderToStaticMarkup(createElement(EventsTabView, { state, locale: 'en', onRetry: () => {}, onCheckedIn: () => {}, notice: 'Date cancelled.' }))
-    const status = (html: string) => html.match(/data-testid="events-tab-status">([^<]*)</)?.[1]
-    expect(status(view({ status: 'ready', items, checkin: emptyCheckinState(), loadedAt: 0 }))).toBe('Date cancelled.')
-    expect(status(view({ status: 'loading' }))).toBe('Loading events…')
-    expect(view({ status: 'ready', items, checkin: emptyCheckinState(), loadedAt: 0 }).match(/role="status"/g)).toHaveLength(1)
+    expect(await render({ status: 'ready', items, checkin: emptyCheckinState(), loadedAt: 0 }, 'Date cancelled.')).toEqual({ status: '', notice: 'Date cancelled.' })
   })
 })
 

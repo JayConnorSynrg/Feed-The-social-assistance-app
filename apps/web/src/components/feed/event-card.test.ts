@@ -331,8 +331,10 @@ describe('the Events tab (render)', () => {
     expect(statusRegion(tab({ status: 'ready', items: [], checkin: { statuses: {}, anonClaims: new Set() }, loadedAt: 0 }))).toBe('No upcoming events yet.')
     const items = buildEventCards([{ occurrenceId: 'a' }], [occ('a', 'e1')])
     expect(statusRegion(tab({ status: 'ready', items, checkin: { statuses: {}, anonClaims: new Set() }, loadedAt: 0 }))).toBe('')
-    // Exactly one live region (the visible copies are hidden from assistive tech).
-    expect(tab({ status: 'error' }).match(/role="(status|alert)"/g)).toHaveLength(1)
+    // The list's live region plus the (empty) card-notice region — the visible copies are hidden
+    // from assistive tech, so nothing is announced twice.
+    expect(tab({ status: 'error' }).match(/role="(status|alert)"/g)).toHaveLength(2)
+    expect(tab({ status: 'error' })).toMatch(/data-testid="events-tab-notice"><\/p>/)
   })
 
   it('the tab heading can take focus (it receives focus after a reload settles), with a visible focus ring', () => {

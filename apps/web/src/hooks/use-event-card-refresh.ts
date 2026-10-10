@@ -11,6 +11,10 @@
 // card). A failed re-read keeps the card as it was (the save itself went through) and writes one
 // warn row.
 //
+// Announcement timing: when the focused card left, the notice is set in the same frame right after
+// focus moves to the heading (so it queues behind the heading); otherwise as soon as the re-read
+// has been applied.
+//
 // Focus (only when it was inside the card): a card that left the list → the list's heading, at
 // once — the feed's exit animation keeps the leaving card in the DOM for a moment, so "is focus
 // still inside it?" would wrongly answer yes. A card still listed → it stays where it is, or, when
@@ -58,13 +62,9 @@ function restoreCardFocus(root: ParentNode | null, eventId: string, active: Elem
   return 'heading'
 }
 
-/** After the re-read is applied, for focus that was inside the card (see the header). */
-function scheduleCardFocus(gone: boolean, root: () => ParentNode | null, eventId: string, focusHeading: () => void): void {
-  if (gone) {
-    requestAnimationFrame(() => focusHeading())
-    return
-  }
-  // Two frames: React commits the re-read card first.
+/** After the re-read card (still listed) is applied, for focus that was inside it: two frames, so
+ *  React commits the re-read card first. */
+function scheduleCardFocus(root: () => ParentNode | null, eventId: string, focusHeading: () => void): void {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => restoreCardFocus(root(), eventId, document.activeElement, focusHeading)),
   )
@@ -81,20 +81,33 @@ export function useEventCardRefresh({ supabase, surface, userId, isGuest, locale
       // Cleared first, so the same sentence twice in a row is announced twice.
       if (!quiet) setNotice('')
       let gone = false
+      let hadFocus = false
       try {
         const { item, checkin } = await reloadEventCard(supabase, eventId, { surface, userId, isGuest, timeoutMs })
         // A later save on the same card started its own re-read: that one wins.
         if (reloadSeq.current.get(eventId) !== seq) return
         gone = item === null
-        const hadFocus = !quiet && typeof document !== 'undefined' && eventCardHasFocus(root(), eventId, document.activeElement)
+        hadFocus = !quiet && typeof document !== 'undefined' && eventCardHasFocus(root(), eventId, document.activeElement)
         apply(eventId, item, checkin)
-        if (hadFocus) scheduleCardFocus(gone, root, eventId, focusHeading)
+        if (hadFocus && !gone) scheduleCardFocus(root, eventId, focusHeading)
       } catch (err) {
         const e = err as { code?: string; name?: string } | null
         logger.warn('events.card.refresh_failed', { surface, code: e?.code || e?.name || 'unknown' })
         if (reloadSeq.current.get(eventId) !== seq) return
       }
-      if (!quiet) setNotice(eventChangeNotice(change, gone, locale))
+      if (quiet) return
+      const text = eventChangeNotice(change, gone, locale)
+      if (gone && hadFocus) {
+        // The focused card left: move focus to the heading first, then set the notice in the same
+        // frame, so the polite message queues behind the heading's announcement — a screen reader
+        // cancels a polite message that was already queued when focus moves.
+        requestAnimationFrame(() => {
+          focusHeading()
+          setNotice(text)
+        })
+        return
+      }
+      setNotice(text)
     },
     [supabase, surface, userId, isGuest, locale, timeoutMs, apply, root, focusHeading],
   )

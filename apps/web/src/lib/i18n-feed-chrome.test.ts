@@ -198,6 +198,8 @@ describe('feed-panel.tsx wiring', () => {
   it('the panel renders both status regions with its raw state (the notice is never cut by a load)', () => {
     expect(panel).toMatch(/<FeedStatusRegions\s+ready=\{announceReady\}\s+loading=\{loading\}\s+error=\{error !== null\}\s+empty=\{feedItems\.length === 0\}\s+notice=\{feedNotice\}\s+locale=\{locale\}\s*\/>/)
     expect(src.match(/\bfeedNotice\b/g)).toHaveLength(2)
+    // The notice belongs to this sub-tab visit and this account (use-feed-event-cards.test.ts).
+    expect(panel).toContain('noticeContext: `${activeSubtab}|${user?.id ?? \'\'}`,')
     expect(panel).toContain('nextTabIndex(e.key, currentIdx, tabs.length, locale)')
     expect(panel).toContain('focusTitle={focusFeedTitle}')
     expect(panel).toContain('<EventsPanel onEventChanged={syncFeedEventCard} />')

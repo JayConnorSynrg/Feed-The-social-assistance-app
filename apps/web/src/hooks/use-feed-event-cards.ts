@@ -32,9 +32,13 @@ export interface FeedEventCardsOptions {
   timeoutMs: number
   /** Focus the feed's heading (the card focus was in has left the feed). Stable. */
   focusHeading: () => void
+  /** The context a card notice belongs to (the feed sub-tab and the signed-in user). When it
+   *  changes the notice is cleared — silently — so it is never re-read in another sub-tab visit or
+   *  by another account. A reload of the same context leaves it alone. */
+  noticeContext: string
 }
 
-export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs, focusHeading }: FeedEventCardsOptions) {
+export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs, focusHeading, noticeContext }: FeedEventCardsOptions) {
   const [eventItems, setEventItems] = useState<EventFeedItem[]>([])
   const [eventMyStatuses, setEventMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
   const [eventAnonClaims, setEventAnonClaims] = useState<Set<string>>(new Set())
@@ -46,7 +50,7 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
   }, [])
   const feedRoot = useCallback(() => (typeof document === 'undefined' ? null : document), [])
 
-  const { notice, onManaged, refreshQuietly } = useEventCardRefresh({
+  const { notice, setNotice, onManaged, refreshQuietly } = useEventCardRefresh({
     supabase,
     surface: 'feed',
     userId,
@@ -57,6 +61,15 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     root: feedRoot,
     focusHeading,
   })
+
+  // Clear the notice when its context changes (render-time, the "previous value" pattern: no stale
+  // sentence is ever rendered in the new context, not even for one commit).
+  const clearNotice = useCallback(() => setNotice(''), [setNotice])
+  const [noticeFor, setNoticeFor] = useState(noticeContext)
+  if (noticeFor !== noticeContext) {
+    setNoticeFor(noticeContext)
+    clearNotice()
+  }
 
   // The latest list, for the Events-tab sync (it must not re-subscribe on every change).
   const eventItemsRef = useRef<EventFeedItem[]>([])
@@ -81,6 +94,8 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     /** What the last change from an event card's ⋯ menu did (the feed's card-notice region). Each
      *  save clears it before setting it, so the same sentence twice is announced twice. */
     feedNotice: notice,
+    /** Clear the card notice now (removing the text announces nothing). */
+    clearNotice,
     handleEventManaged: onManaged,
     syncFeedEventCard,
   }

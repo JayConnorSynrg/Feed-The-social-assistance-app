@@ -79,9 +79,11 @@ const listed = (eventId: string, title: string, score: number, bucket: string): 
   distanceBucket: bucket,
 })
 
+let noticeContext = 'feed|'
 function setup(initial: EventFeedItem[]) {
+  noticeContext = 'feed|'
   const m = mount(() =>
-    useFeedEventCards({ supabase: supabase as never, userId: null, isGuest: false, locale: 'en', timeoutMs: 1000, focusHeading: () => {} }),
+    useFeedEventCards({ supabase: supabase as never, userId: null, isGuest: false, locale: 'en', timeoutMs: 1000, focusHeading: () => {}, noticeContext }),
   )
   m.tree().setEventItems(initial)
   m.rerender()
@@ -151,5 +153,39 @@ describe('useFeedEventCards', () => {
     m.tree().setEventMyStatuses({})
     m.rerender()
     expect(m.tree().feedNotice).toBe('Changes saved.')
+  })
+
+  it('leaving the sub-tab clears the card notice (silently), and coming back does not bring it back', async () => {
+    const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
+    await m.tree().handleEventManaged(E1, { kind: 'updated' })
+    await m.flush()
+    expect(m.tree().feedNotice).toBe('Changes saved.')
+    noticeContext = 'events|'
+    m.rerender()
+    expect(m.tree().feedNotice).toBe('')
+    noticeContext = 'feed|'
+    m.rerender()
+    expect(m.tree().feedNotice).toBe('')
+  })
+
+  it('another account (user change) never finds the previous account\'s notice', async () => {
+    const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
+    noticeContext = 'feed|u1'
+    m.rerender()
+    await m.tree().handleEventManaged(E1, { kind: 'updated' })
+    await m.flush()
+    expect(m.tree().feedNotice).toBe('Changes saved.')
+    noticeContext = 'feed|u2'
+    m.rerender()
+    expect(m.tree().feedNotice).toBe('')
+  })
+
+  it('clearNotice empties the notice on demand', async () => {
+    const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
+    await m.tree().handleEventManaged(E1, { kind: 'updated' })
+    await m.flush()
+    m.tree().clearNotice()
+    m.rerender()
+    expect(m.tree().feedNotice).toBe('')
   })
 })

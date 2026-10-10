@@ -171,21 +171,21 @@ export function takeSettledFocus(
 /** The Events tab's rendering for one load state (pure; EventsPanel owns the loading). */
 export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, announce = true, now, viewerTz, focusMiss = false, highlightId = null, listRef, onManaged, notice = '' }: EventsTabViewProps) {
   const showMiss = focusMiss && state.status === 'ready'
-  // One status region, always mounted, so every load / reload outcome is announced — and what the
-  // last change from a card's ⋯ menu did.
+  // Two status regions, always mounted: the list's (every load / reload outcome, a deep-link miss,
+  // empty) and, separately, what the last change from a card's ⋯ menu did — so a save that removes
+  // the last card still lets "No upcoming events yet." be announced, and a reload never cuts the
+  // notice. Both stay empty on the first paint (`announce`), so their first text is announced.
   const announcement = !announce
     ? ''
     : state.status === 'loading'
       ? eventFormT(locale, 'loading')
       : state.status === 'error'
         ? eventFormT(locale, 'loadError')
-        : notice
-          ? notice
-          : showMiss
-            ? eventMemberT(locale, 'focusNotListed')
-            : state.items.length === 0
-              ? eventFormT(locale, 'eventsTabEmpty')
-              : ''
+        : showMiss
+          ? eventMemberT(locale, 'focusNotListed')
+          : state.items.length === 0
+            ? eventFormT(locale, 'eventsTabEmpty')
+            : ''
   return (
     <section ref={listRef} lang={locale} dir={dir(locale)} aria-labelledby="events-tab-title" className="flex flex-col gap-4">
       <div className="flex items-center gap-2 pb-1">
@@ -197,6 +197,9 @@ export function EventsTabView({ state, locale, onRetry, onCheckedIn, titleRef, a
 
       <p role="status" aria-live="polite" className="sr-only" data-testid="events-tab-status">
         {announcement}
+      </p>
+      <p role="status" aria-live="polite" className="sr-only" data-testid="events-tab-notice">
+        {announce ? notice : ''}
       </p>
 
       {showMiss && (
