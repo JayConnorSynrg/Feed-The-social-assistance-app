@@ -151,6 +151,9 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('post-images', 'post-imag
 INSERT INTO storage.objects (bucket_id, name) VALUES
  ('post-images', 'a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.jpg'),
  ('post-images', 'a0000000-0000-4000-8000-000000000001/44444444-4444-4444-8444-444444444444.webp'),
+ -- existing objects in the author's own folder with a refused type: only the extension rule can refuse them
+ ('post-images', 'a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.gif'),
+ ('post-images', 'a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.svg'),
  ('post-images', 'c0000000-0000-4000-8000-000000000003/22222222-2222-4222-8222-222222222222.jpg');
 CREATE TEMP TABLE snap AS
   SELECT id, post_type, petition_id, resource_id, user_id, is_pinned, created_at
@@ -334,14 +337,15 @@ SELECT pg_temp.ck('E13', 'never changed by edits: type, petition, resource, auth
       OR p.comment_count <> (SELECT count(*) FROM public.post_comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL AND NOT c.is_hidden)));
 SELECT pg_temp.t('E14', 'no-op edit: nothing changes, no version bump, no revision', '"changed": \[\].*"version": 1', 'A',
   $q$SELECT public.edit_post('00000000-0000-4000-a000-000000000007', 1, '{"content":"resource share"}')::text$q$);
-SELECT pg_temp.ck('E15', 'image_url: foreign host, other user folder, missing object, gif refused; own object ok; alt needs image',
-  '^host=>ERR 22023 post_field_invalid:image_url.*\nother=>ERR 22023 post_field_invalid:image_url.*\nmissing=>ERR 22023 post_field_invalid:image_url.*\ngif=>ERR 22023 post_field_invalid:image_url.*\nown=>OK.*\nalt_no_img=>ERR 22023 post_field_invalid:image_alt',
-  pg_temp.each('A', ARRAY['host','other','missing','gif','own','alt_no_img'],
+SELECT pg_temp.ck('E15', 'image_url: foreign host, other user folder, missing object, an existing own gif / svg refused; own object ok; alt needs image',
+  '^host=>ERR 22023 post_field_invalid:image_url.*\nother=>ERR 22023 post_field_invalid:image_url.*\nmissing=>ERR 22023 post_field_invalid:image_url.*\ngif=>ERR 22023 post_field_invalid:image_url.*\nsvg=>ERR 22023 post_field_invalid:image_url.*\nown=>OK.*\nalt_no_img=>ERR 22023 post_field_invalid:image_alt',
+  pg_temp.each('A', ARRAY['host','other','missing','gif','svg','own','alt_no_img'],
    $q$SELECT public.edit_post((SELECT fresh FROM ids), (SELECT version FROM public.posts WHERE id = (SELECT fresh FROM ids)), (jsonb_build_object(
      'host', '{"image_url":"https://evil.example/storage/v1/object/public/post-images/a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.jpg"}'::jsonb,
      'other', '{"image_url":"https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/c0000000-0000-4000-8000-000000000003/22222222-2222-4222-8222-222222222222.jpg"}'::jsonb,
      'missing', '{"image_url":"https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/a0000000-0000-4000-8000-000000000001/33333333-3333-4333-8333-333333333333.jpg"}'::jsonb,
      'gif', '{"image_url":"https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.gif"}'::jsonb,
+     'svg', '{"image_url":"https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.svg"}'::jsonb,
      'own', '{"image_url":"https://ndtpovonpadugthmcntl.supabase.co/storage/v1/object/public/post-images/a0000000-0000-4000-8000-000000000001/11111111-1111-4111-8111-111111111111.jpg","image_alt":"Crates of apples"}'::jsonb,
      'alt_no_img', '{"image_url":null,"image_alt":"orphan alt"}'::jsonb))->%L)::text$q$));
 SELECT pg_temp.run('A', $q$SELECT public.edit_post((SELECT fresh FROM ids), (SELECT version FROM public.posts WHERE id = (SELECT fresh FROM ids)), '{"image_url":null}')::text$q$);
@@ -412,9 +416,10 @@ SELECT pg_temp.t('K3', 'comment owner can no longer re-point post_id (UPDATE rev
   $q$UPDATE public.post_comments SET post_id = '00000000-0000-4000-a000-000000000005' WHERE id = '0d000000-0000-4000-8000-0000000000c1' RETURNING 'x'$q$);
 SELECT pg_temp.t('K5a', 'anon reads comment history while the comment is visible', '^OK 1$', 'anon',
   $q$SELECT count(*)::text FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c1'$q$);
-SELECT pg_temp.ck('K4', 'moderator hides a comment with exactly one audit row; member refused',
-  '^ERR 42501 p3_denied:insufficient_tier.*\|\+0;OK .*"is_hidden": true.*\|\+1$',
-  pg_temp.audited('C', $q$SELECT public.admin_set_comment_hidden('0d000000-0000-4000-8000-0000000000c1', true, 'spam')::text$q$)
+SELECT pg_temp.ck('K4', 'moderator hides a comment with exactly one audit row; guest (platform_admin tier) and member refused',
+  '^ERR 42501 guest_refused.*\|\+0;ERR 42501 p3_denied:insufficient_tier.*\|\+0;OK .*"is_hidden": true.*\|\+1$',
+  pg_temp.audited('G', $q$SELECT public.admin_set_comment_hidden('0d000000-0000-4000-8000-0000000000c1', true, 'spam')::text$q$)
+  || ';' || pg_temp.audited('C', $q$SELECT public.admin_set_comment_hidden('0d000000-0000-4000-8000-0000000000c1', true, 'spam')::text$q$)
   || ';' || pg_temp.audited('CM', $q$SELECT public.admin_set_comment_hidden('0d000000-0000-4000-8000-0000000000c1', true, 'spam')::text$q$));
 SELECT pg_temp.ck('K4b', 'hidden comment: its author cannot edit it', '^B=>ERR 42501 comment_hidden;$',
   pg_temp.who(ARRAY['B'], $q$SELECT public.edit_comment('0d000000-0000-4000-8000-0000000000c1', 3, 'sneaky')::text$q$));
@@ -475,9 +480,9 @@ DELETE FROM auth.users WHERE id = '40000000-0000-4000-8000-00000000000a';
 SELECT pg_temp.ck('K8g', 'account deletion removes the leaver''s comment but keeps the reply (re-rooted, parent_id NULL)', '^0\|reply to leaver\|t$',
   (SELECT count(*) FROM public.post_comments WHERE id = '0d000000-0000-4000-8000-0000000000c7') || '|' ||
   (SELECT content || '|' || (parent_id IS NULL)::char FROM public.post_comments WHERE id = '0d000000-0000-4000-8000-0000000000c8'));
-SELECT pg_temp.ck('R9', 'comment history redaction: member refused; author ok; platform admin needs a reason, then one audit row',
-  '^C=>ERR 42501 p3_denied:insufficient_tier;\|OK .*"redactor_role": "author".*\|\+0\|ERR 22023 reason_required.*\|\+0\|OK .*"redactor_role": "platform_admin".*\|\+1$',
-  pg_temp.who(ARRAY['C'], $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c1'))::text$q$)
+SELECT pg_temp.ck('R9', 'comment history redaction: guest (platform_admin tier) and member refused; author ok; platform admin needs a reason, then one audit row',
+  '^G=>ERR 42501 guest_refused;C=>ERR 42501 p3_denied:insufficient_tier;\|OK .*"redactor_role": "author".*\|\+0\|ERR 22023 reason_required.*\|\+0\|OK .*"redactor_role": "platform_admin".*\|\+1$',
+  pg_temp.who(ARRAY['G','C'], $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c1'))::text$q$)
   || '|' || pg_temp.audited('B', $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c1'))::text$q$)
   || '|' || pg_temp.audited('PA', $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c2'))::text$q$)
   || '|' || pg_temp.audited('PA', $q$SELECT public.redact_comment_revision((SELECT id FROM public.post_comment_revisions WHERE comment_id = '0d000000-0000-4000-8000-0000000000c2'), 'address')::text$q$));
@@ -564,6 +569,11 @@ CREATE TEMP TABLE gp AS SELECT content AS k, id FROM public.posts WHERE content 
 GRANT SELECT ON gp TO PUBLIC;
 CREATE FUNCTION pg_temp.g(k text) RETURNS uuid LANGUAGE sql AS $f$ SELECT id FROM gp WHERE gp.k = $1 $f$;
 GRANT EXECUTE ON FUNCTION pg_temp.g(text) TO PUBLIC;
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"g held"}')::text$q$);
+SELECT pg_temp.run('CM', $q$SELECT public.admin_hold_post((SELECT id FROM public.posts WHERE content = 'g held'), 1)::text$q$);
+SELECT pg_temp.ck('G1b', 'a held post, fresh and never engaged: the author''s edit is recorded, not quiet', '^t\|t\|OK .*"grace": false',
+  (SELECT (is_hidden AND created_at > now() - interval '5 minutes')::char || '|' || (engaged_at IS NULL)::char FROM public.posts WHERE content = 'g held') || '|' ||
+  pg_temp.run('A', $q$SELECT public.edit_post((SELECT id FROM public.posts WHERE content = 'g held'), 1, '{"content":"g held!"}')::text$q$));
 SELECT pg_temp.ck('G1', 'no engagement: engaged_at NULL and the edit is quiet', '^t\|OK .*"grace": true',
   (SELECT (engaged_at IS NULL)::char FROM public.posts WHERE id = pg_temp.g('g quiet')) || '|' ||
   pg_temp.run('A', $q$SELECT public.edit_post(pg_temp.g('g quiet'), 1, '{"content":"g quiet!"}')::text$q$));
@@ -777,7 +787,9 @@ SELECT pg_temp.run('A', $q$SELECT public.submit_content_report('post', (SELECT x
 SELECT pg_temp.ck('X5a', 'hold and remove: one audit row each, carrying the version', '^OK .*\|\+1;OK .*\|\+1$',
   pg_temp.audited('CM', $q$SELECT public.admin_hold_post((SELECT x2 FROM xp), 1)::text$q$)
   || ';' || pg_temp.audited('CM', $q$SELECT public.admin_remove_post((SELECT x3 FROM xp), 'abuse', 1)::text$q$));
-SELECT pg_temp.run('CM', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT x2 FROM xp)), 'dismiss', 1)::text$q$);
+SELECT pg_temp.ck('X5r', 'admin_resolve_report returns the superset {report_id, action, unhidden, needs_review}', '^OK t\|dismiss$',
+  (SELECT CASE WHEN r LIKE 'OK %' THEN 'OK ' || (substr(r, 4)::jsonb ?& ARRAY['report_id', 'action', 'unhidden', 'needs_review'])::char || '|' || (substr(r, 4)::jsonb ->> 'action') ELSE r END
+   FROM (SELECT pg_temp.run('CM', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT x2 FROM xp)), 'dismiss', 1)::text$q$) AS r) s));
 SELECT pg_temp.ck('X5', 'dismissing the only report of a HELD or REMOVED post never un-hides it', '^true\|hold_for_review;true\|admin_removal$',
   (SELECT string_agg(is_hidden || '|' || hidden_reason, ';' ORDER BY content) FROM public.posts WHERE id IN (SELECT x2 FROM xp UNION SELECT x3 FROM xp)));
 SELECT pg_temp.run('C', $q$SELECT public.edit_post((SELECT x2 FROM xp), 1, '{"content":"to hold (fixed)"}')::text$q$);
@@ -862,6 +874,47 @@ SELECT pg_temp.ck('L2', 'author-only actions (create, edit, delete, own redactio
 SELECT pg_temp.ck('L3', 'every post moderation audit row carries the version acted on', '^0$',
   (SELECT count(*)::text FROM public.admin_actions WHERE action IN ('post.hold','post.remove','post.authorize') AND NOT (details ? 'version')));
 
+-- ===================== W: comment INSERT columns (column-scoped grant) =====================
+SELECT pg_temp.as_(pg_temp.u('A'), false, $q$SELECT public.create_post('feed', '{"content":"w post"}')::text$q$);
+SELECT pg_temp.ck('W1', 'a member cannot set created_at on a new comment (would keep grace open for good)', '^ERR 42501 permission denied for table post_comments',
+  pg_temp.run('B', $q$INSERT INTO public.post_comments (post_id, user_id, content, created_at) VALUES ((SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'forged', '2099-01-01') RETURNING 'x'$q$));
+SELECT pg_temp.ck('W2', 'a member cannot set version / edit_count / edited_at (fake "Edited")', '^ERR 42501 permission denied for table post_comments',
+  pg_temp.run('B', $q$INSERT INTO public.post_comments (post_id, user_id, content, version, edit_count, edited_at) VALUES ((SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'forged', 5, 4, now()) RETURNING 'x'$q$));
+SELECT pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000c1', (SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'normal') RETURNING 'x'$q$);
+SELECT pg_temp.ck('W3', 'the client''s inserts still work: a comment (post_id, user_id, content) and a reply (+ parent_id); defaults applied',
+  '^OK x\|t\|1\|0\|t$',
+  pg_temp.run('C', $q$INSERT INTO public.post_comments (post_id, user_id, content, parent_id) VALUES ((SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'reply', '0e000000-0000-4000-8000-0000000000c1') RETURNING 'x'$q$) || '|' ||
+  (SELECT (created_at = now())::char || '|' || version || '|' || edit_count || '|' || (edited_at IS NULL)::char FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000c1'));
+SELECT pg_temp.ck('W4', 'comment INSERT: anon none; authenticated only id, post_id, user_id, content, parent_id',
+  '^f\|id,post_id,user_id,content,parent_id$',
+  has_table_privilege('anon', 'public.post_comments', 'INSERT')::char || '|' ||
+  (SELECT string_agg(attname, ',' ORDER BY attnum) FROM pg_attribute WHERE attrelid = 'public.post_comments'::regclass AND attnum > 0 AND NOT attisdropped
+     AND has_column_privilege('authenticated', 'public.post_comments', attname, 'INSERT')));
+
+-- ===================== S: per-viewer visibility; reads survive a client REVOKE of profiles.is_staff (Settings C2) =====================
+SELECT pg_temp.as_(pg_temp.u('A'), false, x) FROM unnest(ARRAY[
+  $q$SELECT public.create_post('feed', '{"content":"vis visible"}')::text$q$,
+  $q$SELECT public.create_post('feed', '{"content":"vis held"}')::text$q$,
+  $q$SELECT public.create_post('feed', '{"content":"vis deleted"}')::text$q$]) x;
+SELECT pg_temp.run('CM', $q$SELECT public.admin_hold_post((SELECT id FROM public.posts WHERE content = 'vis held'), 1)::text$q$);
+SELECT pg_temp.run('A', $q$SELECT public.delete_own_post((SELECT id FROM public.posts WHERE content = 'vis deleted'))::text$q$);
+SELECT pg_temp.run('C', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000b1', (SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'vis ok') RETURNING 'x'$q$);
+SELECT pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000b2', (SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'vis hidden') RETURNING 'x'$q$);
+SELECT pg_temp.run('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000b2', true)::text$q$);
+CREATE FUNCTION pg_temp.vis() RETURNS text LANGUAGE sql AS $f$
+  SELECT pg_temp.who(ARRAY['anon','C','A','B','CM','PA','G'],
+    $q$SELECT (SELECT count(*) FROM public.posts WHERE content IN ('vis visible', 'vis held', 'vis deleted')) || '|' ||
+              (SELECT count(*) FROM public.post_comments WHERE id IN ('0e000000-0000-4000-8000-0000000000b1', '0e000000-0000-4000-8000-0000000000b2'))$q$)
+$f$;
+-- posts (visible, held, deleted) | comments (visible, hidden): anon / member see visible rows; the post author also
+-- their held post; the hidden comment's author also that comment; staff (CM, PA, and the guest that holds a tier) all
+SELECT pg_temp.ck('S1', 'per-viewer visibility of posts | comments', '^anon=>OK 1\|1;C=>OK 1\|1;A=>OK 2\|1;B=>OK 1\|2;CM=>OK 3\|2;PA=>OK 3\|2;G=>OK 3\|2;$', pg_temp.vis());
+REVOKE SELECT (is_staff) ON public.profiles FROM anon, authenticated;
+SELECT pg_temp.ck('S2', 'simulated Settings C2 in force: clients can no longer read profiles.is_staff', '^anon=>ERR 42501 [^;]*;C=>ERR 42501 [^;]*;$',
+  pg_temp.who(ARRAY['anon','C'], $q$SELECT is_staff::text FROM public.profiles LIMIT 1$q$));
+SELECT pg_temp.ck('S3', 'under simulated C2 the same per-viewer visibility (no read fails)', '^anon=>OK 1\|1;C=>OK 1\|1;A=>OK 2\|1;B=>OK 1\|2;CM=>OK 3\|2;PA=>OK 3\|2;G=>OK 3\|2;$', pg_temp.vis());
+GRANT SELECT (is_staff) ON public.profiles TO anon, authenticated;
+
 -- ===================== F: feed delivery =====================
 SELECT pg_temp.t('F1', 'anon hydration select of the public new columns (column grants)', '^OK', 'anon',
   $q$SELECT count(*)::text FROM (SELECT id, version, edited_at, edit_count, image_alt FROM public.posts) x$q$);
@@ -911,6 +964,9 @@ SELECT pg_temp.ck('Q4', 'realtime: posts column list = the 18 previous columns +
   '^poll_votes:id,poll_id\|post_comments:id,post_id\|posts:id,user_id,content,image_url,is_pinned,is_hidden,created_at,updated_at,resource_id,max_seekers,slots_remaining,post_type,petition_id,hidden_at,hidden_reason,metadata,like_count,comment_count,version,edited_at,edit_count,image_alt,deleted_at,needs_review_at$',
   (SELECT string_agg(tablename || ':' || array_to_string(attnames, ','), '|' ORDER BY tablename) FROM pg_publication_tables
    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename IN ('posts', 'poll_votes', 'post_comments')));
+SELECT pg_temp.ck('Q4b', 'revision id sequences: no anon / authenticated USAGE, SELECT or UPDATE', '^ffffffffffff$',
+  (SELECT string_agg(has_sequence_privilege(r, sq, pr)::char, '' ORDER BY sq, r, pr)
+   FROM unnest(ARRAY['public.post_revisions_id_seq', 'public.post_comment_revisions_id_seq']) sq, unnest(ARRAY['anon', 'authenticated']) r, unnest(ARRAY['USAGE', 'SELECT', 'UPDATE']) pr));
 SELECT pg_temp.ck('Q5', 'named author FKs kept (posts_user_id_fkey, post_comments_user_id_fkey)', '^2$',
   (SELECT count(*)::text FROM pg_constraint WHERE conname IN ('posts_user_id_fkey', 'post_comments_user_id_fkey') AND contype = 'f'));
 SELECT pg_temp.ck('Q6', 'ledger rows: 026 always; 0265 exactly when contracted', CASE WHEN pg_temp.contract() THEN '^1\|1$' ELSE '^1\|0$' END,

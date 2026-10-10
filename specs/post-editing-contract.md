@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (182 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (192 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
 
 ## Release: expand / contract
 
@@ -101,7 +101,9 @@ An author cannot redact a post revision that an **open** report points at (`revi
 Author only; 1–2000 chars after trim; stale version → `PT409` (`details` `{"edited_at": …, "current_version": n}`).
 Grace = within 5 min and no replies. Refused when the comment is deleted (`PT404 comment_deleted`),
 hidden (`comment_hidden`) or the post is deleted / removed (`comments_closed`). Comments are inserted as
-before (direct `post_comments` INSERT); **UPDATE and DELETE are revoked** (use this RPC and
+before (direct `post_comments` INSERT), with **only** `id`, `post_id`, `user_id`, `content`, `parent_id` (column grant;
+`created_at`, `version`, `edit_count`, `edited_at`, `deleted_at`, `is_hidden` take their defaults, any other column →
+`42501 permission denied for table post_comments`); **UPDATE and DELETE are revoked** (use this RPC and
 `delete_own_comment`).
 
 ### `delete_own_comment(p_comment_id uuid) → jsonb`
@@ -277,10 +279,14 @@ instant → `ends_at = now()`); shortening to a future time or reopening a close
 | `engaged_at` | — | — | triggers only (first like / vote / comment / opt-in; never cleared) |
 | `location` | — | — | (unchanged) |
 
-Row visibility (`posts_select_public`): visible posts to everyone; a hidden (held / removed /
-community-hidden) post to its author and staff; a **deleted** post to staff only.
-`post_comments` + both history tables follow the parent: readable exactly when the parent is
-readable; a hidden comment by its author + staff only.
+Row visibility (`posts_select_public` for anon, `posts_select_member` for signed-in users): visible posts to
+everyone; a hidden (held / removed / community-hidden) post to its author and staff; a **deleted** post to staff only.
+`post_comments` (`post_comments_select_visible` anon, `post_comments_select_member` signed-in) + both history tables
+follow the parent: readable exactly when the parent is readable; a hidden comment by its author + staff only.
+Staff = community moderator tier and up, through `current_user_tier_at_least('community_moderator')`. No read policy
+reads a `profiles` column, so a client-role REVOKE of `profiles` columns (Settings C2) cannot break post or comment
+reads. Equivalent to the previous `profiles.is_staff` test: production 2026-10-09 has 0 of 23 profiles where
+`is_staff <> (admin_tier IS NOT NULL)`, and `community_moderator` is the lowest tier (smoke S1–S3).
 
 `post_comments` gains `version`, `edited_at`, `edit_count`, `deleted_at`; `content_reports` gains `reported_version`.
 
@@ -304,6 +310,7 @@ one row per recorded edit, holding the superseded `version`; `snapshot` =
 `{content, metadata, image_url, image_alt, max_seekers[, poll {question, options, ends_at}]}`.
 `post_comment_revisions(id, comment_id, version, edited_at, content, redacted_at, redactor_role)`.
 No author name in either: the author is the post's author; redactions show the role only.
+Clients have no privilege on their id sequences (`post_revisions_id_seq`, `post_comment_revisions_id_seq`).
 Fetch: `.from('post_revisions').select('id, version, edited_at, reason, fields_changed, snapshot, redacted_at, redactor_role').eq('post_id', id).order('version', { ascending: false })`.
 
 ## Realtime

@@ -38,7 +38,10 @@
 --       "deleted"), admin_set_comment_hidden (community moderator+, audited); client UPDATE and DELETE
 --       on comments revoked (post_id / parent_id / user_id can no longer be re-pointed); a hard delete
 --       (account deletion) re-roots replies instead of deleting them (parent FK ON DELETE SET NULL);
---       comments of a post readable only while the post is readable.
+--       comments of a post readable only while the post is readable. Comment INSERT is column-scoped
+--       (id, post_id, user_id, content, parent_id): created_at / version / edit counters are not forgeable.
+--       Post and comment read policies are split anon / authenticated and find staff through
+--       current_user_tier_at_least, not a direct profiles.is_staff read.
 --   (f1) Counters: comment_count counts only comments that are neither deleted nor hidden; comment_count
 --       and like_count are recounted after taking the post row lock (the old recount lost one of two
 --       concurrent changes); submit_content_report locks the post before counting open reports.
@@ -106,7 +109,7 @@ COMMENT ON COLUMN public.posts.version IS 'Optimistic-concurrency token: 1 at cr
 COMMENT ON COLUMN public.posts.edited_at IS 'Last recorded (non-grace) edit; NULL = never shown as Edited.';
 COMMENT ON COLUMN public.posts.deleted_at IS 'Soft delete by the author (delete_own_post); implies is_hidden.';
 COMMENT ON COLUMN public.posts.lang IS 'The author''s app language when posting (lib/i18n.ts Locale; NULL = unknown). Set by create_post, never edited; share previews use it.';
-COMMENT ON COLUMN public.posts.engaged_at IS 'First like, poll vote or comment (set once by triggers, never cleared: an unlike, unvote, comment delete or hide keeps it). Ends the quiet-edit grace. Server-only: no client grant.';
+COMMENT ON COLUMN public.posts.engaged_at IS 'First like, poll vote, comment or opt-in (set once by triggers, never cleared: an unlike, unvote, withdrawn opt-in, comment delete or hide keeps it). Ends the quiet-edit grace. Server-only: no client grant.';
 COMMENT ON COLUMN public.posts.needs_review_at IS 'The author edited this held / community-hidden post at this time; cleared by any moderation decision.';
 COMMENT ON COLUMN public.post_comments.deleted_at IS 'Soft delete by the author (delete_own_comment): content is emptied, the row and its replies stay.';
 COMMENT ON COLUMN public.content_reports.reported_version IS 'posts.version the reporter saw (NULL = filed before 20261026000000).';
@@ -1559,10 +1562,17 @@ GRANT SELECT (deleted_at, needs_review_at) ON public.posts TO authenticated;
 -- (post_id cannot be re-pointed; deleting never removes other people's replies). The deployed client
 -- never updates or deletes comments, so this needs no expand step.
 REVOKE UPDATE, DELETE ON public.post_comments FROM PUBLIC, anon, authenticated;
+-- comment INSERT: only the columns a member writes. created_at, version, edit_count, edited_at, deleted_at and
+-- is_hidden take their defaults (a forged future created_at kept the comment's quiet-edit grace open for good;
+-- a forged version / edit_count / edited_at showed a fake "Edited"). The deployed client (develop 52f6dee) and
+-- this branch insert post_id, user_id, content (+ parent_id for a reply) only, so this needs no expand step.
+REVOKE INSERT ON public.post_comments FROM PUBLIC, anon, authenticated;
+GRANT INSERT (id, post_id, user_id, content, parent_id) ON public.post_comments TO authenticated;
 
 REVOKE ALL ON public.post_revisions, public.post_comment_revisions FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.post_revisions, public.post_comment_revisions TO anon, authenticated;
 GRANT ALL ON public.post_revisions, public.post_comment_revisions TO service_role;
+REVOKE ALL ON SEQUENCE public.post_revisions_id_seq, public.post_comment_revisions_id_seq FROM anon, authenticated;
 
 DO $grants$
 DECLARE f text;
@@ -1616,18 +1626,24 @@ CREATE POLICY post_revisions_select_if_post_readable ON public.post_revisions
 CREATE POLICY post_comment_revisions_select_if_comment_readable ON public.post_comment_revisions
   FOR SELECT USING (public.comment_is_readable(comment_id));
 
+-- Read policies: split by role, and staff = current_user_tier_at_least('community_moderator') (SECURITY DEFINER,
+-- reads admin_tier) instead of a direct profiles.is_staff read, so a client-role REVOKE of profiles columns
+-- (Settings C2) cannot turn post or comment reads into 42501. Equivalent: is_staff is kept equal to
+-- (admin_tier IS NOT NULL) by sync_tier_flags_trigger and community_moderator is the lowest tier (prod
+-- 2026-10-09: 0 of 23 profiles differ). anon cannot execute the tier function and has no uid: visible rows only.
 -- posts: the author no longer sees their own deleted post; staff still do (audit)
-ALTER POLICY posts_select_public ON public.posts USING (
+ALTER POLICY posts_select_public ON public.posts TO anon USING (NOT is_hidden);
+CREATE POLICY posts_select_member ON public.posts FOR SELECT TO authenticated USING (
   (NOT is_hidden)
   OR (user_id = (SELECT auth.uid()) AND deleted_at IS NULL)
-  OR EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = (SELECT auth.uid()) AND profiles.is_staff = true));
+  OR (SELECT public.current_user_tier_at_least('community_moderator')));
 
 -- comments: readable only while the post is readable; a hidden comment by its author + staff only;
 -- new comments / replies only on a visible post
-ALTER POLICY post_comments_select_visible ON public.post_comments USING (
-  ((NOT is_hidden)
-   OR user_id = (SELECT auth.uid())
-   OR EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = (SELECT auth.uid()) AND profiles.is_staff = true))
+ALTER POLICY post_comments_select_visible ON public.post_comments TO anon
+  USING ((NOT is_hidden) AND public.post_is_readable(post_id));
+CREATE POLICY post_comments_select_member ON public.post_comments FOR SELECT TO authenticated USING (
+  ((NOT is_hidden) OR user_id = (SELECT auth.uid()) OR (SELECT public.current_user_tier_at_least('community_moderator')))
   AND public.post_is_readable(post_id));
 DROP POLICY post_comments_update_own ON public.post_comments;
 DROP POLICY post_comments_delete_own ON public.post_comments;
