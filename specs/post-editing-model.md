@@ -61,7 +61,7 @@ visible ──report x3──▶ hidden(community_reports_threshold) ──dismi
 
 Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and races in
 `supabase/tests/posts_editing.race.sh` (C…). Every guard has a mutant that turns its test red
-(156 / 157 killed on the prod-identical harness, the database reviewer's 18 included; the survivor, R-N12 "like/comment BEFORE lock is FOR UPDATE", is equivalent: that lock is the first one an engagement insert takes, and no function inserts likes or comments inside a larger transaction, so the stronger mode can add waiting but never a cycle).
+(171 / 172 killed on the prod-identical harness, the database reviewer's 18 + 12 included; the survivor, R-N12 "like/comment BEFORE lock is FOR UPDATE", is equivalent: that lock is the first one an engagement insert takes, and no function inserts likes or comments inside a larger transaction, so the stronger mode can add waiting but never a cycle).
 
 | # | Invariant | Proof |
 |---|---|---|
@@ -98,8 +98,8 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 | I27 | `posts.like_count` = like rows after the backfill and under concurrent likes / unlikes; two concurrent reports cannot both miss the 3-report threshold | G8a, C10, C10b, C11 |
 | I28 | `engaged_at` is server-only: no client UPDATE / SELECT grant (column `attacl` NULL, no client table UPDATE), not published; client INSERT only between 026 and 0265 (closes the author's own grace only); backfilled from the earliest like / vote / comment / opt-in | G6, G7, G8b, Q4 |
 | I29 | Lock order on every engagement path: the post row, then profiles (likes and comments lock the post BEFORE INSERT; trigger post locks are FOR NO KEY UPDATE), so no like / comment / vote / opt-in pair deadlocks | C13–C16 |
-| I30 | Post, comment and report reads, and comment inserts, depend on no `profiles` column as the caller: read policies split anon / authenticated and find staff through `current_user_tier_at_least('community_moderator')`; `guard_post_comments_is_hidden` and `content_reports_select_own_or_staff` use the same helper. Per-viewer visibility of posts, comments and reports is unchanged, and unchanged under a simulated C2 REVOKE of `profiles.is_staff`; members still comment and reply under it | S1–S5 |
-| I31 | No one lifts or clears moderation on their own content (platform admins included): authorize, resolving a report (dismiss or uphold) and unhiding a comment by the content's author → `42501 self_moderation_refused`, no audit row, versioned and legacy calls alike; self hold / remove / hide stay allowed; another moderator clears it | Y1–Y8 |
+| I30 | Post, comment and report reads, and comment inserts, depend on no `profiles` column as the caller: read policies split anon / authenticated and find staff through `current_user_tier_at_least('community_moderator')`; `guard_post_comments_is_hidden` and `content_reports_select_own_or_staff` use the same helper. Per-viewer visibility of posts, comments and reports is unchanged, and unchanged under a simulated C2 REVOKE of `profiles.is_staff`; members still comment and reply under it (the `is_hidden` guard itself, beneath the column grant: S6) | S1–S6 |
+| I31 | No one lifts or clears moderation on their own content (platform admins included): authorize, resolving a report (dismiss or uphold), unhiding a comment, and holding one's own post that another moderator removed → `42501 self_moderation_refused`, no audit row, versioned and legacy calls alike; self hold / remove / hide stay allowed but never clear `needs_review_at`; another moderator clears it | Y1–Y10 |
 
 ## Prototype → PR-2 changes (found while building)
 
@@ -153,7 +153,10 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
     three member reports could authorize it, which restores it and dismisses every report, or dismiss / uphold the
     reports one by one. They could also unhide their own hidden comment. All four now refuse with
     `self_moderation_refused` (the user's clearance rule: no one moderates their own content); restricting one's own
-    content stays allowed.
+    content stays allowed. The next review found three more gaps: a versioned self-hold or self-remove cleared
+    `needs_review_at`, so a later legacy authorize skipped the edited-since-hidden conflict; a self-hold turned another
+    moderator's removal into an editable hold; and the platform-admin case was untested for resolve and unhide. One's own
+    hold / removal now keeps the flag, holding one's own removed post is refused, and Y4 / Y6 cover platform admins.
 
 ## Out of PR-2 (later PRs)
 

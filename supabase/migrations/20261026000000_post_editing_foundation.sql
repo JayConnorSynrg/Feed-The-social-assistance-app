@@ -51,7 +51,8 @@
 --   (f2) Engagement on hidden posts: likes, comments (and replies) and poll votes are refused on any
 --       hidden (held, removed, community-hidden or deleted) post, for everyone, like opt-ins.
 --   (g) Moderation integrity: no one lifts or clears moderation on their own content (authorize, resolving a
---       report, unhiding a comment: 42501 self_moderation_refused; hold / remove / hide stay allowed); reports snapshot the version; admin_hold / remove / authorize /
+--       report, unhiding a comment, holding one's own removed post: 42501 self_moderation_refused; hold / remove /
+--       hide stay allowed, but one's own hold or removal never clears the review flag); reports snapshot the version; admin_hold / remove / authorize /
 --       resolve_report take an OPTIONAL p_expected_version (NULL = legacy caller, accepted); a
 --       dismissal lifts only a community_reports_threshold hide; publishing an author's edit
 --       that no moderator has seen needs the version, and only a versioned decision clears the
@@ -1063,11 +1064,15 @@ BEGIN
   IF p.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'post_deleted' USING ERRCODE = 'PT404';
   END IF;
+  -- a hold would turn another moderator's removal of one's own post into a hold (editable again)
+  IF p.user_id = auth.uid() AND p.hidden_reason = 'admin_removal' THEN
+    RAISE EXCEPTION 'self_moderation_refused' USING ERRCODE = '42501';
+  END IF;
 
-  -- the review flag clears only when the moderator acted on the version they saw
+  -- the review flag clears only when another moderator acted on the version they saw (never on one's own post)
   UPDATE public.posts
   SET is_hidden = true, hidden_at = now(), hidden_reason = 'hold_for_review',
-      needs_review_at = CASE WHEN p_expected_version IS NULL THEN needs_review_at END
+      needs_review_at = CASE WHEN p_expected_version IS NULL OR p.user_id = auth.uid() THEN needs_review_at END
   WHERE id = p_post_id;
 
   PERFORM public.record_admin_action(auth.uid(), 'post.hold', 'post', p_post_id::text,
@@ -1096,7 +1101,7 @@ BEGIN
 
   UPDATE public.posts
   SET is_hidden = true, hidden_at = now(), hidden_reason = 'admin_removal',
-      needs_review_at = CASE WHEN p_expected_version IS NULL THEN needs_review_at END
+      needs_review_at = CASE WHEN p_expected_version IS NULL OR p.user_id = auth.uid() THEN needs_review_at END
   WHERE id = p_post_id;
 
   UPDATE public.content_reports

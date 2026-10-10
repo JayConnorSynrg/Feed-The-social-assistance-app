@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (203 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (208 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
 
 ## Release: expand / contract
 
@@ -224,8 +224,10 @@ G8b (every post in the database matches, including rows that existed before 026)
   `42501 self_moderation_refused` for `admin_authorize_post` on one's own post, `admin_resolve_report` on a report
   against one's own post (both `p_action` values: `dismiss` clears the report and can lift the community hide;
   `uphold` takes it out of the open count that the 3-report auto-hide counts), and `admin_set_comment_hidden(…, false)`
-  on one's own comment. Raised after the guest, tier and existing checks, before any write; no audit row. Holding,
-  removing or hiding one's own content stays allowed. Another moderator or a platform admin clears it (production
+  on one's own comment, and `admin_hold_post` on one's own post that another moderator removed (a hold would make it
+  editable again). Raised after the guest, tier and existing checks, before any write; no audit row. Holding,
+  removing or hiding one's own content stays allowed, but one's own hold or removal never clears the review flag
+  (`needs_review_at`), even with a version, so a later legacy authorize still gets `PT409`. Another moderator or a platform admin clears it (production
   2026-10-10: 2 staff accounts, both `platform_admin`). Legacy (version-less) calls follow the same rule.
 - **Send the version the moderator is looking at** (`posts.version`). A stale one → `PT409`.
 - `NULL` = legacy caller (accepted during the client rollout). A legacy caller **cannot publish**

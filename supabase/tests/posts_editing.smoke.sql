@@ -924,18 +924,31 @@ SELECT pg_temp.ck('S4', 'under simulated C2 the same per-viewer visibility of re
 SELECT pg_temp.ck('S5', 'under simulated C2 a member still comments and replies (the is_hidden guard reads no profiles column)', '^OK x\|OK x$',
   pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000b3', (SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'under c2') RETURNING 'x'$q$) || '|' ||
   pg_temp.run('C', $q$INSERT INTO public.post_comments (post_id, user_id, content, parent_id) VALUES ((SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'reply under c2', '0e000000-0000-4000-8000-0000000000b3') RETURNING 'x'$q$));
+-- the is_hidden guard is defense in depth beneath the column grant (clients cannot insert is_hidden or update comments):
+-- loosen the grant for this check only, still under the simulated C2, and the guard must still decide
+GRANT INSERT (is_hidden) ON public.post_comments TO authenticated;
+SELECT pg_temp.ck('S6', 'guard beneath the grant: with INSERT(is_hidden) granted for the test, a member''s hidden comment is refused, a moderator''s is allowed (under C2)',
+  '^C=>ERR 42501 guard:post_comments_is_hidden[^;]*;CM=>OK x;$',
+  pg_temp.who(ARRAY['C','CM'], $q$INSERT INTO public.post_comments (post_id, user_id, content, is_hidden) VALUES ((SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'guard test', true) RETURNING 'x'$q$));
+REVOKE INSERT (is_hidden) ON public.post_comments FROM authenticated;
 GRANT SELECT (is_staff) ON public.profiles TO anon, authenticated;
 
 -- ===================== Y: no one lifts or clears moderation on their own content =====================
 -- refused: authorize, resolving a report (dismiss or uphold), unhiding a comment (42501 self_moderation_refused,
 -- no audit row); allowed: hold / hide of one's own content; another moderator or a platform admin clears it
 SELECT pg_temp.as_(pg_temp.u(w), false, format('SELECT public.create_post(''feed'', %L)::text', jsonb_build_object('content', c)))
-FROM (VALUES ('CM', 'y own'), ('CM', 'y own reports'), ('CM', 'y own hold'), ('PA', 'y pa own')) v(w, c);
+FROM (VALUES ('CM', 'y own'), ('CM', 'y own reports'), ('CM', 'y own hold'), ('PA', 'y pa own'), ('PA', 'y pa reports'),
+             ('CM', 'y own edited hold'), ('CM', 'y own edited remove'), ('CM', 'y own removed')) v(w, c);
 CREATE TEMP TABLE yp AS SELECT (SELECT id FROM public.posts WHERE content = 'y own') a, (SELECT id FROM public.posts WHERE content = 'y own reports') r,
-  (SELECT id FROM public.posts WHERE content = 'y own hold') h, (SELECT id FROM public.posts WHERE content = 'y pa own') pa;
+  (SELECT id FROM public.posts WHERE content = 'y own hold') h, (SELECT id FROM public.posts WHERE content = 'y pa own') pa,
+  (SELECT id FROM public.posts WHERE content = 'y pa reports') pr, (SELECT id FROM public.posts WHERE content = 'y own edited hold') eh,
+  (SELECT id FROM public.posts WHERE content = 'y own edited remove') er, (SELECT id FROM public.posts WHERE content = 'y own removed') rm;
 GRANT SELECT ON yp TO PUBLIC;
 SELECT pg_temp.run(w, format('SELECT public.submit_content_report(''post'', %L, ''spam'')::text', x))
-FROM unnest(ARRAY['B','C','B2']) w, (SELECT a AS x FROM yp UNION ALL SELECT r FROM yp) t;
+FROM unnest(ARRAY['B','C','B2']) w, (SELECT a AS x FROM yp UNION ALL SELECT r FROM yp UNION ALL SELECT pr FROM yp
+                                     UNION ALL SELECT eh FROM yp UNION ALL SELECT er FROM yp) t;
+-- fresh(q): read state AFTER calls made earlier in the same check (an inline subquery sees the check's start snapshot)
+CREATE FUNCTION pg_temp.fresh(q text) RETURNS text LANGUAGE plpgsql AS $f$ DECLARE r text; BEGIN EXECUTE q INTO r; RETURN r; END $f$;
 CREATE FUNCTION pg_temp.ystate(p_post uuid) RETURNS text LANGUAGE sql AS $f$
   SELECT is_hidden || '|' || (SELECT count(*) FROM public.content_reports WHERE content_id = p_post AND status = 'open') FROM public.posts WHERE id = p_post
 $f$;
@@ -947,12 +960,15 @@ SELECT pg_temp.ck('Y2', 'the author-moderator cannot authorize their own post (v
   pg_temp.audited('CM', $q$SELECT public.admin_authorize_post((SELECT a FROM yp))::text$q$) || '|' || pg_temp.ystate((SELECT a FROM yp)));
 SELECT pg_temp.ck('Y3', 'a platform admin authorizes it: visible, every open report dismissed, one audit row', '^OK .*\|\+1\|false\|0$',
   pg_temp.audited('PA', $q$SELECT public.admin_authorize_post((SELECT a FROM yp), 1)::text$q$) || '|' || pg_temp.ystate((SELECT a FROM yp)));
-SELECT pg_temp.ck('Y4', 'the author-moderator cannot resolve reports on their own post: dismiss (versioned, legacy) and uphold refused',
-  '^ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0\|true\|3$',
+SELECT pg_temp.ck('Y4', 'the author cannot resolve reports on their own post: CM dismiss (versioned, legacy) and uphold refused; a platform admin on their own post too',
+  '^ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0\|true\|3;PA=>ERR 42501 self_moderation_refused\|\+0;PA=>ERR 42501 self_moderation_refused\|\+0\|true\|3$',
   pg_temp.audited('CM', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT r FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'dismiss', 1)::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT r FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'dismiss')::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT r FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'uphold', 1)::text$q$) || '|' ||
-  pg_temp.ystate((SELECT r FROM yp)));
+  pg_temp.ystate((SELECT r FROM yp)) || ';PA=>' ||
+  pg_temp.audited('PA', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT pr FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'dismiss', 1)::text$q$) || ';PA=>' ||
+  pg_temp.audited('PA', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT pr FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'uphold')::text$q$) || '|' ||
+  pg_temp.ystate((SELECT pr FROM yp)));
 SELECT pg_temp.ck('Y5', 'a platform admin dismisses the three reports (versioned, then legacy): the last lifts the community hide',
   '^OK .*\|\+1;OK .*\|\+1;OK .*"unhidden": true.*\|\+1\|false\|0$',
   pg_temp.audited('PA', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT r FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'dismiss', 1)::text$q$) || ';' ||
@@ -960,25 +976,51 @@ SELECT pg_temp.ck('Y5', 'a platform admin dismisses the three reports (versioned
   pg_temp.audited('PA', $q$SELECT public.admin_resolve_report((SELECT id FROM public.content_reports WHERE content_id = (SELECT r FROM yp) AND status = 'open' ORDER BY reporter_id LIMIT 1), 'dismiss', 1)::text$q$) || '|' ||
   pg_temp.ystate((SELECT r FROM yp)));
 SELECT pg_temp.run('CM', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000d1', (SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'cm own comment') RETURNING 'x'$q$);
-SELECT pg_temp.ck('Y6', 'own comment: the moderator may hide it, may not unhide it (no audit row); a platform admin unhides it',
-  '^OK .*"is_hidden": true.*\|\+1;ERR 42501 self_moderation_refused\|\+0;OK .*"is_hidden": false.*\|\+1\|false$',
+SELECT pg_temp.run('PA', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000d2', (SELECT id FROM public.posts WHERE content = 'w post'), auth.uid(), 'pa own comment') RETURNING 'x'$q$);
+SELECT pg_temp.ck('Y6', 'own comment: the moderator may hide it, may not unhide it (no audit row); a platform admin unhides it; a platform admin''s own comment the same way round',
+  '^OK .*"is_hidden": true.*\|\+1;ERR 42501 self_moderation_refused\|\+0;OK .*"is_hidden": false.*\|\+1\|false;PA=>OK .*"is_hidden": true.*\|\+1;PA=>ERR 42501 self_moderation_refused\|\+0;CM=>OK .*"is_hidden": false.*\|\+1\|false$',
   pg_temp.audited('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d1', true)::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d1', false)::text$q$) || ';' ||
   pg_temp.audited('PA', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d1', false)::text$q$) || '|' ||
-  (SELECT is_hidden::text FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000d1'));
+  pg_temp.fresh($q$SELECT is_hidden::text FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000d1'$q$) || ';PA=>' ||
+  pg_temp.audited('PA', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d2', true)::text$q$) || ';PA=>' ||
+  pg_temp.audited('PA', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d2', false)::text$q$) || ';CM=>' ||
+  pg_temp.audited('CM', $q$SELECT public.admin_set_comment_hidden('0e000000-0000-4000-8000-0000000000d2', false)::text$q$) || '|' ||
+  pg_temp.fresh($q$SELECT is_hidden::text FROM public.post_comments WHERE id = '0e000000-0000-4000-8000-0000000000d2'$q$));
 SELECT pg_temp.ck('Y7', 'own post: the moderator may hold it; may not authorize it back (versioned or legacy); a platform admin can',
   '^OK .*\|\+1;ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0;OK .*\|\+1\|false$',
   pg_temp.audited('CM', $q$SELECT public.admin_hold_post((SELECT h FROM yp), 1)::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_authorize_post((SELECT h FROM yp), 1)::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_authorize_post((SELECT h FROM yp))::text$q$) || ';' ||
   pg_temp.audited('PA', $q$SELECT public.admin_authorize_post((SELECT h FROM yp), 1)::text$q$) || '|' ||
-  (SELECT is_hidden::text FROM public.posts WHERE id = (SELECT h FROM yp)));
+  pg_temp.fresh($q$SELECT is_hidden::text FROM public.posts WHERE id = (SELECT h FROM yp)$q$));
 SELECT pg_temp.ck('Y8', 'platform admins are included: a platform admin holds their own post, cannot authorize it; a community moderator can',
   '^OK .*\|\+1;ERR 42501 self_moderation_refused\|\+0;OK .*\|\+1\|false$',
   pg_temp.audited('PA', $q$SELECT public.admin_hold_post((SELECT pa FROM yp), 1)::text$q$) || ';' ||
   pg_temp.audited('PA', $q$SELECT public.admin_authorize_post((SELECT pa FROM yp), 1)::text$q$) || ';' ||
   pg_temp.audited('CM', $q$SELECT public.admin_authorize_post((SELECT pa FROM yp), 1)::text$q$) || '|' ||
-  (SELECT is_hidden::text FROM public.posts WHERE id = (SELECT pa FROM yp)));
+  pg_temp.fresh($q$SELECT is_hidden::text FROM public.posts WHERE id = (SELECT pa FROM yp)$q$));
+
+-- one's own hold / removal never clears the review flag; one's own removed post cannot be held (would make it editable)
+SELECT pg_temp.run('CM', format('SELECT public.edit_post(%L, 1, %L)::text', x, '{"content":"edited while hidden"}')) FROM (SELECT eh AS x FROM yp UNION ALL SELECT er FROM yp) t;
+SELECT pg_temp.ck('Y9a', 'the CM''s two own posts: hidden by reports, then edited by the CM (version 2, needs_review)', '^community_reports_threshold\|2\|t;community_reports_threshold\|2\|t$',
+  (SELECT string_agg(hidden_reason || '|' || version || '|' || (needs_review_at IS NOT NULL)::char, ';' ORDER BY content) FROM public.posts WHERE id IN ((SELECT eh FROM yp), (SELECT er FROM yp))));
+SELECT pg_temp.ck('Y9', 'a self-hold / self-remove WITH the version keeps needs_review; a platform admin''s legacy authorize then gets PT409',
+  '^OK .*\|\+1\|t;PA=>ERR PT409 edit_conflict.*"needs_review": true.*;\|OK .*\|\+1\|t;PA=>ERR PT409 edit_conflict.*"needs_review": true.*;$',
+  pg_temp.audited('CM', $q$SELECT public.admin_hold_post((SELECT eh FROM yp), 2)::text$q$) || '|' ||
+  pg_temp.fresh($q$SELECT (needs_review_at IS NOT NULL)::char FROM public.posts WHERE id = (SELECT eh FROM yp)$q$) || ';' ||
+  pg_temp.who(ARRAY['PA'], $q$SELECT public.admin_authorize_post((SELECT eh FROM yp))::text$q$) || '|' ||
+  pg_temp.audited('CM', $q$SELECT public.admin_remove_post((SELECT er FROM yp), 'self', 2)::text$q$) || '|' ||
+  pg_temp.fresh($q$SELECT (needs_review_at IS NOT NULL)::char FROM public.posts WHERE id = (SELECT er FROM yp)$q$) || ';' ||
+  pg_temp.who(ARRAY['PA'], $q$SELECT public.admin_authorize_post((SELECT er FROM yp))::text$q$));
+SELECT pg_temp.ck('Y10a', 'a platform admin removes the CM''s post (one audit row)', '^OK .*\|\+1$',
+  pg_temp.audited('PA', $q$SELECT public.admin_remove_post((SELECT rm FROM yp), 'abuse', 1)::text$q$));
+SELECT pg_temp.ck('Y10', 'the CM''s self-hold of their removed post is refused (versioned and legacy, no audit row); it stays removed; the CM''s edit gets post_removed',
+  '^ERR 42501 self_moderation_refused\|\+0;ERR 42501 self_moderation_refused\|\+0\|admin_removal;ERR 42501 post_removed',
+  pg_temp.audited('CM', $q$SELECT public.admin_hold_post((SELECT rm FROM yp), 1)::text$q$) || ';' ||
+  pg_temp.audited('CM', $q$SELECT public.admin_hold_post((SELECT rm FROM yp))::text$q$) || '|' ||
+  pg_temp.fresh($q$SELECT hidden_reason FROM public.posts WHERE id = (SELECT rm FROM yp)$q$) || ';' ||
+  pg_temp.run('CM', $q$SELECT public.edit_post((SELECT rm FROM yp), 1, '{"content":"back again"}')::text$q$));
 
 -- ===================== F: feed delivery =====================
 SELECT pg_temp.t('F1', 'anon hydration select of the public new columns (column grants)', '^OK', 'anon',
