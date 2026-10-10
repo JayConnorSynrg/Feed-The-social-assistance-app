@@ -22,7 +22,6 @@ vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ isAnonymous: false, user:
 import { mount } from '@/test/mini-react'
 import { useFeedEventCards } from './use-feed-event-cards'
 import { buildEventCards, type EventFeedItem, type EventOccurrenceRow } from '@/components/feed/post-model'
-import { feedStatusAnnouncement } from '@/components/feed/feed-chrome'
 
 const E1 = '11111111-1111-4111-8111-111111111111'
 const E2 = '22222222-2222-4222-8222-222222222222'
@@ -128,21 +127,29 @@ describe('useFeedEventCards', () => {
     expect(m.tree().feedNotice).toBe('')
   })
 
-  it('a new first page clears the card notice: the region then says loading, then the empty sentence — never the old notice', async () => {
+  it('the same sentence twice (two identical saves) is announced twice: the notice empties, then speaks again', async () => {
+    const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
+    const heard: string[] = []
+    await m.tree().handleEventManaged(E1, { kind: 'updated' })
+    await m.flush()
+    heard.push(m.tree().feedNotice)
+    const second = m.tree().handleEventManaged(E1, { kind: 'updated' })
+    m.rerender()
+    heard.push(m.tree().feedNotice)
+    await second
+    await m.flush()
+    heard.push(m.tree().feedNotice)
+    expect(heard).toEqual(['Changes saved.', '', 'Changes saved.'])
+  })
+
+  it('a first-page reload after a save (the feed resets its event cards) leaves the notice untouched', async () => {
     const m = setup([listed(E1, 'Saturday pantry', 0.42, '2-5km')])
     await m.tree().handleEventManaged(E1, { kind: 'updated' })
     await m.flush()
-    expect(m.tree().feedNotice).toBe('Changes saved.')
-    // FeedPanel's first-page branch (any filter / order / Retry / realtime refresh).
-    m.tree().clearNotice()
+    // What fetchPosts / fetchRankedPosts do to this hook on a first page.
+    m.tree().setEventItems([])
+    m.tree().setEventMyStatuses({})
     m.rerender()
-    const notice = m.tree().feedNotice
-    const said = [
-      feedStatusAnnouncement({ loading: true, error: false, empty: true, notice }, 'en'),
-      feedStatusAnnouncement({ loading: false, error: false, empty: true, notice }, 'en'),
-      feedStatusAnnouncement({ loading: false, error: false, empty: false, notice }, 'en'),
-    ]
-    expect(said).toEqual(['Loading posts…', 'No posts to show. Be the first to share something!', ''])
-    expect(said).not.toContain('Changes saved.')
+    expect(m.tree().feedNotice).toBe('Changes saved.')
   })
 })

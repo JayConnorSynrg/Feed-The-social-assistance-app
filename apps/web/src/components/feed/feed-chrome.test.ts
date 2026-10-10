@@ -44,7 +44,7 @@ describe('the feed status region waits for the settled language', () => {
     const said: string[] = []
     const m = mount(() => {
       const ready = useFeedAnnounceReady(feedLocaleSettled(input))
-      return ready ? feedStatusAnnouncement({ loading: true, error: false, empty: true, notice: '' }, input.locale) : ''
+      return ready ? feedStatusAnnouncement({ loading: true, error: false, empty: true }, input.locale) : ''
     })
     const record = () => said.push(m.tree())
     record()
@@ -74,7 +74,7 @@ describe('the feed status region waits for the settled language', () => {
     const said: string[] = []
     const m = mount(() => {
       const ready = useFeedAnnounceReady(feedLocaleSettled(input))
-      return ready ? feedStatusAnnouncement({ loading: true, error: false, empty: true, notice: '' }, input.locale) : ''
+      return ready ? feedStatusAnnouncement({ loading: true, error: false, empty: true }, input.locale) : ''
     })
     said.push(m.tree())
     nextFrame()

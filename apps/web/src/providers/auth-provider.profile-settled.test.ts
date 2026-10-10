@@ -166,6 +166,63 @@ describe('signing out drops a profile read still running', () => {
   })
 })
 
+describe('sign-out and account switch never carry one account\'s state to the next', () => {
+  type P = { id?: string }
+  const view = (m: { tree: () => unknown }) => {
+    const c = ctx(m) as unknown as { user: { id: string } | null; profile: P | null; profileSettled: boolean }
+    return { u: c.user?.id ?? null, settled: c.profileSettled, profile: c.profile?.id ?? null }
+  }
+
+  it('the same account signs out and back in: not settled until its NEW read ends', async () => {
+    const m = mount(() => AuthProvider({ children: null }))
+    h.profile = () => Promise.resolve<Answer>({ data: [{ id: 'A' }], error: null })
+    await h.onChange!('INITIAL_SESSION', { user: { id: 'A' } })
+    await m.flush()
+    await h.onChange!('SIGNED_OUT', null)
+    await m.flush()
+    expect(view(m)).toEqual({ u: null, settled: false, profile: null })
+    let release: (a: Answer) => void = () => {}
+    h.profile = () => new Promise<Answer>((r) => (release = r))
+    await h.onChange!('SIGNED_IN', { user: { id: 'A' } })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'A', settled: false, profile: null })
+    release({ data: [{ id: 'A' }], error: null })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'A', settled: true, profile: 'A' })
+  })
+
+  it('direct switch A → B (no sign-out): A\'s profile is gone at once; B unsettled with no profile until its read ends', async () => {
+    const m = mount(() => AuthProvider({ children: null }))
+    h.profile = () => Promise.resolve<Answer>({ data: [{ id: 'A' }], error: null })
+    await h.onChange!('INITIAL_SESSION', { user: { id: 'A' } })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'A', settled: true, profile: 'A' })
+    let release: (a: Answer) => void = () => {}
+    h.profile = () => new Promise<Answer>((r) => (release = r))
+    await h.onChange!('SIGNED_IN', { user: { id: 'B' } })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'B', settled: false, profile: null })
+    release({ data: [{ id: 'B' }], error: null })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'B', settled: true, profile: 'B' })
+  })
+
+  it('a re-read for the SAME user (USER_UPDATED) keeps the profile throughout', async () => {
+    const m = mount(() => AuthProvider({ children: null }))
+    h.profile = () => Promise.resolve<Answer>({ data: [{ id: 'A' }], error: null })
+    await h.onChange!('INITIAL_SESSION', { user: { id: 'A' } })
+    await m.flush()
+    let release: (a: Answer) => void = () => {}
+    h.profile = () => new Promise<Answer>((r) => (release = r))
+    await h.onChange!('USER_UPDATED', { user: { id: 'A' } })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'A', settled: true, profile: 'A' })
+    release({ data: [{ id: 'A' }], error: null })
+    await m.flush()
+    expect(view(m)).toEqual({ u: 'A', settled: true, profile: 'A' })
+  })
+})
+
 describe('server-seeded user', () => {
   afterEach(() => {
     vi.useRealTimers()

@@ -165,6 +165,10 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     // Non-blocking profile load — a slow accessor must never gate `loading`. When it finishes, by
     // any path, the read for `userId` is settled — unless a newer read (or a sign-out) superseded it.
     const loadProfileInBackground = (userId: string) => {
+      // A different account (a direct switch, with no sign-out between): the previous account's
+      // profile is dropped now, not when this read lands, so no profile reader shows it meanwhile.
+      // A re-read for the same user (USER_UPDATED, a reconciled session) keeps the profile.
+      if (readForRef.current !== userId) setProfile(null)
       readForRef.current = userId
       const current = () => readForRef.current === userId
       fetchProfile()
@@ -266,8 +270,10 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             loadProfileInBackground(clientUser.id)
           }
         } else {
-          // Signed out: a profile read still running for the previous user is dropped.
+          // Signed out: a profile read still running for the previous user is dropped, and nothing
+          // counts as settled (the same account signing back in waits for its new read).
           readForRef.current = null
+          setProfileSettledFor(null)
           setUser(null)
           setSession(null)
           setProfile(null)

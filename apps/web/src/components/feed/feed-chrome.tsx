@@ -94,18 +94,51 @@ export function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeC
 export type FeedListState = { kind: 'error'; error: FeedLoadError } | { kind: 'loading' } | { kind: 'empty' }
 
 /**
- * What the feed's one always-mounted polite status region says: the list loading or empty, or what
- * the last change from an event card's ⋯ menu did. A failed read is announced by its own
- * role="alert" line instead (never twice).
+ * What the feed's list-status region says: the list loading or empty. A failed read is announced by
+ * its own role="alert" line instead (never twice). What an event card's ⋯ menu did is NOT said
+ * here — it has its own region (FeedStatusRegions), so neither ever hides the other.
  */
 export function feedStatusAnnouncement(
-  { loading, error, empty, notice }: { loading: boolean; error: boolean; empty: boolean; notice: string },
+  { loading, error, empty }: { loading: boolean; error: boolean; empty: boolean },
   locale: Locale,
 ): string {
   if (error) return ''
   if (loading) return feedChromeT(locale, 'loadingPosts')
-  if (notice) return notice
   return empty ? `${feedChromeT(locale, 'emptyTitle')} ${feedChromeT(locale, 'emptyBody')}` : ''
+}
+
+/**
+ * The feed's two always-mounted polite status regions, side by side:
+ *   feed-status       the list: loading / empty (filters, order, reloads change it);
+ *   feed-card-notice  what the last change from an event card's ⋯ menu did ("Changes saved.").
+ * Separate, so a filter or reload never replaces the card notice and the notice never hides the
+ * empty state. Both stay empty until `ready` (the viewer's language has settled).
+ */
+export function FeedStatusRegions({
+  ready,
+  loading,
+  error,
+  empty,
+  notice,
+  locale,
+}: {
+  ready: boolean
+  loading: boolean
+  error: boolean
+  empty: boolean
+  notice: string
+  locale: Locale
+}) {
+  return (
+    <>
+      <p role="status" aria-live="polite" className="sr-only" data-testid="feed-status">
+        {ready ? feedStatusAnnouncement({ loading, error, empty }, locale) : ''}
+      </p>
+      <p role="status" aria-live="polite" className="sr-only" data-testid="feed-card-notice">
+        {ready ? notice : ''}
+      </p>
+    </>
+  )
 }
 
 /** True from the first frame after `settled` turned true: the status region is mounted empty and

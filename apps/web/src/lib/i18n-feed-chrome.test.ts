@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { messages, type Locale } from './i18n'
 import { feedChromeMessages, feedChromeT, type FeedChromeMessages } from './i18n-feed-chrome'
-import { FeedHeader, FeedListStatus, FeedLoadMore, feedStatusAnnouncement, nextTabIndex } from '@/components/feed/feed-chrome'
+import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedStatusAnnouncement, nextTabIndex } from '@/components/feed/feed-chrome'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const EN_KEYS = Object.keys(feedChromeMessages.en).sort()
@@ -105,16 +105,39 @@ describe('announcements and keyboard (a11y fix round)', () => {
     return out
   }
 
-  it('the feed status region says the list is loading / empty, or the last card change; nothing for an error (its alert speaks)', () => {
-    const say = (s: Partial<{ loading: boolean; error: boolean; empty: boolean; notice: string }>, locale: Locale = 'en') =>
-      feedStatusAnnouncement({ loading: false, error: false, empty: false, notice: '', ...s }, locale)
+  it('the feed status region says the list is loading / empty; nothing for an error (its alert speaks)', () => {
+    const say = (s: Partial<{ loading: boolean; error: boolean; empty: boolean }>, locale: Locale = 'en') =>
+      feedStatusAnnouncement({ loading: false, error: false, empty: false, ...s }, locale)
     expect(say({ loading: true, empty: true })).toBe('Loading posts…')
     // The empty state is announced whole: its title and its second line.
     expect(say({ empty: true })).toBe('No posts to show. Be the first to share something!')
     expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar. ¡Sé la primera persona en compartir algo!')
-    expect(say({ notice: 'Changes saved.' })).toBe('Changes saved.')
     expect(say({ error: true, empty: true, loading: true })).toBe('')
     expect(say({})).toBe('')
+  })
+
+  describe('the list status and the card notice are two regions — neither hides the other', () => {
+    const regions = (p: Partial<{ ready: boolean; loading: boolean; error: boolean; empty: boolean; notice: string }>, locale: Locale = 'en') => {
+      const html = renderToStaticMarkup(
+        h(FeedStatusRegions, { ready: true, loading: false, error: false, empty: false, notice: '', locale, ...p }),
+      )
+      const text = (id: string) => html.match(new RegExp(`<p role="status" aria-live="polite" class="sr-only" data-testid="${id}">([^<]*)</p>`))?.[1]
+      return { status: text('feed-status'), notice: text('feed-card-notice') }
+    }
+
+    it('"Changes saved.", then a filter that leaves nothing: the list region says the empty sentence, the notice region keeps the notice', () => {
+      const r = regions({ empty: true, notice: 'Changes saved.' })
+      expect(r).toEqual({ status: 'No posts to show. Be the first to share something!', notice: 'Changes saved.' })
+      expect(r.status).not.toContain('Changes saved.')
+    })
+
+    it('a first-page reload right after a save: the list region says loading, the notice region is untouched', () => {
+      expect(regions({ loading: true, empty: true, notice: 'Changes saved.' })).toEqual({ status: 'Loading posts…', notice: 'Changes saved.' })
+    })
+
+    it('both regions wait for the settled language (empty until ready)', () => {
+      expect(regions({ ready: false, loading: true, notice: 'Changes saved.' })).toEqual({ status: '', notice: '' })
+    })
   })
 
   it('the visible loading / empty copy is hidden from assistive tech (announced once, by the region)', () => {
@@ -172,8 +195,9 @@ describe('feed-panel.tsx wiring', () => {
     expect(panel).toContain('useState<FeedLoadError | null>(null)')
   })
 
-  it('the feed status region is always mounted and speaks feedStatusAnnouncement (loading, empty, card changes)', () => {
-    expect(panel).toMatch(/<p role="status" aria-live="polite" className="sr-only" data-testid="feed-status">\s*\{announceReady\s*\?\s*feedStatusAnnouncement\(\{ loading, error: error !== null, empty: feedItems\.length === 0, notice: feedNotice \}, locale\)/)
+  it('the panel renders both status regions with its raw state (the notice is never cut by a load)', () => {
+    expect(panel).toMatch(/<FeedStatusRegions\s+ready=\{announceReady\}\s+loading=\{loading\}\s+error=\{error !== null\}\s+empty=\{feedItems\.length === 0\}\s+notice=\{feedNotice\}\s+locale=\{locale\}\s*\/>/)
+    expect(src.match(/\bfeedNotice\b/g)).toHaveLength(2)
     expect(panel).toContain('nextTabIndex(e.key, currentIdx, tabs.length, locale)')
     expect(panel).toContain('focusTitle={focusFeedTitle}')
     expect(panel).toContain('<EventsPanel onEventChanged={syncFeedEventCard} />')
@@ -190,14 +214,6 @@ describe('feed-panel.tsx wiring', () => {
     expect(src.match(/\bprofileSettled\b/g)).toHaveLength(2)
     expect(panel).toMatch(/const \{ user, profileSettled, [^}]*\} = useAuth\(\)/)
     expect(src).not.toMatch(/\b(const|let|var)\s+profileSettled\b|\bprofileSettled\s*=[^=]/)
-  })
-
-  it('every first page (order, filter, Retry, realtime refresh) clears the last card notice', () => {
-    for (const fn of ['const fetchPosts = useCallback(', 'const fetchRankedPosts = useCallback(']) {
-      const body = panel.slice(panel.indexOf(fn))
-      const firstPage = body.slice(body.indexOf('if (cursor === null) {'), body.indexOf('} else {'))
-      expect(firstPage, fn).toContain('clearNotice()')
-    }
   })
 
   it('the panel root carries the viewer language and direction', () => {
