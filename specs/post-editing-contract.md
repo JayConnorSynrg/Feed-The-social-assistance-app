@@ -1,7 +1,7 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (192 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (195 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
 
 ## Release: expand / contract
 
@@ -287,6 +287,9 @@ Staff = community moderator tier and up, through `current_user_tier_at_least('co
 reads a `profiles` column, so a client-role REVOKE of `profiles` columns (Settings C2) cannot break post or comment
 reads. Equivalent to the previous `profiles.is_staff` test: production 2026-10-09 has 0 of 23 profiles where
 `is_staff <> (admin_tier IS NOT NULL)`, and `community_moderator` is the lowest tier (smoke S1–S3).
+The same holds for comment inserts (`guard_post_comments_is_hidden`, the BEFORE INSERT / UPDATE guard on `is_hidden`)
+and for reports (`content_reports_select_own_or_staff`: a member reads their own reports, staff read all): both find staff
+through the tier helper, so they keep working under a C2 revoke (smoke S1b, S4, S5).
 
 `post_comments` gains `version`, `edited_at`, `edit_count`, `deleted_at`; `content_reports` gains `reported_version`.
 

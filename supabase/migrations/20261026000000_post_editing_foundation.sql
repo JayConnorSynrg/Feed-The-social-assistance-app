@@ -41,7 +41,8 @@
 --       comments of a post readable only while the post is readable. Comment INSERT is column-scoped
 --       (id, post_id, user_id, content, parent_id): created_at / version / edit counters are not forgeable.
 --       Post and comment read policies are split anon / authenticated and find staff through
---       current_user_tier_at_least, not a direct profiles.is_staff read.
+--       current_user_tier_at_least, not a direct profiles.is_staff read; so do guard_post_comments_is_hidden and
+--       content_reports_select_own_or_staff (no caller-side profiles read remains on these tables).
 --   (f1) Counters: comment_count counts only comments that are neither deleted nor hidden; comment_count
 --       and like_count are recounted after taking the post row lock (the old recount lost one of two
 --       concurrent changes); submit_content_report locks the post before counting open reports.
@@ -1207,6 +1208,31 @@ $fn$;
 -- 4f. Existing functions: the live body (= the latest repo definition) + one change each
 -- ============================================================================
 
+-- guard_post_comments_is_hidden (BEFORE INSERT OR UPDATE on post_comments, SECURITY INVOKER): the live body,
+-- except the staff check: current_user_tier_at_least('community_moderator') (SECURITY DEFINER) instead of a
+-- caller-side read of profiles.is_staff, so a client REVOKE of that column (Settings C2) cannot stop every
+-- comment insert. Nested so anon (no EXECUTE on the tier function) never evaluates it.
+CREATE OR REPLACE FUNCTION public.guard_post_comments_is_hidden()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN RETURN NEW; END IF;
+  IF current_user = 'authenticated' THEN
+    IF public.current_user_tier_at_least('community_moderator') THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+  IF (TG_OP = 'INSERT' AND COALESCE(NEW.is_hidden, false))
+  OR (TG_OP = 'UPDATE' AND NEW.is_hidden IS DISTINCT FROM OLD.is_hidden) THEN
+    RAISE EXCEPTION USING ERRCODE = '42501',
+      MESSAGE = 'guard:post_comments_is_hidden: comment visibility is set by moderators only',
+      HINT    = 'Only moderators can hide or show comments.';
+  END IF;
+  RETURN NEW;
+END $function$;
+
 -- opt_in_to_post: a hidden post (held, removed, community-hidden or deleted) takes no opt-ins
 CREATE OR REPLACE FUNCTION public.opt_in_to_post(p_post_id uuid)
  RETURNS resource_opt_ins
@@ -1645,6 +1671,11 @@ ALTER POLICY post_comments_select_visible ON public.post_comments TO anon
 CREATE POLICY post_comments_select_member ON public.post_comments FOR SELECT TO authenticated USING (
   ((NOT is_hidden) OR user_id = (SELECT auth.uid()) OR (SELECT public.current_user_tier_at_least('community_moderator')))
   AND public.post_is_readable(post_id));
+
+-- content_reports: a member reads their own reports, staff read all (same roles, authenticated; the staff test
+-- through the tier helper instead of a caller-side profiles.is_staff read)
+ALTER POLICY content_reports_select_own_or_staff ON public.content_reports
+  USING ((reporter_id = (SELECT auth.uid())) OR (SELECT public.current_user_tier_at_least('community_moderator')));
 DROP POLICY post_comments_update_own ON public.post_comments;
 DROP POLICY post_comments_delete_own ON public.post_comments;
 CREATE POLICY post_comments_insert_post_visible ON public.post_comments AS RESTRICTIVE FOR INSERT TO authenticated

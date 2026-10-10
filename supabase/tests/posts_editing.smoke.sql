@@ -909,10 +909,21 @@ $f$;
 -- posts (visible, held, deleted) | comments (visible, hidden): anon / member see visible rows; the post author also
 -- their held post; the hidden comment's author also that comment; staff (CM, PA, and the guest that holds a tier) all
 SELECT pg_temp.ck('S1', 'per-viewer visibility of posts | comments', '^anon=>OK 1\|1;C=>OK 1\|1;A=>OK 2\|1;B=>OK 1\|2;CM=>OK 3\|2;PA=>OK 3\|2;G=>OK 3\|2;$', pg_temp.vis());
+-- reports: C and B each report A's visible post; a member reads only their own report, staff read all
+SELECT pg_temp.run(w, $q$SELECT public.submit_content_report('post', (SELECT id FROM public.posts WHERE content = 'vis visible'), 'spam')::text$q$) FROM unnest(ARRAY['C','B']) w;
+CREATE FUNCTION pg_temp.rvis() RETURNS text LANGUAGE sql AS $f$
+  SELECT pg_temp.who(ARRAY['anon','C','B','A','CM','PA','G'],
+    $q$SELECT count(*)::text FROM public.content_reports WHERE content_id = (SELECT id FROM public.posts WHERE content = 'vis visible')$q$)
+$f$;
+SELECT pg_temp.ck('S1b', 'per-viewer visibility of reports: anon none (no policy), a member their own, the reported author none, staff all', '^anon=>OK 0;C=>OK 1;B=>OK 1;A=>OK 0;CM=>OK 2;PA=>OK 2;G=>OK 2;$', pg_temp.rvis());
 REVOKE SELECT (is_staff) ON public.profiles FROM anon, authenticated;
 SELECT pg_temp.ck('S2', 'simulated Settings C2 in force: clients can no longer read profiles.is_staff', '^anon=>ERR 42501 [^;]*;C=>ERR 42501 [^;]*;$',
   pg_temp.who(ARRAY['anon','C'], $q$SELECT is_staff::text FROM public.profiles LIMIT 1$q$));
 SELECT pg_temp.ck('S3', 'under simulated C2 the same per-viewer visibility (no read fails)', '^anon=>OK 1\|1;C=>OK 1\|1;A=>OK 2\|1;B=>OK 1\|2;CM=>OK 3\|2;PA=>OK 3\|2;G=>OK 3\|2;$', pg_temp.vis());
+SELECT pg_temp.ck('S4', 'under simulated C2 the same per-viewer visibility of reports (staff read all, a member their own)', '^anon=>OK 0;C=>OK 1;B=>OK 1;A=>OK 0;CM=>OK 2;PA=>OK 2;G=>OK 2;$', pg_temp.rvis());
+SELECT pg_temp.ck('S5', 'under simulated C2 a member still comments and replies (the is_hidden guard reads no profiles column)', '^OK x\|OK x$',
+  pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0e000000-0000-4000-8000-0000000000b3', (SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'under c2') RETURNING 'x'$q$) || '|' ||
+  pg_temp.run('C', $q$INSERT INTO public.post_comments (post_id, user_id, content, parent_id) VALUES ((SELECT id FROM public.posts WHERE content = 'vis visible'), auth.uid(), 'reply under c2', '0e000000-0000-4000-8000-0000000000b3') RETURNING 'x'$q$));
 GRANT SELECT (is_staff) ON public.profiles TO anon, authenticated;
 
 -- ===================== F: feed delivery =====================

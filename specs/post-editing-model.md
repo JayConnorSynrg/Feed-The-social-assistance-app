@@ -61,7 +61,7 @@ visible ──report x3──▶ hidden(community_reports_threshold) ──dismi
 
 Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and races in
 `supabase/tests/posts_editing.race.sh` (C…). Every guard has a mutant that turns its test red
-(149 / 150 killed on the prod-identical harness, the database reviewer's 18 included; the survivor, R-N12 "like/comment BEFORE lock is FOR UPDATE", is equivalent: that lock is the first one an engagement insert takes, and no function inserts likes or comments inside a larger transaction, so the stronger mode can add waiting but never a cycle).
+(151 / 152 killed on the prod-identical harness, the database reviewer's 18 included; the survivor, R-N12 "like/comment BEFORE lock is FOR UPDATE", is equivalent: that lock is the first one an engagement insert takes, and no function inserts likes or comments inside a larger transaction, so the stronger mode can add waiting but never a cycle).
 
 | # | Invariant | Proof |
 |---|---|---|
@@ -98,7 +98,7 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
 | I27 | `posts.like_count` = like rows after the backfill and under concurrent likes / unlikes; two concurrent reports cannot both miss the 3-report threshold | G8a, C10, C10b, C11 |
 | I28 | `engaged_at` is server-only: no client UPDATE / SELECT grant (column `attacl` NULL, no client table UPDATE), not published; client INSERT only between 026 and 0265 (closes the author's own grace only); backfilled from the earliest like / vote / comment / opt-in | G6, G7, G8b, Q4 |
 | I29 | Lock order on every engagement path: the post row, then profiles (likes and comments lock the post BEFORE INSERT; trigger post locks are FOR NO KEY UPDATE), so no like / comment / vote / opt-in pair deadlocks | C13–C16 |
-| I30 | Post and comment reads depend on no `profiles` column: read policies split anon / authenticated and find staff through `current_user_tier_at_least('community_moderator')`; per-viewer visibility unchanged, and unchanged under a simulated C2 REVOKE of `profiles.is_staff` | S1–S3 |
+| I30 | Post, comment and report reads, and comment inserts, depend on no `profiles` column as the caller: read policies split anon / authenticated and find staff through `current_user_tier_at_least('community_moderator')`; `guard_post_comments_is_hidden` and `content_reports_select_own_or_staff` use the same helper. Per-viewer visibility of posts, comments and reports is unchanged, and unchanged under a simulated C2 REVOKE of `profiles.is_staff`; members still comment and reply under it | S1–S5 |
 
 ## Prototype → PR-2 changes (found while building)
 
@@ -143,7 +143,11 @@ Proof ids are checks in `supabase/tests/posts_editing.smoke.sql` (S-…) and rac
     grant. The post and comment read policies read `profiles.is_staff` directly, so a peer REVOKE of that column (Settings
     C2) would have failed every read with 42501. They now use `current_user_tier_at_least`. Also from the review:
     guest-guard tests for `redact_comment_revision` and `admin_set_comment_hidden`, `admin_resolve_report`'s result
-    keys, a held fresh post never edits quietly, and the revision sequences are revoked from clients.
+    keys, a held fresh post never edits quietly, and the revision sequences are revoked from clients. A follow-up
+    catalog scan found two older live objects that read `profiles.is_staff` as the caller: the
+    `guard_post_comments_is_hidden` trigger (under C2, nobody could comment) and the `content_reports_select_own_or_staff`
+    policy (staff report reads failed). Both now use the tier helper; no caller-side `profiles` read remains on the
+    nine post-editing tables.
 
 ## Out of PR-2 (later PRs)
 
