@@ -399,6 +399,45 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     expect(applied.map(([, i]) => i?.title ?? null)).toEqual(['Back again'])
   })
 
+  describe('an older still-listed save\'s late frame never overrides a newer save on the same card', () => {
+    // Save A ("updated") leaves the card listed with focus on its ⋯ trigger, so A's two frames are
+    // pending; before A's inner frame runs, save B ("retired") on the same card settles.
+    async function run(bAnswer: () => Promise<unknown>) {
+      const frames: Array<() => void> = []
+      g.requestAnimationFrame = (cb: () => void) => frames.push(cb)
+      const answers: Array<() => Promise<unknown>> = [async () => ({ item: renamed, checkin: emptyCheckinState() }), bAnswer]
+      h.reload = () => answers.shift()!()
+      const { m, headingFocus, dom, leave, setOnApply } = harness()
+      const trigger = dom.trigger as { focus: ReturnType<typeof vi.fn> }
+      focused = trigger
+      await m.tree().onManaged(E1, { kind: 'updated' }) // A: applied, its outer frame pending
+      // A's apply has run; B's apply (the card leaving) takes the card out of the DOM.
+      setOnApply(leave)
+      await m.tree().onManaged(E1, { kind: 'retired' }) // B settles before A's inner frame
+      await m.flush()
+      while (frames.length) frames.splice(0).forEach((f) => f())
+      m.rerender()
+      return { m, headingFocus, trigger }
+    }
+
+    it('B resolves gone: B\'s sentence stays, and A\'s late frame never re-focuses the trigger', async () => {
+      const { m, headingFocus, trigger } = await run(async () => ({ item: null, checkin: emptyCheckinState() }))
+      expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
+      expect(headingFocus.calls).toBe(1) // B's own move to the heading, nothing from A
+      expect(trigger.focus).not.toHaveBeenCalled()
+    })
+
+    it('B\'s re-read fails: B\'s outcome (its failure-path sentence) stays — A\'s "Changes saved." never overwrites it', async () => {
+      const { m, headingFocus, trigger } = await run(async () => {
+        throw Object.assign(new Error('timeout'), { name: 'TimeoutError' })
+      })
+      expect(m.tree().notice).toBe('Event retired.')
+      expect(h.warn).toEqual([['events.card.refresh_failed', { surface: 'events_tab', code: 'TimeoutError' }]])
+      expect(headingFocus.calls).toBe(0)
+      expect(trigger.focus).not.toHaveBeenCalled()
+    })
+  })
+
   it('a still-listed card re-filed under another day: the notice stays empty until focus has landed on its new ⋯ trigger', async () => {
     const frames: Array<() => void> = []
     g.requestAnimationFrame = (cb: () => void) => frames.push(cb)
