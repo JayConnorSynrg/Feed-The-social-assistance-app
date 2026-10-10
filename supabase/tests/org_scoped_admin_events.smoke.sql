@@ -54,9 +54,21 @@ $f$;
 CREATE FUNCTION pg_temp.event_score(p_occ uuid) RETURNS real LANGUAGE sql AS $f$
   SELECT r.score FROM public.ranked_feed_v2(NULL, NULL, 1000) r WHERE r.kind = 'event' AND r.id = p_occ
 $f$;
-CREATE FUNCTION pg_temp.posts_v1() RETURNS text LANGUAGE sql AS $f$
-  SELECT COALESCE(string_agg(r.id::text || '|' || r.score::text || '|' || r.distance_bucket, ',' ORDER BY r.id), '')
-    FROM public.ranked_feed(44.26, -72.58, 1000, NULL, NULL) r
+-- Posts the CURRENT role can read, minus deleted ones (anon holds no SELECT on posts.deleted_at and
+-- never sees a hidden post, so its branch needs no filter).
+CREATE FUNCTION pg_temp.posts_visible() RETURNS text LANGUAGE plpgsql AS $f$
+DECLARE r text;
+BEGIN
+  IF current_user = 'anon' THEN
+    EXECUTE 'SELECT COALESCE(string_agg(p.id::text, '','' ORDER BY p.id), '''') FROM public.posts p' INTO r;
+  ELSE
+    EXECUTE 'SELECT COALESCE(string_agg(p.id::text, '','' ORDER BY p.id), '''') FROM public.posts p WHERE p.deleted_at IS NULL' INTO r;
+  END IF;
+  RETURN r;
+END $f$;
+CREATE FUNCTION pg_temp.posts_v2_ids() RETURNS text LANGUAGE sql AS $f$
+  SELECT COALESCE(string_agg(r.id::text, ',' ORDER BY r.id), '')
+    FROM public.ranked_feed_v2(44.26, -72.58, 1000, NULL, NULL) r WHERE r.kind = 'post'
 $f$;
 CREATE FUNCTION pg_temp.posts_v2() RETURNS text LANGUAGE sql AS $f$
   SELECT COALESCE(string_agg(r.id::text || '|' || r.score::text || '|' || r.distance_bucket, ',' ORDER BY r.id), '')
@@ -692,19 +704,23 @@ BEGIN
   UPDATE public.organizations SET is_active = false WHERE id = v_i;
 
   -- =====================================================================
-  -- E12 — posts branch unchanged: v2 post rows == ranked_feed (v1) rows for every viewer;
-  --        v1 itself is byte-identical (md5 captured 2026-09-24 on origin/develop)
+  -- E12 — posts branch: ranked_feed (v1) was dropped in 20261026000000 (post editing). The posts
+  --        branch is pinned by md5 (W1.3 ranking + the deleted-post filter) and ranks exactly the
+  --        posts each viewer can read, minus deleted ones.
   -- =====================================================================
-  ASSERT (SELECT md5(pg_get_functiondef('public.ranked_feed(double precision,double precision,integer,real,uuid)'::regprocedure)))
-         = '2cca92d907df6b60fbc840214a9df485', 'E12: ranked_feed (v1) must be unchanged';
+  ASSERT to_regprocedure('public.ranked_feed(double precision,double precision,integer,real,uuid)') IS NULL,
+    'E12: ranked_feed (v1) is dropped (20261026000000)';
+  ASSERT (SELECT md5(substring(d FROM position('  visible AS (' IN d) FOR position('  -- EVENTS branch' IN d) - position('  visible AS (' IN d)))
+          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure) d) s)
+         = 'eab880757418ffbd2ddc13566f7032bc', 'E12: ranked_feed_v2 posts branch = W1.3 ranking + deleted-post filter (20261026000000)';
   FOR v_viewer IN SELECT * FROM (VALUES
       ('anon', NULL::uuid, false), ('guest', v_guest, true), ('post owner', v_m2, false),
       ('member', v_m1, false), ('platform admin (staff)', v_admin, false)) AS t(label, uid, anon) LOOP
     PERFORM pg_temp.act(v_viewer.uid, v_viewer.anon);
-    v_p1 := pg_temp.posts_v1();
-    v_p2 := pg_temp.posts_v2();
+    v_p1 := pg_temp.posts_visible();
+    v_p2 := pg_temp.posts_v2_ids();
     RESET ROLE;
-    ASSERT v_p1 <> '' AND v_p1 = v_p2, format('E12 [%s]: v2 post rows must equal v1 rows (%s vs %s)', v_viewer.label, v_p1, v_p2);
+    ASSERT v_p1 <> '' AND v_p1 = v_p2, format('E12 [%s]: v2 post rows must equal the posts the viewer can read, minus deleted ones (%s vs %s)', v_viewer.label, v_p1, v_p2);
   END LOOP;
 
   -- =====================================================================

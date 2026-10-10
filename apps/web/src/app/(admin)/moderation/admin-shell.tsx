@@ -71,7 +71,7 @@ export function AdminShell() {
 
   // Locale for the organization screens: the profile language once it loads (server render and
   // first client render both use 'en', so hydration matches).
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const locale: Locale = useMemo(
     () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
     [profile]
@@ -336,7 +336,7 @@ export function AdminShell() {
           )}
           {tabs.includes('moderation') && (
             <TabsContent value="moderation" className="mt-4">
-              <ModerationTab selectedOrgId={selectedOrgId} />
+              <ModerationTab selectedOrgId={selectedOrgId} viewerId={user?.id ?? null} />
             </TabsContent>
           )}
           {tabs.includes('community') && (

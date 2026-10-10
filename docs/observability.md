@@ -149,7 +149,7 @@ Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
 | `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `focused_post` (the single-post view an Edit in admin link opens) · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events` · `safety_alerts`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
-| `admin.nav.edit_in_admin` | `kind`, `source` | the member → admin direction: one row per click / middle-click of an **Edit in admin** link (`components/admin/admin-edit-link.tsx`, shown only to admins the admin screen will accept). `kind`: `post` · `safety_alert` · `resource` · `business` · `organization` · `event`; `source`: `map_popup` · `map_detail` (the map's resource side pane) · `resource_page` · `business_page` · `organization_page` · `showcase_row` (Community → Businesses row) · `organizations_row` (Community → Organizations row) · `post_page` · `feed_post` · `feed_alert` (feed Active Alerts strip) · `feed_event_menu` (an event card's ⋯ menu in the feed) · `events_panel_menu` (an event card's ⋯ menu in the Events tab); rows before Release 1 carry `feed_event` / `events_panel` (the standalone event-card link the menu replaced) |
+| `admin.nav.edit_in_admin` | `kind`, `source` | the member → admin direction: one row per click / middle-click of an **Edit in admin** link (`components/admin/admin-edit-link.tsx`, shown only to admins the admin screen will accept). `kind`: `post` · `safety_alert` · `resource` · `business` · `organization` · `event`; `source`: `map_popup` · `map_detail` (the map's resource side pane) · `resource_page` · `business_page` · `organization_page` · `showcase_row` (Community → Businesses row) · `organizations_row` (Community → Organizations row) · `post_page` · `feed_post` · `feed_alert` (feed Active Alerts strip) · `feed_event_menu` (an event card's ⋯ menu in the feed) · `events_panel_menu` (an event card's ⋯ menu in the Events tab) · `feed_post_menu` (a post card's ⋯ menu in the feed); rows before Release 1 carry `feed_event` / `events_panel` (the standalone event-card link the menu replaced), rows before Release 2 carry `feed_post` (the standalone post-card footer link the menu replaced) |
 | `admin.deeplink.load_failed` | `code`, `kind` | warn: the admin screen an **Edit in admin** link opened could not read the item (`post` · `safety_alert` · `event`); its `admin.deeplink.resolve` row is `not_found` |
 | `admin.deeplink.resolve` | `kind`, `outcome`, `tab` | one row per followed **Edit in admin** link, written by the admin screen it opens (the tab that owns the kind; the shell when no shown tab will take it — `app/(admin)/moderation/admin-focus-session.ts`). `kind` as above, or `unknown` for a malformed focus; `outcome`: `found` · `not_found` (missing, not approved or not readable — and also when the viewer's tier shows the tab but cannot save that item, e.g. a resource admin on a business link) · `forbidden` (the viewer's tier does not show the owning tab) · `invalid` (malformed `focus`, a kind that screen never opens, or a `?tab=` that is not the kind's tab) · `abandoned` (the admin left before it resolved); `tab`: the admin tab (`manage` · `businesses` · `moderation` · `organizations` · `events` · `profile`), or `unknown` |
 | `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the panel before the focus settled — the Events tab before its list loaded, the map before the pin appeared — or, on the map, a newer link replaced it first); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
@@ -269,6 +269,32 @@ where event in ('admin.nav.member_view', 'admin.nav.back_to_feed')
   and created_at > now() - interval '7 days'
 group by 1, 2, 3
 order by 1, 4 desc;
+```
+
+---
+
+## Post editing (member writes)
+
+Every post and comment write a member makes goes through `apps/web/src/lib/post-rpc.ts`: one `privilegedRpc` call per action, so each action persists exactly one `<op>.complete` or `<op>.error` row whose `request_id` is also the `x-request-id` the database saw (it joins a moderator's `admin_actions` row; author writes keep their own `post_revisions` / `post_comment_revisions` rows). Labels are ids and enums only — never post or comment text, never names.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `feed.post.create.complete` / `.error` | `post_type`, `has_image`, `has_resource`, `lang`, `request_id` | `create_post` (composer, wizard, Programs "Share to feed"); `lang` = the member's app locale stored as `posts.lang` |
+| `feed.post.edit.complete` / `.error` | `post_type`, `fields_count`, `has_reason`, `request_id`, `target_id` | `edit_post` with the version the dialog opened with; a stale version is an `.error` row with `error_code` `PT409` |
+| `feed.post.edit.conflict` | `post_type`, `resolution` | the edit-conflict comparison was resolved: `keep_mine` · `take_theirs` · `combine` |
+| `feed.post.delete.complete` / `.error` | `post_type`, `request_id`, `target_id` | `delete_own_post` (soft delete) |
+| `feed.post.history.open` | `post_type`, `revision_count`, `target` | the public edit history was opened (`target` `post` · `comment`) |
+| `feed.post.revision.redact.complete` / `.error`, `feed.comment.revision.redact.complete` / `.error` | `has_reason`, `request_id`, `target_id` | private details removed from a past version (author, or a platform admin with a reason — that branch also writes `admin_actions`) |
+| `feed.comment.edit.complete` / `.error`, `feed.comment.delete.complete` / `.error` | `request_id`, `target_id` | `edit_comment` / `delete_own_comment` |
+| `admin.comment.hide.complete` / `.error` | `action` (`comment.hide` · `comment.unhide`), `request_id`, `target_id` | `admin_set_comment_hidden` (moderators; one `admin_actions` row) |
+
+Conflict rate (edits refused because another tab saved first):
+
+```sql
+select count(*) filter (where event = 'feed.post.edit.error' and context->>'error_code' = 'PT409') as conflicts,
+       count(*) filter (where event = 'feed.post.edit.complete') as saves
+from public.app_logs
+where created_at > now() - interval '7 days';
 ```
 
 ---

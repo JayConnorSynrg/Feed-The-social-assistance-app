@@ -11,7 +11,8 @@
 //
 // These assertions survive mutation: they fail if v2 loses SECURITY DEFINER, unpins
 // its search_path, over-grants EXECUTE, drops the `kind` column, regresses to a
-// continuous (oracle) distance factor for events, or if ranked_feed (v1) is disturbed.
+// continuous (oracle) distance factor for events, or if ranked_feed (v1) is disturbed before
+// 20261026000000 (post editing) / still present after it (that migration drops v1).
 //
 // SQL SAFETY: read-only SELECTs via queryProd (WRITE_GUARD); the events anti-oracle
 // test seeds inside a DO block that RAISEs → the whole tx rolls back (net-zero writes).
@@ -48,6 +49,13 @@ const GATE_020_SQL = `
 const GATE_023_SQL = `
   SELECT EXISTS (
     SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261023000000'
+  ) AS applied
+`
+
+// 20261026000000 (post editing) drops ranked_feed (v1): 0 app callers since the client moved to v2.
+const GATE_026_SQL = `
+  SELECT EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261026000000'
   ) AS applied
 `
 
@@ -104,7 +112,7 @@ maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () =>
     }
   })
 
-  it('[post-deploy] EXECUTE granted to anon/authenticated/service_role, not PUBLIC; v1 still present + unchanged (I5)', async (ctx) => {
+  it('[post-deploy] EXECUTE granted to anon/authenticated/service_role, not PUBLIC; v1 unchanged until 20261026000000, then dropped', async (ctx) => {
     const gate = await queryProd(GATE_SQL)
     if (gate[0]?.applied !== true) { ctx.skip(); return }
 
@@ -124,8 +132,13 @@ maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () =>
     expect(rows[0].auth_x).toBe(true)
     expect(rows[0].svc_x).toBe(true)
     expect(String(rows[0].acl ?? '')).not.toMatch(/(^|,|\{)=X/)
-    expect(rows[0].v1_present).toBe(1)
-    expect(rows[0].v1_md5).toBe(V1_MD5)
+    const has026 = (await queryProd(GATE_026_SQL))[0]?.applied === true
+    if (has026) {
+      expect(rows[0].v1_present).toBe(0)
+    } else {
+      expect(rows[0].v1_present).toBe(1)
+      expect(rows[0].v1_md5).toBe(V1_MD5)
+    }
   })
 
   it('[post-deploy] a live anon call returns rows shaped {id,kind,score,distance_bucket}', async (ctx) => {

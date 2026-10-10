@@ -6,30 +6,16 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'motion/react'
-import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, MapPin, ScrollText, CheckCircle2, Flag, ShieldAlert, Plus } from 'lucide-react'
+import { User, Link as LinkIcon, ChevronDown, MapPin, ShieldAlert, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { useRateLimitedAction } from '@/hooks/use-rate-limited-action'
-import { sanitizeInput } from '@/lib/security'
 import { createClient } from '@/lib/supabase/client'
 import { useRealtimeFeed } from '@/hooks/use-realtime-feed'
 import { useAuth } from '@/hooks/use-auth'
+import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
@@ -46,32 +32,38 @@ import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { getErrorMessage } from '@/lib/errors'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage } from '@/lib/i18n-event-forms'
+import { relativeAge } from '@/lib/relative-age'
+import { cardT } from '@/lib/i18n-feed-card'
+import { composerT } from '@/lib/i18n-feed-composer'
+import { failureText } from '@/lib/i18n-feed-edit'
+import { createPost, deleteOwnPost } from '@/lib/post-rpc'
+import { moderatePost, type PostModerationAction } from '@/app/(admin)/moderation/post-moderation-actions'
 import { CommentThread } from '@/components/feed/comment-thread'
-import { PostTypeBody } from '@/components/feed/post-type-body'
+import { FeedPostCard, type EnrichedOptIn } from '@/components/feed/feed-post-card'
+import { PostEditDialog } from '@/components/feed/post-edit-dialog'
+import { PostHistoryDialog } from '@/components/feed/post-history-dialog'
+import { ConfirmDeleteDialog } from '@/components/feed/post-delete-dialog'
+import { ReportDialog } from '@/components/feed/report-dialog'
+import { loadFeedRow } from '@/components/feed/post-edit-data'
+import type { ActionViewer, PostMenuItemId } from '@/components/feed/post-actions'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
-import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
+import { postEnterExit } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, visibleInFeed, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, classifyPostUpdate, rowPatchFromFeedRow, editFallbackPatch, assertNever, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
 import { useFeedEventCards } from '@/hooks/use-feed-event-cards'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
-import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
-import { postCardFrameClass } from '@/components/feed/post-card-frame'
 import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
-import { dir } from '@/lib/i18n'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocaleSettled, useFeedAnnounceReady, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
 import { PostTypeWizard } from './post-type-wizard'
-import { HarmonyBadge } from '@/components/feed/harmony-badge'
-import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
-import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
-import { resolveFollowGate } from '@/lib/follow-gate'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
-import { getCategoryTailwind, getCategoryLabel } from '@/lib/resource-categories'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 
@@ -82,16 +74,6 @@ import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 // imported from '@/components/feed/post-model'. The union covers all 7
 // post_type discriminants and the transform is reused by the realtime path.
 
-/** An opt-in row enriched with the seeker's profile for the author's management list. */
-interface EnrichedOptIn {
-  id: string
-  postId: string
-  seekerId: string
-  seekerName: string
-  seekerHarmonyScore: number | null
-  seekerHarmonyCount: number
-  status: string
-}
 
 /**
  * Read the caller's coordinates ONLY when geolocation permission is already granted —
@@ -122,13 +104,6 @@ async function readGeoIfGranted(): Promise<{ lat: number; lng: number } | null> 
 
 // MOCK_POSTS removed - now fetching from Supabase
 
-const CATEGORY_COLORS: Record<Post['category'], string> = {
-  announcement: 'bg-blue-100 text-blue-700',
-  request: 'bg-orange-100 text-orange-700',
-  offer: 'bg-green-100 text-green-700',
-  update: 'bg-gray-100 text-gray-700',
-}
-
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -153,22 +128,28 @@ interface ResourceOption {
 }
 
 interface CreatePostCardProps {
-  /** Returns the new post id on success, or null on error */
+  /** Creates the post through create_post; returns the new post id, or null on error. */
   onPost: (
     content: string,
     resourceId: string | null,
     maxSeekers: number | null,
     imageUrl?: string | null
   ) => Promise<string | null>
+  /** A post was created by the wizard: show it right away. */
+  onCreated: (postId: string) => void
   resourceOptions: ResourceOption[]
   /** Navigates to the map panel to place a safety pin */
   onSafetyAlertClick: () => void
+  locale: Locale
+  /** Announce a result in the feed's card-notice region (the one polite region for card actions). */
+  onAnnounce: (text: string) => void
 }
 
 const GEO_RADIUS_OPTIONS = [5, 10, 25, 50] as const
 type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 
-function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreatePostCardProps) {
+/** The feed composer card (exported for its behaviour tests). */
+export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick, locale, onAnnounce }: CreatePostCardProps) {
   const supabase = createClient()
   const [content, setContent] = useState('')
   const {
@@ -200,7 +181,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
 
   const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
     limiterType: 'formSubmit',
-    onRateLimited: () => setError('Posting too quickly. Please wait a moment.'),
+    onRateLimited: () => setError(composerT(locale, 'postTooQuickly')),
   })
 
   // Fetch seeker count whenever geo toggle is on and a resource is selected
@@ -229,14 +210,14 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
         })
         if (ctrl.signal.aborted) return
         if (rpcErr) {
-          setSeekerCountError(getFriendlyErrorMessage(rpcErr, 'Could not load seeker count.'))
+          setSeekerCountError(composerT(locale, 'seekerCountFailed'))
         } else {
           setSeekerCount(typeof data === 'number' ? data : null)
         }
       } catch (err: unknown) {
         if (ctrl.signal.aborted) return
         if (!isQueryTimeout(err)) {
-          setSeekerCountError(getFriendlyErrorMessage(err, 'Could not load seeker count.'))
+          setSeekerCountError(composerT(locale, 'seekerCountFailed'))
         }
       }
     }
@@ -246,7 +227,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
     return () => {
       ctrl.abort()
     }
-  }, [geoNotify, selectedResourceId, geoRadius, supabase])
+  }, [geoNotify, selectedResourceId, geoRadius, supabase, locale])
 
   const handleSubmit = async () => {
     if (!content.trim()) return
@@ -256,29 +237,28 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
     const maxSeekers =
       maxSeekersInput.trim() !== '' ? parseInt(maxSeekersInput, 10) : null
     if (maxSeekers !== null && (isNaN(maxSeekers) || maxSeekers <= 0)) {
-      setError('Seeker limit must be a positive number.')
+      setError(composerT(locale, 'capacityInvalid'))
       return
     }
 
-    // Single-flight: a second synchronous click returns here without a 2nd INSERT.
+    // Single-flight: a second synchronous click returns here without a 2nd create_post.
     await postGateRef.current.run(async () => {
       setIsPosting(true)
       setError(null)
       setGeoNotifyResult(null)
       try {
         await executeRateLimited(async () => {
-          const sanitizedContent = sanitizeInput(content)
+          // Raw text: create_post stores it as written; React escapes it on render.
           const resourceId = selectedResourceId || null
           const shouldNotify = geoNotify && !!resourceId
           const radiusSnapshot = geoRadius
 
-          const newPostId = await onPost(sanitizedContent, resourceId, maxSeekers, imageUrl)
+          const newPostId = await onPost(content, resourceId, maxSeekers, imageUrl)
           const outcome = composerSubmitOutcome(newPostId)
           if (!outcome.reset) {
-            // INSERT failed (handleCreatePost swallows + returns null): keep the
-            // user's content + surface the error so they can retry. Leave the
-            // uploaded blob as-is (account-deletion cleanup reclaims any orphan).
-            setError(outcome.error)
+            // create_post failed (handleCreatePost returns null): keep the member's text and photo
+            // and say so, so they can retry.
+            setError(composerT(locale, 'postFailed'))
             return
           }
 
@@ -301,12 +281,13 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
                 })
               if (notifyErr) throw notifyErr
               const count = typeof notifyData === 'number' ? notifyData : 0
-              setGeoNotifyResult(
-                `Notified ${count} seeker${count !== 1 ? 's' : ''} within ${radiusSnapshot} mi.`
-              )
+              const text = formatMessage(composerT(locale, 'notifiedSeekers'), { count, radius: radiusSnapshot })
+              setGeoNotifyResult(text)
+              onAnnounce(text)
             } catch (notifyEx: unknown) {
               logger.error('geo.notify.fanout', notifyEx)
-              setGeoNotifyResult('Post shared. (Seeker notifications could not be sent.)')
+              setGeoNotifyResult(composerT(locale, 'notifyFailed'))
+              onAnnounce(composerT(locale, 'notifyFailed'))
             }
           }
         })
@@ -319,13 +300,13 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
   return (
     <div className="mb-4 p-4 rounded-xl bg-[#faf9f6] border border-stone-200">
       {error && (
-        <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+        <div role="alert" className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900">
           {error}
         </div>
       )}
       {geoNotifyResult && (
         <div
-          className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-700"
+          className="mb-3 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-900"
           data-testid="geo-notify-result"
         >
           {geoNotifyResult}
@@ -333,7 +314,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
       )}
       <div className="flex gap-3">
         {/* User Avatar */}
-        <div className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0" aria-hidden="true">
           <User className="w-5 h-5 text-white" />
         </div>
 
@@ -345,12 +326,15 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
               trigger below. */}
           <Textarea
             data-testid="composer-content"
+            dir="auto"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Share a quick update with the community…"
-            className="min-h-[72px] bg-white text-stone-900 placeholder:text-stone-400"
-            aria-label="Share a quick update"
+            maxLength={5000}
+            placeholder={composerT(locale, 'composerPlaceholder')}
+            className="min-h-[72px] bg-white text-stone-900 placeholder:text-stone-500"
+            aria-label={composerT(locale, 'composerAria')}
           />
+          <div lang="en" dir="ltr" data-english-only="photo-picker">
           <PostImagePickerField
             previewUrl={previewUrl}
             imageUploading={imageUploading}
@@ -360,6 +344,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             onClear={clearImage}
             compact
           />
+          </div>
           <div className="flex justify-end">
             <Button
               type="button"
@@ -368,7 +353,7 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
               disabled={!content.trim() || imageUploading || isLimited || isPosting}
               className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white"
             >
-              {imageUploading ? 'Uploading…' : isPosting ? 'Posting…' : 'Post'}
+              {imageUploading ? composerT(locale, 'uploading') : isPosting ? composerT(locale, 'posting') : composerT(locale, 'post')}
             </Button>
           </div>
 
@@ -377,19 +362,19 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             type="button"
             data-testid="post-wizard-trigger"
             onClick={() => setWizardOpen(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-400 text-sm hover:border-[#4a5d23] hover:text-stone-600 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-600 text-sm hover:border-[#4a5d23] hover:text-stone-800 transition-colors focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1"
           >
-            <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center">
+            <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#4a5d23] flex items-center justify-center" aria-hidden="true">
               <Plus className="w-4 h-4 text-white" />
             </span>
-            <span>More: offer, request, poll, event, or petition…</span>
+            <span>{composerT(locale, 'moreTypes')}</span>
           </button>
 
           {/* Optional resource link selector */}
           {resourceOptions.length > 0 && (
             <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
-                <LinkIcon className="w-3.5 h-3.5 text-stone-400" />
+              <div className="pointer-events-none absolute inset-y-0 start-2.5 flex items-center">
+                <LinkIcon className="w-3.5 h-3.5 text-stone-500" aria-hidden="true" />
               </div>
               <select
                 value={selectedResourceId}
@@ -398,16 +383,16 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
                   setGeoNotify(false)
                   setSeekerCount(null)
                 }}
-                className="w-full appearance-none rounded-lg border border-stone-200 bg-white pl-7 pr-7 py-1.5 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
-                aria-label="Link a resource (optional)"
+                className="w-full appearance-none rounded-lg border border-stone-200 bg-white ps-7 pe-7 py-1.5 text-xs text-stone-700 focus:outline-hidden focus:ring-1 focus:ring-[#4a5d23]"
+                aria-label={composerT(locale, 'linkResourceOptional')}
               >
-                <option value="">Link a resource (optional)</option>
+                <option value="">{composerT(locale, 'linkResourceOptional')}</option>
                 {resourceOptions.map((r) => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+              <div className="pointer-events-none absolute inset-y-0 end-2 flex items-center">
+                <ChevronDown className="w-3.5 h-3.5 text-stone-500" aria-hidden="true" />
               </div>
             </div>
           )}
@@ -417,11 +402,12 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             <Input
               type="number"
               min={1}
+              max={1000}
               value={maxSeekersInput}
               onChange={(e) => setMaxSeekersInput(e.target.value)}
-              placeholder="Limit number of seekers (optional)"
+              placeholder={composerT(locale, 'placeholderCapacity')}
               className="bg-white text-xs"
-              aria-label="Limit number of seekers"
+              aria-label={composerT(locale, 'capacityAria')}
               data-testid="max-seekers-input"
             />
           )}
@@ -429,55 +415,53 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
           {/* Geo-outreach controls — shown only when a resource is linked */}
           {selectedResourceId && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              {/* Toggle */}
-              <label className="flex items-center gap-1.5 text-xs text-stone-600 cursor-pointer select-none">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-stone-700 select-none">
                 <button
                   type="button"
                   role="switch"
                   aria-checked={geoNotify}
+                  aria-labelledby="geo-outreach-label"
                   data-testid="geo-outreach-toggle"
                   onClick={() => setGeoNotify((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1 ${
-                    geoNotify ? 'bg-[#4a5d23]' : 'bg-stone-300'
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:ring-offset-1 ${
+                    geoNotify ? 'bg-[#4a5d23]' : 'bg-stone-500'
                   }`}
                 >
                   <span
                     className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                      geoNotify ? 'translate-x-4.5' : 'translate-x-0.5'
+                      geoNotify ? 'translate-x-4.5 rtl:-translate-x-4.5' : 'translate-x-0.5 rtl:-translate-x-0.5'
                     }`}
                   />
                 </button>
-                <MapPin className="w-3.5 h-3.5" />
-                Notify nearby seekers
+                <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+                <span id="geo-outreach-label">{composerT(locale, 'notifyNearby')}</span>
               </label>
 
-              {/* Radius selector */}
               {geoNotify && (
                 <select
                   value={geoRadius}
                   onChange={(e) => setGeoRadius(Number(e.target.value) as GeoRadius)}
                   data-testid="geo-outreach-radius"
-                  aria-label="Notification radius in miles"
-                  className="appearance-none rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-[#4a5d23]"
+                  aria-label={composerT(locale, 'radiusAria')}
+                  className="appearance-none rounded-md border border-stone-200 bg-white px-2 py-1 text-xs text-stone-700 focus:outline-hidden focus:ring-1 focus:ring-[#4a5d23]"
                 >
                   {GEO_RADIUS_OPTIONS.map((r) => (
-                    <option key={r} value={r}>{r} mi</option>
+                    <option key={r} value={r}>{formatMessage(composerT(locale, 'miles'), { n: r })}</option>
                   ))}
                 </select>
               )}
 
-              {/* Live seeker count */}
               {geoNotify && (
                 <span
-                  className="text-xs text-stone-500"
+                  className="text-xs text-stone-600"
                   data-testid="geo-seeker-count"
                   aria-live="polite"
                 >
                   {seekerCountError
                     ? seekerCountError
                     : seekerCount === null
-                      ? 'Loading…'
-                      : `${seekerCount} seeker${seekerCount !== 1 ? 's' : ''} within ${geoRadius} mi`}
+                      ? composerT(locale, 'loading')
+                      : formatMessage(composerT(locale, 'seekersWithin'), { count: seekerCount, radius: geoRadius })}
                 </span>
               )}
             </div>
@@ -488,749 +472,22 @@ function CreatePostCard({ onPost, resourceOptions, onSafetyAlertClick }: CreateP
             type="button"
             data-testid="composer-safety-alert-btn"
             onClick={onSafetyAlertClick}
-            className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 transition-colors pt-1"
+            className="flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-950 transition-colors pt-1"
           >
             <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-            Report a safety hazard on the map
+            {composerT(locale, 'reportHazard')}
           </button>
 
-          {/* Post type wizard */}
           <PostTypeWizard
             open={wizardOpen}
             onClose={() => setWizardOpen(false)}
-            onPost={onPost}
+            onCreated={onCreated}
             resourceOptions={resourceOptions}
             onSafetyAlertClick={onSafetyAlertClick}
+            locale={locale}
           />
         </div>
       </div>
-    </div>
-  )
-}
-
-// ============================================
-// POST REACTIONS
-// ============================================
-interface PostReactionsProps {
-  postId: string
-  likes: number
-  comments: number
-  isLiked: boolean
-  onLike: () => void
-  onComment: () => void
-  onShare: () => void
-  shareCopied?: boolean
-  onEmbed: () => void
-  embedCopied?: boolean
-  /** reduced-motion flag from the parent PostCard; skips the like scale pop when set */
-  reduce?: boolean | null
-}
-
-function PostReactions({ postId, likes, comments, isLiked, onLike, onComment, onShare, shareCopied, onEmbed, embedCopied, reduce }: PostReactionsProps) {
-  // One-shot Heart pop when the user likes. The pop is fired from the click
-  // handler on the unliked→liked transition only (an event handler, so no
-  // effect/ref-in-render); bumping `pop` remounts the m.span to replay its
-  // scale-in. Reduced motion skips the bump — the red fill still changes via
-  // the button's CSS transition.
-  const [pop, setPop] = useState(0)
-  const handleLikeClick = () => {
-    if (!isLiked && !reduce) setPop((p) => p + 1)
-    onLike()
-  }
-
-  return (
-    <div className="flex items-center gap-4 pt-3 border-t border-stone-200">
-      <m.button
-        onClick={handleLikeClick}
-        whileTap={likeTap(reduce ?? null)}
-        className={`flex items-center gap-1.5 text-sm transition-colors ${
-          isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
-        }`}
-      >
-        <m.span
-          key={pop}
-          initial={pop === 0 ? false : { scale: 1.35 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.26, ease: 'easeOut' }}
-          className="inline-flex"
-        >
-          <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500' : ''}`} />
-        </m.span>
-        <span className="font-medium">{likes}</span>
-      </m.button>
-
-      <button
-        onClick={onComment}
-        data-testid={`comment-btn-${postId}`}
-        aria-label="Comment"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-      >
-        <MessageCircle className="w-4 h-4" />
-        <span className="font-medium">{comments}</span>
-      </button>
-
-      <button
-        onClick={onShare}
-        className={`flex items-center gap-1.5 text-sm transition-colors ${shareCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
-        aria-label={shareCopied ? 'Link copied' : 'Share post'}
-      >
-        {shareCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-        {shareCopied && <span className="text-xs font-medium">Copied</span>}
-      </button>
-
-      <button
-        onClick={onEmbed}
-        data-testid="embed-code-btn"
-        className={`flex items-center gap-1.5 text-sm transition-colors ml-auto ${embedCopied ? 'text-green-600' : 'text-muted-foreground hover:text-primary'}`}
-        aria-label={embedCopied ? 'Embed code copied' : 'Copy embed code'}
-      >
-        {embedCopied ? <Check className="w-4 h-4" /> : <Code className="w-4 h-4" />}
-        {embedCopied && <span className="text-xs font-medium">Embed copied</span>}
-      </button>
-    </div>
-  )
-}
-
-// ============================================
-// POST CARD
-// ============================================
-interface PostCardProps {
-  post: Post
-  currentUserId: string | null
-  optInStatus: string | undefined   // current user's opt-in status for this post
-  /** opt-in id for the current user's seeker row (needed for review prompt) */
-  currentUserOptInId?: string | null
-  /** whether current user (seeker) has already reviewed this opt-in's sourcer */
-  seekerHasReviewed?: boolean
-  onLike: (postId: string) => void
-  onComment: (postId: string) => void
-  onShare: (postId: string) => void
-  onEmbed: (postId: string) => void
-  onOptIn: (postId: string) => void
-  onWithdraw: (postId: string) => void
-  onReviewSourcer?: (postId: string, optInId: string) => void
-  optInError?: string | null
-  shareCopied?: boolean
-  embedCopied?: boolean
-  optInCount?: number
-  /** Enriched opt-in rows for the author's management list */
-  authorOptIns?: EnrichedOptIn[]
-  onAuthorUpdateOptIn?: (optInId: string, status: 'accepted' | 'declined' | 'completed') => void
-  onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
-  /** author unblocks a previously-declined opt-in -> seeker may opt in again */
-  onAuthorUnblockOptIn?: (optInId: string) => void
-  /** set of opt-in ids the author has already reviewed */
-  authorReviewedOptInIds?: Set<string>
-  /** seeker ids this author has declined/blocked before (private marker, author-only) */
-  authorDeclinedSeekerIds?: Set<string>
-  /** whether the current signed-in user is a guest (anonymous) — gates the appreciation picker */
-  currentUserIsGuest?: boolean
-  /** whether the current user follows this post's author */
-  isFollowingAuthor?: boolean
-  /** follow/unfollow the post author — only passed when currentUserId != post.author.id */
-  onFollow?: (authorId: string) => void
-  onUnfollow?: (authorId: string) => void
-  /** petition data for petition-type posts */
-  petitionEmbed?: {
-    title: string
-    summary: string
-    signatureCount: number
-    targetSignatures: number
-    hasSigned: boolean
-    isSigning: boolean
-  }
-  onSignPetition?: (petitionId: string) => void
-  onReport?: (postId: string, reason: string, details: string | null) => Promise<{ hidden: boolean }>
-}
-
-const REPORT_REASONS: { value: string; label: string }[] = [
-  { value: 'spam', label: 'Spam' },
-  { value: 'abusive', label: 'Abusive content' },
-  { value: 'harassment', label: 'Harassment' },
-  { value: 'misinformation', label: 'Misinformation' },
-  { value: 'illegal', label: 'Illegal content' },
-  { value: 'off_topic', label: 'Off topic' },
-  { value: 'other', label: 'Other' },
-]
-
-function PostCard({
-  post,
-  currentUserId,
-  optInStatus,
-  currentUserOptInId,
-  seekerHasReviewed,
-  onLike,
-  onComment,
-  onShare,
-  onEmbed,
-  onOptIn,
-  onWithdraw,
-  onReviewSourcer,
-  optInError,
-  shareCopied,
-  embedCopied,
-  optInCount,
-  authorOptIns,
-  onAuthorUpdateOptIn,
-  onAuthorReviewSeeker,
-  onAuthorUnblockOptIn,
-  authorReviewedOptInIds,
-  authorDeclinedSeekerIds,
-  currentUserIsGuest,
-  isFollowingAuthor,
-  onFollow,
-  onUnfollow,
-  petitionEmbed,
-  onSignPetition,
-  onReport,
-}: PostCardProps) {
-  const reduce = useReducedMotion()
-  const categoryColor = CATEGORY_COLORS[post.category]
-  const isAuthor = currentUserId != null && post.author.id === currentUserId
-  // Follow affordance decision (shared with the author profile sheet). A guest resolves to
-  // 'guest-prompt' so a tap opens the account prompt instead of a follows insert that the
-  // RESTRICTIVE anon-insert policy blocks (which reverts silently).
-  const followGate = resolveFollowGate({
-    currentUserId,
-    authorId: post.author.id,
-    isGuest: currentUserIsGuest === true,
-    hasHandlers: !!onFollow && !!onUnfollow,
-  })
-  const isFull =
-    post.maxSeekers != null &&
-    post.slotsRemaining != null &&
-    post.slotsRemaining <= 0
-
-  const [optInListOpen, setOptInListOpen] = useState(false)
-  // Author profile sheet (name/avatar click) — badges + follow + appreciation (P2.1b).
-  const [profileSheetOpen, setProfileSheetOpen] = useState(false)
-
-  // Report dialog state
-  const [reportDialogOpen, setReportDialogOpen] = useState(false)
-  const [reportReason, setReportReason] = useState<string>('')
-  const [reportDetails, setReportDetails] = useState('')
-  const [reportSubmitting, setReportSubmitting] = useState(false)
-  const [reportDone, setReportDone] = useState(false)
-  const [reportError, setReportError] = useState<string | null>(null)
-  const [isHiddenLocally, setIsHiddenLocally] = useState(false)
-
-  const handleReportSubmit = async () => {
-    if (!reportReason || !onReport) return
-    setReportSubmitting(true)
-    setReportError(null)
-    try {
-      const result = await onReport(post.id, reportReason, reportDetails.trim() || null)
-      setReportDone(true)
-      if (result.hidden) {
-        setIsHiddenLocally(true)
-      }
-      setTimeout(() => setReportDialogOpen(false), 1800)
-    } catch (err) {
-      setReportError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setReportSubmitting(false)
-    }
-  }
-
-  const showReviewSourcerBtn =
-    !isAuthor &&
-    optInStatus === 'completed' &&
-    !seekerHasReviewed &&
-    currentUserOptInId != null
-
-  // Effective hidden state: either from DB (initial load) or from this session's report
-  const effectivelyHidden = post.isHidden || isHiddenLocally
-
-  // Non-author sees a hidden post only transiently (local state for immediate feedback);
-  // the RLS policy already excludes DB-hidden posts from non-authors on the next fetch.
-  if (effectivelyHidden && !isAuthor) {
-    return null
-  }
-
-  return (
-    <div className={postCardFrameClass(effectivelyHidden)}>
-      {/* Hidden-pending-review banner — shown to post author only */}
-      {effectivelyHidden && isAuthor && (
-        <div className="mb-3 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs font-medium text-orange-700">
-          Hidden pending review — only you can see this post right now.
-        </div>
-      )}
-
-      {/* Author Row */}
-      <div className="flex items-start gap-3 mb-3">
-        {/* Avatar — opens the author profile sheet (badges + follow + appreciation). */}
-        <button
-          type="button"
-          onClick={() => setProfileSheetOpen(true)}
-          aria-label={`View ${post.author.name}'s profile`}
-          data-testid={`author-open-${post.author.id}`}
-          className="w-10 h-10 rounded-full bg-[#4a5d23] flex items-center justify-center flex-shrink-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-lime-500"
-        >
-          {post.author.avatar ? (
-            <img src={post.author.avatar} alt={post.author.name} className="w-full h-full rounded-full object-cover" />
-          ) : (
-            <User className="w-5 h-5 text-white" />
-          )}
-        </button>
-
-        {/* Author Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setProfileSheetOpen(true)}
-              className="font-medium text-sm truncate hover:underline focus:outline-none focus:underline"
-              data-testid={`author-name-${post.author.id}`}
-            >
-              {post.author.name}
-            </button>
-            <HarmonyBadge
-              score={post.author.harmonyScore}
-              count={post.author.harmonyReviewsCount}
-              userId={post.author.id}
-            />
-            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${categoryColor}`}>
-              {post.category}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{post.author.role}</span>
-            <span>•</span>
-            <span>{getRelativeTime(post.timestamp)}</span>
-          </div>
-        </div>
-
-        {/* Author profile sheet — reuses the feed's follow handlers; appreciation for
-            signed-in non-guest, non-self viewers. */}
-        <AppreciationSheet
-          open={profileSheetOpen}
-          onOpenChange={setProfileSheetOpen}
-          author={{
-            id: post.author.id,
-            name: post.author.name,
-            avatar: post.author.avatar,
-            harmonyScore: post.author.harmonyScore,
-            harmonyReviewsCount: post.author.harmonyReviewsCount,
-            badgeSummary: post.author.badgeSummary,
-            authorTier: post.author.authorTier ?? null,
-          }}
-          currentUserId={currentUserId}
-          isGuest={currentUserIsGuest === true}
-          isFollowing={isFollowingAuthor === true}
-          onFollow={onFollow}
-          onUnfollow={onUnfollow}
-          postId={post.id}
-        />
-
-        {/* Follow/Following toggle — shown for other authors to any signed-in viewer. A guest's
-            tap opens the author profile sheet (whose account prompt is shown immediately) rather
-            than attempting a follows insert that the anon-insert block reverts silently. */}
-        {followGate !== 'hidden' && (
-          <button
-            data-testid={`follow-btn-${post.author.id}`}
-            onClick={() => {
-              if (followGate === 'guest-prompt') {
-                setProfileSheetOpen(true)
-              } else if (isFollowingAuthor) {
-                onUnfollow!(post.author.id)
-              } else {
-                onFollow!(post.author.id)
-              }
-            }}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-              isFollowingAuthor
-                ? 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'
-                : 'bg-lime-50 border-lime-300 text-lime-700 hover:bg-lime-100'
-            }`}
-            aria-label={isFollowingAuthor ? `Unfollow ${post.author.name}` : `Follow ${post.author.name}`}
-          >
-            {isFollowingAuthor ? 'Following' : 'Follow'}
-          </button>
-        )}
-      </div>
-
-      {/* Content */}
-      <p className="text-sm leading-relaxed mb-3">{post.content}</p>
-
-      {/* Attached photo (W1.2). Post-level media renders here in the shared
-          card chrome — the ONLY surface that renders for a plain/general post
-          (post-type-body returns null for 'plain'). Rendered only when present
-          (no empty box on photo-less posts); a fixed aspect box + object-cover
-          prevents layout shift, and the public bucket URL loads lazily. */}
-      {post.imageUrl && (
-        <div
-          data-testid={`post-image-${post.id}`}
-          className="relative mb-3 w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-100 aspect-video"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={post.imageUrl}
-            alt={`Photo attached to ${post.author.name}'s post`}
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        </div>
-      )}
-
-      {/* Type-specific body via the typed render registry (INV1): poll (with
-          vote control), event, seeker-request, source-offer. Petition + plain
-          types render nothing here (petition keeps its embed below). */}
-      <PostTypeBody post={post} />
-
-      {/* Resource chip — shown when the post is linked to a resource */}
-      {post.resourceId && post.resourceName && (
-        <div className="flex items-center flex-wrap gap-1.5 mb-3">
-          <div
-            data-testid={`resource-chip-${post.id}`}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-50 border border-lime-200 text-xs font-medium text-lime-700"
-          >
-            <LinkIcon className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate max-w-[180px]">{post.resourceName}</span>
-          </div>
-          {/* Category badge — distinct visual from the resource link chip */}
-          {post.resourceCategory && (
-            <span
-              data-testid={`category-badge-${post.id}`}
-              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${getCategoryTailwind(post.resourceCategory)}`}
-            >
-              {getCategoryLabel(post.resourceCategory)}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Petition embed card — shown on petition-type posts */}
-      {post.postType === 'petition' && petitionEmbed && (
-        <div
-          data-testid={`petition-embed-${post.id}`}
-          className="mb-3 rounded-xl border border-lime-200 bg-lime-50/60 p-3 flex flex-col gap-2"
-        >
-          <div className="flex items-center gap-1.5">
-            <ScrollText className="w-3.5 h-3.5 text-lime-700 flex-shrink-0" aria-hidden="true" />
-            <span className="text-xs font-semibold text-lime-800 uppercase tracking-wide">Petition</span>
-          </div>
-          <p className="text-sm font-semibold text-stone-900 leading-snug line-clamp-2">
-            {petitionEmbed.title}
-          </p>
-          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
-            {petitionEmbed.summary}
-          </p>
-          <div className="text-xs text-stone-600">
-            <span className="font-semibold text-stone-800">{petitionEmbed.signatureCount.toLocaleString()}</span>
-            {petitionEmbed.targetSignatures > 0 && (
-              <> of {petitionEmbed.targetSignatures.toLocaleString()} signatures</>
-            )}
-          </div>
-          {petitionEmbed.hasSigned ? (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-lime-800">
-              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-              Signed
-            </div>
-          ) : (
-            <button
-              data-testid={`petition-sign-btn-${post.id}`}
-              onClick={() => post.petitionId && onSignPetition?.(post.petitionId)}
-              disabled={petitionEmbed.isSigning}
-              className="w-full text-xs font-semibold bg-lime-700 hover:bg-lime-800 disabled:opacity-60 text-white rounded-lg py-1.5 px-3 transition-colors flex items-center justify-center gap-1.5"
-            >
-              {petitionEmbed.isSigning ? (
-                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-              ) : null}
-              Add your verified signature of support
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Capacity + Opt-In section — only shown on posts with a capacity set */}
-      {post.maxSeekers != null && (
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          {/* Capacity meter */}
-          <span
-            data-testid={`capacity-${post.id}`}
-            className="text-xs text-stone-600"
-          >
-            {post.slotsRemaining ?? 0} of {post.maxSeekers} spot{post.maxSeekers !== 1 ? 's' : ''} left
-          </span>
-
-          {/* Author view: expandable opt-in count */}
-          {isAuthor ? (
-            <button
-              data-testid={`opt-in-manage-${post.id}`}
-              onClick={() => setOptInListOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs font-medium text-lime-700 hover:text-lime-900 transition-colors"
-            >
-              {optInCount ?? 0} opted in
-              {optInListOpen ? (
-                <ChevronUp className="w-3 h-3" />
-              ) : (
-                <ChevronDown className="w-3 h-3" />
-              )}
-            </button>
-          ) : (
-            /* Seeker view: opt-in / opted-in + withdraw / full */
-            optInStatus != null ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-lime-700 flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Opted In
-                </span>
-                {optInStatus === 'pending' && (
-                  <button
-                    data-testid={`withdraw-btn-${post.id}`}
-                    onClick={() => onWithdraw(post.id)}
-                    className="text-xs text-stone-500 underline hover:text-stone-700"
-                  >
-                    Withdraw
-                  </button>
-                )}
-              </div>
-            ) : isFull ? (
-              <button
-                disabled
-                className="px-3 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-400 cursor-not-allowed"
-              >
-                Full
-              </button>
-            ) : (
-              <button
-                data-testid={`opt-in-btn-${post.id}`}
-                onClick={() => onOptIn(post.id)}
-                className="px-3 py-1 rounded-full text-xs font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
-              >
-                Opt In
-              </button>
-            )
-          )}
-        </div>
-      )}
-
-      {/* Author's expandable opt-in management list */}
-      {isAuthor && optInListOpen && authorOptIns && authorOptIns.length > 0 && (
-        <div className="mb-3 border border-stone-200 rounded-lg divide-y divide-stone-100 bg-white">
-          {authorOptIns.map((oi) => (
-            <div key={oi.id} className="px-3 py-2 flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <User className="w-3 h-3 text-stone-400 flex-shrink-0" />
-                <span className="text-xs font-medium text-stone-700 truncate">
-                  {oi.seekerName}
-                </span>
-                <HarmonyBadge
-                  score={oi.seekerHarmonyScore}
-                  count={oi.seekerHarmonyCount}
-                  userId={oi.seekerId}
-                />
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                  oi.status === 'completed' ? 'bg-lime-100 text-lime-700' :
-                  oi.status === 'accepted'  ? 'bg-blue-100 text-blue-700' :
-                  oi.status === 'declined'  ? 'bg-red-100 text-red-600' :
-                  'bg-stone-100 text-stone-600'
-                }`}>
-                  {oi.status}
-                </span>
-                {authorDeclinedSeekerIds?.has(oi.seekerId) && (
-                  <span
-                    data-testid={`declined-before-marker-${oi.seekerId}`}
-                    title="You have declined this person before"
-                    className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-50 border border-amber-200 text-amber-700"
-                  >
-                    <ShieldAlert className="w-2.5 h-2.5" aria-hidden="true" />
-                    Declined before
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {oi.status === 'declined' && (
-                  <button
-                    data-testid={`unblock-optin-${oi.id}`}
-                    onClick={() => onAuthorUnblockOptIn?.(oi.id)}
-                    title="Unblock — they can request again"
-                    aria-label="Unblock — they can request again"
-                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
-                  >
-                    Unblock — they can request again
-                  </button>
-                )}
-                {oi.status === 'pending' && (
-                  <>
-                    <button
-                      data-testid={`accept-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-lime-600 text-white hover:bg-lime-700 transition-colors"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      data-testid={`decline-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
-                    >
-                      Decline
-                    </button>
-                  </>
-                )}
-                {oi.status === 'accepted' && (
-                  <button
-                    data-testid={`complete-optin-${oi.id}`}
-                    onClick={() => onAuthorUpdateOptIn?.(oi.id, 'completed')}
-                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    Mark Completed
-                  </button>
-                )}
-                {oi.status === 'completed' && !authorReviewedOptInIds?.has(oi.id) && (
-                  <button
-                    onClick={() => onAuthorReviewSeeker?.(oi.id, oi.seekerName)}
-                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                  >
-                    <Star className="w-2.5 h-2.5" />
-                    Review seeker
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Seeker: review sourcer prompt when exchange is completed and not yet reviewed */}
-      {showReviewSourcerBtn && (
-        <div className="mb-3">
-          <button
-            data-testid={`review-sourcer-${post.id}`}
-            onClick={() => onReviewSourcer?.(post.id, currentUserOptInId!)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-          >
-            <Star className="w-3 h-3" />
-            Review sourcer
-          </button>
-        </div>
-      )}
-
-      {/* Opt-in error alert */}
-      {optInError && (
-        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
-          {optInError}
-        </div>
-      )}
-
-      {/* Reactions */}
-      <PostReactions
-        postId={post.id}
-        likes={post.likes}
-        comments={post.comments}
-        isLiked={post.isLiked}
-        onLike={() => onLike(post.id)}
-        onComment={() => onComment(post.id)}
-        onShare={() => onShare(post.id)}
-        shareCopied={shareCopied}
-        onEmbed={() => onEmbed(post.id)}
-        embedCopied={embedCopied}
-        reduce={reduce}
-      />
-
-      {/* "Edit in admin" (moderators and up only, after hydration) + Report post (non-authors when
-          authenticated). The row collapses when neither renders. */}
-      <div data-card-actions="" className="mt-2 flex items-center justify-end gap-3 empty:hidden">
-        <PostAdminEditLink postId={post.id} content={post.content} author={post.author.name} createdAt={post.timestamp} source="feed_post" />
-        {currentUserId != null && !isAuthor && onReport && (
-          <button
-            data-testid={`report-btn-${post.id}`}
-            onClick={() => {
-              setReportReason('')
-              setReportDetails('')
-              setReportDone(false)
-              setReportError(null)
-              setReportDialogOpen(true)
-            }}
-            className="flex items-center gap-1 text-xs text-stone-400 hover:text-orange-500 transition-colors"
-            aria-label="Report post"
-          >
-            <Flag className="w-3 h-3" />
-            Report
-          </button>
-        )}
-      </div>
-
-      {/* Report dialog */}
-      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Report this post</DialogTitle>
-          </DialogHeader>
-
-          {reportDone ? (
-            <div className="py-4 text-center text-sm text-stone-700">
-              Thanks — your report helps keep the community safe.
-            </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label htmlFor={`report-reason-${post.id}`}>Reason</Label>
-                <Select value={reportReason} onValueChange={setReportReason}>
-                  <SelectTrigger id={`report-reason-${post.id}`} data-testid={`report-reason-select-${post.id}`}>
-                    <SelectValue placeholder="Select a reason" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REPORT_REASONS.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`report-details-${post.id}`}>
-                  Additional details{' '}
-                  <span className="text-stone-600 font-normal">(optional)</span>
-                </Label>
-                <Textarea
-                  id={`report-details-${post.id}`}
-                  data-testid={`report-details-${post.id}`}
-                  value={reportDetails}
-                  onChange={(e) => setReportDetails(e.target.value)}
-                  maxLength={1000}
-                  placeholder="Describe the issue..."
-                  className="resize-none text-stone-900 placeholder:text-stone-400"
-                  rows={3}
-                />
-                <p className="text-xs text-stone-600 text-right">
-                  {reportDetails.length}/1000
-                </p>
-              </div>
-
-              {reportError && (
-                <p className="text-sm text-destructive">{reportError}</p>
-              )}
-            </div>
-          )}
-
-          {!reportDone && (
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setReportDialogOpen(false)}
-                disabled={reportSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleReportSubmit}
-                disabled={!reportReason || reportSubmitting}
-                data-testid={`report-submit-${post.id}`}
-              >
-                {reportSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                Submit report
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -1296,9 +553,33 @@ export function FeedPanel() {
   const likeInFlightRef = useRef<Set<string>>(new Set())
   // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
   const unblockGateRef = useRef(createSingleFlight())
+  // Post editing (PR-2): the one card dialog open at a time, the element focus returns to, the
+  // polite status line (4.1.3), and the ids taken out because they became hidden (so an unhide
+  // can put them back without reloading the feed).
+  const [cardDialog, setCardDialog] = useState<
+    | { kind: 'edit'; post: Post }
+    | { kind: 'delete'; post: Post }
+    | { kind: 'remove'; post: Post }
+    | { kind: 'report'; post: Post }
+    | { kind: 'history'; post: Post }
+    | { kind: 'signup' }
+    | null
+  >(null)
+  const dialogTriggerRef = useRef<HTMLElement | null>(null)
+  // An announcement waiting for its dialog to close (the modal hides the feed's notice region).
+  const pendingNoticeRef = useRef<(() => void) | null>(null)
+  const removedHiddenIdsRef = useRef<Set<string>>(new Set())
+  const moderationGateRef = useRef(createSingleFlight())
 
   const { user, profileSettled, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
+  // The viewer's admin tier (shared, cached lookup — never profile columns): moderation items only.
+  const adminViewer = useAdminViewer(false)
+  const actionViewer: ActionViewer = {
+    id: user?.id ?? null,
+    isGuest: isAnonymous,
+    tier: adminViewer.status === 'ready' ? adminViewer.tier : null,
+  }
   const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
   // Resolve active subtab from panelParams (set by alias routing in feed-shell).
   // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
@@ -1319,6 +600,7 @@ export function FeedPanel() {
     setEventAnonClaims,
     feedNotice,
     handleEventManaged,
+    announceCardNotice,
     syncFeedEventCard,
   } = useFeedEventCards({
     supabase,
@@ -1580,9 +862,10 @@ export function FeedPanel() {
       // Transform to Post via the shared rowToPost (runs even when postIds is
       // empty). Counts read straight from like_count/comment_count; the
       // discriminant + metadata are preserved for every type.
-      const transformed: Post[] = rows.map((row) =>
-        rowToPost(row, { isLiked: userLikes.has(row.id) })
-      )
+      // A hidden post is the author's alone in the feed (staff review it in moderation).
+      const transformed: Post[] = rows
+        .map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+        .filter((p) => visibleInFeed(p, user?.id ?? null))
 
       // Update pagination cursor: last row's created_at + id becomes the next-page cursor.
       // hasMore is true when the page returned exactly PAGE_SIZE rows (there may be more).
@@ -1757,7 +1040,10 @@ export function FeedPanel() {
         // Transform via the shared rowToPost, then re-order to the RPC's score order
         // and attach each row's distance bucket + score by id. The RPC already places
         // pinned posts first (via the score boost), so NO client-side pinned re-sort.
-        const transformed = rows.map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+        // A hidden post is the author's alone in the feed (staff review it in moderation).
+        const transformed = rows
+          .map((row) => rowToPost(row, { isLiked: userLikes.has(row.id) }))
+          .filter((p) => visibleInFeed(p, user?.id ?? null))
         const ordered = orderByRankAndAttachBucket(postRankRows, transformed)
 
         // W1.6b: build the event cards in RPC rank order through the loader the Events tab
@@ -1865,73 +1151,75 @@ export function FeedPanel() {
     }
   }, [authLoading, fetchFollowing])
 
-  // Real-time updates: a new post arrives — prepend it to the existing list.
-  // Deduplication in the paginated append path prevents double-rendering if the
-  // same post later appears in a Load More page.
-  useRealtimeFeed({
-    onInsert: (newPost) => {
-      // The postgres_changes payload carries the posts row but NOT the joined
-      // author/resource data, nor the poll/petition side-tables. Hydrate the
-      // real row by id with the SAME explicit select as the main query, then
-      // run it through the SAME rowToPost transform — so a live-inserted post
-      // renders as its TRUE type with full data fidelity, exactly once (INV2).
-      // No blank 'feed' stub, no client-side type guess.
-      void (async () => {
-        try {
-          const { data, error } = await supabase
-            .from('posts')
-            .select(FEED_POST_SELECT)
-            .eq('id', newPost.id)
-            .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-            .maybeSingle()
-          if (error) throw error
-          if (!data) {
-            // The row vanished between the realtime INSERT and this hydration
-            // read (e.g. deleted/hidden). Log so a dropped live insert is
-            // observable rather than silently swallowed.
-            logger.warn('feed.realtime.insert.hydrate.empty', { postId: newPost.id })
-            return
-          }
-
-          let isLiked = false
-          if (user) {
-            const { data: liked } = await supabase
-              .from('post_likes')
-              .select('post_id')
-              .eq('post_id', newPost.id)
-              .eq('user_id', user.id)
-              .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-              .maybeSingle()
-            isLiked = liked != null
-          }
-
-          const hydrated = rowToPost(data as unknown as FeedPostRow, { isLiked })
-          // Dedupe by id: guards against StrictMode double-invocation and against
-          // a post this session inserted optimistically or paged in already.
-          setPosts((prev) =>
-            prev.some((p) => p.id === hydrated.id) ? prev : [hydrated, ...prev]
-          )
-        } catch (err) {
-          if (isQueryTimeout(err)) return
-          logger.warn('feed.realtime.hydrate_failed', {
-            postId: newPost.id,
-            error: getErrorMessage(err),
-          })
-        }
-      })()
-    },
-    onUpdate: (row) => {
-      // W1.4: a posts UPDATE carries the full posts row. If the post is already in
-      // the list, patch it in place (absolute counts + refreshed on-row fields, no
-      // refetch, no re-rank). If it is NOT in the list, this is an unhide/restore
-      // (is_hidden flipped false) or a post outside the current window — refetch so
-      // it comes back live. (is_hidden=true is remapped to a delete upstream in
-      // useRealtimeFeed before this fires.)
-      if (!postsRef.current.some((p) => p.id === row.id)) {
-        refreshFeed()
+  // Hydrate one post by id with the SAME explicit select + rowToPost transform as the main query and
+  // put it at the top (deduped by id). Used by the realtime insert, by the author's own create (so a
+  // new post shows even when realtime is slow), and by a restore after an unhide.
+  const hydrateAndInsertPost = useCallback(async (postId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select(FEED_POST_SELECT)
+        .eq('id', postId)
+        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        .maybeSingle()
+      if (error) throw error
+      if (!data) {
+        // The row vanished between the realtime event and this read (deleted / hidden).
+        logger.warn('feed.realtime.insert.hydrate.empty', { postId })
         return
       }
-      setPosts((prev) => applyPostRowPatch(prev, row))
+      let isLiked = false
+      if (user) {
+        const { data: liked } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .eq('post_id', postId)
+          .eq('user_id', user.id)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+          .maybeSingle()
+        isLiked = liked != null
+      }
+      const hydrated = rowToPost(data as unknown as FeedPostRow, { isLiked })
+      if (hydrated.isHidden && hydrated.author.id !== user?.id) return
+      removedHiddenIdsRef.current.delete(postId)
+      setPosts((prev) => (prev.some((p) => p.id === hydrated.id) ? prev : [hydrated, ...prev]))
+    } catch (err) {
+      if (isQueryTimeout(err)) return
+      logger.warn('feed.realtime.hydrate_failed', { postId, error: getErrorMessage(err) })
+    }
+  }, [supabase, user])
+
+  // Real-time updates. INSERT: hydrate the real row (true type, full data, exactly once — INV2).
+  // UPDATE: classifyPostUpdate decides — patch a listed post in place (version-guarded: a stale echo
+  // never reverts an edit, and nothing is re-ranked), keep the author's own held post with its
+  // banner, take a hidden or deleted post out for everyone else, put back a post this session took
+  // out when it is visible again, and IGNORE everything else (a like or comment on a post that is
+  // not listed used to reload the whole feed for every connected viewer).
+  useRealtimeFeed({
+    onInsert: (newPost) => {
+      void hydrateAndInsertPost(newPost.id)
+    },
+    onUpdate: (row) => {
+      const action = classifyPostUpdate(row, {
+        inList: postsRef.current.some((p) => p.id === row.id),
+        viewerId: user?.id ?? null,
+        removedHiddenIds: removedHiddenIdsRef.current,
+      })
+      switch (action) {
+        case 'patch':
+        case 'mark_held':
+          setPosts((prev) => applyPostRowPatch(prev, row))
+          return
+        case 'remove':
+          if (row.deleted_at == null) removedHiddenIdsRef.current.add(row.id)
+          setPosts((prev) => prev.filter((p) => p.id !== row.id))
+          return
+        case 'restore':
+          void hydrateAndInsertPost(row.id)
+          return
+        case 'ignore':
+          return
+      }
     },
     onResubscribe: () => refreshFeed(),
     onDelete: (postId) => {
@@ -2006,6 +1294,8 @@ export function FeedPanel() {
     }
   }, [feedRankMode, rankCursor, paginationCursor, loadingMore, fetchRankedPosts, fetchPosts])
 
+  // The composer's create: one create_post (raw text, the member's language as posts.lang). The new
+  // post is shown at once from a fresh read; the realtime insert is deduped by id.
   const handleCreatePost = async (
     content: string,
     resourceId: string | null,
@@ -2013,27 +1303,19 @@ export function FeedPanel() {
     imageUrl?: string | null
   ): Promise<string | null> => {
     if (!user) return null
-
-    try {
-      const { data, error } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          content,
-          resource_id: resourceId ?? null,
-          max_seekers: maxSeekers ?? null,
-          image_url: imageUrl ?? null,
-        })
-        .select('id')
-        .single()
-
-      if (error) throw error
-      // Real-time subscription will handle adding the post to the feed
-      return data?.id ?? null
-    } catch (err) {
-      logger.error('feed.post.create_failed', err)
-      return null
-    }
+    const res = await createPost(supabase, {
+      postType: 'feed',
+      fields: {
+        content: content.trim(),
+        ...(maxSeekers != null ? { max_seekers: maxSeekers } : {}),
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      },
+      resourceId,
+      lang: locale,
+    })
+    if (!res.ok) return null
+    void hydrateAndInsertPost(res.value)
+    return res.value
   }
 
   const handleOptIn = async (postId: string) => {
@@ -2207,6 +1489,8 @@ export function FeedPanel() {
           ? { ...p, isLiked: post.isLiked, likes: post.likes }
           : p
       ))
+      // A hidden or deleted post takes no new likes (post_likes RLS): say so instead of failing silently.
+      announceCardNotice(cardT(locale, (err as { code?: string })?.code === '42501' ? 'likeClosed' : 'likeFailed'))
       logger.error('feed.like.toggle_failed', err, { postId })
     } finally {
       likeInFlightRef.current.delete(postId)
@@ -2228,15 +1512,8 @@ export function FeedPanel() {
     })
     if (error) throw new Error(getFriendlyErrorMessage(error))
     const result = data as { report_count: number; hidden: boolean }
-    if (result.hidden) {
-      // Remove hidden post from the feed list for non-authors
-      // (PostCard itself will handle the author's own hidden post with a badge)
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, isHidden: true } : p
-        )
-      )
-    }
+    // A report that hides the post: its card leaves the reporter's feed once the dialog closes
+    // (ReportDialog onSubmit below), the same way as every other card that leaves.
     return { hidden: result.hidden }
   }
 
@@ -2254,21 +1531,20 @@ export function FeedPanel() {
 
   const handleShare = (postId: string) => {
     const url = generateShareUrl('post', postId)
+    const copied = () => {
+      setShareCopiedPostId(postId)
+      announceCardNotice(cardT(locale, 'statusLinkCopied'))
+      setTimeout(() => setShareCopiedPostId(null), 2000)
+    }
     if (navigator.share) {
-      navigator.share({ title: 'FEED Community Post', url }).catch((err: unknown) => {
+      navigator.share({ title: cardT(locale, 'shareTitle'), url }).catch((err: unknown) => {
         // AbortError = user cancelled — swallow silently
         if (err instanceof DOMException && err.name === 'AbortError') return
         // Any other share failure: fall back to clipboard
-        navigator.clipboard?.writeText(url).then(() => {
-          setShareCopiedPostId(postId)
-          setTimeout(() => setShareCopiedPostId(null), 2000)
-        }).catch(() => {})
+        navigator.clipboard?.writeText(url).then(copied).catch(() => {})
       })
     } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        setShareCopiedPostId(postId)
-        setTimeout(() => setShareCopiedPostId(null), 2000)
-      }).catch(() => {})
+      navigator.clipboard.writeText(url).then(copied).catch(() => {})
     }
   }
 
@@ -2281,6 +1557,114 @@ export function FeedPanel() {
         setTimeout(() => setEmbedCopiedPostId(null), 2500)
       }).catch(() => {})
     }
+  }
+
+  // Copy a post's share link (the menu's Copy link), announced.
+  const copyPostLink = (postId: string) => {
+    const url = generateShareUrl('post', postId)
+    navigator.clipboard?.writeText(url).then(() => announceCardNotice(cardT(locale, 'statusLinkCopied'))).catch(() => {})
+  }
+
+  // Moderators act from the card with the version they are looking at (p_expected_version). A
+  // conflict (the author edited since) re-reads the post and says so; hold / remove take it out of
+  // the feed (staff review hidden posts in the moderation queue); restore re-reads it in place.
+  // `fromDialog`: run from Remove's confirmation — the notice (and a leaving card's focus move) waits
+  // until the dialog has closed (the modal hides the notice region).
+  const moderateFromCard = async (post: Post, action: PostModerationAction, fromDialog = false) => {
+    const say = (text: string) => {
+      if (fromDialog) pendingNoticeRef.current = () => announceCardNotice(text, () => focusCardTrigger(post.id))
+      else announceCardNotice(text)
+    }
+    const leave = (text: string) => {
+      if (!fromDialog) return cardLeaves(post.id, text)
+      dialogTriggerRef.current = null
+      pendingNoticeRef.current = () => cardLeaves(post.id, text)
+    }
+    await moderationGateRef.current.run(async () => {
+      const result = await moderatePost(supabase, action, post.id, post.version)
+      if (!result.ok) {
+        if (result.conflict || result.gone) {
+          const row = await loadFeedRow(supabase, post.id)
+          if (row) {
+            setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
+            say(cardT(locale, result.gone ? 'statusPostGone' : 'statusModerationConflict'))
+          } else leave(cardT(locale, 'statusPostGone'))
+        } else say(cardT(locale, 'statusModerationFailed'))
+        return
+      }
+      if (action === 'authorize') {
+        const row = await loadFeedRow(supabase, post.id)
+        if (row) setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
+        // The card stays (focus stays on its ⋯ button): announce only.
+        say(cardT(locale, 'statusRestored'))
+      } else {
+        removedHiddenIdsRef.current.add(post.id)
+        leave(cardT(locale, action === 'hold' ? 'statusHeld' : 'statusRemoved'))
+      }
+    })
+  }
+
+  // One handler for every card action (⋯ menu items, the "Edited" label, the footer Report).
+  const handleCardAction = (post: Post, id: PostMenuItemId, trigger: HTMLElement | null) => {
+    dialogTriggerRef.current = trigger
+    switch (id) {
+      case 'edit':
+      case 'delete':
+      case 'report':
+      case 'history':
+        setCardDialog({ kind: id, post })
+        return
+      case 'signup_to_report':
+        setCardDialog({ kind: 'signup' })
+        return
+      case 'copy_link':
+        copyPostLink(post.id)
+        return
+      case 'hold':
+        void moderateFromCard(post, 'hold')
+        return
+      case 'remove':
+        // Removing upholds the post's reports: confirmed first, like Delete.
+        setCardDialog({ kind: 'remove', post })
+        return
+      case 'restore':
+        void moderateFromCard(post, 'authorize')
+        return
+      case 'edit_in_admin':
+        // Rendered as the "Edit in admin" link itself (it navigates; nothing to run here).
+        return
+      default:
+        assertNever(id)
+    }
+  }
+
+  // A card leaves the feed (the author deleted it, a moderator held or removed it): in ONE frame,
+  // focus moves to the next post card (or the feed's heading when none is left), the card is
+  // removed, then the notice is set — the same order as an event card that leaves.
+  const cardLeaves = (postId: string, text: string) => {
+    announceCardNotice(text, () => {
+      const list = postsRef.current
+      const idx = list.findIndex((p) => p.id === postId)
+      const nextId = idx >= 0 ? (list[idx + 1] ?? list[idx - 1])?.id : undefined
+      const next = nextId ? document.querySelector<HTMLElement>(`[data-testid="post-card-${CSS.escape(nextId)}"]`) : null
+      if (next) next.focus()
+      else focusFeedTitle()
+      setPosts((prev) => prev.filter((p) => p.id !== postId))
+    })
+  }
+
+  // The card's ⋯ button (or, when it is gone, nothing): where focus returns after a dialog.
+  const focusCardTrigger = (postId: string) => {
+    const trigger = dialogTriggerRef.current
+    if (trigger?.isConnected) trigger.focus()
+    else document.querySelector<HTMLElement>(`[data-testid="post-menu-${CSS.escape(postId)}"]`)?.focus()
+  }
+
+  // A dialog closed: announce what it did (queued while the modal hid the notice region).
+  const flushPendingNotice = () => {
+    const pending = pendingNoticeRef.current
+    pendingNoticeRef.current = null
+    pending?.()
   }
 
   // Filter posts
@@ -2318,6 +1702,126 @@ export function FeedPanel() {
         revieweeRole={reviewModalRevieweeRole}
         onSubmitted={handleReviewSubmitted}
       />
+    )}
+    {/* Post editing (PR-2): the card dialogs, one at a time, at panel root. Their announcements go
+        through the feed's card-notice region (FeedStatusRegions). */}
+    <PostEditDialog
+      post={cardDialog?.kind === 'edit' ? cardDialog.post : null}
+      locale={locale}
+      returnFocusRef={dialogTriggerRef}
+      onClose={() => setCardDialog(null)}
+      onGone={(postId) => {
+        // The post no longer exists: once the dialog has closed, its card leaves (focus to the next
+        // card or the heading — the card's own ⋯ button is going), then "This post was deleted".
+        dialogTriggerRef.current = null
+        pendingNoticeRef.current = () => cardLeaves(postId, cardT(locale, 'statusPostGone'))
+      }}
+      onSaved={(postId, row, result, changes) => {
+        if (!result) {
+          // "Use the current version": nothing was saved, so nothing is announced; the card shows the
+          // current version when it could be read.
+          if (row) setPosts((prev) => applyPostRowPatch(prev, rowPatchFromFeedRow(row)))
+          return
+        }
+        const patch = row ? rowPatchFromFeedRow(row) : editFallbackPatch(postId, result, changes)
+        setPosts((prev) => applyPostRowPatch(prev, patch))
+        const text = cardT(locale, 'statusPostUpdated')
+        pendingNoticeRef.current = () => announceCardNotice(text, () => focusCardTrigger(postId))
+      }}
+      onClosed={flushPendingNotice}
+    />
+    <PostHistoryDialog
+      target={
+        cardDialog?.kind === 'history'
+          ? {
+              kind: 'post',
+              id: cardDialog.post.id,
+              postType: cardDialog.post.postType,
+              authorId: cardDialog.post.author.id,
+              current: {
+                version: cardDialog.post.version,
+                content: cardDialog.post.content,
+                imageUrl: cardDialog.post.imageUrl,
+                createdAt: cardDialog.post.timestamp.toISOString(),
+                editedAt: cardDialog.post.editedAt?.toISOString() ?? null,
+              },
+            }
+          : null
+      }
+      locale={locale}
+      viewer={{ id: user?.id ?? null, isGuest: isAnonymous, isPlatformAdmin: actionViewer.tier === 'platform_admin' }}
+      onClose={() => setCardDialog(null)}
+      returnFocusRef={dialogTriggerRef}
+    />
+    <ConfirmDeleteDialog
+      open={cardDialog?.kind === 'delete'}
+      kind="post"
+      locale={locale}
+      returnFocusRef={dialogTriggerRef}
+      onClose={() => setCardDialog(null)}
+      onClosed={flushPendingNotice}
+      onConfirm={async () => {
+        if (cardDialog?.kind !== 'delete') return null
+        const target = cardDialog.post
+        const res = await deleteOwnPost(supabase, target.id, target.postType)
+        // Already gone counts as deleted.
+        if (!res.ok && res.failure.kind !== 'not_found') return failureText(locale, res.failure)
+        // The card's own ⋯ button is about to leave: focus goes to the next card once the dialog closed.
+        dialogTriggerRef.current = null
+        const text = cardT(locale, 'statusPostDeleted')
+        pendingNoticeRef.current = () => cardLeaves(target.id, text)
+        return null
+      }}
+    />
+    <ConfirmDeleteDialog
+      open={cardDialog?.kind === 'remove'}
+      kind="remove"
+      locale={locale}
+      returnFocusRef={dialogTriggerRef}
+      onClose={() => setCardDialog(null)}
+      onClosed={flushPendingNotice}
+      onConfirm={async () => {
+        if (cardDialog?.kind !== 'remove') return null
+        await moderateFromCard(cardDialog.post, 'remove', true)
+        return null
+      }}
+    />
+    <ReportDialog
+      postId={cardDialog?.kind === 'report' ? cardDialog.post.id : null}
+      locale={locale}
+      returnFocusRef={dialogTriggerRef}
+      onClose={() => setCardDialog(null)}
+      onClosed={flushPendingNotice}
+      // The dialog itself shows and announces its confirmation (the feed's region is hidden while it is
+      // open). When the report hid the post, the card leaves after the dialog closed.
+      onSubmit={async (postId, reason, details) => {
+        const { hidden } = await handleReport(postId, reason, details)
+        if (hidden) {
+          dialogTriggerRef.current = null
+          pendingNoticeRef.current = () => cardLeaves(postId, cardT(locale, 'statusReportHidden'))
+        }
+      }}
+    />
+    {cardDialog?.kind === 'signup' && (
+      <Dialog open onOpenChange={(o) => !o && setCardDialog(null)}>
+        <DialogContent
+          className="max-w-sm"
+          aria-describedby={undefined}
+          lang={locale}
+          dir={dir(locale)}
+          onCloseAutoFocus={(e) => {
+            if (dialogTriggerRef.current) {
+              e.preventDefault()
+              dialogTriggerRef.current.focus()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{cardT(locale, 'signupToReportTitle')}</DialogTitle>
+          </DialogHeader>
+          <CreateAccountPrompt message={cardT(locale, 'signupToReportBody')} linkLabel={feedChromeT(locale, 'createAccount')} />
+        </DialogContent>
+      </Dialog>
     )}
     <div lang={locale} dir={dir(locale)} className="h-full flex flex-col">
       {/* Top-level tablist: Feed | Messages
@@ -2527,16 +2031,18 @@ export function FeedPanel() {
 
           {/* Create Post Card — full users only; guests see account prompt */}
           {isAuthenticated && !isAnonymous && (
-            /* Not translated yet (Release 2): its English copy is marked English. */
-            <div lang="en" dir="ltr" data-testid="feed-composer-region">
-              <CreatePostCard
-                onPost={handleCreatePost}
-                resourceOptions={resourceOptions}
-                onSafetyAlertClick={() => {
-                  setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
-                  setActivePanel('map')
-                }}
-              />
+            <div data-testid="feed-composer-region">
+            <CreatePostCard
+              onPost={handleCreatePost}
+              onCreated={(postId) => void hydrateAndInsertPost(postId)}
+              locale={locale}
+              onAnnounce={announceCardNotice}
+              resourceOptions={resourceOptions}
+              onSafetyAlertClick={() => {
+                setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
+                setActivePanel('map')
+              }}
+            />
             </div>
           )}
           {isAnonymous && (
@@ -2628,10 +2134,14 @@ export function FeedPanel() {
                 const postOptInStatus = optInMap.get(post.id)
 
                 return (
-                  // Post cards are not translated yet (Release 2): their English copy is marked English.
-                  <m.div key={post.id} data-testid={`post-${post.id}`} lang="en" dir="ltr" {...postEnterExit(reduce)}>
-                    <PostCard
+                  <m.div key={post.id} data-testid={`post-${post.id}`} {...postEnterExit(reduce)}>
+                    <FeedPostCard
                       post={post}
+                      locale={locale}
+                      formatAge={(d) => relativeAge(d.toISOString(), locale)}
+                      viewer={actionViewer}
+                      onAction={handleCardAction}
+                      commentsOpen={openCommentPostIds.has(post.id)}
                       currentUserId={user?.id ?? null}
                       optInStatus={postOptInStatus}
                       currentUserOptInId={seekerOptInId}
@@ -2675,11 +2185,12 @@ export function FeedPanel() {
                           : undefined
                       }
                       onSignPetition={signPetition}
-                      onReport={user ? handleReport : undefined}
                     />
                     {openCommentPostIds.has(post.id) && (
                       <CommentThread
                         postId={post.id}
+                        locale={locale}
+                        onAnnounce={announceCardNotice}
                         onCountChange={(count) => {
                           setPosts((prev) =>
                             prev.map((p) => (p.id === post.id ? { ...p, comments: count } : p))

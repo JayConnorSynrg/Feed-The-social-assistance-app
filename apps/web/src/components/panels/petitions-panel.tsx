@@ -101,14 +101,14 @@ function PetitionCard({
               {categoryLabel(petition.cause_category)}
             </span>
           </div>
-          <h3 className="text-base font-semibold text-stone-900 leading-snug">
+          <h3 className="text-base font-semibold text-stone-900 leading-snug" lang="" dir="auto">
             {petition.title}
           </h3>
         </div>
       </div>
 
       {/* Summary */}
-      <p className="text-sm text-stone-700 leading-relaxed line-clamp-3">
+      <p className="text-sm text-stone-700 leading-relaxed line-clamp-3" lang="" dir="auto">
         {petition.summary}
       </p>
 

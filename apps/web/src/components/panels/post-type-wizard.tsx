@@ -1,12 +1,20 @@
 'use client'
 
-import React, { useState, useReducer, useCallback } from 'react'
+// apps/web/src/components/panels/post-type-wizard.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The "More: offer, request, poll, event, or petition…" wizard. Every post it creates goes through
+// create_post (lib/post-rpc.ts — one checked server write, raw text, the member's language as
+// posts.lang); a poll and its options are created in that same call. The fields are the shared
+// PostFormFields the edit dialog also uses, so a post is created and edited with the same labels and
+// limits. A member event carries its venue time zone (default: the device's zone). Petition drafts
+// are not posts: they keep their own petitions draft path.
+
+import React, { useState, useReducer, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { sanitizeInput } from '@/lib/security'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
-import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { logger } from '@/lib/logger'
-import { createPoll } from '@/hooks/use-poll'
 import {
   Dialog,
   DialogContent,
@@ -30,7 +38,16 @@ import {
   ShieldAlert,
   ScrollText,
 } from 'lucide-react'
-import type { Database } from '@feed/database'
+import type { Locale } from '@/lib/i18n'
+import { dir } from '@/lib/i18n'
+import { browserTimeZone } from '@/lib/event-time'
+import { createPost, type PostType } from '@/lib/post-rpc'
+import { petitionBodyHash } from '@/lib/petition-hash'
+import { composerT, type ComposerMessages } from '@/lib/i18n-feed-composer'
+import { failureText } from '@/lib/i18n-feed-edit'
+import { createSingleFlight } from '@/components/feed/composer-guards'
+import { PostFormFields, firstInvalidControl } from '@/components/feed/post-form-fields'
+import { EMPTY_DRAFT, createFields, validateDraft, type DraftErrors, type PostDraft } from '@/components/feed/post-edit-model'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -39,9 +56,11 @@ import type { Database } from '@feed/database'
 export interface PostTypeWizardProps {
   open: boolean
   onClose: () => void
-  onPost: (content: string, resourceId: string | null, maxSeekers: number | null, imageUrl?: string | null) => Promise<string | null>
+  /** A post was created: the feed shows it right away (the realtime insert is deduped by id). */
+  onCreated: (postId: string) => void
   resourceOptions: Array<{ id: string; name: string }>
   onSafetyAlertClick: () => void
+  locale: Locale
 }
 
 // ---------------------------------------------------------------------------
@@ -54,34 +73,18 @@ type WizardStep = 'type-selection' | 'compose'
 interface WizardState {
   step: WizardStep
   selectedType: PostTypeKey | null
-  isSubmitting: boolean
-  error: string | null
 }
 
-type WizardAction =
-  | { type: 'SELECT_TYPE'; payload: PostTypeKey }
-  | { type: 'BACK' }
-  | { type: 'SET_SUBMITTING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'RESET' }
+type WizardAction = { type: 'SELECT_TYPE'; payload: PostTypeKey } | { type: 'BACK' } | { type: 'RESET' }
 
-const initialState: WizardState = {
-  step: 'type-selection',
-  selectedType: null,
-  isSubmitting: false,
-  error: null,
-}
+const initialState: WizardState = { step: 'type-selection', selectedType: null }
 
 function wizardReducer(state: WizardState, action: WizardAction): WizardState {
   switch (action.type) {
     case 'SELECT_TYPE':
-      return { ...state, step: 'compose', selectedType: action.payload, error: null }
+      return { step: 'compose', selectedType: action.payload }
     case 'BACK':
-      return { ...state, step: 'type-selection', error: null }
-    case 'SET_SUBMITTING':
-      return { ...state, isSubmitting: action.payload }
-    case 'SET_ERROR':
-      return { ...state, error: action.payload }
+      return { ...state, step: 'type-selection' }
     case 'RESET':
       return initialState
     default:
@@ -90,666 +93,254 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 }
 
 // ---------------------------------------------------------------------------
-// Constants
+// Type cards
 // ---------------------------------------------------------------------------
 
-const OE_CATEGORIES = [
-  'Food', 'Housing', 'Goods', 'Transit', 'Health',
-  'Money', 'Care', 'Education', 'Work', 'Legal',
-] as const
-
-const TYPE_LABELS: Record<PostTypeKey, string> = {
-  general: 'General Update',
-  seeker_request: 'Seeking Help',
-  source_offer: 'Offering Help',
-  resource: 'Link a Resource',
-  poll: 'Community Poll',
-  event: 'Community Event',
-  safety: 'Safety Warning',
-  petition: 'Petition Draft',
+interface TypeCard {
+  key: PostTypeKey
+  label: keyof ComposerMessages
+  description: keyof ComposerMessages
+  icon: React.ComponentType<{ className?: string }>
+  variant?: 'amber'
 }
 
-// ---------------------------------------------------------------------------
-// Helper: Json type alias
-// ---------------------------------------------------------------------------
+const TYPE_CARDS: TypeCard[] = [
+  { key: 'general', label: 'typeGeneral', description: 'typeGeneralDesc', icon: Megaphone },
+  { key: 'seeker_request', label: 'typeRequest', description: 'typeRequestDesc', icon: HandHelping },
+  { key: 'source_offer', label: 'typeOffer', description: 'typeOfferDesc', icon: Gift },
+  { key: 'resource', label: 'typeResource', description: 'typeResourceDesc', icon: BookMarked },
+  { key: 'poll', label: 'typePoll', description: 'typePollDesc', icon: BarChart3 },
+  { key: 'event', label: 'typeEvent', description: 'typeEventDesc', icon: CalendarDays },
+  { key: 'safety', label: 'typeSafety', description: 'typeSafetyDesc', icon: ShieldAlert, variant: 'amber' },
+  { key: 'petition', label: 'typePetition', description: 'typePetitionDesc', icon: ScrollText },
+]
 
-type Json = Database['public']['Tables']['posts']['Row']['metadata']
+const TYPE_TITLE: Record<PostTypeKey, keyof ComposerMessages> = Object.fromEntries(TYPE_CARDS.map((c) => [c.key, c.label])) as Record<
+  PostTypeKey,
+  keyof ComposerMessages
+>
 
-// Suppress unused import warning — isQueryTimeout is used in catch blocks below
-const _isQueryTimeout = isQueryTimeout
-
-// ---------------------------------------------------------------------------
-// Helper: CategoryChips
-// ---------------------------------------------------------------------------
-
-function CategoryChips({ selected, onChange }: { selected: string[]; onChange: (cats: string[]) => void }) {
-  const toggle = (cat: string) =>
-    onChange(selected.includes(cat) ? selected.filter(c => c !== cat) : [...selected, cat])
-  return (
-    <div className="flex flex-wrap gap-2">
-      {OE_CATEGORIES.map(cat => (
-        <button
-          key={cat}
-          type="button"
-          onClick={() => toggle(cat)}
-          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-            selected.includes(cat)
-              ? 'bg-[#4a5d23] text-white border-[#4a5d23]'
-              : 'border-stone-300 text-stone-600 hover:border-[#4a5d23]'
-          }`}
-        >
-          {cat}
-        </button>
-      ))}
-    </div>
-  )
+/** The post_type each structured form creates ('resource' = a plain post linked to a saved resource). */
+const POST_TYPE_OF: Record<Exclude<PostTypeKey, 'safety' | 'petition'>, Exclude<PostType, 'petition' | 'resource_post'>> = {
+  general: 'feed',
+  seeker_request: 'seeker_request',
+  source_offer: 'source_offer',
+  resource: 'feed',
+  poll: 'poll',
+  event: 'event_post',
 }
 
-// ---------------------------------------------------------------------------
-// Sub-form: GeneralForm
-// ---------------------------------------------------------------------------
-
-interface BaseFormProps {
-  onClose: () => void
-  dispatch: React.Dispatch<WizardAction>
-  isSubmitting: boolean
-  error: string | null
+const SUBMIT_LABEL: Record<Exclude<PostTypeKey, 'safety' | 'petition'>, keyof ComposerMessages> = {
+  general: 'submitUpdate',
+  seeker_request: 'submitRequest',
+  source_offer: 'submitOffer',
+  resource: 'submitResource',
+  poll: 'submitPoll',
+  event: 'submitEvent',
 }
 
-interface GeneralFormProps extends BaseFormProps {
-  onPost: PostTypeWizardProps['onPost']
-}
-
-function GeneralForm({ onClose, dispatch, isSubmitting, error, onPost }: GeneralFormProps) {
-  const [content, setContent] = useState('')
-  const {
-    imageUrl,
-    previewUrl,
-    imageUploading,
-    imageError,
-    fileInputRef,
-    handleFileSelect,
-    clearImage,
-  } = usePostImagePicker()
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (content.trim().length < 3) return
-    if (imageUploading) return // wait for the in-flight upload to settle
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      await onPost(sanitizeInput(content), null, null, imageUrl)
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [content, imageUrl, imageUploading, dispatch, onClose, onPost])
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
-      )}
-      <div>
-        <Label htmlFor="general-content">Update</Label>
-        <Textarea
-          id="general-content"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Share an update with the community..."
-          className="mt-1 min-h-[120px]"
-        />
-      </div>
-      <PostImagePickerField
-        previewUrl={previewUrl}
-        imageUploading={imageUploading}
-        imageError={imageError}
-        fileInputRef={fileInputRef}
-        onFileSelect={handleFileSelect}
-        onClear={clearImage}
-      />
-      <Button type="submit" disabled={isSubmitting || imageUploading || content.trim().length < 3} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Posting…' : 'Post Update'}
-      </Button>
-    </form>
-  )
-}
+const ERROR_BOX = 'rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900'
 
 // ---------------------------------------------------------------------------
-// Sub-form: SeekerRequestForm
+// Structured post form (general / request / offer / resource / poll / event)
 // ---------------------------------------------------------------------------
 
-function SeekerRequestForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
-  const [content, setContent] = useState('')
-  const [categories, setCategories] = useState<string[]>([])
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (content.trim().length < 3) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      const { error: insertError } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content: sanitizeInput(content),
-        post_type: 'seeker_request',
-        metadata: { categories } as unknown as Json,
-      })
-      if (insertError) throw insertError
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [content, categories, dispatch, onClose])
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
-      )}
-      <div>
-        <Label htmlFor="seeker-content">What are you looking for?</Label>
-        <Textarea
-          id="seeker-content"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Describe what you're looking for..."
-          className="mt-1 min-h-[120px]"
-        />
-      </div>
-      <div>
-        <Label className="mb-2 block">Categories</Label>
-        <CategoryChips selected={categories} onChange={setCategories} />
-      </div>
-      <Button type="submit" disabled={isSubmitting || content.trim().length < 3} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Posting…' : 'Post Request'}
-      </Button>
-    </form>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Sub-form: SourceOfferForm
-// ---------------------------------------------------------------------------
-
-interface SourceOfferFormProps extends BaseFormProps {
+/** One post type's form (exported for its behaviour tests). */
+export function StructuredForm({
+  kind,
+  locale,
+  resourceOptions,
+  onCreated,
+  onDone,
+}: {
+  kind: Exclude<PostTypeKey, 'safety' | 'petition'>
+  locale: Locale
   resourceOptions: PostTypeWizardProps['resourceOptions']
-}
-
-function SourceOfferForm({ onClose, dispatch, isSubmitting, error, resourceOptions }: SourceOfferFormProps) {
-  const [content, setContent] = useState('')
-  const [categories, setCategories] = useState<string[]>([])
+  onCreated: (postId: string) => void
+  onDone: () => void
+}) {
+  const postType = POST_TYPE_OF[kind]
+  const viewerTz = useMemo(() => browserTimeZone(), [])
+  const [draft, setDraft] = useState<PostDraft>(() => ({ ...EMPTY_DRAFT, timeZone: kind === 'event' ? viewerTz : '' }))
   const [resourceId, setResourceId] = useState('')
+  const [errors, setErrors] = useState<DraftErrors>({})
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  // Synchronous single-flight: a double tap creates one post.
+  const gate = useRef(createSingleFlight())
+  const picker = usePostImagePicker()
+  const withImage: PostDraft = kind === 'general' ? { ...draft, imageUrl: picker.imageUrl } : draft
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (content.trim().length < 3) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      const { error: insertError } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content: sanitizeInput(content),
-        post_type: 'source_offer',
-        resource_id: resourceId || null,
-        metadata: { categories } as unknown as Json,
-      })
-      if (insertError) throw insertError
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
+  const resourceName = resourceOptions.find((r) => r.id === resourceId)?.name ?? ''
+  // A shared resource with no note reads as the resource's name.
+  const submitDraft: PostDraft = kind === 'resource' && !draft.content.trim() ? { ...withImage, content: resourceName } : withImage
+  const needsResource = kind === 'resource' && !resourceId
+  const canSubmit = !submitting && !picker.imageUploading && !needsResource && submitDraft.content.trim().length > 0
+
+  const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!canSubmit) return
+      const found = validateDraft(postType, submitDraft, { original: null, facts: { pollVotes: 0, committedOptIns: 0, pollEndsAt: null }, viewerTz })
+      setErrors(found)
+      if (Object.keys(found).length > 0) {
+        // Focus the first field with an error (its message is linked by aria-describedby).
+        const target = kind === 'resource' ? 'resource_post' : postType
+        requestAnimationFrame(() => firstInvalidControl(target, `wizard-${kind}`, found)?.focus())
         return
       }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [content, categories, resourceId, dispatch, onClose])
+      await gate.current.run(async () => {
+        setSubmitting(true)
+        setError(null)
+        try {
+          const res = await createPost(createClient(), {
+            postType,
+            fields: createFields(postType, submitDraft, viewerTz),
+            resourceId: kind === 'resource' || (kind === 'source_offer' && resourceId) ? resourceId : null,
+            lang: locale,
+          })
+          if (!res.ok) {
+            setError(failureText(locale, res.failure))
+            return
+          }
+          picker.resetAfterPost()
+          onCreated(res.value)
+          onDone()
+        } finally {
+          setSubmitting(false)
+        }
+      })
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
+        <div role="alert" className={ERROR_BOX}>
+          {error}
+        </div>
       )}
-      <div>
-        <Label htmlFor="offer-content">What are you offering?</Label>
-        <Textarea
-          id="offer-content"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Describe what you're offering..."
-          className="mt-1 min-h-[120px]"
-        />
-      </div>
-      <div>
-        <Label className="mb-2 block">Categories</Label>
-        <CategoryChips selected={categories} onChange={setCategories} />
-      </div>
-      {resourceOptions.length > 0 && (
+      {kind === 'resource' && (
         <div>
-          <Label htmlFor="offer-resource">Link a resource (optional)</Label>
+          <Label htmlFor="wizard-resource">{composerT(locale, 'fieldResource')}</Label>
           <select
-            id="offer-resource"
+            id="wizard-resource"
             value={resourceId}
-            onChange={e => setResourceId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]"
+            onChange={(e) => setResourceId(e.target.value)}
+            required
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23]"
           >
-            <option value="">None</option>
-            {resourceOptions.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
+            <option value="">{composerT(locale, 'selectResource')}</option>
+            {resourceOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
             ))}
           </select>
         </div>
       )}
-      <Button type="submit" disabled={isSubmitting || content.trim().length < 3} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Posting…' : 'Post Offer'}
-      </Button>
-    </form>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Sub-form: ResourceForm
-// ---------------------------------------------------------------------------
-
-interface ResourceFormProps extends BaseFormProps {
-  resourceOptions: PostTypeWizardProps['resourceOptions']
-  onPost: PostTypeWizardProps['onPost']
-}
-
-function ResourceForm({ onClose, dispatch, isSubmitting, error, resourceOptions, onPost }: ResourceFormProps) {
-  const [resourceId, setResourceId] = useState('')
-  const [content, setContent] = useState('')
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!resourceId) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      await onPost(sanitizeInput(content) || '', resourceId, null)
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [resourceId, content, dispatch, onClose, onPost])
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
-      )}
-      <div>
-        <Label htmlFor="resource-select">Resource <span className="text-red-500">*</span></Label>
-        <select
-          id="resource-select"
-          value={resourceId}
-          onChange={e => setResourceId(e.target.value)}
-          className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#4a5d23]"
-          required
-        >
-          <option value="">Select a resource…</option>
-          {resourceOptions.map(r => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <Label htmlFor="resource-note">Note (optional)</Label>
-        <Textarea
-          id="resource-note"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Add a note about this resource..."
-          className="mt-1 min-h-[80px]"
-        />
-      </div>
-      <Button type="submit" disabled={isSubmitting || !resourceId} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Posting…' : 'Share Resource'}
-      </Button>
-    </form>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Sub-form: PollForm
-// ---------------------------------------------------------------------------
-
-function PollForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
-  const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<string[]>(['', ''])
-  const [endsAt, setEndsAt] = useState('')
-
-  const setOption = (index: number, value: string) => {
-    setOptions(prev => prev.map((o, i) => i === index ? value : o))
-  }
-  const addOption = () => {
-    if (options.length < 6) setOptions(prev => [...prev, ''])
-  }
-  const removeOption = (index: number) => {
-    if (options.length > 2) setOptions(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const isValid = question.trim().length >= 3 && options.length >= 2 && options.every(o => o.trim().length > 0)
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!isValid) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      const { data: post, error: postError } = await supabase
-        .from('posts')
-        .insert({ user_id: user.id, content: sanitizeInput(question), post_type: 'poll' })
-        .select('id')
-        .single()
-      if (postError) throw postError
-      const filteredOptions = options.filter(o => o.trim())
-      const { error: pollError } = await createPoll(
-        post.id,
-        question,
-        filteredOptions,
-        endsAt ? new Date(endsAt) : undefined,
-      )
-      if (pollError) {
-        dispatch({ type: 'SET_ERROR', payload: pollError })
-        return
-      }
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [question, options, endsAt, isValid, dispatch, onClose])
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
-      )}
-      <div>
-        <Label htmlFor="poll-question">Question</Label>
-        <Input
-          id="poll-question"
-          value={question}
-          onChange={e => setQuestion(e.target.value)}
-          placeholder="Ask the community a question…"
-          className="mt-1"
-        />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label>Options</Label>
-        {options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              value={opt}
-              onChange={e => setOption(i, e.target.value)}
-              placeholder={`Option ${i + 1}`}
+      <PostFormFields
+        postType={kind === 'resource' ? 'resource_post' : postType}
+        draft={withImage}
+        onChange={(next) => setDraft({ ...next, imageUrl: null })}
+        mode="create"
+        locale={locale}
+        idPrefix={`wizard-${kind}`}
+        errors={errors}
+        photoSlot={
+          kind === 'general' ? (
+            <div lang="en" dir="ltr" data-english-only="photo-picker">
+            <PostImagePickerField
+              previewUrl={picker.previewUrl}
+              imageUploading={picker.imageUploading}
+              imageError={picker.imageError}
+              fileInputRef={picker.fileInputRef}
+              onFileSelect={picker.handleFileSelect}
+              onClear={picker.clearImage}
             />
-            {options.length > 2 && (
-              <button
-                type="button"
-                onClick={() => removeOption(i)}
-                className="p-1 text-stone-400 hover:text-red-500 transition-colors"
-                aria-label={`Remove option ${i + 1}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        ))}
-        {options.length < 6 && (
-          <button
-            type="button"
-            onClick={addOption}
-            className="text-sm text-[#4a5d23] hover:underline self-start"
+            </div>
+          ) : undefined
+        }
+      />
+      {kind === 'source_offer' && resourceOptions.length > 0 && (
+        <div>
+          <Label htmlFor="wizard-offer-resource">{composerT(locale, 'linkResourceOptional')}</Label>
+          <select
+            id="wizard-offer-resource"
+            value={resourceId}
+            onChange={(e) => setResourceId(e.target.value)}
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23]"
           >
-            + Add option
-          </button>
-        )}
-      </div>
-      <div>
-        <Label htmlFor="poll-ends">Ends at (optional)</Label>
-        <Input
-          id="poll-ends"
-          type="datetime-local"
-          value={endsAt}
-          onChange={e => setEndsAt(e.target.value)}
-          className="mt-1"
-        />
-      </div>
-      <Button type="submit" disabled={isSubmitting || !isValid} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Creating…' : 'Create Poll'}
-      </Button>
-    </form>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Sub-form: EventForm
-// ---------------------------------------------------------------------------
-
-function EventForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
-  const [title, setTitle] = useState('')
-  const [startsAt, setStartsAt] = useState('')
-  const [endsAt, setEndsAt] = useState('')
-  const [location, setLocation] = useState('')
-  const [isOnline, setIsOnline] = useState(false)
-
-  const isValid = title.trim().length >= 3 && startsAt.length > 0
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!isValid) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      const { error: insertError } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content: sanitizeInput(title),
-        post_type: 'event_post',
-        metadata: {
-          starts_at: startsAt,
-          ends_at: endsAt || null,
-          location: isOnline ? null : sanitizeInput(location),
-          is_online: isOnline,
-        } as unknown as Json,
-      })
-      if (insertError) throw insertError
-      onClose()
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
-      }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [title, startsAt, endsAt, location, isOnline, isValid, dispatch, onClose])
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
+            <option value="">{composerT(locale, 'none')}</option>
+            {resourceOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
-      <div>
-        <Label htmlFor="event-title">Event Title</Label>
-        <Input
-          id="event-title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Event title…"
-          className="mt-1"
-        />
-      </div>
-      <div>
-        <Label htmlFor="event-starts">Starts At <span className="text-red-500">*</span></Label>
-        <Input
-          id="event-starts"
-          type="datetime-local"
-          value={startsAt}
-          onChange={e => setStartsAt(e.target.value)}
-          className="mt-1"
-        />
-      </div>
-      <div>
-        <Label htmlFor="event-ends">Ends At (optional)</Label>
-        <Input
-          id="event-ends"
-          type="datetime-local"
-          value={endsAt}
-          onChange={e => setEndsAt(e.target.value)}
-          className="mt-1"
-        />
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={isOnline}
-          onClick={() => setIsOnline(v => !v)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] ${isOnline ? 'bg-[#4a5d23]' : 'bg-stone-300'}`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOnline ? 'translate-x-6' : 'translate-x-1'}`}
-          />
-        </button>
-        <Label>Online event</Label>
-      </div>
-      <div>
-        <Label htmlFor="event-location">Location</Label>
-        <Input
-          id="event-location"
-          value={location}
-          onChange={e => setLocation(e.target.value)}
-          placeholder="Address or venue…"
-          disabled={isOnline}
-          className="mt-1 disabled:opacity-50"
-        />
-      </div>
-      <Button type="submit" disabled={isSubmitting || !isValid} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Creating…' : 'Create Event'}
+      <Button type="submit" disabled={!canSubmit} className="bg-[#4a5d23] text-white hover:bg-[#3a4d1a]">
+        {submitting ? composerT(locale, 'posting') : composerT(locale, SUBMIT_LABEL[kind])}
       </Button>
     </form>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Sub-form: PetitionDraftForm
-// Petitions Insert requires: body, body_version_hash, summary, title
+// Petition draft (its own petitions path — not a post)
 // ---------------------------------------------------------------------------
 
-function PetitionDraftForm({ onClose, dispatch, isSubmitting, error }: BaseFormProps) {
+function PetitionDraftForm({ locale, onDone }: { locale: Locale; onDone: () => void }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [summary, setSummary] = useState('')
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const gate = useRef(createSingleFlight())
 
   const isValid = title.trim().length >= 3 && description.trim().length >= 10 && summary.trim().length >= 3
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isValid) return
-    dispatch({ type: 'SET_SUBMITTING', payload: true })
-    dispatch({ type: 'SET_ERROR', payload: null })
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      const sanitizedTitle = sanitizeInput(title)
-      const sanitizedBody = sanitizeInput(description)
-      const sanitizedSummary = sanitizeInput(summary)
-      // body_version_hash: base64 of the body content, truncated for a stable draft hash
-      const bodyVersionHash = btoa(unescape(encodeURIComponent(sanitizedBody))).slice(0, 32)
-      const { error: insertError } = await supabase
-        .from('petitions')
-        .insert({
-          created_by: user.id,
-          status: 'draft',
-          title: sanitizedTitle,
-          body: sanitizedBody,
-          body_version_hash: bodyVersionHash,
-          summary: sanitizedSummary,
-        })
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      if (insertError) throw insertError
-      setSuccessMsg('Your petition draft has been submitted for admin review.')
-      setTimeout(() => onClose(), 1500)
-    } catch (err) {
-      if (
-        (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof Error && err.message.includes('signal'))
-      ) {
-        return
+    await gate.current.run(async () => {
+      setSubmitting(true)
+      setError(null)
+      try {
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not authenticated')
+        // Raw text, like posts: React escapes on render. The draft hash covers the body as stored.
+        const body = description.trim()
+        const bodyVersionHash = petitionBodyHash(body)
+        const { error: insertError } = await supabase
+          .from('petitions')
+          .insert({ created_by: user.id, status: 'draft', title: title.trim(), body, body_version_hash: bodyVersionHash, summary: summary.trim() })
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (insertError) throw insertError
+        setSubmitted(true)
+      } catch (err) {
+        logger.error('wizard.submit.error', err)
+        setError(composerT(locale, 'submitFailed'))
+      } finally {
+        setSubmitting(false)
       }
-      logger.error('wizard.submit.error', err)
-      dispatch({ type: 'SET_ERROR', payload: 'Failed. Please try again.' })
-    } finally {
-      dispatch({ type: 'SET_SUBMITTING', payload: false })
-    }
-  }, [title, description, summary, isValid, dispatch, onClose])
+    })
+  }
 
-  if (successMsg) {
+  if (submitted) {
+    // No auto-close (WCAG 2.2.1): the member closes it.
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-        <ScrollText className="w-10 h-10 text-[#4a5d23]" />
-        <p className="text-sm text-stone-700">{successMsg}</p>
+        <ScrollText className="h-10 w-10 text-[#4a5d23]" aria-hidden="true" />
+        <p role="status" className="text-sm text-stone-800">
+          {composerT(locale, 'petitionSubmitted')}
+        </p>
+        <Button type="button" variant="outline" onClick={onDone}>
+          {composerT(locale, 'close')}
+        </Button>
       </div>
     )
   }
@@ -757,187 +348,128 @@ function PetitionDraftForm({ onClose, dispatch, isSubmitting, error }: BaseFormP
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 text-sm text-amber-700">{error}</div>
+        <div role="alert" className={ERROR_BOX}>
+          {error}
+        </div>
       )}
       <div>
-        <Label htmlFor="petition-title">Petition Title</Label>
-        <Input
-          id="petition-title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Petition title…"
-          className="mt-1"
-        />
+        <Label htmlFor="petition-title">{composerT(locale, 'fieldPetitionTitle')}</Label>
+        <Input id="petition-title" dir="auto" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={composerT(locale, 'placeholderPetitionTitle')} className="mt-1" />
       </div>
       <div>
-        <Label htmlFor="petition-summary">Summary</Label>
-        <Input
-          id="petition-summary"
-          value={summary}
-          onChange={e => setSummary(e.target.value)}
-          placeholder="One-line summary of your petition…"
-          className="mt-1"
-        />
+        <Label htmlFor="petition-summary">{composerT(locale, 'fieldPetitionSummary')}</Label>
+        <Input id="petition-summary" dir="auto" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder={composerT(locale, 'placeholderPetitionSummary')} className="mt-1" />
       </div>
       <div>
-        <Label htmlFor="petition-description">Description</Label>
+        <Label htmlFor="petition-description">{composerT(locale, 'fieldPetitionDescription')}</Label>
         <Textarea
           id="petition-description"
+          dir="auto"
           value={description}
-          onChange={e => setDescription(e.target.value)}
-          placeholder="Describe your petition and why it matters..."
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={composerT(locale, 'placeholderPetitionDescription')}
           className="mt-1 min-h-[120px]"
         />
       </div>
-      <Button type="submit" disabled={isSubmitting || !isValid} className="bg-[#4a5d23] hover:bg-[#3a4d1a] text-white">
-        {isSubmitting ? 'Submitting…' : 'Submit Draft'}
+      <Button type="submit" disabled={submitting || !isValid} className="bg-[#4a5d23] text-white hover:bg-[#3a4d1a]">
+        {submitting ? composerT(locale, 'submitting') : composerT(locale, 'submitPetition')}
       </Button>
     </form>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Type cards data
-// ---------------------------------------------------------------------------
-
-interface TypeCard {
-  key: PostTypeKey
-  label: string
-  description: string
-  icon: React.ComponentType<{ className?: string }>
-  variant?: 'amber'
-}
-
-const TYPE_CARDS: TypeCard[] = [
-  { key: 'general', label: 'General Update', description: 'Share news or announcements', icon: Megaphone },
-  { key: 'seeker_request', label: 'Seeking Help', description: 'Request resources or services', icon: HandHelping },
-  { key: 'source_offer', label: 'Offering Help', description: 'Share what you can provide', icon: Gift },
-  { key: 'resource', label: 'Link a Resource', description: 'Share a community resource', icon: BookMarked },
-  { key: 'poll', label: 'Community Poll', description: 'Ask the community a question', icon: BarChart3 },
-  { key: 'event', label: 'Community Event', description: 'Organize a local event', icon: CalendarDays },
-  { key: 'safety', label: 'Safety Warning', description: 'Report a hazard on the map', icon: ShieldAlert, variant: 'amber' },
-  { key: 'petition', label: 'Petition Draft', description: 'Start a community petition', icon: ScrollText },
-]
-
-// ---------------------------------------------------------------------------
-// ComposeForm switch
-// ---------------------------------------------------------------------------
-
-interface ComposeFormProps {
-  selectedType: PostTypeKey
-  onClose: () => void
-  dispatch: React.Dispatch<WizardAction>
-  isSubmitting: boolean
-  error: string | null
-  onPost: PostTypeWizardProps['onPost']
-  resourceOptions: PostTypeWizardProps['resourceOptions']
-}
-
-function ComposeForm({ selectedType, onClose, dispatch, isSubmitting, error, onPost, resourceOptions }: ComposeFormProps) {
-  switch (selectedType) {
-    case 'general':
-      return <GeneralForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} onPost={onPost} />
-    case 'seeker_request':
-      return <SeekerRequestForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} />
-    case 'source_offer':
-      return <SourceOfferForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} resourceOptions={resourceOptions} />
-    case 'resource':
-      return <ResourceForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} resourceOptions={resourceOptions} onPost={onPost} />
-    case 'poll':
-      return <PollForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} />
-    case 'event':
-      return <EventForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} />
-    case 'petition':
-      return <PetitionDraftForm onClose={onClose} dispatch={dispatch} isSubmitting={isSubmitting} error={error} />
-    default:
-      return null
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export function PostTypeWizard({ open, onClose, onPost, resourceOptions, onSafetyAlertClick }: PostTypeWizardProps) {
+export function PostTypeWizard({ open, onClose, onCreated, resourceOptions, onSafetyAlertClick, locale }: PostTypeWizardProps) {
   const [state, dispatch] = useReducer(wizardReducer, initialState)
 
-  const handleCardClick = useCallback((card: TypeCard) => {
-    if (card.key === 'safety') {
-      onClose()
-      onSafetyAlertClick()
-      return
-    }
-    dispatch({ type: 'SELECT_TYPE', payload: card.key })
-  }, [onClose, onSafetyAlertClick])
-
-  const handleOpenChange = useCallback((o: boolean) => {
-    if (!o) {
-      dispatch({ type: 'RESET' })
-      onClose()
-    }
+  const close = useCallback(() => {
+    dispatch({ type: 'RESET' })
+    onClose()
   }, [onClose])
+
+  const handleCardClick = useCallback(
+    (card: TypeCard) => {
+      if (card.key === 'safety') {
+        close()
+        onSafetyAlertClick()
+        return
+      }
+      dispatch({ type: 'SELECT_TYPE', payload: card.key })
+    },
+    [close, onSafetyAlertClick],
+  )
+
+  const handleOpenChange = useCallback(
+    (o: boolean) => {
+      if (!o) close()
+    },
+    [close],
+  )
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideDefaultClose
+        disableOutsideClose
+        lang={locale}
+        dir={dir(locale)}
         className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-[92vh] rounded-t-2xl rounded-b-none flex flex-col p-0 gap-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:h-auto sm:max-h-[88vh] overflow-hidden"
       >
-        {/* Header */}
-        <DialogHeader className="flex-row items-center gap-3 p-5 border-b border-stone-100 space-y-0">
+        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b border-stone-100 p-5">
           {state.step === 'compose' && (
             <button
+              type="button"
               onClick={() => dispatch({ type: 'BACK' })}
-              className="p-1 rounded-lg hover:bg-stone-100 transition-colors"
-              aria-label="Back to post types"
+              className="rounded-lg p-1 transition-colors hover:bg-stone-100"
+              aria-label={composerT(locale, 'backToTypes')}
             >
-              <ArrowLeft className="w-5 h-5 text-stone-600" />
+              <ArrowLeft className="h-5 w-5 text-stone-700 rtl:rotate-180" aria-hidden="true" />
             </button>
           )}
-          <DialogTitle className="text-base font-semibold text-stone-900 flex-1">
-            {state.step === 'type-selection'
-              ? 'What would you like to share?'
-              : TYPE_LABELS[state.selectedType!]}
+          <DialogTitle className="flex-1 text-base font-semibold text-stone-900">
+            {state.step === 'type-selection' || !state.selectedType ? composerT(locale, 'wizardTitle') : composerT(locale, TYPE_TITLE[state.selectedType])}
           </DialogTitle>
-          <DialogClose className="p-1 rounded-lg hover:bg-stone-100 transition-colors text-stone-500">
-            <X className="w-4 h-4" />
+          <DialogClose className="rounded-lg p-1 text-stone-600 transition-colors hover:bg-stone-100" aria-label={composerT(locale, 'close')}>
+            <X className="h-4 w-4" aria-hidden="true" />
           </DialogClose>
         </DialogHeader>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {state.step === 'type-selection' ? (
             <div className="grid grid-cols-2 gap-4">
-              {TYPE_CARDS.map(card => {
+              {TYPE_CARDS.map((card) => {
                 const Icon = card.icon
                 const isAmber = card.variant === 'amber'
                 return (
                   <button
                     key={card.key}
                     type="button"
+                    data-testid={`wizard-type-${card.key}`}
                     onClick={() => handleCardClick(card)}
-                    className={`rounded-xl border border-stone-200 bg-white p-5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-[#4a5d23] ${
-                      isAmber
-                        ? 'hover:border-amber-400 hover:bg-stone-50'
-                        : 'hover:border-[#4a5d23] hover:bg-stone-50'
+                    className={`rounded-xl border border-stone-200 bg-white p-5 text-start transition-colors focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] ${
+                      isAmber ? 'hover:border-amber-500 hover:bg-stone-50' : 'hover:border-[#4a5d23] hover:bg-stone-50'
                     }`}
                   >
-                    <Icon className={`w-7 h-7 mb-3 ${isAmber ? 'text-amber-500' : 'text-[#4a5d23]'}`} />
-                    <div className="text-sm font-semibold text-stone-900">{card.label}</div>
-                    <div className="text-xs text-stone-500 mt-1 leading-relaxed">{card.description}</div>
+                    <Icon className={`mb-3 h-7 w-7 ${isAmber ? 'text-amber-700' : 'text-[#4a5d23]'}`} />
+                    <div className="text-sm font-semibold text-stone-900">{composerT(locale, card.label)}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-stone-600">{composerT(locale, card.description)}</div>
                   </button>
                 )
               })}
             </div>
-          ) : state.selectedType ? (
-            <ComposeForm
-              selectedType={state.selectedType}
-              onClose={onClose}
-              dispatch={dispatch}
-              isSubmitting={state.isSubmitting}
-              error={state.error}
-              onPost={onPost}
+          ) : state.selectedType === 'petition' ? (
+            <PetitionDraftForm locale={locale} onDone={close} />
+          ) : state.selectedType && state.selectedType !== 'safety' ? (
+            <StructuredForm
+              key={state.selectedType}
+              kind={state.selectedType}
+              locale={locale}
               resourceOptions={resourceOptions}
+              onCreated={onCreated}
+              onDone={close}
             />
           ) : null}
         </div>

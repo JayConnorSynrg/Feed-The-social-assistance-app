@@ -25,7 +25,7 @@
  *   cd /Users/jelalconnor/CODING/CURSOR/FEED. && npx playwright test apps/web/e2e/content-reports.spec.ts --reporter=line
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { type SupabaseClient } from '@supabase/supabase-js'
 import {
   makeAdminClient,
@@ -193,6 +193,15 @@ test.afterAll(async () => {
   }
 })
 
+// Report lives in the post card's ⋯ menu (components/feed/post-card-actions.tsx): open the menu
+// (post-menu-<id>), then its Report item (post-menu-report-<id>).
+async function openReport(page: Page, postId: string): Promise<void> {
+  const trigger = page.locator(`[data-testid="post-menu-${postId}"]`)
+  await expect(trigger).toBeVisible({ timeout: 10_000 })
+  await trigger.click()
+  await page.locator(`[data-testid="post-menu-report-${postId}"]`).click()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // (a) Reporter sees dialog and submits
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,10 +209,8 @@ test.afterAll(async () => {
 test('(a) reporter sees report dialog and submits — confirmation shown', async ({ page }) => {
   await loginAndGoToFeed(page, REPORTER1_EMAIL, USER_PASSWORD)
 
-  // Find the post and click its Report button
-  const reportBtn = page.locator(`[data-testid="report-btn-${postId}"]`)
-  await expect(reportBtn).toBeVisible({ timeout: 10_000 })
-  await reportBtn.click()
+  // Open the post's ⋯ menu and choose Report
+  await openReport(page, postId)
 
   // Dialog should be visible
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -230,9 +237,7 @@ test('(a) reporter sees report dialog and submits — confirmation shown', async
 test('(b) 3 distinct reporters auto-hide post — neutral user cannot see it', async ({ page }) => {
   // reporter2 submits report
   await loginAndGoToFeed(page, REPORTER2_EMAIL, USER_PASSWORD)
-  const r2Btn = page.locator(`[data-testid="report-btn-${postId}"]`)
-  await expect(r2Btn).toBeVisible({ timeout: 10_000 })
-  await r2Btn.click()
+  await openReport(page, postId)
   await expect(page.getByRole('dialog')).toBeVisible()
   const r2Select = page.locator(`[data-testid="report-reason-select-${postId}"]`)
   await r2Select.click()
@@ -243,9 +248,7 @@ test('(b) 3 distinct reporters auto-hide post — neutral user cannot see it', a
   // reporter3 submits the 3rd report — triggers auto-hide (reporter3 is_staff but still a reporter)
   await page.context().clearCookies()
   await loginAndGoToFeed(page, REPORTER3_EMAIL, USER_PASSWORD)
-  const r3Btn = page.locator(`[data-testid="report-btn-${postId}"]`)
-  await expect(r3Btn).toBeVisible({ timeout: 10_000 })
-  await r3Btn.click()
+  await openReport(page, postId)
   await expect(page.getByRole('dialog')).toBeVisible()
   const r3Select = page.locator(`[data-testid="report-reason-select-${postId}"]`)
   await r3Select.click()

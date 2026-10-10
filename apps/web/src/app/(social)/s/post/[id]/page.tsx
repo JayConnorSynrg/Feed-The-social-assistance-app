@@ -78,7 +78,7 @@ export default async function SharedPostPage({ params }: Props) {
   // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, image_url, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
+    .select('id, content, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -93,18 +93,16 @@ export default async function SharedPostPage({ params }: Props) {
     admin_tier: AdminTier | null
   } | null
 
+  // The counts the feed card shows: posts.like_count and posts.comment_count, kept by the database
+  // (comment_count = comments that are neither deleted by their author nor hidden by a moderator).
+  // Counting post_comments rows here would include soft-deleted comments.
+  const likeCount = post.like_count ?? 0
+  const commentCount = post.comment_count ?? 0
+
   // Fetch donation handles via SECURITY DEFINER RPC — isolated column access
-  const [
-    { count: likeCount },
-    { count: commentCount },
-    handlesResult,
-  ] = await Promise.all([
-    supabase.from('post_likes').select('*', { count: 'exact', head: true }).eq('post_id', id),
-    supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', id),
-    user?.id
-      ? supabase.rpc('get_donation_handles', { target_id: user.id })
-      : Promise.resolve({ data: [] }),
-  ])
+  const handlesResult = user?.id
+    ? await supabase.rpc('get_donation_handles', { target_id: user.id })
+    : { data: [] }
 
   const handles = Array.isArray(handlesResult.data) && handlesResult.data.length > 0
     ? handlesResult.data[0] as { paypal_email: string | null; venmo_username: string | null }

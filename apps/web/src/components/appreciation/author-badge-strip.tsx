@@ -22,7 +22,10 @@ export function AuthorBadgeStrip({
   const top = topBadgesByLevel(summary, limit)
   if (top.length === 0) return null
   return (
+    // English-only labels, marked so a screen reader reads them as English.
     <span
+      lang="en"
+      dir="ltr"
       className="inline-flex items-center gap-1"
       data-testid={`author-badge-strip-${userId}`}
     >

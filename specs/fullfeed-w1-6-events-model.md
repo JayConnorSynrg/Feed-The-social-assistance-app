@@ -419,7 +419,9 @@ granted to anon/authenticated/service_role (identical grants to `ranked_feed`).
   caller / origin / visible / base / scored` CTEs + the bucket `CASE` are pasted
   verbatim), tagged `kind='post'`. **I5:** `ranked_feed` (v1) is left untouched
   (prosrc md5 `2cca92d907df6b60fbc840214a9df485`) — the deployed client keeps
-  calling v1 until the W1.6b client deploys (schema-first).
+  calling v1 until the W1.6b client deploys (schema-first). *Superseded:* 20261026000000
+  (post editing) drops v1 (0 app callers) and adds `p.deleted_at IS NULL` to the posts branch;
+  smoke 29 asserts v1 present + unchanged before that ledger row and absent after it.
 - **Events branch** emits one row per eligible event = its **next** occurrence
   (`DISTINCT ON (event_id) … ORDER BY starts_at ASC`) where the occurrence is
   `status='upcoming' AND ends_at>=now() AND starts_at<=now()+30d` — matching the

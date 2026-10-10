@@ -7,7 +7,7 @@
 // and a non-matching id is a true no-op.
 
 import { describe, it, expect } from 'vitest'
-import { applyPostRowPatch, type PostRowPatch, type Post } from './post-model'
+import { applyPostRowPatch, classifyPostUpdate, type PostRowPatch, type Post } from './post-model'
 
 function basePost(over: Partial<Post> = {}): Post {
   return {
@@ -28,6 +28,11 @@ function basePost(over: Partial<Post> = {}): Post {
     petitionId: null,
     isHidden: false,
     imageUrl: null,
+    imageAlt: null,
+    version: 1,
+    editedAt: null,
+    editCount: 0,
+    hiddenReason: null,
     eventMeta: null,
     requestCategories: [],
     distanceBucket: '<2km',
@@ -99,5 +104,70 @@ describe('applyPostRowPatch', () => {
     expect(applyPostRowPatch(posts, { id: 'a', like_count: 0 })[0].slotsRemaining).toBe(4)
     // provided -> apply
     expect(applyPostRowPatch(posts, { id: 'a', slots_remaining: 1 })[0].slotsRemaining).toBe(1)
+  })
+})
+
+// PR-2 (post editing): the version guard, the edit fields, and the realtime classifier that replaced
+// "any off-screen UPDATE reloads the whole feed".
+describe('applyPostRowPatch — edits (PR-2)', () => {
+  it('ignores a stale echo: a row with a LOWER version than the card shows never reverts the text', () => {
+    const posts = [basePost({ id: 'a', content: 'v3 text', version: 3 })]
+    const next = applyPostRowPatch(posts, { id: 'a', content: 'v2 text', version: 2, like_count: 9 })
+    expect(next).toBe(posts)
+    expect(next[0].content).toBe('v3 text')
+  })
+
+  it('a newer version patches content, edit state and photo text; an equal version still patches counts', () => {
+    const posts = [basePost({ id: 'a', content: 'old', version: 1, likes: 1 })]
+    const edited = applyPostRowPatch(posts, {
+      id: 'a',
+      content: 'new',
+      version: 2,
+      edited_at: '2026-10-09T12:00:00Z',
+      edit_count: 1,
+      image_alt: 'A crate of apples',
+    })
+    expect(edited[0]).toMatchObject({ content: 'new', version: 2, editCount: 1, imageAlt: 'A crate of apples' })
+    expect(edited[0].editedAt?.toISOString()).toBe('2026-10-09T12:00:00.000Z')
+    const liked = applyPostRowPatch(edited, { id: 'a', version: 2, like_count: 5 })
+    expect(liked[0]).toMatchObject({ content: 'new', likes: 5 })
+  })
+
+  it('an edit back to unlimited capacity (max_seekers null) is applied, not kept at the old cap', () => {
+    const posts = [basePost({ id: 'a', maxSeekers: 5, slotsRemaining: 2 })]
+    expect(applyPostRowPatch(posts, { id: 'a', version: 2, max_seekers: null, slots_remaining: null })[0]).toMatchObject({
+      maxSeekers: null,
+      slotsRemaining: null,
+    })
+  })
+})
+
+describe('classifyPostUpdate — targeted realtime handling', () => {
+  const ctx = (o: Partial<Parameters<typeof classifyPostUpdate>[1]> = {}) => ({
+    inList: true,
+    viewerId: 'me',
+    removedHiddenIds: new Set<string>(),
+    ...o,
+  })
+
+  it('a like or edit on a post that is NOT listed does nothing (no feed reload)', () => {
+    expect(classifyPostUpdate({ id: 'x', user_id: 'u2', like_count: 4 }, ctx({ inList: false }))).toBe('ignore')
+  })
+
+  it('a listed post is patched in place', () => {
+    expect(classifyPostUpdate({ id: 'a', user_id: 'u2', content: 'edited', version: 2 }, ctx())).toBe('patch')
+  })
+
+  it("the viewer's OWN held post stays with its banner; anyone else's hidden post leaves", () => {
+    expect(classifyPostUpdate({ id: 'a', user_id: 'me', is_hidden: true, hidden_reason: 'hold_for_review' }, ctx())).toBe('mark_held')
+    expect(classifyPostUpdate({ id: 'a', user_id: 'u2', is_hidden: true }, ctx())).toBe('remove')
+  })
+
+  it("a deleted post leaves every viewer's feed, its author's other tab included", () => {
+    expect(classifyPostUpdate({ id: 'a', user_id: 'me', is_hidden: true, deleted_at: '2026-10-09T00:00:00Z' }, ctx())).toBe('remove')
+  })
+
+  it('a post this session took out because it was hidden comes back when it is visible again', () => {
+    expect(classifyPostUpdate({ id: 'a', user_id: 'u2', is_hidden: false }, ctx({ inList: false, removedHiddenIds: new Set(['a']) }))).toBe('restore')
   })
 })

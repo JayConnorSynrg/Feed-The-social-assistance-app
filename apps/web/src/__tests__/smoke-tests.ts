@@ -573,12 +573,12 @@ test(
 )
 
 test(
-  "feed-panel.tsx — handleCreatePost inserts into 'posts' table",
+  'feed-panel.tsx — handleCreatePost creates through create_post (lib/post-rpc.ts)',
   () => {
     const fnBody = feedPanel.slice(feedPanel.indexOf('const handleCreatePost'))
-    return fnBody.includes(".from('posts')") && fnBody.includes('.insert(')
+    return fnBody.includes('createPost(supabase,') && !fnBody.slice(0, 1200).includes('.insert(')
   },
-  "insert into 'posts' not found in handleCreatePost",
+  'handleCreatePost does not call createPost',
 )
 
 test(

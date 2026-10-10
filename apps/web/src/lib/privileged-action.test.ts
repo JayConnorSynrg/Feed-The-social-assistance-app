@@ -115,6 +115,13 @@ describe('scanForBypasses — catches every bypass form', () => {
       expect(scanForBypasses(src).length).toBeGreaterThan(0)
     })
   }
+  it('every post-editing write is audited: a direct .rpc of any of them is a bypass', () => {
+    for (const name of ['create_post', 'edit_post', 'delete_own_post', 'edit_comment', 'delete_own_comment', 'redact_post_revision', 'redact_comment_revision', 'admin_set_comment_hidden']) {
+      expect(AUDITED_PRIVILEGED).toContain(name)
+      expect(scanForBypasses(`await supabase.rpc('${name}', {})`), name).toEqual([name])
+      expect(scanForBypasses(`await privilegedRpc(supabase, 'feed.x', '${name}', {})`), name).toEqual([])
+    }
+  })
   it('AUDITED list includes set_resource_location_by_id and approve_form_template', () => {
     expect(AUDITED_PRIVILEGED).toContain('set_resource_location_by_id')
     expect(AUDITED_PRIVILEGED).toContain('approve_form_template')

@@ -34,7 +34,8 @@ export function initialModerationSubtab(search: string): SubTab {
  * Safety Alerts sub-tabs — a real tablist (role=tab, aria-selected, arrow keys) with an underline on
  * the selected tab, not colour alone.
  */
-export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
+/** viewerId: the signed-in moderator — the post actions leave out lifting their own moderation. */
+export function ModerationTab({ selectedOrgId, viewerId = null }: { selectedOrgId: string; viewerId?: string | null }) {
   // null until mounted: the sub-tab depends on the URL (window.location exists only after mount),
   // and neither list is read before it is decided.
   const [activeSubtab, setActiveSubtab] = useState<SubTab | null>(null)
@@ -61,7 +62,7 @@ export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
   return (
     <div>
       {/* "Edit in admin" on a post: that post, with its actions (nothing without a post link). */}
-      <FocusedPost onChanged={reloadQueue} reloadKey={postReloadKey} onDismissed={focusSelectedTab} />
+      <FocusedPost onChanged={reloadQueue} reloadKey={postReloadKey} onDismissed={focusSelectedTab} viewerId={viewerId} />
 
       <Tabs value={shown} onValueChange={(v) => setActiveSubtab(v as SubTab)} className="gap-0">
         <TabsList
@@ -87,7 +88,7 @@ export function ModerationTab({ selectedOrgId }: { selectedOrgId: string }) {
         {activeSubtab !== null && (
           <>
             <TabsContent value="reports" className="overflow-y-auto max-h-[calc(100vh-220px)]">
-              <ReportsQueue key={queueKey} onPostChanged={rereadLinkedPost} />
+              <ReportsQueue key={queueKey} onPostChanged={rereadLinkedPost} viewerId={viewerId} />
             </TabsContent>
             <TabsContent value="safety" className="overflow-y-auto max-h-[calc(100vh-220px)]">
               <SafetyAlertsReview />

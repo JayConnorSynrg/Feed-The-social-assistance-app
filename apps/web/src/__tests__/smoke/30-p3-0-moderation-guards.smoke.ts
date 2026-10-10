@@ -171,11 +171,16 @@ maybeDescribe('30 — P3.0 moderation guards + volunteer withdraw (PROD read-onl
       /^ERR 42501 not authorized/
     )
     // I6 post_comments — is_hidden forges rejected (insert-hidden and unfiltered un-hide).
-    expect(r.COMMENT_HIDDEN_INSERT, 'inserting a hidden comment must be rejected').toMatch(
-      /^ERR 42501 guard:post_comments_is_hidden/
+    // Since 20261026000000 the privilege layer refuses both before the guard trigger runs: comment
+    // INSERT is column-scoped to (id, post_id, user_id, content, parent_id), so is_hidden is not
+    // insertable, and client UPDATE on post_comments is revoked (edit_comment / delete_own_comment /
+    // admin_set_comment_hidden are the only updaters). The guard trigger beneath the grants stays
+    // covered by DB smoke S6.
+    expect(r.COMMENT_HIDDEN_INSERT, 'inserting a hidden comment must be refused by the column grant').toMatch(
+      /^ERR 42501 permission denied for table post_comments/
     )
-    expect(r.UNFILTERED_UNHIDE, 'an unfiltered un-hide of a hidden comment must be rejected').toMatch(
-      /^ERR 42501 guard:post_comments_is_hidden/
+    expect(r.UNFILTERED_UNHIDE, 'a client UPDATE (unfiltered un-hide) of comments must be refused by the grant').toMatch(
+      /^ERR 42501 permission denied for table post_comments/
     )
     // I3 organizations — an org admin cannot change created_by, nor deactivate via an UNFILTERED
     // UPDATE (see orgAdminDirect above for the before/after-20261020000000 expectation).

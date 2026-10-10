@@ -9,7 +9,7 @@ import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
-import { DESTRUCTIVE_BUTTON_CLASS, moderatePost, type PostModerationAction } from './post-moderation-actions'
+import { DESTRUCTIVE_BUTTON_CLASS, canResolveReportsOn, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
 
 const REASON_LABELS: Record<string, string> = {
@@ -24,6 +24,7 @@ const REASON_LABELS: Record<string, string> = {
 
 interface HeldPost {
   id: string
+  version: number | null
   is_hidden: boolean
   content: string | null
   created_at: string
@@ -38,8 +39,10 @@ function postItemName(content: string | null): string {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
-/** onPostChanged: a Remove / Hold / Authorize here succeeded (the linked-post panel above re-reads). */
-export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: string) => void } = {}) {
+/** onPostChanged: a Remove / Hold / Authorize here succeeded (the linked-post panel above re-reads).
+ *  viewerId: the signed-in moderator — no Dismiss on reports about their own post, no Authorize of
+ *  their own held post, no Hold of their own removed post (the database refuses each). */
+export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged?: (postId: string) => void; viewerId?: string | null } = {}) {
   const [groups, setGroups] = useState<ContentGroup[]>([])
   const [heldPosts, setHeldPosts] = useState<HeldPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,7 +73,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         if (contentIds.length > 0) {
           const { data: posts, error: postsError } = await supabase
             .from('posts')
-            .select('id, content, user_id, is_hidden')
+            .select('id, content, user_id, is_hidden, hidden_reason, version')
             .in('id', contentIds)
           // A failed read must not pass for "post deleted" (post_hidden stays null only when the
           // read succeeded without that row), so it surfaces like a failed reports read.
@@ -84,7 +87,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
         // Load removed & held posts
         const { data: hiddenPostsData } = await supabase
           .from('posts')
-          .select('id, is_hidden, content, created_at, hidden_at, hidden_reason, user_id')
+          .select('id, is_hidden, content, created_at, hidden_at, hidden_reason, user_id, version')
           .eq('is_hidden', true)
           .in('hidden_reason', ['admin_removal', 'hold_for_review'])
           .order('hidden_at', { ascending: false })
@@ -99,6 +102,32 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // After a conflict (the author edited) or a gone post: read the post again so the queue shows the
+  // version the next decision is made on (its text, hidden state and version), or that it is gone.
+  const rereadPost = async (postId: string) => {
+    const { data, error: readError } = await supabase
+      .from('posts')
+      .select('id, user_id, content, is_hidden, hidden_reason, version')
+      .eq('id', postId)
+      .maybeSingle()
+    if (readError) return
+    const row = data as ReportedPostRow | null
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.content_id !== postId
+          ? g
+          : row
+            ? { ...g, post_user_id: row.user_id ?? g.post_user_id, post_hidden_reason: row.hidden_reason ?? null, post_content: row.content?.slice(0, 200) ?? null, post_hidden: row.is_hidden !== false, post_version: row.version ?? null }
+            : { ...g, post_content: null, post_hidden: null, post_version: null },
+      ),
+    )
+    setHeldPosts((prev) =>
+      row
+        ? prev.map((p) => (p.id === postId ? { ...p, content: row.content, is_hidden: row.is_hidden !== false, version: row.version ?? null } : p))
+        : prev.filter((p) => p.id !== postId),
+    )
+  }
+
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -109,7 +138,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
     })
 
   const handleResolve = useCallback(
-    async (reportId: string, action: 'dismiss' | 'uphold') => {
+    async (reportId: string, action: 'dismiss' | 'uphold', expectedVersion: number | null, postId: string) => {
       setProcessingId(reportId)
       setError(null)
       try {
@@ -117,11 +146,25 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
           supabase,
           'admin.report.resolve',
           'admin_resolve_report',
-          { p_report_id: reportId, p_action: action },
+          // The version on screen: an author edit since the queue loaded is refused (PT409) instead of
+          // being published by a dismissal nobody reviewed.
+          { p_report_id: reportId, p_action: action, p_expected_version: expectedVersion ?? undefined },
           { action: `report.${action}`, target_id: reportId },
         )
         if (rpcError) {
           logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
+          if (rpcError.code === '42501' && /self_moderation_refused/.test(rpcError.message)) {
+            // Dismissing reports on their own content: another moderator has to review it.
+            setError(moderationFailure(rpcError).message)
+            return
+          }
+          if (rpcError.code === 'PT409' || rpcError.code === 'PT404') {
+            // Show the post as it is now (or that it is gone) before the moderator decides again.
+            const failure = moderationFailure(rpcError)
+            await rereadPost(postId)
+            setError(failure.message)
+            return
+          }
           throw rpcError
         }
 
@@ -148,12 +191,14 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   // same one the single-post view uses. Remove and Hold take the post out of the reports list;
   // Authorize takes it out of "Removed & Held Posts".
   const handlePostAction = useCallback(
-    async (action: PostModerationAction, postId: string) => {
+    async (action: PostModerationAction, postId: string, expectedVersion: number | null) => {
       setProcessingId(postId)
       setError(null)
-      const result = await moderatePost(supabase, action, postId)
-      if (!result.ok) setError(result.message)
-      else {
+      const result = await moderatePost(supabase, action, postId, expectedVersion)
+      if (!result.ok) {
+        if (result.conflict || result.gone) await rereadPost(postId)
+        setError(result.message)
+      } else {
         if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
         else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
         onPostChanged?.(postId)
@@ -191,7 +236,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+        <div role="alert" data-testid="reports-queue-error" className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -203,6 +248,10 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
 
       {groups.map((group) => {
         const isExpanded = expandedId === group.content_id
+        // The moderator's own post: another moderator resolves its reports, and a removal by
+        // another moderator is not softened to a hold (the database refuses both).
+        const canResolve = canResolveReportsOn(group.post_user_id, viewerId)
+        const canHold = canResolve || group.post_hidden_reason !== 'admin_removal'
         const reportCount = group.reports.length
         const reasons = [...new Set(group.reports.map((r) => REASON_LABELS[r.reason] ?? r.reason))]
 
@@ -273,7 +322,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                     variant="destructive"
                     className={`h-9 min-h-[44px] text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                     disabled={processingId === group.content_id}
-                    onClick={() => handlePostAction('remove', group.content_id)}
+                    onClick={() => handlePostAction('remove', group.content_id, group.post_version)}
                     data-testid={`remove-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -283,12 +332,13 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                     )}
                     Remove Post
                   </Button>
+                  {canHold && (
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-9 min-h-[44px] text-xs"
                     disabled={processingId === group.content_id}
-                    onClick={() => handlePostAction('hold', group.content_id)}
+                    onClick={() => handlePostAction('hold', group.content_id, group.post_version)}
                     data-testid={`hold-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
@@ -296,7 +346,13 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                     ) : null}
                     Hold for Review
                   </Button>
+                  )}
                 </div>
+                {!canResolve && (
+                  <p className="text-xs text-stone-600" data-testid={`own-post-note-${group.content_id}`}>
+                    This is your own post: another moderator reviews its reports.
+                  </p>
+                )}
 
                 {/* Per-report rows */}
                 {group.reports.map((report) => (
@@ -313,13 +369,14 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                           {formatDate(report.created_at)}
                         </span>
                       </div>
+                      {canResolve && (
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           variant="outline"
                           className="h-9 min-h-[44px] text-xs"
                           disabled={processingId === report.id}
-                          onClick={() => handleResolve(report.id, 'dismiss')}
+                          onClick={() => handleResolve(report.id, 'dismiss', group.post_version, group.content_id)}
                           data-testid={`dismiss-report-${report.id}`}
                         >
                           {processingId === report.id ? (
@@ -330,6 +387,7 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                           Dismiss
                         </Button>
                       </div>
+                      )}
                     </div>
                     {report.details && (
                       <p className="text-xs text-stone-600 leading-relaxed">
@@ -372,12 +430,12 @@ export function ReportsQueue({ onPostChanged }: { onPostChanged?: (postId: strin
                       source="held_posts"
                     />
                   </div>
-                  {post.hidden_reason === 'hold_for_review' && (
+                  {post.hidden_reason === 'hold_for_review' && canResolveReportsOn(post.user_id, viewerId) && (
                     <Button
                       variant="outline"
                       size="sm"
                       data-testid={`authorize-post-${post.id}`}
-                      onClick={() => handlePostAction('authorize', post.id)}
+                      onClick={() => handlePostAction('authorize', post.id, post.version)}
                       disabled={processingId === post.id}
                     >
                       {processingId === post.id ? (

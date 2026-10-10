@@ -24,6 +24,37 @@ import { keepFeedRank, replaceEventCard, type EventCardItem, type EventFeedItem 
 import type { EventCardChange } from '@/components/events/event-card-admin-menu'
 import { useEventCardRefresh } from './use-event-card-refresh'
 
+/**
+ * The post cards' announcements through the SAME card-notice region the event cards use (one region,
+ * never a second one), with the same rules:
+ *   - empty first, then the sentence set once (so the same sentence twice is announced twice);
+ *   - when focus moves (a card left, a dialog closed), in ONE frame: `moveFocus` first, then the
+ *     notice — a screen reader cancels a polite message queued before a focus move;
+ *   - a newer announcement (or a newer event-card change) supersedes an older one still waiting
+ *     for its frame; quiet paths simply do not call it.
+ * Pure (the region setter and the frame scheduler are passed in) so the rules are unit-tested.
+ */
+export function createCardNoticeAnnouncer(
+  setNotice: (text: string) => void,
+  schedule: (fn: () => void) => void,
+): { announce: (text: string, moveFocus?: () => void) => void; supersede: () => void } {
+  let seq = 0
+  return {
+    announce(text, moveFocus) {
+      const mine = ++seq
+      setNotice('')
+      schedule(() => {
+        if (seq !== mine) return
+        moveFocus?.()
+        setNotice(text)
+      })
+    },
+    supersede() {
+      seq++
+    },
+  }
+}
+
 export interface FeedEventCardsOptions {
   supabase: SupabaseClient<Database>
   userId: string | null
@@ -62,6 +93,22 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     focusHeading,
   })
 
+  // Post cards announce through the same region (createCardNoticeAnnouncer); an event-card change
+  // supersedes a post announcement still waiting for its frame.
+  const [postNotices] = useState(() =>
+    createCardNoticeAnnouncer(setNotice, (fn) => {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn)
+      else fn()
+    }),
+  )
+  const onCardManaged = useCallback(
+    (eventId: string, change: EventCardChange) => {
+      postNotices.supersede()
+      return onManaged(eventId, change)
+    },
+    [postNotices, onManaged],
+  )
+
   // Clear the notice when its context changes (render-time, the "previous value" pattern: no stale
   // sentence is ever rendered in the new context, not even for one commit).
   const clearNotice = useCallback(() => setNotice(''), [setNotice])
@@ -94,7 +141,9 @@ export function useFeedEventCards({ supabase, userId, isGuest, locale, timeoutMs
     /** What the last change from an event card's ⋯ menu did (the feed's card-notice region). Each
      *  save clears it before setting it, so the same sentence twice is announced twice. */
     feedNotice: notice,
-    handleEventManaged: onManaged,
+    handleEventManaged: onCardManaged,
+    /** A post card's announcement (edit saved, deleted, link copied, …) in the card-notice region. */
+    announceCardNotice: postNotices.announce,
     syncFeedEventCard,
   }
 }

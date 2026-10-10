@@ -40,7 +40,8 @@ function post(id: string, score?: number): Post {
     content: '', timestamp: new Date(0), likes: 0, comments: 0, isLiked: false,
     category: 'update', resourceId: null, resourceName: null, resourceCategory: null,
     maxSeekers: null, slotsRemaining: null, postType: 'feed', petitionId: null,
-    isHidden: false, imageUrl: null, eventMeta: null, requestCategories: [],
+    isHidden: false, imageUrl: null, imageAlt: null, version: 1, editedAt: null, editCount: 0, hiddenReason: null,
+    eventMeta: null, requestCategories: [],
     score,
   }
 }

@@ -2,7 +2,7 @@
  * post-type-wizard.spec.ts — E2E regression guard for the PostTypeWizard.
  *
  * Verifies: trigger visibility, dialog open/close, type selection cards,
- * step navigation, shortcut icon bar, and per-type compose form fields.
+ * step navigation, and per-type compose form fields.
  *
  * Requires: E2E_TEST_EMAIL + E2E_TEST_PASSWORD in apps/web/.env.local
  * Run with: npx playwright test e2e/post-type-wizard.spec.ts
@@ -37,14 +37,6 @@ test.describe('Post Type Wizard', () => {
   test('clicking + button opens wizard dialog', async ({ page }) => {
     await page.getByTestId('post-wizard-trigger').click()
     await expect(page.getByText('What would you like to share?')).toBeVisible({ timeout: 8_000 })
-  })
-
-  test('icon bar shortcuts are visible', async ({ page }) => {
-    await expect(page.getByTestId('shortcut-seeker')).toBeVisible()
-    await expect(page.getByTestId('shortcut-offer')).toBeVisible()
-    await expect(page.getByTestId('shortcut-poll')).toBeVisible()
-    await expect(page.getByTestId('shortcut-event')).toBeVisible()
-    await expect(page.getByTestId('shortcut-petition')).toBeVisible()
   })
 
   test('type selection shows 8 post type cards', async ({ page }) => {

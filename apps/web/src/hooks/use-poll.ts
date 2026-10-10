@@ -4,7 +4,8 @@
  * use-poll.ts
  *
  * Data layer for community poll posts.
- * - createPoll(postId, question, options, endsAt?) → INSERT into polls
+ * - polls are created only with their post, by create_post (lib/post-rpc.ts) — clients no longer
+ *   write polls directly (contract migration 20261026500000 revokes it)
  * - castVote(pollId, optionIndex) → INSERT into poll_votes (UNIQUE enforces single-choice)
  * - revokeVote(pollId) → DELETE from poll_votes for current user
  * - usePollData(postId) → fetches poll + live vote tallies via Realtime subscription
@@ -32,7 +33,6 @@ import { aggregatePollTallies } from '@/hooks/poll-tally'
 
 type PollRow = Database['public']['Tables']['polls']['Row']
 type PollVoteRow = Database['public']['Tables']['poll_votes']['Row']
-type PollInsert = Database['public']['Tables']['polls']['Insert']
 type PollVoteInsert = Database['public']['Tables']['poll_votes']['Insert']
 
 /** Poll row extended with per-option vote counts and total. */
@@ -48,39 +48,8 @@ export type { PollRow, PollVoteRow }
 // Mutation helpers
 // ---------------------------------------------------------------------------
 
-/**
- * createPoll — INSERT a new poll linked to a feed post.
- */
-export async function createPoll(
-  postId: string,
-  question: string,
-  options: string[],
-  endsAt?: Date,
-  multipleChoice = false
-): Promise<{ error: string | null }> {
-  const supabase = createClient()
-
-  const payload: PollInsert = {
-    post_id: postId,
-    question,
-    options,
-    ends_at: endsAt ? endsAt.toISOString() : null,
-    multiple_choice: multipleChoice,
-  }
-
-  const { error } = await supabase
-    .from('polls')
-    .insert(payload)
-    .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-
-  if (error) {
-    logger.error('poll.create.error', error, { postId })
-    return { error: error.message }
-  }
-
-  logger.info('poll.create.success', { postId })
-  return { error: null }
-}
+/** castVote's error when the server refuses a vote because the poll is closed (the card translates it). */
+export const POLL_CLOSED = 'poll_closed'
 
 /**
  * castVote — INSERT a vote for a poll option.
@@ -115,6 +84,10 @@ export async function castVote(
     // Postgres unique violation code
     if (error.code === '23505') {
       return { error: 'Already voted' }
+    }
+    // RESTRICTIVE poll_votes_insert_poll_open: the poll closed, or its post is hidden or deleted.
+    if (error.code === '42501') {
+      return { error: POLL_CLOSED }
     }
     logger.error('poll.castVote.error', error, { pollId, optionIndex })
     return { error: error.message }
@@ -159,7 +132,8 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
 // ---------------------------------------------------------------------------
 
 /**
- * usePollData — fetch poll + live tallies for a given postId.
+ * usePollData — fetch poll + live tallies for a given postId. Re-reads when the post's version
+ * changes (an author edit of the question, options or deadline).
  *
  * Returns:
  *   poll       — PollWithTallies or null (null while loading or when post has no poll)
@@ -170,7 +144,7 @@ export async function revokeVote(pollId: string): Promise<{ error: string | null
  * Realtime: subscribes to poll_votes INSERT/DELETE for this poll so tallies
  * update live. Subscription is cleaned up on unmount.
  */
-export function usePollData(postId: string | null): {
+export function usePollData(postId: string | null, version: number = 1): {
   poll: PollWithTallies | null
   userVote: number | null
   loading: boolean
@@ -402,7 +376,10 @@ export function usePollData(postId: string | null): {
     } finally {
       setLoading(false)
     }
-  }, [postId, supabase, scheduleSettle, runSettle])
+    // `version` (posts.version) is a dependency on purpose: an edit of the question, the options or
+    // the deadline bumps it, and the realtime patch delivers it — the poll re-reads its own row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId, version, supabase, scheduleSettle, runSettle])
 
   /**
    * Overwrite the displayed vote state. Used by the poll body to apply the pure

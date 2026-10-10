@@ -120,6 +120,17 @@ describe('FocusedPostView — actions only for a post that was read', () => {
     expect(removed).not.toMatch(/focused-(remove|hold)-post/)
   })
 
+  it("the moderator's own post: no Authorize (another moderator lifts it); Remove and Hold stay", () => {
+    const me = 'mod-1'
+    const ownHeld = view({ status: 'found', post: post({ user_id: me, is_hidden: true, hidden_reason: 'hold_for_review' }) }, { viewerId: me })
+    expect(ownHeld).toContain('focused-remove-post')
+    expect(ownHeld).not.toContain('focused-authorize-post')
+    const ownVisible = view({ status: 'found', post: post({ user_id: me }) }, { viewerId: me })
+    expect(ownVisible).toMatch(/focused-remove-post[\s\S]*focused-hold-post/)
+    // Someone else's held post: Authorize is offered.
+    expect(view({ status: 'found', post: post({ user_id: 'author-2', is_hidden: true, hidden_reason: 'hold_for_review' }) }, { viewerId: me })).toContain('focused-authorize-post')
+  })
+
   it.each([
     [{ status: 'loading' } as FocusedPostState, 'Loading the linked post'],
     [{ status: 'not_found' } as FocusedPostState, 'This post was not found'],
@@ -129,6 +140,17 @@ describe('FocusedPostView — actions only for a post that was read', () => {
     expect(html).toContain(text)
     expect(html).not.toMatch(/focused-(remove|hold|authorize)-post/)
     expect(html).not.toContain('<button disabled')
+  })
+
+  it('postActionsFor per viewer: no Authorize on your own post; no Hold of your own post another moderator removed', () => {
+    const own = { user_id: 'me' }
+    expect(postActionsFor({ ...own, is_hidden: true, hidden_reason: 'hold_for_review' }, 'me')).toEqual(['remove'])
+    expect(postActionsFor({ ...own, is_hidden: true, hidden_reason: 'admin_removal' }, 'me')).toEqual([])
+    expect(postActionsFor({ ...own, is_hidden: false, hidden_reason: null }, 'me')).toEqual(['remove', 'hold'])
+    // A removal the database still records (hidden_reason) refuses a self-hold even when visible.
+    expect(postActionsFor({ ...own, is_hidden: false, hidden_reason: 'admin_removal' }, 'me')).toEqual(['remove'])
+    expect(postActionsFor({ ...own, is_hidden: false, hidden_reason: 'admin_removal' }, 'other')).toEqual(['remove', 'hold'])
+    expect(postActionsFor({ ...own, is_hidden: true, hidden_reason: 'admin_removal' }, 'other')).toEqual(['authorize'])
   })
 
   it('postActionsFor / applyPostAction / postStatusLabel agree with the RPCs', () => {
@@ -172,6 +194,25 @@ describe('moderatePost — one privileged RPC per action', () => {
     expect(r.calls).toHaveLength(1)
     expect(r.calls[0]).toMatchObject({ fn, args: { p_post_id: ID } })
     expect(r.calls[0].header?.[0]).toBe('x-request-id')
+  })
+
+  // Post editing (PR-2): the version is optional. A caller without it sends p_post_id ONLY (the wire
+  // body has no p_expected_version key — the legacy shape the server accepts); a caller with it sends
+  // both. The server answers {success: true} either way.
+  const wire = (args: unknown) => JSON.parse(JSON.stringify(args)) as Record<string, unknown>
+  it.each(['remove', 'hold', 'authorize'] as const)('%s without a version: the p_post_id-only call shape', async (action) => {
+    const r = rpcClient({ data: { success: true }, error: null })
+    expect(await moderatePost(r.client, action, ID)).toEqual({ ok: true })
+    expect(wire(r.calls[0].args)).toEqual({ p_post_id: ID })
+  })
+  it.each(['remove', 'hold', 'authorize'] as const)('%s with the version on screen: p_post_id + p_expected_version', async (action) => {
+    const r = rpcClient({ data: { success: true }, error: null })
+    expect(await moderatePost(r.client, action, ID, 4)).toEqual({ ok: true })
+    expect(wire(r.calls[0].args)).toEqual({ p_post_id: ID, p_expected_version: 4 })
+  })
+  it('the author edited since the moderator read it (PT409): a conflict the caller re-reads on', async () => {
+    const r = rpcClient({ data: null, error: { code: 'PT409', message: 'edit_conflict', details: '{"current_version": 5, "edited_at": null, "needs_review": true}' } as never })
+    expect(await moderatePost(r.client, 'authorize', ID, 4)).toMatchObject({ ok: false, conflict: { currentVersion: 5, needsReview: true } })
   })
 
   it('a refusal: the queue\'s generic line, and one admin.denied row', async () => {

@@ -25,7 +25,10 @@ export function HarmonyBadge({ score, count, userId }: HarmonyBadgeProps) {
   const hasReviews = count > 0 && score !== null
 
   return (
+    // English-only copy ("New", the score) marked so a screen reader reads it as English.
     <span
+      lang="en"
+      dir="ltr"
       data-testid={`harmony-badge-${userId}`}
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 border border-amber-200 text-amber-700"
     >

@@ -72,6 +72,9 @@ import { eventMenuSections } from '@/components/events/event-card-admin-menu'
 import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { MarkerPopupDialog } from '@/components/map/marker-popup'
 import { buildEventCards, type EventOccurrenceRow } from '@/components/feed/post-model'
+import { postMenuItems } from '@/components/feed/post-actions'
+import { buildPostMenuSections } from '@/components/feed/post-menu-content'
+import { PostCardActions } from '@/components/feed/post-card-actions'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 
 const POST = '11111111-1111-4111-8111-111111111111'
@@ -156,8 +159,24 @@ function eventCardWithMenu(surface: 'feed' | 'events-tab'): string {
   return card + renderToStaticMarkup(h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(CardMenuItems, { sections }))))
 }
 
+/** A post card's ⋯ menu opened (Release 2: "Edit in admin" is its link item, source feed_post_menu).
+ *  The items come from the same rule the card uses (post-actions.ts) for this viewer's tier. */
+function postCardMenu(): string {
+  const v = viewerRef.current as AdminEditViewer
+  const items = postMenuItems(
+    { id: 'viewer', isGuest: false, tier: v.status === 'ready' ? v.tier : null },
+    { id: POST, authorId: 'someone-else', postType: 'feed', isHidden: false, hiddenReason: null, editedAt: null },
+  )
+  const sections = buildPostMenuSections(items, {
+    locale: 'en',
+    onSelect: () => {},
+    adminLink: h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'feed_post_menu' }),
+  })
+  return renderToStaticMarkup(h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(CardMenuItems, { sections }))))
+}
+
 const SURFACES: Record<string, () => string> = {
-  post_feed_card: () => renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'feed_post' })),
+  post_feed_card: () => postCardMenu(),
   post_page: () => renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'post_page' })),
   alert_feed_strip: () => renderToStaticMarkup(h(SafetyStrip, { alerts: [alert], onViewMap: () => {}, formatAge: () => '1h ago' })),
   alert_map_popup: () => renderToStaticMarkup(h(SafetyAlertMarker, { alert, onVote: async () => {} })),
@@ -299,6 +318,26 @@ describe('surface details', () => {
     expect(eventAdminSource('events-tab')).toBe('events_panel_menu')
   })
 
+  it('post card: the link is a ⋯ menu item named "Edit in admin: <post> (opens in the admin tab)"', () => {
+    viewerRef.current = VIEWERS.community_moderator
+    const link = postCardMenu().match(/<a [^>]*data-testid="admin-edit-post-[^"]*"[^>]*>/)?.[0] ?? ''
+    expect(link).toMatch(/role="menuitem"/)
+    expect(link).toMatch(/target="feed-admin"/)
+    expect(link).not.toMatch(/\brel=/)
+    expect(link).toMatch(/aria-label="Edit in admin: Need a ride \(opens in the admin tab\)"/)
+  })
+
+  it('post card: the ⋯ menu button (after hydration) is a WAI-ARIA menu button named after the post', () => {
+    viewerRef.current = VIEWERS.community_moderator
+    const items = postMenuItems({ id: 'mod', isGuest: false, tier: 'community_moderator' }, { id: POST, authorId: 'a', postType: 'feed', isHidden: false, hiddenReason: null, editedAt: null })
+    const html = renderToStaticMarkup(h(PostCardActions, { postId: POST, items, locale: 'en', onSelect: () => {}, adminItem: { content: 'Need a ride', author: 'Ada', createdAt: new Date(0) } }))
+    const trigger = html.match(new RegExp(`<button[^>]*data-testid="post-menu-${POST}"[^>]*>`))?.[0] ?? ''
+    expect(trigger).toMatch(/aria-haspopup="menu"/)
+    expect(trigger).toMatch(/aria-expanded="false"/)
+    // Named after the post: author, time and the start of its text (two posts by Ada differ).
+    expect(trigger).toMatch(/aria-label="Actions for the post by Ada, [^"]+: Need a ride"/)
+  })
+
   it('post item name: the start of the text, collapsed and capped', () => {
     expect(postAdminItemName('  Need\n a   ride ')).toBe('Need a ride')
     expect(postAdminItemName('x'.repeat(80))).toHaveLength(58)
@@ -316,15 +355,19 @@ describe('surface details', () => {
 describe('wiring: each surface renders its link through the hydration-gated component', () => {
   const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 
-  it('the feed PostCard renders PostAdminEditLink for its post; the strip is SafetyStrip', () => {
-    const src = read('../panels/feed-panel.tsx')
-    const start = src.indexOf('function PostCard(')
-    const card = src.slice(start, src.indexOf('\nexport function FeedPanel(', start))
-    expect(card).toContain('<PostAdminEditLink postId={post.id} content={post.content} author={post.author.name} createdAt={post.timestamp} source="feed_post" />')
-    // The action row is exempt from the hidden-post dimming.
-    expect(card).toMatch(/<div data-card-actions="" [^>]*>\s*<PostAdminEditLink/)
-    expect(card).toContain('<div className={postCardFrameClass(effectivelyHidden)}>')
-    expect(src).toMatch(/<SafetyStrip\s+alerts=\{safetyAlerts\}/)
+  it('the feed post card: its ⋯ menu carries the link (source feed_post_menu), no footer link; the strip is SafetyStrip', () => {
+    // Release 2: the card (components/feed/feed-post-card.tsx) renders PostCardActions; the link is
+    // the menu's "Edit in admin" item, the same PostAdminEditLink → ClientAdminEditLink.
+    const card = read('../feed/feed-post-card.tsx')
+    expect(card).toMatch(/<PostCardActions\b/)
+    expect(card).not.toMatch(/<PostAdminEditLink\b/)
+    const actions = read('../feed/post-card-actions.tsx')
+    expect(actions).toMatch(/<PostAdminEditLink[\s\S]{0,200}source="feed_post_menu"/)
+    expect(actions).toMatch(/<CardActionsMenu\b/)
+    // The row holding the menu is exempt from the hidden-post dimming.
+    expect(card).toMatch(/<div data-card-actions="" className="mb-3 flex items-start gap-3">/)
+    expect(card).toContain('className={`${postCardFrameClass(post.isHidden)} ')
+    expect(read('../panels/feed-panel.tsx')).toMatch(/<SafetyStrip\s+alerts=\{safetyAlerts\}/)
   })
 
   it('/s/post (a server component) renders the client island, with the page source', () => {

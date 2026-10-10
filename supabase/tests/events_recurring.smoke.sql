@@ -1034,13 +1034,13 @@ BEGIN
      AND (SELECT count(*) FROM pg_proc WHERE proname = 'admin_update_event' AND pronamespace = 'public'::regnamespace) = 1
      AND (SELECT count(*) FROM pg_proc WHERE proname = 'add_event_dates' AND pronamespace = 'public'::regnamespace) = 1,
     'R11: exactly one signature each (old ones dropped, no PostgREST overload)';
-  ASSERT (SELECT md5(pg_get_functiondef('public.ranked_feed(double precision,double precision,integer,real,uuid)'::regprocedure))) = '2cca92d907df6b60fbc840214a9df485'
+  ASSERT to_regprocedure('public.ranked_feed(double precision,double precision,integer,real,uuid)') IS NULL
      AND (SELECT md5(pg_get_functiondef('public.event_local_to_utc(timestamp,text)'::regprocedure))) = 'aa78328d8bdf1b33506b72aa5b24e117',
-    'R11: ranked_feed (v1) and event_local_to_utc unchanged';
+    'R11: ranked_feed (v1) dropped (20261026000000); event_local_to_utc unchanged';
   ASSERT (SELECT md5(substring(d FROM position('  visible AS (' IN d) FOR position('  -- EVENTS branch' IN d) - position('  visible AS (' IN d)))
           FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure) d) s)
-         = 'ff419aa0319bb7fb276ce3389bd8b873',
-    'R11: ranked_feed_v2 posts branch byte-identical';
+         = 'eab880757418ffbd2ddc13566f7032bc',
+    'R11: ranked_feed_v2 posts branch = W1.3 ranking + the deleted-post filter (20261026000000)';
   ASSERT (SELECT prosrc !~* 'temp' FROM pg_proc WHERE oid = 'public.event_apply_rule_change(uuid)'::regprocedure),
     'R11: the rule-edit step uses no temp table';
   FOREACH v_fn IN ARRAY ARRAY[

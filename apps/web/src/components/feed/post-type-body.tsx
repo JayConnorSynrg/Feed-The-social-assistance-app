@@ -29,17 +29,24 @@ import {
   type Post,
   type PollVoteState,
 } from './post-model'
-import { usePollData, castVote, revokeVote } from '@/hooks/use-poll'
+import { usePollData, castVote, revokeVote, POLL_CLOSED } from '@/hooks/use-poll'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
+import type { Locale } from '@/lib/i18n'
+import { formatMessage } from '@/lib/i18n-event-forms'
+import { cardT } from '@/lib/i18n-feed-card'
+import { requestCategoryLabel } from '@/lib/i18n-feed-composer'
+import { checkLocalTime, dateTimeFormat, browserTimeZone, formatEventWhen } from '@/lib/event-time'
+import { memberEventWhen } from './post-model'
 
 // ---------------------------------------------------------------------------
 // Poll body (INV6)
 // ---------------------------------------------------------------------------
 
-function PollBody({ post }: { post: Post }) {
+function PollBody({ post, locale }: { post: Post; locale: Locale }) {
   const reduce = useReducedMotion()
-  const { poll, userVote, loading, error, setVoteState, settleVotes } = usePollData(post.id)
+  // Keyed on the post's version: an author edit of the question / options / deadline re-reads the poll.
+  const { poll, userVote, loading, error, setVoteState, settleVotes } = usePollData(post.id, post.version)
   const { isAuthenticated } = useAuth()
   const [busyIndex, setBusyIndex] = React.useState<number | null>(null)
   const [voteError, setVoteError] = React.useState<string | null>(null)
@@ -48,7 +55,7 @@ function PollBody({ post }: { post: Post }) {
     return (
       <div data-testid={`poll-loading-${post.id}`} className="mb-3 flex items-center gap-2 text-xs text-stone-500">
         <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-        Loading poll…
+        {cardT(locale, 'pollLoading')}
       </div>
     )
   }
@@ -62,6 +69,9 @@ function PollBody({ post }: { post: Post }) {
   const ended = pollHasEnded(poll.ends_at)
   const votingAllowed = canCastVote(isAuthenticated, poll.ends_at)
   const showResults = userVote !== null || ended || poll.totalVotes > 0
+
+  // The server refuses a vote once the poll closed or its post is hidden / deleted (poll_votes RLS).
+  const voteMessage = (err: string) => (err === POLL_CLOSED ? cardT(locale, 'voteClosed') : cardT(locale, 'voteFailed'))
 
   const handleOptionClick = async (index: number) => {
     if (!votingAllowed || busyIndex !== null) return
@@ -93,7 +103,7 @@ function PollBody({ post }: { post: Post }) {
           if (revErr) {
             // Revoke failed — nothing was written; the pre-click snapshot is
             // still server-accurate, so revert to it.
-            setVoteError(revErr)
+            setVoteError(voteMessage(revErr))
             setVoteState(prevState)
             return
           }
@@ -104,7 +114,7 @@ function PollBody({ post }: { post: Post }) {
         writeErr = castErr
       }
       if (writeErr) {
-        setVoteError(writeErr)
+        setVoteError(voteMessage(writeErr))
         if (serverMutated) {
           // Switch-vote cast failed after the revoke already committed —
           // reconcile the display to server truth (zero votes), never to the
@@ -121,7 +131,7 @@ function PollBody({ post }: { post: Post }) {
       await settleVotes()
     } catch (err) {
       logger.error('poll.vote.click', err, { pollId: poll.id, optionIndex: index })
-      setVoteError('Could not record your vote. Please try again.')
+      setVoteError(cardT(locale, 'voteFailed'))
       if (serverMutated) {
         // An unexpected throw after the switch-vote revoke committed: the
         // server truth (zero votes) differs from prevState — reconcile to it.
@@ -138,11 +148,11 @@ function PollBody({ post }: { post: Post }) {
     <div data-testid={`poll-body-${post.id}`} className="mb-3 rounded-xl border border-stone-200 bg-white p-3">
       <div className="flex items-center gap-1.5 mb-2">
         <BarChart3 className="w-3.5 h-3.5 text-[#4a5d23] flex-shrink-0" aria-hidden="true" />
-        <span className="text-xs font-semibold text-[#4a5d23] uppercase tracking-wide">Poll</span>
-        {ended && <span className="text-[10px] text-stone-500">Closed</span>}
+        <span className="text-xs font-semibold text-[#4a5d23] uppercase tracking-wide">{cardT(locale, 'pollLabel')}</span>
+        {ended && <span className="text-[10px] text-stone-600">{cardT(locale, 'pollClosed')}</span>}
       </div>
-      <p className="text-sm font-semibold text-stone-900 mb-2 leading-snug">{poll.question}</p>
-      <div className="flex flex-col gap-1.5" role="group" aria-label="Poll options">
+      <p dir="auto" className="text-sm font-semibold text-stone-900 mb-2 leading-snug">{poll.question}</p>
+      <div className="flex flex-col gap-1.5" role="group" aria-label={cardT(locale, 'pollOptionsAria')}>
         {optionViews.map((opt) => (
           <button
             key={opt.index}
@@ -173,10 +183,10 @@ function PollBody({ post }: { post: Post }) {
               <span className="flex items-center gap-1.5">
                 {opt.isUserChoice && <Check className="w-3 h-3 flex-shrink-0" aria-hidden="true" />}
                 {busyIndex === opt.index && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
-                {opt.label}
+                <span dir="auto">{opt.label}</span>
               </span>
               {showResults && (
-                <span className="text-[11px] text-stone-500">
+                <span className="text-[11px] text-stone-600">
                   {opt.count} · {opt.pct}%
                 </span>
               )}
@@ -185,14 +195,14 @@ function PollBody({ post }: { post: Post }) {
         ))}
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[11px] text-stone-500">
-          {poll.totalVotes} vote{poll.totalVotes !== 1 ? 's' : ''}
+        <span className="text-[11px] text-stone-600">
+          {formatMessage(cardT(locale, 'pollVotes'), { n: poll.totalVotes })}
         </span>
         {!isAuthenticated && !ended && (
-          <span className="text-[11px] text-stone-600">Sign in to vote</span>
+          <span className="text-[11px] text-stone-600">{cardT(locale, 'pollSignIn')}</span>
         )}
       </div>
-      {voteError && <p className="mt-1 text-[11px] text-red-600">{voteError}</p>}
+      {voteError && <p role="alert" className="mt-1 text-[11px] text-red-700">{voteError}</p>}
     </div>
   )
 }
@@ -201,42 +211,57 @@ function PollBody({ post }: { post: Post }) {
 // Event body
 // ---------------------------------------------------------------------------
 
-function formatEventTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+/** A legacy member event's wall clock exactly as entered ("Oct 10, 6:00 PM"), never shifted by a zone. */
+function formatWallClock(local: string, locale: Locale): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local)
+  if (!m) return local
+  // Format the digits as a UTC instant in UTC: the same wall clock, whatever the viewer's zone.
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]))
+  return dateTimeFormat(locale, 'UTC', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d)
 }
 
-function EventBody({ post }: { post: Post }) {
+/** The when line of a member event: zoned events in the viewer's time (+ venue time when it
+ *  differs); a legacy event posted before zones exactly as entered, labelled "local time". */
+export function memberEventWhenText(meta: NonNullable<Post['eventMeta']>, locale: Locale, viewerTz: string = browserTimeZone()): { main: string; venue: string | null } {
+  const when = memberEventWhen(meta, checkLocalTime)
+  if (when.kind === 'zoned') {
+    if (!when.endIso) {
+      const start = dateTimeFormat(locale, viewerTz, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+      return { main: start.format(new Date(when.startIso)), venue: null }
+    }
+    const r = formatEventWhen(when.startIso, when.endIso, when.timeZone, locale, { viewerTz })
+    return { main: r.text, venue: r.venue }
+  }
+  const range = when.end ? `${formatWallClock(when.start, locale)} – ${formatWallClock(when.end, locale)}` : formatWallClock(when.start, locale)
+  return { main: formatMessage(cardT(locale, 'localTime'), { when: range }), venue: null }
+}
+
+function EventBody({ post, locale }: { post: Post; locale: Locale }) {
   const meta = post.eventMeta
   if (!meta) return null
+  const when = memberEventWhenText(meta, locale)
   return (
     <div data-testid={`event-body-${post.id}`} className="mb-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3 flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5">
         <CalendarDays className="w-3.5 h-3.5 text-sky-700 flex-shrink-0" aria-hidden="true" />
-        <span className="text-xs font-semibold text-sky-800 uppercase tracking-wide">Event</span>
+        <span className="text-xs font-semibold text-sky-800 uppercase tracking-wide">{cardT(locale, 'eventLabel')}</span>
       </div>
       <div className="text-xs text-stone-700">
         <span className="font-semibold text-stone-900" data-testid={`event-starts-${post.id}`}>
-          {formatEventTime(meta.startsAt)}
+          {when.main}
         </span>
-        {meta.endsAt && <> – {formatEventTime(meta.endsAt)}</>}
+        {when.venue && <span className="block text-stone-700">{when.venue}</span>}
       </div>
-      <div className="flex items-center gap-1.5 text-xs text-stone-600">
+      <div className="flex items-center gap-1.5 text-xs text-stone-700">
         {meta.isOnline ? (
           <>
             <Video className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
-            Online event
+            {cardT(locale, 'onlineEvent')}
           </>
         ) : meta.location ? (
           <>
             <MapPin className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
-            <span className="truncate">{meta.location}</span>
+            <span className="truncate" dir="auto">{meta.location}</span>
           </>
         ) : null}
       </div>
@@ -248,10 +273,10 @@ function EventBody({ post }: { post: Post }) {
 // Seeker-request / source-offer body
 // ---------------------------------------------------------------------------
 
-function RequestOfferBody({ post, intent }: { post: Post; intent: 'request' | 'offer' }) {
+function RequestOfferBody({ post, intent, locale }: { post: Post; intent: 'request' | 'offer'; locale: Locale }) {
   const isRequest = intent === 'request'
   const Icon = isRequest ? HandHelping : Gift
-  const label = isRequest ? 'Seeking help' : 'Offering help'
+  const label = cardT(locale, isRequest ? 'seekingHelp' : 'offeringHelp')
   const tone = isRequest
     ? 'border-orange-200 bg-orange-50/60 text-orange-800'
     : 'border-green-200 bg-green-50/60 text-green-800'
@@ -268,7 +293,7 @@ function RequestOfferBody({ post, intent }: { post: Post; intent: 'request' | 'o
               key={cat}
               className="inline-flex items-center rounded-full bg-white/70 border border-current/20 px-2 py-0.5 text-[11px] font-medium"
             >
-              {cat}
+              {requestCategoryLabel(cat, locale)}
             </span>
           ))}
         </div>
@@ -281,17 +306,17 @@ function RequestOfferBody({ post, intent }: { post: Post; intent: 'request' | 'o
 // Registry entry point (INV1)
 // ---------------------------------------------------------------------------
 
-export function PostTypeBody({ post }: { post: Post }) {
+export function PostTypeBody({ post, locale = 'en' }: { post: Post; locale?: Locale }) {
   const kind = postBodyKind(post.postType)
   switch (kind) {
     case 'poll':
-      return <PollBody post={post} />
+      return <PollBody post={post} locale={locale} />
     case 'event':
-      return <EventBody post={post} />
+      return <EventBody post={post} locale={locale} />
     case 'request':
-      return <RequestOfferBody post={post} intent="request" />
+      return <RequestOfferBody post={post} intent="request" locale={locale} />
     case 'offer':
-      return <RequestOfferBody post={post} intent="offer" />
+      return <RequestOfferBody post={post} intent="offer" locale={locale} />
     case 'petition':
     case 'plain':
       // Petition keeps its existing embed in PostCard; plain types have no

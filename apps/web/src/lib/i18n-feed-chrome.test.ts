@@ -245,16 +245,19 @@ describe('feed-panel.tsx wiring', () => {
     }
   })
 
-  it('inside the Feed tab, every part not translated yet is marked English, left-to-right', () => {
-    // The composer, the safety strip, the follow-error banner and each post card (its Report button
-    // and relative time included) — the translated chrome around them keeps the viewer language.
-    expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-composer-region">\s*<CreatePostCard\b/)
+  it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {
+    // Still English (Release 3): the safety strip and the follow-error banner.
     expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">\s*<SafetyStrip\b/)
-    expect(panel).toMatch(/<m\.div key=\{post\.id\} data-testid=\{`post-\$\{post\.id\}`\} lang="en" dir="ltr"[^>]*>\s*<PostCard\b/)
     expect(panel).toMatch(/role="alert"[\s\S]{0,120}lang="en"\s+dir="ltr"[\s\S]{0,160}\{followError\}/)
-    // ...and nothing in the Feed tab renders them outside those marks.
-    expect(panel.match(/<CreatePostCard\b/g)).toHaveLength(1)
     expect(panel.match(/<SafetyStrip\b/g)).toHaveLength(1)
-    expect(panel.match(/<PostCard\b/g)).toHaveLength(1)
+    // Translated (Release 2): the composer and each post card carry the viewer language — no mark.
+    expect(panel).toMatch(/<div data-testid="feed-composer-region">\s*<CreatePostCard\b/)
+    expect(panel).toMatch(/<m\.div key=\{post\.id\} data-testid=\{`post-\$\{post\.id\}`\} \{\.\.\.postEnterExit\(reduce\)\}>\s*<FeedPostCard\b/)
+    expect(panel.match(/<CreatePostCard\b/g)).toHaveLength(1)
+    expect(panel.match(/<FeedPostCard\b/g)).toHaveLength(1)
+    // ...and the card's relative time is the translated one, not the English short form.
+    expect(panel).toMatch(/<FeedPostCard[\s\S]{0,200}formatAge=\{\(d\) => relativeAge\(d\.toISOString\(\), locale\)\}/)
+    // Inside the translated composer, the still-English photo picker carries its own mark.
+    expect(src).toMatch(/<div lang="en" dir="ltr" data-english-only="photo-picker">\s*<PostImagePickerField\b/)
   })
 })
