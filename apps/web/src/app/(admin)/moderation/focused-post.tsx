@@ -20,13 +20,11 @@ import type { Database } from '@feed/database'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
-import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
 import { useAdminFocusSession } from './use-admin-focus'
 import {
   DESTRUCTIVE_BUTTON_CLASS,
-  localizeModeration,
   moderatePost,
   postActionsFor,
   type ModeratedPostState,
@@ -37,7 +35,7 @@ import {
  *  two ways (lib/supabase/embed-fk-hint.test.ts). It reads first_name only — never username /
  *  avatar_url / bio, which Settings C2 revokes from anon and authenticated. */
 export const FOCUSED_POST_SELECT =
-  'id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, version, author:profiles!posts_user_id_fkey(first_name)'
+  'id, user_id, content, post_type, created_at, is_hidden, hidden_reason, hidden_at, version, author:profiles!posts_user_id_fkey(first_name)'
 
 export interface FocusedPostRow extends ModeratedPostState {
   id: string
@@ -128,9 +126,11 @@ export interface FocusedPostViewProps {
   onAction: (action: PostModerationAction) => void
   onDismiss: () => void
   headingRef?: React.Ref<HTMLHeadingElement>
+  /** The signed-in moderator: no lifting actions on their own post. */
+  viewerId?: string | null
 }
 
-export function FocusedPostView({ state, processing, lastAction = null, error, onAction, onDismiss, headingRef }: FocusedPostViewProps) {
+export function FocusedPostView({ state, processing, lastAction = null, error, onAction, onDismiss, headingRef, viewerId = null }: FocusedPostViewProps) {
   return (
     <section
       aria-labelledby="focused-post-title"
@@ -159,7 +159,7 @@ export function FocusedPostView({ state, processing, lastAction = null, error, o
       </p>
 
       {state.status === 'found' && (
-        <FoundPost post={state.post} processing={processing} error={error} onAction={onAction} />
+        <FoundPost post={state.post} processing={processing} error={error} onAction={onAction} viewerId={viewerId} />
       )}
     </section>
   )
@@ -170,11 +170,13 @@ function FoundPost({
   processing,
   error,
   onAction,
+  viewerId,
 }: {
   post: FocusedPostRow
   processing: PostModerationAction | null
   error: string | null
   onAction: (action: PostModerationAction) => void
+  viewerId: string | null
 }) {
   const author = post.author?.first_name || null
   const text = (post.content ?? '').replace(/\s+/g, ' ').trim()
@@ -198,7 +200,7 @@ function FoundPost({
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {postActionsFor(post).map((action) => (
+        {postActionsFor(post, viewerId).map((action) => (
           <Button
             key={action}
             size="sm"
@@ -226,20 +228,21 @@ function FoundPost({
  *   - reloadKey: bumped when the queue below changed a post, so this panel re-reads its post and
  *     never offers an action on a stale state;
  *   - onDismissed: the panel was closed (the tab moves focus to its active sub-tab).
+ *   - viewerId: the signed-in moderator (no Authorize on their own post; see postActionsFor).
  */
 export function FocusedPost({
   onChanged,
   reloadKey = 0,
   onDismissed,
+  viewerId = null,
 }: {
   onChanged?: () => void
   reloadKey?: number
   onDismissed?: () => void
+  viewerId?: string | null
 }) {
   const session = useAdminFocusSession('post', 'moderation')
   const supabase = useMemo(() => createClient(), [])
-  // The moderator's language, for the messages from the shared moderation path.
-  const locale = useProfileLocale()
   const [state, setState] = useState<FocusedPostState>({ status: 'loading' })
   const [dismissed, setDismissed] = useState(false)
   const [processing, setProcessing] = useState<PostModerationAction | null>(null)
@@ -274,15 +277,15 @@ export function FocusedPost({
   if (!session || dismissed) return null
 
   const act = async (action: PostModerationAction) => {
-    // Only a post that was read gets an action, and only one at a time.
-    if (state.status !== 'found' || inFlight.current) return
+    // Only a post that was read gets an action it offers, and only one at a time.
+    if (state.status !== 'found' || inFlight.current || !postActionsFor(state.post, viewerId).includes(action)) return
     inFlight.current = true
     const post = state.post
     setProcessing(action)
     setError(null)
     // The version on screen: if the author edited the post since, the RPC refuses (conflict) and the
     // panel re-reads it so the moderator decides on what members would actually see.
-    const result = localizeModeration(await moderatePost(supabase, action, post.id, post.version ?? null), locale)
+    const result = await moderatePost(supabase, action, post.id, post.version ?? null)
     if (!result.ok && (result.conflict || result.gone)) {
       const next = await loadFocusedPost(supabase, post.id)
       setState(next)
@@ -312,6 +315,7 @@ export function FocusedPost({
         onDismissed?.()
       }}
       headingRef={headingRef}
+      viewerId={viewerId}
     />
   )
 }

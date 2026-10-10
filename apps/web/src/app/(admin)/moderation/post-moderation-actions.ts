@@ -18,8 +18,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
-import type { Locale } from '@/lib/i18n'
-import { editT } from '@/lib/i18n-feed-edit'
 
 export type PostModerationAction = 'remove' | 'hold' | 'authorize'
 
@@ -62,15 +60,16 @@ export type PostModerationResult =
 export const MODERATION_CONFLICT_MESSAGE =
   'The author changed this post since you opened it. The latest version is shown — review it and choose again.'
 
+/** The console's line for a refused self-moderation (the feed shows its translated sibling,
+ *  failSelfModeration in lib/i18n-feed-edit.ts). */
+export const SELF_MODERATION_MESSAGE = "You can't moderate your own content — another moderator needs to review it."
+
 /** Map a moderation RPC error to the result (exported for the reports queue's resolve path). */
-export function moderationFailure(
-  error: { code?: string; message: string; details?: string | null },
-  locale: Locale = 'en',
-): Exclude<PostModerationResult, { ok: true }> {
+export function moderationFailure(error: { code?: string; message: string; details?: string | null }): Exclude<PostModerationResult, { ok: true }> {
   // A moderator lifting moderation on their own content (the database refuses it): another
-  // moderator has to review it. Said in the moderator's language.
+  // moderator has to review it. English, like the rest of the admin console.
   if (error.code === '42501' && /self_moderation_refused/.test(error.message)) {
-    return { ok: false, message: editT(locale, 'failSelfModeration'), selfModeration: true }
+    return { ok: false, message: SELF_MODERATION_MESSAGE, selfModeration: true }
   }
   if (error.code === 'PT409') {
     let d: Record<string, unknown> = {}
@@ -113,28 +112,33 @@ export async function moderatePost(
   }
 }
 
-/** A refused self-moderation, said in the moderator's language (the other messages stay English). */
-export function localizeModeration(result: PostModerationResult, locale: Locale): PostModerationResult {
-  return !result.ok && result.selfModeration ? { ...result, message: editT(locale, 'failSelfModeration') } : result
-}
-
 /** The post state the single-post view needs to offer actions. */
 export interface ModeratedPostState {
   is_hidden: boolean | null
   hidden_reason: string | null
   /** posts.version — sent with every action (p_expected_version). */
   version?: number | null
+  /** The author (posts.user_id): a moderator never lifts moderation on their own post. */
+  user_id?: string | null
 }
 
 /**
  * The actions offered on a post, in button order: Remove unless it is already removed; Hold while
- * members can see it; Authorize (make it visible again) while it is hidden for any reason.
+ * members can see it; Authorize (make it visible again) while it is hidden for any reason. On the
+ * viewer's OWN post (the database refuses self-moderation that lifts or softens a decision): no
+ * Authorize, and no Hold once another moderator removed it; Remove and Hold otherwise stay.
  */
-export function postActionsFor(post: ModeratedPostState): PostModerationAction[] {
+export function postActionsFor(post: ModeratedPostState, viewerId: string | null = null): PostModerationAction[] {
   const hidden = post.is_hidden !== false
+  const own = viewerId != null && post.user_id === viewerId
   const out: PostModerationAction[] = []
   if (post.hidden_reason !== 'admin_removal' || !hidden) out.push('remove')
-  if (!hidden) out.push('hold')
-  if (hidden) out.push('authorize')
+  if (!hidden && !(own && post.hidden_reason === 'admin_removal')) out.push('hold')
+  if (hidden && !own) out.push('authorize')
   return out
+}
+
+/** A report on the viewer's own post is resolved by another moderator (no Dismiss / Uphold). */
+export function canResolveReportsOn(postAuthorId: string | null | undefined, viewerId: string | null): boolean {
+  return viewerId == null || postAuthorId == null || postAuthorId !== viewerId
 }

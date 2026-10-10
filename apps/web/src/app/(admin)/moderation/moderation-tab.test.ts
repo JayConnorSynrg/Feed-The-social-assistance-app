@@ -12,8 +12,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))
-
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logEvent: vi.fn(), withMetric: vi.fn() }))

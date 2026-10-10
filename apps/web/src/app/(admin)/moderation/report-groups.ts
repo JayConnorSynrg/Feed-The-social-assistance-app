@@ -26,6 +26,10 @@ export interface ContentGroup {
   post_hidden: boolean | null
   /** posts.version the moderator is looking at (sent as p_expected_version); null when not read. */
   post_version: number | null
+  /** The post's author (posts.user_id) and hidden_reason: a moderator never resolves reports on,
+   *  or holds a removed, post of their own. null when not read. */
+  post_user_id: string | null
+  post_hidden_reason: string | null
   reports: ReportRow[]
 }
 
@@ -34,6 +38,8 @@ export interface ReportedPostRow {
   content: string | null
   is_hidden: boolean | null
   version?: number | null
+  user_id?: string | null
+  hidden_reason?: string | null
 }
 
 /** Groups open reports by reported post (first-report order), then fills in each post's text and
@@ -43,7 +49,7 @@ export function buildReportGroups(reports: ReportRow[], posts: ReportedPostRow[]
   for (const report of reports) {
     let group = groupMap.get(report.content_id)
     if (!group) {
-      group = { content_id: report.content_id, post_content: null, post_author: null, post_hidden: null, post_version: null, reports: [] }
+      group = { content_id: report.content_id, post_content: null, post_author: null, post_hidden: null, post_version: null, post_user_id: null, post_hidden_reason: null, reports: [] }
       groupMap.set(report.content_id, group)
     }
     group.reports.push(report)
@@ -55,6 +61,8 @@ export function buildReportGroups(reports: ReportRow[], posts: ReportedPostRow[]
     // /s/post/[id] reads is_hidden=false only, so a NULL is_hidden is hidden from members too.
     group.post_hidden = post.is_hidden !== false
     group.post_version = post.version ?? null
+    group.post_user_id = post.user_id ?? null
+    group.post_hidden_reason = post.hidden_reason ?? null
   }
   return Array.from(groupMap.values())
 }

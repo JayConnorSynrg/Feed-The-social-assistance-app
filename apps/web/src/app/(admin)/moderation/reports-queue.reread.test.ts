@@ -16,9 +16,7 @@ const h = vi.hoisted(() => ({
   replies: [] as Array<{ data: unknown; error: unknown }>,
   post: null as null | Record<string, unknown>,
   held: [] as Array<Record<string, unknown>>,
-  locale: 'en' as string,
 }))
-vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => h.locale }))
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   logEvent: vi.fn(),
@@ -59,7 +57,7 @@ vi.mock('@/lib/supabase/client', () => {
 import { mount, findAll } from '@/test/mini-react'
 import { ReportsQueue } from './reports-queue'
 import { MODERATION_CONFLICT_MESSAGE } from './post-moderation-actions'
-import { editT } from '@/lib/i18n-feed-edit'
+const ENGLISH_REFUSAL = "You can't moderate your own content — another moderator needs to review it."
 
 type El = { type: unknown; props: Record<string, unknown> }
 const byTestId = (tree: unknown, id: string) => findAll(tree, (e) => e.props['data-testid'] === id)[0] as El | undefined
@@ -71,7 +69,6 @@ beforeEach(() => {
   h.replies.length = 0
   h.post = { id: POST, content: 'Buy now', user_id: 'a', is_hidden: false, version: 7 }
   h.held = []
-  h.locale = 'en'
 })
 
 async function openGroup() {
@@ -163,24 +160,61 @@ describe('"Removed & Held Posts" follows the re-read', () => {
 })
 
 describe('a moderator cannot lift moderation on their own content', () => {
-  it("dismissing reports on their own post: the refusal is explained in the moderator's language", async () => {
-    h.locale = 'fr'
+  it('a refused Dismiss (self-moderation) reads in English, like the rest of the console', async () => {
     const c = await openGroup()
     h.replies.push({ data: null, error: { code: '42501', message: 'self_moderation_refused' } })
     const tree = await click(c, 'dismiss-report-r1')
-    expect(alertText(tree)).toBe(editT('fr', 'failSelfModeration'))
+    expect(alertText(tree)).toBe(ENGLISH_REFUSAL)
     expect(byTestId(tree, 'dismiss-report-r1')).toBeDefined()
   })
 
-  it("authorizing their own held post: the refusal is explained in the moderator's language and the post stays held", async () => {
-    h.locale = 'ar'
+  it('a refused Authorize (self-moderation) reads in English and the post stays held', async () => {
     const HELD = '44444444-4444-4444-8444-444444444444'
     h.held = [{ id: HELD, is_hidden: true, content: 'Mine', created_at: '2026-10-01T00:00:00Z', hidden_at: null, hidden_reason: 'hold_for_review', user_id: 'me', version: 2 }]
     const c = mount(() => ReportsQueue())
     await c.flush()
     h.replies.push({ data: null, error: { code: '42501', message: 'self_moderation_refused' } })
     const tree = await click(c, `authorize-post-${HELD}`)
-    expect(alertText(tree)).toBe(editT('ar', 'failSelfModeration'))
+    expect(alertText(tree)).toBe(ENGLISH_REFUSAL)
     expect(byTestId(tree, `authorize-post-${HELD}`)).toBeDefined()
+  })
+})
+
+describe("the moderator's own post in the queue", () => {
+  const openAs = async (viewerId: string) => {
+    const c = mount(() => ReportsQueue({ viewerId }))
+    let tree = await c.flush()
+    ;(findAll(tree, (el) => el.props.variant === 'ghost')[0].props.onClick as () => void)()
+    tree = c.rerender()
+    return { c, tree }
+  }
+
+  it('its author sees no Dismiss (another moderator resolves its reports) and a note why; Remove and Hold stay', async () => {
+    const { tree } = await openAs('a')
+    expect(byTestId(tree, 'dismiss-report-r1')).toBeUndefined()
+    expect(byTestId(tree, `own-post-note-${POST}`)).toBeDefined()
+    expect(byTestId(tree, `remove-post-${POST}`)).toBeDefined()
+    expect(byTestId(tree, `hold-post-${POST}`)).toBeDefined()
+  })
+
+  it('another moderator sees Dismiss and no note', async () => {
+    const { tree } = await openAs('someone-else')
+    expect(byTestId(tree, 'dismiss-report-r1')).toBeDefined()
+    expect(byTestId(tree, `own-post-note-${POST}`)).toBeUndefined()
+  })
+
+  it('no Hold of your own post another moderator removed; another moderator can still hold it', async () => {
+    h.post = { id: POST, content: 'Buy now', user_id: 'a', is_hidden: true, hidden_reason: 'admin_removal', version: 7 }
+    expect(byTestId((await openAs('a')).tree, `hold-post-${POST}`)).toBeUndefined()
+    expect(byTestId((await openAs('someone-else')).tree, `hold-post-${POST}`)).toBeDefined()
+  })
+
+  it('no Authorize of your own held post; another moderator gets it', async () => {
+    const HELD = '55555555-5555-4555-8555-555555555555'
+    h.held = [{ id: HELD, is_hidden: true, content: 'Mine', created_at: '2026-10-01T00:00:00Z', hidden_at: null, hidden_reason: 'hold_for_review', user_id: 'me', version: 2 }]
+    const own = mount(() => ReportsQueue({ viewerId: 'me' }))
+    expect(byTestId(await own.flush(), `authorize-post-${HELD}`)).toBeUndefined()
+    const other = mount(() => ReportsQueue({ viewerId: 'someone-else' }))
+    expect(byTestId(await other.flush(), `authorize-post-${HELD}`)).toBeDefined()
   })
 })

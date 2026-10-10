@@ -13,8 +13,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => h.locale }))
-
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const h = vi.hoisted(() => ({
@@ -23,7 +21,6 @@ const h = vi.hoisted(() => ({
   postRow: null as unknown,
   reads: [] as string[],
   rpcs: [] as Array<{ fn: string; args: Record<string, unknown> }>,
-  locale: 'en' as string,
   rpcError: null as null | { code: string; message: string },
 }))
 vi.mock('./use-admin-focus', () => ({ useAdminFocusSession: () => h.session }))
@@ -52,13 +49,12 @@ vi.mock('@/lib/supabase/client', () => ({
 import { mount } from '@/test/mini-react'
 import { FocusedPost, type FocusedPostViewProps } from './focused-post'
 import { postActionsFor } from './post-moderation-actions'
-import { editT } from '@/lib/i18n-feed-edit'
 
 const LINKED = '11111111-1111-4111-8111-111111111111'
 const visible = { id: LINKED, content: 'x', post_type: 'request', created_at: '2026-10-01T00:00:00Z', is_hidden: false, hidden_reason: null, hidden_at: null, author: null }
 
 type View = { props: FocusedPostViewProps } | null
-let props: { reloadKey: number; onChanged: () => void; onDismissed: () => void }
+let props: { reloadKey: number; onChanged: () => void; onDismissed: () => void; viewerId?: string | null }
 const changed: string[] = []
 
 function mountPanel() {
@@ -69,7 +65,6 @@ beforeEach(() => {
   h.resolved.length = 0
   h.reads.length = 0
   h.rpcs.length = 0
-  h.locale = 'en'
   h.rpcError = null
   changed.length = 0
   props = { reloadKey: 0, onChanged: () => changed.push('changed'), onDismissed: () => changed.push('dismissed') }
@@ -82,15 +77,25 @@ beforeEach(() => {
 })
 
 describe('FocusedPost wiring', () => {
-  it("a moderator restoring their own post: the refusal is explained in the moderator's language", async () => {
-    h.locale = 'es'
+  it("an Authorize on the moderator's own post is never sent (the action is not offered)", async () => {
+    h.postRow = { ...visible, user_id: 'me', is_hidden: true, hidden_reason: 'hold_for_review', version: 2 }
+    props = { ...props, viewerId: 'me' } as typeof props
+    const c = mountPanel()
+    const view = (await c.flush())!
+    expect(view.props.viewerId).toBe('me')
+    view.props.onAction('authorize')
+    await c.flush()
+    expect(h.rpcs).toEqual([])
+  })
+
+  it('a refused self-moderation reads in English, like the rest of the console', async () => {
     h.rpcError = { code: '42501', message: 'self_moderation_refused' }
     h.postRow = { ...visible, is_hidden: true, hidden_reason: 'hold_for_review', version: 2 }
     const c = mountPanel()
     const view = (await c.flush())!
     view.props.onAction('authorize')
     const after = (await c.flush())!
-    expect(after.props.error).toBe(editT('es', 'failSelfModeration'))
+    expect(after.props.error).toBe("You can't moderate your own content — another moderator needs to review it.")
     expect(changed).toEqual([])
   })
 

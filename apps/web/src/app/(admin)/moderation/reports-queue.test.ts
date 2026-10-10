@@ -8,8 +8,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))
-
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const POST = '11111111-1111-4111-8111-111111111111'

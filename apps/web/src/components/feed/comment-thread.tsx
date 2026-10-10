@@ -345,6 +345,13 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
   const comments = useMemo(() => commentThreadView(rows, { includeHidden: isStaff }), [rows, isStaff])
   const liveCount = liveCommentCount(rows)
   const loadedRef = useRef(false)
+  // Set once the first read has finished (loading went true, then false).
+  const sawLoadingRef = useRef(false)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  useEffect(() => {
+    if (loading) sawLoadingRef.current = true
+    else if (sawLoadingRef.current) setHasLoadedOnce(true)
+  }, [loading])
 
   const handleToggleReply = useCallback((id: string) => {
     setReplyOpenIds((prev) => {
@@ -450,9 +457,10 @@ export function CommentThread({ postId, locale, onCountChange, onAnnounce }: Com
   const visibleComments = showAll ? comments : comments.slice(0, INITIAL_SHOW)
   const hiddenCount = comments.length - INITIAL_SHOW
   const errorText = error ? commentErrorText(locale, error) : null
-  // Only the first read shows the spinner. A refetch (realtime, after an edit) keeps the list
-  // mounted, so a comment being edited or a reply being written keeps its focus and its text.
-  const firstLoad = loading && rows.length === 0
+  // Only the first read shows the spinner (an empty thread included). A refetch (realtime, after an
+  // edit) keeps the list mounted, so a comment being edited or a reply being written keeps its
+  // focus and its text, and an empty thread does not flash "Loading…".
+  const firstLoad = loading && !hasLoadedOnce
 
   const ctx: RowContext = {
     locale,

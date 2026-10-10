@@ -108,7 +108,10 @@ describe('editing a comment while the thread refreshes', () => {
 describe('a refetch keeps the list mounted (focus and text stay where they are)', () => {
   it('the comment being edited and the open reply box stay mounted through the whole refetch', async () => {
     h.rows = [comment(), comment({ id: 'c2', user_id: 'other', content: 'Thanks!' })]
+    // The first read: loading, then done.
+    h.loading = true
     const c = mount(() => CommentThread({ postId: 'p1', locale: 'en' }))
+    h.loading = false
     await c.flush()
     ctxOf(c.tree()).onAction(comment(), 'edit', { focus() {} } as HTMLElement)
     c.rerender()
@@ -135,6 +138,22 @@ describe('a refetch keeps the list mounted (focus and text stay where they are)'
     expect(ctx.editDraft).toBe('See you at 6')
     expect(ctx.replyOpenIds.has('c2')).toBe(true)
     expect(ctx.replyTexts.get('c2')).toBe('On my way')
+  })
+
+  it('an empty thread does not show "Loading…" when it re-reads after the first read', async () => {
+    h.rows = []
+    h.loading = true
+    const c = mount(() => CommentThread({ postId: 'p1', locale: 'en' }))
+    const loadingText = (tree: unknown) => findAll(tree, (e) => e.props.children === 'Loading comments…' || e.props.children === 'Loading…')
+    expect(loadingText(c.tree()).length).toBeGreaterThan(0)
+    h.loading = false
+    c.rerender()
+    expect(loadingText(c.tree())).toHaveLength(0)
+    // A realtime refetch of the still-empty thread.
+    h.loading = true
+    expect(loadingText(c.rerender())).toHaveLength(0)
+    h.loading = false
+    expect(loadingText(c.rerender())).toHaveLength(0)
   })
 
   it('the first read still shows the spinner (nothing to keep yet)', async () => {

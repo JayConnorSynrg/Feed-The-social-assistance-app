@@ -81,12 +81,18 @@ describe('menu and moderation copy', () => {
     expect(menuItemLabel('remove', l).endsWith('…')).toBe(true)
   })
 
-  it.each(LOCALES)("%s: a refused self-moderation is explained, not a generic error", (l) => {
+  it('the admin console says it in English (the console is English throughout)', () => {
+    expect(moderationFailure({ code: '42501', message: 'self_moderation_refused' })).toEqual({
+      ok: false,
+      message: "You can't moderate your own content — another moderator needs to review it.",
+      selfModeration: true,
+    })
+  })
+
+  it.each(LOCALES)("%s: the feed's comment thread explains a refused self-moderation in the member's language", (l) => {
     const text = editT(l, 'failSelfModeration')
     expect(text.length).toBeGreaterThan(10)
     if (l !== 'en') expect(text).not.toBe(editT('en', 'failSelfModeration'))
-    const refused = moderationFailure({ code: '42501', message: 'self_moderation_refused' }, l)
-    expect(refused).toMatchObject({ ok: false, message: text, selfModeration: true })
     expect(failureText(l, { kind: 'forbidden', token: 'self_moderation_refused' })).toBe(text)
     expect(text).not.toBe(failureText(l, { kind: 'forbidden', token: 'permission' }))
   })
