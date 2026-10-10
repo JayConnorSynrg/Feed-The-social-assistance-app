@@ -4350,8 +4350,8 @@ export type Database = {
       create_post: {
         Args: {
           p_fields: Json
-          p_post_type: Database["public"]["Enums"]["post_type"]
           p_lang?: string
+          p_post_type: Database["public"]["Enums"]["post_type"]
           p_resource_id?: string
         }
         Returns: string
@@ -5072,10 +5072,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      poll_is_open: { Args: { p_poll_id: string }; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
-      poll_is_open: { Args: { p_poll_id: string }; Returns: boolean }
       post_accepts_engagement: { Args: { p_post_id: string }; Returns: boolean }
       post_assert_event: { Args: { p_meta: Json }; Returns: undefined }
       post_image_url_ok: {
@@ -5096,6 +5096,7 @@ export type Database = {
           deleted_at: string | null
           edit_count: number
           edited_at: string | null
+          engaged_at: string | null
           hidden_at: string | null
           hidden_reason: string | null
           id: string
