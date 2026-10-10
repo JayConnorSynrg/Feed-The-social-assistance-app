@@ -88,8 +88,8 @@ import {
   decideEventFocus,
   eventFocusNotice,
   focusedEventQuery,
-  toEditTarget,
 } from './event-scheduler'
+import { toEditTarget } from '@/lib/event-edit-target'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 

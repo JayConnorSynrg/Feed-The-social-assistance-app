@@ -54,13 +54,16 @@ import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
 import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
-import type { MyCheckinStatus } from '@/lib/event-checkin'
+import { useFeedEventCards } from '@/hooks/use-feed-event-cards'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 import { postCardFrameClass } from '@/components/feed/post-card-frame'
 import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocaleSettled, useFeedAnnounceReady, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
@@ -90,10 +93,6 @@ interface EnrichedOptIn {
   status: string
 }
 
-/** Ranked-feed ordering mode. Default 'ranked' (proximity/recency/engagement blend
- *  via the ranked_feed RPC); 'recent' is the legacy chronological keyset query. */
-type FeedRankMode = 'ranked' | 'recent'
-
 /**
  * Read the caller's coordinates ONLY when geolocation permission is already granted —
  * this never triggers a new permission prompt (W1.3). Returns null on any browser
@@ -120,7 +119,6 @@ async function readGeoIfGranted(): Promise<{ lat: number; lng: number } | null> 
   }
 }
 
-type FilterType = 'all' | 'following' | 'mine' | 'announcements'
 
 // MOCK_POSTS removed - now fetching from Supabase
 
@@ -144,75 +142,6 @@ function getRelativeTime(date: Date): string {
   if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
   if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 604800)}w ago`
   return date.toLocaleDateString()
-}
-
-// ============================================
-// FEED HEADER
-// ============================================
-interface FeedHeaderProps {
-  activeFilter: FilterType
-  onFilterChange: (filter: FilterType) => void
-  rankMode: FeedRankMode
-  onRankModeChange: (mode: FeedRankMode) => void
-}
-
-function FeedHeader({ activeFilter, onFilterChange, rankMode, onRankModeChange }: FeedHeaderProps) {
-  const filters: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'following', label: 'Following' },
-    { key: 'mine', label: 'My Posts' },
-    { key: 'announcements', label: 'Announcements' },
-  ]
-  const rankModes: { key: FeedRankMode; label: string }[] = [
-    { key: 'ranked', label: 'Ranked' },
-    { key: 'recent', label: 'Recent' },
-  ]
-
-  return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="font-semibold text-lg">Community Feed</h2>
-        {/* Ranked ↔ chronological toggle (default ranked). */}
-        <div
-          role="group"
-          aria-label="Feed ordering"
-          className="flex items-center rounded-full bg-[#f0ede6] p-0.5 shrink-0"
-        >
-          {rankModes.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              aria-pressed={rankMode === m.key}
-              data-testid={`feed-rankmode-${m.key}`}
-              onClick={() => onRankModeChange(m.key)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                rankMode === m.key
-                  ? 'bg-[#4a5d23] text-white'
-                  : 'text-stone-700 hover:text-stone-900'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="flex gap-2 overflow-x-auto">
-        {filters.map((filter) => (
-          <button
-            key={filter.key}
-            onClick={() => onFilterChange(filter.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
-              activeFilter === filter.key
-                ? 'bg-[#4a5d23] text-white'
-                : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 // ============================================
@@ -1326,18 +1255,13 @@ export function FeedPanel() {
   // Ranked feed (W1.3): default 'ranked'. rankCursor is the keyset for ranked pages.
   const [feedRankMode, setFeedRankMode] = useState<FeedRankMode>('ranked')
   const [rankCursor, setRankCursor] = useState<{ score: number; id: string } | null>(null)
-  // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
-  // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
-  // (own rows only, exactly as the Events panel loads them). All three are empty in
-  // Recent mode and clear when the ranked page has no event rows.
-  const [eventItems, setEventItems] = useState<EventFeedItem[]>([])
-  const [eventMyStatuses, setEventMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
-  const [eventAnonClaims, setEventAnonClaims] = useState<Set<string>>(new Set())
-  const eventLocale = useProfileLocale()
+  // The viewer's language: the feed's chrome, the event cards, and the panel's lang / dir.
+  const locale = useProfileLocale()
   // Cached caller geo (undefined = not yet read; null = unavailable/denied). Read at
   // most once per mount and never triggers a permission prompt.
   const geoRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined)
-  const [error, setError] = useState<string | null>(null)
+  // A failed feed read, by kind; the member sees a translated sentence, never the server's text.
+  const [error, setError] = useState<FeedLoadError | null>(null)
   // Active safety alerts for the feed strip — fetched independently of the map
   const [safetyAlerts, setSafetyAlerts] = useState<SafetyAlert[]>([])
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
@@ -1373,9 +1297,40 @@ export function FeedPanel() {
   // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
   const unblockGateRef = useRef(createSingleFlight())
 
-  const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
+  const { user, profileSettled, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
   const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
+  // Resolve active subtab from panelParams (set by alias routing in feed-shell).
+  // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
+  const activeSubtab: FeedSubtab = resolveFeedSubtab(panelParams?.subtab)
+  // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
+  // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
+  // (own rows only, exactly as the Events panel loads them). All three are empty in
+  // Recent mode and clear when the ranked page has no event rows. A change an admin makes
+  // from an event card re-reads only that card (hooks/use-feed-event-cards.ts).
+  const feedTitleRef = useRef<HTMLHeadingElement>(null)
+  const focusFeedTitle = useCallback(() => feedTitleRef.current?.focus(), [])
+  const {
+    eventItems,
+    setEventItems,
+    eventMyStatuses,
+    setEventMyStatuses,
+    eventAnonClaims,
+    setEventAnonClaims,
+    feedNotice,
+    handleEventManaged,
+    syncFeedEventCard,
+  } = useFeedEventCards({
+    supabase,
+    userId: user?.id ?? null,
+    isGuest: isAnonymous,
+    locale,
+    timeoutMs: QUERY_TIMEOUT_MS,
+    focusHeading: focusFeedTitle,
+    // A card notice belongs to this sub-tab visit and this account: leaving the sub-tab or
+    // switching accounts clears it (silently); a reload keeps it.
+    noticeContext: `${activeSubtab}|${user?.id ?? ''}`,
+  })
   // Saved resources for the resource-link selector in the composer
   const { savedResources } = useSavedResources()
   const resourceOptions: ResourceOption[] = savedResources
@@ -1386,9 +1341,6 @@ export function FeedPanel() {
   const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
   const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
-  // Resolve active subtab from panelParams (set by alias routing in feed-shell).
-  // A cleared/unknown subtab resolves to 'feed' — see resolveFeedSubtab.
-  const activeSubtab: FeedSubtab = resolveFeedSubtab(panelParams?.subtab)
 
   // Sync subtab when panelParams.subtab changes (e.g. back-button hash navigation)
   // No local state needed — activeSubtab is derived directly from panelParams.
@@ -1424,17 +1376,15 @@ export function FeedPanel() {
     currentIdx: number
   ) => {
     const tabs: FeedSubtab[] = ['feed', 'events', 'businesses', 'organizations', 'petitions', 'messages']
-    let next = currentIdx
-    if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
-    else if (e.key === 'Home') { e.preventDefault(); next = 0 }
-    else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
-    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
-    else return
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
+    // Arrow keys follow the reading direction (right-to-left locales swap them).
+    const next = nextTabIndex(e.key, currentIdx, tabs.length, locale)
+    if (next === null) return
+    e.preventDefault()
     const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
     tabEls?.[next]?.focus()
     handleSubtabSwitch(tabs[next])
-  }, [handleSubtabSwitch])
+  }, [handleSubtabSwitch, locale])
 
   // ── Pagination constants ────────────────────────────────────────────────────
   // Keyset pagination uses (created_at, id) for a stable cursor. is_pinned desc
@@ -1677,11 +1627,7 @@ export function FeedPanel() {
         (err as { code?: string })?.code === '42501' ||
         serializedMsg.toLowerCase().includes('permission denied')
 
-      const msg = isTimeout
-        ? 'Feed timed out — please check your connection and retry.'
-        : isPermission
-          ? "Couldn\'t load the feed right now — please retry."
-          : serializedMsg
+      const msg: FeedLoadError = isTimeout ? 'timeout' : 'failed'
 
       logger.error('feed.posts.fetch_failed', err, {
         code: (err as { code?: string })?.code,
@@ -1694,7 +1640,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, loadPostSideData])
+  }, [supabase, user, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
 
   // Ranked feed (W1.3): fetch a page via the hardened ranked_feed RPC, then hydrate
   // full rows with the SAME explicit FEED_POST_SELECT + rowToPost transform the
@@ -1872,11 +1818,7 @@ export function FeedPanel() {
         (err as { code?: string })?.code === '42501' ||
         serializedMsg.toLowerCase().includes('permission denied')
 
-      const msg = isTimeout
-        ? 'Feed timed out — please check your connection and retry.'
-        : isPermission
-          ? "Couldn\'t load the feed right now — please retry."
-          : serializedMsg
+      const msg: FeedLoadError = isTimeout ? 'timeout' : 'failed'
 
       logger.error('feed.rank.fetch_failed', err, {
         code: (err as { code?: string })?.code,
@@ -1889,7 +1831,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, isAnonymous, loadPostSideData])
+  }, [supabase, user, isAnonymous, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
 
   // Refresh the feed in the CURRENT ordering mode — used by the initial load, the
   // mode toggle, the retry button, and realtime UPDATE/DELETE reconciliation.
@@ -1900,6 +1842,11 @@ export function FeedPanel() {
       fetchPosts(null)
     }
   }, [feedRankMode, fetchRankedPosts, fetchPosts])
+
+  // The feed's status region starts empty and gets its first text a frame after the viewer's
+  // language has settled (useProfileLocale reads 'en' until the profile has loaded), so its first
+  // message (the list loading) is announced once, in the viewer's language.
+  const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profileSettled }))
 
   // Initial fetch + mode-change refetch — wait for auth to reconcile (guest OR user)
   // before the first fetch so it runs against the reconciled session. Gate on
@@ -2372,7 +2319,7 @@ export function FeedPanel() {
         onSubmitted={handleReviewSubmitted}
       />
     )}
-    <div className="h-full flex flex-col">
+    <div lang={locale} dir={dir(locale)} className="h-full flex flex-col">
       {/* Top-level tablist: Feed | Messages
           Styled DISTINCT from FeedHeader's rounded-full filter pills:
           py-2.5 font-semibold border-b — per NN/g 2-level tab differentiation */}
@@ -2384,7 +2331,7 @@ export function FeedPanel() {
           shrinking keeps the full tab-row height and its own hit area. */}
       <div
         role="tablist"
-        aria-label="Community sections"
+        aria-label={feedChromeT(locale, 'sectionsAria')}
         className="flex shrink-0 border-b border-stone-200 mb-0 overflow-x-auto"
       >
         <button
@@ -2401,7 +2348,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Feed
+          {feedChromeT(locale, 'tabFeed')}
         </button>
         <button
           role="tab"
@@ -2417,7 +2364,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Events
+          {feedChromeT(locale, 'tabEvents')}
         </button>
         <button
           role="tab"
@@ -2433,7 +2380,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Businesses
+          {feedChromeT(locale, 'tabBusinesses')}
         </button>
         <button
           role="tab"
@@ -2449,7 +2396,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Organizations
+          {feedChromeT(locale, 'tabOrganizations')}
         </button>
         <button
           role="tab"
@@ -2465,7 +2412,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Petitions
+          {feedChromeT(locale, 'tabPetitions')}
         </button>
         {/* Visual divider before Messages — separates community content from P2P */}
         <span className="border-l border-stone-300 dark:border-stone-600 pl-1 ml-1 self-stretch my-1" aria-hidden="true" />
@@ -2483,7 +2430,7 @@ export function FeedPanel() {
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          Messages
+          {feedChromeT(locale, 'tabMessages')}
         </button>
       </div>
 
@@ -2494,6 +2441,9 @@ export function FeedPanel() {
           id="feed-panel-messages"
           aria-labelledby="feed-tab-messages"
           tabIndex={0}
+          /* Not translated yet (Release 3): its English copy is marked English. */
+          lang="en"
+          dir="ltr"
           className="flex-1 min-h-0"
         >
           <MessagesPanel />
@@ -2506,7 +2456,7 @@ export function FeedPanel() {
           tabIndex={0}
           className="flex-1 overflow-y-auto p-1"
         >
-          <EventsPanel />
+          <EventsPanel onEventChanged={syncFeedEventCard} />
         </div>
       ) : activeSubtab === 'businesses' ? (
         <div
@@ -2514,6 +2464,9 @@ export function FeedPanel() {
           id="feed-panel-businesses"
           aria-labelledby="feed-tab-businesses"
           tabIndex={0}
+          /* Not translated yet (Release 3): its English copy is marked English. */
+          lang="en"
+          dir="ltr"
           className="flex-1 min-h-0"
         >
           <BusinessesPanel />
@@ -2524,6 +2477,9 @@ export function FeedPanel() {
           id="feed-panel-organizations"
           aria-labelledby="feed-tab-organizations"
           tabIndex={0}
+          /* Not translated yet (Release 3): its English copy is marked English. */
+          lang="en"
+          dir="ltr"
           className="flex-1 min-h-0"
         >
           <OrganizationsPanel />
@@ -2534,6 +2490,9 @@ export function FeedPanel() {
           id="feed-panel-petitions"
           aria-labelledby="feed-tab-petitions"
           tabIndex={0}
+          /* Not translated yet (Release 3): its English copy is marked English. */
+          lang="en"
+          dir="ltr"
           className="flex-1 overflow-y-auto p-1"
         >
           <PetitionsPanel />
@@ -2552,22 +2511,37 @@ export function FeedPanel() {
             onFilterChange={setActiveFilter}
             rankMode={feedRankMode}
             onRankModeChange={setFeedRankMode}
+            locale={locale}
+            titleRef={feedTitleRef}
+          />
+          {/* The feed's two polite status regions (mounted before their first text): the list
+              (loading / empty) and, separately, what the last event-card change did. */}
+          <FeedStatusRegions
+            ready={announceReady}
+            loading={loading}
+            error={error !== null}
+            empty={feedItems.length === 0}
+            notice={feedNotice}
+            locale={locale}
           />
 
           {/* Create Post Card — full users only; guests see account prompt */}
           {isAuthenticated && !isAnonymous && (
-            <CreatePostCard
-              onPost={handleCreatePost}
-              resourceOptions={resourceOptions}
-              onSafetyAlertClick={() => {
-                setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
-                setActivePanel('map')
-              }}
-            />
+            /* Not translated yet (Release 2): its English copy is marked English. */
+            <div lang="en" dir="ltr" data-testid="feed-composer-region">
+              <CreatePostCard
+                onPost={handleCreatePost}
+                resourceOptions={resourceOptions}
+                onSafetyAlertClick={() => {
+                  setPanelParams((prev) => ({ ...prev, openSafetyReport: true }))
+                  setActivePanel('map')
+                }}
+              />
+            </div>
           )}
           {isAnonymous && (
             <div className="mb-3">
-              <CreateAccountPrompt message="Create a free account to post and interact with the community" />
+              <CreateAccountPrompt message={feedChromeT(locale, 'guestPrompt')} linkLabel={feedChromeT(locale, 'createAccount')} />
             </div>
           )}
 
@@ -2576,6 +2550,9 @@ export function FeedPanel() {
           {followError && (
             <div
               role="alert"
+              /* Not translated yet (Release 3: use-follows messages): marked English. */
+              lang="en"
+              dir="ltr"
               className="mx-2 mt-1 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
             >
               {followError}
@@ -2585,11 +2562,14 @@ export function FeedPanel() {
           {/* Safety alerts strip — active alerts (expires_at > now), max 5.
               Tap any card to navigate to the map panel for full details + voting. */}
           {safetyAlerts.length > 0 && (
-            <SafetyStrip
-              alerts={safetyAlerts}
-              onViewMap={() => setActivePanel('map')}
-              formatAge={getRelativeTime}
-            />
+            /* Not translated yet (Release 3): its English copy is marked English. */
+            <div lang="en" dir="ltr" data-testid="feed-safety-region">
+              <SafetyStrip
+                alerts={safetyAlerts}
+                onViewMap={() => setActivePanel('map')}
+                formatAge={getRelativeTime}
+              />
+            </div>
           )}
 
           {/* Scrollable Feed */}
@@ -2598,26 +2578,13 @@ export function FeedPanel() {
               the motion surface to the `m.*` primitives below. */}
           <LazyMotion features={domAnimation} strict>
           <div className="flex-1 overflow-y-auto space-y-3">
-            {error ? (
-              <div className="text-center py-8">
-                <p className="text-sm text-red-600">{error}</p>
-                <button
-                  onClick={() => { setError(null); refreshFeed() }}
-                  className="text-sm text-stone-600 underline mt-2"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
-                <p className="text-sm">Loading posts...</p>
-              </div>
-            ) : feedItems.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-sm">No posts to show</p>
-                <p className="text-xs mt-1">Be the first to share something!</p>
-              </div>
+            {error || loading || feedItems.length === 0 ? (
+              <FeedListStatus
+                state={error ? { kind: 'error', error } : loading ? { kind: 'loading' } : { kind: 'empty' }}
+                locale={locale}
+                onRetry={() => { setError(null); refreshFeed() }}
+                focusTitle={focusFeedTitle}
+              />
             ) : (
               // W1.5 — initial={false} so page-1 / first paint does NOT animate
               // every post; only subsequent live inserts/removals animate. No
@@ -2633,7 +2600,7 @@ export function FeedPanel() {
                     <m.div key={`event-${ev.eventId}`} data-testid={`event-${ev.occurrenceId}`} {...postEnterExit(reduce)}>
                       <EventCard
                         event={ev}
-                        locale={eventLocale}
+                        locale={locale}
                         surface="feed"
                         distanceBucket={ev.distanceBucket}
                         myStatus={eventMyStatuses[ev.occurrenceId] ?? 'none'}
@@ -2646,6 +2613,7 @@ export function FeedPanel() {
                           if ('anonymous' in effect) setEventAnonClaims((prev) => new Set(prev).add(occurrenceId))
                           else setEventMyStatuses((prev) => ({ ...prev, [occurrenceId]: effect.status }))
                         }}
+                        onManaged={handleEventManaged}
                       />
                     </m.div>
                   )
@@ -2660,7 +2628,8 @@ export function FeedPanel() {
                 const postOptInStatus = optInMap.get(post.id)
 
                 return (
-                  <m.div key={post.id} data-testid={`post-${post.id}`} {...postEnterExit(reduce)}>
+                  // Post cards are not translated yet (Release 2): their English copy is marked English.
+                  <m.div key={post.id} data-testid={`post-${post.id}`} lang="en" dir="ltr" {...postEnterExit(reduce)}>
                     <PostCard
                       post={post}
                       currentUserId={user?.id ?? null}
@@ -2726,23 +2695,7 @@ export function FeedPanel() {
 
             {/* Load More — only shown when there are more pages and the feed has loaded */}
             {!loading && !error && hasMore && (
-              <div className="pt-2 pb-4 flex justify-center">
-                <button
-                  data-testid="feed-load-more"
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="px-5 py-2 rounded-full text-sm font-medium bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700 disabled:opacity-60 flex items-center gap-2 transition-colors"
-                >
-                  {loadingMore ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                      Loading…
-                    </>
-                  ) : (
-                    'Load more posts'
-                  )}
-                </button>
-              </div>
+              <FeedLoadMore locale={locale} loading={loadingMore} onLoadMore={handleLoadMore} />
             )}
           </div>
           </LazyMotion>

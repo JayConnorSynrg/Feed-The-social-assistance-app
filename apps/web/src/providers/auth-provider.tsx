@@ -18,6 +18,10 @@ interface AuthContextType {
   isAuthenticated: boolean
   /** True when the active session is an anonymous (guest) session created via signInAnonymously(). */
   isAnonymous: boolean
+  /** True once the background profile read for the CURRENT user has finished — loaded, failed or
+   *  timed out (profile may still be null). False while it runs, before any user, and again
+   *  whenever the user changes, until that user's read finishes. */
+  profileSettled: boolean
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
   updateProfile: (updates: ProfileUpdate) => Promise<void>
@@ -119,6 +123,12 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   )
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  // The user id whose background profile read last finished (see profileSettled).
+  const [profileSettledFor, setProfileSettledFor] = useState<string | null>(null)
+  // The user id the latest background profile read is for (null after sign-out). An older read that
+  // answers late — another account's — is ignored, so it can never put that account's profile on
+  // the current user or change the current user's profileSettled.
+  const readForRef = useRef<string | null>(null)
   // Always gate data-fetching until a session is CONFIRMED by
   // onAuthStateChange/reconciliation. The `user` seed (above) lets the shell
   // render authenticated on first paint, while data components gate on `loading`
@@ -152,11 +162,25 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       return Object.assign({}, data, coords) as unknown as Profile
     }
 
-    // Non-blocking profile load — a slow accessor must never gate `loading`.
-    const loadProfileInBackground = () => {
+    // Non-blocking profile load — a slow accessor must never gate `loading`. When it finishes, by
+    // any path, the read for `userId` is settled — unless a newer read (or a sign-out) superseded it.
+    const loadProfileInBackground = (userId: string) => {
+      // A different account (a direct switch, with no sign-out between): the previous account's
+      // profile is dropped now, not when this read lands, so no profile reader shows it meanwhile.
+      // A re-read for the same user (USER_UPDATED, a reconciled session) keeps the profile.
+      if (readForRef.current !== userId) setProfile(null)
+      readForRef.current = userId
+      const current = () => readForRef.current === userId
       fetchProfile()
-        .then((p) => setProfile(p))
-        .catch(() => setProfile(null))
+        .then((p) => {
+          if (current()) setProfile(p)
+        })
+        .catch(() => {
+          if (current()) setProfile(null)
+        })
+        .finally(() => {
+          if (current()) setProfileSettledFor(userId)
+        })
     }
 
     const mountTime = Date.now()
@@ -166,13 +190,16 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     // the data gate after 10s so the spinner is never permanent. Cleared on first
     // resolution (below) and on unmount so it never fights a normal resolution.
     // This is a pure upper-bound timer — not a getSession()-vs-timeout race.
-    const valve = setTimeout(
-      () => setLoading((c) => {
+    const valve = setTimeout(() => {
+      setLoading((c) => {
         if (c) logger.warn('auth.safetyValve', { bound_ms: 10000 })
         return false
-      }),
-      10000
-    )
+      })
+      // No auth event resolved, so no profile read ever ran for the server-seeded user: count its
+      // (absent) profile as settled, so profile-gated UI (the feed's announcements) is not silent
+      // all session. A read started later by an auth event still applies its profile.
+      setProfileSettledFor(initialUser?.id ?? null)
+    }, 10000)
     const clearValve = () => clearTimeout(valve)
 
     // Listen for auth changes (single listener for the whole app). This also
@@ -214,7 +241,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             setSession(refreshed)
             clearValve()
             setLoading(false)
-            loadProfileInBackground()
+            loadProfileInBackground(refreshed.user.id)
           } else {
             // Still divergent — clear only the local guest session (scope:'local'
             // leaves other sessions intact) so the client re-adopts the server
@@ -240,9 +267,13 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
           // TOKEN_REFRESHED fires every ~hour and doesn't change the user —
           // re-fetching the profile on each refresh is unnecessary DB load.
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            loadProfileInBackground()
+            loadProfileInBackground(clientUser.id)
           }
         } else {
+          // Signed out: a profile read still running for the previous user is dropped, and nothing
+          // counts as settled (the same account signing back in waits for its new read).
+          readForRef.current = null
+          setProfileSettledFor(null)
           setUser(null)
           setSession(null)
           setProfile(null)
@@ -320,6 +351,8 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     // is_anonymous is a first-class field on the Supabase User object (supabase-js 2.105+).
     // Cast through unknown because the generated types may not include it yet.
     isAnonymous: (user as unknown as { is_anonymous?: boolean })?.is_anonymous ?? false,
+    // Keyed by user id, so a new user (sign-in, account switch) reads false until its own read ends.
+    profileSettled: user !== null && profileSettledFor === user.id,
     signOut,
     refreshSession,
     updateProfile,

@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-location-field.tsx
+// apps/web/src/components/events/event-location-field.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Where an event happens. Choices: keep the saved location (edit only), use the organization's

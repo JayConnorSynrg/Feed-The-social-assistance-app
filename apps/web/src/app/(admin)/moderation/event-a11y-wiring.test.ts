@@ -16,7 +16,7 @@ const read = (f: string) => fs.readFileSync(path.join(HERE, f), 'utf8')
 
 describe('event dialogs', () => {
   const scheduler = read('event-scheduler.tsx')
-  const ui = read('event-form-ui.tsx')
+  const ui = read('../../../components/events/event-form-ui.tsx')
 
   it('every dialog the scheduler opens restores focus to its opener (or New event)', () => {
     // create, add dates, edit, cancel-date confirm, kiosk, attendance
@@ -41,7 +41,9 @@ describe('event dialogs', () => {
   it('translated portals and the scheduler root carry lang + dir', () => {
     expect(ui).toMatch(/lang=\{locale\}\s+dir=\{dir\(locale\)\}/)
     expect(scheduler).toMatch(/<div lang=\{locale\} dir=\{dir\(locale\)\} className="space-y-4">/)
-    expect(scheduler).toMatch(/<AlertDialogContent lang=\{locale\} dir=\{dir\(locale\)\}/)
+    // The cancel-date confirmation (shared with the event card menu) carries its own.
+    expect(read('../../../components/events/cancel-date-confirm.tsx')).toMatch(/<AlertDialogContent lang=\{locale\} dir=\{dir\(locale\)\}/)
+    expect(scheduler).toMatch(/<CancelDateConfirm\b/)
   })
 
   it('attendance is a real dialog (no hand-built overlay) and the status line is never display:none', () => {
@@ -55,7 +57,7 @@ describe('event dialogs', () => {
 })
 
 describe('location field', () => {
-  const loc = read('event-location-field.tsx')
+  const loc = read('../../../components/events/event-location-field.tsx')
   it('the error focus target is the CHECKED radio and every radio is described by the error', () => {
     expect(loc).toMatch(/ref=\{value\.source === source \? firstRef : undefined\}/)
     expect(loc).toMatch(/\[opts\.note, error \? errId : null\]/)
@@ -64,7 +66,7 @@ describe('location field', () => {
 
 describe('recurring-events review fixes (wiring the node env cannot render)', () => {
   const scheduler = read('event-scheduler.tsx')
-  const edit = read('event-edit-dialog.tsx')
+  const edit = read('../../../components/events/event-edit-dialog.tsx')
 
   it('Edit focuses the first error in its own document order and returns to Save changes after a failed stop-confirm', () => {
     expect(edit).toMatch(/firstErrorField\(next, EDIT_FIELD_ORDER\)/)

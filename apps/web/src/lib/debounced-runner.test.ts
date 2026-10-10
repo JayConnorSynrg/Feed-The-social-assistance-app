@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDebouncedRunner } from './debounced-runner'
+import { createDebouncedRunner } from '@/lib/debounced-runner'
 
 // These tests target the exact layer AddressAutocomplete calls: on typing it
 // schedule()s a search; on selecting a suggestion its choose() calls cancel().

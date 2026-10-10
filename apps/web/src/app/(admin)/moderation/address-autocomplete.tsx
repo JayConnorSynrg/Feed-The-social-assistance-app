@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { logger, logEvent } from '@/lib/logger'
 import { suggestAddressesV6, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
 import { buildAutocompleteEvent } from './resource-edit-save'
-import { createDebouncedRunner, type DebouncedRunner } from './debounced-runner'
+import { createDebouncedRunner, type DebouncedRunner } from '@/lib/debounced-runner'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LEN = 3

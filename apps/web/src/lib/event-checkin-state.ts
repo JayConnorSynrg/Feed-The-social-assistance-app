@@ -31,6 +31,11 @@ export function emptyCheckinState(): CheckinState {
   return { statuses: {}, anonClaims: new Set() }
 }
 
+/** Add a re-read card's check-in state to the list's (a re-read never forgets a claim). */
+export function mergeCheckinState(prev: CheckinState, next: CheckinState): CheckinState {
+  return { statuses: { ...prev.statuses, ...next.statuses }, anonClaims: new Set([...prev.anonClaims, ...next.anonClaims]) }
+}
+
 export interface LoadCheckinStateOptions {
   /** The signed-in member's id; null when logged out. */
   userId: string | null

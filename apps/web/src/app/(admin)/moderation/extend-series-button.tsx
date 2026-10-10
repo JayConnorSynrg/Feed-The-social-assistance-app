@@ -20,7 +20,7 @@ import type { Locale } from '@/lib/i18n'
 import { eventFormT, formatMessage } from '@/lib/i18n-event-forms'
 import { extendEventSeries, type ExtendedSeries } from '@/lib/event-admin-rpc'
 import { createSubmitController, mintIdempotencyKey, type FieldError, type SubmitController } from '@/lib/event-form-model'
-import { SECONDARY, errorText } from './event-form-ui'
+import { SECONDARY, errorText } from '@/components/events/event-form-ui'
 
 /** One tap: extend once (single flight; the key is reused until a call succeeds). */
 export async function runExtend(

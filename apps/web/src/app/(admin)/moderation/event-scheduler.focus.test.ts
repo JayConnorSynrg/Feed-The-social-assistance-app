@@ -46,7 +46,7 @@ vi.mock('@/lib/supabase/client', () => ({
 
 import { mount, findAll } from '@/test/mini-react'
 import { EventScheduler } from './event-scheduler'
-import { EventEditDialog } from './event-edit-dialog'
+import { EventEditDialog } from '@/components/events/event-edit-dialog'
 
 const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER_ORG = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

@@ -251,12 +251,26 @@ hydrating render, then `AdminEditLink`, so no admin link is ever part of server 
 | `/s/post/<id>` (server page; `components/feed/post-admin-edit-link.tsx` is its client island) | post | `post_page` |
 | Map safety-alert popup (inside the popup dialog: Tab reaches it, Escape still closes) | `safety_alerts.id` | `map_popup` |
 | Feed Active Alerts strip (`components/feed/safety-strip.tsx`, beside each alert button, never inside it) | `safety_alerts.id` | `feed_alert` |
-| Event card in the feed / in the Events tab (`components/feed/event-card.tsx`) | event `assistance_events.id` + `org_id` | `feed_event` / `events_panel` |
+| Event card in the feed / in the Events tab — an item of the card's ⋯ menu (`components/events/event-card-admin-menu.tsx`) | event `assistance_events.id` + `org_id` | `feed_event_menu` / `events_panel_menu` (before Release 1: `feed_event` / `events_panel`, a standalone link) |
 
 Event cards carry `orgId` from the one hydration select (`EVENT_OCCURRENCE_SELECT` reads the event's
 own `org_id`). Cost: post and alert links share the one tier lookup; an event link of a viewer who is
 not a platform admin adds one `get_admin_org_list` per identity (an organization admin may hold no
 tier, so a signed-in member's feed with event cards asks once).
+
+**Event cards: manage from the feed (Release 1)** — a platform admin, or an admin of the event's
+organization (the same `canEditInAdmin('event')` rule, via `useAdminViewer(true)`), gets a ⋯ menu on
+the event's card in the community feed and in the Events tab; everyone else gets no menu. Items:
+**Edit event** (the scheduler's edit dialog, filled from the event read by id —
+`lib/event-edit-target.ts`), **Add dates** (the scheduler's add-dates dialog), **Cancel date** (the
+card's shown date; shown with its reason when that date is already cancelled or has ended) and
+**Edit in admin** (the link above, as the menu item). The dialogs live in `components/events/`, shared
+with the scheduler, and each save is the same one RPC (`lib/event-admin-rpc.ts`, permission decided in
+the database), logged with `surface: feed_card`. After a save only that card is re-read
+(`lib/event-card-data.ts` `reloadEventCard`: the server's shown-date rule through `upcoming_events`)
+and replaced in place — the feed is not reloaded; a card that is no longer listed leaves and focus
+moves to the list heading. The menu primitive is `components/feed/card-actions-menu.tsx` (Radix
+DropdownMenu; sections, destructive items, items unavailable with a reason, link items).
 
 **What the admin screen opens** — the tab that owns the kind claims `?focus=` on mount
 (`app/(admin)/moderation/use-admin-focus.ts`) and writes exactly one `admin.deeplink.resolve` row, then
