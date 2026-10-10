@@ -204,11 +204,19 @@ export function EventCardAdminMenu({
   )
 
   const entries = hydrated ? eventMenuEntries(event, viewer, nowMs) : []
-  // Every dialog opened from the menu returns focus to the ⋯ trigger when it closes.
-  const restoreFocus = useCallback((e: Event) => {
-    e.preventDefault()
-    triggerRef.current?.focus()
-  }, [])
+  // Every dialog opened from the menu returns focus to the ⋯ trigger when it closes — the one now
+  // on screen: when the card's re-read lands during the dialog's exit, the Events tab may have
+  // re-filed (remounted) the card under another day, leaving this ref on a detached button.
+  const eventId = event.eventId
+  const restoreFocus = useCallback(
+    (e: Event) => {
+      e.preventDefault()
+      const trigger = triggerRef.current
+      if (trigger?.isConnected) trigger.focus()
+      else document.querySelector<HTMLElement>(`[data-testid="event-menu-${CSS.escape(eventId)}"]`)?.focus()
+    },
+    [eventId],
+  )
 
   const openEdit = async () => {
     setEditError(false)

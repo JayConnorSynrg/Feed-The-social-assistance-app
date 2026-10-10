@@ -11,7 +11,7 @@
 //     card's shown date; every save is labelled surface=feed_card and reported to the card's owner;
 //   - every dialog returns focus to the ⋯ trigger when it closes.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
@@ -149,7 +149,7 @@ function setup(event = item) {
   const one = (type: unknown) => findAll(m.tree(), (el) => el.type === type) as El[]
   const open = () => (menu()!.props.onOpenChange as (o: boolean) => void)(true)
   // The ⋯ trigger the dialogs must return focus to.
-  const trigger = { focus: vi.fn() }
+  const trigger = { focus: vi.fn(), isConnected: true }
   const attachTrigger = () => {
     ;(menu()!.props.triggerRef as { current: unknown }).current = trigger
   }
@@ -320,6 +320,29 @@ describe('focus returns to the ⋯ trigger when any dialog closes', () => {
     ;(dialog.props.onCloseAutoFocus as (e: unknown) => void)(e)
     expect(e.preventDefault).toHaveBeenCalledTimes(1)
     expect(s.trigger.focus).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('focus return when the card was re-filed during the dialog\'s exit (Events tab)', () => {
+  const g = globalThis as unknown as { document?: unknown; CSS?: unknown }
+  afterEach(() => {
+    delete g.document
+    delete g.CSS
+  })
+
+  it('the remembered ⋯ trigger is detached: focus goes to the card\'s ⋯ trigger now on screen', async () => {
+    const onScreen = { focus: vi.fn() }
+    const selectors: string[] = []
+    g.CSS = { escape: (s: string) => s }
+    g.document = { querySelector: (sel: string) => (selectors.push(sel), sel === `[data-testid="event-menu-${EVENT}"]` ? onScreen : null) }
+    const s = setup()
+    ;(s.menu()!.props.triggerRef as { current: unknown }).current = { focus: vi.fn(), isConnected: false }
+    s.choose('add_dates')
+    s.m.rerender()
+    const e = { preventDefault: vi.fn() }
+    ;(s.one(LazyEventDatesDialog)[0].props.onCloseAutoFocus as (e: unknown) => void)(e)
+    expect(onScreen.focus).toHaveBeenCalledTimes(1)
+    expect(selectors).toEqual([`[data-testid="event-menu-${EVENT}"]`])
   })
 })
 

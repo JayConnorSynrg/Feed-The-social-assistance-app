@@ -342,6 +342,18 @@ describe('useEventCardRefresh — what both panels do after a save from a card',
     expect(m.tree().notice).toBe('Event retired. This event is no longer listed.')
   })
 
+  it('feed: the card left but its exit animation still holds it in the DOM — focus goes to the heading anyway', async () => {
+    h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
+    const { m, applied, headingFocus, dom, setOnApply } = harness()
+    focused = dom.trigger
+    // AnimatePresence keeps the leaving card mounted (and focus inside it) for its exit animation.
+    setOnApply(() => {})
+    await m.tree().onManaged(E1, { kind: 'retired' })
+    await m.flush()
+    expect(applied).toEqual([[E1, null]])
+    expect(headingFocus.calls).toBe(1)
+  })
+
   it('focus elsewhere when the card changes: focus is not moved', async () => {
     h.reload = async () => ({ item: null, checkin: emptyCheckinState() })
     const { m, headingFocus, leave, setOnApply } = harness()

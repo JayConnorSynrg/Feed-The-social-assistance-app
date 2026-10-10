@@ -9,7 +9,7 @@
 // (timeout, or anything else) — the server's text never reaches the member. FeedPanel
 // (components/panels/feed-panel.tsx) owns the state; these only render it.
 
-import type { Ref } from 'react'
+import { useEffect, useState, type Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import { dir, type Locale } from '@/lib/i18n'
 import { feedChromeT, type FeedChromeMessages } from '@/lib/i18n-feed-chrome'
@@ -105,7 +105,26 @@ export function feedStatusAnnouncement(
   if (error) return ''
   if (loading) return feedChromeT(locale, 'loadingPosts')
   if (notice) return notice
-  return empty ? feedChromeT(locale, 'emptyTitle') : ''
+  return empty ? `${feedChromeT(locale, 'emptyTitle')} ${feedChromeT(locale, 'emptyBody')}` : ''
+}
+
+/** True once the viewer's language will not change any more: auth has resolved, and a signed-in
+ *  viewer's profile (which carries the language; every account, guests included, has one) has
+ *  loaded. Until then useProfileLocale reads 'en', so announcing earlier would speak English first. */
+/** True from the first frame after `settled` turned true: the status region is mounted empty and
+ *  only then speaks, so its first message is announced — once, in the settled language. */
+export function useFeedAnnounceReady(settled: boolean): boolean {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (!settled) return
+    const id = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [settled])
+  return ready
+}
+
+export function feedLocaleSettled({ authLoading, user, profile }: { authLoading: boolean; user: unknown; profile: unknown }): boolean {
+  return !authLoading && (!user || profile !== null)
 }
 
 /** The tab a sub-tab-list key moves to (null = not a moving key). ArrowRight / ArrowLeft follow

@@ -52,12 +52,10 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit, likeTap } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, replaceEventCard, keepFeedRank, type EventCardItem, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
-import { useEventCardRefresh } from '@/hooks/use-event-card-refresh'
-import type { EventCardChange } from '@/components/events/event-card-admin-menu'
-import type { MyCheckinStatus } from '@/lib/event-checkin'
-import { emptyCheckinState, checkinResultEffect, type CheckinState } from '@/lib/event-checkin-state'
+import { useFeedEventCards } from '@/hooks/use-feed-event-cards'
+import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
 import { loadEventCards } from '@/lib/event-card-data'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 import { postCardFrameClass } from '@/components/feed/post-card-frame'
@@ -65,7 +63,7 @@ import { SafetyStrip } from '@/components/feed/safety-strip'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { FeedHeader, FeedListStatus, FeedLoadMore, feedStatusAnnouncement, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
+import { FeedHeader, FeedListStatus, FeedLoadMore, feedLocaleSettled, useFeedAnnounceReady, feedStatusAnnouncement, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
 import { PostTypeWizard } from './post-type-wizard'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
 import { AuthorBadgeStrip } from '@/components/appreciation/author-badge-strip'
@@ -1257,13 +1255,6 @@ export function FeedPanel() {
   // Ranked feed (W1.3): default 'ranked'. rankCursor is the keyset for ranked pages.
   const [feedRankMode, setFeedRankMode] = useState<FeedRankMode>('ranked')
   const [rankCursor, setRankCursor] = useState<{ score: number; id: string } | null>(null)
-  // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
-  // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
-  // (own rows only, exactly as the Events panel loads them). All three are empty in
-  // Recent mode and clear when the ranked page has no event rows.
-  const [eventItems, setEventItems] = useState<EventFeedItem[]>([])
-  const [eventMyStatuses, setEventMyStatuses] = useState<Record<string, MyCheckinStatus>>({})
-  const [eventAnonClaims, setEventAnonClaims] = useState<Set<string>>(new Set())
   // The viewer's language: the feed's chrome, the event cards, and the panel's lang / dir.
   const locale = useProfileLocale()
   // Cached caller geo (undefined = not yet read; null = unavailable/denied). Read at
@@ -1306,8 +1297,26 @@ export function FeedPanel() {
   // Single-flight gate so a rapid double-click on Unblock fires the RPC once.
   const unblockGateRef = useRef(createSingleFlight())
 
-  const { user, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
+  const { user, profile, isAuthenticated, isAnonymous, loading: authLoading } = useAuth()
   const supabase = createClient()
+  // Events in the ranked feed (W1.6b): eventItems are hydrated occurrences in RPC
+  // rank order; eventMyStatuses / eventAnonClaims drive each card's check-in button
+  // (own rows only, exactly as the Events panel loads them). All three are empty in
+  // Recent mode and clear when the ranked page has no event rows. A change an admin makes
+  // from an event card re-reads only that card (hooks/use-feed-event-cards.ts).
+  const feedTitleRef = useRef<HTMLHeadingElement>(null)
+  const focusFeedTitle = useCallback(() => feedTitleRef.current?.focus(), [])
+  const {
+    eventItems,
+    setEventItems,
+    eventMyStatuses,
+    setEventMyStatuses,
+    eventAnonClaims,
+    setEventAnonClaims,
+    feedNotice,
+    handleEventManaged,
+    syncFeedEventCard,
+  } = useFeedEventCards({ supabase, userId: user?.id ?? null, isGuest: isAnonymous, locale, timeoutMs: QUERY_TIMEOUT_MS, focusHeading: focusFeedTitle })
   const { panelParams, setActivePanel, setPanelParams } = usePanelContext()
   // Saved resources for the resource-link selector in the composer
   const { savedResources } = useSavedResources()
@@ -1621,7 +1630,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, loadPostSideData])
+  }, [supabase, user, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
 
   // Ranked feed (W1.3): fetch a page via the hardened ranked_feed RPC, then hydrate
   // full rows with the SAME explicit FEED_POST_SELECT + rowToPost transform the
@@ -1812,7 +1821,7 @@ export function FeedPanel() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [supabase, user, isAnonymous, loadPostSideData])
+  }, [supabase, user, isAnonymous, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
 
   // Refresh the feed in the CURRENT ordering mode — used by the initial load, the
   // mode toggle, the retry button, and realtime UPDATE/DELETE reconciliation.
@@ -1824,47 +1833,10 @@ export function FeedPanel() {
     }
   }, [feedRankMode, fetchRankedPosts, fetchPosts])
 
-  // An admin changed an event from its card's ⋯ menu (edit, add dates, cancel a date): re-read ONLY
-  // that card and put it back where it was — its rank score and distance bucket stay, so the change
-  // never moves it, and the feed is never reloaded (hooks/use-event-card-refresh.ts).
-  const feedTitleRef = useRef<HTMLHeadingElement>(null)
-  const applyEventCard = useCallback((eventId: string, item: EventCardItem | null, checkin: CheckinState) => {
-    setEventItems((prev) =>
-      replaceEventCard(prev, eventId, item, keepFeedRank),
-    )
-    setEventMyStatuses((prev) => ({ ...prev, ...checkin.statuses }))
-    setEventAnonClaims((prev) => new Set([...prev, ...checkin.anonClaims]))
-  }, [])
-  const feedRoot = useCallback(() => (typeof document === 'undefined' ? null : document), [])
-  const focusFeedTitle = useCallback(() => feedTitleRef.current?.focus(), [])
-  // The feed's status region starts empty and gets its first text a frame later, so that first
-  // message (the list loading) is announced.
-  const [announceReady, setAnnounceReady] = useState(false)
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setAnnounceReady(true))
-    return () => cancelAnimationFrame(id)
-  }, [])
-  const { notice: feedNotice, onManaged: handleEventManaged, refreshQuietly: refreshFeedEventQuietly } = useEventCardRefresh({
-    supabase,
-    surface: 'feed',
-    userId: user?.id ?? null,
-    isGuest: isAnonymous,
-    locale,
-    timeoutMs: QUERY_TIMEOUT_MS,
-    apply: applyEventCard,
-    root: feedRoot,
-    focusHeading: focusFeedTitle,
-  })
-
-  // An admin changed an event from its card in the Events tab: the feed (mounted, not on screen)
-  // re-reads ITS copy of that event too, quietly — no announcement, no focus move — so going back
-  // to the feed never shows the old card. Nothing is read when the feed does not list the event.
-  const eventItemsRef = useRef<EventFeedItem[]>([])
-  useEffect(() => { eventItemsRef.current = eventItems }, [eventItems])
-  const syncFeedEventCard = useCallback((eventId: string, change: EventCardChange) => {
-    if (!eventItemsRef.current.some((e) => e.eventId === eventId)) return
-    void refreshFeedEventQuietly(eventId, change)
-  }, [refreshFeedEventQuietly])
+  // The feed's status region starts empty and gets its first text a frame after the viewer's
+  // language has settled (useProfileLocale reads 'en' until the profile has loaded), so its first
+  // message (the list loading) is announced once, in the viewer's language.
+  const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profile }))
 
   // Initial fetch + mode-change refetch — wait for auth to reconcile (guest OR user)
   // before the first fetch so it runs against the reconciled session. Gate on

@@ -105,8 +105,9 @@ describe('announcements and keyboard (a11y fix round)', () => {
     const say = (s: Partial<{ loading: boolean; error: boolean; empty: boolean; notice: string }>, locale: Locale = 'en') =>
       feedStatusAnnouncement({ loading: false, error: false, empty: false, notice: '', ...s }, locale)
     expect(say({ loading: true, empty: true })).toBe('Loading posts…')
-    expect(say({ empty: true })).toBe('No posts to show')
-    expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar')
+    // The empty state is announced whole: its title and its second line.
+    expect(say({ empty: true })).toBe('No posts to show Be the first to share something!')
+    expect(say({ empty: true }, 'es')).toBe('No hay publicaciones para mostrar ¡Sé la primera persona en compartir algo!')
     expect(say({ notice: 'Changes saved.' })).toBe('Changes saved.')
     expect(say({ error: true, empty: true, loading: true })).toBe('')
     expect(say({})).toBe('')
@@ -172,6 +173,12 @@ describe('feed-panel.tsx wiring', () => {
     expect(panel).toContain('nextTabIndex(e.key, currentIdx, tabs.length, locale)')
     expect(panel).toContain('focusTitle={focusFeedTitle}')
     expect(panel).toContain('<EventsPanel onEventChanged={syncFeedEventCard} />')
+    // The region speaks only once the viewer's language has settled (feed-chrome.test.ts).
+    expect(panel).toContain('const announceReady = useFeedAnnounceReady(feedLocaleSettled({ authLoading, user, profile }))')
+    // Fallback wiring check: the feed hands its cards the hook's handler as is (the hook is never
+    // given the feed's reload — hooks/use-feed-event-cards.test.ts proves what that handler reads).
+    expect(panel).toMatch(/<EventCard\b[\s\S]{0,1200}onManaged=\{handleEventManaged\}\s*\/>/)
+    expect(panel).toContain('} = useFeedEventCards({')
   })
 
   it('the panel root carries the viewer language and direction', () => {

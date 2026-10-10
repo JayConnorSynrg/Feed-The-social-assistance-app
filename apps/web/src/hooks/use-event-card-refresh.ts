@@ -11,9 +11,10 @@
 // card). A failed re-read keeps the card as it was (the save itself went through) and writes one
 // warn row.
 //
-// Focus: when it was inside the card, it stays there — or, when the re-read card was mounted anew
-// (the Events tab files it under another day) it moves to that card's ⋯ trigger; when the card
-// left, to the list's heading.
+// Focus (only when it was inside the card): a card that left the list → the list's heading, at
+// once — the feed's exit animation keeps the leaving card in the DOM for a moment, so "is focus
+// still inside it?" would wrongly answer yes. A card still listed → it stays where it is, or, when
+// the card was mounted anew (the Events tab files it under another day), its new ⋯ trigger.
 //
 // `refreshQuietly` re-reads a card for a list that is not on screen (the feed's copy of an event
 // changed from the Events tab): same re-read and apply, no announcement, no focus move.
@@ -57,6 +58,18 @@ export function restoreCardFocus(root: ParentNode | null, eventId: string, activ
   return 'heading'
 }
 
+/** After the re-read is applied, for focus that was inside the card (see the header). */
+export function scheduleCardFocus(gone: boolean, root: () => ParentNode | null, eventId: string, focusHeading: () => void): void {
+  if (gone) {
+    requestAnimationFrame(() => focusHeading())
+    return
+  }
+  // Two frames: React commits the re-read card first.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => restoreCardFocus(root(), eventId, document.activeElement, focusHeading)),
+  )
+}
+
 export function useEventCardRefresh({ supabase, surface, userId, isGuest, locale, timeoutMs, apply, root, focusHeading }: EventCardRefreshOptions) {
   const [notice, setNotice] = useState('')
   const reloadSeq = useRef(new Map<string, number>())
@@ -75,12 +88,7 @@ export function useEventCardRefresh({ supabase, surface, userId, isGuest, locale
         gone = item === null
         const hadFocus = !quiet && typeof document !== 'undefined' && eventCardHasFocus(root(), eventId, document.activeElement)
         apply(eventId, item, checkin)
-        // After the list has rendered the re-read card (two frames: React commits the update first).
-        if (hadFocus) {
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => restoreCardFocus(root(), eventId, document.activeElement, focusHeading)),
-          )
-        }
+        if (hadFocus) scheduleCardFocus(gone, root, eventId, focusHeading)
       } catch (err) {
         const e = err as { code?: string; name?: string } | null
         logger.warn('events.card.refresh_failed', { surface, code: e?.code || e?.name || 'unknown' })
