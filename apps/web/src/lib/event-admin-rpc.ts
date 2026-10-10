@@ -16,7 +16,9 @@
 //   preview_event_recurrence op admin.event.preview (withMetric; reads, writes nothing)
 //
 // Labels are ids, enums and counts only (frequency, series_end, announce_days_before, rule_edit);
-// the repeat rule itself never reaches a log row.
+// the repeat rule itself never reaches a log row. Edit / add dates / cancel a date also carry
+// `surface`: 'admin' (the admin scheduler) or 'feed_card' (an event card's ⋯ menu on the community
+// feed or the Events tab) — the same op either way, so one row per save on both screens.
 //
 // mapEventError turns a SQLSTATE + stable message prefix into a dictionary key and the form
 // field it belongs to, so raw database text never reaches the UI.
@@ -59,6 +61,9 @@ export interface MappedEventError {
 }
 
 export type EventRpcFailure = { ok: false; code: string | null } & MappedEventError
+
+/** Where an event write was made (the `surface` label of its app_logs row). */
+export type EventWriteSurface = 'admin' | 'feed_card'
 
 /** SQLSTATE of a failed call; null when the database never answered (postgrest-js code ""). */
 function sqlstateOf(error: { code?: string | null }): string | null {
@@ -159,7 +164,7 @@ export interface LocalDate {
 /** Add (or restore cancelled) dates. `changed` = dates added + restored; 0 is a success. */
 export async function addEventDates(
   supabase: SupabaseClient<Database>,
-  input: { eventId: string; orgId: string; dates: readonly LocalDate[] },
+  input: { eventId: string; orgId: string; dates: readonly LocalDate[]; surface?: EventWriteSurface },
 ): Promise<{ ok: true; changed: number } | EventRpcFailure> {
   const args: Rpc['add_event_dates']['Args'] = {
     p_event_id: input.eventId,
@@ -171,7 +176,7 @@ export async function addEventDates(
     'admin.event.add_dates',
     'add_event_dates',
     args,
-    { event_id: input.eventId, org_id: input.orgId, date_count: input.dates.length },
+    { event_id: input.eventId, org_id: input.orgId, date_count: input.dates.length, surface: input.surface ?? 'admin' },
   )
   if (error) return fail(error)
   return { ok: true, changed: typeof data === 'number' ? data : 0 }
@@ -180,7 +185,7 @@ export async function addEventDates(
 /** Cancel one date. Cancelling an already-cancelled date succeeds and changes nothing. */
 export async function cancelEventOccurrence(
   supabase: SupabaseClient<Database>,
-  input: { occurrenceId: string; eventId: string; orgId: string },
+  input: { occurrenceId: string; eventId: string; orgId: string; surface?: EventWriteSurface },
 ): Promise<{ ok: true } | EventRpcFailure> {
   const args: Rpc['cancel_event_occurrence']['Args'] = { p_occurrence_id: input.occurrenceId }
   const { error } = await privilegedRpc<Rpc['cancel_event_occurrence']['Returns']>(
@@ -188,7 +193,7 @@ export async function cancelEventOccurrence(
     'admin.occurrence.cancel',
     'cancel_event_occurrence',
     args,
-    { occurrence_id: input.occurrenceId, event_id: input.eventId, org_id: input.orgId },
+    { occurrence_id: input.occurrenceId, event_id: input.eventId, org_id: input.orgId, surface: input.surface ?? 'admin' },
   )
   if (error) return fail(error)
   return { ok: true }
@@ -222,7 +227,7 @@ function updateSeriesLabels(args: UpdateEventArgs) {
 /** Edit (action 'update') or retire (action 'retire', p_is_active false) an event. */
 export async function updateEvent(
   supabase: SupabaseClient<Database>,
-  input: { orgId: string; action: 'update' | 'retire'; args: UpdateEventArgs },
+  input: { orgId: string; action: 'update' | 'retire'; args: UpdateEventArgs; surface?: EventWriteSurface },
 ): Promise<{ ok: true } | EventRpcFailure> {
   const { error } = await privilegedRpc<Rpc['admin_update_event']['Returns']>(
     supabase,
@@ -236,6 +241,7 @@ export async function updateEvent(
       location_source: input.args.p_location_source ?? 'keep',
       cleared_count: input.args.p_clear?.length ?? 0,
       ...updateSeriesLabels(input.args),
+      surface: input.surface ?? 'admin',
     },
   )
   if (error) return fail(error)

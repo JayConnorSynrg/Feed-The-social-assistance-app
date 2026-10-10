@@ -98,6 +98,16 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
     expect(gate(`?tab=events&focus=event:${ID}`, ORG_ONLY)).toBeNull()
   })
 
+  it('organization (main shell): owned by Organizations; a tier without it is forbidden', () => {
+    expect(gate(`?tab=organizations&org=${ID}&focus=organization:${ID}`, ALL)).toBeNull()
+    expect(gate(`?tab=organizations&org=${ID}&focus=organization:${ID}`, ['moderation', 'manage'])).toEqual({
+      kind: 'organization',
+      outcome: 'forbidden',
+      tab: 'organizations',
+    })
+    expect(gate(`?tab=manage&focus=organization:${ID}`, ALL)).toEqual({ kind: 'organization', outcome: 'invalid', tab: 'manage' })
+  })
+
   it('forbidden: the tier does not show the owning tab', () => {
     expect(gate(`?tab=moderation&focus=post:${ID}`, ORG_ONLY)).toEqual({ kind: 'post', outcome: 'forbidden', tab: 'moderation' })
     expect(gate(`?tab=moderation&focus=safety_alert:${ID}`, ORG_ONLY)).toEqual({ kind: 'safety_alert', outcome: 'forbidden', tab: 'moderation' })
@@ -112,9 +122,11 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
     expect(gate(`?tab=events&focus=post:${ID}`, ALL)).toEqual({ kind: 'post', outcome: 'invalid', tab: 'events' })
   })
 
-  it('organization page: only an event focus on its Events tab; anything else is invalid', () => {
+  it('organization page: an event focus on its Events tab, its organization on Profile; anything else is invalid', () => {
     const ORG_TABS = ['overview', 'events', 'profile', 'members']
     expect(gate(`?tab=events&focus=event:${ID}`, ORG_TABS, orgPageOwnerTab)).toBeNull()
+    expect(gate(`?tab=profile&focus=organization:${ID}`, ORG_TABS, orgPageOwnerTab)).toBeNull()
+    expect(gate(`?tab=events&focus=organization:${ID}`, ORG_TABS, orgPageOwnerTab)).toEqual({ kind: 'organization', outcome: 'invalid', tab: 'events' })
     expect(gate(`?tab=events&focus=post:${ID}`, ORG_TABS, orgPageOwnerTab)).toEqual({ kind: 'post', outcome: 'invalid', tab: 'events' })
     expect(gate(`?tab=profile&focus=event:${ID}`, ORG_TABS, orgPageOwnerTab)).toEqual({ kind: 'event', outcome: 'invalid', tab: 'profile' })
   })
@@ -135,7 +147,9 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
   })
 
   // What the main shell mounts: resolveAdminTab(?tab= or 'overview', visible tabs) — a missing or
-  // unknown ?tab= falls back to the first tab the viewer has. The kinds each tab claims.
+  // unknown ?tab= falls back to the first tab the viewer has. The kinds each tab claims. The
+  // organization claimant (OrgPanelFocus, org-focus.tsx) is not a tab body: the shell mounts it
+  // whenever the Organizations tab is SHOWN, whichever tab is open.
   const CLAIMS: Record<string, AdminFocusKind[]> = { moderation: ['post', 'safety_alert'], events: ['event'], manage: ['resource'], businesses: ['business'] }
   function writers(search: string, visible: AdminTabId[]) {
     const mounted = resolveAdminTab(readTabParam(search, TAB_ORDER) ?? 'overview', visible)
@@ -144,7 +158,9 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
     const claimEnv = env(search)
     const claim = claimAdminFocus(claimEnv.e, CLAIMS[mounted] ?? [], mounted)
     claim?.resolve('found')
-    return { mounted, rows: [...t.rows, ...claimEnv.rows] }
+    const orgEnv = env(search)
+    if (visible.includes('organizations')) claimAdminFocus(orgEnv.e, ['organization'], 'organizations')?.resolve('found')
+    return { mounted, rows: [...t.rows, ...claimEnv.rows, ...orgEnv.rows] }
   }
 
   it('the four reviewer probe URLs (no / other ?tab=, fallback tab mounted): exactly one row each', () => {
@@ -159,8 +175,8 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
   it('exactly one writer for every URL × viewer, with the tab the shell really mounts', () => {
     const ALL_TABS = [...TAB_ORDER] as AdminTabId[]
     const viewers: AdminTabId[][] = [ALL_TABS, ['moderation'], ['events'], ['events', 'moderation'], ['moderation', 'resources', 'businesses', 'manage', 'people']]
-    const tabs = [null, 'overview', 'events', 'moderation', 'manage', 'businesses', 'junk']
-    const focuses = ['post', 'safety_alert', 'event', 'resource', 'business'].map((k) => `${k}:${ID}`).concat(['post:junk', 'nope'])
+    const tabs = [null, 'overview', 'events', 'moderation', 'manage', 'businesses', 'organizations', 'junk']
+    const focuses = ['post', 'safety_alert', 'event', 'resource', 'business', 'organization'].map((k) => `${k}:${ID}`).concat(['post:junk', 'nope'])
     let cases = 0
     for (const visible of viewers) {
       for (const tab of tabs) {
@@ -172,6 +188,27 @@ describe('adminFocusGateOutcome — the shell reports what no tab will take', ()
         }
       }
     }
-    expect(cases).toBe(5 * 7 * 7)
+    expect(cases).toBe(5 * 8 * 8)
+  })
+
+  it('organization page: exactly one writer for every URL (Events claims events, Profile its organization)', () => {
+    const ORG_TABS = ['overview', 'events', 'profile', 'members'] as const
+    const ORG_CLAIMS: Record<string, AdminFocusKind[]> = { events: ['event'], profile: ['organization'] }
+    const tabs = [null, ...ORG_TABS, 'junk']
+    const focuses = ['post', 'safety_alert', 'event', 'resource', 'business', 'organization'].map((k) => `${k}:${ID}`).concat(['post:junk', 'nope'])
+    let cases = 0
+    for (const tab of tabs) {
+      for (const focus of focuses) {
+        const search = `?${tab ? `tab=${tab}&` : ''}focus=${focus}`
+        const mounted = readTabParam(search, ORG_TABS) ?? 'overview'
+        const t = env(search)
+        runAdminFocusGate(t.e, { visibleTabs: ORG_TABS, ownerTab: orgPageOwnerTab })
+        const c = env(search)
+        claimAdminFocus(c.e, ORG_CLAIMS[mounted] ?? [], mounted)?.resolve('found')
+        expect([...t.rows, ...c.rows], `${search} on the organization page`).toHaveLength(1)
+        cases++
+      }
+    }
+    expect(cases).toBe(6 * 8)
   })
 })

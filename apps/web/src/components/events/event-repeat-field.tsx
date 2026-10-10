@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-repeat-field.tsx
+// apps/web/src/components/events/event-repeat-field.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // The repeat + feed-lead part of the event create / edit forms:
@@ -45,7 +45,7 @@ import {
 } from '@/lib/event-recurrence'
 import { previewEventRecurrence, type PreviewDate, type PreviewInput } from '@/lib/event-admin-rpc'
 import { localTimestamp, type EventTimeDraft, type FieldError, type FieldErrors } from '@/lib/event-form-model'
-import { createDebouncedRunner } from './debounced-runner'
+import { createDebouncedRunner } from '@/lib/debounced-runner'
 import { FieldErrorText, INPUT, LABEL, errorText, invalidProps } from './event-form-ui'
 
 const CHOICE_ROW = 'flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm text-stone-900 hover:bg-stone-50'

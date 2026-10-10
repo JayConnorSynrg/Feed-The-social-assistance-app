@@ -50,9 +50,9 @@ import {
   errorText,
   invalidProps,
   useOrgHasPin,
-} from './event-form-ui'
-import { EventLocationField } from './event-location-field'
-import { LeadField, RepeatField, RepeatPreview, focusField } from './event-repeat-field'
+} from '@/components/events/event-form-ui'
+import { EventLocationField } from '@/components/events/event-location-field'
+import { LeadField, RepeatField, RepeatPreview, focusField } from '@/components/events/event-repeat-field'
 import type { AdminOrg } from './use-admin-orgs'
 
 export type OrgChoice = { kind: 'fixed'; orgId: string } | { kind: 'pick'; orgs: AdminOrg[] }

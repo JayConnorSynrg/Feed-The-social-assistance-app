@@ -118,7 +118,9 @@ describe('what the member sees', () => {
     const html = view(ready(E1), { focusMiss: true })
     expect(statusRegion(html)).toBe('That event isn&#x27;t in the upcoming list right now.')
     expect(html).toContain('data-testid="events-focus-miss"')
-    expect(html.match(/role="(status|alert)"/g)).toHaveLength(1)
+    // The list's region carries the line; the separate card-notice region is empty.
+    expect(html.match(/role="(status|alert)"/g)).toHaveLength(2)
+    expect(html).toMatch(/data-testid="events-tab-notice"><\/p>/)
     expect(html).toContain(`data-event-id="${E1}"`)
     expect(html).not.toContain(EVENT_CARD_HIGHLIGHT)
     expect(statusRegion(view(ready(E1), { focusMiss: true }, 'es'))).toBe('Ese evento no está en la lista de próximos eventos en este momento.')

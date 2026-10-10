@@ -194,6 +194,33 @@ describe('add_event_dates / cancel_event_occurrence / admin_update_event', () =>
   })
 })
 
+describe('surface label — a save from an event card menu is the same ONE row, marked feed_card', () => {
+  it('edit / add dates / cancel a date from a card: one RPC each, one row each, surface=feed_card', async () => {
+    const sb = fakeSupabase({ data: 'e-1', error: null })
+    await updateEvent(sb.client, { orgId: 'org-1', action: 'update', args: { p_event_id: 'e-1', p_title: 'X' }, surface: 'feed_card' })
+    await addEventDates(sb.client, { eventId: 'e-1', orgId: 'org-1', dates: [{ startsLocal: '2026-11-17T10:00', endsLocal: '2026-11-17T11:30' }], surface: 'feed_card' })
+    await cancelEventOccurrence(sb.client, { occurrenceId: 'o-1', eventId: 'e-1', orgId: 'org-1', surface: 'feed_card' })
+    expect(sb.calls.map((c) => c.name)).toEqual(['admin_update_event', 'add_event_dates', 'cancel_event_occurrence'])
+    expect(logs.map((l) => l.event)).toEqual(['admin.event.update.complete', 'admin.event.add_dates.complete', 'admin.occurrence.cancel.complete'])
+    // The registry keeps the label (the route drops unregistered keys), and the RPC never sees it.
+    expect(logs.map((l) => stored(l)?.surface)).toEqual(['feed_card', 'feed_card', 'feed_card'])
+    for (const c of sb.calls) expect(c.args).not.toHaveProperty('surface')
+    // One request id joins each row to its admin_actions row.
+    expect(logs.map((l) => l.request_id)).toEqual(sb.calls.map((c) => c.headers['x-request-id']))
+  })
+
+  it('the admin scheduler (no surface given) is labelled admin; a refused save from a card keeps the label', async () => {
+    const ok = fakeSupabase({ data: null, error: null })
+    await cancelEventOccurrence(ok.client, { occurrenceId: 'o-1', eventId: 'e-1', orgId: 'org-1' })
+    expect(stored(logs[0])?.surface).toBe('admin')
+    logs = []
+    const refused = fakeSupabase({ data: null, error: { code: '42501', message: 'event_denied: not an admin of this organization' } })
+    const r = await updateEvent(refused.client, { orgId: 'org-1', action: 'update', args: { p_event_id: 'e-1', p_title: 'X' }, surface: 'feed_card' })
+    expect(r).toMatchObject({ ok: false, errorKey: 'errDenied' })
+    expect(stored(logs[0])).toMatchObject({ error_code: '42501', surface: 'feed_card' })
+  })
+})
+
 describe('mapEventError — every contract message has a specific, translated answer', () => {
   const cases: Array<[string, string, string, string | null]> = [
     ['22023', 'event_time_invalid: 2026-11-01 01:30 happens twice in America/New_York (the clocks go back when daylight saving time ends); choose a time outside that hour', 'errTimeRepeat', 'start'],

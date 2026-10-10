@@ -30,6 +30,8 @@ import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canCreateOrganizations } from '@/lib/admin-tier'
 import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
+import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
+import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
 
 /** Human label for an org_type, falling back to the raw value for any unexpected type. */
 function orgTypeLabel(orgType: string): string {
@@ -149,7 +151,7 @@ export function OrganizationsPanel() {
               const label = labelFor(o)
               const addr = [o.city, o.state].filter(Boolean).join(', ')
               return (
-                <li key={o.id}>
+                <li key={o.id} className="flex flex-col gap-1">
                   <a
                     href={`/s/organization/${o.id}`}
                     className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4 transition-colors hover:border-org/40 hover:bg-org/5"
@@ -179,6 +181,17 @@ export function OrganizationsPanel() {
                       </div>
                     </div>
                   </a>
+                  {/* Admins only: platform admins, and admins of this organization. A sibling of the row
+                      link, never inside it: an <a> may not contain another <a>. */}
+                  <ClientAdminEditLink
+                    target={{ kind: 'organization', id: o.id }}
+                    itemName={o.name}
+                    source="organizations_row"
+                    locale={adminLocale}
+                    lang={adminLocale}
+                    dir={dir(adminLocale)}
+                    className={`${ADMIN_EDIT_LINK_CLASS} self-end`}
+                  />
                 </li>
               )
             })}

@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-form-ui.tsx
+// apps/web/src/components/events/event-form-ui.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Building blocks shared by the event create / add-dates / edit dialogs: the dialog frame (Radix
@@ -19,7 +19,7 @@ import { timeZoneOptions } from '@/lib/event-time'
 import { withStartDate, type EventTimeDraft, type FieldError, type FieldErrors } from '@/lib/event-form-model'
 
 export const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
+  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2'
 export const PRIMARY =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-60 ' +
   FOCUS_RING

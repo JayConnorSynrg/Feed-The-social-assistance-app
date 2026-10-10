@@ -547,7 +547,7 @@ test(
 
 test(
   'feed-panel.tsx — renders error UI with retry button',
-  () => feedPanel.includes('Retry') && feedPanel.includes('fetchPosts'),
+  () => feedPanel.includes('<FeedListStatus') && feedPanel.includes('fetchPosts'),
   'retry button not found',
 )
 
@@ -559,7 +559,7 @@ test(
 
 test(
   'feed-panel.tsx — renders empty state when no posts',
-  () => feedPanel.includes('No posts to show'),
+  () => feedPanel.includes("{ kind: 'empty' }"),
   'empty state text not found',
 )
 

@@ -92,6 +92,8 @@ export interface OrgFormPanelProps {
   onCloseRequestDeclined?: () => void
   /** Where focus goes when the panel closes (Save, Cancel, Escape, Back). */
   onCloseAutoFocus?: (event: Event) => void
+  /** Edit mode: the panel's read of `orgId` settled — ok = loaded, !ok = failed or not found. */
+  onLoadResult?: (orgId: string, ok: boolean) => void
   ref?: Ref<OrgFormPanelHandle>
 }
 
@@ -298,6 +300,7 @@ export function OrgFormPanel(props: OrgFormPanelProps) {
               registerBackToForm={registerBackToForm}
               consumeFocusName={consumeFocusName}
               onSaved={handleSaved}
+              onLoadResult={props.onLoadResult}
             />
           )}
         </SheetContent>
@@ -393,7 +396,7 @@ export function OrgTypeField({
 // Body: loads the edit target, then renders the form.
 // ---------------------------------------------------------------------------------------------
 
-interface BodyProps {
+export interface BodyProps {
   mode: OrgFormMode
   kind: OrgFormKind
   orgId: string | null
@@ -410,14 +413,20 @@ interface BodyProps {
   /** True once, when this org's form mounts right after "Edit existing" switched to it. */
   consumeFocusName: (id: string) => boolean
   onSaved: (result: { id: string; created: boolean; name: string }) => void
+  onLoadResult?: (orgId: string, ok: boolean) => void
 }
 
-function OrgFormBody(props: BodyProps) {
+export function OrgFormBody(props: BodyProps) {
   const { mode, orgId, tr } = props
   const supabase = useMemo(() => createClient(), [])
   const [detail, setDetail] = useState<AdminOrgDetail | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(mode === 'edit' ? 'loading' : 'ready')
   const [retry, setRetry] = useState(0)
+  // The latest onLoadResult, read when the fetch settles (not a fetch dependency).
+  const onLoadResultRef = useRef(props.onLoadResult)
+  useEffect(() => {
+    onLoadResultRef.current = props.onLoadResult
+  })
 
   useEffect(() => {
     if (mode !== 'edit' || !orgId) return
@@ -427,9 +436,12 @@ function OrgFormBody(props: BodyProps) {
         if (cancelled) return
         setDetail(d)
         setLoadState(d ? 'ready' : 'error')
+        onLoadResultRef.current?.(orgId, d !== null)
       },
       () => {
-        if (!cancelled) setLoadState('error')
+        if (cancelled) return
+        setLoadState('error')
+        onLoadResultRef.current?.(orgId, false)
       }
     )
     return () => {

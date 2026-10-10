@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-edit-dialog.tsx
+// apps/web/src/components/events/event-edit-dialog.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Edit an event's title, type, description, place name and location (keep / organization pin /
@@ -18,7 +18,7 @@ import type { Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { EVENT_TYPES, eventFormT, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
 import { venueDateKey, zoneLabel } from '@/lib/event-time'
-import { updateEvent, type EventErrorField } from '@/lib/event-admin-rpc'
+import { updateEvent, type EventErrorField, type EventWriteSurface } from '@/lib/event-admin-rpc'
 import {
   DEFAULT_ANNOUNCE_LEAD,
   isAnnounceLead,
@@ -108,6 +108,7 @@ export function EventEditDialog({
   event,
   onSaved,
   onCloseAutoFocus,
+  surface = 'admin',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -115,6 +116,8 @@ export function EventEditDialog({
   event: EditTarget
   onSaved: (action: 'update' | 'retire') => void
   onCloseAutoFocus?: (event: Event) => void
+  /** Where the dialog was opened (the save's `surface` log label). */
+  surface?: EventWriteSurface
 }) {
   const supabase = useMemo(() => createClient(), [])
   const uid = useId()
@@ -210,7 +213,7 @@ export function EventEditDialog({
     setErrors({})
     setFormError(null)
     setSaving(action)
-    const outcome = await controller.submit(() => updateEvent(supabase, { orgId: event.org_id, action, args }))
+    const outcome = await controller.submit(() => updateEvent(supabase, { orgId: event.org_id, action, args, surface }))
     setSaving(null)
     if (outcome.status === 'busy') return
     const r = outcome.result

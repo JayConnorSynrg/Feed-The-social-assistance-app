@@ -7,6 +7,8 @@
 //   - post (feed card, /s/post, petitions are posts): community moderator and up;
 //   - safety alert (map popup, feed Active Alerts): community moderator and up;
 //   - event (feed event card, Events tab): platform admin, or an admin of THAT event's organization.
+//     Since Release 1 the event link is an item of the card's ⋯ menu: the card shows the menu button
+//     exactly for those viewers, and the open menu holds the link (role="menuitem").
 // Each link carries the contract URL for its item. The hydration gate is replaced by AdminEditLink
 // itself here (its server render is proven empty in client-admin-edit-link.test.ts).
 
@@ -63,6 +65,10 @@ import { PostAdminEditLink, postAdminItemName } from '@/components/feed/post-adm
 import { SafetyStrip, safetyStripItemName } from '@/components/feed/safety-strip'
 import { postCardFrameClass } from '@/components/feed/post-card-frame'
 import { EventCard, eventAdminSource } from '@/components/feed/event-card'
+import { DropdownMenu as Menu } from 'radix-ui'
+import { CardMenuItems } from '@/components/feed/card-actions-menu'
+import { eventMenuEntries } from '@/components/feed/event-card-menu'
+import { eventMenuSections } from '@/components/events/event-card-admin-menu'
 import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { MarkerPopupDialog } from '@/components/map/marker-popup'
 import { buildEventCards, type EventOccurrenceRow } from '@/components/feed/post-model'
@@ -130,16 +136,33 @@ const occ: EventOccurrenceRow = {
   },
 }
 const [eventItem] = buildEventCards([{ occurrenceId: 'occ-1' }], [occ])
+const NOW = Date.parse('2026-10-22T14:00:00Z')
 
-const SURFACES = {
-  post_feed_card: () => h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'feed_post' }),
-  post_page: () => h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'post_page' }),
-  alert_feed_strip: () => h(SafetyStrip, { alerts: [alert], onViewMap: () => {}, formatAge: () => '1h ago' }),
-  alert_map_popup: () => h(SafetyAlertMarker, { alert, onVote: async () => {} }),
-  event_feed_card: () =>
-    h(EventCard, { event: eventItem, locale: 'en', surface: 'feed', myStatus: 'none', anonymousClaimed: false, onCheckedIn: () => {}, now: Date.parse('2026-10-22T14:00:00Z'), viewerTz: 'America/New_York' }),
-  event_events_tab: () =>
-    h(EventCard, { event: eventItem, locale: 'en', surface: 'events-tab', myStatus: 'none', anonymousClaimed: false, onCheckedIn: () => {}, now: Date.parse('2026-10-22T14:00:00Z'), viewerTz: 'America/New_York' }),
+/** The card, and — when the card shows its ⋯ menu button — that menu opened (the link lives there). */
+function eventCardWithMenu(surface: 'feed' | 'events-tab'): string {
+  const card = renderToStaticMarkup(
+    h(EventCard, { event: eventItem, locale: 'en', surface, myStatus: 'none', anonymousClaimed: false, onCheckedIn: () => {}, now: NOW, viewerTz: 'America/New_York' }),
+  )
+  if (!card.includes(`data-testid="event-menu-${EVENT}"`)) return card
+  const sections = eventMenuSections({
+    entries: eventMenuEntries(eventItem, viewerRef.current as AdminEditViewer, NOW),
+    event: eventItem,
+    locale: 'en',
+    source: eventAdminSource(surface),
+    onEdit: () => {},
+    onAddDates: () => {},
+    onCancelDate: () => {},
+  })
+  return card + renderToStaticMarkup(h(Menu.Root, { open: true, modal: false }, h(Menu.Trigger, null, 'More'), h(Menu.Content, null, h(CardMenuItems, { sections }))))
+}
+
+const SURFACES: Record<string, () => string> = {
+  post_feed_card: () => renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'feed_post' })),
+  post_page: () => renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'post_page' })),
+  alert_feed_strip: () => renderToStaticMarkup(h(SafetyStrip, { alerts: [alert], onViewMap: () => {}, formatAge: () => '1h ago' })),
+  alert_map_popup: () => renderToStaticMarkup(h(SafetyAlertMarker, { alert, onVote: async () => {} })),
+  event_feed_card: () => eventCardWithMenu('feed'),
+  event_events_tab: () => eventCardWithMenu('events-tab'),
 }
 
 function linkHrefs(html: string): string[] {
@@ -168,7 +191,7 @@ describe('I1 — present exactly for the viewers the admin screen accepts', () =
     admin_of_event_org: ['', '', EVENT_ORG],
     admin_of_other_org: ['', '', ''],
   }
-  const column: Record<keyof typeof SURFACES, 0 | 1 | 2> = {
+  const column: Record<string, 0 | 1 | 2> = {
     post_feed_card: 0,
     post_page: 0,
     alert_feed_strip: 1,
@@ -178,22 +201,25 @@ describe('I1 — present exactly for the viewers the admin screen accepts', () =
   }
 
   for (const [viewerName, viewer] of Object.entries(VIEWERS)) {
-    for (const [surface, el] of Object.entries(SURFACES) as Array<[keyof typeof SURFACES, () => ReturnType<typeof h>]>) {
+    for (const [surface, html] of Object.entries(SURFACES)) {
       const want = EXPECTED[viewerName][column[surface]]
       it(`${surface} × ${viewerName}: ${want ? 'link' : 'no link'}`, () => {
         viewerRef.current = viewer
-        expect(linkHrefs(renderToStaticMarkup(el()))).toEqual(want ? [want] : [])
+        const out = html()
+        expect(linkHrefs(out)).toEqual(want ? [want] : [])
+        // An event card's ⋯ menu button appears exactly when its link does (nothing for anyone else).
+        if (column[surface] === 2) expect(out.includes(`data-testid="event-menu-${EVENT}"`)).toBe(Boolean(want))
       })
     }
   }
 
   it('event links ask for the administered-organization list; post and alert links never do', () => {
     viewerRef.current = VIEWERS.member
-    renderToStaticMarkup(SURFACES.post_feed_card())
-    renderToStaticMarkup(SURFACES.alert_feed_strip())
+    SURFACES.post_feed_card()
+    SURFACES.alert_feed_strip()
     expect(neededOrgs.every((n) => n === false)).toBe(true)
     neededOrgs.length = 0
-    renderToStaticMarkup(SURFACES.event_feed_card())
+    SURFACES.event_feed_card()
     expect(neededOrgs).toEqual([true])
   })
 })
@@ -201,7 +227,7 @@ describe('I1 — present exactly for the viewers the admin screen accepts', () =
 describe('surface details', () => {
   it('the feed strip: each alert is a real <button> named by its visible text; the link is its sibling', () => {
     viewerRef.current = VIEWERS.community_moderator
-    const html = renderToStaticMarkup(SURFACES.alert_feed_strip())
+    const html = SURFACES.alert_feed_strip()
     const button = html.indexOf(`data-testid="safety-strip-item-${ALERT}"`)
     const link = html.indexOf(`data-testid="admin-edit-alert-${ALERT}"`)
     expect(button).toBeGreaterThan(-1)
@@ -237,7 +263,7 @@ describe('surface details', () => {
 
   it('map popup: the link is inside the dialog, Tab-reachable, and Escape on the dialog still closes it', () => {
     viewerRef.current = VIEWERS.community_moderator
-    const html = renderToStaticMarkup(SURFACES.alert_map_popup())
+    const html = SURFACES.alert_map_popup()
     const dialog = html.indexOf('role="dialog"')
     const link = html.indexOf(`data-testid="admin-edit-alert-${ALERT}"`)
     expect(dialog).toBeGreaterThan(-1)
@@ -254,11 +280,23 @@ describe('surface details', () => {
     expect([closed, stopped]).toEqual([1, 1])
   })
 
-  it('the event card link names the event; feed vs Events tab are separate sources', () => {
+  it('event card: the menu button names the event; the link is a menu item named "Edit in admin: <event> (opens in the admin tab)"', () => {
     viewerRef.current = VIEWERS.platform_admin
-    expect(renderToStaticMarkup(SURFACES.event_feed_card())).toMatch(/aria-label="Edit in admin: Saturday pantry/)
-    expect(eventAdminSource('feed')).toBe('feed_event')
-    expect(eventAdminSource('events-tab')).toBe('events_panel')
+    const html = SURFACES.event_feed_card()
+    // The WAI-ARIA menu button (Radix sets the popup + expanded state).
+    const trigger = html.match(new RegExp(`<button[^>]*data-testid="event-menu-${EVENT}"[^>]*>`))?.[0] ?? ''
+    expect(trigger).toMatch(/aria-haspopup="menu"/)
+    expect(trigger).toMatch(/aria-expanded="false"/)
+    expect(trigger).toMatch(/aria-label="Manage event: Saturday pantry"/)
+    // The link IS the menu item: role=menuitem on the <a>, reused "feed-admin" tab, no rel.
+    const link = html.match(/<a [^>]*data-testid="admin-edit-event-[^"]*"[^>]*>/)?.[0] ?? ''
+    expect(link).toMatch(/role="menuitem"/)
+    expect(link).toMatch(/target="feed-admin"/)
+    expect(link).not.toMatch(/\brel=/)
+    expect(link).toContain('aria-label="Edit in admin: Saturday pantry (opens in the admin tab)"')
+    // feed vs Events tab stay separate sources, both marked as the menu.
+    expect(eventAdminSource('feed')).toBe('feed_event_menu')
+    expect(eventAdminSource('events-tab')).toBe('events_panel_menu')
   })
 
   it('post item name: the start of the text, collapsed and capped', () => {
@@ -298,7 +336,7 @@ describe('wiring: each surface renders its link through the hydration-gated comp
   it.each([
     ['../feed/post-admin-edit-link.tsx'],
     ['../feed/safety-strip.tsx'],
-    ['../feed/event-card.tsx'],
+    ['../events/event-card-admin-menu.tsx'],
     ['../map/safety-alert-marker.tsx'],
   ])('%s uses ClientAdminEditLink (never the ungated AdminEditLink)', (file) => {
     const src = read(file)
@@ -306,8 +344,14 @@ describe('wiring: each surface renders its link through the hydration-gated comp
     expect(src).not.toMatch(/<AdminEditLink\b/)
   })
 
-  it('the Events tab renders the shared EventCard (so it carries the link)', () => {
+  it('the Events tab renders the shared EventCard (so it carries the menu and its link)', () => {
     expect(read('../panels/events-panel.tsx')).toMatch(/<EventCard\b[\s\S]*surface="events-tab"/)
+  })
+
+  it('the event card has no standalone link any more: only its ⋯ menu carries "Edit in admin"', () => {
+    const card = read('../feed/event-card.tsx')
+    expect(card).not.toMatch(/ClientAdminEditLink|AdminEditLink/)
+    expect(card).toMatch(/<EventCardAdminMenu event=\{event\} locale=\{locale\} source=\{eventAdminSource\(surface\)\}/)
   })
 })
 

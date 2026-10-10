@@ -116,9 +116,12 @@ export function shellOwnerTab(kind: AdminFocusKind): string {
   return ADMIN_FOCUS_TAB[kind]
 }
 
-/** The organization admin page (/moderation/org/<id>): only events, on its Events tab. */
+/** The organization admin page (/moderation/org/<id>): events on its Events tab, the organization
+ *  itself on its Profile tab. */
 export function orgPageOwnerTab(kind: AdminFocusKind): string | null {
-  return kind === 'event' ? 'events' : null
+  if (kind === 'event') return 'events'
+  if (kind === 'organization') return 'profile'
+  return null
 }
 
 /** Write the shell's row when it has one (then drop the param). Returns the row written, or null. */

@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 
 import { withMetric, logger, logEvent } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
-import { loadAdminTier } from '@/hooks/use-admin-tier'
+import { resetAdminTierCache, resolveAdminTier } from '@/hooks/use-admin-tier'
 import { installClientErrorCapture, MAX_REPORTS_PER_SESSION } from '@/lib/client-error-capture'
 import { scanMapTelemetry } from './map-telemetry-scan.mjs'
 
@@ -94,6 +94,8 @@ describe('logEvent — a persisted first-party info event', () => {
 })
 
 describe('useAdminTier — no tier RPC for logged-out visitors or guests', () => {
+  // resolveAdminTier is the one lookup every useAdminTier / useAdminViewer shares; it caches per user id.
+  beforeEach(() => resetAdminTierCache())
   const rpcClient = () => {
     const calls: string[] = []
     return {
@@ -104,19 +106,19 @@ describe('useAdminTier — no tier RPC for logged-out visitors or guests', () =>
 
   it('logged out: zero RPC calls, no tier', async () => {
     const { calls, client } = rpcClient()
-    expect(await loadAdminTier(client, null)).toEqual({ tier: null, isFounder: false })
+    expect(await resolveAdminTier(client, null)).toEqual({ tier: null, isFounder: false, ok: true })
     expect(calls).toEqual([])
   })
 
   it('guest (anonymous auth): zero RPC calls, no tier', async () => {
     const { calls, client } = rpcClient()
-    expect(await loadAdminTier(client, { id: 'g1', is_anonymous: true })).toEqual({ tier: null, isFounder: false })
+    expect(await resolveAdminTier(client, { id: 'g1', is_anonymous: true })).toEqual({ tier: null, isFounder: false, ok: true })
     expect(calls).toEqual([])
   })
 
   it('signed-in member: calls both RPCs and returns the tier', async () => {
     const { calls, client } = rpcClient()
-    expect(await loadAdminTier(client, { id: 'u1', is_anonymous: false })).toEqual({ tier: 'steward', isFounder: false })
+    expect(await resolveAdminTier(client, { id: 'u1', is_anonymous: false })).toEqual({ tier: 'steward', isFounder: false, ok: true })
     expect(calls.sort()).toEqual(['current_user_tier', 'is_founder'])
   })
 })

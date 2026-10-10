@@ -571,6 +571,19 @@ export async function fetchBusinessPhotos(
 // this controlled boundary and each is wrapped in withMetric with a bounded, PII-free label set.
 // ---------------------------------------------------------------------------
 
+/** The message a business write shows when it changed nothing. */
+export const BUSINESS_NOT_SAVED_MESSAGE =
+  'Nothing was saved: this business was not changed. Only platform admins can edit businesses, or it no longer exists.'
+
+/**
+ * A plain UPDATE that RLS (orgs_admin_update) filters out matches ZERO rows and returns no error, so
+ * success is proven by the returned row (`.select('id')`), never by the absence of an error: zero
+ * rows throws BusinessWriteError, which withMetric records as an error row before the caller shows it.
+ */
+function assertBusinessRowChanged(data: unknown): void {
+  if (!Array.isArray(data) || data.length === 0) throw new BusinessWriteError(BUSINESS_NOT_SAVED_MESSAGE)
+}
+
 /** The business's own editable descriptive + contact fields, as the admin edit form submits them. */
 export interface AdminBusinessEdit {
   name: string
@@ -588,8 +601,9 @@ export interface AdminBusinessEdit {
  * status; active=true restores it to exactly those surfaces. Authorized by orgs_admin_update (the
  * BEFORE-UPDATE guard RETURNs NEW for a platform admin, so the is_active change is permitted).
  * Wrapped in business.admin.set_active with ONE closed-vocab boolean label `active` (the direction) —
- * never the target id, which is the eq filter. Throws BusinessWriteError on failure so the caller can
- * revert its optimistic toggle rather than claim a false success.
+ * never the target id, which is the eq filter. Throws BusinessWriteError on failure — including an
+ * UPDATE that changed no row (a non-platform admin, or a missing id) — so the caller can revert its
+ * optimistic toggle rather than claim a false success.
  */
 export async function adminSetBusinessActive(
   supabase: SupabaseClient<Database>,
@@ -597,12 +611,14 @@ export async function adminSetBusinessActive(
   active: boolean
 ): Promise<void> {
   await withMetric('business.admin.set_active', { active }, async () => {
-    const { error } = await loose(supabase)
+    const { data, error } = await loose(supabase)
       .from('organizations')
       .update({ is_active: active })
       .eq('id', orgId)
+      .select('id')
       .then((r) => r)
     if (error) throw new BusinessWriteError(error.message)
+    assertBusinessRowChanged(data)
   })
 }
 
@@ -612,7 +628,8 @@ export async function adminSetBusinessActive(
  * scheme-less domain is https-prefixed, an empty value is stored as null. Authorized by
  * orgs_admin_update. Wrapped in business.admin.update with bounded, PII-free SHAPE labels only
  * (has_* booleans describing which optional fields are set — never the name/email/url/address value).
- * Throws BusinessWriteError on failure so the caller can surface it rather than claim a false success.
+ * Throws BusinessWriteError on failure — including an UPDATE that changed no row — so the caller can
+ * surface it rather than claim a false success.
  */
 export async function adminUpdateBusiness(
   supabase: SupabaseClient<Database>,
@@ -627,7 +644,7 @@ export async function adminUpdateBusiness(
     has_website: website !== null,
   }
   await withMetric('business.admin.update', attrs, async () => {
-    const { error } = await loose(supabase)
+    const { data, error } = await loose(supabase)
       .from('organizations')
       .update({
         name: fields.name.trim(),
@@ -637,7 +654,9 @@ export async function adminUpdateBusiness(
         website,
       })
       .eq('id', orgId)
+      .select('id')
       .then((r) => r)
     if (error) throw new BusinessWriteError(error.message)
+    assertBusinessRowChanged(data)
   })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-// apps/web/src/app/(admin)/moderation/event-dates-dialog.tsx
+// apps/web/src/components/events/event-dates-dialog.tsx
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Add one or more dates to an existing event, entered as wall-clock times in the EVENT's own time
@@ -16,7 +16,7 @@ import type { Locale } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { eventFormT, formatMessage } from '@/lib/i18n-event-forms'
 import { zoneLabel } from '@/lib/event-time'
-import { addEventDates } from '@/lib/event-admin-rpc'
+import { addEventDates, type EventWriteSurface } from '@/lib/event-admin-rpc'
 import {
   createSubmitController,
   firstErrorField,
@@ -46,6 +46,7 @@ export function EventDatesDialog({
   initialDate,
   onAdded,
   onCloseAutoFocus,
+  surface = 'admin',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -54,6 +55,8 @@ export function EventDatesDialog({
   initialDate: string
   onAdded: (changed: number) => void
   onCloseAutoFocus?: (event: Event) => void
+  /** Where the dialog was opened (the save's `surface` log label). */
+  surface?: EventWriteSurface
 }) {
   const supabase = useMemo(() => createClient(), [])
   const uid = useId()
@@ -91,7 +94,7 @@ export function EventDatesDialog({
     setFormError(null)
     setSaving(true)
     const outcome = await controller.submit(() =>
-      addEventDates(supabase, { eventId: event.id, orgId: event.org_id, dates: toLocalDates(rows) })
+      addEventDates(supabase, { eventId: event.id, orgId: event.org_id, dates: toLocalDates(rows), surface })
     )
     setSaving(false)
     if (outcome.status === 'busy') return

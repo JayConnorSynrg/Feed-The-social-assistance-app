@@ -21,6 +21,16 @@
 // admin viewing a member surface sees what members see — only this admin reader projects is_active
 // and lists inactive rows. Each approved row offers "View public page" (/s/business/<id>) while active,
 // and says why members cannot see it while inactive.
+//
+// "Edit in admin" (?tab=businesses&focus=business:<uuid>, from a member surface): once the approved
+// list has loaded, that business's row opens in edit mode, scrolled into view with its Name field
+// focused. Only a platform admin can save a business (orgs_admin_update), so for any other tier, or
+// an id not in the approved list, the tab writes 'not_found' with a plain line saying why. One
+// admin.deeplink.resolve row per followed link (use-admin-focus.ts), then focus is stripped; a
+// malformed link or a tier that does not see this tab is the shell gate's row.
+//
+// Saves fail loudly: an UPDATE that RLS filtered to zero rows is an error (business-data.ts), never
+// a success, so the edit form stays open with the reason and the toggle reverts.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, X, Loader2, Leaf, MapPin, Pencil } from 'lucide-react'
@@ -45,6 +55,10 @@ import {
   type AdminBusinessEdit,
 } from '@/lib/business-data'
 import type { Business } from '@/lib/business'
+import { useAdminTier } from '@/hooks/use-admin-tier'
+import { canEditBusinesses } from '@/lib/admin-tier'
+import { useAdminFocusSession } from './use-admin-focus'
+import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -180,6 +194,38 @@ export function BusinessesTab() {
     setDraft((d) => (d ? { ...d, [key]: value } : d))
   }, [])
 
+  // "Edit in admin" landing. The tier is the shell's shared lookup (useAdminTier: no extra RPC).
+  const { tier, loading: tierLoading } = useAdminTier()
+  // The row a followed link opened: scrolled into view and its Name field focused once rendered.
+  const [revealId, setRevealId] = useState<string | null>(null)
+  // This tab claims ?focus=business:<uuid> (useAdminFocusSession) and, once the tier and the approved
+  // list are known, writes found (that row opens in edit mode) or not_found; invalid / forbidden are
+  // the shell's gate. The tab is shown to resource admins, but only a platform admin can save a
+  // business: for anyone else the link is not_found with a plain "only platform admins" line.
+  const focusSession = useAdminFocusSession('business', 'businesses')
+  const [focusNotice, setFocusNotice] = useState<AdminFocusNotice | null>(null)
+  useEffect(() => {
+    if (!focusSession?.isOpen() || tierLoading || loadingApproved) return
+    const editable = canEditBusinesses(tier)
+    const item = editable ? approved.find((b) => b.id.toLowerCase() === focusSession.focus.id) : undefined
+    if (item) {
+      focusSession.resolve('found')
+      startEdit(item)
+      setRevealId(item.id)
+    } else {
+      focusSession.resolve('not_found')
+      setFocusNotice(editable ? 'not_found' : 'not_editable')
+    }
+  }, [focusSession, tier, tierLoading, loadingApproved, approved, startEdit])
+  useEffect(() => {
+    // Waits for the row to be on screen (the pending queue's first load hides both sections).
+    const field = revealId && !loading ? document.getElementById(`edit-name-${revealId}`) : null
+    if (!field) return
+    field.scrollIntoView({ block: 'center' })
+    field.focus({ preventScroll: true })
+    setRevealId(null)
+  }, [revealId, loading])
+
   const handleSaveEdit = useCallback(
     async (item: Business) => {
       if (!draft || !draft.name.trim() || savingId) return
@@ -231,16 +277,27 @@ export function BusinessesTab() {
     [supabase]
   )
 
+  // "Edit in admin" link that opened nothing. Rendered from the first render — through the loading
+  // spinner too — so its live region exists before a notice arrives and is announced. Both returns put
+  // it first inside the same root <div>, so React keeps the same DOM node when loading ends.
+  const focusNoticeLine = (
+    <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={() => setFocusNotice(null)} />
+  )
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-stone-600">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="space-y-8">
+        {focusNoticeLine}
+        <div className="flex items-center justify-center py-12 text-stone-600">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-8">
+      {focusNoticeLine}
       {/* Section 1 — pending queue (unchanged behavior). */}
       <div className="space-y-3">
         <h3 className="text-base font-semibold text-[#4a5d23]">Awaiting review</h3>
@@ -381,7 +438,7 @@ export function BusinessesTab() {
                       <Leaf className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-stone-800">{item.name}</h4>
+                      <h4 id={`business-title-${item.id}`} className="font-semibold text-stone-800">{item.name}</h4>
                       {item.description && (
                         <p className="mt-0.5 text-sm text-stone-600">{item.description}</p>
                       )}
@@ -465,6 +522,8 @@ export function BusinessesTab() {
                           </label>
                           <Input
                             id={`edit-name-${item.id}`}
+                            // Names the business being edited when this field takes focus (a followed link focuses it).
+                            aria-describedby={`business-title-${item.id}`}
                             value={draft.name}
                             onChange={(e) => setDraftField('name', e.target.value)}
                             placeholder="Business name"
