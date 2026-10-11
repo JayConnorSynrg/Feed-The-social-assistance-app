@@ -74,33 +74,56 @@ function cardBytes(kind: OgCardKind): Promise<Uint8Array<ArrayBuffer>> {
   return bytes
 }
 
+/** A failure's class without its text: a driver or filesystem message can quote the request. */
+function failureCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code
+  if (typeof code === 'string' && code) return code
+  return error instanceof Error ? error.name : 'UnknownError'
+}
+
 /**
  * Answer one preview-image request. `findKind` makes the route's single read of FEED's own database
  * and returns the card kind, or null when the item is hidden, deleted, not approved or unknown (the
  * route's 404, with `notFoundText` as its body).
  *
  * Writes one app_logs row per request: og.image.complete with the surface, the kind and
- * outcome ok | not_found (duration in duration_ms), or og.image.error when the request throws.
+ * outcome ok | not_found (duration in duration_ms), or og.image.error with outcome error when the
+ * request fails. A failed request answers 500 and is never cacheable.
  */
-export function serveOgCard(
+export async function serveOgCard(
   surface: OgSurface,
   notFoundText: string,
   findKind: () => Promise<OgCardKind | null>
 ): Promise<Response> {
-  const attrs: Record<string, string | null> = { surface, kind: null, outcome: 'not_found' }
-  return withMetric('og.image', attrs, async () => {
-    const kind = await findKind()
-    if (!kind) return new Response(notFoundText, { status: 404 })
-    const bytes = await cardBytes(kind)
-    attrs.kind = kind
-    attrs.outcome = 'ok'
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Content-Length': String(bytes.byteLength),
-        'Cache-Control': OG_CARD_CACHE_CONTROL,
-      },
+  // 'error' until the request reaches one of its two answers, so a request that fails part-way is
+  // never recorded as a 404.
+  const attrs: Record<string, string | null> = { surface, kind: null, outcome: 'error' }
+  try {
+    return await withMetric('og.image', attrs, async () => {
+      try {
+        const kind = await findKind()
+        if (!kind) {
+          attrs.outcome = 'not_found'
+          return new Response(notFoundText, { status: 404 })
+        }
+        attrs.kind = kind
+        const bytes = await cardBytes(kind)
+        attrs.outcome = 'ok'
+        return new Response(bytes, {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/png',
+            'Content-Length': String(bytes.byteLength),
+            'Cache-Control': OG_CARD_CACHE_CONTROL,
+          },
+        })
+      } catch (error) {
+        // The persisted row keeps the failure's code and a fixed message, never the raw text.
+        throw Object.assign(new Error('preview image failed'), { code: failureCode(error) })
+      }
     })
-  })
+  } catch {
+    // withMetric has written the og.image.error row.
+    return new Response('Preview image unavailable', { status: 500, headers: { 'Cache-Control': 'no-store' } })
+  }
 }

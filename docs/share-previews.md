@@ -65,6 +65,7 @@ To change the design, or add a kind:
 | a visible post, an approved resource, an approved and active business, an active organization | 200 | the card for its kind, `image/png` |
 | a hidden or deleted post; a pending or rejected resource; a business or organization that is not public | 404 | `Post not found` / `Resource not found` / `Business not found` / `Organization not found` |
 | an id that does not exist | 404 | the same text |
+| any of the above when the read or the card file fails | 500 | `Preview image unavailable`, sent with `Cache-Control: no-store` |
 
 Each handler makes one read of FEED's own database, and asks for the `id` column only — plus
 `post_type` for a post, which picks the card. Nothing else about the item (its text, name, place or
@@ -93,8 +94,9 @@ Two consequences to know:
 
 ## Logging
 
-One `og.image.complete` row per handled request (`surface`, `kind`, `outcome`, duration), or
-`og.image.error` if the handler fails. No id and no text. See
+One `og.image.complete` row per handled request (`surface`, `kind`, `outcome` `ok` or `not_found`,
+duration), or one `og.image.error` row (`outcome` `error`, the failure's code) when the request fails.
+No id and no text, including in the error row: it stores a fixed message, not the raw failure. See
 [`observability.md`](observability.md#share-preview-images).
 
 ## oEmbed

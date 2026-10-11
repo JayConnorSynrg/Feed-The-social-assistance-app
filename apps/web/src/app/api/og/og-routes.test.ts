@@ -396,4 +396,28 @@ describe('share-preview images: the persisted log row', () => {
     expect(ogRows()[0].row).toMatchObject({ event: 'og.image.complete', context: { surface: 'resource', kind: null, outcome: 'not_found' } })
     expect(JSON.stringify(ogRows()[0].row)).not.toContain(ID)
   })
+
+  it.each(SURFACES)('$surface route: a failed read answers 500, uncacheable, and writes one og.image.error row with outcome error', async ({ surface: name, handler, table, kinds, row }) => {
+    seed(table, row(kinds[0], INPUTS[1]))
+    // a driver failure whose message quotes the request and the item's text
+    db.failWith = Object.assign(new Error(`read failed for ${ID}: ${INPUTS[1].text}`), { code: 'ECONNRESET' })
+    const res = await call(handler)
+    expect(res.status).toBe(500)
+    expect(await res.text()).toBe('Preview image unavailable')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('content-type')).not.toBe('image/png')
+    await settled()
+    expect(ogRows()).toHaveLength(1)
+    const { row: logged } = ogRows()[0]
+    expect(logged).toMatchObject({
+      level: 'error',
+      event: 'og.image.error',
+      context: { surface: name, kind: null, outcome: 'error', error_code: 'ECONNRESET', error_message: 'preview image failed' },
+    })
+    expect(typeof logged.duration_ms).toBe('number')
+    const stored = JSON.stringify(logged)
+    expect(stored).not.toContain(ID)
+    expect(stored).not.toContain(INPUTS[1].text.slice(0, 12))
+    expect(attempts).toEqual([])
+  })
 })

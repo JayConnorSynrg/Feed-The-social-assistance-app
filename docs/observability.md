@@ -306,7 +306,7 @@ where created_at > now() - interval '7 days';
 | Event | Labels | Meaning |
 |---|---|---|
 | `og.image.complete` | `surface`, `kind`, `outcome` | one preview-image request. `surface`: `post` · `resource` · `business` · `organization` (which route). `kind`: the card served — `feed` · `resource_post` · `petition` · `seeker_request` · `source_offer` · `event_post` · `poll` · `resource` · `business` · `organization` — or `null` when nothing was served. `outcome`: `ok` (200) · `not_found` (404: hidden, deleted, not approved or unknown). Duration is in `duration_ms`. |
-| `og.image.error` | `surface`, `kind`, `outcome` | the handler threw (the request answers 500); `error_code` names the failure |
+| `og.image.error` | `surface`, `kind`, `outcome` | the request failed and answered 500 (`Cache-Control: no-store`). `outcome` is `error`; `kind` is the card that was being served, or `null` when the failure came before the kind was known. `error_code` names the failure (a driver or system code, or the error's class); `error_message` is always the fixed text `preview image failed`, never the raw failure text, which could quote the request |
 
 No item id and no text from the item is in either row. CDN cache status is not a label: the handler cannot see it, and a handler run is a CDN miss by definition.
 
