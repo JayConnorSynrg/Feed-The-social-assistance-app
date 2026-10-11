@@ -85,6 +85,11 @@ export interface FeedMessagesMessages {
   errNoConversation: string
   errSendMessage: string
   errMarkRead: string
+  // Said to a screen reader once a confirmed action has gone through (the button that opened
+  // the dialog has left the page by then).
+  announceDeclined: string
+  announceWithdrawn: string
+  announceEnded: string
 }
 
 export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
@@ -143,6 +148,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'No conversation selected',
     errSendMessage: 'Failed to send message',
     errMarkRead: 'Failed to mark messages as read',
+    announceDeclined: 'Request declined.',
+    announceWithdrawn: 'Request withdrawn.',
+    announceEnded: 'Conversation ended.',
   },
   es: {
     guestPrompt: 'Crea una cuenta gratuita para enviar mensajes a voluntarios y conectar con tu comunidad',
@@ -199,6 +207,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'No hay ninguna conversación seleccionada',
     errSendMessage: 'No se pudo enviar el mensaje',
     errMarkRead: 'No se pudieron marcar los mensajes como leídos',
+    announceDeclined: 'Solicitud rechazada.',
+    announceWithdrawn: 'Solicitud retirada.',
+    announceEnded: 'Conversación finalizada.',
   },
   // machine-drafted, needs native review
   ht: {
@@ -256,6 +267,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Pa gen konvèsasyon ki chwazi',
     errSendMessage: 'Nou pa t kapab voye mesaj la',
     errMarkRead: 'Nou pa t kapab make mesaj yo kòm li',
+    announceDeclined: 'Demann lan refize.',
+    announceWithdrawn: 'Demann lan retire.',
+    announceEnded: 'Konvèsasyon an fini.',
   },
   vi: {
     guestPrompt: 'Tạo tài khoản miễn phí để nhắn tin cho tình nguyện viên và kết nối với cộng đồng của bạn',
@@ -312,6 +326,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Chưa chọn cuộc trò chuyện nào',
     errSendMessage: 'Không thể gửi tin nhắn',
     errMarkRead: 'Không thể đánh dấu tin nhắn là đã đọc',
+    announceDeclined: 'Đã từ chối yêu cầu.',
+    announceWithdrawn: 'Đã rút lại yêu cầu.',
+    announceEnded: 'Đã kết thúc cuộc trò chuyện.',
   },
   ar: {
     guestPrompt: 'أنشئ حسابًا مجانيًا لتراسل المتطوعين وتتواصل مع مجتمعك',
@@ -368,6 +385,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'لم تُحدَّد أي محادثة',
     errSendMessage: 'تعذّر إرسال الرسالة',
     errMarkRead: 'تعذّر تحديد الرسائل كمقروءة',
+    announceDeclined: 'تم رفض الطلب.',
+    announceWithdrawn: 'تم سحب الطلب.',
+    announceEnded: 'تم إنهاء المحادثة.',
   },
   zh: {
     guestPrompt: '创建免费账户，即可给志愿者发消息并与社区建立联系',
@@ -424,6 +444,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: '未选择对话',
     errSendMessage: '无法发送消息',
     errMarkRead: '无法将消息标记为已读',
+    announceDeclined: '已拒绝请求。',
+    announceWithdrawn: '已撤回请求。',
+    announceEnded: '对话已结束。',
   },
   // machine-drafted, needs native review
   so: {
@@ -481,6 +504,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Wada hadal lama dooran',
     errSendMessage: 'Lama diri karin fariinta',
     errMarkRead: 'Fariimaha laguma calaamadin karin in la akhriyay',
+    announceDeclined: 'Codsiga waa la diiday.',
+    announceWithdrawn: 'Codsiga waa laga noqday.',
+    announceEnded: 'Wada hadalka waa la dhammeeyay.',
   },
   fr: {
     guestPrompt: 'Créez un compte gratuit pour écrire aux bénévoles et échanger avec votre communauté',
@@ -537,6 +563,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Aucune conversation sélectionnée',
     errSendMessage: 'Impossible d’envoyer le message',
     errMarkRead: 'Impossible de marquer les messages comme lus',
+    announceDeclined: 'Demande refusée.',
+    announceWithdrawn: 'Demande retirée.',
+    announceEnded: 'Conversation terminée.',
   },
   pt: {
     guestPrompt: 'Crie uma conta gratuita para enviar mensagens a voluntários e se conectar com a sua comunidade',
@@ -593,6 +622,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Nenhuma conversa selecionada',
     errSendMessage: 'Não foi possível enviar a mensagem',
     errMarkRead: 'Não foi possível marcar as mensagens como lidas',
+    announceDeclined: 'Pedido recusado.',
+    announceWithdrawn: 'Pedido retirado.',
+    announceEnded: 'Conversa encerrada.',
   },
   ru: {
     guestPrompt: 'Создайте бесплатную учётную запись, чтобы писать волонтёрам и общаться с сообществом',
@@ -649,6 +681,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Разговор не выбран',
     errSendMessage: 'Не удалось отправить сообщение',
     errMarkRead: 'Не удалось отметить сообщения как прочитанные',
+    announceDeclined: 'Запрос отклонён.',
+    announceWithdrawn: 'Запрос отозван.',
+    announceEnded: 'Разговор завершён.',
   },
   ko: {
     guestPrompt: '무료 계정을 만들어 자원봉사자에게 메시지를 보내고 커뮤니티와 소통하세요',
@@ -705,6 +740,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: '선택된 대화가 없습니다',
     errSendMessage: '메시지를 보내지 못했습니다',
     errMarkRead: '메시지를 읽음으로 표시하지 못했습니다',
+    announceDeclined: '요청을 거절했습니다.',
+    announceWithdrawn: '요청을 철회했습니다.',
+    announceEnded: '대화를 종료했습니다.',
   },
   tl: {
     guestPrompt: 'Gumawa ng libreng account para makapagmensahe sa mga boluntaryo at makaugnay sa iyong komunidad',
@@ -761,6 +799,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Walang napiling usapan',
     errSendMessage: 'Hindi naipadala ang mensahe',
     errMarkRead: 'Hindi namarkahang nabasa ang mga mensahe',
+    announceDeclined: 'Tinanggihan ang kahilingan.',
+    announceWithdrawn: 'Binawi ang kahilingan.',
+    announceEnded: 'Tinapos ang usapan.',
   },
   // machine-drafted, needs native review
   am: {
@@ -818,6 +859,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'ምንም ውይይት አልተመረጠም',
     errSendMessage: 'መልዕክቱን መላክ አልተቻለም',
     errMarkRead: 'መልዕክቶቹን እንደተነበቡ ምልክት ማድረግ አልተቻለም',
+    announceDeclined: 'ጥያቄው ተቀባይነት አላገኘም።',
+    announceWithdrawn: 'ጥያቄው ተነስቷል።',
+    announceEnded: 'ውይይቱ ተጠናቋል።',
   },
   // machine-drafted, needs native review
   hmn: {
@@ -875,6 +919,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Tsis tau xaiv kev sib tham',
     errSendMessage: 'Xa tsis tau cov lus',
     errMarkRead: 'Cim tsis tau tias cov lus raug nyeem lawm',
+    announceDeclined: 'Tsis txais qhov kev thov lawm.',
+    announceWithdrawn: 'Thim qhov kev thov lawm.',
+    announceEnded: 'Kev sib tham xaus lawm.',
   },
 }
 

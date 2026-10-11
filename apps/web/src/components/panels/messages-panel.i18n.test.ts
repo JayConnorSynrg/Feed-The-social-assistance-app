@@ -14,7 +14,9 @@
 //   - a member's own words are never handed to a translation function;
 //   - loading says so to a screen reader, a failure is an alert, the confirm dialog has a
 //     description, a translated close label, and returns focus to the button that opened it;
-//   - Accept accepts and Decline asks first (the handlers are wired to the right buttons).
+//   - Accept accepts and Decline asks first (the handlers are wired to the right buttons);
+//   - after a confirmed decline, withdraw or end, focus moves to the thread heading (the inbox
+//     heading when no thread is open) and a status region says what happened, in 14 locales.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createElement as h, isValidElement } from 'react'
@@ -162,7 +164,7 @@ describe('member-written text', () => {
   it('a message body and a name keep their direction and take no page language', () => {
     const out = html('en')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">مرحبا، كيف أساعد؟</p>')
-    expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">مريم</p>')
+    expect(out).toContain('<p tabindex="-1" lang="" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">مريم</p>')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
   })
 
@@ -171,7 +173,7 @@ describe('member-written text', () => {
     const out = html('es', { messages: [msg({ content: 'Failed to send message' })], conversations: [conv({ counterpartyDisplayName: 'pending' })] })
     expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">Failed to send message</p>')
     expect(out).not.toContain('No se pudo enviar el mensaje')
-    expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">pending</p>')
+    expect(out).toContain('<p tabindex="-1" lang="" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">pending</p>')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">pending</p>')
     expect(out).not.toMatch(/>pendiente<\/p>/)
   })
@@ -191,7 +193,7 @@ describe('member-written text', () => {
 
   it('with no name, the fallback word is FEED’s own text in the member language (no lang="")', () => {
     const out = html('ru', { conversations: [conv({ counterpartyDisplayName: null, volunteer: null })] })
-    expect(out).toContain('<p dir="auto" class="font-medium text-stone-800 text-sm">Пользователь</p>')
+    expect(out).toContain('<p tabindex="-1" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">Пользователь</p>')
     expect(out).toContain('<p dir="auto" class="text-sm font-medium text-stone-800 truncate">Пользователь</p>')
   })
 })
@@ -259,7 +261,9 @@ describe('loading', () => {
     expect(out).toContain('En cours (1)')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
     expect(out).not.toContain('Chargement')
-    expect(out).not.toContain('role="status"')
+    // No loading status; the one status region left is the (empty) action result line.
+    expect(out.match(/role="status"/g)).toHaveLength(1)
+    expect(out).toContain('<p role="status" aria-live="polite" data-testid="messages-action-status" class="sr-only"></p>')
   })
 
   it('the review check on a completed conversation says so too', () => {
@@ -435,6 +439,133 @@ describe('the buttons do what they say', () => {
     ;(confirm.props.onClick as () => void)()
     expect(h0[method]).toHaveBeenCalledWith('c1')
     for (const m of methods.filter((x) => x !== method)) expect(h0[m], m).not.toHaveBeenCalled()
+  })
+})
+
+describe('after a confirmed action the opener is gone: focus moves to something that stays, then the result is said', () => {
+  const pendingAsVolunteer = { status: 'pending', volunteer_id: 'me', requester_id: 'r' }
+  const CASES = [
+    ['decline', 'decline', 'confirmDecline', pendingAsVolunteer, 'declined', 'announceDeclined'],
+    ['withdraw', 'withdraw', 'confirmWithdraw', { status: 'pending' }, 'cancelled', 'announceWithdrawn'],
+    ['end', 'endAndReview', 'endAndReview', { status: 'active', volunteer_id: 'me', requester_id: 'r' }, 'completed', 'announceEnded'],
+  ] as const
+  type Case = (typeof CASES)[number]
+
+  /** Open the confirm dialog from a button, confirm, and hand back what the test steers. */
+  function confirmed(language: Locale, [, openKey, , over]: Case, hookOver: Record<string, unknown> = {}) {
+    state.language = language
+    state.hook = hook({ conversations: [conv(over)], ...hookOver })
+    const opener = { isConnected: true, focus: vi.fn() }
+    const c = mount(() => MessagesPanel())
+    const label = messagesT(language, openKey)
+    const button = (findAll(c.tree(), (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === label) as El[])[0]
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    const content = (findAll(c.rerender(), (e: El) => e.type === DialogContent) as El[])[0]
+    ;((findAll(content, (e: El) => e.props['data-testid'] === 'confirm-end-btn') as El[])[0].props.onClick as () => void)()
+    // The two elements focus can go to: the thread heading and the inbox heading.
+    const refs: Array<{ current: unknown }> = []
+    const target = (el: El) => {
+      const focus = vi.fn()
+      const ref = el.props.ref as { current: unknown }
+      ref.current = { focus }
+      refs.push(ref)
+      return focus
+    }
+    const tree = c.rerender()
+    const threadName = target((findAll(tree, (e: El) => e.type === 'p' && e.props.tabIndex === -1) as El[])[0])
+    const inboxHeading = target((findAll(tree, (e: El) => e.type === 'h2' && e.props.tabIndex === -1) as El[])[0])
+    /** What React does when the thread leaves the page: its ref is emptied. */
+    const threadUnmounts = () => void (refs[0].current = null)
+    const said = () => textOf((findAll(c.tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0])
+    /** What the hook shows next. */
+    const hookShows = (status: string, more: Record<string, unknown> = {}) => {
+      state.hook = hook({ conversations: [conv({ ...over, status })], ...hookOver, ...more })
+      c.rerender()
+    }
+    return { c, opener, threadName, inboxHeading, said, hookShows, threadUnmounts }
+  }
+
+  it('the status region is on the page from the start, polite and empty', () => {
+    const region = (findAll(mount(() => { state.language = 'en'; state.hook = hook(); return MessagesPanel() }).tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0]
+    expect(region.props.role).toBe('status')
+    expect(region.props['aria-live']).toBe('polite')
+    expect(region.props.className).toBe('sr-only')
+    expect(textOf(region)).toBe('')
+  })
+
+  describe.each(CASES)('%s', (...testCase) => {
+    const [, , , over, newStatus, saysKey] = testCase
+
+    it.each(LOCALES)('%s: once the conversation shows its new status, focus is on the thread heading and the result is said', (locale) => {
+      const a = confirmed(locale, testCase)
+      // Still loading, old status: nothing yet.
+      a.hookShows(over.status, { isLoading: true })
+      expect(a.said()).toBe('')
+      expect(a.threadName).not.toHaveBeenCalled()
+      // The new status arrives and the opener has left the page.
+      a.opener.isConnected = false
+      a.hookShows(newStatus)
+      expect(a.threadName).toHaveBeenCalledTimes(1)
+      expect(a.inboxHeading).not.toHaveBeenCalled()
+      expect(a.opener.focus).not.toHaveBeenCalled()
+      expect(a.said()).toBe(messagesT(locale, saysKey))
+      if (locale !== 'en') expect(a.said()).not.toBe(messagesT('en', saysKey))
+      // Said once: a later render does not move focus again.
+      a.hookShows(newStatus)
+      expect(a.threadName).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('the three results are three different sentences in every locale', () => {
+    for (const locale of LOCALES) expect(new Set(CASES.map((c) => messagesT(locale, c[5]))).size, locale).toBe(3)
+  })
+
+  it('a button that is still on the page keeps the focus; the result is still said', () => {
+    const a = confirmed('es', CASES[0])
+    a.hookShows('declined')
+    expect(a.threadName).not.toHaveBeenCalled()
+    expect(a.said()).toBe('Solicitud rechazada.')
+  })
+
+  it('with no thread open, focus goes to the inbox heading', () => {
+    const a = confirmed('en', CASES[1])
+    a.opener.isConnected = false
+    a.threadUnmounts()
+    state.hook = hook({ conversations: [conv({ status: 'cancelled' })], selectedConversationId: null })
+    a.c.rerender()
+    expect(a.inboxHeading).toHaveBeenCalledTimes(1)
+    expect(a.threadName).not.toHaveBeenCalled()
+    expect(a.said()).toBe('Request withdrawn.')
+  })
+
+  it('a failure says nothing here (the alert banner speaks) and moves no focus, even if the status changes later', () => {
+    const a = confirmed('en', CASES[0])
+    a.opener.isConnected = false
+    a.hookShows('pending', { isLoading: true })
+    a.hookShows('pending', { error: 'Failed to decline request' })
+    expect(a.said()).toBe('')
+    expect(a.threadName).not.toHaveBeenCalled()
+    a.hookShows('declined')
+    expect(a.said()).toBe('')
+    expect(a.threadName).not.toHaveBeenCalled()
+  })
+
+  it('opening the next confirmation empties the region, so the same sentence is spoken again', () => {
+    const a = confirmed('en', CASES[1])
+    a.hookShows('cancelled')
+    expect(a.said()).toBe('Request withdrawn.')
+    state.hook = hook({ conversations: [conv({ status: 'pending' })] })
+    const tree = a.c.rerender()
+    const button = (findAll(tree, (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === 'Withdraw') as El[])[0]
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: a.opener })
+    a.c.rerender()
+    expect(a.said()).toBe('')
+  })
+
+  it('both focus targets take focus by script only and show a ring', () => {
+    const out = html('en')
+    expect(out).toMatch(/<h2 tabindex="-1" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
+    expect(out).toMatch(/<p tabindex="-1" lang="" dir="auto" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
   })
 })
 

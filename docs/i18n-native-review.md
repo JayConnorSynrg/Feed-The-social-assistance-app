@@ -490,6 +490,9 @@ step in that test, and the test fails until the list below is regenerated.
 | `errNoConversation` | ht | No conversation selected | Pa gen konvèsasyon ki chwazi | 2026-10-11 | machine-drafted, needs native review |
 | `errSendMessage` | ht | Failed to send message | Nou pa t kapab voye mesaj la | 2026-10-11 | machine-drafted, needs native review |
 | `errMarkRead` | ht | Failed to mark messages as read | Nou pa t kapab make mesaj yo kòm li | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | ht | Request declined. | Demann lan refize. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | ht | Request withdrawn. | Demann lan retire. | 2026-10-11 | machine-drafted, needs native review |
+| `announceEnded` | ht | Conversation ended. | Konvèsasyon an fini. | 2026-10-11 | machine-drafted, needs native review |
 | `guestPrompt` | so | Create a free account to message volunteers and connect with your community | Samee akoon bilaash ah si aad fariin ugu dirto tabaruceyaasha oo aad ula xiriirto bulshadaada | 2026-10-11 | machine-drafted, needs native review |
 | `emptyTitle` | so | No messages yet | Weli fariimo ma jiraan | 2026-10-11 | machine-drafted, needs native review |
 | `emptyBody` | so | Volunteer resources on the map have a Message button. Send a request to start a conversation. | Agabka tabaruceyaasha ee khariidadda ku yaal waxay leeyihiin badhan Fariin ah. Dir codsi si aad wada hadal u bilowdo. | 2026-10-11 | machine-drafted, needs native review |
@@ -544,6 +547,9 @@ step in that test, and the test fails until the list below is regenerated.
 | `errNoConversation` | so | No conversation selected | Wada hadal lama dooran | 2026-10-11 | machine-drafted, needs native review |
 | `errSendMessage` | so | Failed to send message | Lama diri karin fariinta | 2026-10-11 | machine-drafted, needs native review |
 | `errMarkRead` | so | Failed to mark messages as read | Fariimaha laguma calaamadin karin in la akhriyay | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | so | Request declined. | Codsiga waa la diiday. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | so | Request withdrawn. | Codsiga waa laga noqday. | 2026-10-11 | machine-drafted, needs native review |
+| `announceEnded` | so | Conversation ended. | Wada hadalka waa la dhammeeyay. | 2026-10-11 | machine-drafted, needs native review |
 | `guestPrompt` | am | Create a free account to message volunteers and connect with your community | ለበጎ ፈቃደኞች መልዕክት ለመላክ እና ከማኅበረሰብዎ ጋር ለመገናኘት ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
 | `emptyTitle` | am | No messages yet | እስካሁን ምንም መልዕክት የለም | 2026-10-11 | machine-drafted, needs native review |
 | `emptyBody` | am | Volunteer resources on the map have a Message button. Send a request to start a conversation. | በካርታው ላይ ያሉ የበጎ ፈቃደኞች ግብዓቶች የመልዕክት አዝራር አላቸው። ውይይት ለመጀመር ጥያቄ ይላኩ። | 2026-10-11 | machine-drafted, needs native review |
@@ -598,6 +604,9 @@ step in that test, and the test fails until the list below is regenerated.
 | `errNoConversation` | am | No conversation selected | ምንም ውይይት አልተመረጠም | 2026-10-11 | machine-drafted, needs native review |
 | `errSendMessage` | am | Failed to send message | መልዕክቱን መላክ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
 | `errMarkRead` | am | Failed to mark messages as read | መልዕክቶቹን እንደተነበቡ ምልክት ማድረግ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | am | Request declined. | ጥያቄው ተቀባይነት አላገኘም። | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | am | Request withdrawn. | ጥያቄው ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceEnded` | am | Conversation ended. | ውይይቱ ተጠናቋል። | 2026-10-11 | machine-drafted, needs native review |
 | `guestPrompt` | hmn | Create a free account to message volunteers and connect with your community | Tsim ib tus account dawb los xa lus rau cov neeg pab dawb thiab txuas nrog koj lub zej zog | 2026-10-11 | machine-drafted, needs native review |
 | `emptyTitle` | hmn | No messages yet | Tseem tsis tau muaj lus | 2026-10-11 | machine-drafted, needs native review |
 | `emptyBody` | hmn | Volunteer resources on the map have a Message button. Send a request to start a conversation. | Cov neeg pab dawb li kev pab hauv daim ntawv qhia chaw muaj ib lub khawm Xa Lus. Xa ib qho kev thov los pib sib tham. | 2026-10-11 | machine-drafted, needs native review |
@@ -652,6 +661,9 @@ step in that test, and the test fails until the list below is regenerated.
 | `errNoConversation` | hmn | No conversation selected | Tsis tau xaiv kev sib tham | 2026-10-11 | machine-drafted, needs native review |
 | `errSendMessage` | hmn | Failed to send message | Xa tsis tau cov lus | 2026-10-11 | machine-drafted, needs native review |
 | `errMarkRead` | hmn | Failed to mark messages as read | Cim tsis tau tias cov lus raug nyeem lawm | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | hmn | Request declined. | Tsis txais qhov kev thov lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | hmn | Request withdrawn. | Thim qhov kev thov lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceEnded` | hmn | Conversation ended. | Kev sib tham xaus lawm. | 2026-10-11 | machine-drafted, needs native review |
 
 ### `lib/i18n-feed-organizations.ts`
 

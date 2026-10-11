@@ -5,6 +5,11 @@
 // portal — carries that language and its direction. Names and message bodies are shown as written
 // (dir="auto", no page language). What is still English is marked English: the rating display,
 // and a failure whose text came from the server.
+//
+// A confirmed decline, withdraw or end removes the button that opened the dialog (it belonged to
+// the conversation's old status). Once the conversation shows its new status, focus moves to the
+// thread heading — the other member's name; the inbox heading when no thread is open — and a
+// polite status region says what happened.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
@@ -43,12 +48,22 @@ import { formatClock, formatCount, formatDate } from '@/lib/i18n-intl'
 import { browserTimeZone } from '@/lib/event-time'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { cardT } from '@/lib/i18n-feed-card'
-import { conversationError, conversationStatusLabel, isConversationStatus, messagesT } from '@/lib/i18n-feed-messages'
+import { conversationError, conversationStatusLabel, isConversationStatus, messagesT, type FeedMessagesMessages } from '@/lib/i18n-feed-messages'
 import { resourceCategoryLabel, resourceCategoryMessages } from '@/lib/i18n-resource-categories'
 
 /** A stored value FEED has no label for is shown as stored, which is English: mark it so. */
 const englishIfUnlabelled = (labelled: boolean) => (labelled ? undefined : 'en')
 const isResourceCategory = (category: string) => Object.prototype.hasOwnProperty.call(resourceCategoryMessages.en, category)
+
+type ConfirmType = 'decline' | 'withdraw' | 'cancel' | 'complete'
+/** The status a confirmed action leaves the conversation in, and what is said once it has it. */
+const CONFIRMED_OUTCOME: Partial<Record<ConfirmType, { status: string; says: keyof FeedMessagesMessages }>> = {
+  decline: { status: 'declined', says: 'announceDeclined' },
+  withdraw: { status: 'cancelled', says: 'announceWithdrawn' },
+  complete: { status: 'completed', says: 'announceEnded' },
+}
+/** Something that takes focus by script only: no tab stop, and a ring a keyboard user can see. */
+const FOCUS_TARGET = 'rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
 
 export function MessagesPanel() {
   const { user, isAnonymous } = useAuth()
@@ -78,14 +93,40 @@ export function MessagesPanel() {
 
   const [messageInput, setMessageInput] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel' | 'complete'; id: string } | null
+  type ConfirmAction = { type: ConfirmType; id: string } | null
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   // The button that opened the confirm dialog: focus returns to it when the dialog closes.
   const confirmOpenerRef = useRef<HTMLElement | null>(null)
+  // The confirmed action whose result has not shown yet, and what the status region says.
+  const awaitedOutcomeRef = useRef<{ type: ConfirmType; id: string; sawLoading: boolean } | null>(null)
+  const [announcement, setAnnouncement] = useState('')
+  const threadNameRef = useRef<HTMLParagraphElement>(null)
+  const inboxHeadingRef = useRef<HTMLHeadingElement>(null)
   const openConfirm = (action: NonNullable<ConfirmAction>, opener: HTMLElement) => {
     confirmOpenerRef.current = opener
+    // Empty again, so the same sentence is spoken the next time it is written.
+    setAnnouncement('')
     setConfirmAction(action)
   }
+
+  // The hook reports no result: the conversation taking its new status is the success. Then the
+  // opener is gone (it belonged to the old status), so focus goes to something that stays and the
+  // status region says what happened. A load that ends without the new status was a failure; the
+  // alert banner speaks for it.
+  useEffect(() => {
+    const awaited = awaitedOutcomeRef.current
+    if (!awaited) return
+    const outcome = CONFIRMED_OUTCOME[awaited.type]
+    const status = conversations.find((c) => c.id === awaited.id)?.status
+    if (outcome && status === outcome.status) {
+      awaitedOutcomeRef.current = null
+      if (!confirmOpenerRef.current?.isConnected) (threadNameRef.current ?? inboxHeadingRef.current)?.focus()
+      setAnnouncement(messagesT(locale, outcome.says))
+      return
+    }
+    if (isLoading) awaited.sawLoading = true
+    else if (awaited.sawLoading) awaitedOutcomeRef.current = null
+  }, [conversations, isLoading, locale])
 
   // Review state for the selected completed conversation
   const [myReview, setMyReview] = useState<ReviewRow | null | undefined>(undefined) // undefined = not yet fetched
@@ -204,8 +245,8 @@ export function MessagesPanel() {
       {/* ── Left: Conversation List ── */}
       <div className={`${selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-shrink-0 flex-col border-e border-stone-200/50 overflow-y-auto`}>
         <div className="p-4 border-b border-stone-200/50">
-          <h2 className="font-semibold text-stone-800 flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
+          <h2 ref={inboxHeadingRef} tabIndex={-1} className={`font-semibold text-stone-800 flex items-center gap-2 ${FOCUS_TARGET}`}>
+            <MessageSquare className="w-5 h-5" aria-hidden="true" />
             {messagesT(locale, 'title')}
           </h2>
         </div>
@@ -320,7 +361,7 @@ export function MessagesPanel() {
                 <ArrowLeft className="w-5 h-5 rtl:rotate-180" aria-hidden="true" />
               </button>
               <div className="flex-1">
-                <p lang={otherUserLang} dir="auto" className="font-medium text-stone-800 text-sm">{otherUserName}</p>
+                <p ref={threadNameRef} tabIndex={-1} lang={otherUserLang} dir="auto" className={`font-medium text-stone-800 text-sm ${FOCUS_TARGET}`}>{otherUserName}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge
                     lang={englishIfUnlabelled(isConversationStatus(selectedConv.status))}
@@ -500,6 +541,10 @@ export function MessagesPanel() {
         )}
       </div>
 
+      {/* What a confirmed action did, for a screen reader. Always on the page, so the text
+          arriving in it is what gets spoken. */}
+      <p role="status" aria-live="polite" data-testid="messages-action-status" className="sr-only">{announcement}</p>
+
       {/* Error display */}
       {failure && (
         /* The hook's own sentences read in the member's language; the server's text is English. */
@@ -556,6 +601,7 @@ export function MessagesPanel() {
               className={confirmAction?.type === 'complete' ? 'bg-lime-700 hover:bg-lime-800 text-white' : ''}
               onClick={() => {
                 if (!confirmAction) return
+                awaitedOutcomeRef.current = { ...confirmAction, sawLoading: false }
                 if (confirmAction.type === 'decline') declineRequest(confirmAction.id)
                 else if (confirmAction.type === 'withdraw') withdrawRequest(confirmAction.id)
                 else if (confirmAction.type === 'cancel') cancelConversation(confirmAction.id)
