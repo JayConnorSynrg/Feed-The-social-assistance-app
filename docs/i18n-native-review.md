@@ -10,7 +10,8 @@ This list starts with Release 3.5. It itemises, string by string:
 - the four Community sub-tab dictionaries: `lib/i18n-feed-organizations.ts`,
   `lib/i18n-feed-petitions.ts`, `lib/i18n-feed-messages.ts`, `lib/i18n-feed-businesses.ts`;
 - the feed card dictionaries written after them, each as it lands: `lib/i18n-feed-photo.ts`
-  (photo picker);
+  (photo picker), `lib/i18n-feed-follows.ts` (follow errors), `lib/i18n-friendly-error.ts` (the
+  two general failure sentences);
 - the hand-written time words in `lib/i18n-intl.ts` (months, weekdays, day periods, "5 minutes
   ago", "In 3 days") for `ht`, `hmn` and `so`;
 - the Arabic petition strings that say "confirmed signature of support" (`مؤكَّد`), listed as a
@@ -433,6 +434,35 @@ step in that test, and the test fails until the list below is regenerated.
 | `emptyAddFirst` | hmn | Be the first to add one. | Koj ua thawj tus ntxiv ib lub. | 2026-10-11 | machine-drafted, needs native review |
 | `loadFailed` | hmn | Failed to load businesses | Thauj tsis tau cov lag luam | 2026-10-11 | machine-drafted, needs native review |
 | `uploadFailed` | hmn | Upload failed. Please try again. | Xa daim duab tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-feed-follows.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `errLoadTimeout` | ht | Follows data timed out — please check your connection and retry. | Chajman moun w ap swiv yo pran twòp tan. Tanpri verifye koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadFailed` | ht | Couldn't load follows. Please try again. | Nou pa kapab chaje moun w ap swiv yo. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToFollow` | ht | You must be signed in to follow someone. | Ou dwe konekte pou w swiv yon moun. | 2026-10-11 | machine-drafted, needs native review |
+| `errFollowFailed` | ht | Couldn't follow. Please try again. | Nou pa kapab swiv moun sa a. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToUnfollow` | ht | You must be signed in to unfollow someone. | Ou dwe konekte pou w sispann swiv yon moun. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnfollowFailed` | ht | Couldn't unfollow. Please try again. | Nou pa kapab sispann swiv moun sa a. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadTimeout` | so | Follows data timed out — please check your connection and retry. | Soo dejinta dadka aad raacdo way daahday. Fadlan hubi xiriirkaaga oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadFailed` | so | Couldn't load follows. Please try again. | Lama soo dejin karin dadka aad raacdo. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToFollow` | so | You must be signed in to follow someone. | Waa inaad soo gashaa si aad qof u raacdo. | 2026-10-11 | machine-drafted, needs native review |
+| `errFollowFailed` | so | Couldn't follow. Please try again. | Lama raaci karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToUnfollow` | so | You must be signed in to unfollow someone. | Waa inaad soo gashaa si aad qof uga hartid raacitaankiisa. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnfollowFailed` | so | Couldn't unfollow. Please try again. | Raacitaanka lama joojin karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadTimeout` | am | Follows data timed out — please check your connection and retry. | የሚከተሏቸውን መጫን ጊዜ ወሰደ። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadFailed` | am | Couldn't load follows. Please try again. | የሚከተሏቸውን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToFollow` | am | You must be signed in to follow someone. | ሰውን ለመከተል መግባት አለብዎት። | 2026-10-11 | machine-drafted, needs native review |
+| `errFollowFailed` | am | Couldn't follow. Please try again. | መከተል አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToUnfollow` | am | You must be signed in to unfollow someone. | መከተል ለማቆም መግባት አለብዎት። | 2026-10-11 | machine-drafted, needs native review |
+| `errUnfollowFailed` | am | Couldn't unfollow. Please try again. | መከተል ማቆም አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadTimeout` | hmn | Follows data timed out — please check your connection and retry. | Kev thauj cov neeg koj raws siv sijhawm ntev dhau. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadFailed` | hmn | Couldn't load follows. Please try again. | Thauj tsis tau cov neeg koj raws. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToFollow` | hmn | You must be signed in to follow someone. | Koj yuav tsum nkag mus ua ntej thiaj raws tau ib tug neeg. | 2026-10-11 | machine-drafted, needs native review |
+| `errFollowFailed` | hmn | Couldn't follow. Please try again. | Raws tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToUnfollow` | hmn | You must be signed in to unfollow someone. | Koj yuav tsum nkag mus ua ntej thiaj tso tseg raws tau ib tug neeg. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnfollowFailed` | hmn | Couldn't unfollow. Please try again. | Tso tseg raws tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
 
 ### `lib/i18n-feed-messages.ts`
 
@@ -912,6 +942,19 @@ step in that test, and the test fails until the list below is regenerated.
 | `errProcess` | hmn | Could not process that image. Please try another. | Ua tsis tau daim duab ntawd. Thov sim lwm daim. | 2026-10-11 | machine-drafted, needs native review |
 | `errTooLarge` | hmn | Image exceeds the {mb}MB limit. | Daim duab loj tshaj qhov txwv {mb} MB. | 2026-10-11 | machine-drafted, needs native review |
 | `errAccountRequired` | hmn | Create a free account to attach a photo. | Tsim ib tus account dawb los txuas ib daim duab. | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-friendly-error.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `permission` | ht | You don't have permission to view this right now. Please try again or contact support. | Ou pa gen pèmisyon pou wè sa kounye a. Tanpri eseye ankò oswa kontakte sipò. | 2026-10-11 | machine-drafted, needs native review |
+| `connection` | ht | We're having trouble connecting. Please check your connection and try again. | Nou gen pwoblèm pou konekte. Tanpri verifye koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `permission` | so | You don't have permission to view this right now. Please try again or contact support. | Hadda ma haysatid oggolaansho aad ku aragto tan. Fadlan mar kale isku day ama la xiriir taageerada. | 2026-10-11 | machine-drafted, needs native review |
+| `connection` | so | We're having trouble connecting. Please check your connection and try again. | Waxaa naga jira dhibaato isku xirka ah. Fadlan hubi xiriirkaaga oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `permission` | am | You don't have permission to view this right now. Please try again or contact support. | ይህን አሁን ለማየት ፈቃድ የለዎትም። እባክዎ እንደገና ይሞክሩ ወይም ድጋፍን ያግኙ። | 2026-10-11 | machine-drafted, needs native review |
+| `connection` | am | We're having trouble connecting. Please check your connection and try again. | ለመገናኘት ችግር አጋጥሞናል። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
+| `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
 
 <!-- END GENERATED -->
 

@@ -2,7 +2,7 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // The Release 3.5 dictionaries: one per Community sub-tab, and one per part of the feed card
-// translated after them (photo picker, …). For each:
+// translated after them (photo picker, follow errors, …). For each:
 //   - parity: exactly the 14 locales, the English key set, no empty value, the English
 //     {placeholders}, and translated (a locale is not a copy of English);
 //   - its reader falls back to English for a missing or empty value and writes one
@@ -21,6 +21,8 @@ import { feedPetitionsMessages, petitionsT } from './i18n-feed-petitions'
 import { feedMessagesMessages, messagesT } from './i18n-feed-messages'
 import { businessesT, feedBusinessesMessages } from './i18n-feed-businesses'
 import { feedPhotoMessages, photoT } from './i18n-feed-photo'
+import { feedFollowsMessages, followsT } from './i18n-feed-follows'
+import { friendlyErrorMessages, friendlyErrorT } from './i18n-friendly-error'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
@@ -32,6 +34,8 @@ const DICTS: Array<[name: string, dict: Record<Locale, object>, reader: Reader]>
   ['messages', feedMessagesMessages, messagesT as Reader],
   ['businesses', feedBusinessesMessages, businessesT as Reader],
   ['photo picker', feedPhotoMessages, photoT as Reader],
+  ['follow errors', feedFollowsMessages, followsT as Reader],
+  ['general errors', friendlyErrorMessages, friendlyErrorT as Reader],
 ]
 
 // The same word in a language (a brand, a loanword, a format) may equal English.

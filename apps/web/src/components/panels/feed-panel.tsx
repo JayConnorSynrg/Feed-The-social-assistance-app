@@ -49,6 +49,7 @@ import { ReportDialog } from '@/components/feed/report-dialog'
 import { loadFeedRow } from '@/components/feed/post-edit-data'
 import type { ActionViewer, PostMenuItemId } from '@/components/feed/post-actions'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
+import { FollowErrorBanner } from '@/components/feed/follow-error-banner'
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
@@ -2039,18 +2040,8 @@ export function FeedPanel() {
           )}
 
 
-          {/* Follow/unfollow error banner */}
-          {followError && (
-            <div
-              role="alert"
-              /* Not translated yet (Release 3: use-follows messages): marked English. */
-              lang="en"
-              dir="ltr"
-              className="mx-2 mt-1 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
-            >
-              {followError}
-            </div>
-          )}
+          {/* Follow/unfollow error banner: the hook's sentence, in the member's language. */}
+          {followError && <FollowErrorBanner error={followError} locale={locale} />}
 
           {/* Safety alerts strip — active alerts (expires_at > now), max 5.
               Tap any card to navigate to the map panel for full details + voting. */}
