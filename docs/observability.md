@@ -77,7 +77,7 @@ The registry was sourced from every static event name in `apps/web/src` (logger,
 
 ## Uncaught errors (I5)
 
-- **Server**: `src/instrumentation.ts` exports `onRequestError`. Next.js calls it once per uncaught server error; it writes one `request.error` row with `request_id`, the route **pattern** (`/profile/[username]`, never the concrete URL), `route_type`, `method`, the Next.js `digest`, and `error_code`. The raw message is not persisted.
+- **Server**: `src/instrumentation.ts` exports `onRequestError`. Next.js calls it once per uncaught server error; it writes one `request.error` row with `request_id`, the route **pattern** (`/s/post/[id]`, never the concrete URL), `route_type`, `method`, the Next.js `digest`, and `error_code`. The raw message is not persisted.
 - **Client**: `app/error.tsx` (`app.error.boundary`), `app/(admin)/error.tsx` (`admin.error.boundary`), `app/global-error.tsx` (`global-error.boundary`) and the panel `PanelErrorBoundary` in `app/page.tsx` (`panel.error.boundary`) each persist one error row. `src/lib/client-error-capture.ts`, installed once in `app/providers.tsx`, records window `error` (`client.window.error`) and `unhandledrejection` (`client.unhandled_rejection`), de-duplicated (same message at most once per 60 s, at most 20 per page session; `AbortError` rejections skipped).
 
 ## Retention (I6)
