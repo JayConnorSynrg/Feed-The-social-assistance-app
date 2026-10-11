@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import { Heart, MessageCircle } from 'lucide-react'
@@ -6,24 +7,35 @@ import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
+import { ogLocaleForLang } from '@/lib/og-locale'
 
 interface Props {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params
+/**
+ * The one read of the shared post. React `cache` keys it by id for the length of a request, so
+ * generateMetadata and the page below share a single database round trip.
+ *
+ * Explicit column list (omits posts.location — W1.3 V1b column-privacy gate): this anon-facing SSR
+ * read must never select('*') on posts. Author columns are the safe public ones only (PII hardening:
+ * no venmo/paypal in the FK join).
+ */
+const readSharedPost = cache(async (id: string) => {
   const supabase = await createClient()
-  const appUrl = await getAppUrlFromHeaders()
-
-  // Explicit column list (omits posts.location — W1.3 V1b column-privacy gate):
-  // this anon-facing SSR read must never select('*') on posts.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, user:profiles!posts_user_id_fkey(first_name, username)')
+    .select('id, content, lang, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
+  return post
+})
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const appUrl = await getAppUrlFromHeaders()
+  const post = await readSharedPost(id)
 
   if (!post) {
     return { title: 'Post Not Found - FEED' }
@@ -37,6 +49,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const canonicalUrl = `${appUrl}/s/post/${id}`
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(`${appUrl}/s/embed/${id}`)}`
+  // og:locale from the post's own language; left out when the post has none or no valid value exists.
+  const ogLocale = ogLocaleForLang(post.lang)
 
   return {
     title: `${authorName} on FEED`,
@@ -47,6 +61,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       siteName: 'FEED',
       url: canonicalUrl,
+      ...(ogLocale ? { locale: ogLocale } : {}),
       images: [
         {
           url: `${appUrl}/api/og/post/${id}`,
@@ -74,14 +89,7 @@ export default async function SharedPostPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join).
-  // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
-  const { data: post } = await supabase
-    .from('posts')
-    .select('id, content, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
-    .eq('id', id)
-    .eq('is_hidden', false)
-    .single()
+  const post = await readSharedPost(id)
 
   if (!post) notFound()
 

@@ -14,6 +14,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
+import { ogLocaleForLang } from '@/lib/og-locale'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { data: post } = await supabase
     .from('posts')
     // Use explicit FK hint to avoid PGRST201 ambiguity (posts has 2 FK paths to profiles)
-    .select('content, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username)')
+    .select('content, lang, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -67,6 +68,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const canonicalUrl = `${appUrl}/s/embed/${id}`
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(canonicalUrl)}`
+  // og:locale from the post's own language; left out when the post has none or no valid value exists.
+  const ogLocale = ogLocaleForLang(post.lang)
 
   return {
     title,
@@ -77,6 +80,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       siteName: 'FEED',
       url: canonicalUrl,
+      ...(ogLocale ? { locale: ogLocale } : {}),
       images: [
         {
           url: `${appUrl}/api/og/post/${id}`,
