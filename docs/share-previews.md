@@ -122,17 +122,23 @@ No id and no text, including in the error row: it stores a fixed message, not th
 
 ## Member text on the share pages
 
-The share pages' own chrome is English, so what a member wrote is marked up to keep its language and
-direction:
+The share pages' own chrome is English and the page is `lang="en"`. Text with no `lang` attribute
+inherits that, so everything a member wrote says what it is:
 
-- **The post's text** (`/s/post` body, `/s/embed` body) carries `lang` from `posts.lang` when the post
-  has one, and `dir="auto"`, so a screen reader picks the right voice and right-to-left text is laid
-  out right-to-left.
-- **Names and titles that are not the post's text** — the author's name, a petition's title and
-  summary, a linked resource's name — carry `dir="auto"` only. They are not written in "the post's
-  language", and a wrong `lang` is worse than none.
+- **The post's text** (`/s/post` body, `/s/embed` body) carries `lang` from `posts.lang` — the
+  author's app language when they posted, the best signal there is, not a detected language — and
+  `lang=""` (unknown) when the post has none. It also carries `dir="auto"`, so right-to-left text is
+  laid out right-to-left.
+- **A petition's title and summary and a linked resource's name** have no recorded language and are
+  not the post's text: `lang=""` and `dir="auto"`, never the post's language. (When a petition is
+  not approved the widget shows the post's own text instead, with the post's language.)
+- **The author's name** carries `dir="auto"` only.
 - **A post's photo** on `/s/post` is described by the author's own description (`posts.image_alt`)
-  when there is one, and by "Post image" otherwise.
+  when there is one; its wrapper then carries the post's language (or `lang=""`). Otherwise the
+  description is the page's own "Post image" and no language is set.
+
+Neither page shows a hidden post (404), and neither the widget nor oEmbed shows the title or summary
+of a petition that is not approved.
 
 `/s/post` and `/s/embed` each read their post once per request: the metadata and the page share one
 cached reader (and `/s/embed` one cached petition reader), which send one identical query.

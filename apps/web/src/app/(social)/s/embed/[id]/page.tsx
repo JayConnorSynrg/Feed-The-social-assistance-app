@@ -134,10 +134,14 @@ export default async function EmbedWidgetPage({ params }: Props) {
 
   if (!post) notFound()
 
-  // The post's own text is marked with the language it was written in (posts.lang) and takes its
-  // direction from its first strong character. A petition's title and summary and a resource's name
-  // are not the post's text and carry no language of their own, so they get the direction only.
-  const postLang = post.lang ?? undefined
+  // Language of member text. The page itself is lang="en", and text with no lang attribute inherits
+  // that, so every piece of member text says what it is:
+  //   - the post's own text carries posts.lang — the author's app language when they posted, the best
+  //     signal there is, not a detected language — or lang="" (unknown) when the post has none;
+  //   - a petition's title and summary and a resource's name are not the post's text and have no
+  //     recorded language, so they carry lang="" (unknown).
+  // All of it takes its direction from its own first strong character (dir="auto").
+  const postLang = post.lang ?? ''
 
   const postType = (post.post_type as string | null) ?? 'feed'
   const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
@@ -167,7 +171,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
         {/* Title */}
         <p
           className="text-stone-900 font-semibold leading-snug line-clamp-2 mb-1"
-          lang={petition?.title ? undefined : postLang}
+          lang={petition?.title ? '' : postLang}
           dir="auto"
         >
           {petition?.title ?? post.content}
@@ -175,7 +179,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
 
         {/* Summary */}
         {petition?.summary && (
-          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed mb-2" dir="auto">
+          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed mb-2" lang="" dir="auto">
             {petition.summary}
           </p>
         )}
@@ -229,7 +233,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
     >
       {/* Resource label */}
       {resource?.name && (
-        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1" dir="auto">
+        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1" lang="" dir="auto">
           {resource.name}
         </p>
       )}

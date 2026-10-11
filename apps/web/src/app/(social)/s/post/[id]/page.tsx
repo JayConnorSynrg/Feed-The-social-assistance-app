@@ -121,6 +121,8 @@ export default async function SharedPostPage({ params }: Props) {
     : { paypal_email: null, venmo_username: null }
 
   const displayName = user?.first_name || 'Community Member'
+  // The author's description of the photo (posts.image_alt), when they wrote one.
+  const authorImageAlt = post.image_alt?.trim() || null
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const hasPayment = handles.venmo_username || handles.paypal_email
 
@@ -172,18 +174,23 @@ export default async function SharedPostPage({ params }: Props) {
 
         {/* Content */}
         <div className="px-4 pb-3">
-          {/* The member's text: marked with the language it was written in, direction from the text. */}
-          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed" lang={post.lang ?? undefined} dir="auto">
+          {/* The member's text. posts.lang is the author's app language when they posted — the best
+              signal there is, not a detected language; a post without one is marked lang="" (unknown)
+              so it does not inherit the page's lang="en". Direction comes from the text itself. */}
+          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed" lang={post.lang ?? ''} dir="auto">
             {post.content}
           </p>
         </div>
 
         {/* Image */}
         {post.image_url && (
-          <div className="relative aspect-video">
+          // The photo's description is the author's own words when they wrote one, so the wrapper
+          // carries the post's language for it (lang="" when unknown). The fallback text is this
+          // page's own English, so then the wrapper sets no language.
+          <div className="relative aspect-video" lang={authorImageAlt ? (post.lang ?? '') : undefined}>
             <Image
               src={post.image_url}
-              alt={post.image_alt?.trim() || 'Post image'}
+              alt={authorImageAlt || 'Post image'}
               fill
               className="object-cover"
               sizes="(max-width: 672px) 100vw, 672px"

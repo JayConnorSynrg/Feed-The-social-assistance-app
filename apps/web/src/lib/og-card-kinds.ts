@@ -47,11 +47,6 @@ export function postCardKind(postType: string | null | undefined): OgCardKind {
     : 'feed'
 }
 
-/** The fixed label drawn on a kind's card, e.g. "Request for help". */
-export function ogCardLabel(kind: OgCardKind): string {
-  return LABELS[kind]
-}
-
 /**
  * The text alternative for a kind's card, e.g. "FEED — Request for help": everything the picture
  * shows, and nothing about the item (its title and text are in og:title / og:description). Sent as

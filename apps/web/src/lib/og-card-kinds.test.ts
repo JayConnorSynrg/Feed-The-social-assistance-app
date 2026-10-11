@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { OG_CARD_KINDS, ogCardAlt, ogCardLabel, postCardKind } from './og-card-kinds'
+import { OG_CARD_KINDS, ogCardAlt, postCardKind } from './og-card-kinds'
 import { OG_CARD_LABELS } from './og-card-labels.mjs'
 import { POST_TYPE_VALUES } from '@/components/feed/post-model'
 
@@ -46,7 +46,6 @@ describe.each(OG_CARD_KINDS)('card %s', (kind) => {
   })
 
   it('is described by exactly what it shows: "FEED — <label>"', () => {
-    expect(ogCardLabel(kind)).toBe(manifest[kind].label)
     expect(ogCardAlt(kind)).toBe(`FEED — ${manifest[kind].label}`)
   })
 })

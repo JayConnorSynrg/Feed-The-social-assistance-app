@@ -83,6 +83,27 @@ describe('/api/oembed: our own addresses', () => {
   })
 })
 
+describe('/api/oembed: a petition post is titled by its petition only once the petition is approved', () => {
+  const PETITION = '55555555-5555-4555-8555-555555555555'
+  const petition = { id: PETITION, title: 'Keep the pantry open', status: 'approved' }
+  const petitionPost = { ...POST, post_type: 'petition', petition_id: PETITION }
+
+  it('an approved petition gives the title', async () => {
+    db.tables = { posts: [petitionPost], petitions: [petition] }
+    const body = await (await ask(`https://www.sourcetofeed.com/s/post/${ID}`)).json()
+    expect(body.title).toBe('Keep the pantry open — FEED Community Petition')
+  })
+
+  it.each(['draft', 'pending', 'rejected'])('a %s petition\'s title is not disclosed: the title is the author\'s', async (status) => {
+    db.tables = { posts: [petitionPost], petitions: [{ ...petition, status }] }
+    const res = await ask(`https://www.sourcetofeed.com/s/post/${ID}`)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.title).toBe('Ada on FEED')
+    expect(JSON.stringify(body)).not.toContain('Keep the pantry open')
+  })
+})
+
 describe('/api/oembed: everyone else is refused', () => {
   it.each([
     ['a foreign origin', `https://evil.example/s/post/${ID}`],

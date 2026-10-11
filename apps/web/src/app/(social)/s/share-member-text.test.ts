@@ -3,12 +3,17 @@
 //
 // What a member wrote keeps its language and direction on the public share pages, so a screen reader
 // picks the right voice and right-to-left text is laid out right-to-left even though the page chrome
-// is English:
-//   - the post's own text carries lang from posts.lang and dir="auto";
-//   - a name, a petition's title and summary and a resource's name carry dir="auto" only — they are
-//     not written in "the post's language", and a wrong lang is worse than none;
-//   - a photo is described by the author's own description (posts.image_alt) when there is one.
-// Also: /s/post and /s/embed each make one identical posts query for the metadata and the page.
+// is English. The page is lang="en" and text with no lang attribute inherits that, so member text
+// always says what it is:
+//   - the post's own text carries lang from posts.lang (the author's app language when they posted),
+//     or lang="" — unknown — when the post has none, and dir="auto";
+//   - a petition's title and summary and a resource's name have no recorded language: lang="" and
+//     dir="auto", never the post's language;
+//   - the author's name carries dir="auto" only;
+//   - a photo is described by the author's own description (posts.image_alt) when there is one, and
+//     its wrapper then carries the post's language.
+// Also: /s/post and /s/embed each make one identical posts query for the metadata and the page, and
+// neither shows a hidden post or an unapproved petition's text.
 // Renders the real server pages to HTML.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -98,11 +103,10 @@ describe('/s/post: the member\'s text keeps its language and direction', () => {
     expect(tagAround(await renderPost(), 'body text')).toContain(`lang="${lang}" dir="auto"`)
   })
 
-  it('a post with no language carries dir="auto" and no lang attribute', async () => {
+  it('a post with no language says so: lang="" (unknown), not the page\'s English', async () => {
     db.tables = { posts: [post({ lang: null })] }
     const body = tagAround(await renderPost(), AR_BODY)
-    expect(body).toContain('dir="auto"')
-    expect(body).not.toContain('lang=')
+    expect(body).toContain('lang="" dir="auto"')
   })
 
   it('the author\'s name takes its own direction and is not given the post\'s language', async () => {
@@ -137,6 +141,24 @@ describe('/s/post: a photo is described by its author', () => {
     db.tables = { posts: [post({ image_url: photo, image_alt: imageAlt })] }
     expect(postPhotoAlt(await renderPost())).toBe('Post image')
   })
+
+  /** The opening tag of the element that directly wraps the post's photo. */
+  const photoWrapper = (html: string) => html.match(/<div[^>]*>(?=<img[^>]*data-next-image="")/)![0]
+
+  it('the author\'s description is in the post\'s language: its wrapper carries lang="ar"', async () => {
+    db.tables = { posts: [post({ image_url: photo, image_alt: 'قدور حساء أمام القاعة' })] }
+    expect(photoWrapper(await renderPost())).toContain('lang="ar"')
+  })
+
+  it('the author\'s description on a post with no language: the wrapper says lang="" (unknown)', async () => {
+    db.tables = { posts: [post({ lang: null, image_url: photo, image_alt: 'A table of soup pots' })] }
+    expect(photoWrapper(await renderPost())).toContain('lang=""')
+  })
+
+  it('the fallback "Post image" is the page\'s own English: the wrapper sets no language', async () => {
+    db.tables = { posts: [post({ image_url: photo, image_alt: null })] }
+    expect(photoWrapper(await renderPost())).not.toContain('lang=')
+  })
 })
 
 describe('/s/embed: the member\'s text keeps its language and direction', () => {
@@ -145,21 +167,20 @@ describe('/s/embed: the member\'s text keeps its language and direction', () => 
     expect(tagAround(await renderEmbed(), AR_BODY)).toContain('lang="ar" dir="auto"')
   })
 
-  it('a post with no language carries dir="auto" and no lang attribute', async () => {
+  it('a post with no language says so: lang="" (unknown), not the page\'s English', async () => {
     db.tables = { posts: [post({ lang: null })] }
     const body = tagAround(await renderEmbed(), AR_BODY)
-    expect(body).toContain('dir="auto"')
-    expect(body).not.toContain('lang=')
+    expect(body).toContain('lang="" dir="auto"')
   })
 
-  it('a linked resource\'s name takes its own direction and is not given the post\'s language', async () => {
+  it('a linked resource\'s name is marked as unknown language (lang=""), never the post\'s language', async () => {
     db.tables = { posts: [post({ resource: { name: 'Riverside Pantry' } })] }
     const name = tagAround(await renderEmbed(), 'Riverside Pantry')
-    expect(name).toContain('dir="auto"')
-    expect(name).not.toContain('lang=')
+    expect(name).toContain('lang="" dir="auto"')
+    expect(name).not.toContain('lang="ar"')
   })
 
-  it('a petition\'s title and summary take their own direction and are not given the post\'s language', async () => {
+  it('a petition\'s title and summary are marked as unknown language (lang=""), never the post\'s language', async () => {
     db.tables = {
       posts: [post({ post_type: 'petition', petition_id: PETITION })],
       petitions: [{ id: PETITION, status: 'approved', title: 'Keep the pantry open', summary: 'Sign to keep Saturday hours', target_signatures: 100 }],
@@ -167,14 +188,50 @@ describe('/s/embed: the member\'s text keeps its language and direction', () => 
     const html = await renderEmbed()
     for (const text of ['Keep the pantry open', 'Sign to keep Saturday hours']) {
       const tag = tagAround(html, text)
-      expect(tag).toContain('dir="auto"')
-      expect(tag).not.toContain('lang=')
+      expect(tag).toContain('lang="" dir="auto"')
+      expect(tag).not.toContain('lang="ar"')
     }
   })
 
   it('when the petition is not available the title is the post\'s own text, with the post\'s language', async () => {
     db.tables = { posts: [post({ post_type: 'petition', petition_id: PETITION })], petitions: [] }
     expect(tagAround(await renderEmbed(), AR_BODY)).toContain('lang="ar" dir="auto"')
+  })
+})
+
+describe('what is not public is not shown', () => {
+  it('/s/post: a hidden post is "not found" for the page and for its metadata', async () => {
+    db.tables = { posts: [post({ is_hidden: true, content: 'Hidden post text' })] }
+    await expect(SharedPostPage({ params })).rejects.toThrow('notFound')
+    expect(await postMetadata({ params })).toEqual({ title: 'Post Not Found - FEED' })
+    // control: the same row, visible, renders
+    db.tables = { posts: [post({ content: 'Hidden post text' })] }
+    expect(await renderPost()).toContain('Hidden post text')
+  })
+
+  it('/s/embed: a hidden post is "not found" for the widget and for its metadata', async () => {
+    db.tables = { posts: [post({ is_hidden: true, content: 'Hidden post text' })] }
+    await expect(EmbedWidgetPage({ params })).rejects.toThrow('notFound')
+    expect(await embedMetadata({ params })).toEqual({ title: 'Post Not Found - FEED' })
+    db.tables = { posts: [post({ content: 'Hidden post text' })] }
+    expect(await renderEmbed()).toContain('Hidden post text')
+  })
+
+  it.each(['draft', 'pending', 'rejected'])('/s/embed: a %s petition\'s title and summary appear nowhere; the post\'s own text is shown', async (status) => {
+    const petition = { id: PETITION, status, title: 'Unapproved petition title', summary: 'Unapproved petition summary', target_signatures: 100 }
+    db.tables = { posts: [post({ post_type: 'petition', petition_id: PETITION })], petitions: [petition] }
+    const html = await renderEmbed()
+    expect(html).not.toContain('Unapproved petition title')
+    expect(html).not.toContain('Unapproved petition summary')
+    expect(tagAround(html, AR_BODY)).toContain('lang="ar" dir="auto"')
+    const meta = await embedMetadata({ params })
+    expect(JSON.stringify(meta)).not.toContain('Unapproved petition')
+    expect(meta.description).toBe(AR_BODY)
+
+    // control: the same petition, approved, is what the widget and the metadata show
+    db.tables = { posts: [post({ post_type: 'petition', petition_id: PETITION })], petitions: [{ ...petition, status: 'approved' }] }
+    expect(await renderEmbed()).toContain('Unapproved petition title')
+    expect(String((await embedMetadata({ params })).title)).toContain('Unapproved petition title')
   })
 })
 
