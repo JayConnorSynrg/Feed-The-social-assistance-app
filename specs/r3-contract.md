@@ -1,9 +1,28 @@
 # Release 3 — client contract (migrations `20261026600000_r3_foundation` + `20261026700000_r3_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [r3-model.md](r3-model.md).
-Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (229 checks, passing after the foundation and
-after the contract step) and `supabase/tests/r3_foundation.race.sh` (21 races). The request shapes below
+Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (235 checks, passing after the foundation and
+after the contract step) and `supabase/tests/r3_foundation.race.sh` (26 races). The request shapes below
 were sent through PostgREST 14.5 on a prod-identical catalog; every one answers as written here.
+
+> **Changed on 2026-10-11 (security review round). Read these first if you coded against the earlier text.**
+>
+> 1. **Verified mark: ANY edit by the reporter returns a verified alert to unverified**, a lower severity
+>    alone included (the earlier text said lowering severity kept the mark). After the owner's own
+>    `update_safety_alert`, always take `verified` from the answer; expect `false` whenever the alert was
+>    verified and anything changed. A moderator's edit of someone else's alert still keeps the mark.
+>    See [Safety alerts → Rules the UI shows → Verified](#safety-alerts-31).
+> 2. **Opt-ins: no client `DELETE` after the contract step.** `supabase.from('resource_opt_ins').delete()`
+>    answers `403 42501 permission denied for table resource_opt_ins` once `20261026700000` is applied, for
+>    every role (the seeker, the author, a platform admin). A seeker leaves through `withdraw_opt_in(p_post_id)`;
+>    an author lifts a decline through `unblock_opt_in(p_opt_in_id)`. Both are unchanged and work in both
+>    states. No deployed client sends the direct delete; do not add one. See
+>    [Request / offer status, and opt-ins](#request--offer-status-and-opt-ins-33).
+> 3. **Audit rows of alert actions carry no reporter id.** `admin_actions.details` for `safety_alert.verify`
+>    and `safety_alert.remove` is now `{"version": n}` only (the `created_by` key is gone). Admin screens
+>    that list alert actions show the alert (`target_id`) and the acting moderator (`actor_id`); there is no
+>    reporter to show, by design.
+> 4. Nothing else in a request or answer shape changed: no signature, no return type, no error token.
 
 This is what the Release 3 client builders code against. It covers: safety alerts (3.1), labels, comment
 lock and reports (3.2), request / offer status, opt-ins, announcements and petitions (3.3).
@@ -12,13 +31,19 @@ lock and reports (3.2), request / offer status, opt-ins, announcements and petit
 
 | Step | File | What stays open for the client deployed today |
 |---|---|---|
-| 1. Expand (apply first) | `20261026600000_r3_foundation.sql` | `update_safety_alert` without a version token; the author's direct `UPDATE` of `resource_opt_ins.status`; `body_version_hash` in the petition draft insert |
+| 1. Expand (apply first) | `20261026600000_r3_foundation.sql` | `update_safety_alert` without a version token; the author's direct `UPDATE` of `resource_opt_ins.status`; `body_version_hash` in the petition draft insert; a direct `DELETE` of an opt-in (no deployed client sends it) |
 | 2. Deploy every Release 3 client (3.1, 3.2, 3.3) | — | — |
-| 3. Contract (apply after the last deploy) | `20261026700000_r3_contract.sql` | nothing: the three paths above are closed |
+| 3. Contract (apply after the last deploy) | `20261026700000_r3_contract.sql` | nothing: the four paths above are closed |
 
 The contract file refuses to run before the foundation (`55000`). **Build to the contract state from day
-one**: send `p_expected_version` on every alert update, decide opt-ins through `decide_opt_in`, and do not
-send `body_version_hash`. All three work in both states.
+one**: send `p_expected_version` on every alert update, decide opt-ins through `decide_opt_in`, leave an
+opt-in through `withdraw_opt_in` / `unblock_opt_in` (never a direct delete), and do not send
+`body_version_hash`. All four work in both states.
+
+The prod smoke suite (`apps/web/src/__tests__/smoke/04, 12, 23, 25, 29`) reads the ledger: while
+`20261026600000` is not recorded it asserts today's database (or skips what does not exist yet), and from
+the moment it is recorded the Release 3 assertions always run. It is green merged-before-applied and
+green once applied.
 
 Types: `packages/database/types.ts` carries hand-edited hunks for these shapes until the release regen.
 RPCs that return `jsonb` are typed `Json`; cast to the types written here.
@@ -143,9 +168,12 @@ Rules the UI shows:
 - **Expiry.** Raising severity restarts the expiry for the new level from the update (2 h / 6 h / 24 h /
   72 h). Lowering it never extends the alert and caps what is left at the lower level's window. Any other
   update keeps the expiry. Read `expires_at` from the answer.
-- **Verified.** The reporter's own change of type, text or place, or a raise of severity, returns the alert
-  to unverified (`verified: false` in the answer). Lowering severity alone keeps the mark, and so does a
-  moderator's edit of someone else's alert. A second verify changes nothing.
+- **Verified.** ANY change by the reporter returns a verified alert to unverified (`verified: false` in the
+  answer): type, text, place, a higher severity, and a lower severity alone. A call that changes nothing
+  keeps the mark (it is not an edit: same `version`). A moderator's edit of someone else's alert keeps the
+  mark, whatever it changes. A second verify changes nothing. A moderator verifies again with
+  `admin_verify_safety_alert`; the UI should tell the owner, before they save an edit of a verified alert,
+  that the alert will show as unverified until a moderator checks it again.
 - **Resolve.** `status: 'resolved'`, `shown_state: 'resolved'`, `shown_until` = `resolved_at` + 6 h. There is
   no reopen: a wrong all-clear is answered with a new alert.
 - **Withdraw.** `delete_safety_alert` records a withdrawal (`withdrawn`); the alert leaves every reader at
@@ -158,6 +186,12 @@ Rules the UI shows:
 Direct reads of `safety_alerts` (authenticated only; RLS shows `status = 'live'` rows): every column except
 `created_by` and `verified_by`. `anon` reads through the readers only. Nobody reads `safety_alert_updates`
 or other members' rows of `safety_alert_votes`.
+
+**Reporter anonymity, everywhere.** No answer, no reader row, no history message and no error text
+(`message`, `details`, `hint`) of an alert RPC carries an account id. The audit rows a platform admin reads
+(`admin_actions`, actions `safety_alert.verify | update | resolve | remove`) carry the alert id, the acting
+moderator and `details: {"version": n}` (`update` adds `changed` and `severity_change`): never the
+reporter, and never who verified. A moderation screen has no way to show "reported by", and must not try.
 
 ## Labels (3.2)
 
@@ -184,6 +218,14 @@ type LabelResult = { post_id: string; label: string; applied: boolean; label_id:
   record is retracted (`superseded`) and a new one names the current version (re-affirm after an edit).
 - Retracting (`p_applied: false`) marks the record retracted; nothing is deleted.
 - A moderator may label their own post and may not retract a label from it.
+- **Statement-of-reasons fields.** Each label decision writes one audit row whose `details` carries, beside
+  `label`, `label_id`, `supersedes_label_id`, `author_id` and `version`: `decision_visibility`
+  (`CONTENT_LABELLED` | `LABEL_RETRACTED`), `decision_ground` (`INCOMPATIBLE_CONTENT` | `ILLEGAL_CONTENT`),
+  `decision_facts` (the reason), `source_type` (`VOLUNTARY` | `OTHER_NOTIFICATION`), `report_id`,
+  `automated_detection: false`, `automated_decision: "NOT_AUTOMATED"`, `content_type`, `application_date`,
+  `redress`. **Nothing reads these in Release 3.** They are kept on purpose: the moderation screens of the
+  next release (the decision log and the notice to the author) read them from this row, so the decisions
+  made between now and then are already complete. Platform admins only (`admin_actions` RLS).
 - Refusals, in order: `42501 guest_refused` → `not_authenticated` → `p3_denied:insufficient_tier` →
   `22023 label_invalid:<label>` → `label_field_required:applied` → `label_field_invalid:ground` →
   `label_field_invalid:reason` → `label_field_required:reason` → `PT404 post_not_found` →
@@ -216,6 +258,9 @@ flag; so does a versioned hold or remove. An author's own `sensitive` never sets
 
 Callers: moderators. Authors cannot lock. `p_reason` (one of the five) is required to lock; `p_note`
 (≤ 500) is the free text kept in the audit row. A moderator may lock their own post and may not unlock it.
+The audit row of a lock / unlock carries the same statement-of-reasons fields as a label decision
+(`decision_visibility`: `CONTENT_INTERACTION_RESTRICTED` | `INTERACTION_RESTRICTION_LIFTED`, plus
+`lock_reason`); as there, nothing reads them in Release 3 and the next release's moderation screens do.
 Refusals, in order: `42501 guest_refused` → `not_authenticated` → `p3_denied:insufficient_tier` →
 `22023 lock_field_required:locked` → `lock_field_invalid:reason` → `lock_field_invalid:note` →
 `PT404 post_not_found` → `PT409 edit_conflict` → `PT404 post_deleted` → `42501 self_moderation_refused`.
@@ -283,12 +328,31 @@ on a removed or deleted post is refused; decline and complete stay possible. Ref
 Replaces `supabase.from('resource_opt_ins').update({ status })` (`feed-panel.tsx`), which stops working at
 the contract step (`403 42501`; note that a direct update that matches no row answers 204, not an error).
 
+### Leaving an opt-in: the two RPCs only
+
+| Who | Call | Answer |
+|---|---|---|
+| The seeker, while their opt-in is `pending` | `withdraw_opt_in(p_post_id uuid)` | `true` if a pending opt-in was withdrawn, `false` if there was none (already decided, already gone) |
+| The post's author, on a `declined` opt-in | `unblock_opt_in(p_opt_in_id uuid)` | `true`; the seeker may opt in again |
+
+**A direct `DELETE` on `resource_opt_ins` is not a client path.** After the contract step every client role
+is refused (`403 42501 permission denied for table resource_opt_ins`): the seeker, the author and a platform
+admin alike (a platform admin's removal of a member's opt-in becomes a service-side operation). Before the
+contract step the old policy still lets a seeker delete their own pending row, and it must not be used: it
+takes the opt-in row and the post row in the opposite order to `decide_opt_in`, and when the two coincide
+one of them is aborted with `40P01 deadlock detected` (measured on simultaneous pairs: 21 and 25 of 40 by
+the reviewer, 39 and 40 of 40 in the builder's runs; the slots never drifted). `withdraw_opt_in` against
+`decide_opt_in` never deadlocks (0 in 40 forced interleaves and 40 simultaneous pairs, in both release
+states): exactly one of the two takes effect. If the decision lands first, `withdraw_opt_in` answers `false`;
+if the withdrawal lands first, `decide_opt_in` answers `PT404 opt_in_not_found`. Treat both as "re-read the
+list".
+
 ### Unchanged RPCs, one new refusal
 
 - `opt_in_to_post(p_post_id) → resource_opt_ins row`: adds `PT409 This post is closed` (+ `details.code =
   "post_closed"`) for a post its author closed.
-- `withdraw_opt_in(p_post_id) → boolean`, `unblock_opt_in(p_opt_in_id) → boolean`: same answers. The slot now
-  comes back on every deletion of an opt-in row (these RPCs, a direct delete, an account deletion).
+- `withdraw_opt_in(p_post_id) → boolean`, `unblock_opt_in(p_opt_in_id) → boolean`: same answers. The slot
+  comes back on every deletion of an opt-in row (these RPCs, an account deletion, a service-side delete).
   `posts.slots_remaining` always equals `max_seekers` minus the post's opt-in rows.
 
 ### Trail
@@ -368,8 +432,8 @@ Read notes from `petition_updates` (`id, petition_id, body, author_role, created
 | `petition_updates` — `id`, `petition_id`, `body`, `author_role`, `created_at` | yes | yes | notes of approved petitions |
 
 Client writes that remain: comment insert (`id, post_id, user_id, content, parent_id`), likes, poll votes,
-the petition draft insert, the seeker's delete of their own pending opt-in (prefer `withdraw_opt_in`), and
-notification read / delete. Everything else is an RPC.
+the petition draft insert, and notification read / delete. Everything else is an RPC. (`resource_opt_ins`
+takes no direct client write after the contract step: no insert, no update, no delete.)
 
 ## Realtime (the posts doorbell)
 

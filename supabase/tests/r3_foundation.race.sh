@@ -1,7 +1,10 @@
 #!/bin/bash
-# r3_foundation.race.sh — two-session concurrency checks for 20261026600000 (Release 3 foundation).
-# A single-transaction SQL smoke cannot reach these paths, hence a separate script. In every scenario session 1
-# makes its call and holds its transaction open; session 2 arrives while it is open.
+# r3_foundation.race.sh — two-session concurrency checks for 20261026600000 (Release 3 foundation) and
+# 20261026700000 (its contract step). A single-transaction SQL smoke cannot reach these paths, hence a separate
+# script. In every scenario session 1 makes its call and holds its transaction open; session 2 arrives while it
+# is open. The release state is read from the ledger: after the contract step no client role can DELETE an opt-in,
+# so the direct DELETEs of R3 / R3b / R3c are made by the table owner (a service-side delete) and R3e asserts the
+# refusal; before it they are made by the seeker.
 #   Alert version token
 #   R1   two updates of one alert with the same expected version: one wins, the other gets PT409; one message for v2.
 #   R1b  an update in flight, then a resolve with the version seen before it: waits, then PT409; the alert stays live.
@@ -12,16 +15,30 @@
 #        from it and is refused comments_locked; 0 comments on the locked post.
 #   R2b  a comment in flight, then the lock: the lock waits; the comment (made before the lock) stands; a later one is refused.
 #   Opt-in slot return
-#   R3   an offer with one slot, taken. The seeker's direct DELETE in flight, then another seeker opts in: the
+#   R3   an offer with one slot, taken. A direct DELETE of that opt-in in flight, then another seeker opts in: the
 #        opt-in waits, finds the slot returned and is taken; slots = capacity - rows.
-#   R3b  two seekers direct-DELETE their own opt-ins at once: both slots come back (never one, never three).
-#   R3c  withdraw_opt_in in flight, then the same seeker's direct DELETE of the same row (and the reverse order):
-#        one of them deletes, the slot comes back exactly once.
+#   R3b  two direct DELETEs of two opt-ins at once: both slots come back (never one, never three).
+#   R3c  withdraw_opt_in in flight, then a direct DELETE of the same row (and the reverse order): one of them
+#        deletes, the slot comes back exactly once.
+#   R3e  the direct DELETE against the author's decide_opt_in, PAIRS (40) simultaneous pairs.
+#        Expand: the two take the opt-in row and the post row in opposite orders, so a pair can end in a
+#        detected deadlock (one side gets 40P01 and can retry); the count is printed, and what is asserted is
+#        that the slots never drift. Contract: the seeker's direct DELETE is refused (42501), the row and its
+#        slot stay, and no pair deadlocks.
+#   R3f  decide_opt_in against withdraw_opt_in (the RPC every client uses): PAIRS forced interleaves (half with the
+#        author's transaction holding the post row first, half with the withdrawal in flight first) and PAIRS
+#        simultaneous pairs. Both take the post row before the opt-in row: no deadlock, ever; no drift.
 #   Labels
 #   R4   two moderators apply the same label at once: one record; the second answers changed = false; one audit row.
 #   R4b  a retraction in flight, then another moderator applies the label: after the wait a NEW record is written;
 #        posts.labels equals the active records.
 #   R4c  the author's own "sensitive" in flight, then a moderator's: two records, posts.labels = {sensitive}.
+#   R4d  two writers that take NO post lock themselves (the table owner inserting two different label records):
+#        the sync trigger alone serialises them; posts.labels = both active records.
+#   R4e  a moderator's "outdated" in flight, then the author's own "sensitive" (different labels, through the
+#        RPCs): posts.labels = {outdated,sensitive} = the active records.
+#   R4f  a transaction that already holds the foreign key's KEY SHARE lock on the post, then writes a label, while
+#        a second label writer arrives in between: both land, no deadlock (the trigger's lock is FOR NO KEY UPDATE).
 #   Pin / unpin
 #   R5   a pin in flight, then an unpin: the unpin waits and lands; unpinned, pinned_until NULL; two audit rows.
 #   R5b  a hold in flight, then a pin: the pin waits and is refused post_not_visible (no pin lands on a hidden post).
@@ -42,7 +59,7 @@
 # Local / ephemeral databases only: it creates, seeds and drops a scratch database.
 set -u
 : "${PSQL:?set PSQL to the harness psql wrapper}"; TPL=${TEMPLATE_DB:-feed_base}
-D=$(mktemp -d); RDB=feed_race_r3_$$; HOLD=${HOLD:-1.5}; GAP=${GAP:-0.6}
+D=$(mktemp -d); RDB=feed_race_r3_$$; HOLD=${HOLD:-1.5}; GAP=${GAP:-0.6}; PAIRS=${PAIRS:-40}
 trap 'rm -rf "$D"; DB=postgres $PSQL -qc "SET client_min_messages=warning" -c "DROP DATABASE IF EXISTS $RDB" >/dev/null' EXIT
 DB=postgres $PSQL -qc "SET client_min_messages=warning" -c "DROP DATABASE IF EXISTS $RDB" -c "CREATE DATABASE $RDB TEMPLATE $TPL" >/dev/null || exit 1
 q() { DB=$RDB $PSQL -At -c "$1"; }
@@ -54,7 +71,8 @@ P1=00000000-0000-4000-a000-0000000000f1; P2=00000000-0000-4000-a000-0000000000f2
 P4=00000000-0000-4000-a000-0000000000f4; P5=00000000-0000-4000-a000-0000000000f5; P6=00000000-0000-4000-a000-0000000000f6
 P7=00000000-0000-4000-a000-0000000000f7; P8=00000000-0000-4000-a000-0000000000f8; P9=00000000-0000-4000-a000-0000000000f9
 P10=00000000-0000-4000-a000-0000000000fa; P11=00000000-0000-4000-a000-0000000000fb; P12=00000000-0000-4000-a000-0000000000fc
-P13=00000000-0000-4000-a000-0000000000fd
+P13=00000000-0000-4000-a000-0000000000fd; P14=00000000-0000-4000-a000-0000000000fe; P15=00000000-0000-4000-a000-0000000000ff
+P16=00000000-0000-4000-a000-0000000001f0; P17=00000000-0000-4000-a000-0000000001f1; P18=00000000-0000-4000-a000-0000000001f2
 T1=0c000000-0000-4000-8000-0000000000f1; T2=0c000000-0000-4000-8000-0000000000f2; T3=0c000000-0000-4000-8000-0000000000f3
 T4=0c000000-0000-4000-8000-0000000000f4; T5=0c000000-0000-4000-8000-0000000000f5
 K1=0d000000-0000-4000-8000-0000000000f1
@@ -81,7 +99,12 @@ q "INSERT INTO auth.users (id, email) VALUES ('$A','r3race-a@t'), ('$B','r3race-
      ('$P10', '$A', 'hold vs pin', 'feed', NULL, now() - interval '1 hour'),
      ('$P11', '$A', 're-report', 'feed', NULL, now() - interval '1 hour'),
      ('$P12', '$A', 'comment reports', 'feed', NULL, now() - interval '1 hour'),
-     ('$P13', '$A', 'delete vs withdraw', 'source_offer', 2, now() - interval '1 hour');
+     ('$P13', '$A', 'delete vs withdraw', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P14', '$A', 'decide vs direct delete', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P15', '$A', 'decide vs withdraw', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P16', '$A', 'two unlocked label writers', 'feed', NULL, now() - interval '1 hour'),
+     ('$P17', '$A', 'moderator and author, different labels', 'feed', NULL, now() - interval '1 hour'),
+     ('$P18', '$A', 'key share, then a label', 'feed', NULL, now() - interval '1 hour');
    INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('$K1', '$P12', '$A', 'a comment three members report');
    INSERT INTO public.petitions (id, title, summary, body, body_version_hash, status, created_by) VALUES
      ('$T1', 'approve twice', 's', 'body one', 'x', 'draft', '$A'), ('$T2', 'approve vs reject', 's', 'body two', 'x', 'draft', '$A'),
@@ -101,6 +124,10 @@ fail=0
 ok()  { echo "  $1 ok: $2"; }
 bad() { echo "  $1 FAIL: $2"; fail=1; }
 as1() { DB=$RDB $PSQL -At -c "$(AS $1)" -c "$2" 2>&1 | grep -E '^[0-9a-z{]|ERROR' | grep -v '^set_config' | tail -1; }
+# the release state: after the contract step (20261026700000) no client role holds DELETE on opt-ins
+CON=$(q "SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261026700000')")
+if [ "$CON" = "t" ]; then DEL=-; DELWHO="the table owner"; else DEL=$B; DELWHO="the seeker"; fi
+INV() { q "SELECT slots_remaining = max_seekers - (SELECT count(*) FROM public.resource_opt_ins o WHERE o.post_id = p.id) FROM public.posts p WHERE id = '$1'"; }
 SLOTS() { q "SELECT max_seekers || '/' || slots_remaining || '/' || (SELECT count(*) FROM public.resource_opt_ins o WHERE o.post_id = p.id) FROM public.posts p WHERE id = '$1'"; }
 LABELS() { q "SELECT labels::text || '|' || (SELECT count(*) FROM public.post_labels l WHERE l.post_id = p.id AND l.retracted_at IS NULL) || '|' || (SELECT count(*) FROM public.post_labels l WHERE l.post_id = p.id) FROM public.posts p WHERE id = '$1'"; }
 
@@ -147,33 +174,96 @@ F=$(q "SELECT (comments_locked_at IS NOT NULL) || '|' || (SELECT count(*) FROM p
 if grep -q '^inserted$' "$D/r2ba" && grep -q '^true$' "$D/r2bb" && echo "$L" | grep -q 'comments_locked' && [ "$F" = "true|1" ]; then ok R2b "the earlier comment stands, the lock landed, a later comment is refused; locked|comments $F"
 else bad R2b "comment=$(r "$D/r2ba") lock=$(r "$D/r2bb") later=$L locked|comments=$F"; fi
 
-# ---- R3: one slot, taken by B. B's direct DELETE in flight, then C opts in
+# ---- R3: one slot, taken by B. A direct DELETE of B's opt-in in flight (by B before the contract step, by the table owner after), then C opts in
 as1 $B "SELECT (public.opt_in_to_post('$P3')).status" >/dev/null
-two r3 $B "DELETE FROM public.resource_opt_ins WHERE post_id = '$P3' AND seeker_id = '$B' RETURNING 'deleted'" \
+two r3 $DEL "DELETE FROM public.resource_opt_ins WHERE post_id = '$P3' AND seeker_id = '$B' RETURNING 'deleted'" \
        $C "SELECT (public.opt_in_to_post('$P3')).status"
 F=$(SLOTS $P3)
-if grep -q '^deleted$' "$D/r3a" && grep -q '^pending$' "$D/r3b" && [ "$F" = "1/0/1" ]; then ok R3 "the opt-in waited, found the slot returned and was taken; max/slots/rows $F"
+if grep -q '^deleted$' "$D/r3a" && grep -q '^pending$' "$D/r3b" && [ "$F" = "1/0/1" ]; then ok R3 "the opt-in waited, found the slot returned and was taken (delete by $DELWHO); max/slots/rows $F"
 else bad R3 "delete=$(r "$D/r3a") optin=$(r "$D/r3b") max/slots/rows=$F"; fi
 
-# ---- R3b: two seekers direct-DELETE their own opt-ins at once
+# ---- R3b: two direct DELETEs of two opt-ins at once (each seeker their own before the contract step; the table owner after)
 as1 $B "SELECT (public.opt_in_to_post('$P4')).status" >/dev/null; as1 $C "SELECT (public.opt_in_to_post('$P4')).status" >/dev/null
-two r3b $B "DELETE FROM public.resource_opt_ins WHERE post_id = '$P4' AND seeker_id = '$B' RETURNING 'deleted'" \
-        $C "DELETE FROM public.resource_opt_ins WHERE post_id = '$P4' AND seeker_id = '$C' RETURNING 'deleted'"
+[ "$CON" = "t" ] && DEL2=- || DEL2=$C
+two r3b $DEL  "DELETE FROM public.resource_opt_ins WHERE post_id = '$P4' AND seeker_id = '$B' RETURNING 'deleted'" \
+        $DEL2 "DELETE FROM public.resource_opt_ins WHERE post_id = '$P4' AND seeker_id = '$C' RETURNING 'deleted'"
 F=$(SLOTS $P4)
 if grep -q '^deleted$' "$D/r3ba" && grep -q '^deleted$' "$D/r3bb" && [ "$F" = "2/2/0" ]; then ok R3b "both slots came back; max/slots/rows $F"
 else bad R3b "a=$(r "$D/r3ba") b=$(r "$D/r3bb") max/slots/rows=$F"; fi
 
-# ---- R3c: withdraw_opt_in in flight, then the same seeker's direct DELETE; then the reverse order (C keeps a second row throughout)
+# ---- R3c: withdraw_opt_in in flight, then a direct DELETE of the same row; then the reverse order (C keeps a second row throughout)
 as1 $B "SELECT (public.opt_in_to_post('$P5')).status" >/dev/null; as1 $C "SELECT (public.opt_in_to_post('$P5')).status" >/dev/null
-two r3c $B "SELECT public.withdraw_opt_in('$P5')::text" \
-        $B "WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '$P5' AND seeker_id = '$B' RETURNING 1) SELECT count(*) FROM d"
+two r3c $B   "SELECT public.withdraw_opt_in('$P5')::text" \
+        $DEL "WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '$P5' AND seeker_id = '$B' RETURNING 1) SELECT count(*) FROM d"
 F=$(SLOTS $P5)
 as1 $B "SELECT (public.opt_in_to_post('$P13')).status" >/dev/null; as1 $C "SELECT (public.opt_in_to_post('$P13')).status" >/dev/null
-two r3d $B "WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '$P13' AND seeker_id = '$B' RETURNING 1) SELECT count(*) FROM d" \
-        $B "SELECT public.withdraw_opt_in('$P13')::text"
+two r3d $DEL "WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '$P13' AND seeker_id = '$B' RETURNING 1) SELECT count(*) FROM d" \
+        $B   "SELECT public.withdraw_opt_in('$P13')::text"
 G=$(SLOTS $P13)
 if grep -q '^true$' "$D/r3ca" && grep -q '^0$' "$D/r3cb" && [ "$F" = "2/1/1" ] && grep -q '^1$' "$D/r3da" && grep -q '^false$' "$D/r3db" && [ "$G" = "2/1/1" ]; then ok R3c "one delete each time, the slot back exactly once; max/slots/rows $F and $G"
 else bad R3c "withdraw=$(r "$D/r3ca") delete=$(r "$D/r3cb") final=$F | delete=$(r "$D/r3da") withdraw=$(r "$D/r3db") final=$G"; fi
+
+# pair <tag> <sql of session 1 (background, own BEGIN..COMMIT)> <sql of session 2>: fired at the same instant, no hold
+V() { DB=$RDB $PSQL -At -v VERBOSITY=verbose "$@"; }
+OPTIN() { q "SELECT set_config('request.jwt.claims', '{\"sub\":\"$B\",\"role\":\"authenticated\"}', false); SET ROLE authenticated; SELECT (public.opt_in_to_post('$1')).id;" | tail -1; }
+CLEAN() { q "DELETE FROM public.resource_opt_ins WHERE post_id = '$1'" >/dev/null; }
+LAS() { echo "SELECT set_config('request.jwt.claims', '{\"sub\":\"$1\",\"role\":\"authenticated\"}', true); SET LOCAL ROLE authenticated;"; }
+
+# ---- R3e: the direct DELETE against decide_opt_in, PAIRS simultaneous pairs
+dl=0; drift=0; refused=0; kept=0
+for i in $(seq 1 $PAIRS); do
+  OI=$(OPTIN $P14)
+  ( V -c "BEGIN; $(LAS $A) SELECT public.decide_opt_in('$OI', 'decline') ->> 'status'; COMMIT;" > "$D/e_a" 2>&1 ) &
+  V -c "BEGIN; $(LAS $B) DELETE FROM public.resource_opt_ins WHERE id = '$OI'; COMMIT;" > "$D/e_b" 2>&1
+  wait
+  grep -q 40P01 "$D/e_a" "$D/e_b" && dl=$((dl+1))
+  grep -q '42501: permission denied for table resource_opt_ins' "$D/e_b" && refused=$((refused+1))
+  [ "$(q "SELECT count(*) FROM public.resource_opt_ins WHERE id = '$OI'")" = "1" ] && kept=$((kept+1))
+  [ "$(INV $P14)" = "t" ] || drift=$((drift+1))
+  CLEAN $P14; [ "$(INV $P14)" = "t" ] || drift=$((drift+1))
+done
+if [ "$CON" = "t" ]; then
+  if [ $refused = $PAIRS ] && [ $kept = $PAIRS ] && [ $dl = 0 ] && [ $drift = 0 ]; then ok R3e "contract: the seeker's direct DELETE refused in $refused of $PAIRS pairs, the row and its slot kept, 0 deadlocks, 0 drift"
+  else bad R3e "contract: refused=$refused kept=$kept of $PAIRS, deadlocks=$dl, drift=$drift"; fi
+else
+  if [ $drift = 0 ]; then ok R3e "expand: $PAIRS simultaneous direct DELETE / decide_opt_in pairs: $dl ended in a detected deadlock (opposite lock order; closed by the contract step), 0 drift"
+  else bad R3e "expand: slots drifted in $drift of $PAIRS pairs (deadlocks $dl)"; fi
+fi
+
+# ---- R3f: decide_opt_in against withdraw_opt_in: forced interleaves (both orders) and simultaneous pairs
+dl=0; drift=0; odd=0; H=0.3; G=0.12; half=$((PAIRS / 2))
+for i in $(seq 1 $half); do            # the author's transaction holds the post row; the withdrawal arrives and waits
+  OI=$(OPTIN $P15)
+  ( V -c "BEGIN; SELECT 1 FROM public.posts WHERE id = '$P15' FOR UPDATE; SELECT pg_sleep($H); $(LAS $A) SELECT public.decide_opt_in('$OI', 'accept') ->> 'status'; COMMIT;" > "$D/f_a" 2>&1 ) &
+  sleep $G
+  V -c "BEGIN; $(LAS $B) SELECT public.withdraw_opt_in('$P15')::text; COMMIT;" > "$D/f_b" 2>&1
+  wait
+  grep -q 40P01 "$D/f_a" "$D/f_b" && dl=$((dl+1))
+  { grep -q '^accepted$' "$D/f_a" && grep -q '^false$' "$D/f_b"; } || odd=$((odd+1))      # decided first; nothing pending left to withdraw
+  [ "$(INV $P15)" = "t" ] || drift=$((drift+1)); CLEAN $P15
+done
+for i in $(seq 1 $half); do            # the withdrawal is in flight; the decision arrives and waits
+  OI=$(OPTIN $P15)
+  ( V -c "BEGIN; $(LAS $B) SELECT public.withdraw_opt_in('$P15')::text; SELECT pg_sleep($H); COMMIT;" > "$D/f_b" 2>&1 ) &
+  sleep $G
+  V -c "BEGIN; $(LAS $A) SELECT public.decide_opt_in('$OI', 'accept') ->> 'status'; COMMIT;" > "$D/f_a" 2>&1
+  wait
+  grep -q 40P01 "$D/f_a" "$D/f_b" && dl=$((dl+1))
+  { grep -q '^true$' "$D/f_b" && grep -q 'opt_in_not_found' "$D/f_a"; } || odd=$((odd+1))  # withdrawn first; the decision finds no opt-in
+  [ "$(INV $P15)" = "t" ] || drift=$((drift+1)); CLEAN $P15
+done
+udl=0; uodd=0
+for i in $(seq 1 $PAIRS); do           # simultaneous, no hold
+  OI=$(OPTIN $P15)
+  ( V -c "BEGIN; $(LAS $A) SELECT public.decide_opt_in('$OI', 'decline') ->> 'status'; COMMIT;" > "$D/f_a" 2>&1 ) &
+  V -c "BEGIN; $(LAS $B) SELECT public.withdraw_opt_in('$P15')::text; COMMIT;" > "$D/f_b" 2>&1
+  wait
+  grep -q 40P01 "$D/f_a" "$D/f_b" && udl=$((udl+1))
+  { grep -q '^declined$' "$D/f_a" && grep -q '^false$' "$D/f_b"; } || { grep -q 'opt_in_not_found' "$D/f_a" && grep -q '^true$' "$D/f_b"; } || uodd=$((uodd+1))
+  [ "$(INV $P15)" = "t" ] || drift=$((drift+1)); CLEAN $P15
+done
+if [ $dl = 0 ] && [ $udl = 0 ] && [ $drift = 0 ] && [ $odd = 0 ] && [ $uodd = 0 ]; then ok R3f "decide_opt_in / withdraw_opt_in: 0 deadlocks in $((half * 2)) forced interleaves and $PAIRS simultaneous pairs; exactly one of the two takes effect each time; 0 drift"
+else bad R3f "forced: deadlocks=$dl unexpected outcomes=$odd; simultaneous: deadlocks=$udl unexpected outcomes=$uodd; drift=$drift (last: decide=$(r "$D/f_a") withdraw=$(r "$D/f_b"))"; fi
 
 # ---- R4: two moderators apply the same label at once
 two r4 $CM  "SELECT public.admin_set_post_label('$P6', 'outdated', true, 1, 'stale hours') ->> 'changed'" \
@@ -196,6 +286,27 @@ two r4c $A  "SELECT (public.set_own_post_label('$P8', 'sensitive', true, 1) -> '
 F=$(LABELS $P8)
 if grep -q 'sensitive' "$D/r4ca" && grep -q '^true$' "$D/r4cb" && [ "$F" = "{sensitive}|2|2" ]; then ok R4c "two records, one label on the post; labels|active|records $F"
 else bad R4c "author=$(r "$D/r4ca") moderator=$(r "$D/r4cb") labels|active|records=$F"; fi
+
+# ---- R4d: two writers that lock nothing themselves (the table owner writes two different label records)
+two r4d - "INSERT INTO public.post_labels (post_id, label, post_version, source_role, reason) VALUES ('$P16', 'outdated', 1, 'community_moderator', 'race') RETURNING 'a'" \
+        - "INSERT INTO public.post_labels (post_id, label, post_version, source_role, reason) VALUES ('$P16', 'misleading', 1, 'platform_admin', 'race') RETURNING 'b'"
+F=$(LABELS $P16)
+if grep -q '^a$' "$D/r4da" && grep -q '^b$' "$D/r4db" && [ "$F" = "{misleading,outdated}|2|2" ]; then ok R4d "the sync trigger alone serialised two unlocked writers; labels|active|records $F"
+else bad R4d "a=$(r "$D/r4da") b=$(r "$D/r4db") labels|active|records=$F"; fi
+
+# ---- R4e: a moderator's "outdated" in flight, then the author's own "sensitive"
+two r4e $CM "SELECT public.admin_set_post_label('$P17', 'outdated', true, NULL, 'stale') ->> 'changed'" \
+        $A  "SELECT public.set_own_post_label('$P17', 'sensitive', true) ->> 'applied'"
+F=$(LABELS $P17)
+if grep -q '^true$' "$D/r4ea" && grep -q '^true$' "$D/r4eb" && [ "$F" = "{outdated,sensitive}|2|2" ]; then ok R4e "two different labels, both on the post; labels|active|records $F"
+else bad R4e "moderator=$(r "$D/r4ea") author=$(r "$D/r4eb") labels|active|records=$F"; fi
+
+# ---- R4f: session 1 holds KEY SHARE on the post (what a foreign-key check takes), sleeps, then writes a label; session 2 writes another label in between
+two r4f - "SELECT 'held' FROM public.posts WHERE id = '$P18' FOR KEY SHARE; SELECT pg_sleep(1.0); INSERT INTO public.post_labels (post_id, label, post_version, source_role, reason) VALUES ('$P18', 'outdated', 1, 'community_moderator', 'race') RETURNING 'a'" \
+        - "INSERT INTO public.post_labels (post_id, label, post_version, source_role, reason) VALUES ('$P18', 'misleading', 1, 'platform_admin', 'race') RETURNING 'b'"
+F=$(LABELS $P18)
+if grep -q '^a$' "$D/r4fa" && grep -q '^b$' "$D/r4fb" && ! grep -q 'deadlock' "$D/r4fa" "$D/r4fb" && [ "$F" = "{misleading,outdated}|2|2" ]; then ok R4f "both label writes landed, no deadlock; labels|active|records $F"
+else bad R4f "a=$(r "$D/r4fa") b=$(r "$D/r4fb") labels|active|records=$F"; fi
 
 # ---- R5: a pin in flight, then an unpin
 two r5 $CM  "SELECT public.admin_set_post_pinned('$P9', true, 1) ->> 'is_pinned'" \
@@ -266,4 +377,4 @@ F=$(q "SELECT (SELECT count(*) FROM public.content_reports WHERE content_id = c.
 if grep -q '^2$' "$D/r7ba" && grep -q '"hidden": true' "$D/r7bb" && [ "$F" = "3|true|community_reports_threshold" ]; then ok R7b "the third report waited, counted 3 and hid the comment; open|hidden|reason $F"
 else bad R7b "a=$(r "$D/r7ba") b=$(r "$D/r7bb") open|hidden|reason=$F"; fi
 
-if [ $fail = 0 ]; then echo "PASS r3_foundation race: R1 R1b R1c R1d R2 R2b R3 R3b R3c R4 R4b R4c R5 R5b R6 R6b R6c R6d R6e R7 R7b"; else echo "FAIL r3_foundation race"; exit 1; fi
+if [ $fail = 0 ]; then echo "PASS r3_foundation race: R1 R1b R1c R1d R2 R2b R3 R3b R3c R3e R3f R4 R4b R4c R4d R4e R4f R5 R5b R6 R6b R6c R6d R6e R7 R7b"; else echo "FAIL r3_foundation race"; exit 1; fi

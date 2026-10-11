@@ -18,14 +18,28 @@
 // test seeds inside a DO block that RAISEs → the whole tx rolls back (net-zero writes).
 
 import * as fs from 'fs'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
 
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
-// Six arguments since 20261026600000 (p_filter added; DROP + CREATE, never an overload).
-const SIG = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'
+// GATE ON THE LEDGER, NOT ON THE STATE (as smoke 24 does). The Release 3 foundation migration
+// (20261026600000_r3_foundation.sql) is applied as its own step and writes its row in
+// supabase_migrations.schema_migrations in the same transaction. While that row is absent the checks below
+// assert what the database is today (or skip, where the object does not exist yet); once it is recorded the
+// Release 3 assertions ALWAYS run. So the suite is green when this file is merged before the migration is
+// applied, and green after it is applied; a later regression fails instead of skipping.
+const R3_FOUNDATION = '20261026600000'
+const R3_GATE_SQL = `
+  SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '${R3_FOUNDATION}') AS r3_applied
+`
+let r3Applied = false
+// The signature follows the ledger: five arguments today, six once 20261026600000 is recorded
+// (p_filter added; DROP + CREATE, never an overload).
+const SIG_BEFORE_R3 = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'
+const SIG_R3 = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'
+let SIG = SIG_R3
 const MGMT_URL = 'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
 // v1 prosrc md5 captured on origin/develop 2026-09-24 (I5 — v1 must stay byte-identical).
 const V1_MD5 = '2cca92d907df6b60fbc840214a9df485'
@@ -87,6 +101,12 @@ async function probeRolledBack(doBlockSql: string): Promise<string> {
 }
 
 maybeDescribe('29 — Ranked Feed v2 (events in feed) — PROD read-only', () => {
+  beforeAll(async () => {
+    const gate = await queryProd(R3_GATE_SQL)
+    r3Applied = gate[0]?.r3_applied === true
+    SIG = r3Applied ? SIG_R3 : SIG_BEFORE_R3
+  })
+
   it('[post-deploy] v2 is SECDEF + pinned search_path, emits id|kind|score|distance_bucket (no coords)', async (ctx) => {
     const gate = await queryProd(GATE_SQL)
     if (gate[0]?.applied !== true) { ctx.skip(); return }

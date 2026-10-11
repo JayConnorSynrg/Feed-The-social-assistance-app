@@ -16,11 +16,12 @@
 --   (A) Safety alert lifecycle. Alerts gain a version token, an "updated" marker, a resolved state and an
 --       append-only history (one complete message per version). Update: owner or moderator, only while live;
 --       raising severity restarts the expiry for the new level from the update, lowering it caps what is left at
---       the lower level's window, any other update keeps the expiry; the reporter's own content change returns a
+--       the lower level's window, any other update keeps the expiry; ANY change by the reporter returns a
 --       verified alert to unverified. Resolve: shown as resolved for 6 hours, then gone. The owner's "delete" is a
 --       recorded withdrawal (status withdrawn; no row leaves). A NULL-owner alert belongs to nobody. No reader and
---       no RPC returns created_by or verified_by; ownership is is_mine only. A moderator cannot verify their own
---       alert; a second verify keeps the first verifier. One predicate decides live / resolved / gone.
+--       no RPC returns created_by or verified_by, and no audit row or error text carries either; ownership is
+--       is_mine only. A moderator cannot verify their own alert; a second verify keeps the first verifier. One
+--       predicate decides live / resolved / gone.
 --   (B) Labels: outdated / misleading / sensitive. Moderator-applied with a reason, append-only records,
 --       retracted by negation, each naming the post version it covers; an author may mark their own post
 --       sensitive; posts.labels carries the current set. Labels annotate only (ranking never reads them).
@@ -30,7 +31,8 @@
 --       report is taken after the item changed; three reports hide a post or a comment, never an org event.
 --   (E) Requests and offers can be closed and reopened by their author. Opt-in decisions get an audited RPC and
 --       every opt-in change writes an event row. Any DELETE of an opt-in row returns its slot (the direct seeker
---       DELETE drained offers). EXPAND/CONTRACT: the direct UPDATE (status) grant stays until the contract step.
+--       DELETE drained offers). EXPAND/CONTRACT: the direct UPDATE (status) grant and the direct DELETE (policy
+--       opt_ins_delete) stay until the contract step; withdraw_opt_in is the seeker's path from then on.
 --   (F) Announcements: moderators pin / unpin with an expiry (7 days by default); ranked_feed_v2 gains an
 --       optional p_filter ('announcements' = live pins + org events). DROP + CREATE with a DEFAULT, no overload.
 --   (G) Petitions: drafts are column-limited on insert; the hash is sha256 of the body, computed by the server;
@@ -294,10 +296,15 @@ END $$;
 CREATE TRIGGER trg_post_labels_append_only BEFORE UPDATE OR DELETE ON public.post_labels
   FOR EACH ROW EXECUTE FUNCTION public.post_labels_append_only();
 
--- posts.labels = the labels of the active records (feed, share pages and realtime read it from the post row)
+-- posts.labels = the labels of the active records (feed, share pages and realtime read it from the post row).
+-- The trigger takes the post row lock itself, then recomputes in a new statement (which sees every record committed
+-- while it waited): two writers of one post's labels are serialised here, whether or not their caller locked the
+-- post first. FOR NO KEY UPDATE is the lock the UPDATE below takes anyway; it does not conflict with the
+-- KEY SHARE lock the post_labels foreign key holds, so two inserters queue instead of deadlocking.
 CREATE FUNCTION public.post_labels_sync() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
+  PERFORM 1 FROM public.posts WHERE id = NEW.post_id FOR NO KEY UPDATE;
   UPDATE public.posts p
      SET labels = COALESCE((SELECT array_agg(DISTINCT l.label ORDER BY l.label)
                               FROM public.post_labels l WHERE l.post_id = p.id AND l.retracted_at IS NULL), '{}')
@@ -576,8 +583,9 @@ BEGIN
   ELSIF n_sev < a.severity THEN v_sev := 'de_escalated'; n_exp := LEAST(a.expires_at, v_now + public.safety_alert_ttl(n_sev));
   ELSE n_exp := a.expires_at; END IF;
   IF n_exp IS DISTINCT FROM a.expires_at THEN v_changed := array_append(v_changed, 'expires_at'); END IF;
-  -- publish-then-verify: the reporter's own change (other than only lowering severity) returns the alert to unverified
-  v_unverify := a.verified AND v_owner AND (v_changed && ARRAY['alert_type', 'description', 'location'] OR n_sev > a.severity);
+  -- publish-then-verify: ANY change by the reporter returns a verified alert to unverified (a lower severity alone
+  -- included); a moderator's change of someone else's alert keeps the mark
+  v_unverify := a.verified AND v_owner;
 
   UPDATE public.safety_alerts
      SET alert_type = n_type, severity = n_sev, description = n_desc, location = n_loc, expires_at = n_exp,
@@ -685,8 +693,9 @@ BEGIN
       DETAIL = jsonb_build_object('current_version', a.version, 'updated_at', a.updated_at)::text; END IF;
   IF a.verified THEN RETURN public.safety_alert_public(a); END IF;              -- the first verifier stands; no second audit row
   UPDATE public.safety_alerts SET verified = true, verified_by = v_uid, verified_at = now() WHERE id = a.id RETURNING * INTO a;
+  -- the audit row names the alert and the acting moderator, never the reporter (reporter anonymity holds for staff too)
   PERFORM public.record_admin_action(v_uid, 'safety_alert.verify', 'safety_alert', a.id::text, 'ok', NULL,
-    jsonb_build_object('created_by', a.created_by, 'version', a.version), public.request_id());
+    jsonb_build_object('version', a.version), public.request_id());
   RETURN public.safety_alert_public(a);
 END $$;
 
@@ -711,7 +720,7 @@ BEGIN
   UPDATE public.safety_alerts SET status = 'removed', version = a.version + 1 WHERE id = a.id RETURNING * INTO a;
   PERFORM public.safety_alert_append(a, 'cancel', a.version - 1, ARRAY['status'], 'same', v_uid, 'moderator', v_reason);
   PERFORM public.record_admin_action(v_uid, 'safety_alert.remove', 'safety_alert', a.id::text, 'ok', v_reason,
-    jsonb_build_object('created_by', a.created_by, 'version', a.version), public.request_id());
+    jsonb_build_object('version', a.version), public.request_id());                -- no reporter id (see verify)
   RETURN public.safety_alert_public(a);
 END $$;
 
@@ -819,7 +828,8 @@ BEGIN
     jsonb_build_object('label', p_label, 'label_id', COALESCE(v_new, v_old.id),
                        'supersedes_label_id', CASE WHEN p_applied THEN v_old.id END,
                        'author_id', p.user_id, 'version', p.version,
-                       -- statement-of-reasons fields
+                       -- statement-of-reasons fields: no reader in this release; the moderation screens of the
+                       -- next release (decision log, the notice to the author) read them from this row
                        'decision_visibility', CASE WHEN p_applied THEN 'CONTENT_LABELLED' ELSE 'LABEL_RETRACTED' END,
                        'decision_ground', upper(p_ground), 'decision_facts', v_reason,
                        'source_type', CASE WHEN p_report_id IS NULL THEN 'VOLUNTARY' ELSE 'OTHER_NOTIFICATION' END,
@@ -895,6 +905,7 @@ BEGIN
     'post', p.id::text, 'ok', COALESCE(v_note, p_reason),
     jsonb_build_object('author_id', p.user_id, 'version', p.version,
                        'lock_reason', CASE WHEN p_locked THEN p_reason ELSE p.comments_locked_reason END,
+                       -- statement-of-reasons fields (as on a label decision): read by the next release's moderation screens
                        'decision_visibility', CASE WHEN p_locked THEN 'CONTENT_INTERACTION_RESTRICTED' ELSE 'INTERACTION_RESTRICTION_LIFTED' END,
                        'decision_ground', 'INCOMPATIBLE_CONTENT', 'decision_facts', COALESCE(v_note, p_reason),
                        'source_type', 'VOLUNTARY', 'automated_detection', false, 'automated_decision', 'NOT_AUTOMATED',

@@ -3,7 +3,8 @@
 -- Objective: the CONTRACT step of Release 3 (expand = 20261026600000_r3_foundation.sql). Apply only AFTER every
 -- Release 3 client is live: until then the deployed client still updates alerts without a version token, decides
 -- opt-ins with a direct UPDATE and sends a petition hash, and the foundation migration kept those three paths so
--- nothing breaks between its apply and the client deploys.
+-- nothing breaks between its apply and the client deploys. (The fourth path closed here, the direct DELETE of an
+-- opt-in, has no deployed caller.)
 --
 -- What this migration does
 --   (a) update_safety_alert requires its version token (p_expected_version NULL -> 22023
@@ -11,12 +12,15 @@
 --       foundation body plus that one guard; nothing else changes.
 --   (b) Opt-in decisions go through decide_opt_in only: the direct UPDATE (status) grant and policy opt_ins_update
 --       go (with them the path that accepted an opt-in on a removed post, and a platform admin's direct write).
+--   (b2) No client DELETE on opt-ins: policy opt_ins_delete and the DELETE grant go. A seeker leaves through
+--       withdraw_opt_in, an author lifts a decline through unblock_opt_in; both lock the post before the opt-in,
+--       so they cannot deadlock with decide_opt_in the way the direct DELETE did. The slot-return trigger stays.
 --   (c) petitions: INSERT (body_version_hash) goes. The composer no longer sends a hash; the server computes it.
 --   (d) Refuses to run before the foundation migration (SQLSTATE 55000), so it can never remove a legacy path
 --       whose replacement does not exist.
 -- Contract: specs/r3-contract.md ("Release: expand / contract").
 --
--- Migration order (5-step): no extensions, no tables; one function, then grants + policies (RLS last).
+-- Migration order (5-step): no extensions, no tables; one function, then grants, then policies (RLS last).
 -- ONE transaction; the schema_migrations ledger row is written in the SAME transaction.
 
 BEGIN;
@@ -81,8 +85,9 @@ BEGIN
   ELSIF n_sev < a.severity THEN v_sev := 'de_escalated'; n_exp := LEAST(a.expires_at, v_now + public.safety_alert_ttl(n_sev));
   ELSE n_exp := a.expires_at; END IF;
   IF n_exp IS DISTINCT FROM a.expires_at THEN v_changed := array_append(v_changed, 'expires_at'); END IF;
-  -- publish-then-verify: the reporter's own change (other than only lowering severity) returns the alert to unverified
-  v_unverify := a.verified AND v_owner AND (v_changed && ARRAY['alert_type', 'description', 'location'] OR n_sev > a.severity);
+  -- publish-then-verify: ANY change by the reporter returns a verified alert to unverified (a lower severity alone
+  -- included); a moderator's change of someone else's alert keeps the mark
+  v_unverify := a.verified AND v_owner;
 
   UPDATE public.safety_alerts
      SET alert_type = n_type, severity = n_sev, description = n_desc, location = n_loc, expires_at = n_exp,
@@ -100,13 +105,28 @@ BEGIN
   RETURN public.safety_alert_public(a);
 END $$;
 
--- (b) opt-in decisions: decide_opt_in is the only way in. The seeker's own DELETE (which returns the slot) and the
--- read policy stay.
-DROP POLICY opt_ins_update ON public.resource_opt_ins;
+-- ---------------------------------------------------------------------------
+-- Grants
+-- ---------------------------------------------------------------------------
+-- (b) opt-in decisions: decide_opt_in is the only way in. The read policy stays.
 REVOKE UPDATE ON public.resource_opt_ins FROM PUBLIC, anon, authenticated;   -- table level: removes the UPDATE (status) column grant too
+
+-- (b2) no client DELETE on opt-ins: a seeker leaves through withdraw_opt_in, an author lifts a decline through
+-- unblock_opt_in (both take the post row first, then the opt-in row, as decide_opt_in does). A direct DELETE took
+-- the two locks in the opposite order (opt-in row, then the post row in the slot trigger) and deadlocked with a
+-- decide_opt_in made at the same moment (measured: 21 and 25 of 40 simultaneous pairs). No deployed client sends
+-- it. The slot-return and trail triggers stay: they serve the two RPCs, cascades and account deletion. With the
+-- policy goes the platform admin's direct removal of an opt-in (service-side only from here on).
+REVOKE DELETE ON public.resource_opt_ins FROM PUBLIC, anon, authenticated;
 
 -- (c) petitions: the server's trigger is the only writer of the hash
 REVOKE INSERT (body_version_hash) ON public.petitions FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- RLS policies last: the two policies that served the paths closed above
+-- ---------------------------------------------------------------------------
+DROP POLICY opt_ins_update ON public.resource_opt_ins;
+DROP POLICY opt_ins_delete ON public.resource_opt_ins;
 
 -- ---------------------------------------------------------------------------
 -- Ledger row in the SAME transaction.

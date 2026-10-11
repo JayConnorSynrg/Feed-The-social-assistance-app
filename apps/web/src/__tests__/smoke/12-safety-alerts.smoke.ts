@@ -4,13 +4,30 @@
 // Surface: apps/web/src/components/panels/map-panel.tsx, safety-alert-marker.tsx
 // Upstream: Map (M4), Auth (M1) | Downstream: Moderation (M17)
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
 
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
+// GATE ON THE LEDGER, NOT ON THE STATE (as smoke 24 does). The Release 3 foundation migration
+// (20261026600000_r3_foundation.sql) is applied as its own step and writes its row in
+// supabase_migrations.schema_migrations in the same transaction. While that row is absent the checks below
+// assert what the database is today (or skip, where the object does not exist yet); once it is recorded the
+// Release 3 assertions ALWAYS run. So the suite is green when this file is merged before the migration is
+// applied, and green after it is applied; a later regression fails instead of skipping.
+const R3_FOUNDATION = '20261026600000'
+const R3_GATE_SQL = `
+  SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '${R3_FOUNDATION}') AS r3_applied
+`
+let r3Applied = false
+
 maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
+  beforeAll(async () => {
+    const gate = await queryProd(R3_GATE_SQL)
+    r3Applied = gate[0]?.r3_applied === true
+  })
+
   it('safety_alerts is NOT in supabase_realtime publication (WAL privacy gate)', async () => {
     // Backend: safety_alerts DROPPED from realtime — created_by must not transit WAL
     // Surface: supabase/migrations/20260619000400_drop_safety_alerts_from_realtime.sql
@@ -55,9 +72,9 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
     expect(rows[0].can_select, 'anon must NOT have SELECT on safety_alerts.created_by').toBe(false)
   })
 
-  it('all nine safety alert RPCs are SECDEF with search_path = public, pg_temp, one signature each', async () => {
+  it('the safety alert RPCs are SECDEF; from 20261026600000 all nine pin search_path = public, pg_temp, one signature each', async () => {
     // Backend: 20261026600000 — place / update / resolve / delete (withdraw) / vote / admin_verify / admin_remove,
-    // and the two readers safety_alerts_in_view + safety_alert_history.
+    // and the two readers safety_alerts_in_view + safety_alert_history. Before it: the four RPCs of the map.
     // Surface: use-safety-alerts.ts (place, vote, update, delete, read), safety-alerts-review.tsx (verify, remove)
     const rows = await queryProd(`
       SELECT proname, prosecdef, proconfig
@@ -70,6 +87,13 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
           'safety_alerts_in_view', 'safety_alert_history'
         )
     `)
+    if (!r3Applied) {
+      // today's database: the four RPCs the map and the review screen call are SECDEF
+      const today = rows.filter((r) => ['place_safety_alert', 'vote_safety_alert', 'safety_alerts_in_view', 'admin_verify_safety_alert'].includes(String(r.proname)))
+      expect(today.length).toBe(4)
+      for (const row of today) expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
+      return
+    }
     expect(rows.length).toBe(9)
     for (const row of rows) {
       expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
@@ -77,7 +101,8 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
     }
   })
 
-  it('no client role can SELECT safety_alerts.verified_by (the verifying moderator stays anonymous too)', async () => {
+  it('[post-deploy 20261026600000] no client role can SELECT safety_alerts.verified_by (the verifying moderator stays anonymous too)', async (ctx) => {
+    if (!r3Applied) { ctx.skip(); return }
     const rows = await queryProd(`
       SELECT has_column_privilege('anon', 'public.safety_alerts', 'verified_by', 'SELECT')          AS anon_sel,
              has_column_privilege('authenticated', 'public.safety_alerts', 'verified_by', 'SELECT') AS auth_sel
@@ -86,7 +111,8 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
     expect(rows[0].auth_sel, 'authenticated must NOT have SELECT on safety_alerts.verified_by').toBe(false)
   })
 
-  it('no alert RPC returns the safety_alerts row or an identity column; clients hold no write bit and no grant on the history', async () => {
+  it('[post-deploy 20261026600000] no alert RPC returns the safety_alerts row or an identity column; clients hold no write bit and no grant on the history', async (ctx) => {
+    if (!r3Applied) { ctx.skip(); return }
     const rows = await queryProd(`
       SELECT
         (SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -115,8 +141,10 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
       WHERE n.nspname = 'public' AND proname = 'admin_verify_safety_alert'
     `)
     expect(rows.length).toBeGreaterThan(0)
-    expect(rows.length, 'exactly one admin_verify_safety_alert signature (no PostgREST overload)').toBe(1)
     const config = rows[0].proconfig as string[] | null
+    expect(config?.some((c: string) => c.startsWith('search_path=')), 'search_path must be pinned (both states)').toBe(true)
+    if (!r3Applied) return
+    expect(rows.length, 'exactly one admin_verify_safety_alert signature (no PostgREST overload)').toBe(1)
     expect(config).toEqual(['search_path=public, pg_temp'])
   })
 })

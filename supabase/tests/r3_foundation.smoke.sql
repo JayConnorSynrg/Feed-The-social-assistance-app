@@ -6,9 +6,10 @@
 -- vs edit, re-report) lives in r3_foundation.race.sh.
 --
 -- Two release states, both must PASS: 20261026600000 alone (expand: the deployed client still updates alerts
--- without a token, decides opt-ins by direct UPDATE and sends a petition hash) and 20261026600000 +
--- 20261026700000 (contract). The state is read from the ledger; the checks that differ assert each state's own
--- behaviour. Without the foundation migration the file FAILS (it never skips).
+-- without a token, decides opt-ins by direct UPDATE and sends a petition hash; a direct DELETE of an opt-in is
+-- still possible) and 20261026600000 + 20261026700000 (contract: all four closed). The state is read from the
+-- ledger; the checks that differ assert each state's own behaviour. Without the foundation migration the file
+-- FAILS (it never skips).
 -- Run against a database that already has the migration(s) applied, e.g.:
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/r3_foundation.smoke.sql
 -- The whole file runs inside BEGIN ... ROLLBACK: it commits NOTHING. It seeds its own principals and rows, so it
@@ -37,7 +38,7 @@ GRANT ALL ON SEQUENCE res_n_seq TO PUBLIC;
 
 -- Run q as a principal (p_uid NULL = anon role); returns 'OK <value>' or 'ERR <sqlstate> <message>[ | <detail>]'.
 CREATE FUNCTION pg_temp.as_(p_uid uuid, p_anon boolean, q text) RETURNS text LANGUAGE plpgsql AS $f$
-DECLARE r text; d text;
+DECLARE r text; d text; h text;
 BEGIN
   IF p_uid IS NULL THEN
     PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
@@ -51,8 +52,9 @@ BEGIN
     EXECUTE q INTO r;
     r := 'OK ' || COALESCE(r, '<null>');
   EXCEPTION WHEN others THEN
-    GET STACKED DIAGNOSTICS d = PG_EXCEPTION_DETAIL;
-    r := 'ERR ' || SQLSTATE || ' ' || SQLERRM || COALESCE(' | ' || NULLIF(d, ''), '');
+    GET STACKED DIAGNOSTICS d = PG_EXCEPTION_DETAIL, h = PG_EXCEPTION_HINT;
+    r := 'ERR ' || SQLSTATE || ' ' || SQLERRM || COALESCE(' | ' || NULLIF(d, ''), '')
+         || CASE WHEN current_setting('r3smoke.hint', true) = 'on' THEN COALESCE(' | HINT ' || NULLIF(h, ''), '') ELSE '' END;
   END;
   PERFORM set_config('role', 'postgres', true);
   PERFORM set_config('request.jwt.claims', '', true);
@@ -70,6 +72,13 @@ $f$;
 CREATE FUNCTION pg_temp.run(w text, q text) RETURNS text LANGUAGE sql AS $f$
   SELECT CASE WHEN w = 'anon' THEN pg_temp.as_(NULL, false, q) ELSE pg_temp.as_(pg_temp.u(w), w IN ('G', 'GT'), q) END
 $f$;
+-- runx: run, with the HINT appended too: message | detail | hint is everything an error sends to a client
+CREATE FUNCTION pg_temp.runx(w text, q text) RETURNS text LANGUAGE plpgsql AS $f$
+DECLARE r text;
+BEGIN
+  PERFORM set_config('r3smoke.hint', 'on', true); r := pg_temp.run(w, q); PERFORM set_config('r3smoke.hint', 'off', true);
+  RETURN r;
+END $f$;
 -- one check as a principal
 CREATE FUNCTION pg_temp.t(p_id text, p_what text, p_expect text, w text, q text) RETURNS text LANGUAGE plpgsql AS $f$
 DECLARE r text := pg_temp.run(w, q);
@@ -224,6 +233,12 @@ SELECT pg_temp.ck('HY3', 'born closed: a new table, its sequence and a new funct
          || has_function_privilege('service_role', 'public.r3_smoke_probe_f()', 'EXECUTE')::char);
 DROP FUNCTION public.r3_smoke_probe_f();
 DROP TABLE public.r3_smoke_probe_t;
+SELECT pg_temp.ck('HY3b', 'the default-privilege change is scoped to schema public: no role-wide (schema-less) default ACL row exists for any role; postgres keeps its three rows in public and none of them names a client role',
+  '^0\|3\|0$',
+  (SELECT count(*)::text FROM pg_default_acl WHERE defaclnamespace = 0) || '|' ||
+  (SELECT count(*) FROM pg_default_acl d WHERE d.defaclrole = 'postgres'::regrole AND d.defaclnamespace = 'public'::regnamespace) || '|' ||
+  (SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a
+    WHERE d.defaclrole = 'postgres'::regrole AND d.defaclnamespace = 'public'::regnamespace AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole)));
 -- every function this release creates or replaces
 CREATE TEMP TABLE r3_fns (sig text PRIMARY KEY, kind text);   -- kind: member | anon | internal
 INSERT INTO r3_fns VALUES
@@ -266,12 +281,16 @@ SELECT pg_temp.ck('HY6', 'EXECUTE: PUBLIC never; anon only on the three readers;
 SELECT pg_temp.ck('HY7', 'the two existing notification trigger functions are no longer client-executable', '^ffff$',
   (SELECT string_agg(has_function_privilege(r, f, 'EXECUTE')::char, '' ORDER BY f, r)
      FROM unnest(ARRAY['anon', 'authenticated']) r, unnest(ARRAY['public.notify_post_comment_author()', 'public.notify_application_status_change()']) f));
-SELECT pg_temp.ck('HY8', 'notification_type holds the three Release 4 values; no row and no function of this release uses one', '^3\|0\|0$',
+SELECT pg_temp.ck('HY8', 'notification_type holds the three Release 4 values; no row uses one; no function in public names one as a literal at all, in any context (the matcher sees one when it is there)', '^3\|0\|0\|0\|t$',
   (SELECT count(*)::text FROM pg_enum WHERE enumtypid = 'public.notification_type'::regtype AND enumlabel IN ('moderation', 'content_update', 'event_update'))
   || '|' || (SELECT count(*) FROM public.notifications WHERE type::text IN ('moderation', 'content_update', 'event_update'))
   || '|' || (SELECT count(*) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
                AND p.prosrc ~ '''(moderation|content_update|event_update)''(::(public\.)?notification_type)?'
-               AND p.prosrc ~ 'notification'));
+               AND p.prosrc ~ 'notification')
+  || '|' || (SELECT count(*) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+               AND p.prosrc ~ '''(moderation|content_update|event_update)''')
+  || '|' || ($ctl$ PERFORM 1 WHERE p_note = 'moderation'; $ctl$ ~ '''(moderation|content_update|event_update)''')::char);
 
 -- ===================== A: safety alert lifecycle =====================
 -- A0: who may place; the answer shape
@@ -291,6 +310,17 @@ SELECT pg_temp.ck('A0d', 'invalid input is refused before any write, with a toke
 SELECT pg_temp.ck('A0e', 'every signed-in member places an alert, each staff tier included', '^C=>OK live;CM=>OK live;RA=>OK live;PA=>OK live;$',
   pg_temp.who(ARRAY['C', 'CM', 'RA', 'PA'], $q$SELECT public.place_safety_alert('general', 1, 'placed by ' || auth.uid(), 10, 10) ->> 'status'$q$));
 INSERT INTO ids SELECT 'pl_' || lower(w), (SELECT id FROM public.safety_alerts WHERE description = 'placed by ' || pg_temp.u(w)) FROM unnest(ARRAY['C', 'CM', 'RA', 'PA']) w;
+
+-- A0g: the shared gate takes EITHER signal. A member's account presenting a token that carries the guest claim, and a
+-- guest account presenting a token that does not, are both refused (G and GT above carry both signals at once).
+SELECT pg_temp.ck('A0g', 'a guest by one signal alone is refused by the alert writes: the JWT claim without the account flag (place, vote), the account flag without the JWT claim (place, vote); nothing was written',
+  '^(ERR 42501 Account required for this action;){4}\|0\|0$',
+  pg_temp.as_(pg_temp.u('C2'), true,  $q$SELECT public.place_safety_alert('general', 1, 'claim only', -70.1, 42.1)::text$q$) || ';' ||
+  pg_temp.as_(pg_temp.u('C2'), true,  $q$SELECT public.vote_safety_alert('5a000000-0000-4000-8000-0000000000b1', 'confirm')::text$q$) || ';' ||
+  pg_temp.as_(pg_temp.u('G'),  false, $q$SELECT public.place_safety_alert('general', 1, 'flag only', -70.2, 42.2)::text$q$) || ';' ||
+  pg_temp.as_(pg_temp.u('G'),  false, $q$SELECT public.vote_safety_alert('5a000000-0000-4000-8000-0000000000b1', 'confirm')::text$q$) || ';|' ||
+  pg_temp.fresh($q$SELECT count(*)::text FROM public.safety_alerts WHERE description IN ('claim only', 'flag only')$q$) || '|' ||
+  pg_temp.fresh($q$SELECT count(*)::text FROM public.safety_alert_votes WHERE alert_id = '5a000000-0000-4000-8000-0000000000b1'$q$));
 
 -- A1: who may update / resolve / withdraw. Owned alert al1 (version 1), then the NULL-owner alert, then a tiered guest's own.
 SELECT pg_temp.ck('A1a', 'update of an owned alert: anon no EXECUTE; guests refused; strangers (member, seeker) are not the owner',
@@ -415,15 +445,22 @@ SELECT pg_temp.ck('A5c', 'a second verify keeps the first verifier and writes no
   pg_temp.audited('PA', $q$SELECT public.admin_verify_safety_alert('5a000000-0000-4000-8000-0000000000a2') ->> 'verified'$q$) || ';' ||
   pg_temp.fresh($q$SELECT (verified_by = pg_temp.u('CM2'))::char FROM public.safety_alerts WHERE id = '5a000000-0000-4000-8000-0000000000a2'$q$));
 SELECT pg_temp.ck('A5d', 'verify does not move the version', '^1$', (SELECT version::text FROM public.safety_alerts WHERE id = '5a000000-0000-4000-8000-0000000000a2'));
-SELECT pg_temp.ck('A5e', 'the reporter lowers severity only: the mark stays', '^OK true\|t$',
+SELECT pg_temp.ck('A5e', 'ANY edit by the reporter of a verified alert returns it to unverified, a LOWER severity alone included: verifier cleared; the message is the owner''s and names only severity + expiry',
+  '^OK false\|t\|owner:de_escalated:\{severity,expires_at\}$',
   pg_temp.run('CM', $q$SELECT public.update_safety_alert('5a000000-0000-4000-8000-0000000000a2', p_severity => 1, p_expected_version => 1) ->> 'verified'$q$) || '|' ||
-  pg_temp.fresh($q$SELECT (verified_by IS NOT NULL)::char FROM public.safety_alerts WHERE id = '5a000000-0000-4000-8000-0000000000a2'$q$));
+  pg_temp.fresh($q$SELECT (verified_by IS NULL AND verified_at IS NULL)::char FROM public.safety_alerts WHERE id = '5a000000-0000-4000-8000-0000000000a2'$q$) || '|' ||
+  pg_temp.fresh($q$SELECT actor_role || ':' || severity_change || ':' || changed::text FROM public.safety_alert_updates WHERE alert_id = '5a000000-0000-4000-8000-0000000000a2' AND version = 2$q$));
+-- another moderator verifies it again (the mark is back for the next check)
+SELECT pg_temp.run('CM2', $q$SELECT public.admin_verify_safety_alert('5a000000-0000-4000-8000-0000000000a2', 2) ->> 'verified'$q$);
 SELECT pg_temp.ck('A5f', 'the reporter changes the text: back to unverified, verifier cleared (a moderator editing their own alert acts as its owner: no audit row)', '^OK false\|\+0\|t\|owner$',
   pg_temp.audited('CM', $q$SELECT public.update_safety_alert('5a000000-0000-4000-8000-0000000000a2', p_description => 'a different hazard', p_expected_version => 2) ->> 'verified'$q$) || '|' ||
   pg_temp.fresh($q$SELECT (verified_by IS NULL AND verified_at IS NULL)::char FROM public.safety_alerts WHERE id = '5a000000-0000-4000-8000-0000000000a2'$q$) || '|' ||
   pg_temp.fresh($q$SELECT actor_role FROM public.safety_alert_updates WHERE alert_id = '5a000000-0000-4000-8000-0000000000a2' AND version = 3$q$));
-SELECT pg_temp.ck('A5g', 'a moderator''s edit of SOMEONE ELSE''S verified alert keeps the mark', '^OK true$',
-  pg_temp.run('CM2', $q$SELECT public.update_safety_alert((SELECT v FROM ids WHERE k = 'al2'), p_description => 'black ice (checked)', p_expected_version => (SELECT version FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2'))) ->> 'verified'$q$));
+SELECT pg_temp.ck('A5g', 'a moderator''s edit of SOMEONE ELSE''S verified alert keeps the mark: a new text, a higher severity, then a lower severity alone', '^OK true;OK true;OK true\|t$',
+  pg_temp.run('CM2', $q$SELECT public.update_safety_alert((SELECT v FROM ids WHERE k = 'al2'), p_description => 'black ice (checked)', p_expected_version => (SELECT version FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2'))) ->> 'verified'$q$) || ';' ||
+  pg_temp.run('CM2', $q$SELECT public.update_safety_alert((SELECT v FROM ids WHERE k = 'al2'), p_severity => 2, p_expected_version => (SELECT version FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2'))) ->> 'verified'$q$) || ';' ||
+  pg_temp.run('CM2', $q$SELECT public.update_safety_alert((SELECT v FROM ids WHERE k = 'al2'), p_severity => 1, p_expected_version => (SELECT version FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2'))) ->> 'verified'$q$) || '|' ||
+  pg_temp.fresh($q$SELECT (verified_by IS NOT NULL AND severity = 1)::char FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2')$q$));
 SELECT pg_temp.ck('A5h', 'the reporter moves it, changes its type or RAISES severity: each returns it to unverified', '^OK false;OK false;OK false$',
   (SELECT string_agg(pg_temp.run('A', format($q$SELECT public.update_safety_alert((SELECT v FROM ids WHERE k = 'al2'), %s, p_expected_version => (SELECT version FROM public.safety_alerts WHERE id = (SELECT v FROM ids WHERE k = 'al2'))) ->> 'verified'$q$, a))
                      || CASE WHEN o < 3 THEN left(pg_temp.pg(format($q$UPDATE public.safety_alerts SET verified = true, verified_by = %L, verified_at = now() WHERE id = (SELECT v FROM ids WHERE k = 'al2') RETURNING ''$q$, pg_temp.u('CM'))), 0) ELSE '' END,
@@ -606,6 +643,72 @@ SELECT pg_temp.ck('A11e', 'the deployed client''s three direct reads still work:
   pg_temp.run('C',  $q$SELECT (count(*) > 0)::char FROM (SELECT id, alert_type, severity, description, created_at, expires_at, status, confirm_count, clear_count, verified FROM public.safety_alerts WHERE expires_at > now() ORDER BY severity DESC, created_at DESC LIMIT 5) s$q$) || ';' ||
   pg_temp.run('CM', $q$SELECT (count(*) > 0)::char FROM (SELECT id, status, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified FROM public.safety_alerts WHERE status = 'live' AND expires_at > now()) s$q$) || ';' ||
   pg_temp.run('C',  $q$SELECT (count(*) > 0)::char FROM (SELECT id, location, status, expires_at FROM public.safety_alerts WHERE status = 'live' AND expires_at > now()) s$q$));
+-- A11g: everything a client is sent. alscan is A's alert, verified by CM; every answer and every error text (message,
+-- DETAIL and HINT) of the alert RPCs and readers is collected, for strangers, moderators, a guest and anon.
+INSERT INTO ids SELECT 'alscan', ((substr(pg_temp.run('A', $q$SELECT public.place_safety_alert('general', 2, 'for the identity scan', -72.05, 43.75)::text$q$), 4))::jsonb ->> 'id')::uuid;
+CREATE TEMP TABLE scan (n serial, src text, txt text);
+GRANT ALL ON scan TO PUBLIC; GRANT ALL ON SEQUENCE scan_n_seq TO PUBLIC;
+DO $scan$
+DECLARE r record; v_al text := quote_literal((SELECT v FROM ids WHERE k = 'alscan')) || '::uuid';
+BEGIN
+  FOR r IN SELECT * FROM (VALUES
+     (1,  'verify',                 'CM',   'SELECT public.admin_verify_safety_alert($AL)::text'),
+     (2,  'update, stale version',  'CM2',  'SELECT public.update_safety_alert($AL, p_description => ''z'', p_expected_version => 99)::text'),
+     (3,  'resolve, stale version', 'CM2',  'SELECT public.resolve_safety_alert($AL, 99)::text'),
+     (4,  'remove, stale version',  'CM2',  'SELECT public.admin_remove_safety_alert($AL, ''r'', 99)::text'),
+     (5,  'verify, stale version',  'CM2',  'SELECT public.admin_verify_safety_alert($AL, 99)::text'),
+     (6,  'update by a stranger',   'C',    'SELECT public.update_safety_alert($AL, p_description => ''z'', p_expected_version => 1)::text'),
+     (7,  'resolve by a stranger',  'C',    'SELECT public.resolve_safety_alert($AL, 1)::text'),
+     (8,  'withdraw by a stranger', 'C',    'SELECT public.delete_safety_alert($AL)::text'),
+     (9,  'update, bad severity',   'CM2',  'SELECT public.update_safety_alert($AL, p_severity => 9, p_expected_version => 1)::text'),
+     (10, 'update, bad type',       'CM2',  'SELECT public.update_safety_alert($AL, p_type => ''nope'', p_expected_version => 1)::text'),
+     (11, 'update, long note',      'CM2',  'SELECT public.update_safety_alert($AL, p_description => ''q'', p_note => repeat(''n'', 501), p_expected_version => 1)::text'),
+     (12, 'update, half a location','CM2',  'SELECT public.update_safety_alert($AL, p_lng => -72, p_expected_version => 1)::text'),
+     (13, 'update by a guest',      'G',    'SELECT public.update_safety_alert($AL, p_description => ''z'', p_expected_version => 1)::text'),
+     (14, 'verify by a member',     'C',    'SELECT public.admin_verify_safety_alert($AL)::text'),
+     (15, 'vote, bad value',        'C',    'SELECT public.vote_safety_alert($AL, ''maybe'')::text'),
+     (16, 'vote',                   'C',    'SELECT public.vote_safety_alert($AL, ''confirm'')::text'),
+     (17, 'reader, one alert',      'anon', 'SELECT jsonb_agg(to_jsonb(v))::text FROM public.safety_alerts_in_view(p_alert_id => $AL) v'),
+     (18, 'reader, one alert',      'CM2',  'SELECT jsonb_agg(to_jsonb(v))::text FROM public.safety_alerts_in_view(p_alert_id => $AL) v'),
+     (19, 'history',                'C',    'SELECT jsonb_agg(to_jsonb(v))::text FROM public.safety_alert_history($AL) v'),
+     (20, 'update by a moderator',  'CM2',  'SELECT public.update_safety_alert($AL, p_description => ''checked'', p_expected_version => 1)::text'),
+     (21, 'remove by a moderator',  'CM2',  'SELECT public.admin_remove_safety_alert($AL, ''duplicate'', 2)::text'),
+     (22, 'update, gone',           'CM2',  'SELECT public.update_safety_alert($AL, p_description => ''late'', p_expected_version => 3)::text'),
+     (23, 'resolve, gone',          'CM2',  'SELECT public.resolve_safety_alert($AL, 3)::text'),
+     (24, 'vote, gone',             'C',    'SELECT public.vote_safety_alert($AL, ''clear'')::text'),
+     (25, 'verify, gone',           'CM2',  'SELECT public.admin_verify_safety_alert($AL)::text'),
+     (26, 'withdraw, gone',         'A',    'SELECT public.delete_safety_alert($AL)::text'),
+     (27, 'update by its owner, gone', 'A', 'SELECT public.update_safety_alert($AL, p_description => ''late'', p_expected_version => 3)::text'),
+     (28, 'history',                'anon', 'SELECT jsonb_agg(to_jsonb(v))::text FROM public.safety_alert_history($AL) v')
+  ) v(o, src, w, q) ORDER BY o LOOP
+    INSERT INTO scan (src, txt) VALUES (r.src || ' / ' || r.w, pg_temp.runx(r.w, replace(r.q, '$AL', v_al)));
+  END LOOP;
+END $scan$;
+SELECT pg_temp.ck('A11g', 'no answer and no error text (message, DETAIL, HINT) of the alert RPCs and readers carries an account id or names an identity key: texts scanned | errors among them, with a DETAIL | carrying any principal''s id | naming an identity key | the scanner finds the alert id in the answers',
+  '^28\|20:10\|0\|0\|t$',
+  (SELECT count(*) || '|' || count(*) FILTER (WHERE txt LIKE 'ERR %') || ':' || count(*) FILTER (WHERE txt LIKE 'ERR % | {%')
+          || '|' || count(*) FILTER (WHERE txt ~ (SELECT string_agg(pg_temp.u(w)::text, '|') FROM unnest(ARRAY['A','B','B2','C','C2','C3','G','GT','CM','CM2','RA','PA','OA','XM']) w))
+          || '|' || count(*) FILTER (WHERE txt ~ '(created_by|verified_by|actor_id|reporter)')
+          || '|' || (count(*) FILTER (WHERE txt LIKE 'OK %' AND txt ~ (SELECT v::text FROM ids WHERE k = 'alscan')) >= 6)::char
+     FROM scan));
+-- A11f: the audit rows. A platform admin reads admin_actions, so no row may carry the reporter (or, on another
+-- moderator's row, the verifier). Every safety_alert.* row written above is scanned as jsonb text, minus its own
+-- actor_id; alscan (verified by CM, then updated and removed by CM2) is among them.
+SELECT pg_temp.ck('A11f', 'no audit row of an alert action carries the reporter''s id or names an identity key, anywhere in the row (details, reason, target): verify, remove, update and resolve rows about someone else''s alert, and rows written by a moderator other than the verifier, are among those scanned; rows carrying an id | rows naming an identity key | the scanner finds the alert id in every row | a platform admin reads these rows',
+  '^verify:t,remove:t,update:t,resolve:t,by-another:t\|0\|0\|t\|OK t$',
+  (SELECT 'verify:' || (count(*) FILTER (WHERE aa.action = 'safety_alert.verify' AND sa.created_by <> aa.actor_id) > 0)::char
+          || ',remove:' || (count(*) FILTER (WHERE aa.action = 'safety_alert.remove' AND sa.created_by <> aa.actor_id) > 0)::char
+          || ',update:' || (count(*) FILTER (WHERE aa.action = 'safety_alert.update' AND sa.created_by <> aa.actor_id) > 0)::char
+          || ',resolve:' || (count(*) FILTER (WHERE aa.action = 'safety_alert.resolve' AND sa.created_by <> aa.actor_id) > 0)::char
+          || ',by-another:' || (count(*) FILTER (WHERE aa.action IN ('safety_alert.update', 'safety_alert.remove') AND sa.verified_by <> aa.actor_id) > 0)::char
+          || '|' || count(*) FILTER (WHERE (to_jsonb(aa) - 'actor_id')::text ~ sa.created_by::text
+                                        OR (sa.verified_by <> aa.actor_id AND (to_jsonb(aa) - 'actor_id')::text ~ sa.verified_by::text))
+          || '|' || count(*) FILTER (WHERE aa.details::text ~ '"(created_by|verified_by|reporter|reporter_id|owner|owner_id)"')
+          || '|' || bool_and((to_jsonb(aa) - 'actor_id')::text ~ sa.id::text)::char
+     FROM public.admin_actions aa JOIN public.safety_alerts sa ON sa.id::text = aa.target_id
+    WHERE aa.action LIKE 'safety_alert.%' AND sa.created_by IS NOT NULL)
+  || '|' || pg_temp.run('PA', $q$SELECT (count(*) > 3)::char FROM public.admin_actions WHERE action LIKE 'safety_alert.%'$q$));
+
 SELECT pg_temp.ck('A12', 'alerts stay off realtime: no alert table is a member of the publication', '^0$',
   (SELECT count(*)::text FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename ~ '^safety_alert'));
 
@@ -1045,10 +1148,14 @@ SELECT pg_temp.ck('E3d', 'the acting account is selectable by nobody; nobody wri
   pg_temp.pg($q$DELETE FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000003' RETURNING 'x'$q$));
 
 -- E4: the slot. Every opt-in row holds one slot until it is deleted; the slot comes back on any delete. P8 = 2 slots.
-SELECT pg_temp.ck('E4a', 'the drain is closed: a seeker opts in and direct-DELETEs their own opt-in, three times over; the slot comes back every time and each withdrawal is on the trail',
-  '^OK pending/OK 1/2/2/0;OK pending/OK 1/2/2/0;OK pending/OK 1/2/2/0\|3 withdrawn by seeker$',
+SELECT pg_temp.ck('E4a', 'the drain is closed, three times over. Expand: a seeker opts in and direct-DELETEs their own opt-in, the slot comes back (withdraw_opt_in then finds nothing). Contract: the direct DELETE is refused and holds the slot; withdraw_opt_in is the way out and returns it. Each withdrawal is on the trail',
+  CASE WHEN pg_temp.contract()
+       THEN '^(OK pending/ERR 42501 permission denied for table resource_opt_ins/2/1/1/OK true/2/2/0;?){3}\|3 withdrawn by seeker$'
+       ELSE '^(OK pending/OK 1/2/2/0/OK false/2/2/0;?){3}\|3 withdrawn by seeker$' END,
   (SELECT string_agg(pg_temp.run('C', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000008')).status$q$) || '/' ||
                      pg_temp.run('C', $q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = auth.uid() RETURNING 1) SELECT count(*)::text FROM d$q$) || '/' ||
+                     pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '/' ||
+                     pg_temp.run('C', $q$SELECT public.withdraw_opt_in('00000000-0000-4000-a000-000000000008')::text$q$) || '/' ||
                      pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$), ';' ORDER BY g) FROM generate_series(1, 3) g) || '|' ||
   pg_temp.fresh($q$SELECT count(*) || ' ' || min(event) || ' by ' || min(actor_role) FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000008' AND event <> 'opted_in'$q$));
 SELECT pg_temp.ck('E4b', '... so the offer is still open to the next two seekers, and full for the third', '^OK pending;OK pending;ERR P0001 This offer is full\|2/0/2$',
@@ -1063,21 +1170,26 @@ SELECT pg_temp.ck('E4c', 'the RPC paths return the slot exactly once: withdraw_o
   pg_temp.run('A',  $q$SELECT public.decide_opt_in((SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008'), 'decline') ->> 'status'$q$) || '|' || pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || ';' ||
   pg_temp.run('A',  $q$SELECT public.unblock_opt_in((SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008'))::text$q$) || '|' || pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$));
 SELECT pg_temp.run('B', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000008')).status$q$);
-SELECT pg_temp.ck('E4d', 'a direct DELETE reaches only one''s own PENDING opt-in: a stranger, the post''s author, a moderator and a guest delete nothing (0 rows, slots unchanged); anon has no grant',
-  '^C3=>OK 0;A=>OK 0;CM=>OK 0;G=>OK 0;anon=>ERR 42501 permission denied for table resource_opt_ins;\|2/1/1$',
+SELECT pg_temp.ck('E4d', 'a direct DELETE of someone else''s opt-in: in the expand state it reaches only one''s own PENDING row (a stranger, the post''s author, a moderator and a guest delete 0 rows); after the contract step every client role is refused outright; anon has no grant in either; slots unchanged',
+  CASE WHEN pg_temp.contract() THEN '^(\w+=>ERR 42501 permission denied for table resource_opt_ins;){5}\|2/1/1$'
+       ELSE '^C3=>OK 0;A=>OK 0;CM=>OK 0;G=>OK 0;anon=>ERR 42501 permission denied for table resource_opt_ins;\|2/1/1$' END,
   pg_temp.who(ARRAY['C3', 'A', 'CM', 'G', 'anon'], $q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$));
-SELECT pg_temp.ck('E4e', '... and not an opt-in the author already accepted (the seeker''s DELETE matches 0 rows); a direct INSERT is refused for everyone', '^OK accepted;OK 0\|2/1/1\|B=>ERR 42501 permission denied for table resource_opt_ins;A=>ERR 42501 permission denied for table resource_opt_ins;$',
+SELECT pg_temp.ck('E4e', '... and not an opt-in the author already accepted (expand: the seeker''s DELETE matches 0 rows; contract: refused); a direct INSERT is refused for everyone',
+  CASE WHEN pg_temp.contract() THEN '^OK accepted;ERR 42501 permission denied for table resource_opt_ins\|2/1/1\|B=>ERR 42501 permission denied for table resource_opt_ins;A=>ERR 42501 permission denied for table resource_opt_ins;$'
+       ELSE '^OK accepted;OK 0\|2/1/1\|B=>ERR 42501 permission denied for table resource_opt_ins;A=>ERR 42501 permission denied for table resource_opt_ins;$' END,
   pg_temp.run('A', $q$SELECT public.decide_opt_in((SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008'), 'accept') ->> 'status'$q$) || ';' ||
   pg_temp.run('B', $q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = auth.uid() RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
   pg_temp.who(ARRAY['B', 'A'], $q$INSERT INTO public.resource_opt_ins (post_id, seeker_id, status) VALUES ('00000000-0000-4000-a000-000000000008', auth.uid(), 'accepted') RETURNING 'forged'$q$));
 SELECT pg_temp.run('C3', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000008')).status$q$);
-SELECT pg_temp.ck('E4h', 'the one other direct delete the policy allows (kept from before): a platform admin removes a member''s opt-in; now the slot comes back and the trail says who (removed, by platform admin)',
-  '^OK 1\|2/1/1\|removed:pending:platform_admin$',
+SELECT pg_temp.ck('E4h', 'the one other direct delete the policy allowed: a platform admin removes a member''s opt-in. Expand: the slot comes back and the trail says who (removed, by platform admin). Contract: refused like every client DELETE; the row and its slot stay',
+  CASE WHEN pg_temp.contract() THEN '^ERR 42501 permission denied for table resource_opt_ins\|2/0/2\|opted_in:-:seeker$' ELSE '^OK 1\|2/1/1\|removed:pending:platform_admin$' END,
   pg_temp.run('PA', format($q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = %L RETURNING 1) SELECT count(*)::text FROM d$q$, pg_temp.u('C3'))) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
-  pg_temp.fresh($q$SELECT event || ':' || from_status || ':' || actor_role FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000008' ORDER BY id DESC LIMIT 1$q$));
+  pg_temp.fresh($q$SELECT event || ':' || COALESCE(from_status, '-') || ':' || actor_role FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000008' ORDER BY id DESC LIMIT 1$q$));
+-- contract state: C3's row is still there (the admin's DELETE was refused); C3 leaves through the RPC so both states continue alike
+SELECT CASE WHEN pg_temp.contract() THEN pg_temp.run('C3', $q$SELECT public.withdraw_opt_in('00000000-0000-4000-a000-000000000008')::text$q$) END;
 SELECT pg_temp.ck('E4f', 'a delete by the table owner (a service-side cleanup) returns the slot too and is on the trail as removed / system; the slot never exceeds the capacity', '^OK 1\|2/2/0\|removed:accepted:system\|2/2/0$',
   pg_temp.pg($q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
@@ -1348,16 +1460,43 @@ SELECT pg_temp.ck('X5', 'hard deletes by the table owner cascade through the app
   pg_temp.fresh($q$SELECT count(*)::text FROM public.petition_updates WHERE petition_id = (SELECT v FROM ids WHERE k = 'pt1')$q$) || '|' ||
   pg_temp.fresh($q$SELECT count(*)::text FROM public.posts WHERE petition_id = (SELECT v FROM ids WHERE k = 'pt1')$q$));
 
+-- X6: the account deletion function's own path (supabase/functions/delete-account): as service_role it deletes the
+-- member's posts, then the profile row; the profile's opt-ins on other members' offers go by cascade. No client
+-- DELETE grant is involved, so this is the same before and after the contract step.
+INSERT INTO auth.users (id, email, is_anonymous, raw_user_meta_data) VALUES ('91000000-0000-4000-8000-000000000019', 'leaver@r3smoke.test', false, '{}'::jsonb);
+INSERT INTO public.profiles (id) VALUES ('91000000-0000-4000-8000-000000000019') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.posts (id, user_id, content, post_type, metadata, max_seekers, created_at) VALUES
+ ('00000000-0000-4000-a000-0000000000e1', pg_temp.u('A'), 'an offer the leaver opts in to', 'source_offer', '{"categories":["food"]}', 2, now() - interval '1 hour');
+CREATE FUNCTION pg_temp.svc(q text) RETURNS text LANGUAGE plpgsql AS $f$
+DECLARE r text;
+BEGIN
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true); PERFORM set_config('role', 'service_role', true);
+  BEGIN EXECUTE q INTO r; r := 'OK ' || COALESCE(r, '<null>');
+  EXCEPTION WHEN others THEN r := 'ERR ' || SQLSTATE || ' ' || SQLERRM; END;
+  PERFORM set_config('role', 'postgres', true); PERFORM set_config('request.jwt.claims', '', true);
+  RETURN r;
+END $f$;
+SELECT pg_temp.ck('X6', 'the deletion function''s path in both release states: the member holds a slot (2/1/1); service_role deletes the profile; the opt-in goes by cascade, the slot is back (2/2/0) and the trail records the removal by the system with the seeker cleared',
+  '^OK pending\|2/1/1\|OK 1\|2/2/0\|removed:pending:system:t$',
+  pg_temp.as_('91000000-0000-4000-8000-000000000019', false, $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-0000000000e1')).status$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-0000000000e1')$q$) || '|' ||
+  pg_temp.svc($q$WITH d AS (DELETE FROM public.profiles WHERE id = '91000000-0000-4000-8000-000000000019' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-0000000000e1')$q$) || '|' ||
+  pg_temp.fresh($q$SELECT event || ':' || from_status || ':' || actor_role || ':' || (seeker_id IS NULL)::char FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-0000000000e1' ORDER BY id DESC LIMIT 1$q$));
+
 -- ===================== Z: release state =====================
 SELECT pg_temp.ck('Z1', 'ledger rows: 0266 always; 0267 exactly when contracted', CASE WHEN pg_temp.contract() THEN '^1\|1$' ELSE '^1\|0$' END,
   (SELECT count(*) FILTER (WHERE version = '20261026600000') || '|' || count(*) FILTER (WHERE version = '20261026700000') FROM supabase_migrations.schema_migrations));
-SELECT pg_temp.ck('Z2', 'the three legacy paths: open in the expand state, closed after the contract step (alert update without a token | UPDATE (status) on opt-ins + its policy | INSERT (body_version_hash))',
-  CASE WHEN pg_temp.contract() THEN '^t\|f:0\|f$' ELSE '^f\|t:1\|t$' END,
+SELECT pg_temp.ck('Z2', 'the four legacy paths: open in the expand state, closed after the contract step (alert update without a token | UPDATE (status) on opt-ins + its policy | INSERT (body_version_hash) | DELETE on opt-ins + its policy); the read policy and the guest block on opt-ins stay in both',
+  CASE WHEN pg_temp.contract() THEN '^t\|f:0\|f\|ff:0\|opt_ins_select,resource_opt_ins_block_anon_insert$' ELSE '^f\|t:1\|t\|tf:1\|opt_ins_delete,opt_ins_select,opt_ins_update,resource_opt_ins_block_anon_insert$' END,
   (SELECT (prosrc ~ 'IF p_expected_version IS NULL THEN RAISE EXCEPTION ''alert_field_required:expected_version''')::char FROM pg_proc
     WHERE oid = 'public.update_safety_alert(uuid,text,integer,text,double precision,double precision,integer,text)'::regprocedure) || '|' ||
   has_column_privilege('authenticated', 'public.resource_opt_ins', 'status', 'UPDATE')::char || ':' ||
   (SELECT count(*) FROM pg_policy WHERE polrelid = 'public.resource_opt_ins'::regclass AND polcmd = 'w') || '|' ||
-  has_column_privilege('authenticated', 'public.petitions', 'body_version_hash', 'INSERT')::char);
+  has_column_privilege('authenticated', 'public.petitions', 'body_version_hash', 'INSERT')::char || '|' ||
+  has_table_privilege('authenticated', 'public.resource_opt_ins', 'DELETE')::char || has_table_privilege('anon', 'public.resource_opt_ins', 'DELETE')::char || ':' ||
+  (SELECT count(*) FROM pg_policy WHERE polrelid = 'public.resource_opt_ins'::regclass AND polcmd = 'd') || '|' ||
+  (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid = 'public.resource_opt_ins'::regclass));
 -- the migration's data fixes, as properties of every row (the rows that existed before it included)
 SELECT pg_temp.ck('BF1', 'every alert has its message 1 (the backfill covered the alerts that existed before the migration)', '^0$',
   (SELECT count(*)::text FROM public.safety_alerts a WHERE NOT EXISTS (SELECT 1 FROM public.safety_alert_updates u WHERE u.alert_id = a.id AND u.version = 1)));
@@ -1372,6 +1511,11 @@ SELECT pg_temp.ck('Z3', 'new tables: RLS on with at least one policy each; no cl
           count(*) FILTER (WHERE has_table_privilege('authenticated', c.oid, 'INSERT') OR has_table_privilege('authenticated', c.oid, 'UPDATE') OR has_table_privilege('authenticated', c.oid, 'DELETE')
                                  OR has_table_privilege('anon', c.oid, 'INSERT') OR has_table_privilege('anon', c.oid, 'UPDATE') OR has_table_privilege('anon', c.oid, 'DELETE'))
      FROM pg_class c WHERE c.oid IN ('public.safety_alert_updates'::regclass, 'public.post_labels'::regclass, 'public.resource_opt_in_events'::regclass, 'public.petition_updates'::regclass)));
+SELECT pg_temp.ck('Z3b', 'the seven policies of this release decide through the SECURITY DEFINER helpers or the row itself: none reads public.profiles as the caller (a column revoke on profiles cannot change who they admit)', '^7\|0$',
+  (SELECT count(*) || '|' || count(*) FILTER (WHERE COALESCE(pg_get_expr(polqual, polrelid), '') || COALESCE(pg_get_expr(polwithcheck, polrelid), '') ~ '\mprofiles\M')
+     FROM pg_policy
+    WHERE polname IN ('safety_alert_updates_no_client_read', 'post_labels_select_public', 'post_labels_select_staff', 'resource_opt_in_events_select_parties',
+                      'petitions_select_staff', 'petitions_select_own', 'petition_updates_select_approved')));
 SELECT pg_temp.ck('Z4', 'the id sequences of the new tables carry no anon / authenticated privilege', '^f+$',
   (SELECT string_agg(has_sequence_privilege(r, sq, pr)::char, '' ORDER BY sq, r, pr)
      FROM unnest(ARRAY['public.safety_alert_updates_id_seq', 'public.post_labels_id_seq', 'public.resource_opt_in_events_id_seq', 'public.petition_updates_id_seq']) sq,
