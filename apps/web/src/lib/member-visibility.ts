@@ -7,6 +7,7 @@
 // visible to members — these answers decide whether the row offers a "View …" link or a reason.
 
 import type { EventFeedReason } from './event-feed-window'
+import { isAlertShown } from './safety-alert-live'
 
 export type ReasonCode =
   | 'hidden'
@@ -84,13 +85,13 @@ export function businessMapVisibility(business: { status: string; is_active: boo
   return business.has_map_location ? VISIBLE : hiddenBecause('no_location')
 }
 
-/** Safety alert pin: safety_alerts_in_view (status='live' AND expires_at > now; location is NOT NULL).
- *  A live alert past expires_at (the 5-minute expiry job has not reached it) is expired too; a
- *  removed alert is hidden. */
-export function safetyAlertMapVisibility(alert: { status: string; expires_at: string }, now: Date): MemberVisibility {
-  if (alert.status === 'expired') return hiddenBecause('expired')
-  if (alert.status !== 'live') return hiddenBecause('hidden')
-  return Date.parse(alert.expires_at) > now.getTime() ? VISIBLE : hiddenBecause('expired')
+/** Safety alert pin: the shown rule (lib/safety-alert-live.ts) — live, or resolved less than 6 hours
+ *  ago; the map draws both. A live alert past expires_at (the 5-minute expiry job has not reached
+ *  it), an expired one and a resolved one past its 6 hours are expired; a removed, cleared or
+ *  withdrawn alert is hidden. */
+export function safetyAlertMapVisibility(alert: { status: string; expires_at: string; resolved_at?: string | null }, now: Date): MemberVisibility {
+  if (isAlertShown(alert, now.getTime())) return VISIBLE
+  return alert.status === 'live' || alert.status === 'expired' || alert.status === 'resolved' ? hiddenBecause('expired') : hiddenBecause('hidden')
 }
 
 /** A row shows its "View on map" control (the link, or its reason) unless it would only repeat the

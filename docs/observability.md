@@ -193,8 +193,8 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
 - The map (`components/panels/map-panel.tsx`, `lib/map-focus.ts`) takes `resource`, `organization`,
   `business` and `safety_alert`. It reads the item by id under exactly the predicate of the layer that
   draws it (resource: approved + located; organization: active, non-business, located; business:
-  approved, active, located; safety alert: live and `expires_at` > now — the expiry is re-checked on the
-  row because RLS checks status only), flies to it at zoom 17 (above the cluster `maxZoom` 16, so a
+  approved, active, located; safety alert: shown — live, or resolved less than 6 hours ago — read
+  through the alert reader by id and checked again on the returned row), flies to it at zoom 17 (above the cluster `maxZoom` 16, so a
   clustered pin becomes a leaf; instant under FEED's or the OS's reduced motion), and claims the camera
   so a later GPS fix or profile geocode does not move it. The whole lifecycle is `MapFocusSession`;
   the panel's effects only forward to it. `found` = the pin's id appears in its loaded layer within 8 s
@@ -227,7 +227,9 @@ order by 1, 3 desc;
 ```
 
 Safety-alert map reads (`safety_alerts_in_view`): one call per settled pan/zoom (400 ms debounce),
-one per 60 s while the map tab is visible, and one after a member places or edits an alert. Before
+one per 60 s while the map tab is visible, one on return to the tab, and one after the member's own
+place / vote / update / resolve / withdraw. The feed strip reads the same RPC once per viewer, every
+60 s while visible and after the member's own action; `alerts.poll` (above) counts both. Before
 the 2026-10 fix (admin-nav PR-3) a new bounds object every render re-armed the debounce on every
 render — about 1.5–2.5 calls a second per open map (pg_stat_statements: 139,348 calls vs 126 for
 `resources_in_bounds`). Expected after deploy: a stationary open map drops from ~2/s to 1/60 s
@@ -295,6 +297,51 @@ select count(*) filter (where event = 'feed.post.edit.error' and context->>'erro
        count(*) filter (where event = 'feed.post.edit.complete') as saves
 from public.app_logs
 where created_at > now() - interval '7 days';
+```
+
+---
+
+## Safety alerts (member actions and read volume)
+
+Every member write on a safety alert goes through `apps/web/src/lib/safety-alert-rpc.ts`: one `privilegedRpc` call per action, so each action persists exactly one `<op>.complete` or `<op>.error` row with its `duration_ms`, and its `request_id` is the `x-request-id` the database saw (it joins the `admin_actions` row a moderator's update or resolve of someone else's alert writes). A refusal is the `.error` row; `error_code` is the SQLSTATE (`PT409` stale version, `PT410` no longer live, `PT404` gone, `42501` guest / not the owner, `22023` invalid field). Labels are ids and enums only — never the description, an address or a coordinate, and no identity beyond the `user_id` the route derives from the session. Before Release 3.1 these actions logged with `logger.info` (`pin.place`, `pin.confirm`, `pin.clear`, `safety-alerts.*.success`), which is console-only: nothing reached `app_logs`. The bypass guard (`privileged-action-guard.ts`) fails any alert write outside the wrapper.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `alerts.place.complete` / `.error` | `alert_type`, `severity_before` (null), `severity_after`, `is_owner` (true), `surface`, `request_id` | `place_safety_alert` (the map's hazard menu) |
+| `alerts.update.complete` / `.error` | `target_id`, `alert_type`, `severity_before`, `severity_after`, `is_owner`, `surface`, `request_id` | `update_safety_alert` that leaves the severity as it was (text or type); the expiry is kept |
+| `alerts.escalate.complete` / `.error` | same | `update_safety_alert` that raises the severity; the server restarts the expiry for the new level |
+| `alerts.deescalate.complete` / `.error` | same | `update_safety_alert` that lowers the severity; the server caps the time left |
+| `alerts.resolve.complete` / `.error` | same (`severity_after` = `severity_before`) | `resolve_safety_alert`: the all-clear, shown for 6 hours |
+| `alerts.withdraw.complete` / `.error` | same (`severity_after` null) | `delete_safety_alert`: the reporter's recorded withdrawal |
+| `alerts.vote.complete` / `.error` | same + `vote` (`confirm` · `clear`) | `vote_safety_alert` ("Still here" / "Gone now") |
+| `alerts.history.open.complete` / `.error` | `target_id`, `surface` | one read of `safety_alert_history` (`withMetric`, so it carries the read's duration) |
+| `alerts.poll` | `surface`, `reads`, `changed`, `errors`, `result_count`, `window_s` | read volume of the alert reader, aggregated in the browser (below) |
+| `feed.safety_alerts.fetch_failed` | `code` | warn: one strip read failed (the strip keeps what it had) |
+
+`surface` is `strip` (the feed's alert strip) or `map`. `is_owner` is the server's `is_mine` for the alert acted on. Every update, escalate, de-escalate and resolve sends the alert's `version`; a `PT409` row means the member was shown the compare step.
+
+**Read volume (`alerts.poll`).** Alerts are not in the realtime publication, so each surface polls the reader: once per viewer (strip) or settled viewport (map), every 60 s while the tab is visible, once on return to the tab, and once after the member's own action. A row per read would be one row a minute per open tab; instead each surface counts in memory and writes ONE row when 30 reads have accumulated, when the tab is hidden, or when the surface unmounts (`PollCounter`, `lib/safety-alerts-fetch.ts`). `reads` = reader calls in the window, `changed` = how many returned something different from the read before, `errors` = failed reads, `result_count` = alerts in the latest answer, `window_s` = seconds the window covered. `sum(reads)` is the exact call count; a visible, idle tab writes two rows an hour.
+
+```sql
+-- Reader calls per surface per day, and how often a poll found something new.
+select created_at::date as day, context->>'surface' as surface,
+       sum((context->>'reads')::int) as reads,
+       sum((context->>'changed')::int) as changed,
+       sum((context->>'errors')::int) as errors,
+       count(*) as rows_written
+from public.app_logs
+where event = 'alerts.poll' and created_at > now() - interval '7 days'
+group by 1, 2 order by 1, 2;
+
+-- Outcomes per action, with the stale-version and no-longer-live refusals.
+select split_part(event, '.', 2) as action,
+       count(*) filter (where event like '%.complete') as ok,
+       count(*) filter (where context->>'error_code' = 'PT409') as stale_version,
+       count(*) filter (where context->>'error_code' = 'PT410') as not_live,
+       percentile_cont(0.95) within group (order by duration_ms) as p95_ms
+from public.app_logs
+where event like 'alerts.%' and event <> 'alerts.poll' and created_at > now() - interval '7 days'
+group by 1 order by 1;
 ```
 
 ---

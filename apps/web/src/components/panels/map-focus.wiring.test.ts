@@ -3,7 +3,7 @@
 //
 // Wiring guard. The behaviour lives in tested plain code — MapFocusSession, the popup reducer and
 // hook, MarkerPopupDialog / markerA11yRef / focusPopupOnOpen, motionDuration,
-// SafetyAlertsFetchScheduler, createLatestOnlyLoader, placeSafetyAlert / updateSafetyAlert. This
+// SafetyAlertsFetchScheduler, createLatestOnlyLoader, SafetyAlertStore, the alert RPC wrapper. This
 // suite has no DOM, so React effects never run here; these checks pin the few lines that forward to
 // that code, so deleting or commenting one out turns RED. Sources are re-printed by the TypeScript
 // printer with comments removed (JSX-aware), so a commented-out line never satisfies a check — the
@@ -84,14 +84,29 @@ describe('the four markers share one popup behaviour', () => {
 
 describe('the safety-alerts hook forwards to its scheduler and latest-only loader', () => {
   const hook = src('hooks/use-safety-alerts.ts')
-  it('bounds, unmount, visibility, the refetch after place / edit, and latest-only reads', () => {
-    expect(hook).toContain('scheduler.setBounds(viewportBounds)')
-    expect(hook).toContain('useEffect(() => () => scheduler.dispose(), [scheduler]);')
-    expect(hook).toContain("const onVisibility = () => scheduler.visibilityChanged(document.visibilityState === 'visible');")
+  it('bounds (as four numbers), unmount, visibility, the refetch after place / vote, and latest-only reads', () => {
+    // The effect is keyed on the four numbers, never on the bounds object.
+    expect(hook).toContain('scheduler.setBounds(west === null || south === null || east === null || north === null ? null : { west, south, east, north });')
+    expect(hook).toContain('}, [scheduler, west, south, east, north]);')
+    expect(hook).not.toMatch(/\[[^\]]*viewportBounds[^\]]*\]\)/)
+    expect(hook).toContain('scheduler.dispose();')
+    expect(hook).toContain("const visible = document.visibilityState === 'visible';")
+    expect(hook).toContain('scheduler.visibilityChanged(visible);')
     expect(hook).toContain("document.addEventListener('visibilitychange', onVisibility);")
-    expect(hook).toContain('placeSafetyAlert(supabase, input, () => scheduler.refresh())')
-    expect(hook).toContain('updateSafetyAlert(supabase, alertId, input, () => scheduler.refresh())')
+    expect(hook).toContain("const res = await placeSafetyAlert(supabase, input, 'map'); if (res.ok) { store.apply(res.value); scheduler.refresh(); }")
+    expect(hook).toContain("const res = await voteSafetyAlert(supabase, alert, vote, 'map'); if (res.ok) store.apply(res.value);")
     expect(hook).toContain('createLatestOnlyLoader<ViewportBounds, SafetyAlert[]>({ read: (bounds) => readSafetyAlertsInView(supabase, bounds),')
     expect(hook).toContain('fetch: (bounds) => void fetchAlerts(bounds),')
+  })
+})
+
+describe('the strip hook forwards to the same scheduler, keyed on the viewer id', () => {
+  const hook = src('hooks/use-safety-strip.ts')
+  it('one key (a string), unmount, visibility, latest-only reads through the strip reader', () => {
+    expect(hook).toContain('useEffect(() => { scheduler.set(viewerKey, viewerKey); }, [scheduler, viewerKey]);')
+    expect(hook).toContain('scheduler.dispose();')
+    expect(hook).toContain('scheduler.visibilityChanged(visible);')
+    expect(hook).toContain('createLatestOnlyLoader<string, SafetyAlert[]>({ read: () => readSafetyAlertStrip(supabase),')
+    expect(hook).toContain('debounceMs: 0,')
   })
 })

@@ -155,6 +155,30 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.user.unban': ['actor_tier', 'ban_duration', 'outcome', 'request_id'],
   'admin.user.unban.complete': ['request_id'],
   'admin.user.unban.error': ['request_id'],
+  // Safety alerts (Release 3.1, lib/safety-alert-rpc.ts): one privilegedRpc row per member action —
+  // ids and enums only. severity_before / severity_after: 1-4 (null where there is none);
+  // is_owner: the server's is_mine for the alert acted on; surface: map | strip; vote: confirm | clear.
+  // escalate / deescalate are updates that raise / lower the severity (the server moves the expiry).
+  'alerts.deescalate.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.deescalate.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.escalate.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.escalate.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  // The alert history was opened (one read of safety_alert_history, with its duration).
+  'alerts.history.open.complete': ['surface', 'target_id'],
+  'alerts.history.open.error': ['surface', 'target_id'],
+  'alerts.place.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
+  'alerts.place.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
+  // Read volume of the alert reader per surface, aggregated in the browser: one row per 30 reads, per
+  // tab hide and per unmount (lib/safety-alerts-fetch.ts PollCounter). sum(reads) = reader calls.
+  'alerts.poll': ['changed', 'errors', 'reads', 'result_count', 'surface', 'window_s'],
+  'alerts.resolve.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.resolve.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.update.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.update.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.vote.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id', 'vote'],
+  'alerts.vote.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id', 'vote'],
+  'alerts.withdraw.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  'alerts.withdraw.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
   'allow_messages.changed': ['allow_messages'],
   'allow_messages.read_failed': [],
   'allow_messages.write_failed': ['user_present'],
@@ -283,7 +307,8 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'feed.realtime.reconnect': ['channel', 'count', 'status'],
   'feed.realtime.subscribe.complete': ['channel'],
   'feed.realtime.subscribe.error': ['channel'],
-  'feed.safety_alerts.fetch_failed': [],
+  // The feed strip's alert read failed (code = the server's code, or 'exception').
+  'feed.safety_alerts.fetch_failed': ['code'],
   'forms.archive.complete': ['documentId', 'submissionId'],
   'forms.archive.warning': ['submissionId'],
   'forms.draft.complete': ['template_id'],

@@ -1,25 +1,27 @@
 // apps/web/src/lib/safety-alerts-fetch.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The members' map reads safety_alerts_in_view once per real viewport change, every 60 s while
-// visible, and once right after the member places or edits an alert — never once per render
-// (the loop that made safety_alerts_in_view ~1,100x more frequent than resources_in_bounds).
-// Fake timers + a counting fake fetch; the place/edit writes call onWritten exactly once on success.
+// When the alert surfaces read (Release 3.1 invariant 2): once per real change of a primitive key
+// (the map's four bound numbers after 400 ms; the strip's viewer id at once), every 60 s while
+// visible, once on return to the tab, once on refresh — never once per render (the loop that made
+// safety_alerts_in_view ~1,100x more frequent than resources_in_bounds). And how the read volume is
+// measured (invariant 8): one alerts.poll row per 30 reads / tab hide / unmount, never one per read.
+// Fake timers + a counting fake fetch.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-
-vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import {
   ALERTS_DEBOUNCE_MS,
   ALERTS_POLL_MS,
+  KeyedPollScheduler,
+  POLL_FLUSH_EVERY,
+  PollCounter,
   SafetyAlertsFetchScheduler,
   boundsKey,
   createLatestOnlyLoader,
   type AlertBounds,
+  type PollRow,
 } from './safety-alerts-fetch'
-import { placeSafetyAlert, updateSafetyAlert } from '@/hooks/use-safety-alerts'
 
 const B = (west = -73, south = 43, east = -72, north = 44): AlertBounds => ({ west, south, east, north })
 
@@ -112,34 +114,107 @@ describe('SafetyAlertsFetchScheduler', () => {
   })
 })
 
-describe('place / edit an alert → one refetch so the pin appears (their RPCs return no lng/lat)', () => {
-  function rpcClient(result: { data: unknown; error: unknown }) {
-    const rpc = vi.fn(() => ({ abortSignal: () => Promise.resolve(result) }))
-    return { client: { rpc } as never, rpc }
-  }
-  const input = { type: 'general' as const, severity: 2, description: 'Ice', lng: -72.9, lat: 43.6 }
-
-  it('a placed alert triggers exactly one refetch; a failed place triggers none', async () => {
-    const ok = rpcClient({ data: { id: 'a1' }, error: null })
-    const onWritten = vi.fn()
-    await placeSafetyAlert(ok.client, input, onWritten)
-    expect(onWritten).toHaveBeenCalledTimes(1)
-    const bad = rpcClient({ data: null, error: new Error('denied') })
-    const none = vi.fn()
-    await expect(placeSafetyAlert(bad.client, input, none)).rejects.toThrow('denied')
-    expect(none).not.toHaveBeenCalled()
+describe('KeyedPollScheduler with no debounce (the feed strip: keyed on the viewer id)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('an edited alert triggers exactly one refetch; a failed edit triggers none', async () => {
-    const ok = rpcClient({ data: null, error: null })
-    const onWritten = vi.fn()
-    await updateSafetyAlert(ok.client, 'a1', { ...input }, onWritten)
-    expect(onWritten).toHaveBeenCalledTimes(1)
-    expect(ok.rpc).toHaveBeenCalledWith('update_safety_alert', expect.objectContaining({ p_alert_id: 'a1' }))
-    const bad = rpcClient({ data: null, error: new Error('not yours') })
-    const none = vi.fn()
-    await expect(updateSafetyAlert(bad.client, 'a1', input, none)).rejects.toThrow('not yours')
-    expect(none).not.toHaveBeenCalled()
+  function strip(visible = true) {
+    const calls: string[] = []
+    const state = { visible }
+    const scheduler = new KeyedPollScheduler<string>({ fetch: (viewer) => calls.push(viewer), isVisible: () => state.visible, debounceMs: 0 })
+    return { scheduler, calls, state }
+  }
+
+  it('reads at once for a viewer; the same viewer again (every render) reads nothing', () => {
+    const { scheduler, calls } = strip()
+    for (let i = 0; i < 50; i++) scheduler.set('user-1', 'user-1')
+    expect(calls).toEqual(['user-1'])
+  })
+
+  it('polls once per 60 s while visible, not while hidden, and reads once on return', () => {
+    const { scheduler, calls, state } = strip()
+    scheduler.set('user-1', 'user-1')
+    vi.advanceTimersByTime(ALERTS_POLL_MS * 3)
+    expect(calls).toHaveLength(1 + 3)
+    state.visible = false
+    scheduler.visibilityChanged(false)
+    vi.advanceTimersByTime(ALERTS_POLL_MS * 5)
+    expect(calls).toHaveLength(4)
+    state.visible = true
+    scheduler.visibilityChanged(true)
+    expect(calls).toHaveLength(5)
+  })
+
+  it('a new viewer reads at once; no viewer stops everything', () => {
+    const { scheduler, calls } = strip()
+    scheduler.set('user-1', 'user-1')
+    scheduler.set('user-2', 'user-2')
+    expect(calls).toEqual(['user-1', 'user-2'])
+    scheduler.set(null, null)
+    scheduler.refresh()
+    vi.advanceTimersByTime(ALERTS_POLL_MS * 2)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('refresh reads once, now (after the member’s own action)', () => {
+    const { scheduler, calls } = strip()
+    scheduler.set('user-1', 'user-1')
+    scheduler.refresh()
+    expect(calls).toEqual(['user-1', 'user-1'])
+  })
+})
+
+describe('PollCounter — read volume without a row per read', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-11T12:00:00.000Z') })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function counting() {
+    const rows: PollRow[] = []
+    return { rows, counter: new PollCounter('strip', (row) => rows.push(row)) }
+  }
+
+  it('30 reads write one row; 29 write none', () => {
+    const { rows, counter } = counting()
+    for (let i = 0; i < POLL_FLUSH_EVERY - 1; i++) {
+      counter.record({ signature: 'a', count: 2 })
+      vi.advanceTimersByTime(ALERTS_POLL_MS)
+    }
+    expect(rows).toEqual([])
+    counter.record({ signature: 'a', count: 2 })
+    expect(rows).toEqual([{ surface: 'strip', reads: 30, changed: 0, errors: 0, result_count: 2, window_s: 29 * 60 }])
+  })
+
+  it('a flush (tab hidden, unmount) writes what has accumulated, then starts over; no reads, no row', () => {
+    const { rows, counter } = counting()
+    counter.flush()
+    expect(rows).toEqual([])
+    counter.record({ signature: 'a', count: 1 })
+    counter.record({ signature: 'b', count: 2 })
+    counter.record({ signature: null, count: 0 })
+    counter.record({ signature: 'b', count: 2 })
+    counter.flush()
+    expect(rows).toEqual([{ surface: 'strip', reads: 4, changed: 1, errors: 1, result_count: 2, window_s: 0 }])
+    counter.flush()
+    expect(rows).toHaveLength(1)
+    counter.record({ signature: 'c', count: 0 })
+    counter.flush()
+    // Changed is counted against the last answer seen, across windows.
+    expect(rows[1]).toMatchObject({ reads: 1, changed: 1, result_count: 0 })
+  })
+
+  it('an hour of an idle visible strip is two rows, not sixty', () => {
+    const { rows, counter } = counting()
+    for (let minute = 0; minute < 60; minute++) counter.record({ signature: 'same', count: 3 })
+    expect(rows).toHaveLength(2)
+    expect(rows.reduce((n, r) => n + r.reads, 0)).toBe(60)
   })
 })
 
