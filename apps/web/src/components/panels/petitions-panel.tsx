@@ -28,7 +28,7 @@ import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
 import { formatCount, formatPercent } from '@/lib/i18n-intl'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { petitionCategoryLabel, petitionErrorText, petitionsT, signatureCountMessage } from '@/lib/i18n-feed-petitions'
+import { isPetitionCategory, petitionCategoryLabel, petitionErrorText, petitionsT, signatureCountMessage } from '@/lib/i18n-feed-petitions'
 import { nextTabIndex } from '@/components/feed/feed-chrome'
 
 // ─────────────────────────────────────────────────────────
@@ -107,7 +107,9 @@ function PetitionCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 mb-1">
+            {/* A category FEED has no label for is shown as stored, which is English. */}
             <span
+              lang={isPetitionCategory(petition.cause_category) ? undefined : 'en'}
               className={`text-xs font-semibold px-2 py-0.5 rounded-full ${categoryColor(petition.cause_category)}`}
             >
               {petitionCategoryLabel(petition.cause_category, locale)}
@@ -260,7 +262,7 @@ export function PetitionsPanel() {
 
   if (loading) {
     return (
-      <div lang={locale} dir={dir(locale)} className="flex flex-col items-center justify-center h-48 gap-3">
+      <div role="status" lang={locale} dir={dir(locale)} className="flex flex-col items-center justify-center h-48 gap-3">
         <Loader2 className="w-7 h-7 text-lime-700 animate-spin" aria-hidden="true" />
         <p className="text-sm text-stone-500">{petitionsT(locale, 'loading')}</p>
       </div>

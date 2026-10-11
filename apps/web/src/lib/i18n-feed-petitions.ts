@@ -15,6 +15,8 @@
 // Intl.PluralRules (lib/i18n-intl.ts).
 // Parity: i18n-feed-subtabs.test.ts.
 // ht, so, am and hmn are machine-drafted, needs native review: docs/i18n-native-review.md.
+// Arabic says "confirmed" (مؤكَّد), not "certified" (a word that can read as notarised); that
+// wording choice is on the same list for an Arabic speaker to confirm.
 
 import { translate, type Locale } from './i18n'
 import { pluralMessage, type PluralForms } from './i18n-intl'
@@ -256,10 +258,10 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     signed: 'تم التوقيع',
     signaturesFinal: 'التوقيعات نهائية (تم تصدير القائمة).',
     withdraw: 'سحب توقيعي',
-    sign: 'أضف توقيع الدعم الموثَّق الخاص بك',
+    sign: 'أضف توقيع الدعم المؤكَّد الخاص بك',
     actionForPetitionAria: '{action}: {title}',
     signingAs: 'التوقيع باسم {name}',
-    retentionNotice: 'يُحفظ اسمك والتاريخ وسجل لهذه النسخة من العريضة بوصفها توقيع الدعم الموثَّق الخاص بك.',
+    retentionNotice: 'يُحفظ اسمك والتاريخ وسجل لهذه النسخة من العريضة بوصفها توقيع الدعم المؤكَّد الخاص بك.',
     loading: 'جارٍ تحميل العرائض…',
     tryAgain: 'حاول مرة أخرى',
     emptyTitle: 'لا توجد عرائض نشطة',
@@ -267,15 +269,15 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     faqToggle: 'حول توقيعات العرائض',
     faqPrivacy: 'المشرفون وحدهم يرون أسماء الموقِّعين؛ والعدد المعلن لا يكشف أبدًا من وقَّع.',
     faqWithdraw: 'يمكنك سحب توقيعك في أي وقت، إلى أن يصدِّر المنظِّم قائمة التوقيعات؛ بعدها تصبح التوقيعات نهائية.',
-    faqVerified: '«توقيع الدعم الموثَّق» يعني أن توقيعك يُسجَّل مع طابع زمني آمن.',
-    guestPrompt: 'أنشئ حسابًا مجانيًا لتضيف توقيع الدعم الموثَّق الخاص بك إلى العرائض',
-    signInPrompt: 'سجِّل الدخول لتضيف توقيع الدعم الموثَّق الخاص بك إلى أي عريضة.',
+    faqVerified: '«توقيع الدعم المؤكَّد» يعني أن توقيعك يُسجَّل مع طابع زمني آمن.',
+    guestPrompt: 'أنشئ حسابًا مجانيًا لتضيف توقيع الدعم المؤكَّد الخاص بك إلى العرائض',
+    signInPrompt: 'سجِّل الدخول لتضيف توقيع الدعم المؤكَّد الخاص بك إلى أي عريضة.',
     signedEmptyTitle: 'لم توقِّع أي عريضة بعد',
     signedEmptyBody: 'ستظهر هنا العرائض التي توقِّعها.',
     errLoadFailed: 'تعذّر تحميل العرائض. حاول مرة أخرى.',
     errSignFailed: 'تعذّرت إضافة توقيعك. حاول مرة أخرى.',
-    errAccountRequired: 'سجِّل الدخول بحساب لتضيف توقيع الدعم الموثَّق الخاص بك.',
-    errAffirmationRequired: 'عليك التأكيد لتضيف توقيع الدعم الموثَّق الخاص بك.',
+    errAccountRequired: 'سجِّل الدخول بحساب لتضيف توقيع الدعم المؤكَّد الخاص بك.',
+    errAffirmationRequired: 'عليك التأكيد لتضيف توقيع الدعم المؤكَّد الخاص بك.',
     errWithdrawLocked: 'التوقيعات نهائية: صدَّر المنظِّم هذه القائمة.',
     errWithdrawFailed: 'تعذّر سحب توقيعك. حاول مرة أخرى.',
   },
@@ -698,12 +700,12 @@ export const VERIFIED_SIGNATURES: Record<Locale, PluralForms> = {
   ht: { other: '{count} siyati verifye' },
   vi: { other: '{count} chữ ký đã xác minh' },
   ar: {
-    zero: '{count} توقيع موثَّق',
-    one: '{count} توقيع موثَّق',
-    two: '{count} توقيعان موثَّقان',
-    few: '{count} توقيعات موثَّقة',
-    many: '{count} توقيعًا موثَّقًا',
-    other: '{count} توقيع موثَّق',
+    zero: '{count} توقيع مؤكَّد',
+    one: '{count} توقيع مؤكَّد',
+    two: '{count} توقيعان مؤكَّدان',
+    few: '{count} توقيعات مؤكَّدة',
+    many: '{count} توقيعًا مؤكَّدًا',
+    other: '{count} توقيع مؤكَّد',
   },
   zh: { other: '{count} 个经验证的签名' },
   so: { other: '{count} saxiix oo la xaqiijiyay' },
@@ -748,6 +750,12 @@ const CATEGORY_KEYS: Record<string, keyof FeedPetitionsMessages> = {
 
 /** The known petition categories (the stored cause_category values). */
 export const PETITION_CATEGORIES = Object.keys(CATEGORY_KEYS)
+
+/** True when the badge for this value is one of FEED's labels (a missing category reads
+ *  "Community"); false when it is the stored value itself, which is English. */
+export function isPetitionCategory(category: string | null): boolean {
+  return !category || Object.prototype.hasOwnProperty.call(CATEGORY_KEYS, category)
+}
 
 /**
  * The category badge in the viewer's language. No category reads "Community". A value this list

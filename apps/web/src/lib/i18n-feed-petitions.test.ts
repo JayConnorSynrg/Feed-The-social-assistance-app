@@ -37,7 +37,7 @@ describe('advocacy wording', () => {
     es: /firma verificada de apoyo/i,
     ht: /siyati verifye pou sipò/i,
     vi: /chữ ký ủng hộ đã xác minh/i,
-    ar: /توقيع الدعم الموثَّق/,
+    ar: /توقيع الدعم المؤكَّد/,
     zh: /经验证的支持签名/,
     so: /saxiixaaga taageerada ee la xaqiijiyay|saxiix taageero oo la xaqiijiyay/i,
     fr: /signature de soutien vérifiée/i,
@@ -90,6 +90,16 @@ describe('advocacy wording', () => {
   })
 })
 
+describe('Arabic wording', () => {
+  // Fix round, low 6: "موثَّق" can read as notarised. The signature is "confirmed" (مؤكَّد).
+  it('says "confirmed" and never uses the root of "certified / notarised"', () => {
+    const all = [...Object.values(feedPetitionsMessages.ar), ...Object.values(SIGNATURES_OF_TARGET.ar), ...Object.values(VERIFIED_SIGNATURES.ar)]
+    for (const text of all) expect(text, text).not.toMatch(/موث[\u064B-\u0652]*ق|توثيق/)
+    expect(feedPetitionsMessages.ar.sign).toBe('أضف توقيع الدعم المؤكَّد الخاص بك')
+    expect(Object.values(VERIFIED_SIGNATURES.ar).every((t) => /مؤكَّد/.test(t))).toBe(true)
+  })
+})
+
 describe('signature counts', () => {
   const TABLES = [
     ['SIGNATURES_OF_TARGET', SIGNATURES_OF_TARGET, ['{count}', '{target}']],
@@ -132,8 +142,8 @@ describe('signature counts', () => {
     expect(line(7, 0, 'en')).toBe('7 verified signatures')
     expect(line(1, 2, 'ar')).toBe('1 من 2 توقيعين')
     expect(line(2, 3, 'ar')).toBe('2 من 3 توقيعات')
-    expect(line(2, 0, 'ar')).toBe('2 توقيعان موثَّقان')
-    expect(line(11, 0, 'ar')).toBe('11 توقيعًا موثَّقًا')
+    expect(line(2, 0, 'ar')).toBe('2 توقيعان مؤكَّدان')
+    expect(line(11, 0, 'ar')).toBe('11 توقيعًا مؤكَّدًا')
     expect(line(21, 0, 'ru')).toBe('21 подтверждённая подпись')
     expect(line(4, 22, 'ru')).toBe('4 из 22 подписей')
     expect(line(4, 21, 'ru')).toBe('4 из 21 подписи')

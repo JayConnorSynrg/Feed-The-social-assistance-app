@@ -89,7 +89,7 @@ describe('Petitions sub-tab in the member language', () => {
     expect(html).toMatch(/^<div lang="ar" dir="rtl"/)
     expect(html).toContain('>عرائض المجتمع</h2>')
     expect(html).toContain('<span class="font-semibold text-stone-900">2</span> من 3 توقيعات')
-    expect(html).toContain('أضف توقيع الدعم الموثَّق الخاص بك</button>')
+    expect(html).toContain('أضف توقيع الدعم المؤكَّد الخاص بك</button>')
   })
 
   it('ru: one / few / many forms when a petition has no target', () => {
@@ -110,7 +110,8 @@ describe('Petitions sub-tab in the member language', () => {
   })
 
   it('loading, failed and empty states read in the member language, each root marked', () => {
-    expect(render('vi', { loading: true })).toMatch(/^<div lang="vi" dir="ltr"[^>]*>.*Đang tải kiến nghị…/)
+    // Loading is a status, so a screen reader hears it.
+    expect(render('vi', { loading: true })).toMatch(/^<div role="status" lang="vi" dir="ltr"[^>]*>.*Đang tải kiến nghị…/)
     const failed = render('ko', { error: 'load_failed' })
     expect(failed).toMatch(/^<div lang="ko" dir="ltr"/)
     expect(failed).toContain('>청원을 불러올 수 없습니다. 다시 시도해 주세요.</p>')
@@ -159,11 +160,62 @@ describe('Petitions sub-tab in the member language', () => {
   })
 })
 
+describe('a category FEED has no label for', () => {
+  it('is shown as stored and marked English; a labelled one and the "Community" default are not marked', () => {
+    const unknown = render('es', { petitions: [petition({ cause_category: 'river_cleanup' })] })
+    expect(unknown).toMatch(/<span lang="en" class="text-xs font-semibold[^"]*">River Cleanup<\/span>/)
+    const known = render('es')
+    expect(known).toMatch(/<span class="text-xs font-semibold[^"]*">Derechos sobre la tierra<\/span>/)
+    const none = render('es', { petitions: [petition({ cause_category: null })] })
+    expect(none).toMatch(/<span class="text-xs font-semibold[^"]*">Comunidad<\/span>/)
+  })
+})
+
+describe('the buttons do what they say', () => {
+  type El = { type: unknown; props: Record<string, unknown> }
+  function card(over: Record<string, unknown>) {
+    state.language = 'en'
+    const sign = vi.fn()
+    const withdraw = vi.fn()
+    state.hook = hook({ petitions: [petition(over)], sign, withdraw })
+    const c = mount(() => PetitionsPanel())
+    // The card is a child component (no hooks): render it to reach its buttons.
+    const el = (findAll(c.tree(), (e: El) => typeof e.props.onSign === 'function') as El[])[0]
+    const tree = (el.type as (p: unknown) => unknown)(el.props)
+    const press = (testId: string) => ((findAll(tree, (e: El) => e.props['data-testid'] === testId) as El[])[0].props.onClick as () => void)()
+    return { sign, withdraw, press }
+  }
+
+  it('the sign button signs this petition and does not withdraw', () => {
+    const { sign, withdraw, press } = card({})
+    press('sign-p1')
+    expect(sign).toHaveBeenCalledWith('p1')
+    expect(withdraw).not.toHaveBeenCalled()
+  })
+
+  it('the withdraw button withdraws and does not sign', () => {
+    const { sign, withdraw, press } = card({ hasSigned: true })
+    press('withdraw-p1')
+    expect(withdraw).toHaveBeenCalledWith('p1')
+    expect(sign).not.toHaveBeenCalled()
+  })
+})
+
 describe('member-written text', () => {
   it('title and summary keep their direction and take no page language', () => {
     const html = render('en')
     expect(html).toMatch(/<h3 class="[^"]*" lang="" dir="auto">أنقذوا الحديقة<\/h3>/)
     expect(html).toMatch(/<p class="[^"]*" lang="" dir="auto">نطلب من المدينة إبقاء الحديقة مفتوحة<\/p>/)
+  })
+
+  it('is never handed to a translation function: a title or summary that equals a code or a key is shown as written', () => {
+    const html = render('es', { petitions: [petition({ title: 'sign_failed', summary: 'load_failed' })] })
+    expect(html).toMatch(/<h3 class="[^"]*" lang="" dir="auto">sign_failed<\/h3>/)
+    expect(html).toMatch(/<p class="[^"]*" lang="" dir="auto">load_failed<\/p>/)
+    expect(html).not.toContain('No se pudo añadir tu firma')
+    expect(html).not.toContain('No se pudieron cargar las peticiones')
+    // In a button name the title is an interpolated value, isolated, after the visible text.
+    expect(html).toContain('aria-label="Añade tu firma verificada de apoyo: \u2068sign_failed\u2069"')
   })
 
   it("the member's own name sits in its own element inside the translated sentence", () => {
@@ -187,9 +239,9 @@ describe('label in name (WCAG 2.5.3)', () => {
 
   it('the rendered buttons carry exactly that name; the title is direction-isolated', () => {
     const sign = render('es')
-    expect(sign).toContain('aria-label="Añade tu firma verificada de apoyo: ⁨أنقذوا الحديقة⁩"')
+    expect(sign).toContain('aria-label="Añade tu firma verificada de apoyo: \u2068أنقذوا الحديقة\u2069"')
     const withdraw = render('es', { petitions: [petition({ hasSigned: true })] })
-    expect(withdraw).toContain('aria-label="Retirar mi firma: ⁨أنقذوا الحديقة⁩"')
+    expect(withdraw).toContain('aria-label="Retirar mi firma: \u2068أنقذوا الحديقة\u2069"')
   })
 })
 
@@ -241,6 +293,15 @@ describe('petitions-panel.tsx and use-petitions.ts sources', () => {
       expect(jsx, literal).not.toContain(literal)
     }
     expect(panel).not.toContain('CATEGORY_LABELS')
+  })
+
+  it('no translation reader is given a member\'s own words', () => {
+    const code = panel.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const READERS = 'petitionsT|feedChromeT|petitionErrorText|petitionCategoryLabel|isPetitionCategory|signatureCountMessage'
+    const MEMBER_TEXT = 'petition\\.title|petition\\.summary|petition\\.body|signerDisplayName|full_name'
+    expect(code).not.toMatch(new RegExp(`\\b(${READERS})\\([^()]*\\b(${MEMBER_TEXT})\\b`))
+    // The one place a title meets a dictionary value: as a variable of formatMessage, isolated.
+    expect(code).toContain("{ action: petitionsT(locale, action), title: isolate(title) }")
   })
 
   it('the arrow keys go through the direction-aware helper', () => {
