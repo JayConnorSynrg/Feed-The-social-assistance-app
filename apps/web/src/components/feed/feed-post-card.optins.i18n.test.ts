@@ -275,6 +275,12 @@ describe('the petition embed in the member language', () => {
     expect(embed).toContain('lang="" dir="auto" data-member-text="petition-summary">ملخص</p>')
   })
 
+  it('a title or a summary that equals a status or a button word is shown as written', () => {
+    const out = card('es', { petitionEmbed: { ...petition, title: 'pending', summary: 'accepted' } }, petitionRow)
+    expect(out).toContain('data-member-text="petition-title">pending</p>')
+    expect(out).toContain('data-member-text="petition-summary">accepted</p>')
+  })
+
   it.each(LOCALES)('%s: the sign button is named by its visible text, then the petition (label in name)', (locale) => {
     const out = card(locale, { petitionEmbed: petition }, petitionRow)
     const button = out.match(/<button[^>]*data-testid="petition-sign-btn-p1"[^>]*>(.*?)<\/button>/)

@@ -157,6 +157,28 @@ describe('joinList: the joining word is the same on every device', () => {
     })
   })
 
+  it('a locale the runtime has no list data for reads from the grammar, not from the English list', async () => {
+    vi.resetModules()
+    const fresh = await import('./event-recurrence-format')
+    const real = intl.ListFormat
+    class OnlyEnglish {
+      static supportedLocalesOf(tags: string | string[]) {
+        return [tags].flat().filter((t) => t === 'en-US')
+      }
+      format(items: string[]) {
+        return items.join(' and ')
+      }
+    }
+    intl.ListFormat = OnlyEnglish as unknown as LF
+    try {
+      expect(fresh.joinList(['a', 'b', 'c'], 'am')).toBe('a፣ b እና c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'es')).toBe('a, b y c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'tl')).toBe('a, b at c')
+    } finally {
+      intl.ListFormat = real
+    }
+  })
+
   it('the hand-written Somali joiner equals Intl where the runtime has Somali', () => {
     if (Intl.ListFormat.supportedLocalesOf('so').length === 0) return
     const so = new Intl.ListFormat('so', { type: 'conjunction', style: 'long' })

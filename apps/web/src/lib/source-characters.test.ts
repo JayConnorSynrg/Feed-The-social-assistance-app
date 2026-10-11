@@ -1,8 +1,10 @@
 // apps/web/src/lib/source-characters.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// No source file holds a raw invisible character. Each one is written as a \u escape, so a
-// reader, a reviewer and a scanner all see what the line does:
+// No source file holds a raw invisible character — in the web app's source (apps/web/src), its
+// end-to-end specs (apps/web/e2e), its scripts (apps/web/scripts) and the edge functions
+// (supabase/functions). Each one is written as a \u escape, so a reader, a reviewer and a
+// scanner all see what the line does:
 //   - the bidirectional controls U+2066–U+2069 (isolates) and U+202A–U+202E (embeddings,
 //     overrides), which can reorder the code a reviewer reads;
 //   - the invisible spaces and marks Intl output carries, which five lines held raw inside a
@@ -15,6 +17,9 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SRC = fileURLToPath(new URL('..', import.meta.url))
+const REPO = fileURLToPath(new URL('../../../..', import.meta.url))
+/** Every tree the check walks, as a path from the repository root. */
+const TREES = ['apps/web/src', 'apps/web/e2e', 'apps/web/scripts', 'supabase/functions']
 const BIDI_CONTROLS = /[\u2066-\u2069\u202a-\u202e]/
 const INVISIBLE = /[\u2066-\u2069\u202a-\u202e\u00a0\u202f\u2009\u200e\u200f\u061c]/g
 
@@ -35,15 +40,22 @@ export function rawInvisibles(text: string): string[] {
 }
 
 describe('source files hold no raw invisible character', () => {
-  const files = sourceFiles(SRC)
+  const files = TREES.flatMap((tree) => sourceFiles(join(REPO, tree)))
+  const rel = (f: string) => relative(REPO, f)
 
-  it('reads the source tree', () => {
-    expect(files.length).toBeGreaterThan(500)
-    expect(files.map((f) => relative(SRC, f))).toContain('lib/i18n-intl.ts')
+  it('reads the four trees', () => {
+    expect(sourceFiles(SRC).length).toBeGreaterThan(500)
+    const listed = files.map(rel)
+    expect(listed).toContain('apps/web/src/lib/i18n-intl.ts')
+    // One known file from each of the other three, so a moved or emptied tree is noticed.
+    expect(listed).toContain('apps/web/e2e/opt-in-flow.spec.ts')
+    expect(listed).toContain('supabase/functions/post-image-upload/index.ts')
+    expect(listed.some((f) => f.startsWith('apps/web/scripts/'))).toBe(true)
+    for (const tree of TREES) expect(listed.filter((f) => f.startsWith(`${tree}/`)).length, tree).toBeGreaterThan(0)
   })
 
   it('no bidirectional control (U+2066–U+2069, U+202A–U+202E) and no invisible space or mark: write \\u escapes', () => {
-    const hits = files.flatMap((f) => rawInvisibles(readFileSync(f, 'utf8')).map((hit) => `${relative(SRC, f)} ${hit}`))
+    const hits = files.flatMap((f) => rawInvisibles(readFileSync(f, 'utf8')).map((hit) => `${rel(f)} ${hit}`))
     expect(hits).toEqual([])
   })
 

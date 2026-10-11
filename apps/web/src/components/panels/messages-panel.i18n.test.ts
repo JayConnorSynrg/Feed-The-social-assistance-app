@@ -443,6 +443,7 @@ describe('the buttons do what they say', () => {
     expect(textOf(confirm).trim()).toBe(confirmLabel)
     ;(confirm.props.onClick as () => void)()
     expect(h0[method]).toHaveBeenCalledWith('c1')
+    expect(h0[method]).toHaveBeenCalledTimes(1)
     for (const m of methods.filter((x) => x !== method)) expect(h0[m], m).not.toHaveBeenCalled()
   })
 })
@@ -459,7 +460,9 @@ describe('after a confirmed action the opener is gone: focus moves to something 
   /** Open the confirm dialog from a button, confirm, and hand back what the test steers. */
   function confirmed(language: Locale, [, openKey, , over]: Case, hookOver: Record<string, unknown> = {}) {
     state.language = language
-    state.hook = hook({ conversations: [conv(over)], ...hookOver })
+    // One set of spies for every render, so a request sent after the confirm click is counted too.
+    const writes = { acceptRequest: vi.fn(), declineRequest: vi.fn(), withdrawRequest: vi.fn(), completeConversation: vi.fn(), cancelConversation: vi.fn() }
+    state.hook = hook({ conversations: [conv(over)], ...writes, ...hookOver })
     const opener = { isConnected: true, focus: vi.fn() }
     const c = mount(() => MessagesPanel())
     const label = messagesT(language, openKey)
@@ -484,10 +487,12 @@ describe('after a confirmed action the opener is gone: focus moves to something 
     const said = () => textOf((findAll(c.tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0])
     /** What the hook shows next. */
     const hookShows = (status: string, more: Record<string, unknown> = {}) => {
-      state.hook = hook({ conversations: [conv({ ...over, status })], ...hookOver, ...more })
+      state.hook = hook({ conversations: [conv({ ...over, status })], ...writes, ...hookOver, ...more })
       c.rerender()
     }
-    return { c, opener, threadName, inboxHeading, said, hookShows, threadUnmounts }
+    /** How many write requests the panel has sent in all. */
+    const requestsSent = () => Object.values(writes).reduce((n, f) => n + f.mock.calls.length, 0)
+    return { c, opener, threadName, inboxHeading, said, hookShows, threadUnmounts, requestsSent }
   }
 
   it('the status region is on the page from the start, polite and empty', () => {
@@ -518,6 +523,8 @@ describe('after a confirmed action the opener is gone: focus moves to something 
       // Said once: a later render does not move focus again.
       a.hookShows(newStatus)
       expect(a.threadName).toHaveBeenCalledTimes(1)
+      // One request in all: the confirmed action, and nothing after it.
+      expect(a.requestsSent()).toBe(1)
     })
   })
 

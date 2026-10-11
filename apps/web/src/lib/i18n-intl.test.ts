@@ -227,6 +227,20 @@ describe('the hand-written locales', () => {
     expect(text(localizeParts(odd, at, TZ, TIME_WORDS.ht!, {}))).toBe('10 2026')
   })
 
+  it('a no-break space (U+00A0) or a narrow one (U+202F) in a literal comes out as one plain space', () => {
+    type Part = Intl.DateTimeFormatPart
+    const at = new Date('2026-10-10T19:05:00Z')
+    const clock = (space: string): Part[] => [{ type: 'hour', value: '3' }, { type: 'literal', value: ':' }, { type: 'minute', value: '05' }, { type: 'literal', value: space }, { type: 'dayPeriod', value: 'PM' }]
+    for (const space of ['\u00a0', '\u202f', ' ']) {
+      const out = localizeParts(clock(space), at, TZ, TIME_WORDS.so!, { hour: 'numeric', minute: '2-digit' })
+      expect(out.map((p) => p.value).join(''), `U+${space.charCodeAt(0).toString(16)}`).toBe('3:05 GD')
+      expect(out[3].value).toBe(' ')
+    }
+    // Both in one literal, as a date-and-time join can carry.
+    const mixed: Part[] = [{ type: 'day', value: '10' }, { type: 'literal', value: '\u00a0\u202f' }, { type: 'year', value: '2026' }]
+    expect(localizeParts(mixed, at, TZ, TIME_WORDS.ht!, {}).map((p) => p.value).join('')).toBe('10  2026')
+  })
+
   it('Somali equals CLDR wherever this runtime has Somali data', () => {
     // Node ships full ICU; if a future runtime drops Somali this comparison has nothing to read.
     expect(Intl.DateTimeFormat.supportedLocalesOf(['so'])).toEqual(['so'])
