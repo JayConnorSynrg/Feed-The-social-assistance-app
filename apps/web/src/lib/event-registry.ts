@@ -253,6 +253,8 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'feed.like.toggle_failed': ['postId'],
   'feed.load.complete': ['has_geo', 'mode', 'page', 'page_size'],
   'feed.load.error': ['has_geo', 'mode', 'page', 'page_size'],
+  // A read that follows a confirmed sign-up or review action failed (components/panels/feed-panel.tsx).
+  'feed.optin.reread_failed': ['action', 'postId', 'step'],
   'feed.optin.unblock': ['optInId'],
   'feed.optin.update': ['optInId', 'status'],
   // Post editing (PR-2, lib/post-rpc.ts): one privilegedRpc row per member write — ids and enums only.

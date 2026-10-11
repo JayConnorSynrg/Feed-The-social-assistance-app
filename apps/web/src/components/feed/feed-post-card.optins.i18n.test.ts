@@ -30,6 +30,7 @@ import { messages, type Locale } from '@/lib/i18n'
 import { optInActionName, optInsT, optInStatusLabel, OPT_IN_STATUSES } from '@/lib/i18n-feed-optins'
 import { petitionActionName, petitionsT } from '@/lib/i18n-feed-petitions'
 import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
+import { isolate } from '@/lib/format-message'
 import { FeedPostCard, type EnrichedOptIn, type FeedPostCardProps } from './feed-post-card'
 import { rowToPost, type FeedPostRow } from './post-model'
 
@@ -217,6 +218,9 @@ describe('the author sheet opens from the card and gets its opener back', () => 
     const sheet = (findAll(c.rerender(), (e) => e.type === AppreciationSheet) as El[])[0]
     expect(sheet.props.open).toBe(true)
     expect((sheet.props.returnFocusRef as { current: unknown }).current).toBe(opener)
+    // A guest's tap opens the prompt and sends nothing.
+    expect(p.onFollow).not.toHaveBeenCalled()
+    expect(p.onUnfollow).not.toHaveBeenCalled()
   })
 })
 
@@ -232,6 +236,42 @@ describe('the rows of the author\'s list', () => {
     // The row that holds a button is the row with that id.
     const row = (findAll(tree, (e) => e.props['data-opt-in-row'] === 'o2') as El[])[0]
     expect(byTestId(row, 'complete-optin-o2')).toHaveLength(1)
+  })
+
+  describe('a row whose action is under way', () => {
+    const rows = [optIn(), optIn({ id: 'o2', seekerId: 's2', status: 'accepted' }), optIn({ id: 'o3', seekerId: 's3', status: 'declined' })]
+    const WRITES = ['accept-optin-o1', 'decline-optin-o1', 'complete-optin-o2', 'unblock-optin-o3']
+
+    it('is marked busy; its action buttons say they are unavailable but stay focusable (aria-disabled, never disabled); other rows are untouched', () => {
+      const tree = authorTree('es', rows, { busyOptInIds: new Set(['o1']) })
+      const row = (id: string) => (findAll(tree, (e) => e.props['data-opt-in-row'] === id) as El[])[0]
+      expect(row('o1').props['aria-busy']).toBe(true)
+      expect(row('o2').props['aria-busy']).toBeUndefined()
+      for (const id of ['accept-optin-o1', 'decline-optin-o1']) {
+        const b = byTestId(tree, id)[0]
+        expect(b.props['aria-disabled'], id).toBe(true)
+        expect(b.props.disabled, id).toBeUndefined()
+        expect(b.props.tabIndex, id).toBeUndefined()
+        expect(String(b.props.className), id).toContain('aria-disabled:opacity-60')
+        // Its name is what it was: the action, then the person.
+        expect(String(b.props['aria-label']), id).toContain(isolate('مريم'))
+      }
+      for (const id of ['complete-optin-o2', 'unblock-optin-o3']) expect(byTestId(tree, id)[0].props['aria-disabled'], id).toBeUndefined()
+    })
+
+    it('a press on a busy row\'s button calls nothing; the same press on a free row calls its handler once', () => {
+      const onAuthorUpdateOptIn = vi.fn()
+      const onAuthorUnblockOptIn = vi.fn()
+      const press = (tree: unknown, id: string) => (byTestId(tree, id)[0].props.onClick as () => void)()
+      const busyTree = authorTree('en', rows, { busyOptInIds: new Set(['o1', 'o2', 'o3']), onAuthorUpdateOptIn, onAuthorUnblockOptIn })
+      for (const id of WRITES) press(busyTree, id)
+      expect(onAuthorUpdateOptIn).not.toHaveBeenCalled()
+      expect(onAuthorUnblockOptIn).not.toHaveBeenCalled()
+      const freeTree = authorTree('en', rows, { busyOptInIds: new Set(), onAuthorUpdateOptIn, onAuthorUnblockOptIn })
+      for (const id of WRITES) press(freeTree, id)
+      expect(onAuthorUpdateOptIn.mock.calls).toEqual([['o1', 'accepted'], ['o1', 'declined'], ['o2', 'completed']])
+      expect(onAuthorUnblockOptIn.mock.calls).toEqual([['o3']])
+    })
   })
 })
 

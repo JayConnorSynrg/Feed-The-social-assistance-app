@@ -299,6 +299,23 @@ where created_at > now() - interval '7 days';
 
 ---
 
+## Sign-up follow-up reads (feed post card)
+
+After a sign-up action on a post card (accept, decline, mark completed, unblock) or a sent review, the feed reads the acted post again on its own and then reads sign-up side data for the posts on screen. The action itself is logged as before (`feed.optin.update`, `feed.optin.unblock` on failure). A follow-up read that fails writes one error row; the card stays, and the outcome of the confirmed action is still announced to the member.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `feed.optin.reread_failed` | `step` (`post` · `side_data` · `follow_up`), `action` (`accept` · `decline` · `complete` · `unblock` · `review`), `postId` (step `post` only) | `post`: the single-post re-read failed (the card is kept; a post that is gone is not an error and writes nothing). `side_data`: the sign-up rows could not be read again; each acted row is set from its own action's result and the member is told the list could not be refreshed. `follow_up`: anything else thrown while following up |
+
+```sql
+select context->>'step' as step, context->>'action' as action, count(*)
+from public.app_logs
+where event = 'feed.optin.reread_failed' and created_at > now() - interval '7 days'
+group by 1, 2 order by 3 desc;
+```
+
+---
+
 ## Share-preview images
 
 `/api/og/{post,resource,business,organization}/[id]` answer with one of ten pre-rendered cards (`apps/web/src/lib/og-card.ts`; rule and design in [`share-previews.md`](share-previews.md)). The handler still runs for every request the CDN does not answer from its cache — it reads FEED's database for the item's kind and for the 404 — so each run writes exactly one row. The image is cached for a year once served, so a row means a first fetch of that URL (or one after a deployment purged the CDN).

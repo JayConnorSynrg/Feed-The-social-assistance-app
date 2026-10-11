@@ -37,6 +37,17 @@ const h = vi.hoisted(() => ({
   memberStatuses: new Map<string, string>(),
   optIns: [] as Row[],
   writeError: null as unknown,
+  // Every request, in the order it was sent (reads, writes and rpcs alike).
+  log: [] as string[],
+  // What the single-post read and the sign-up rows read answer when they are to fail.
+  postReadError: null as unknown,
+  rowsReadError: null as unknown,
+  // Sign-up rows reads take the next gate (if any) and answer, with what they read when they were
+  // sent, only once it opens: lets a test make an older read arrive after a newer one.
+  rowGates: [] as Array<Promise<void>>,
+  // Error-level log rows: event name and labels.
+  logged: [] as Array<{ event: string; labels: unknown }>,
+  eventCardWrites: 0,
 }))
 const once = <T,>(k: string, make: () => T): T => (h.stable[k] ??= make()) as T
 
@@ -45,7 +56,7 @@ vi.mock('motion/react', () => {
   return { LazyMotion: pass, AnimatePresence: pass, domAnimation: {}, useReducedMotion: () => false, m: new Proxy({}, { get: () => 'div' }) }
 })
 vi.mock('@/lib/logger', () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: (event: string, _err: unknown, labels: unknown) => void h.logged.push({ event, labels }) },
   logEvent: vi.fn(),
   withMetric: async (_op: string, _a: unknown, fn: () => Promise<unknown>) => fn(),
 }))
@@ -58,9 +69,25 @@ vi.mock('@/hooks/use-admin-viewer', async (orig) => ({
 }))
 vi.mock('@/hooks/use-saved-resources', () => ({ useSavedResources: () => once('saved', () => ({ savedResources: [] })) }))
 vi.mock('@/hooks/use-opt-ins', () => ({
-  useOptIns: () => once('optins', () => ({ fetchOptInsForPosts: async () => new Map(h.memberStatuses), optIn: vi.fn(), withdrawOptIn: vi.fn() })),
+  useOptIns: () =>
+    once('optins', () => ({
+      fetchOptInsForPosts: async (ids: string[]) => {
+        h.log.push(`optins.mine(${ids.join(',')})`)
+        return new Map(h.memberStatuses)
+      },
+      optIn: vi.fn(),
+      withdrawOptIn: vi.fn(),
+    })),
 }))
-vi.mock('@/hooks/use-reviews', () => ({ useReviews: () => once('reviews', () => ({ fetchMyReviewsForOptIns: async () => new Map() })) }))
+vi.mock('@/hooks/use-reviews', () => ({
+  useReviews: () =>
+    once('reviews', () => ({
+      fetchMyReviewsForOptIns: async (ids: string[]) => {
+        h.log.push(`reviews.mine(${ids.join(',')})`)
+        return new Map()
+      },
+    })),
+}))
 vi.mock('@/hooks/use-follows', () => ({
   useFollows: () => once('follows', () => ({ followingIds: new Set(), fetchFollowing: () => {}, follow: vi.fn(), unfollow: vi.fn(), error: null })),
 }))
@@ -81,11 +108,11 @@ vi.mock('@/hooks/use-feed-event-cards', async (orig) => ({
   ...(await orig<object>()),
   useFeedEventCards: () => once('events', () => ({
     eventItems: [],
-    setEventItems: () => {},
+    setEventItems: () => void h.eventCardWrites++,
     eventMyStatuses: {},
-    setEventMyStatuses: () => {},
+    setEventMyStatuses: () => void h.eventCardWrites++,
     eventAnonClaims: new Set(),
-    setEventAnonClaims: () => {},
+    setEventAnonClaims: () => void h.eventCardWrites++,
     feedNotice: '',
     handleEventManaged: () => {},
     // The real announcer moves focus first, then sets the notice: the same order here.
@@ -101,11 +128,30 @@ vi.mock('@/lib/supabase/client', () => {
     from(table: string) {
       const calls: Call[] = []
       h.reads.push({ table, calls })
+      const arg = (m: string, col: string) => calls.find((c) => c.m === m && c.a[0] === col)?.a[1]
+      const fullRows = () => calls.some((c) => c.m === 'select' && String(c.a[0]).includes('seeker:profiles'))
+      /** One line per request: what was asked of which table. */
+      const describeCall = (single: boolean) => {
+        if (table === 'posts') {
+          if (single && arg('eq', 'id') !== undefined) return `posts.one(${String(arg('eq', 'id'))})`
+          return calls.some((c) => c.m === 'limit') ? 'posts.page' : `posts.in(${((arg('in', 'id') as string[] | undefined) ?? []).join(',')})`
+        }
+        if (table === 'resource_opt_ins') {
+          const upd = calls.find((c) => c.m === 'update')
+          if (upd) return `optins.update(${String(arg('eq', 'id'))}=${(upd.a[0] as { status: string }).status})`
+          const ids = ((arg('in', 'post_id') as string[] | undefined) ?? []).join(',')
+          return fullRows() ? `optins.rows(${ids})` : `optins.counts(${ids})`
+        }
+        return table
+      }
       const result = () => {
         if (table === 'resource_opt_ins') {
           if (calls.some((c) => c.m === 'update')) return { data: null, error: h.writeError }
-          const full = calls.some((c) => c.m === 'select' && String(c.a[0]).includes('seeker:profiles'))
-          return { data: full ? h.optIns : h.optIns.map((o) => ({ post_id: o.post_id })), error: null }
+          const full = fullRows()
+          if (full && h.rowsReadError) return { data: null, error: h.rowsReadError }
+          const posts = arg('in', 'post_id') as string[] | undefined
+          const rows = h.optIns.filter((o) => !posts || posts.includes(o.post_id as string))
+          return { data: full ? rows : rows.map((o) => ({ post_id: o.post_id })), error: null }
         }
         if (table !== 'posts') return { data: [], error: null }
         const idEq = calls.find((c) => c.m === 'eq' && c.a[0] === 'id')?.a[1]
@@ -119,9 +165,17 @@ vi.mock('@/lib/supabase/client', () => {
         {},
         {
           get(_t, prop: string) {
-            if (prop === 'then') return (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(result()).then(res, rej)
+            if (prop === 'then')
+              return (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
+                h.log.push(describeCall(false))
+                const r = result()
+                const gate = table === 'resource_opt_ins' && fullRows() ? h.rowGates.shift() : undefined
+                return (gate ?? Promise.resolve()).then(() => r).then(res, rej)
+              }
             if (prop === 'maybeSingle' || prop === 'single')
               return () => {
+                h.log.push(describeCall(true))
+                if (table === 'posts' && h.postReadError) return Promise.resolve({ data: null, error: h.postReadError })
                 const r = result()
                 return Promise.resolve({ data: (r.data as Row[])[0] ?? null, error: null })
               }
@@ -136,6 +190,7 @@ vi.mock('@/lib/supabase/client', () => {
     },
     rpc(fn: string, args: Record<string, unknown>) {
       h.rpcs.push({ fn, args })
+      h.log.push(`rpc:${fn}`)
       const reply = fn === 'ranked_feed_v2' ? { data: h.rows.map((r, i) => ({ id: r.id, kind: 'post', score: 10 - i, distance_bucket: 'unknown' })), error: null } : h.rpcReply(fn)
       const chain: Record<string, unknown> = {
         abortSignal: () => chain,
@@ -177,7 +232,7 @@ import { ConfirmDeleteDialog } from '@/components/feed/post-delete-dialog'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { FEED_POST_SELECT } from '@/components/feed/post-model'
 import { cardT } from '@/lib/i18n-feed-card'
-import { FeedHeader } from '@/components/feed/feed-chrome'
+import { FeedHeader, FeedStatusRegions } from '@/components/feed/feed-chrome'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { isolate } from '@/lib/format-message'
 import { optInsT } from '@/lib/i18n-feed-optins'
@@ -242,6 +297,12 @@ beforeEach(() => {
   h.memberStatuses = new Map()
   h.optIns = []
   h.writeError = null
+  h.log.length = 0
+  h.postReadError = null
+  h.rowsReadError = null
+  h.rowGates.length = 0
+  h.logged.length = 0
+  h.eventCardWrites = 0
   signIn('member')
 })
 
@@ -492,8 +553,6 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
   const doc = () => (globalThis as unknown as { document: Record<string, unknown> }).document
   const seeker = (id: string, name: string) => ({ id, first_name: name, harmony_score: null, harmony_reviews_count: 0 })
   const optIn = (id: string, name: string, status = 'pending', post = 'p1'): Row => ({ id, post_id: post, seeker_id: `s-${id}`, status, seeker: seeker(`s-${id}`, name) })
-  /** Writes to resource_opt_ins (each `from('resource_opt_ins')` chain that called update). */
-  const updates = () => h.reads.filter((r) => r.table === 'resource_opt_ins' && r.calls.some((c) => c.m === 'update')).map((r) => r.calls.filter((c) => c.m === 'update' || c.m === 'eq').map((c) => c.a))
   const card = (c: { tree: () => unknown }, id: string) => cardsOf(c.tree()).find((x) => (x.props.post as { id: string }).id === id) as El
   const rowAction = (id: string) => `[data-opt-in-row="${id}"] button:not([disabled])`
   /** The pressed control has left the page and focus went with it (the browser puts it on the body). */
@@ -582,6 +641,27 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.focused).toEqual([])
     })
 
+    it('the read that follows an opt-in comes back without the status: the outcome is said then, once — and never later', async () => {
+      const c = await feed()
+      const pressed = el('opt-in-btn-p1')
+      el('post-card-p1')
+      const sent = (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      gone(pressed)
+      await sent
+      await c.flush()
+      // The write went through; the card does not show it. It is still said, with focus on the card.
+      expect(card(c, 'p1').props.optInStatus).toBeUndefined()
+      expect(h.notices).toEqual([optInsT('en', 'announceOptedIn')])
+      expect(h.focused).toEqual(['post-card-p1'])
+      // Much later the status shows up (a realtime update, another read): nothing more is said.
+      h.memberStatuses.set('p1', 'pending')
+      h.realtime!.onInsert({ id: 'p1' })
+      ;(one(c.tree(), FeedHeader).props.onRankModeChange as (m: string) => void)('recent')
+      await c.flush(12)
+      expect(card(c, 'p1').props.optInStatus).toBe('pending')
+      expect(h.notices).toHaveLength(1)
+    })
+
     it('a pressed control that is still on the page keeps the focus', async () => {
       const c = await feed()
       el('opt-in-btn-p1')
@@ -595,49 +675,67 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
     })
   })
 
-  describe('the author', () => {
-    const asAuthor = async (rows: Row[]) => {
-      signIn('author')
-      h.optIns = rows
-      const c = await feed()
-      h.reads.length = 0
-      h.rpcs.length = 0
-      return c
-    }
-    const update = (c: { tree: () => unknown }, id: string, status: string) => (card(c, 'p1').props.onAuthorUpdateOptIn as (id: string, s: string) => Promise<void>)(id, status)
+  // ── What an author action (and a sent review) sends, and what it leaves alone ──────────────
+  const POSTS = 'p1,p3'
+  /** The one follow-up: a single read of the acted post, then ONE side-data set for every post
+   *  on screen (my statuses, decline markers, the sign-up rows, and — when there are rows — my
+   *  reviews for them). */
+  const followUp = (postId: string, rowIds: string[], posts = POSTS) => [
+    `posts.one(${postId})`,
+    `optins.mine(${posts})`,
+    'opt_in_declines',
+    `optins.rows(${posts})`,
+    ...(rowIds.length > 0 ? [`reviews.mine(${rowIds.join(',')})`] : []),
+  ]
+  const asAuthor = async (rows: Row[]) => {
+    signIn('author')
+    h.optIns = rows
+    const c = await feed()
+    h.reads.length = 0
+    h.rpcs.length = 0
+    h.log.length = 0
+    h.eventCardWrites = 0
+    return c
+  }
+  type Mounted = { tree: () => unknown; rerender: () => unknown; flush: (n?: number) => Promise<unknown> }
+  const update = (c: Mounted, id: string, status: string, post = 'p1') => (card(c, post).props.onAuthorUpdateOptIn as (id: string, s: string) => Promise<void>)(id, status)
+  const unblock = (c: Mounted, id: string) => (card(c, 'p1').props.onAuthorUnblockOptIn as (id: string) => Promise<void>)(id)
+  const rowsOf = (c: Mounted, post = 'p1') => ((card(c, post).props.authorOptIns as Array<{ id: string; status: string }> | undefined) ?? []).map((o) => [o.id, o.status])
+  const busy = (c: Mounted) => [...((card(c, 'p1').props.busyOptInIds as ReadonlySet<string> | undefined) ?? [])]
 
+  describe('the author', () => {
     it('the card gets the rows of its sign-up list', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       expect((card(c, 'p1').props.authorOptIns as Array<{ id: string; seekerName: string }>).map((o) => [o.id, o.seekerName])).toEqual([['o1', 'Bo'], ['o2', 'Cy']])
     })
 
-    it('Accept: one write; then "… accepted." and focus on that row\'s Mark Completed', async () => {
+    it('Accept: one write, one post read, one side-data set; then "You accepted …" and focus on that row\'s Mark Completed', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const before = cardIds(c.tree())
       const pressed = el('accept-optin-o1')
       el('complete-optin-o1')
       const sent = update(c, 'o1', 'accepted')
       h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy')]
       gone(pressed)
-      // The feed is re-read with the list left on screen: the card, and the author's place in its
-      // open list, are not unmounted.
       c.rerender()
-      expect(cardIds(c.tree())).toContain('p1')
+      expect(cardIds(c.tree())).toEqual(before)
       await sent
-      c.rerender()
-      expect(cardIds(c.tree())).toContain('p1')
       await c.flush()
-      expect(updates()).toEqual([[[{ status: 'accepted' }], ['id', 'o1']]])
+      expect(h.log).toEqual(['optins.update(o1=accepted)', ...followUp('p1', ['o1', 'o2'])])
+      expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'pending']])
       expect(h.focused).toEqual(['complete-optin-o1'])
-      expect(h.notices).toEqual([`${isolate('Bo')} accepted.`])
+      expect(h.notices).toEqual([`You accepted ${isolate('Bo')}.`])
+      // Nothing more is sent or said by later renders: the announce and focus code reads nothing.
       c.rerender()
       await c.flush()
-      expect(updates()).toHaveLength(1)
+      expect(h.log).toHaveLength(6)
       expect(h.notices).toHaveLength(1)
     })
 
-    it('Decline: one write; then "… declined." and focus on the next row\'s first action', async () => {
+    it('Decline: focus goes to that same row\'s Unblock (the way to undo it), not to another person\'s row', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       const pressed = el('decline-optin-o1')
+      el('unblock-optin-o1')
       el(rowAction('o2'))
       el('opt-in-manage-p1')
       const sent = update(c, 'o1', 'declined')
@@ -645,14 +743,15 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       gone(pressed)
       await sent
       await c.flush()
-      expect(updates()).toEqual([[[{ status: 'declined' }], ['id', 'o1']]])
-      expect(h.focused).toEqual([rowAction('o2')])
-      expect(h.notices).toEqual([`${isolate('Bo')} declined.`])
+      expect(h.log).toEqual(['optins.update(o1=declined)', ...followUp('p1', ['o1', 'o2'])])
+      expect(h.focused).toEqual(['unblock-optin-o1'])
+      expect(h.notices).toEqual([`You declined ${isolate('Bo')}.`])
     })
 
-    it('Decline on the last row with an action: focus goes to the sign-up list toggle', async () => {
+    it('Decline when that row ends up with no control: focus goes to the sign-up list toggle', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       const pressed = el('decline-optin-o2')
+      el(rowAction('o1'))
       el('opt-in-manage-p1')
       const sent = update(c, 'o2', 'declined')
       h.optIns = [optIn('o1', 'Bo'), optIn('o2', 'Cy', 'declined')]
@@ -660,10 +759,10 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       await sent
       await c.flush()
       expect(h.focused).toEqual(['opt-in-manage-p1'])
-      expect(h.notices).toEqual([`${isolate('Cy')} declined.`])
+      expect(h.notices).toEqual([`You declined ${isolate('Cy')}.`])
     })
 
-    it('Mark Completed: one write; then "Marked completed for …" and focus on the sign-up list toggle', async () => {
+    it('Mark Completed: one write and one follow-up; then "Marked completed for …" and focus on the sign-up list toggle', async () => {
       const c = await asAuthor([optIn('o1', 'Bo', 'accepted')])
       const pressed = el('complete-optin-o1')
       el('opt-in-manage-p1')
@@ -672,51 +771,57 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       gone(pressed)
       await sent
       await c.flush()
-      expect(updates()).toEqual([[[{ status: 'completed' }], ['id', 'o1']]])
+      expect(h.log).toEqual(['optins.update(o1=completed)', ...followUp('p1', ['o1'])])
       expect(h.focused).toEqual(['opt-in-manage-p1'])
       expect(h.notices).toEqual([`Marked completed for ${isolate('Bo')}.`])
     })
 
-    it('Unblock: one request; then "… unblocked." and focus on the next row or the toggle', async () => {
+    it('Unblock: one request and one follow-up; the row goes, the count follows, then "… unblocked." and focus on the next row', async () => {
       const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+      expect(card(c, 'p1').props.optInCount).toBe(2)
       const pressed = el('unblock-optin-o1')
       el(rowAction('o2'))
-      const sent = (card(c, 'p1').props.onAuthorUnblockOptIn as (id: string) => Promise<void>)('o1')
+      const sent = unblock(c, 'o1')
       h.optIns = [optIn('o2', 'Cy')]
       gone(pressed)
       await sent
       await c.flush()
-      expect(h.rpcs.filter((r) => r.fn === 'unblock_opt_in')).toEqual([{ fn: 'unblock_opt_in', args: { p_opt_in_id: 'o1' } }])
-      expect(updates()).toEqual([])
+      expect(h.log).toEqual(['rpc:unblock_opt_in', ...followUp('p1', ['o2'])])
+      expect(h.rpcs).toEqual([{ fn: 'unblock_opt_in', args: { p_opt_in_id: 'o1' } }])
+      expect(rowsOf(c)).toEqual([['o2', 'pending']])
+      // "N opted in" on the toggle is right after the action (it used to come from the page read).
+      expect(card(c, 'p1').props.optInCount).toBe(1)
       expect(h.focused).toEqual([rowAction('o2')])
       expect(h.notices).toEqual([`${isolate('Bo')} unblocked. They can request again.`])
     })
 
-    it.each(['accepted', 'declined', 'completed'] as const)('a failed %s: said in the same region; one write; focus stays on the pressed button', async (status) => {
+    it.each(['accepted', 'declined', 'completed'] as const)('a failed %s: said in the same region; the write and nothing after it; focus stays; the row is free again', async (status) => {
       const c = await asAuthor([optIn('o1', 'Bo', status === 'completed' ? 'accepted' : 'pending'), optIn('o2', 'Cy')])
       h.writeError = { code: '42501', message: 'permission denied' }
       el(status === 'accepted' ? 'accept-optin-o1' : status === 'declined' ? 'decline-optin-o1' : 'complete-optin-o1')
       el('complete-optin-o1')
+      el('unblock-optin-o1')
       el('opt-in-manage-p1')
       el(rowAction('o2'))
       await update(c, 'o1', status)
       await c.flush()
-      expect(updates()).toHaveLength(1)
+      // No read of any kind follows a failed write.
+      expect(h.log).toEqual([`optins.update(o1=${status})`])
       expect(h.notices).toEqual([cardT('en', 'statusModerationFailed')])
       expect(h.focused).toEqual([])
-      // No re-read of the feed follows a failed write.
-      expect(h.reads.filter((r) => r.table === 'posts')).toEqual([])
+      expect(busy(c)).toEqual([])
     })
 
     it('a failed unblock is said too, and sends nothing else', async () => {
       const c = await asAuthor([optIn('o1', 'Bo', 'declined')])
       h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: null, error: { message: 'Only a declined opt-in can be unblocked' } } : { data: null, error: null })
       el('unblock-optin-o1')
-      await (card(c, 'p1').props.onAuthorUnblockOptIn as (id: string) => Promise<void>)('o1')
+      await unblock(c, 'o1')
       await c.flush()
-      expect(h.rpcs.filter((r) => r.fn === 'unblock_opt_in')).toHaveLength(1)
+      expect(h.log).toEqual(['rpc:unblock_opt_in'])
       expect(h.notices).toEqual([cardT('en', 'statusModerationFailed')])
       expect(h.focused).toEqual([])
+      expect(busy(c)).toEqual([])
     })
 
     it('a name that reads like a status or a sentence is said as written, isolated', async () => {
@@ -728,7 +833,319 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       gone(pressed)
       await sent
       await c.flush()
-      expect(h.notices).toEqual([`${isolate('accepted')} accepted.`])
+      expect(h.notices).toEqual([`You accepted ${isolate('accepted')}.`])
+    })
+  })
+
+  describe('a row is busy until its outcome shows', () => {
+    it('a double press sends one write; the row is marked busy for the card, and free once the outcome is on screen', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      el('accept-optin-o1')
+      el('complete-optin-o1')
+      // Two presses before anything has rendered, then a third (Decline, same row) after a render.
+      const first = update(c, 'o1', 'accepted')
+      const second = update(c, 'o1', 'accepted')
+      c.rerender()
+      expect(busy(c)).toEqual(['o1'])
+      const third = update(c, 'o1', 'declined')
+      h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy')]
+      await Promise.all([first, second, third])
+      await c.flush()
+      expect(h.log.filter((l) => l.startsWith('optins.update'))).toEqual(['optins.update(o1=accepted)'])
+      expect(h.log).toEqual(['optins.update(o1=accepted)', ...followUp('p1', ['o1', 'o2'])])
+      expect(h.notices).toEqual([`You accepted ${isolate('Bo')}.`])
+      expect(busy(c)).toEqual([])
+      // Free again: the next action on that row goes through.
+      h.log.length = 0
+      await update(c, 'o1', 'completed')
+      await c.flush()
+      expect(h.log[0]).toBe('optins.update(o1=completed)')
+    })
+
+    it('a second Unblock on the same row sends nothing, so the first one\'s outcome is still said', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+      const pressed = el('unblock-optin-o1')
+      el(rowAction('o2'))
+      const first = unblock(c, 'o1')
+      await first
+      // The rpc is back; the row is still on screen (the follow-up has not landed). Press again.
+      const second = unblock(c, 'o1')
+      h.optIns = [optIn('o2', 'Cy')]
+      gone(pressed)
+      await second
+      await c.flush()
+      expect(h.rpcs.filter((r) => r.fn === 'unblock_opt_in')).toHaveLength(1)
+      expect(h.notices).toEqual([`${isolate('Bo')} unblocked. They can request again.`])
+    })
+
+    it('two quick actions on different rows: two writes, and both outcomes are said', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      el('accept-optin-o1')
+      el('decline-optin-o2')
+      el('complete-optin-o1')
+      el('unblock-optin-o2')
+      const a = update(c, 'o1', 'accepted')
+      const b = update(c, 'o2', 'declined')
+      h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy', 'declined')]
+      await Promise.all([a, b])
+      await c.flush()
+      expect(h.log.filter((l) => l.startsWith('optins.update'))).toEqual(['optins.update(o1=accepted)', 'optins.update(o2=declined)'])
+      expect(h.notices.join(' ')).toContain(`You accepted ${isolate('Bo')}.`)
+      expect(h.notices.join(' ')).toContain(`You declined ${isolate('Cy')}.`)
+      expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'declined']])
+      expect(busy(c)).toEqual([])
+    })
+  })
+
+  describe('the read that follows an action', () => {
+    const accept = async (c: Mounted, after: () => void = () => {}) => {
+      const pressed = el('accept-optin-o1')
+      el('complete-optin-o1')
+      el('opt-in-manage-p1')
+      el('post-card-p3')
+      const sent = update(c, 'o1', 'accepted')
+      h.optIns = h.optIns.map((o) => (o.id === 'o1' ? { ...o, status: 'accepted' } : o))
+      gone(pressed)
+      after()
+      await sent
+      await c.flush()
+    }
+
+    it('leaves the list alone: same cards in the same order, still ranked, no page read, no event-card write, no loading state', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const before = cardIds(c.tree())
+      const loadingSeen: unknown[] = []
+      await accept(c, () => {
+        c.rerender()
+        loadingSeen.push(one(c.tree(), FeedStatusRegions).props.loading)
+      })
+      loadingSeen.push(one(c.tree(), FeedStatusRegions).props.loading)
+      expect(cardIds(c.tree())).toEqual(before)
+      expect(one(c.tree(), FeedHeader).props.rankMode).toBe('ranked')
+      expect(h.rpcs.filter((r) => r.fn === 'ranked_feed_v2')).toEqual([])
+      expect(h.log.filter((l) => l === 'posts.page' || l.startsWith('posts.in') || l === 'post_likes' || l.startsWith('optins.counts'))).toEqual([])
+      expect(h.eventCardWrites).toBe(0)
+      expect(loadingSeen).toEqual([false, false])
+      expect(one(c.tree(), FeedStatusRegions).props.error).toBe(false)
+    })
+
+    it('reads sign-up side data for EVERY listed post: another card keeps its rows', async () => {
+      h.rows = [...h.rows, row('p5', { max_seekers: 1, slots_remaining: 0 })]
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy'), optIn('o5', 'Di', 'accepted', 'p5')])
+      expect(rowsOf(c, 'p5')).toEqual([['o5', 'accepted']])
+      await accept(c)
+      expect(h.log).toEqual(['optins.update(o1=accepted)', ...followUp('p1', ['o1', 'o2', 'o5'], 'p1,p3,p5')])
+      expect(rowsOf(c, 'p5')).toEqual([['o5', 'accepted']])
+      expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'pending']])
+    })
+
+    it('version guard kept: a sign-up does not move the version, and slots_remaining still patches; an older version does not', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const post = () => card(c, 'p1').props.post as { slotsRemaining: number; content: string; version: number }
+      expect([post().slotsRemaining, post().version]).toEqual([2, 3])
+      h.rows = h.rows.map((r) => (r.id === 'p1' ? { ...r, slots_remaining: 1 } : r))
+      await accept(c)
+      expect([post().slotsRemaining, post().version]).toEqual([1, 3])
+      // A stale row (an older version) changes nothing.
+      h.rows = h.rows.map((r) => (r.id === 'p1' ? { ...r, version: 2, content: 'older text', slots_remaining: 0 } : r))
+      h.optIns = [optIn('o1', 'Bo', 'completed'), optIn('o2', 'Cy')]
+      el('complete-optin-o1')
+      await update(c, 'o1', 'completed')
+      await c.flush()
+      expect([post().slotsRemaining, post().content]).toEqual([1, 'post p1'])
+    })
+
+    describe('gone is not the same as failed', () => {
+      it('the post is gone at the re-read: the card leaves as a deleted one does, the outcome is still said, focus goes to the next card; nothing is logged as an error', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        await accept(c, () => {
+          h.rows = h.rows.filter((r) => r.id !== 'p1')
+        })
+        expect(cardIds(c.tree())).toEqual(['p3'])
+        expect(h.notices).toEqual([`You accepted ${isolate('Bo')}.`])
+        expect(h.focused).toEqual(['post-card-p3'])
+        expect(h.logged).toEqual([])
+        // Still exactly one post read and one side-data set (for the cards that are left).
+        expect(h.log).toEqual(['optins.update(o1=accepted)', 'posts.one(p1)', 'optins.mine(p3)', 'opt_in_declines', 'optins.rows(p3)'])
+        c.rerender()
+        await c.flush()
+        expect(h.notices).toHaveLength(1)
+      })
+
+      it('the re-read FAILS: the card stays, an error row is written, and the outcome is still said from the side data', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        h.postReadError = { code: '57014', message: 'canceling statement due to statement timeout' }
+        await accept(c)
+        expect(cardIds(c.tree())).toEqual(['p1', 'p3'])
+        expect(h.logged).toEqual([{ event: 'feed.optin.reread_failed', labels: { step: 'post', action: 'accept', postId: 'p1' } }])
+        expect(h.notices).toEqual([`You accepted ${isolate('Bo')}.`])
+        expect(h.focused).toEqual(['complete-optin-o1'])
+        expect(h.log).toEqual(['optins.update(o1=accepted)', ...followUp('p1', ['o1', 'o2'])])
+      })
+    })
+
+    describe('the hidden-post rule is the feed\'s own', () => {
+      it('the author\'s own post was held meanwhile: the card stays, with its hidden state', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        await accept(c, () => {
+          h.rows = h.rows.map((r) => (r.id === 'p1' ? { ...r, is_hidden: true, hidden_reason: 'hold_for_review' } : r))
+        })
+        expect(cardIds(c.tree())).toEqual(['p1', 'p3'])
+        expect((card(c, 'p1').props.post as { isHidden: boolean }).isHidden).toBe(true)
+        expect(h.notices).toEqual([`You accepted ${isolate('Bo')}.`])
+      })
+
+      it('a viewer who is not the author loses a card whose post is now hidden (a sent review): it leaves, and the review is still said', async () => {
+        signIn('cm')
+        h.memberStatuses.set('p1', 'completed')
+        h.optIns = [{ ...optIn('o7', 'Me', 'completed'), seeker_id: OTHER }]
+        const c = await feed()
+        el('review-sourcer-p1')
+        el('post-card-p3')
+        ;(card(c, 'p1').props.onReviewSourcer as (postId: string, optInId: string) => void)('p1', 'o7')
+        c.rerender()
+        h.log.length = 0
+        // Staff can still read the hidden row; the feed does not keep it for them.
+        h.rows = h.rows.map((r) => (r.id === 'p1' ? { ...r, is_hidden: true, hidden_reason: 'removed' } : r))
+        await (one(c.tree(), ReviewModal).props.onSubmitted as () => Promise<void>)()
+        await c.flush()
+        expect(cardIds(c.tree())).toEqual(['p3'])
+        expect(h.notices).toEqual(['Your review was submitted'])
+        expect(h.focused).toEqual(['post-card-p3'])
+        expect(h.log.slice(0, 1)).toEqual(['posts.one(p1)'])
+      })
+    })
+
+    describe('when the sign-up rows cannot be read again', () => {
+      it('an error row is written, the row is set from the action\'s own result, and the outcome is said with a sentence that says the list is not fresh', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        h.rowsReadError = { code: '57014', message: 'timeout' }
+        const pressed = el('accept-optin-o1')
+        el('complete-optin-o1')
+        const sent = update(c, 'o1', 'accepted')
+        gone(pressed)
+        await sent
+        await c.flush()
+        expect(h.logged).toEqual([{ event: 'feed.optin.reread_failed', labels: { step: 'side_data', action: 'accept' } }])
+        // Not shown with the status it had before.
+        expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'pending']])
+        expect(h.notices).toEqual([`You accepted ${isolate('Bo')}. ${optInsT('en', 'announceListStale')}`])
+        expect(h.focused).toEqual(['complete-optin-o1'])
+        expect(busy(c)).toEqual([])
+        expect(h.log).toEqual(['optins.update(o1=accepted)', 'posts.one(p1)', `optins.mine(${POSTS})`, 'opt_in_declines', `optins.rows(${POSTS})`])
+      })
+
+      it('unblock: the row is taken out and the count goes down by one', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+        h.rowsReadError = { message: 'timeout' }
+        el('unblock-optin-o1').isConnected = false
+        el(rowAction('o2'))
+        await unblock(c, 'o1')
+        await c.flush()
+        expect(rowsOf(c)).toEqual([['o2', 'pending']])
+        expect(card(c, 'p1').props.optInCount).toBe(1)
+        expect(h.notices).toEqual([`${isolate('Bo')} unblocked. They can request again. ${optInsT('en', 'announceListStale')}`])
+      })
+
+      it('a sent review: said with the same sentence added', async () => {
+        signIn('author')
+        h.optIns = [optIn('o1', 'Bo', 'completed')]
+        const c = await feed()
+        el('review-seeker-o1')
+        el('opt-in-manage-p1')
+        ;(card(c, 'p1').props.onAuthorReviewSeeker as (id: string, name: string) => void)('o1', 'Bo')
+        c.rerender()
+        h.rowsReadError = { message: 'timeout' }
+        await (one(c.tree(), ReviewModal).props.onSubmitted as () => Promise<void>)()
+        await c.flush()
+        expect(h.notices).toEqual([`Your review was submitted ${optInsT('en', 'announceListStale')}`])
+        expect(h.logged).toEqual([{ event: 'feed.optin.reread_failed', labels: { step: 'side_data', action: 'review' } }])
+      })
+    })
+
+    describe('a read that has been overtaken writes nothing', () => {
+      const deferred = () => {
+        let open = () => {}
+        const promise = new Promise<void>((res) => {
+          open = res
+        })
+        return { promise, open }
+      }
+
+      it('an older sign-up rows read that arrives after a newer one is dropped (the last request, not the last response, wins)', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        el('accept-optin-o1')
+        el('decline-optin-o2')
+        el('complete-optin-o1')
+        el('unblock-optin-o2')
+        // The first follow-up's rows read is held; it read the rows before the second write.
+        const held = deferred()
+        h.rowGates.push(held.promise)
+        h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy')]
+        const first = update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(h.log.filter((l) => l.startsWith('optins.rows'))).toHaveLength(1)
+        // The second action, whole: its rows read (not held) lands with both rows as they are now.
+        h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy', 'declined')]
+        await update(c, 'o2', 'declined')
+        await c.flush()
+        expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'declined']])
+        // Now the older response arrives, saying Cy is still pending. It must not be written.
+        held.open()
+        await first
+        await c.flush()
+        expect(rowsOf(c)).toEqual([['o1', 'accepted'], ['o2', 'declined']])
+        expect(h.notices.join(' ')).toContain(`You accepted ${isolate('Bo')}.`)
+        expect(h.notices.join(' ')).toContain(`You declined ${isolate('Cy')}.`)
+        expect(busy(c)).toEqual([])
+      })
+
+      it('an action that began under another account is not followed up: no post read, no side-data set, nothing said for the account that is here now', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        el('accept-optin-o1')
+        el('complete-optin-o1')
+        const sent = update(c, 'o1', 'accepted')
+        h.log.length = 0
+        // The account changes while the write is on its way.
+        signIn('member')
+        c.rerender()
+        await sent
+        await c.flush()
+        // The new account loads its own feed (one ranked page, one side-data set); the old
+        // account's write lands, and nothing follows it.
+        expect(h.log.filter((l) => l === 'rpc:ranked_feed_v2')).toHaveLength(1)
+        expect(h.log.filter((l) => l.startsWith('posts.one'))).toEqual([])
+        expect(h.log.filter((l) => l.startsWith('optins.rows'))).toHaveLength(1)
+        expect(h.log.filter((l) => l.startsWith('optins.mine'))).toHaveLength(1)
+        expect(h.notices).toEqual([])
+        expect(h.focused).toEqual([])
+        expect(busy(c)).toEqual([])
+      })
+
+      it('a sign-up rows read that comes back to another account is dropped: the old account\'s rows are not written over the new one\'s', async () => {
+        const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+        el('accept-optin-o1')
+        el('complete-optin-o1')
+        const held = deferred()
+        h.rowGates.push(held.promise)
+        h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy')]
+        const sent = update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(h.log.filter((l) => l.startsWith('optins.rows'))).toHaveLength(1)
+        // The account changes while that read is on its way; the new account sees no rows.
+        h.optIns = []
+        signIn('member')
+        c.rerender()
+        await c.flush(12)
+        expect(rowsOf(c)).toEqual([])
+        h.notices.length = 0
+        held.open()
+        await sent
+        await c.flush()
+        expect(rowsOf(c)).toEqual([])
+        expect(h.notices).toEqual([])
+        expect(h.focused).toEqual([])
+      })
     })
   })
 
@@ -760,17 +1177,26 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.focused).toEqual(['opt-in-manage-p1', 'post-card-p1'])
     })
 
-    it('a sent review: focus first, then "Your review was submitted", and the feed is re-read with the list left on screen', async () => {
+    it('a sent review: one post read and one side-data set, the list left as it is; then focus first and "Your review was submitted", once', async () => {
       const { c, modal } = await openFromList()
       el('opt-in-manage-p1')
-      h.reads.length = 0
-      ;(modal().props.onSubmitted as () => void)()
+      const before = cardIds(c.tree())
+      h.log.length = 0
+      h.eventCardWrites = 0
+      const done = (modal().props.onSubmitted as () => Promise<void>)()
       c.rerender()
-      expect(cardIds(c.tree())).toContain('p1')
+      expect(cardIds(c.tree())).toEqual(before)
+      await done
       await c.flush()
+      expect(h.log).toEqual(followUp('p1', ['o1']))
+      expect(cardIds(c.tree())).toEqual(before)
+      expect(h.eventCardWrites).toBe(0)
       expect(h.focused).toEqual(['opt-in-manage-p1'])
       expect(h.notices).toEqual(['Your review was submitted'])
-      expect(h.reads.filter((r) => r.table === 'posts')).toHaveLength(1)
+      c.rerender()
+      await c.flush()
+      expect(h.log).toHaveLength(5)
+      expect(h.notices).toHaveLength(1)
     })
 
     it('opened from "Review sourcer": the opener is that button, and the stable control is the post card', async () => {
@@ -786,6 +1212,23 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(modal.props.revieweeRole).toBe('sourcer')
       ;(modal.props.fallbackFocus as () => void)()
       expect(h.focused).toEqual(['post-card-p1'])
+    })
+
+    it('a sent review on a post that is gone at the re-read: the card leaves, and the review is said as it goes', async () => {
+      h.memberStatuses.set('p1', 'completed')
+      h.optIns = [{ ...optIn('o7', 'Me', 'completed'), seeker_id: OTHER }]
+      const c = await feed()
+      el('review-sourcer-p1')
+      el('post-card-p3')
+      ;(card(c, 'p1').props.onReviewSourcer as (postId: string, optInId: string) => void)('p1', 'o7')
+      c.rerender()
+      h.rows = h.rows.filter((r) => r.id !== 'p1')
+      await (one(c.tree(), ReviewModal).props.onSubmitted as () => Promise<void>)()
+      await c.flush()
+      expect(cardIds(c.tree())).toEqual(['p3'])
+      expect(h.notices).toEqual(['Your review was submitted'])
+      expect(h.focused).toEqual(['post-card-p3'])
+      expect(h.logged).toEqual([])
     })
   })
 })

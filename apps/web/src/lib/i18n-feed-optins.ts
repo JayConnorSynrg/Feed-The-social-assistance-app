@@ -65,6 +65,8 @@ export interface FeedOptInsMessages {
   announceDeclined: string
   announceCompleted: string
   announceUnblocked: string
+  /** Added to an outcome when the list could not be read again after it. */
+  announceListStale: string
 }
 
 export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
@@ -95,10 +97,11 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errAlreadyOptedIn: 'Already opted in',
     announceOptedIn: 'You are opted in.',
     announceWithdrawn: 'Your opt-in was withdrawn.',
-    announceAccepted: '{name} accepted.',
-    announceDeclined: '{name} declined.',
+    announceAccepted: 'You accepted {name}.',
+    announceDeclined: 'You declined {name}.',
     announceCompleted: 'Marked completed for {name}.',
     announceUnblocked: '{name} unblocked. They can request again.',
+    announceListStale: 'The sign-up list could not be refreshed.',
   },
   es: {
     optIn: 'Apuntarme',
@@ -131,6 +134,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Rechazaste a {name}.',
     announceCompleted: 'Marcada como completada: {name}.',
     announceUnblocked: 'Desbloqueaste a {name}. Podrá volver a solicitarlo.',
+    announceListStale: 'No se pudo actualizar la lista de personas apuntadas.',
   },
   // machine-drafted, needs native review
   ht: {
@@ -164,6 +168,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Ou refize {name}.',
     announceCompleted: 'Make kòm fini pou {name}.',
     announceUnblocked: 'Ou debloke {name}. Li ka mande ankò.',
+    announceListStale: 'Nou pa t kapab mete lis moun ki enskri yo ajou.',
   },
   vi: {
     optIn: 'Đăng ký',
@@ -196,6 +201,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Đã từ chối {name}.',
     announceCompleted: 'Đã đánh dấu hoàn tất cho {name}.',
     announceUnblocked: 'Đã bỏ chặn {name}. Họ có thể yêu cầu lại.',
+    announceListStale: 'Không thể làm mới danh sách đăng ký.',
   },
   ar: {
     optIn: 'سجّلني',
@@ -228,6 +234,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'تم رفض {name}.',
     announceCompleted: 'تم التحديد كمكتمل لـ {name}.',
     announceUnblocked: 'تم إلغاء حظر {name}. يمكنه الطلب مجددًا.',
+    announceListStale: 'تعذّر تحديث قائمة المسجّلين.',
   },
   zh: {
     optIn: '报名',
@@ -260,6 +267,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: '已拒绝 {name}。',
     announceCompleted: '已为 {name} 标记为已完成。',
     announceUnblocked: '已解除对 {name} 的限制。对方可再次申请。',
+    announceListStale: '无法刷新报名名单。',
   },
   // machine-drafted, needs native review
   so: {
@@ -293,6 +301,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: '{name} waa la diiday.',
     announceCompleted: 'Waxaa loo calaamadeeyay in la dhammeeyay: {name}.',
     announceUnblocked: '{name} xannibaaddii waa laga qaaday. Mar kale ayuu codsan karaa.',
+    announceListStale: 'Liiska dadka is qoray lama cusboonaysiin karin.',
   },
   fr: {
     optIn: "M'inscrire",
@@ -325,6 +334,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: '{name} : demande refusée.',
     announceCompleted: '{name} : marquée comme terminée.',
     announceUnblocked: '{name} : déblocage fait. Une nouvelle demande est possible.',
+    announceListStale: "Impossible d'actualiser la liste des inscriptions.",
   },
   pt: {
     optIn: 'Inscrever-me',
@@ -357,6 +367,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Você recusou {name}.',
     announceCompleted: 'Marcada como concluída: {name}.',
     announceUnblocked: 'Você desbloqueou {name}. A pessoa poderá pedir de novo.',
+    announceListStale: 'Não foi possível atualizar a lista de inscrições.',
   },
   ru: {
     optIn: 'Записаться',
@@ -389,6 +400,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Заявка отклонена: {name}.',
     announceCompleted: 'Отмечено как завершённое: {name}.',
     announceUnblocked: 'Блокировка снята: {name}. Можно подать заявку снова.',
+    announceListStale: 'Не удалось обновить список записавшихся.',
   },
   ko: {
     optIn: '신청하기',
@@ -421,6 +433,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: '{name} 님을 거절했습니다.',
     announceCompleted: '{name} 님 건을 완료로 표시했습니다.',
     announceUnblocked: '{name} 님의 차단을 해제했습니다. 다시 신청할 수 있습니다.',
+    announceListStale: '신청 목록을 새로 고치지 못했습니다.',
   },
   tl: {
     optIn: 'Mag-opt in',
@@ -453,6 +466,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Tinanggihan si {name}.',
     announceCompleted: 'Minarkahang tapos na para kay {name}.',
     announceUnblocked: 'Na-unblock si {name}. Maaari siyang humiling muli.',
+    announceListStale: 'Hindi na-refresh ang listahan ng mga nag-opt in.',
   },
   // machine-drafted, needs native review
   am: {
@@ -486,6 +500,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: '{name} ተቀባይነት አላገኘም።',
     announceCompleted: 'ለ{name} እንደተጠናቀቀ ምልክት ተደርጓል።',
     announceUnblocked: 'የ{name} እገዳ ተነስቷል። እንደገና መጠየቅ ይችላል።',
+    announceListStale: 'የተመዝጋቢዎችን ዝርዝር ማደስ አልተቻለም።',
   },
   // machine-drafted, needs native review
   hmn: {
@@ -519,6 +534,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     announceDeclined: 'Tsis txais {name} lawm.',
     announceCompleted: 'Kos tias tiav lawm rau {name}.',
     announceUnblocked: 'Tshem kev thaiv {name} lawm. Nws thov tau dua.',
+    announceListStale: 'Rov thauj daim ntawv teev cov neeg sau npe tsis tau.',
   },
 }
 

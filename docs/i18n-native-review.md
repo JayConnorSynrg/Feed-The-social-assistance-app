@@ -1075,10 +1075,11 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAlreadyOptedIn` | ht | Already opted in | Ou deja enskri | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | ht | You are opted in. | Ou enskri. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | ht | Your opt-in was withdrawn. | Ou retire enskripsyon ou. | 2026-10-11 | machine-drafted, needs native review |
-| `announceAccepted` | ht | {name} accepted. | Ou aksepte {name}. | 2026-10-11 | machine-drafted, needs native review |
-| `announceDeclined` | ht | {name} declined. | Ou refize {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | ht | You accepted {name}. | Ou aksepte {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | ht | You declined {name}. | Ou refize {name}. | 2026-10-11 | machine-drafted, needs native review |
 | `announceCompleted` | ht | Marked completed for {name}. | Make kòm fini pou {name}. | 2026-10-11 | machine-drafted, needs native review |
 | `announceUnblocked` | ht | {name} unblocked. They can request again. | Ou debloke {name}. Li ka mande ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `announceListStale` | ht | The sign-up list could not be refreshed. | Nou pa t kapab mete lis moun ki enskri yo ajou. | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | so | Opt In | Isu qor | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | so | Opted In | Waad is qortay | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | so | Withdraw | Ka noqo | 2026-10-11 | machine-drafted, needs native review |
@@ -1105,10 +1106,11 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAlreadyOptedIn` | so | Already opted in | Hore ayaad isu qortay | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | so | You are opted in. | Waad is qortay. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | so | Your opt-in was withdrawn. | Is-qoristaadii waad ka noqotay. | 2026-10-11 | machine-drafted, needs native review |
-| `announceAccepted` | so | {name} accepted. | {name} waa la aqbalay. | 2026-10-11 | machine-drafted, needs native review |
-| `announceDeclined` | so | {name} declined. | {name} waa la diiday. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | so | You accepted {name}. | {name} waa la aqbalay. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | so | You declined {name}. | {name} waa la diiday. | 2026-10-11 | machine-drafted, needs native review |
 | `announceCompleted` | so | Marked completed for {name}. | Waxaa loo calaamadeeyay in la dhammeeyay: {name}. | 2026-10-11 | machine-drafted, needs native review |
 | `announceUnblocked` | so | {name} unblocked. They can request again. | {name} xannibaaddii waa laga qaaday. Mar kale ayuu codsan karaa. | 2026-10-11 | machine-drafted, needs native review |
+| `announceListStale` | so | The sign-up list could not be refreshed. | Liiska dadka is qoray lama cusboonaysiin karin. | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | am | Opt In | ተመዝገብ | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | am | Opted In | ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
@@ -1135,10 +1137,11 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAlreadyOptedIn` | am | Already opted in | አስቀድመው ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | am | You are opted in. | ተመዝግበዋል። | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | am | Your opt-in was withdrawn. | ምዝገባዎ ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
-| `announceAccepted` | am | {name} accepted. | {name} ተቀባይነት አግኝቷል። | 2026-10-11 | machine-drafted, needs native review |
-| `announceDeclined` | am | {name} declined. | {name} ተቀባይነት አላገኘም። | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | am | You accepted {name}. | {name} ተቀባይነት አግኝቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | am | You declined {name}. | {name} ተቀባይነት አላገኘም። | 2026-10-11 | machine-drafted, needs native review |
 | `announceCompleted` | am | Marked completed for {name}. | ለ{name} እንደተጠናቀቀ ምልክት ተደርጓል። | 2026-10-11 | machine-drafted, needs native review |
 | `announceUnblocked` | am | {name} unblocked. They can request again. | የ{name} እገዳ ተነስቷል። እንደገና መጠየቅ ይችላል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceListStale` | am | The sign-up list could not be refreshed. | የተመዝጋቢዎችን ዝርዝር ማደስ አልተቻለም። | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | hmn | Opt In | Sau npe | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | hmn | Opted In | Sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | hmn | Withdraw | Thim | 2026-10-11 | machine-drafted, needs native review |
@@ -1165,10 +1168,11 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAlreadyOptedIn` | hmn | Already opted in | Koj twb sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | hmn | You are opted in. | Koj sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | hmn | Your opt-in was withdrawn. | Koj thim kev sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
-| `announceAccepted` | hmn | {name} accepted. | Txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
-| `announceDeclined` | hmn | {name} declined. | Tsis txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | hmn | You accepted {name}. | Txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | hmn | You declined {name}. | Tsis txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `announceCompleted` | hmn | Marked completed for {name}. | Kos tias tiav lawm rau {name}. | 2026-10-11 | machine-drafted, needs native review |
 | `announceUnblocked` | hmn | {name} unblocked. They can request again. | Tshem kev thaiv {name} lawm. Nws thov tau dua. | 2026-10-11 | machine-drafted, needs native review |
+| `announceListStale` | hmn | The sign-up list could not be refreshed. | Rov thauj daim ntawv teev cov neeg sau npe tsis tau. | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.other` | ht | {left} of {max} spots left | {left} sou {max} plas ki rete | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.other` | so | {left} of {max} spots left | {left} ka mid ah {max} boos ayaa haray | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.one` | am | {left} of {max} spot left | {left} ከ{max} ቦታ ቀርቷል | 2026-10-11 | machine-drafted, needs native review |

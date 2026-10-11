@@ -180,6 +180,9 @@ export interface FeedPostCardProps {
   onAuthorUpdateOptIn?: (optInId: string, status: 'accepted' | 'declined' | 'completed') => void
   onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
   onAuthorUnblockOptIn?: (optInId: string) => void
+  /** Rows whose action is under way (from the press until its outcome shows or it fails): their
+   *  action buttons stay focusable, are marked unavailable, and do nothing when pressed. */
+  busyOptInIds?: ReadonlySet<string>
   authorReviewedOptInIds?: Set<string>
   authorDeclinedSeekerIds?: Set<string>
   currentUserIsGuest?: boolean
@@ -224,6 +227,7 @@ export function FeedPostCard({
   onAuthorUpdateOptIn,
   onAuthorReviewSeeker,
   onAuthorUnblockOptIn,
+  busyOptInIds,
   authorReviewedOptInIds,
   authorDeclinedSeekerIds,
   currentUserIsGuest,
@@ -531,8 +535,12 @@ export function FeedPostCard({
       {/* Author's expandable opt-in management list */}
       {isAuthor && optInListOpen && authorOptIns && authorOptIns.length > 0 && (
         <div data-testid={`opt-in-list-${post.id}`} className="mb-3 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
-          {authorOptIns.map((oi) => (
-            <div key={oi.id} data-opt-in-row={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+          {authorOptIns.map((oi) => {
+            // An action on this row is under way: its buttons keep focus and say they are
+            // unavailable (aria-disabled, never disabled), and a press on them does nothing.
+            const rowBusy = busyOptInIds?.has(oi.id) === true
+            return (
+            <div key={oi.id} data-opt-in-row={oi.id} aria-busy={rowBusy || undefined} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <User className="h-3 w-3 flex-shrink-0 text-stone-500" aria-hidden="true" />
                 <span className="truncate text-xs font-medium text-stone-700" lang="" dir="auto" data-member-text="seeker-name">
@@ -571,9 +579,12 @@ export function FeedPostCard({
                   <button
                     type="button"
                     data-testid={`unblock-optin-${oi.id}`}
-                    onClick={() => onAuthorUnblockOptIn?.(oi.id)}
+                    aria-disabled={rowBusy || undefined}
+                    onClick={() => {
+                      if (!rowBusy) onAuthorUnblockOptIn?.(oi.id)
+                    }}
                     aria-label={optInActionName(locale, 'unblock', oi.seekerName)}
-                    className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                    className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                   >
                     {optInsT(locale, 'unblock')}
                   </button>
@@ -583,18 +594,24 @@ export function FeedPostCard({
                     <button
                       type="button"
                       data-testid={`accept-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
+                      aria-disabled={rowBusy || undefined}
+                      onClick={() => {
+                        if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'accepted')
+                      }}
                       aria-label={optInActionName(locale, 'accept', oi.seekerName)}
-                      className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                      className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                     >
                       {optInsT(locale, 'accept')}
                     </button>
                     <button
                       type="button"
                       data-testid={`decline-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
+                      aria-disabled={rowBusy || undefined}
+                      onClick={() => {
+                        if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'declined')
+                      }}
                       aria-label={optInActionName(locale, 'decline', oi.seekerName)}
-                      className="rounded bg-stone-200 px-2 py-1.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300"
+                      className="rounded bg-stone-200 px-2 py-1.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300 aria-disabled:cursor-default aria-disabled:opacity-60"
                     >
                       {optInsT(locale, 'decline')}
                     </button>
@@ -604,9 +621,12 @@ export function FeedPostCard({
                   <button
                     type="button"
                     data-testid={`complete-optin-${oi.id}`}
-                    onClick={() => onAuthorUpdateOptIn?.(oi.id, 'completed')}
+                    aria-disabled={rowBusy || undefined}
+                    onClick={() => {
+                      if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'completed')
+                    }}
                     aria-label={optInActionName(locale, 'markCompleted', oi.seekerName)}
-                    className="rounded bg-blue-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800"
+                    className="rounded bg-blue-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                   >
                     {optInsT(locale, 'markCompleted')}
                   </button>
@@ -625,7 +645,8 @@ export function FeedPostCard({
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

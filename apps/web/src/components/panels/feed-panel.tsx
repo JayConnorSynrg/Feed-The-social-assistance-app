@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
-import { useSignUpOutcomes } from '@/hooks/use-sign-up-outcomes'
+import { useSignUpOutcomes, signUpRowsAfter, type SignUpAttempt } from '@/hooks/use-sign-up-outcomes'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
 import { useFollows } from '@/hooks/use-follows'
 import { MessagesPanel } from './messages-panel'
@@ -47,7 +47,7 @@ import { PostEditDialog } from '@/components/feed/post-edit-dialog'
 import { PostHistoryDialog } from '@/components/feed/post-history-dialog'
 import { ConfirmDeleteDialog } from '@/components/feed/post-delete-dialog'
 import { ReportDialog } from '@/components/feed/report-dialog'
-import { loadFeedRow } from '@/components/feed/post-edit-data'
+import { loadFeedRow, readFeedRow } from '@/components/feed/post-edit-data'
 import type { ActionViewer, PostMenuItemId } from '@/components/feed/post-actions'
 import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post-image-picker'
 import { FollowErrorBanner } from '@/components/feed/follow-error-banner'
@@ -66,6 +66,7 @@ import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocale
 import { PostTypeWizard } from './post-type-wizard'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { messagesT } from '@/lib/i18n-feed-messages'
+import { optInsT } from '@/lib/i18n-feed-optins'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
@@ -150,6 +151,12 @@ interface CreatePostCardProps {
 
 const GEO_RADIUS_OPTIONS = [5, 10, 25, 50] as const
 type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
+
+/** What one sign-up side-data read did (FeedPanel's loadPostSideData). */
+type SideDataResult =
+  | { status: 'applied'; rows: Record<string, EnrichedOptIn[]> }
+  | { status: 'failed'; error: unknown }
+  | { status: 'dropped' }
 
 /** The feed composer card (exported for its behaviour tests). */
 export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick, locale, onAnnounce }: CreatePostCardProps) {
@@ -624,7 +631,8 @@ export function FeedPanel() {
   const { fetchMyReviewsForOptIns } = useReviews()
   // What a sign-up action says and where focus goes once its outcome is on screen. It sends
   // nothing: the handlers below tell it when an attempt begins and how its request came back.
-  const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap })
+  // Its attempts belong to this sub-tab visit and this account, as the card notice does.
+  const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap, context: `${activeSubtab}|${user?.id ?? ''}` })
   // The button that opened the review dialog and the post it sits on (where focus returns).
   const reviewOpenerRef = useRef<HTMLElement | null>(null)
   const reviewPostIdRef = useRef<string | null>(null)
@@ -689,10 +697,17 @@ export function FeedPanel() {
   // opt-in rows (seeker + author views) + the reviews they've submitted. Used by
   // BOTH the chronological (fetchPosts) and ranked (fetchRankedPosts) paths so the
   // author-management + review affordances behave identically in either ordering.
-  const loadPostSideData = useCallback((postIds: string[]) => {
-    if (!user || postIds.length === 0) return
+  //
+  // Every map it writes is replaced whole, so the last response to arrive wins. A caller that must
+  // not be overwritten by an older response passes `current`, asked before each write: when it
+  // answers false nothing is written. Resolves with what happened to the sign-up rows: 'applied'
+  // (with the rows written), 'failed' (the read failed; nothing written) or 'dropped'.
+  const loadPostSideData = useCallback((postIds: string[], current: () => boolean = () => true): Promise<SideDataResult> => {
+    if (!user || postIds.length === 0) return Promise.resolve({ status: 'dropped' })
     const uid = user.id
-    fetchOptInsForPosts(postIds).then(setOptInMap)
+    fetchOptInsForPosts(postIds).then((map) => {
+      if (current()) setOptInMap(map)
+    })
 
     // Load this author's private decline markers (author-only via RLS). Best-effort:
     // the marker is a supplementary label, so a failure never blocks the opt-in list.
@@ -701,17 +716,18 @@ export function FeedPanel() {
       .select('seeker_id')
       .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       .then(({ data }) => {
-        if (data) setAuthorDeclinedSeekers(new Set(data.map((r) => r.seeker_id as string)))
+        if (data && current()) setAuthorDeclinedSeekers(new Set(data.map((r) => r.seeker_id as string)))
       })
 
     // Fetch full seeker opt-in rows (for review prompts and author management)
-    supabase
+    const rowsRead = supabase
       .from('resource_opt_ins')
       .select('id, post_id, seeker_id, status, seeker:profiles!resource_opt_ins_seeker_id_fkey(id, first_name, harmony_score, harmony_reviews_count)')
       .in('post_id', postIds)
       .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      .then(({ data: oisData }) => {
-        if (!oisData) return
+      .then(({ data: oisData, error: oisError }): SideDataResult => {
+        if (!oisData) return { status: 'failed', error: oisError }
+        if (!current()) return { status: 'dropped' }
 
         // Map post_id → seeker opt-in id for the current user (seeker view)
         const seekerIds: Record<string, string> = {}
@@ -742,23 +758,23 @@ export function FeedPanel() {
         const allOptInIds = oisData.map((oi) => oi.id)
         if (allOptInIds.length > 0) {
           fetchMyReviewsForOptIns(allOptInIds).then((reviewMap) => {
+            if (!current()) return
             setMyReviewMap(reviewMap)
             // Build the set of opt-in ids the current user has reviewed (for author side)
             setAuthorReviewedSet(new Set(reviewMap.keys()))
           })
         }
+        return { status: 'applied', rows: authorMap }
       })
+    return Promise.resolve(rowsRead).catch((error: unknown): SideDataResult => ({ status: 'failed', error }))
   }, [supabase, user, fetchOptInsForPosts, fetchMyReviewsForOptIns])
 
   // Fetch posts from Supabase
   // When cursor is provided, fetches the NEXT page after that cursor position.
   // When cursor is null, fetches the first page.
-  // `quiet` re-reads the first page with the list left on screen (no loading state): the same
-  // requests, used after a sign-up or review action so the card the member is on — its open
-  // sign-up list, and their focus — is not unmounted and re-created around them.
-  const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null, quiet = false) => {
+  const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null) => {
     if (cursor === null) {
-      if (!quiet) setLoading(true)
+      setLoading(true)
       // Recent (chronological) mode shows posts only (W1.6b): drop any events held
       // from a prior ranked page so nothing stale lingers behind the render gate.
       setEventItems([])
@@ -1337,11 +1353,15 @@ export function FeedPanel() {
     }
     setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
     const attempt = signUps.begin('optIn', { postId })
+    if (!attempt) return
     try {
       await doOptIn(postId)
       signUps.succeeded(attempt)
-      // Refresh opt-in map and slots
-      fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
+      // Refresh opt-in map and slots; once that read is in, the attempt is done either way
+      fetchOptInsForPosts(posts.map((p) => p.id)).then((map) => {
+        setOptInMap(map)
+        signUps.settled(attempt)
+      })
       // Decrement slots_remaining optimistically
       setPosts((prev) =>
         prev.map((p) =>
@@ -1361,11 +1381,15 @@ export function FeedPanel() {
   const handleWithdraw = async (postId: string) => {
     setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
     const attempt = signUps.begin('withdraw', { postId })
+    if (!attempt) return
     try {
       await doWithdraw(postId)
       signUps.succeeded(attempt)
-      // Refresh opt-in map
-      fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
+      // Refresh opt-in map; once that read is in, the attempt is done either way
+      fetchOptInsForPosts(posts.map((p) => p.id)).then((map) => {
+        setOptInMap(map)
+        signUps.settled(attempt)
+      })
       // Restore slot optimistically
       const post = posts.find((p) => p.id === postId)
       if (post?.maxSeekers != null && post.slotsRemaining != null) {
@@ -1388,12 +1412,131 @@ export function FeedPanel() {
     }
   }
 
-  // Author updates an opt-in status (accept / decline / complete)
+  // ── After a sign-up or review action on one post ──────────────────────────────────────────
+  // The acted post is read again on its own and patched in place, then sign-up side data is read
+  // again for every post on screen: exactly one post read and one side-data set per action. The
+  // list is left alone — its cards and their order, its mode (ranked stays ranked), its event
+  // cards, its loaded pages and cursor, its loading and error state.
+  const viewerId = user?.id ?? null
+  const viewerIdRef = useRef<string | null>(viewerId)
+  // Confirmed sign-up writes that no side-data read has covered yet.
+  const confirmedSignUpsRef = useRef<SignUpAttempt[]>([])
+  useEffect(() => {
+    viewerIdRef.current = viewerId
+    confirmedSignUpsRef.current = []
+  }, [viewerId])
+  // A response writes only while it is the latest of its kind and the account has not changed.
+  const postReadSeqRef = useRef(new Map<string, number>())
+  const sideDataSeqRef = useRef(0)
+
+  // Read the acted post again with the feed's own select and decide with the feed's own rule
+  // (classifyPostUpdate, as a realtime update does): patch it in place — version-guarded, so a
+  // sign-up, which does not move the version, still patches slots_remaining — or take the card
+  // out when the post is hidden from this viewer or no longer readable. A read that FAILS keeps
+  // the card and is logged; it is never taken for "the post is gone".
+  // `uid` is the account the action began under: a result that comes back to another one is dropped.
+  const rereadActedPost = async (postId: string, action: string, uid: string | null, leave: () => void): Promise<'kept' | 'left'> => {
+    const seq = (postReadSeqRef.current.get(postId) ?? 0) + 1
+    postReadSeqRef.current.set(postId, seq)
+    const read = await readFeedRow(supabase, postId)
+    if (viewerIdRef.current !== uid || postReadSeqRef.current.get(postId) !== seq) return 'kept'
+    if (read.status === 'error') {
+      logger.error('feed.optin.reread_failed', read.error, { step: 'post', action, postId })
+      return 'kept'
+    }
+    if (read.status === 'gone') {
+      leave()
+      return 'left'
+    }
+    const patch = rowPatchFromFeedRow(read.row)
+    const decision = classifyPostUpdate(patch, {
+      inList: postsRef.current.some((p) => p.id === postId),
+      viewerId: uid,
+      removedHiddenIds: removedHiddenIdsRef.current,
+    })
+    if (decision === 'patch' || decision === 'mark_held') {
+      setPosts((prev) => applyPostRowPatch(prev, patch))
+    } else if (decision === 'remove') {
+      removedHiddenIdsRef.current.add(postId)
+      leave()
+      return 'left'
+    }
+    return 'kept'
+  }
+
+  // Read sign-up side data again for every post on screen (its maps are replaced whole, so a
+  // narrower read would empty the other cards). The latest of these reads is the one that
+  // writes; it settles every confirmed sign-up that began before it:
+  //   applied → their rows are on their way to the next render, and each acted post's count is
+  //             the number of its rows (the same table and row rules as the count read);
+  //   failed  → logged; each row is set from its own action's result, so no row is shown with the
+  //             status it had before, and the outcome is said with a sentence that says the list
+  //             could not be refreshed.
+  const refreshSignUpSideData = async (action: string, uid: string | null, leftPostId: string | null): Promise<SideDataResult['status']> => {
+    if (viewerIdRef.current !== uid) return 'dropped'
+    const seq = ++sideDataSeqRef.current
+    const covered = confirmedSignUpsRef.current.slice()
+    const current = () => sideDataSeqRef.current === seq && viewerIdRef.current === uid
+    const ids = postsRef.current.map((p) => p.id).filter((id) => id !== leftPostId)
+    const result = await loadPostSideData(ids, current)
+    // Overtaken by a newer read, or begun under another account: the newer one settles them.
+    if (!current()) return 'dropped'
+    confirmedSignUpsRef.current = confirmedSignUpsRef.current.filter((a) => !covered.includes(a))
+    if (result.status === 'failed') {
+      logger.error('feed.optin.reread_failed', result.error, { step: 'side_data', action })
+      setAuthorOptInsMap((prev) => covered.reduce((rows, a) => signUpRowsAfter(rows, a), prev))
+      setOptInCounts((prev) => {
+        const next = { ...prev }
+        for (const a of covered) if (a.kind === 'unblock' && a.postId) next[a.postId] = Math.max((next[a.postId] ?? 1) - 1, 0)
+        return next
+      })
+      for (const a of covered) signUps.settled(a, true)
+      return 'failed'
+    }
+    if (result.status === 'applied') {
+      const rows = result.rows
+      setOptInCounts((prev) => {
+        const next = { ...prev }
+        for (const a of covered) if (a.postId) next[a.postId] = rows[a.postId]?.length ?? 0
+        return next
+      })
+    }
+    for (const a of covered) signUps.settled(a)
+    return result.status
+  }
+
+  // A sign-up write went through: follow it up, and make sure its attempt is settled.
+  const followSignUp = async (attempt: SignUpAttempt, uid: string | null) => {
+    if (viewerIdRef.current !== uid) return
+    confirmedSignUpsRef.current.push(attempt)
+    try {
+      let left = false
+      if (attempt.postId) {
+        left = (await rereadActedPost(attempt.postId, attempt.kind, uid, () => {
+          // The card leaves the feed as a deleted one does (focus to the next card, then the
+          // card goes, then the sentence); what is said is this action's outcome.
+          confirmedSignUpsRef.current = confirmedSignUpsRef.current.filter((a) => a !== attempt)
+          signUps.disarm(attempt)
+          cardLeaves(attempt.postId, signUps.sentence(attempt))
+        })) === 'left'
+      }
+      await refreshSignUpSideData(attempt.kind, uid, left ? attempt.postId : null)
+    } catch (err: unknown) {
+      logger.error('feed.optin.reread_failed', err, { step: 'follow_up', action: attempt.kind })
+      confirmedSignUpsRef.current = confirmedSignUpsRef.current.filter((a) => a !== attempt)
+      signUps.settled(attempt, true)
+    }
+  }
+
+  // Author updates an opt-in status (accept / decline / complete). One action per row at a time:
+  // a press on a row whose action is still under way starts nothing.
   const handleAuthorUpdateOptIn = async (
     optInId: string,
     status: 'accepted' | 'declined' | 'completed'
   ) => {
     const attempt = signUps.begin(status === 'accepted' ? 'accept' : status === 'declined' ? 'decline' : 'complete', { optInId })
+    if (!attempt) return
+    const uid = viewerIdRef.current
     try {
       const { error: updErr } = await supabase
         .from('resource_opt_ins')
@@ -1401,15 +1544,14 @@ export function FeedPanel() {
         .eq('id', optInId)
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       if (updErr) throw updErr
-      signUps.succeeded(attempt)
-      // Refresh post data so the management list and seeker view stay in sync (the list stays on
-      // screen meanwhile: the author's place in it is kept)
-      fetchPosts(null, true)
     } catch (err: unknown) {
       logger.error('feed.optin.update', err, { optInId, status })
       // The author hears that it did not go through; focus stays on the button they pressed.
-      signUps.failed()
+      signUps.failed(attempt)
+      return
     }
+    signUps.succeeded(attempt)
+    await followSignUp(attempt, uid)
   }
 
   // Author unblocks a previously-declined opt-in -> the DB DELETEs the declined row and
@@ -1420,17 +1562,21 @@ export function FeedPanel() {
   const handleAuthorUnblockOptIn = async (optInId: string) => {
     await unblockGateRef.current.run(async () => {
       const attempt = signUps.begin('unblock', { optInId })
+      if (!attempt) return
+      const uid = viewerIdRef.current
       try {
         const { error: rpcErr } = await supabase
           .rpc('unblock_opt_in', { p_opt_in_id: optInId })
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcErr) throw rpcErr
-        signUps.succeeded(attempt)
-        fetchPosts(null, true)
       } catch (err: unknown) {
         logger.error('feed.optin.unblock', err, { optInId })
-        signUps.failed()
+        signUps.failed(attempt)
+        return
       }
+      signUps.succeeded(attempt)
+      // Not awaited: the gate covers the request, as before; the row itself stays busy.
+      void followSignUp(attempt, uid)
     })
   }
 
@@ -1467,11 +1613,18 @@ export function FeedPanel() {
     else focusFeedTitle()
   }
 
-  // After a review is submitted — say so (focus first, then the sentence, in one frame) and
-  // refresh data with the list left on screen
-  const handleReviewSubmitted = () => {
-    announceCardNotice(messagesT(locale, 'reviewSubmitted'), focusAfterReview)
-    fetchPosts(null, true)
+  // After a review is submitted: the same follow-up as a sign-up action (one post read, one
+  // side-data set), then it is said once — focus first, then the sentence, in one frame. When
+  // the post is gone the card leaves and the sentence is said as it goes; when the side data
+  // could not be read the sentence says so (the Review button may still be on the card).
+  const handleReviewSubmitted = async () => {
+    const postId = reviewPostIdRef.current
+    const uid = viewerIdRef.current
+    const sent = messagesT(locale, 'reviewSubmitted')
+    const left = postId != null && (await rereadActedPost(postId, 'review', uid, () => cardLeaves(postId, sent))) === 'left'
+    if (viewerIdRef.current !== uid) return
+    const side = await refreshSignUpSideData('review', uid, left ? postId : null)
+    if (!left) announceCardNotice(side === 'failed' ? `${sent} ${optInsT(locale, 'announceListStale')}` : sent, focusAfterReview)
   }
 
   const handleLike = async (postId: string) => {
@@ -2182,6 +2335,7 @@ export function FeedPanel() {
                       onAuthorUpdateOptIn={handleAuthorUpdateOptIn}
                       onAuthorReviewSeeker={handleAuthorReviewSeeker}
                       onAuthorUnblockOptIn={handleAuthorUnblockOptIn}
+                      busyOptInIds={signUps.busy}
                       authorReviewedOptInIds={authorReviewedSet}
                       authorDeclinedSeekerIds={authorDeclinedSeekers}
                       currentUserIsGuest={isAnonymous}
