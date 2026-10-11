@@ -1147,6 +1147,22 @@ SELECT pg_temp.ck('E3d', 'the acting account is selectable by nobody; nobody wri
   pg_temp.pg($q$UPDATE public.resource_opt_in_events SET actor_id = NULL, event = 'declined' WHERE post_id = '00000000-0000-4000-a000-000000000003' AND event = 'accepted' RETURNING 'x'$q$) || ';' ||
   pg_temp.pg($q$DELETE FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000003' RETURNING 'x'$q$));
 
+-- E3e: the trail trigger looks the two accounts up with KEY SHARE SKIP LOCKED, so that an opt-in write never waits
+-- for an account deletion. That records NULL only for an account being deleted as long as nothing else takes a
+-- lock on a profile row that conflicts with KEY SHARE: no function locks a profile row FOR UPDATE (FOR NO KEY
+-- UPDATE and FOR KEY SHARE do not conflict) and none deletes one. The three opt-in RPCs take the seeker's
+-- profile KEY SHARE before the post.
+SELECT pg_temp.ck('E3e', 'no function in public locks a profiles row FOR UPDATE or deletes one (statement-level scan; the matcher finds one when it is there); the trail trigger''s two lookups are KEY SHARE SKIP LOCKED; decide / withdraw / unblock take the profile lock before the post lock',
+  '^0\|t\|2\|ttt$',
+  (SELECT count(*)::text FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+      AND (p.prosrc ~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M' OR p.prosrc ~* 'DELETE\s+FROM\s+(ONLY\s+)?(public\.)?profiles\M'))
+  || '|' || ($ctl$ PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR UPDATE; $ctl$ ~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M'
+             AND $ctl$ PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR KEY SHARE; SELECT * INTO p FROM public.posts WHERE id = v_post_id FOR UPDATE; $ctl$ !~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M')::char
+  || '|' || (SELECT count(*) FROM regexp_matches((SELECT prosrc FROM pg_proc WHERE oid = 'public.resource_opt_ins_audit()'::regprocedure), '\mprofiles\M[^;]*FOR KEY SHARE SKIP LOCKED;', 'g'))
+  || '|' || (SELECT string_agg((p.prosrc ~ 'FROM public\.profiles WHERE id = \w+ FOR KEY SHARE;.*FROM public\.posts WHERE id = \w+ FOR UPDATE;')::char, '' ORDER BY p.proname)
+               FROM pg_proc p WHERE p.oid IN ('public.decide_opt_in(uuid,text,text)'::regprocedure, 'public.withdraw_opt_in(uuid)'::regprocedure, 'public.unblock_opt_in(uuid)'::regprocedure)));
+
 -- E4: the slot. Every opt-in row holds one slot until it is deleted; the slot comes back on any delete. P8 = 2 slots.
 SELECT pg_temp.ck('E4a', 'the drain is closed, three times over. Expand: a seeker opts in and direct-DELETEs their own opt-in, the slot comes back (withdraw_opt_in then finds nothing). Contract: the direct DELETE is refused and holds the slot; withdraw_opt_in is the way out and returns it. Each withdrawal is on the trail',
   CASE WHEN pg_temp.contract()
@@ -1483,6 +1499,17 @@ SELECT pg_temp.ck('X6', 'the deletion function''s path in both release states: t
   pg_temp.svc($q$WITH d AS (DELETE FROM public.profiles WHERE id = '91000000-0000-4000-8000-000000000019' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-0000000000e1')$q$) || '|' ||
   pg_temp.fresh($q$SELECT event || ':' || from_status || ':' || actor_role || ':' || (seeker_id IS NULL)::char FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-0000000000e1' ORDER BY id DESC LIMIT 1$q$));
+
+-- X7: service_role keeps its direct DELETE on opt-ins in both release states (the contract step closes the client
+-- roles only). The e2e fixtures (apps/web/e2e/fulfillment-view.spec.ts) and service-side cleanups rely on it.
+SELECT pg_temp.run('C', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-0000000000e1')).status$q$);
+SELECT pg_temp.ck('X7', 'service_role deletes a member''s opt-in directly, before and after the contract step: it holds the DELETE privilege, the row goes (2/1/1 -> 2/2/0), the slot is back and the trail records the removal by the system for the seeker',
+  '^t\|2/1/1\|OK 1\|2/2/0\|removed:pending:system:t$',
+  has_table_privilege('service_role', 'public.resource_opt_ins', 'DELETE')::char || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-0000000000e1')$q$) || '|' ||
+  pg_temp.svc($q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-0000000000e1' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-0000000000e1')$q$) || '|' ||
+  pg_temp.fresh($q$SELECT event || ':' || from_status || ':' || actor_role || ':' || (seeker_id = pg_temp.u('C'))::char FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-0000000000e1' ORDER BY id DESC LIMIT 1$q$));
 
 -- ===================== Z: release state =====================
 SELECT pg_temp.ck('Z1', 'ledger rows: 0266 always; 0267 exactly when contracted', CASE WHEN pg_temp.contract() THEN '^1\|1$' ELSE '^1\|0$' END,

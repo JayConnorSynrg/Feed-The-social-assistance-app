@@ -28,6 +28,19 @@
 #   R3f  decide_opt_in against withdraw_opt_in (the RPC every client uses): PAIRS forced interleaves (half with the
 #        author's transaction holding the post row first, half with the withdrawal in flight first) and PAIRS
 #        simultaneous pairs. Both take the post row before the opt-in row: no deadlock, ever; no drift.
+#   An opt-in write against an account deletion (the deletion takes the profile row first and reaches the opt-in
+#   through the cascade; the three RPCs take the seeker's profile row, KEY SHARE, before the post). Each family:
+#   the write in flight then the deletion; the deletion holding the profile row then the write; PAIRS simultaneous.
+#   R3g  decide_opt_in against the seeker's account deletion: no deadlock, ever. The decision is recorded and the
+#        opt-in then goes with the account, or the decision waits for the deletion and answers opt_in_not_found.
+#   R3h  unblock_opt_in against the declined seeker's account deletion: no deadlock; true, or false after the wait.
+#   R3i  withdraw_opt_in against that member's own account deletion: no deadlock; true, or false after the wait.
+#   R3j  a status write that cannot take the profile lock first (the direct UPDATE the deployed client still sends
+#        before the contract step; the table owner's after it) against the seeker's account deletion: no deadlock.
+#        The trail trigger's account lookups never wait: the write goes through at once and its trail row records
+#        the seeker as NULL, the value the deletion would give it.
+#   R3k  decide_opt_in against the AUTHOR's own account deletion (the acting account is the one being deleted):
+#        no deadlock; the decision is recorded with its actor as NULL, or the post is already gone.
 #   Labels
 #   R4   two moderators apply the same label at once: one record; the second answers changed = false; one audit row.
 #   R4b  a retraction in flight, then another moderator applies the label: after the wait a NEW record is written;
@@ -73,6 +86,8 @@ P7=00000000-0000-4000-a000-0000000000f7; P8=00000000-0000-4000-a000-0000000000f8
 P10=00000000-0000-4000-a000-0000000000fa; P11=00000000-0000-4000-a000-0000000000fb; P12=00000000-0000-4000-a000-0000000000fc
 P13=00000000-0000-4000-a000-0000000000fd; P14=00000000-0000-4000-a000-0000000000fe; P15=00000000-0000-4000-a000-0000000000ff
 P16=00000000-0000-4000-a000-0000000001f0; P17=00000000-0000-4000-a000-0000000001f1; P18=00000000-0000-4000-a000-0000000001f2
+P19=00000000-0000-4000-a000-0000000001f3; P20=00000000-0000-4000-a000-0000000001f4; P21=00000000-0000-4000-a000-0000000001f5
+P22=00000000-0000-4000-a000-0000000001f6
 T1=0c000000-0000-4000-8000-0000000000f1; T2=0c000000-0000-4000-8000-0000000000f2; T3=0c000000-0000-4000-8000-0000000000f3
 T4=0c000000-0000-4000-8000-0000000000f4; T5=0c000000-0000-4000-8000-0000000000f5
 K1=0d000000-0000-4000-8000-0000000000f1
@@ -104,7 +119,11 @@ q "INSERT INTO auth.users (id, email) VALUES ('$A','r3race-a@t'), ('$B','r3race-
      ('$P15', '$A', 'decide vs withdraw', 'source_offer', 2, now() - interval '1 hour'),
      ('$P16', '$A', 'two unlocked label writers', 'feed', NULL, now() - interval '1 hour'),
      ('$P17', '$A', 'moderator and author, different labels', 'feed', NULL, now() - interval '1 hour'),
-     ('$P18', '$A', 'key share, then a label', 'feed', NULL, now() - interval '1 hour');
+     ('$P18', '$A', 'key share, then a label', 'feed', NULL, now() - interval '1 hour'),
+     ('$P19', '$A', 'decide vs account deletion', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P20', '$A', 'unblock vs account deletion', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P21', '$A', 'withdraw vs account deletion', 'source_offer', 2, now() - interval '1 hour'),
+     ('$P22', '$A', 'status write vs account deletion', 'source_offer', 2, now() - interval '1 hour');
    INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('$K1', '$P12', '$A', 'a comment three members report');
    INSERT INTO public.petitions (id, title, summary, body, body_version_hash, status, created_by) VALUES
      ('$T1', 'approve twice', 's', 'body one', 'x', 'draft', '$A'), ('$T2', 'approve vs reject', 's', 'body two', 'x', 'draft', '$A'),
@@ -265,6 +284,60 @@ done
 if [ $dl = 0 ] && [ $udl = 0 ] && [ $drift = 0 ] && [ $odd = 0 ] && [ $uodd = 0 ]; then ok R3f "decide_opt_in / withdraw_opt_in: 0 deadlocks in $((half * 2)) forced interleaves and $PAIRS simultaneous pairs; exactly one of the two takes effect each time; 0 drift"
 else bad R3f "forced: deadlocks=$dl unexpected outcomes=$odd; simultaneous: deadlocks=$udl unexpected outcomes=$uodd; drift=$drift (last: decide=$(r "$D/f_a") withdraw=$(r "$D/f_b"))"; fi
 
+# ---- R3g / R3h / R3i / R3j: an opt-in write against an account deletion. A fresh seeker each time (the deletion removes it).
+SKN=0
+NEWSK() { SKN=$((SKN+1)); SK=$(printf 'c9000000-0000-4000-8000-%012d' $SKN)
+  q "INSERT INTO auth.users (id, email) VALUES ('$SK', 'r3race-sk$SKN@t'); INSERT INTO public.profiles (id) VALUES ('$SK') ON CONFLICT (id) DO NOTHING" >/dev/null; }
+OPTINAS() { q "SELECT set_config('request.jwt.claims', '{\"sub\":\"$1\",\"role\":\"authenticated\"}', false); SET ROLE authenticated; SELECT (public.opt_in_to_post('$2')).id;" | tail -1; }
+ASDO() { q "SELECT set_config('request.jwt.claims', '{\"sub\":\"$1\",\"role\":\"authenticated\"}', false); SET ROLE authenticated; $2" >/dev/null 2>&1; }
+ans() { grep -E '^[a-z]|ERROR' "$1" | grep -v '^set_config' | tail -1 | sed -E 's/^ERROR: +[0-9A-Z]+: +//'; }
+NEWAU() { AU=$(printf 'a9000000-0000-4000-8000-%012d' $SKN); PA=$(printf '00000000-0000-4000-b000-%012d' $SKN)
+  q "INSERT INTO auth.users (id, email) VALUES ('$AU', 'r3race-au$SKN@t'); INSERT INTO public.profiles (id) VALUES ('$AU') ON CONFLICT (id) DO NOTHING;
+     INSERT INTO public.posts (id, user_id, content, post_type, max_seekers) VALUES ('$PA', '$AU', 'the author leaves', 'source_offer', 2)" >/dev/null; }
+GONE() { q "SELECT (NOT EXISTS (SELECT 1 FROM auth.users WHERE id = '$1') AND NOT EXISTS (SELECT 1 FROM public.resource_opt_ins WHERE id = '$2'))::char"; }
+# versus <tag> <post, or AU: a fresh author with a fresh post each time, and it is the AUTHOR's account that is deleted>
+#        <session of the write: uid, SK (the seeker), AU (that author) or - (table owner)> <prepare: none|decline> <sql of the write, \$OI = the opt-in id>
+#        <answer when the write lands first> <answer when the deletion holds the profile first> [<another legal answer of a simultaneous pair>]
+versus() {
+  local tag=$1 post=$2 who=$3 prep=$4 sql=$5 first=$6 second=$7 also=${8:-$7} dl=0 odd=0 drift=0 left=0 a OI W X vpost=$2
+  wr() { case $who in -) echo "$1";; SK) echo "$(LAS $SK) $1";; AU) echo "$(LAS $AU) $1";; *) echo "$(LAS $who) $1";; esac; }
+  prepare() { NEWSK; X=$SK; if [ "$vpost" = AU ]; then NEWAU; post=$PA; X=$AU; fi
+              OI=$(OPTINAS $SK $post); [ "$prep" = decline ] && ASDO $A "SELECT public.decide_opt_in('$OI', 'decline')"; W=$(wr "${sql//\$OI/$OI}"); }
+  check() { grep -q 40P01 "$D/v_a" "$D/v_b" && dl=$((dl+1)); grep -q ERROR "$D/v_b" && odd=$((odd+1)); [ "$(GONE $X $OI)" = t ] || left=$((left+1)); [ "$(INV $post)" = f ] && drift=$((drift+1)); }
+  # 1. the write is in flight; the deletion arrives, waits for it, then removes the account and the opt-in
+  prepare
+  ( V -c "BEGIN; $W; SELECT pg_sleep(0.6); COMMIT;" > "$D/v_a" 2>&1 ) & sleep 0.2
+  V -c "DELETE FROM auth.users WHERE id = '$X'" > "$D/v_b" 2>&1; wait; check
+  a=$(ans "$D/v_a"); echo "$a" | grep -qE "^($first)$" || odd=$((odd+1)); local a1=$a
+  # 2. the deletion holds the profile row (as it does before it reaches the opt-in); the write arrives
+  prepare
+  ( V -c "BEGIN; SELECT 1 FROM public.profiles WHERE id = '$X' FOR UPDATE; SELECT pg_sleep(0.6); DELETE FROM auth.users WHERE id = '$X'; COMMIT;" > "$D/v_b" 2>&1 ) & sleep 0.2
+  V -c "BEGIN; $W; COMMIT;" > "$D/v_a" 2>&1; wait; check
+  a=$(ans "$D/v_a"); echo "$a" | grep -qE "^($second)$" || odd=$((odd+1)); local a2=$a
+  local seen2=$(q "SELECT COALESCE(string_agg(event || ':' || COALESCE(seeker_id::text, 'null'), ',' ORDER BY id), 'no rows') FROM public.resource_opt_in_events WHERE opt_in_id = '$OI' AND event NOT IN ('opted_in', 'declined')")
+  # 3. simultaneous, no hold
+  for i in $(seq 1 $PAIRS); do
+    prepare
+    ( V -c "BEGIN; $W; COMMIT;" > "$D/v_a" 2>&1 ) &
+    V -c "DELETE FROM auth.users WHERE id = '$X'" > "$D/v_b" 2>&1; wait; check
+    ans "$D/v_a" | grep -qE "^($first|$second|$also)$" || odd=$((odd+1))
+  done
+  VS="deadlocks $dl, outcomes outside the legal ones $odd, accounts or opt-ins left behind $left, slot drift $drift; write first -> '$a1'; deletion first -> '$a2' (trail after it: $seen2)"
+  [ $dl = 0 ] && [ $odd = 0 ] && [ $left = 0 ] && [ $drift = 0 ]
+}
+if versus r3g $P19 $A none "SELECT public.decide_opt_in('\$OI', 'accept') ->> 'status'" 'accepted' 'opt_in_not_found'; then ok R3g "decide_opt_in / the seeker's account deletion, 2 forced interleaves + $PAIRS simultaneous pairs: $VS"
+else bad R3g "decide_opt_in / the seeker's account deletion: $VS"; fi
+if versus r3h $P20 $A decline "SELECT public.unblock_opt_in('\$OI')::text" 'true' 'false|Opt-in not found'; then ok R3h "unblock_opt_in / the seeker's account deletion, 2 forced + $PAIRS simultaneous: $VS"
+else bad R3h "unblock_opt_in / the seeker's account deletion: $VS"; fi
+if versus r3i $P21 SK none "SELECT public.withdraw_opt_in('$P21')::text" 'true' 'false'; then ok R3i "withdraw_opt_in / that member's own account deletion, 2 forced + $PAIRS simultaneous: $VS"
+else bad R3i "withdraw_opt_in / that member's own account deletion: $VS"; fi
+# R3j: before the contract step this is the deployed client's request (the author, through the UPDATE (status) grant); after it only a service-side writer can send it
+[ "$CON" = "t" ] && UW=- || UW=$A
+if versus r3j $P22 $UW none "WITH u AS (UPDATE public.resource_opt_ins SET status = 'accepted' WHERE id = '\$OI' RETURNING status) SELECT COALESCE((SELECT status FROM u), 'no row')" 'accepted' 'accepted' 'no row'; then ok R3j "a direct UPDATE of status ($([ "$CON" = t ] && echo "the table owner" || echo "the author, as the deployed client sends it")) / the seeker's account deletion, 2 forced + $PAIRS simultaneous: $VS"
+else bad R3j "a direct UPDATE of status / the seeker's account deletion: $VS"; fi
+if versus r3k AU AU none "SELECT public.decide_opt_in('\$OI', 'accept') ->> 'status'" 'accepted' 'accepted' 'opt_in_not_found'; then ok R3k "decide_opt_in / the author's own account deletion, 2 forced + $PAIRS simultaneous: $VS"
+else bad R3k "decide_opt_in / the author's own account deletion: $VS"; fi
+
 # ---- R4: two moderators apply the same label at once
 two r4 $CM  "SELECT public.admin_set_post_label('$P6', 'outdated', true, 1, 'stale hours') ->> 'changed'" \
        $CM2 "SELECT public.admin_set_post_label('$P6', 'outdated', true, 1, 'stale hours too') ->> 'changed'"
@@ -377,4 +450,4 @@ F=$(q "SELECT (SELECT count(*) FROM public.content_reports WHERE content_id = c.
 if grep -q '^2$' "$D/r7ba" && grep -q '"hidden": true' "$D/r7bb" && [ "$F" = "3|true|community_reports_threshold" ]; then ok R7b "the third report waited, counted 3 and hid the comment; open|hidden|reason $F"
 else bad R7b "a=$(r "$D/r7ba") b=$(r "$D/r7bb") open|hidden|reason=$F"; fi
 
-if [ $fail = 0 ]; then echo "PASS r3_foundation race: R1 R1b R1c R1d R2 R2b R3 R3b R3c R3e R3f R4 R4b R4c R4d R4e R4f R5 R5b R6 R6b R6c R6d R6e R7 R7b"; else echo "FAIL r3_foundation race"; exit 1; fi
+if [ $fail = 0 ]; then echo "PASS r3_foundation race: R1 R1b R1c R1d R2 R2b R3 R3b R3c R3e R3f R3g R3h R3i R3j R3k R4 R4b R4c R4d R4e R4f R5 R5b R6 R6b R6c R6d R6e R7 R7b"; else echo "FAIL r3_foundation race"; exit 1; fi

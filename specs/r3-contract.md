@@ -1,8 +1,8 @@
 # Release 3 — client contract (migrations `20261026600000_r3_foundation` + `20261026700000_r3_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [r3-model.md](r3-model.md).
-Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (235 checks, passing after the foundation and
-after the contract step) and `supabase/tests/r3_foundation.race.sh` (26 races). The request shapes below
+Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (237 checks, passing after the foundation and
+after the contract step) and `supabase/tests/r3_foundation.race.sh` (31 races). The request shapes below
 were sent through PostgREST 14.5 on a prod-identical catalog; every one answers as written here.
 
 > **Changed on 2026-10-11 (security review round). Read these first if you coded against the earlier text.**
@@ -23,6 +23,12 @@ were sent through PostgREST 14.5 on a prod-identical catalog; every one answers 
 >    that list alert actions show the alert (`target_id`) and the acting moderator (`actor_id`); there is no
 >    reporter to show, by design.
 > 4. Nothing else in a request or answer shape changed: no signature, no return type, no error token.
+>
+> **Added on 2026-10-11 (second review round), no shape change:** an opt-in write and the seeker's account
+> deletion no longer collide. When the deletion gets there first, `decide_opt_in` answers
+> `PT404 opt_in_not_found` and `withdraw_opt_in` / `unblock_opt_in` answer `false`: the three "re-read the
+> list" outcomes the client already handles. See
+> [Account deletion and opt-ins](#account-deletion-and-opt-ins-what-can-collide-and-until-when).
 
 This is what the Release 3 client builders code against. It covers: safety alerts (3.1), labels, comment
 lock and reports (3.2), request / offer status, opt-ins, announcements and petitions (3.3).
@@ -44,6 +50,32 @@ The prod smoke suite (`apps/web/src/__tests__/smoke/04, 12, 23, 25, 29`) reads t
 `20261026600000` is not recorded it asserts today's database (or skips what does not exist yet), and from
 the moment it is recorded the Release 3 assertions always run. It is green merged-before-applied and
 green once applied.
+
+### Account deletion and opt-ins: what can collide, and until when
+
+An account deletion removes the member's opt-ins (and, for an author, their posts with every opt-in on
+them). It locks the member's profile row first and reaches the opt-in rows through the cascade.
+
+- **A decision, a withdrawal or an unblock against the seeker's account deletion: no collision, in either
+  release state, on any path.** The three RPCs take the seeker's profile row before the post, so the two
+  queue; the trail row of an opt-in change never waits for a profile. Whoever is first wins and the other
+  sees a normal answer: the decision is recorded and the opt-in then goes with the account, or the RPC
+  answers `PT404 opt_in_not_found` (`decide_opt_in`) / `false` (`withdraw_opt_in`, `unblock_opt_in`). The
+  status update the deployed client still sends directly (`feed-panel.tsx`) is covered too: it answers as
+  it does today. Measured on 40 simultaneous pairs per pairing: 0 collisions after the fix, against 35 to
+  40 of 40 before it (the collision came in with the opt-in trail of this release; today's database has
+  none).
+- **What can still collide, until release 3.3:** an author who accepts, declines or completes an opt-in
+  through the deployed client's direct status update at the very moment that same author's own account
+  deletion is removing their posts. The update holds the opt-in and asks for the post; the deletion holds
+  the post and asks for the opt-in; the database ends one of the two. **What the member sees:** one failed
+  save (the status change answers an error, code `40P01`, or the account deletion reports a failure) that
+  succeeds on retry. Nothing is half-written and no slot drifts. It takes one person doing both things in
+  the same instant, in the expand state only. Measured on 40 simultaneous pairs: 6 with the deletion
+  function's own removal of the author's posts, 0 through the admin route (today's database: 0 and 0).
+- **Which release removes it:** 3.3, when the client moves decisions to `decide_opt_in` (post first, then
+  the opt-in: 0 collisions measured against the author's own deletion as well). The contract step then
+  closes the direct update for every client.
 
 Types: `packages/database/types.ts` carries hand-edited hunks for these shapes until the release regen.
 RPCs that return `jsonb` are typed `Json`; cast to the types written here.
@@ -345,7 +377,10 @@ the reviewer, 39 and 40 of 40 in the builder's runs; the slots never drifted). `
 `decide_opt_in` never deadlocks (0 in 40 forced interleaves and 40 simultaneous pairs, in both release
 states): exactly one of the two takes effect. If the decision lands first, `withdraw_opt_in` answers `false`;
 if the withdrawal lands first, `decide_opt_in` answers `PT404 opt_in_not_found`. Treat both as "re-read the
-list".
+list". The same two answers come back when the seeker's account is deleted first (the opt-in went with it).
+
+`service_role` keeps its direct `DELETE` on `resource_opt_ins` in both release states (e2e fixtures and
+service-side cleanups use it); the slot comes back and the trail records the removal by the system.
 
 ### Unchanged RPCs, one new refusal
 

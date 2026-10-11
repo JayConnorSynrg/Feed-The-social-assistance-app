@@ -33,6 +33,8 @@
 --       every opt-in change writes an event row. Any DELETE of an opt-in row returns its slot (the direct seeker
 --       DELETE drained offers). EXPAND/CONTRACT: the direct UPDATE (status) grant and the direct DELETE (policy
 --       opt_ins_delete) stay until the contract step; withdraw_opt_in is the seeker's path from then on.
+--       An opt-in write and the seeker's account deletion never meet in a deadlock: the three RPCs take the
+--       seeker's profile row (KEY SHARE) before the post, and the trail trigger's account lookups never wait.
 --   (F) Announcements: moderators pin / unpin with an expiry (7 days by default); ranked_feed_v2 gains an
 --       optional p_filter ('announcements' = live pins + org events). DROP + CREATE with a DEFAULT, no overload.
 --   (G) Petitions: drafts are column-limited on insert; the hash is sha256 of the body, computed by the server;
@@ -360,10 +362,17 @@ CREATE TRIGGER trg_resource_opt_ins_return_slot AFTER DELETE ON public.resource_
   FOR EACH ROW EXECUTE FUNCTION public.resource_opt_ins_return_slot();
 
 -- one event row per opt-in change, however it is made (the RPCs, the direct status UPDATE the deployed client
--- still sends, a direct DELETE, an account deletion)
+-- still sends, a direct DELETE, an account deletion).
+-- The trigger runs with the opt-in row already locked, and an account deletion locks the profile row first and
+-- reaches the opt-in through the cascade. So the two account columns are looked up with a KEY SHARE lock that
+-- never waits (SKIP LOCKED): a profile whose row is free is locked here (the foreign key below then has its lock
+-- already, and a deletion that arrives later waits for this transaction); a profile that is being deleted at this
+-- moment is recorded as NULL, the value ON DELETE SET NULL would give the row anyway. Nothing but its deletion
+-- takes a lock on a profile row that conflicts with KEY SHARE (smoke E3e keeps it so), so no other write is skipped.
 CREATE FUNCTION public.resource_opt_ins_audit() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE v_uid uuid := auth.uid(); r public.resource_opt_ins; v_author uuid; v_event text; v_role text;
+        v_seeker uuid; v_actor uuid;
 BEGIN
   r := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   IF TG_OP = 'UPDATE' AND NEW.status IS NOT DISTINCT FROM OLD.status THEN RETURN NULL; END IF;
@@ -375,11 +384,13 @@ BEGIN
                         WHEN 'UPDATE' THEN NEW.status
                         ELSE CASE WHEN OLD.status = 'declined' AND v_role = 'author' THEN 'unblocked'
                                   WHEN v_role = 'seeker' THEN 'withdrawn' ELSE 'removed' END END;
-  -- a profile that is being deleted in this statement (account deletion cascade) is recorded as NULL
+  -- a profile that is being deleted, in this statement (the cascade) or by another transaction, is recorded as NULL
+  SELECT id INTO v_seeker FROM public.profiles WHERE id = r.seeker_id FOR KEY SHARE SKIP LOCKED;
+  SELECT id INTO v_actor  FROM public.profiles WHERE id = v_uid       FOR KEY SHARE SKIP LOCKED;
   INSERT INTO public.resource_opt_in_events (opt_in_id, post_id, seeker_id, event, from_status, to_status, actor_id, actor_role)
-  VALUES (r.id, r.post_id, (SELECT id FROM public.profiles WHERE id = r.seeker_id), v_event,
+  VALUES (r.id, r.post_id, v_seeker, v_event,
           CASE WHEN TG_OP <> 'INSERT' THEN OLD.status END, CASE WHEN TG_OP <> 'DELETE' THEN NEW.status END,
-          (SELECT id FROM public.profiles WHERE id = v_uid), v_role);
+          v_actor, v_role);
   RETURN NULL;
 END $$;
 CREATE TRIGGER trg_resource_opt_ins_audit AFTER INSERT OR UPDATE OF status OR DELETE ON public.resource_opt_ins
@@ -1142,7 +1153,10 @@ BEGIN
     RAISE EXCEPTION 'Account required for this action' USING ERRCODE = '42501'; END IF;
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
-  -- post first, then the opt-in: the lock order of every opt-in RPC
+  -- The lock order of every opt-in RPC: the seeker's profile (KEY SHARE), then the post, then the opt-in. An account
+  -- deletion takes the profile row first and reaches the opt-in through the cascade, so the two queue at the profile
+  -- row; without this lock the trail row's foreign key asks for it last and the two meet in a deadlock.
+  PERFORM 1 FROM public.profiles WHERE id = v_caller_id FOR KEY SHARE;
   PERFORM 1 FROM public.posts WHERE id = p_post_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Post not found'; END IF;
   DELETE FROM public.resource_opt_ins WHERE post_id = p_post_id AND seeker_id = v_caller_id AND status = 'pending';
@@ -1152,18 +1166,19 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.unblock_opt_in(p_opt_in_id uuid) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_uid uuid := auth.uid(); v_status text; v_author uuid; v_post_id uuid; v_deleted integer;
+DECLARE v_uid uuid := auth.uid(); v_status text; v_author uuid; v_post_id uuid; v_seeker uuid; v_deleted integer;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF EXISTS (SELECT 1 FROM auth.users WHERE id = v_uid AND is_anonymous IS TRUE) THEN
     RAISE EXCEPTION 'Account required for this action' USING ERRCODE = '42501'; END IF;
-  SELECT oi.status, oi.post_id, p.user_id INTO v_status, v_post_id, v_author
+  SELECT oi.status, oi.post_id, oi.seeker_id, p.user_id INTO v_status, v_post_id, v_seeker, v_author
     FROM public.resource_opt_ins oi JOIN public.posts p ON p.id = oi.post_id WHERE oi.id = p_opt_in_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Opt-in not found'; END IF;
   IF v_author IS DISTINCT FROM v_uid THEN
     RAISE EXCEPTION 'Only the post author may unblock this opt-in' USING ERRCODE = '42501'; END IF;
   IF v_status <> 'declined' THEN
     RAISE EXCEPTION 'Only a declined opt-in can be unblocked' USING ERRCODE = '22023'; END IF;
+  PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR KEY SHARE;         -- the seeker's profile, then the post, then the opt-in
   PERFORM 1 FROM public.posts WHERE id = v_post_id FOR UPDATE;
   DELETE FROM public.resource_opt_ins WHERE id = p_opt_in_id AND status = 'declined';
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
@@ -1174,15 +1189,18 @@ END $$;
 -- written by trg_resource_opt_ins_audit.
 CREATE FUNCTION public.decide_opt_in(p_opt_in_id uuid, p_decision text, p_expected_status text DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_uid uuid := auth.uid(); v_post_id uuid; p public.posts%ROWTYPE; o public.resource_opt_ins%ROWTYPE; v_to text;
+DECLARE v_uid uuid := auth.uid(); v_post_id uuid; v_seeker uuid; p public.posts%ROWTYPE; o public.resource_opt_ins%ROWTYPE; v_to text;
 BEGIN
   IF COALESCE((auth.jwt() ->> 'is_anonymous')::boolean, false) THEN RAISE EXCEPTION 'guest_refused' USING ERRCODE = '42501'; END IF;
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501'; END IF;
   v_to := CASE p_decision WHEN 'accept' THEN 'accepted' WHEN 'decline' THEN 'declined' WHEN 'complete' THEN 'completed' END;
   IF v_to IS NULL THEN RAISE EXCEPTION 'opt_in_field_invalid:decision' USING ERRCODE = '22023'; END IF;
-  SELECT post_id INTO v_post_id FROM public.resource_opt_ins WHERE id = p_opt_in_id;
+  SELECT post_id, seeker_id INTO v_post_id, v_seeker FROM public.resource_opt_ins WHERE id = p_opt_in_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'opt_in_not_found' USING ERRCODE = 'PT404'; END IF;
-  SELECT * INTO p FROM public.posts WHERE id = v_post_id FOR UPDATE;        -- post first, then the opt-in
+  -- the seeker's profile first (KEY SHARE): a decision and that seeker's account deletion queue at the profile row.
+  -- After the wait the opt-in may be gone with the account; the lookup below then answers opt_in_not_found.
+  PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR KEY SHARE;
+  SELECT * INTO p FROM public.posts WHERE id = v_post_id FOR UPDATE;        -- then the post, then the opt-in
   SELECT * INTO o FROM public.resource_opt_ins WHERE id = p_opt_in_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'opt_in_not_found' USING ERRCODE = 'PT404'; END IF;
   IF p.user_id <> v_uid THEN RAISE EXCEPTION 'not_author' USING ERRCODE = '42501'; END IF;
