@@ -15,6 +15,11 @@
 // passes. Only the latest read's answer is applied.
 // Between reads the store (lib/safety-alert-store.ts) merges RPC answers onto the pins it holds
 // (coordinates and is_mine kept).
+// When a read fails after one has succeeded, the pins stay exactly as the server last returned them
+// (nothing is hidden on the browser clock) and the map says so: `stale` is the instant of the last
+// read that succeeded, for the line "Couldn't refresh alerts — last updated HH:MM", shown until the
+// next read that succeeds. A first read that fails has no "last updated": `stale` stays null and
+// `error` says the read failed.
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -71,11 +76,16 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [notice, setNotice] = useState<AlertNotice>({ text: '', seq: 0 })
-  // The instant of the last change to the list: the clock the markers render ages with.
+  // The instant of the last read (answered or failed): the clock the markers render ages with.
   const [now, setNow] = useState(() => Date.now())
+  // The latest read failed: when the last one succeeded (null = not stale, or nothing was ever read).
+  const [stale, setStale] = useState<number | null>(null)
 
   const [core] = useState(() => {
     const counter = pollCounter()
+    // When the last read succeeded, and whether the map is showing that it is stale.
+    let lastSuccessAt: number | null = null
+    let isStale = false
     // Only the latest read's answer is applied: a slow answer for an older viewport is dropped.
     const fetchAlerts = createLatestOnlyLoader<ViewportBounds, SafetyAlert[]>({
       read: (bounds) => readSafetyAlertsInView(supabase, bounds),
@@ -85,11 +95,24 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
       },
       onResult: (rows) => {
         counter.record({ signature: alertsSignature(rows), count: rows.length })
+        lastSuccessAt = Date.now()
+        if (isStale) {
+          isStale = false
+          setStale(null)
+        }
         store.replace(rows)
       },
       onError: (err) => {
         counter.record({ error: err instanceof AlertReadError && err.code ? err.code : 'exception' })
+        store.readFailed()
         setError(err instanceof Error ? err : new Error(String(err)))
+        // Ages keep counting from the present; the pins stay as the server last returned them.
+        setNow(Date.now())
+        // Stale from the first read that fails after one that succeeded, until the next success.
+        if (lastSuccessAt !== null && !isStale) {
+          isStale = true
+          setStale(lastSuccessAt)
+        }
       },
       onSettled: () => setLoading(false),
     })
@@ -195,5 +218,5 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
 
   const setEngaged = useCallback((alertId: string, engaged: boolean) => core.store.setEngaged(alertId, engaged), [core])
 
-  return { alerts, loading, error, notice, now, placeAlert, voteAlert, host: core.host, setEngaged, clearNotice, focusMap: focusMapSurface }
+  return { alerts, loading, error, notice, now, stale, placeAlert, voteAlert, host: core.host, setEngaged, clearNotice, focusMap: focusMapSurface }
 }

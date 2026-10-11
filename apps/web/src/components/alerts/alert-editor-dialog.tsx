@@ -413,7 +413,7 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                 placeholder={t('descriptionPlaceholder')}
-                className="mt-1 resize-none bg-white text-stone-900 placeholder:text-stone-500"
+                className="mt-1 resize-none border-stone-500! bg-white text-stone-900 placeholder:text-stone-500"
                 data-testid="alert-edit-description"
               />
             </div>

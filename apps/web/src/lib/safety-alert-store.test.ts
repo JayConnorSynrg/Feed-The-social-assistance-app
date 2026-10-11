@@ -18,7 +18,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { alertShownState } from './safety-alert-live'
 import type { SafetyAlert } from './safety-alert-rpc'
-import { ENDED_STATUS, SHOWN_UNTIL_MARGIN_MS, SafetyAlertStore, alertsSignature, compareAlerts, mergeAlertAnswer } from './safety-alert-store'
+import { DUE_READ_SPACING_MS, ENDED_STATUS, SHOWN_UNTIL_MARGIN_MS, SafetyAlertStore, alertsSignature, compareAlerts, mergeAlertAnswer } from './safety-alert-store'
 import { HOUR, NOW, alert, iso } from '@/test/alert-fixtures'
 
 const mine = (over: Partial<SafetyAlert> = {}) => alert({ id: 'a1', is_mine: true, verified: true, ...over })
@@ -153,6 +153,79 @@ describe('the server decides what is held, on any browser clock', () => {
     store.replace(served())
     store.dispose()
     vi.advanceTimersByTime(24 * HOUR)
+    expect(due).toEqual([])
+  })
+})
+
+// Alerts that end close together share one re-read: the store asks no sooner than 5 s after the
+// last read finished.
+describe('the re-reads the store asks for are spaced out', () => {
+  const at = (due: number[]) => due.map((t) => t - NOW)
+
+  it('an alert that ends long after the last read: asked for one second after its end, as before', () => {
+    const { store, due } = harness()
+    store.replace([alert({ id: 'a', expires_at: iso(60_000) })])
+    vi.advanceTimersByTime(60_000 + SHOWN_UNTIL_MARGIN_MS - 1)
+    expect(due).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(at(due)).toEqual([61_000])
+  })
+
+  it('an alert that ends right after a read: its re-read waits until 5 s after that read', () => {
+    const { store, due } = harness()
+    vi.advanceTimersByTime(10_000)
+    store.replace([alert({ id: 'a', expires_at: iso(10_500) })]) // the read finished at 10.0 s; the alert ends at 10.5 s
+    vi.advanceTimersByTime(DUE_READ_SPACING_MS - 1)
+    expect(due).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(at(due)).toEqual([15_000])
+  })
+
+  it('three alerts ending within two seconds of each other: one re-read covers them (a server that drops what has ended)', () => {
+    const rows = [alert({ id: 'a', expires_at: iso(20_000) }), alert({ id: 'b', expires_at: iso(21_000) }), alert({ id: 'c', expires_at: iso(22_000) })]
+    const reads: number[] = []
+    // onDue reads: the server answers with what is still shown on its clock.
+    const live = new SafetyAlertStore(() => {}, {
+      onDue: () => {
+        reads.push(Date.now() - NOW)
+        live.replace(rows.filter((r) => Date.parse(r.shown_until as string) > Date.now()))
+      },
+    })
+    live.replace(rows)
+    vi.advanceTimersByTime(60_000)
+    // 21 s: a's re-read (b and c are still shown). 26 s: 5 s later, one read covers b and c.
+    expect(reads).toEqual([21_000, 26_000])
+    expect(live.list()).toEqual([])
+    live.dispose()
+  })
+
+  it('a failed read counts as a read: the next one the store asks for is 5 s after it', () => {
+    const { store, due } = harness()
+    store.replace([alert({ id: 'a', expires_at: iso(30_000) })])
+    vi.advanceTimersByTime(29_000)
+    store.readFailed() // a poll failed at 29 s
+    store.apply(alert({ id: 'a', expires_at: iso(30_000), confirm_count: 2 })) // an answer re-arms the timer
+    vi.advanceTimersByTime(4_999)
+    expect(due).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(at(due)).toEqual([34_000])
+  })
+
+  it('a re-read that is already waiting is not pushed back by a later alert or an answer', () => {
+    const { store, due } = harness()
+    store.replace([alert({ id: 'a', expires_at: iso(20_000) }), alert({ id: 'b', expires_at: iso(90_000) })])
+    vi.advanceTimersByTime(20_500) // a's instant has passed; its re-read is due at 21 s
+    store.apply(alert({ id: 'b', expires_at: iso(90_000), confirm_count: 3 })) // something else changes meanwhile
+    vi.advanceTimersByTime(500)
+    expect(at(due)).toEqual([21_000])
+  })
+
+  it('a read that arrives first (the poll) takes the place of the waiting re-read', () => {
+    const { store, due } = harness()
+    store.replace([alert({ id: 'a', expires_at: iso(20_000) })])
+    vi.advanceTimersByTime(20_500)
+    store.replace([]) // the poll came in at 20.5 s and no longer returns it
+    vi.advanceTimersByTime(60_000)
     expect(due).toEqual([])
   })
 })

@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { HOUR, alert, iso } from '@/test/alert-fixtures'
-import { alertDraftChanges, alertDraftOf, formatAlertDateTime, rebaseAlertDraft, resolvedNoticeText, savedNoticeText } from './alert-edit-model'
+import { alertDraftChanges, alertDraftOf, formatAlertDateTime, rebaseAlertDraft, resolvedNoticeText, savedNoticeText, staleNoticeText } from './alert-edit-model'
 
 describe('alertDraftChanges', () => {
   it('nothing touched: nothing to save', () => {
@@ -47,6 +47,39 @@ describe('rebaseAlertDraft — "keep my changes" after someone else saved', () =
   it('the member changed nothing: the result is the newer version', () => {
     const current = alert({ severity: 1, description: null })
     expect(rebaseAlertDraft(opened, alertDraftOf(opened), current)).toEqual(alertDraftOf(current))
+  })
+})
+
+describe('the stale line: "Couldn’t refresh alerts — last updated …"', () => {
+  const at = (iso8601: string) => Date.parse(iso8601)
+
+  it('the clock time of the last read that succeeded, in the viewer’s language and zone', () => {
+    const last = at('2026-10-11T19:04:00.000Z')
+    const now = at('2026-10-11T21:30:00.000Z')
+    expect(staleNoticeText(last, 'en', now, 'UTC')).toBe('Couldn’t refresh alerts — last updated 7:04 PM.')
+    expect(staleNoticeText(last, 'en', now, 'America/New_York')).toBe('Couldn’t refresh alerts — last updated 3:04 PM.')
+    expect(staleNoticeText(last, 'fr', now, 'UTC')).toBe('Impossible d’actualiser les alertes. Dernière mise à jour : 19:04.')
+    expect(staleNoticeText(last, 'es', now, 'UTC')).toMatch(/^No se pudieron actualizar las alertas\. Última actualización: 19:04\.$/)
+  })
+
+  it('with its date when the last success was not today (in the viewer’s zone): a time alone would name the wrong day', () => {
+    const last = at('2026-10-10T23:50:00.000Z')
+    const now = at('2026-10-11T08:00:00.000Z')
+    expect(staleNoticeText(last, 'en', now, 'UTC')).toBe('Couldn’t refresh alerts — last updated Oct 10, 2026, 11:50 PM.')
+    // The same two instants are one calendar day in New York (7:50 PM and 4:00 AM are not): still dated.
+    expect(staleNoticeText(last, 'en', now, 'America/New_York')).toBe('Couldn’t refresh alerts — last updated Oct 10, 2026, 7:50 PM.')
+    // Honolulu: 1:50 PM and 10:00 PM on Oct 10 — the same day, so the time alone.
+    expect(staleNoticeText(last, 'en', now, 'Pacific/Honolulu')).toBe('Couldn’t refresh alerts — last updated 1:50 PM.')
+  })
+
+  it('every locale has the sentence, with the time in it', () => {
+    const last = at('2026-10-11T19:04:00.000Z')
+    for (const locale of ['en', 'es', 'ht', 'vi', 'ar', 'zh', 'so', 'fr', 'pt', 'ru', 'ko', 'tl', 'am', 'hmn'] as const) {
+      const text = staleNoticeText(last, locale, last + 60_000, 'UTC')
+      expect(text, locale).not.toContain('{time}')
+      expect(text, locale).toMatch(/04/)
+      if (locale !== 'en') expect(text, locale).not.toContain('refresh alerts')
+    }
   })
 })
 

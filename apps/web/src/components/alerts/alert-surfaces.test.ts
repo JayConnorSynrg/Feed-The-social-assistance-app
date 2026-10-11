@@ -416,7 +416,7 @@ describe('accessibility', () => {
   })
 
   it('a new or raised alert speaks in the alert region; an update, a resolution and an ended alert in the status region', () => {
-    const live = (over: Record<string, unknown>) => strip([alert()], VIEWERS.member, { live: { assertive: [], polite: [], spoken: '', notice: '', seq: 1, ...over } })
+    const live = (over: Record<string, unknown>) => strip([alert()], VIEWERS.member, { live: { assertive: [], polite: [], spoken: '', notice: '', staleSpoken: null, seq: 1, ...over } })
     const region = (html: string, id: string) => new RegExp(`data-testid="${id}"[^>]*>(?:<span>)?([^<]*)`).exec(html)?.[1]
     const fresh = live({ assertive: [{ kind: 'new', alert_type: 'weather', severity: 4 }] })
     expect(region(fresh, 'safety-strip-alert')).toBe('New safety alert: Weather Hazard, Critical.')
@@ -429,7 +429,7 @@ describe('accessibility', () => {
   })
 
   it('the member’s own outcome is spoken politely once, and shown as a line with a Dismiss control', () => {
-    const html = strip([alert()], VIEWERS.owner, { live: { assertive: [], polite: [], spoken: 'Alert updated.', notice: 'Alert updated.', seq: 2 } })
+    const html = strip([alert()], VIEWERS.owner, { live: { assertive: [], polite: [], spoken: 'Alert updated.', notice: 'Alert updated.', staleSpoken: null, seq: 2 } })
     expect(html).toContain('<p role="status" class="sr-only" data-testid="safety-strip-status"><span>Alert updated.</span></p>')
     expect(html).toContain('<p role="alert" class="sr-only" data-testid="safety-strip-alert"></p>')
     // The visible line is not a second live region (it would be read twice).
@@ -438,22 +438,75 @@ describe('accessibility', () => {
     expect(box).not.toMatch(/role=|aria-live/)
     expect(box).toMatch(/<button type="button" aria-label="Dismiss" data-testid="safety-strip-notice-dismiss" class="[^"]*\bh-6 w-6\b/)
     // A few seconds later the spoken text is gone and the line is still there, until dismissed.
-    const later = strip([alert()], VIEWERS.owner, { live: { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', seq: 2 } })
+    const later = strip([alert()], VIEWERS.owner, { live: { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', staleSpoken: null, seq: 2 } })
     expect(later).toContain('<p role="status" class="sr-only" data-testid="safety-strip-status"></p>')
     expect(later).toContain('data-testid="safety-strip-notice"')
     expect(strip([alert()], VIEWERS.owner)).not.toContain('data-testid="safety-strip-notice"')
     // es: the Dismiss name is translated.
-    expect(strip([alert()], VIEWERS.owner, { locale: 'es', live: { assertive: [], polite: [], spoken: '', notice: 'x', seq: 1 } })).toContain(`aria-label="${alertsT('es', 'dismiss')}"`)
+    expect(strip([alert()], VIEWERS.owner, { locale: 'es', live: { assertive: [], polite: [], spoken: '', notice: 'x', staleSpoken: null, seq: 1 } })).toContain(`aria-label="${alertsT('es', 'dismiss')}"`)
+  })
+
+  // The latest read failed: one line says so, with the time of the last read that succeeded.
+  describe('the stale line', () => {
+    const LAST = NOW - 26 * 60_000 // 11:34 AM UTC
+    const SENTENCE = 'Couldn’t refresh alerts — last updated 11:34 AM.'
+
+    it('strip: one visible line with the time, above the alerts — not a live region; the alerts are drawn as before', () => {
+      const html = strip([alert()], VIEWERS.member, { stale: LAST })
+      const line = /<p data-testid="safety-strip-stale"[^>]*>[\s\S]*?<\/p>/.exec(html)?.[0] ?? ''
+      expect(line).toContain(`<span>${SENTENCE}</span>`)
+      expect(line).not.toMatch(/role=|aria-live/)
+      expect(html.indexOf('data-testid="safety-strip-stale"')).toBeLessThan(html.indexOf('data-testid="safety-strip"'))
+      expect(has(html, `safety-strip-item-${ID}`)).toBe(true)
+      expect(html.match(/data-testid="safety-strip-stale"/g)).toHaveLength(1)
+      // Fresh: no line.
+      expect(strip([alert()])).not.toContain('safety-strip-stale')
+    })
+
+    it('strip: shown even when no alert is held (there may be alerts the member cannot see)', () => {
+      const html = strip([], VIEWERS.member, { stale: LAST })
+      expect(html).toContain(SENTENCE)
+      expect(html).not.toContain('data-testid="safety-strip"')
+    })
+
+    it('strip: said once in the polite region when it becomes stale; the member’s own outcome and list events take precedence', () => {
+      const said = (over: Record<string, unknown>) =>
+        new RegExp('data-testid="safety-strip-status"[^>]*>(?:<span>)?([^<]*)').exec(strip([alert()], VIEWERS.member, { stale: LAST, live: { assertive: [], polite: [], spoken: '', notice: '', staleSpoken: null, seq: 1, ...over } }))?.[1]
+      expect(said({ staleSpoken: LAST })).toBe(SENTENCE)
+      expect(said({})).toBe('') // a few seconds later (and on every later failed poll) the region is empty
+      expect(said({ staleSpoken: LAST, spoken: 'Alert updated.' })).toBe('Alert updated.')
+      // Never assertive.
+      expect(strip([alert()], VIEWERS.member, { stale: LAST, live: { assertive: [], polite: [], spoken: '', notice: '', staleSpoken: LAST, seq: 1 } })).toContain('<p role="alert" class="sr-only" data-testid="safety-strip-alert"></p>')
+    })
+
+    it('strip: in the viewer’s language, with the time in their format', () => {
+      const es = strip([alert()], VIEWERS.member, { stale: LAST, locale: 'es' })
+      expect(es).toMatch(/No se pudieron actualizar las alertas\. Última actualización: 11:34\./)
+      expect(es).not.toContain('refresh alerts')
+    })
+
+    it('map: the line arrives in the existing status region (not atomic: only the new line is read), with no Dismiss; it shares the box with an outcome', () => {
+      const only = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: '', seq: 0 }, locale: 'en', onDismiss: () => {}, stale: SENTENCE }))
+      expect(only).toContain(`<p role="status" aria-atomic="false" class="min-w-0 flex-1" data-testid="map-alert-status"><span class="block" data-testid="map-alert-stale">${SENTENCE}</span></p>`)
+      expect(only).not.toContain('map-alert-notice-dismiss')
+      expect(only).not.toMatch(/class="sr-only"/)
+      const both = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: 'Alert updated.', seq: 3 }, locale: 'en', onDismiss: () => {}, stale: SENTENCE }))
+      expect(both).toContain(`<span class="block">Alert updated.</span><span class="block" data-testid="map-alert-stale">${SENTENCE}</span>`)
+      expect(both).toContain('map-alert-notice-dismiss')
+      expect(both.match(/role="status"/g)).toHaveLength(1)
+      // Fresh and nothing to say: out of the layout, as before.
+      expect(renderToStaticMarkup(h(MapAlertNotice, { notice: { text: '', seq: 0 }, locale: 'en', onDismiss: () => {}, stale: null }))).toContain('data-testid="map-alert-notice" class="sr-only"')
+    })
   })
 
   it('the map’s notice: one polite status region, mounted empty, shown in the page’s flow with a Dismiss control', () => {
     const empty = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: '', seq: 0 }, locale: 'en', onDismiss: () => {} }))
     // Empty: the wrapper is out of the layout (sr-only is absolutely positioned, so it is no flex child
     // and adds no gap above the map) and holds only the mounted, empty region.
-    expect(empty).toBe('<div lang="en" dir="ltr" data-testid="map-alert-notice" class="sr-only"><p role="status" class="sr-only" data-testid="map-alert-status"></p></div>')
+    expect(empty).toBe('<div lang="en" dir="ltr" data-testid="map-alert-notice" class="sr-only"><p role="status" aria-atomic="false" class="sr-only" data-testid="map-alert-status"></p></div>')
     const shown = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: 'Alert updated.', seq: 1 }, locale: 'ar', onDismiss: () => {} }))
     expect(shown).toMatch(/^<div lang="ar" dir="rtl" data-testid="map-alert-notice" class="[^"]*">/)
-    expect(shown).toContain('<p role="status" class="min-w-0 flex-1" data-testid="map-alert-status"><span>Alert updated.</span></p>')
+    expect(shown).toContain('<p role="status" aria-atomic="false" class="min-w-0 flex-1" data-testid="map-alert-status"><span class="block">Alert updated.</span></p>')
     expect(shown).toContain(`aria-label="${alertsT('ar', 'dismiss')}" data-testid="map-alert-notice-dismiss"`)
     // In the flow, above the map: nothing positions it over a marker or a popup.
     expect(shown).not.toMatch(/\b(absolute|fixed|sticky)\b/)

@@ -16,6 +16,11 @@
 // Each read's difference from the list before is announced by the rule in
 // lib/safety-alert-announce.ts; the member's own actions announce their own notice (host.announce).
 // What a live region said is cleared a few seconds later, so browse mode does not find stale text.
+// When a read fails after one has succeeded, the list stays exactly as the server last returned it
+// (nothing is hidden on the browser clock) and the strip says so: `stale` is the instant of the last
+// read that succeeded, for the line "Couldn't refresh alerts — last updated HH:MM". It is announced
+// once when the strip becomes stale, and cleared by the next read that succeeds. A first read that
+// fails has no "last updated" to show: `stale` stays null.
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -38,6 +43,9 @@ export interface StripLive {
   spoken: string
   /** The same outcome as a visible line: it stays until dismissed or the next action. */
   notice: string
+  /** The strip just became stale: the instant of the last read that succeeded, to be said once in
+   *  the polite region ("Couldn't refresh alerts — last updated …"). null otherwise. */
+  staleSpoken: number | null
   seq: number
 }
 
@@ -58,7 +66,7 @@ export interface AlertHost {
   focusAfterLeave: () => void
 }
 
-const QUIET: StripLive = { assertive: [], polite: [], spoken: '', notice: '', seq: 0 }
+const QUIET: StripLive = { assertive: [], polite: [], spoken: '', notice: '', staleSpoken: null, seq: 0 }
 
 /** The strip item that takes focus when `alertId` leaves: the next one, else the one before. */
 export function neighbourOf(alerts: readonly SafetyAlert[], alertId: string): string | null {
@@ -84,8 +92,10 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
   const supabase = createClient()
   const [alerts, setAlerts] = useState<SafetyAlert[]>([])
   const [live, setLive] = useState<StripLive>(QUIET)
-  // The instant of the last change to the list: the clock the strip renders ages with.
+  // The instant of the last read (answered or failed): the clock the strip renders ages with.
   const [now, setNow] = useState(() => Date.now())
+  // The latest read failed: when the last one succeeded (null = not stale, or nothing was ever read).
+  const [stale, setStale] = useState<number | null>(null)
 
   const [core] = useState(() => {
     const counter = pollCounter()
@@ -95,14 +105,19 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
     // The strip item that takes focus after an alert left (set by leave, used once).
     let neighbour: string | null = null
     let clearTimer: ReturnType<typeof setTimeout> | null = null
+    // When this viewer's last read succeeded, and whether the strip has said it is stale since.
+    let lastSuccessAt: number | null = null
+    let isStale = false
 
     /** Put a message in the live regions, and take the spoken text out again a few seconds later. */
-    const say = (next: Pick<StripLive, 'assertive' | 'polite' | 'spoken'> & { notice?: string }) => {
-      setLive((l) => ({ assertive: next.assertive, polite: next.polite, spoken: next.spoken, notice: next.notice ?? l.notice, seq: l.seq + 1 }))
+    const say = (next: Pick<StripLive, 'assertive' | 'polite' | 'spoken'> & { notice?: string; staleSpoken?: number }) => {
+      setLive((l) => ({ assertive: next.assertive, polite: next.polite, spoken: next.spoken, notice: next.notice ?? l.notice, staleSpoken: next.staleSpoken ?? null, seq: l.seq + 1 }))
       if (clearTimer) clearTimeout(clearTimer)
       clearTimer = setTimeout(() => {
         clearTimer = null
-        setLive((l) => (l.assertive.length === 0 && l.polite.length === 0 && l.spoken === '' ? l : { ...l, assertive: [], polite: [], spoken: '' }))
+        setLive((l) =>
+          l.assertive.length === 0 && l.polite.length === 0 && l.spoken === '' && l.staleSpoken === null ? l : { ...l, assertive: [], polite: [], spoken: '', staleSpoken: null },
+        )
       }, LIVE_REGION_CLEAR_MS)
     }
 
@@ -111,13 +126,29 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
       onStart: () => {},
       onResult: (rows) => {
         counter.record({ signature: alertsSignature(rows), count: rows.length })
+        lastSuccessAt = Date.now()
+        if (isStale) {
+          isStale = false
+          setStale(null)
+        }
         const before = first ? null : store.list().filter((a) => isAlertShown(a))
         first = false
         store.replace(rows)
         const said = stripAnnouncement(before, rows, STRIP_ALERT_LIMIT)
         if (said.assertive.length > 0 || said.polite.length > 0) say({ assertive: said.assertive, polite: said.polite, spoken: '' })
       },
-      onError: (err) => counter.record({ error: err instanceof AlertReadError && err.code ? err.code : 'exception' }),
+      onError: (err) => {
+        counter.record({ error: err instanceof AlertReadError && err.code ? err.code : 'exception' })
+        store.readFailed()
+        // Ages keep counting from the present; the list itself stays as the server last returned it.
+        setNow(Date.now())
+        // Stale: said once, when the first read fails after one that succeeded.
+        if (lastSuccessAt !== null && !isStale) {
+          isStale = true
+          setStale(lastSuccessAt)
+          say({ assertive: [], polite: [], spoken: '', staleSpoken: lastSuccessAt })
+        }
+      },
       onSettled: () => {},
     })
 
@@ -126,6 +157,9 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
         if (key !== viewer) {
           viewer = key
           first = true
+          lastSuccessAt = null
+          isStale = false
+          setStale(null)
           store.replace([])
         }
         void load(key)
@@ -196,5 +230,5 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
   /** The visible notice is dismissed, or the member started something else. */
   const dismissNotice = useCallback(() => setLive((l) => (l.notice === '' ? l : { ...l, notice: '' })), [])
 
-  return { alerts, live, now, host: core.host, setEngaged, dismissNotice }
+  return { alerts, live, now, stale, host: core.host, setEngaged, dismissNotice }
 }

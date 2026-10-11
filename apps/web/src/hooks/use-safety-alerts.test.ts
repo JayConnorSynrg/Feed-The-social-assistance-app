@@ -39,7 +39,7 @@ vi.mock('@/lib/logger', () => ({
 }))
 
 import { mount } from '@/test/mini-react'
-import { ALERTS_DEBOUNCE_MS, ALERTS_POLL_MS, flushPollCounters, resetPollCounters } from '@/lib/safety-alerts-fetch'
+import { ALERTS_DEBOUNCE_MS, ALERTS_POLL_MS, SafetyAlertsFetchScheduler, flushPollCounters, resetPollCounters } from '@/lib/safety-alerts-fetch'
 import { ALERT_ID, HOUR, NOW, alert, iso } from '@/test/alert-fixtures'
 import { useSafetyAlerts, type ViewportBounds } from './use-safety-alerts'
 
@@ -386,6 +386,150 @@ describe('the map’s notice for the member’s own action', () => {
     // The same sentence twice is still a new message (seq moves).
     m.hook().host.announce('Alert updated.')
     expect(m.hook().notice.seq).toBeGreaterThan(2)
+  })
+})
+
+describe('when reads fail: the map says it is stale', () => {
+  const FAIL = { error: { code: '57014', message: 'timeout' } }
+
+  it('stale since the last success, once, however many polls and pans fail; the pins stay; a success clears it', async () => {
+    const m = await map() // the first read succeeds at NOW + the debounce
+    const firstSuccess = NOW + ALERTS_DEBOUNCE_MS
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const hook = await m.settle(ALERTS_POLL_MS)
+    expect(hook.stale).toBe(firstSuccess)
+    expect(hook.alerts).toHaveLength(1)
+    expect(hook.error).toBeInstanceOf(Error)
+    m.state.make = () => B(-74) // a pan while offline: the read fails too
+    m.c.rerender()
+    const later = await m.settle(ALERTS_POLL_MS * 3)
+    expect(later.stale).toBe(firstSuccess)
+    expect(later.alerts).toHaveLength(1)
+    expect(later.now).toBeGreaterThan(firstSuccess + 3 * ALERTS_POLL_MS) // ages count from the present
+    h.backend.answers.safety_alerts_in_view = { data: [] }
+    const fresh = await m.settle(ALERTS_POLL_MS)
+    expect([fresh.stale, fresh.alerts.length, fresh.error]).toEqual([null, 0, null])
+  })
+
+  it('a first-ever read that fails: the existing error state, and no "last updated"', async () => {
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const m = await map()
+    const hook = await m.settle(ALERTS_POLL_MS * 2)
+    expect(hook.stale).toBeNull()
+    expect(hook.error).toBeInstanceOf(Error)
+    expect(hook.alerts).toEqual([])
+  })
+})
+
+// The reviewer's scenario: many pins ending close together. Each "shown until" used to ask for its own read.
+describe('pins that end close together share a re-read (no sooner than 5 s after the last read)', () => {
+  const MIN = 60_000
+  /** A server on the fake clock: a row whose shown_until has passed is no longer returned. */
+  const serve = (rows: ReturnType<typeof alert>[]) => {
+    h.backend.answers.safety_alerts_in_view = () => ({ data: rows.filter((r) => Date.parse(r.shown_until as string) > Date.now()) })
+  }
+  /** Fifty pins, the first ending 2 min 10 s in, the rest `gap` ms apart. Returns the reads beyond the
+   *  60 s poll during the two minutes in which they end, the most reads in any 10 s, how long past
+   *  its end the slowest pin was still drawn, and how many pins are left. */
+  async function fiftyEnding(gap: number) {
+    const ends = Array.from({ length: 50 }, (_, i) => NOW + 2 * MIN + 10_000 + i * gap)
+    serve(ends.map((end, i) => alert({ id: `m${i}`, expires_at: new Date(end).toISOString() })))
+    const m = await map()
+    await m.settle(2 * MIN - ALERTS_DEBOUNCE_MS)
+    const before = reads().length
+    let peak = 0
+    let worstLate = 0
+    for (let ten = 0; ten < 12; ten++) {
+      const atStart = reads().length
+      for (let step = 0; step < 20; step++) {
+        const held = (await m.settle(500)).alerts
+        for (const a of held) worstLate = Math.max(worstLate, Date.now() - Date.parse(a.shown_until as string))
+      }
+      peak = Math.max(peak, reads().length - atStart)
+    }
+    const result = { extra: reads().length - before - 2 /* the poll alone reads twice in two minutes */, peak, worstLate, left: m.hook().alerts.length }
+    m.c.unmount()
+    return result
+  }
+
+  it('fifty pins ending 1.5 s apart: about one extra read per 5 s (it was 49), and none is drawn more than 6 s past its end', async () => {
+    const r = await fiftyEnding(1500)
+    expect(r.left).toBe(0)
+    expect(r.extra).toBe(15)
+    expect(r.peak).toBeLessThanOrEqual(3) // it was 7 in the busiest ten seconds
+    expect(r.worstLate).toBeLessThanOrEqual(6000)
+  })
+
+  it('fifty pins ending 200 ms apart: three extra reads (it was 9), at most two in any ten seconds (it was 8)', async () => {
+    const r = await fiftyEnding(200)
+    expect([r.left, r.extra]).toEqual([0, 3])
+    expect(r.peak).toBeLessThanOrEqual(2)
+    expect(r.worstLate).toBeLessThanOrEqual(6000)
+  })
+
+  it('fifty pins ending at the same instant: one extra read (as before)', async () => {
+    const r = await fiftyEnding(0)
+    expect([r.left, r.extra]).toEqual([0, 1])
+    expect(r.worstLate).toBeLessThanOrEqual(1500)
+  })
+
+  it('a failed read counts as the last read: a pin ending right after it is asked for 5 s after the failure, not 1 s after its end', async () => {
+    // The pin ends at 62 s. The 60 s poll fails.
+    let failing = false
+    const pin = alert({ id: 'p', expires_at: iso(62_000) })
+    h.backend.answers.safety_alerts_in_view = () => (failing ? { error: { code: '57014', message: 'timeout' } } : { data: Date.now() < NOW + 62_000 ? [pin] : [] })
+    const m = await map()
+    await m.settle(59_000)
+    failing = true
+    await m.settle(ALERTS_POLL_MS - 59_000) // now 60.4 s; the poll ran at 60.0 s and failed
+    expect(reads()).toHaveLength(2)
+    failing = false
+    await m.settle(4_500) // 64.9 s: the pin's end plus one second (63 s) has passed; no read yet
+    expect(reads()).toHaveLength(2)
+    expect((await m.settle(200)).alerts).toEqual([]) // 65.1 s: five seconds after the failed read
+    expect(reads()).toHaveLength(3)
+  })
+
+  it('one pin ending alone, long after the last read: still asked for one second after its end', async () => {
+    serve([alert({ id: 'solo', expires_at: iso(2 * MIN + 30_000) })])
+    const m = await map()
+    await m.settle(2 * MIN + 30_000 - ALERTS_DEBOUNCE_MS)
+    expect(m.hook().alerts).toHaveLength(1)
+    expect((await m.settle(1000)).alerts).toHaveLength(0)
+  })
+})
+
+// Behaviours that were correct and unguarded (reviewer mutants N1.6b and R4.2).
+describe('guards', () => {
+  it('a hidden tab does not read when a pin’s "shown until" passes; the pin leaves on return to the tab', async () => {
+    h.backend.answers.safety_alerts_in_view = () => ({ data: [alert({ expires_at: iso(120_000) })].filter((r) => Date.parse(r.shown_until as string) > Date.now()) })
+    const m = await map()
+    setVisible(false)
+    const hidden = await m.settle(10 * 60_000)
+    expect(reads()).toHaveLength(1)
+    expect(hidden.alerts).toHaveLength(1) // nothing is removed on the browser clock
+    setVisible(true)
+    expect((await m.settle()).alerts).toEqual([])
+    expect(reads()).toHaveLength(2)
+  })
+
+  it('the hook hands its scheduler new bounds only when one of the four numbers changes — never for a new object with the same numbers', async () => {
+    const setBounds = vi.spyOn(SafetyAlertsFetchScheduler.prototype, 'setBounds')
+    try {
+      const m = await map()
+      for (let i = 0; i < 50; i++) m.c.rerender() // fifty new bounds objects, the same four numbers
+      await m.settle(ALERTS_DEBOUNCE_MS)
+      expect(setBounds).toHaveBeenCalledTimes(1)
+      expect(reads()).toHaveLength(1)
+      m.state.make = () => B(-74)
+      m.c.rerender()
+      for (let i = 0; i < 10; i++) m.c.rerender()
+      await m.settle(ALERTS_DEBOUNCE_MS)
+      expect(setBounds).toHaveBeenCalledTimes(2)
+      expect(reads()).toHaveLength(2)
+    } finally {
+      setBounds.mockRestore()
+    }
   })
 })
 

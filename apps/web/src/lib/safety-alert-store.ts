@@ -17,6 +17,10 @@
 //  - At the earliest "shown until" instant among the rows held — when that instant is still in the
 //    browser's future — the store asks for ONE read (onDue). It deletes nothing itself: the read's
 //    answer does. With a wrong browser clock the 60 s poll is the backstop.
+//    Those reads are spaced out: one is asked for no sooner than 5 seconds after the last read
+//    finished (DUE_READ_SPACING_MS), so alerts that end close together share a read — fifty pins
+//    ending 1.5 s apart cost a read every 5 s, not one each. An ended alert is therefore drawn for
+//    up to about 6 seconds past its end, and never past the next 60 s poll.
 //  - setEngaged(id, true): the member's focus or pointer is inside that strip entry, or its popup
 //    is open. An engaged alert is never taken away by a read: when a read no longer returns it, the
 //    store asks for that one alert by id (recheck). Still shown (it only left the viewport, or the
@@ -32,6 +36,9 @@ export const ENDED_STATUS = 'ended'
 
 /** How long after a "shown until" instant the one read is asked for (the server has passed it). */
 export const SHOWN_UNTIL_MARGIN_MS = 1000
+
+/** A read the store asks for is never sooner than this after the last read finished. */
+export const DUE_READ_SPACING_MS = 5000
 
 const RANK = { live: 0, resolved: 1, gone: 2 } as const
 
@@ -96,6 +103,10 @@ export class SafetyAlertStore {
   private readonly engaged = new Set<string>()
   private readonly rechecking = new Set<string>()
   private timer: ReturnType<typeof setTimeout> | null = null
+  /** When the waiting timer fires (browser clock). */
+  private timerAt: number | null = null
+  /** When the last read finished, answered or failed (browser clock). */
+  private lastReadAt: number | null = null
   private readonly now: () => number
 
   constructor(
@@ -115,6 +126,9 @@ export class SafetyAlertStore {
   }
 
   replace(alerts: readonly SafetyAlert[]): void {
+    // A read just finished: whatever instant a waiting timer was for, this answer covers it.
+    this.lastReadAt = this.now()
+    this.cancelTimer()
     const next = new Map<string, SafetyAlert>()
     for (const alert of alerts) if (isAlertShown(alert)) next.set(alert.id, alert)
     const dropped: string[] = []
@@ -156,10 +170,21 @@ export class SafetyAlertStore {
     }
   }
 
+  /** A read finished without an answer (it failed): the next one the store asks for is spaced from it too. */
+  readFailed(): void {
+    this.lastReadAt = this.now()
+    this.schedule()
+  }
+
   /** Unmount: stop the timer. */
   dispose(): void {
+    this.cancelTimer()
+  }
+
+  private cancelTimer(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
+    this.timerAt = null
   }
 
   /** Is an engaged alert a read dropped still shown? One by-id read; without a reader, it is ended. */
@@ -197,12 +222,13 @@ export class SafetyAlertStore {
     this.onChange(this.list())
   }
 
-  /** One timer at the earliest "shown until" instant that is still ahead on this clock. It asks for
+  /** One timer for the earliest "shown until" instant that is still ahead on this clock. It asks for
    *  one read; it never deletes. An instant already behind this clock arms nothing (the row was just
-   *  returned by the server, so this clock is the one that is wrong): the poll will ask. */
+   *  returned by the server, so this clock is the one that is wrong): the poll will ask.
+   *  The read is asked for no sooner than DUE_READ_SPACING_MS after the last read finished. A timer
+   *  already waiting is never pushed back by a later alert (an alert whose instant passed while it
+   *  waits is covered by that same read) — only by that spacing. */
   private schedule(): void {
-    if (this.timer) clearTimeout(this.timer)
-    this.timer = null
     if (!this.deps.onDue) return
     const now = this.now()
     let next: number | null = null
@@ -210,10 +236,17 @@ export class SafetyAlertStore {
       const until = alertShownUntil(alert)
       if (until !== null && until > now && (next === null || until < next)) next = until
     }
-    if (next === null) return
+    const floor = this.lastReadAt === null ? 0 : this.lastReadAt + DUE_READ_SPACING_MS
+    const fresh = next === null ? null : Math.max(next + SHOWN_UNTIL_MARGIN_MS, floor)
+    const waiting = this.timerAt === null ? null : Math.max(this.timerAt, floor)
+    const at = fresh === null ? waiting : waiting === null ? fresh : Math.min(fresh, waiting)
+    if (at === null || at === this.timerAt) return
+    this.cancelTimer()
+    this.timerAt = at
     this.timer = setTimeout(() => {
       this.timer = null
+      this.timerAt = null
       this.deps.onDue?.()
-    }, next - now + SHOWN_UNTIL_MARGIN_MS)
+    }, at - now)
   }
 }

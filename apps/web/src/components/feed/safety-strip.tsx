@@ -24,6 +24,10 @@
 //                     outcome of the member's own action.
 //    A refresh that changes nothing changes neither region. Their text is cleared a few seconds
 //    after it was spoken. The member's own outcome is also a visible line with a Dismiss control.
+//  - When the latest read failed, one line says so with the time of the last read that succeeded
+//    ("Couldn't refresh alerts — last updated 3:04 PM"); it is said once in the status region when
+//    the strip becomes stale, and goes away with the next read that succeeds. The alerts stay as the
+//    server last returned them.
 //  - An alert never leaves under the member: while focus or the pointer is inside an entry the store
 //    keeps it (marked "No longer listed" once the server drops it) until they move on (onEngage).
 //    The strip itself never moves focus when the list changes: an action button that has focus when
@@ -34,7 +38,7 @@
 //    first (the feed's heading when no alert is listed).
 
 import { useRef, useState } from 'react'
-import { CheckCircle2, ShieldAlert, X } from 'lucide-react'
+import { CheckCircle2, CloudOff, ShieldAlert, X } from 'lucide-react'
 import type { Locale } from '@/lib/i18n'
 import { relativeAge } from '@/lib/relative-age'
 import { alertSeverityLabel, alertTypeLabel, alertUpdatedText, alertsT, stripEventText, type AlertMessages } from '@/lib/i18n-feed-alerts'
@@ -45,6 +49,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { AlertTypeIcon, isHighSeverity, resolvedByText } from '@/components/alerts/alert-parts'
 import type { AlertActionKind } from '@/components/alerts/alert-editor-dialog'
+import { staleNoticeText } from '@/components/alerts/alert-edit-model'
 
 /**
  * The "Edit in admin" name of one strip alert: up to 5 alerts share 4 types, so the type alone
@@ -98,7 +103,7 @@ export function actionsToDraw(offered: readonly StripAction[], focused: StripAct
   return ACTION_ORDER.filter((action) => offered.includes(action) || action === focused).map((action) => ({ action, disabled: !offered.includes(action) }))
 }
 
-const QUIET: StripLive = { assertive: [], polite: [], spoken: '', notice: '', seq: 0 }
+const QUIET: StripLive = { assertive: [], polite: [], spoken: '', notice: '', staleSpoken: null, seq: 0 }
 
 /** What holds an entry in place: keyboard focus inside it, or the pointer over it. */
 type Hold = 'focus' | 'hover'
@@ -108,6 +113,8 @@ export interface SafetyStripProps {
   locale?: Locale
   /** What the two live regions say, and the visible notice (hooks/use-safety-strip.ts). */
   live?: StripLive
+  /** The latest read failed: when the last one succeeded (hooks/use-safety-strip.ts). null = fresh. */
+  stale?: number | null
   /** Open the map: on one alert (its entry), or as it is (the header link). */
   onViewMap: (alert?: SafetyAlert) => void
   /** Update / Mark resolved / Withdraw / History on an alert; `trigger` is the button (focus returns to it). */
@@ -123,14 +130,17 @@ export interface SafetyStripProps {
   tz?: string
 }
 
-export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, onAction, onEngage, onDismissNotice, focusFallback, now, tz }: SafetyStripProps) {
+export function SafetyStrip({ alerts, locale = 'en', live = QUIET, stale = null, onViewMap, onAction, onEngage, onDismissNotice, focusFallback, now, tz }: SafetyStripProps) {
   // A guest (anonymous session) gets no owner action.
   const { isAnonymous: isGuest } = useAuth()
   const [mountedAt] = useState(() => Date.now())
   const clock = now ?? mountedAt
   const t = (key: keyof AlertMessages) => alertsT(locale, key)
   const assertive = live.assertive.map((event) => stripEventText(locale, event)).join(' ')
-  const polite = live.spoken || live.polite.map((event) => stripEventText(locale, event)).join(' ')
+  const polite =
+    live.spoken ||
+    live.polite.map((event) => stripEventText(locale, event)).join(' ') ||
+    (live.staleSpoken != null ? staleNoticeText(live.staleSpoken, locale, clock, tz) : '')
 
   // Which entries the member is on, and by what (an entry is released when nothing holds it).
   const holds = useRef(new Map<string, Set<Hold>>())
@@ -180,6 +190,14 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+      )}
+      {/* The latest read failed: the list below is as of that time. Not a live region (it was said
+          once, above, when the strip became stale). */}
+      {stale !== null && (
+        <p data-testid="safety-strip-stale" className="mb-2 flex items-start gap-2 rounded-md border border-amber-700! bg-amber-50 px-3 py-2 text-sm text-stone-900">
+          <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" aria-hidden="true" />
+          <span>{staleNoticeText(stale, locale, clock, tz)}</span>
+        </p>
       )}
       {alerts.length > 0 && (
         <div data-testid="safety-strip" className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">

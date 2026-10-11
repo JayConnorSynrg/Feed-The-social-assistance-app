@@ -121,7 +121,7 @@ describe('the report form’s fields can be seen', () => {
     expect(cls).toEqual(expect.arrayContaining(['border', 'border-stone-500!', 'placeholder:text-stone-500', 'focus:outline-hidden', 'focus:ring-2']))
     expect(cls.filter((x) => x.includes('outline-none') || /^border-stone-\d+$/.test(x) || x === 'placeholder:text-stone-400')).toEqual([])
     const description = findAll(c.tree(), (e) => e.props.id === 'wizard-description')[0] as El
-    expect(String(description.props.className)).toContain('placeholder:text-stone-500')
+    expect(String(description.props.className).split(' ')).toEqual(expect.arrayContaining(['border-stone-500!', 'placeholder:text-stone-500']))
   })
 
   it('the suggest form’s placeholders are stone-500 too', () => {

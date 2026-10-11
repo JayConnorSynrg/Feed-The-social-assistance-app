@@ -262,7 +262,7 @@ describe('the strip', () => {
 
   // Dismiss takes its own button out of the page. If that button has focus, focus is given a place first.
   describe('dismissing the visible notice', () => {
-    const NOTICE = { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', seq: 1 }
+    const NOTICE = { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', staleSpoken: null, seq: 1 }
     function dismissable(alerts: SafetyAlert[], fallback = true) {
       const trail: string[] = []
       const state = { alerts }
@@ -702,7 +702,7 @@ describe('the panels hand the callbacks on', () => {
 
   it('the feed panel: strip → store, dialogs, the dismissed notice and the map focus on that alert', () => {
     const panel = read('components/panels/feed-panel.tsx')
-    expect(panel).toContain('<SafetyStrip alerts={safetyAlerts} locale={locale} live={stripLive} now={stripNow} onViewMap={openMapOnAlert} onAction={alertDialog.open} onEngage={setStripEngaged} onDismissNotice={dismissStripNotice} focusFallback={focusFeedTitle} />')
+    expect(panel).toContain('<SafetyStrip alerts={safetyAlerts} locale={locale} live={stripLive} stale={stripStale} now={stripNow} onViewMap={openMapOnAlert} onAction={alertDialog.open} onEngage={setStripEngaged} onDismissNotice={dismissStripNotice} focusFallback={focusFeedTitle} />')
     expect(panel).toContain('<AlertDialogs request={alertDialog.request} locale={locale} surface="strip" host={stripHost} onClose={alertDialog.close} returnFocusRef={alertDialog.triggerRef} />')
     // Starting the next action clears the last outcome's visible line.
     expect(panel).toContain('const alertDialog = useAlertDialog(dismissStripNotice)')
@@ -714,8 +714,8 @@ describe('the panels hand the callbacks on', () => {
     expect(panel).toContain('<SafetyAlertMarker key={alert.id} alert={alert} locale={locale} now={alertsNow} onVote={voteAlert} onAction={alertDialog.open} onEngage={setAlertEngaged} onEnded={handleAlertEnded}')
     expect(panel).toContain('<AlertDialogs request={alertDialog.request} locale={locale} surface="map" host={alertHost} onClose={alertDialog.close} returnFocusRef={alertDialog.triggerRef} />')
     // The notice is a sibling BEFORE the map's panel (in the flow: it cannot cover a marker).
-    expect(panel).toContain('<MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} focusAfterDismiss={focusMapAfterNotice} /> <div id="map-view-panel"')
-    expect(panel).toContain('focusMap: focusMapAfterNotice } = useSafetyAlerts(bounds)')
+    expect(panel).toContain('<MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} focusAfterDismiss={focusMapAfterNotice} stale={alertsStale === null ? null : staleNoticeText(alertsStale, locale, alertsNow)} /> <div id="map-view-panel"')
+    expect(panel).toContain('focusMap: focusMapAfterNotice, stale: alertsStale } = useSafetyAlerts(bounds)')
     expect(panel).toContain('const alertDialog = useAlertDialog(clearAlertNotice)')
     expect(panel).toContain('alertHost.focusAfterLeave() if (notice) requestAnimationFrame(() => alertHost.announce(notice))')
     expect(panel).toContain('<HazardBubbleMenu viewCenter={currentMapCenter} locale={locale} onPlaceAlert={placeAlert}')
@@ -765,6 +765,27 @@ describe('the panels hand the callbacks on', () => {
     expect(String(shown.root[2])).toContain('flex')
     expect(String(shown.root[2])).not.toContain('sr-only')
     expect(textOf(byTestId(c.tree(), 'map-alert-status')[0])).toBe('Alert updated.')
+  })
+
+  it('the map’s stale line is one node for as long as the map is stale: failed polls re-render it, they do not re-insert it', () => {
+    const state = { stale: null as string | null, notice: { text: '', seq: 0 } }
+    const c = mount(() => MapAlertNotice({ notice: state.notice, locale: 'en', onDismiss: () => {}, stale: state.stale }))
+    const line = () => byTestId(c.tree(), 'map-alert-stale') as Array<El & { key: unknown }>
+    expect(line()).toHaveLength(0)
+    state.stale = 'Couldn’t refresh alerts — last updated 11:34 AM.'
+    c.rerender()
+    const key = line()[0].key
+    for (let poll = 0; poll < 5; poll++) c.rerender() // five more failed polls: the same sentence
+    expect(line()).toHaveLength(1)
+    expect(line()[0].key).toBe(key)
+    // An outcome arriving while stale is its own node; the stale node is untouched.
+    state.notice = { text: 'Alert updated.', seq: 1 }
+    c.rerender()
+    expect(line()[0].key).toBe(key)
+    // A read succeeds: the line is gone. The next staleness inserts it again (a new announcement).
+    state.stale = null
+    c.rerender()
+    expect(line()).toHaveLength(0)
   })
 
   it('starting an action from a surface clears its last notice, then opens the dialog on that alert', () => {

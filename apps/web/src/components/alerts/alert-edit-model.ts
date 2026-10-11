@@ -9,7 +9,7 @@
 import type { Locale } from '@/lib/i18n'
 import { formatMessage } from '@/lib/format-message'
 import { browserTimeZone } from '@/lib/event-time'
-import { dateTimeFormatter } from '@/lib/i18n-intl'
+import { dateTimeFormatter, formatClock, formatDate } from '@/lib/i18n-intl'
 import { alertsT } from '@/lib/i18n-feed-alerts'
 import { RESOLVED_SHOWN_MS } from '@/lib/safety-alert-live'
 import type { AlertChanges, AlertType, SafetyAlert } from '@/lib/safety-alert-rpc'
@@ -60,6 +60,14 @@ export function formatAlertDateTime(iso: string, locale: Locale, tz: string = br
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return dateTimeFormatter(locale, tz, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d)
+}
+
+/** "Couldn't refresh alerts — last updated 3:04 PM." — when the last read succeeded, in the viewer's
+ *  language and zone: the clock time, with its date when that was not today. */
+export function staleNoticeText(lastSuccessAt: number, locale: Locale, now: number, tz: string = browserTimeZone()): string {
+  const at = new Date(lastSuccessAt).toISOString()
+  const today = formatDate(at, locale, tz) === formatDate(new Date(now).toISOString(), locale, tz)
+  return formatMessage(alertsT(locale, 'staleNotice'), { time: today ? formatClock(at, locale, tz) : formatAlertDateTime(at, locale, tz) })
 }
 
 /** What the member is told after a save: the new expiry when the save moved it (a severity change

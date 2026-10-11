@@ -53,6 +53,7 @@ import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
 import { AlertDialogs, MapAlertNotice, useAlertDialog } from '@/components/alerts/alert-dialogs'
+import { staleNoticeText } from '@/components/alerts/alert-edit-model'
 import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
@@ -676,7 +677,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Safety alerts layer — shown alerts (live, and resolved for six hours) in the current viewport.
   // The hook keys its reads on the four bound numbers, so a re-render never reads again.
-  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow, clearNotice: clearAlertNotice, focusMap: focusMapAfterNotice } = useSafetyAlerts(bounds)
+  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow, clearNotice: clearAlertNotice, focusMap: focusMapAfterNotice, stale: alertsStale } = useSafetyAlerts(bounds)
   // Update / Mark resolved / Withdraw / History, opened from a popup (the last outcome's visible line
   // goes away when the member starts the next action).
   const alertDialog = useAlertDialog(clearAlertNotice)
@@ -1080,7 +1081,13 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
       {/* Center: Interactive Map, under the line that says what the member's own alert action did. */}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-      <MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} focusAfterDismiss={focusMapAfterNotice} />
+      <MapAlertNotice
+        notice={alertNotice}
+        locale={locale}
+        onDismiss={clearAlertNotice}
+        focusAfterDismiss={focusMapAfterNotice}
+        stale={alertsStale === null ? null : staleNoticeText(alertsStale, locale, alertsNow)}
+      />
       <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative min-h-0 flex-1 rounded-xl overflow-hidden">
         <MapView
           ref={mapViewRef}

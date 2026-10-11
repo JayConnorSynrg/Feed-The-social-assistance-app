@@ -682,7 +682,7 @@ export function HazardBubbleMenu({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t('descriptionPlaceholder')}
-                className="text-stone-900 placeholder:text-stone-500 resize-none"
+                className="border-stone-500! text-stone-900 placeholder:text-stone-500 resize-none"
                 rows={3}
               />
             </div>

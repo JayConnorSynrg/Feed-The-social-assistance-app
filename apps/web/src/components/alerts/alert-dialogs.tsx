@@ -88,28 +88,46 @@ export function AlertDialogs({
  *
  * Dismiss takes its own button away: when that button has focus, `focusAfterDismiss` is called first
  * (the map), so focus never falls to the page.
+ *
+ * `stale` is the line "Couldn't refresh alerts — last updated …" while the latest read has failed.
+ * It is put into the same region when the map becomes stale (said once: the region is not atomic, so
+ * only the line that arrives is read) and taken out by the next read that succeeds. It has no
+ * Dismiss: it is a state, not an outcome.
  */
 export function MapAlertNotice({
   notice,
   locale,
   onDismiss,
   focusAfterDismiss,
+  stale = null,
 }: {
   notice: { text: string; seq: number }
   locale: Locale
   onDismiss: () => void
   focusAfterDismiss?: () => void
+  /** The stale line, already in the viewer's language; null while the alerts are fresh. */
+  stale?: string | null
 }) {
+  const shown = Boolean(notice.text || stale)
   return (
     <div
       lang={locale}
       dir={dir(locale)}
       data-testid="map-alert-notice"
-      className={notice.text ? 'flex items-start gap-2 rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm text-stone-800' : 'sr-only'}
+      className={shown ? 'flex items-start gap-2 rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm text-stone-800' : 'sr-only'}
     >
       {/* The one copy of the text: the status region itself is the visible line. */}
-      <p role="status" className={notice.text ? 'min-w-0 flex-1' : 'sr-only'} data-testid="map-alert-status">
-        {notice.text && <span key={notice.seq}>{notice.text}</span>}
+      <p role="status" aria-atomic="false" className={shown ? 'min-w-0 flex-1' : 'sr-only'} data-testid="map-alert-status">
+        {notice.text && (
+          <span key={notice.seq} className="block">
+            {notice.text}
+          </span>
+        )}
+        {stale && (
+          <span key="stale" className="block" data-testid="map-alert-stale">
+            {stale}
+          </span>
+        )}
       </p>
       {notice.text && (
           <button

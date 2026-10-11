@@ -583,6 +583,7 @@ export function FeedPanel() {
     alerts: safetyAlerts,
     live: stripLive,
     now: stripNow,
+    stale: stripStale,
     host: stripHost,
     setEngaged: setStripEngaged,
     dismissNotice: dismissStripNotice,
@@ -2021,6 +2022,7 @@ export function FeedPanel() {
               alerts={safetyAlerts}
               locale={locale}
               live={stripLive}
+              stale={stripStale}
               now={stripNow}
               onViewMap={openMapOnAlert}
               onAction={alertDialog.open}

@@ -486,7 +486,8 @@ describe('a proper dialog', () => {
       expect(cls, id).toEqual(expect.arrayContaining(['border', 'border-stone-500!', 'focus-visible:ring-2']))
       expect(cls.filter((c) => /^border-stone-\d+$/.test(c)), id).toEqual([])
     }
-    expect(String(one(d.c.tree(), 'alert-edit-description').props.className)).toContain('placeholder:text-stone-500')
+    const description = String(one(d.c.tree(), 'alert-edit-description').props.className).split(' ')
+    expect(description).toEqual(expect.arrayContaining(['border-stone-500!', 'placeholder:text-stone-500']))
   })
 
   it('the title and the comparison heading show their focus ring', async () => {

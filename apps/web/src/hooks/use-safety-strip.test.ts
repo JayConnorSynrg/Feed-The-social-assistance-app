@@ -182,6 +182,110 @@ describe('when the strip reads', () => {
   })
 })
 
+// The latest read failed: the list stays as the server last returned it, and the strip says when that was.
+describe('when reads fail: the strip says it is stale', () => {
+  const FAIL = { error: { code: '57014', message: 'timeout' } }
+
+  it('the first failed read after a success: stale since that success; the alerts stay; ages count from the present', async () => {
+    const s = await strip() // read at NOW: succeeds
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const hook = await s.settle(ALERTS_POLL_MS)
+    expect(hook.stale).toBe(NOW)
+    expect(hook.alerts.map((a) => [a.id, a.shown_state])).toEqual([[alert().id, 'live']])
+    expect(hook.now).toBe(NOW + ALERTS_POLL_MS)
+  })
+
+  it('announced once across several failed polls: one message, and "last updated" stays the time of the last success', async () => {
+    const s = await strip()
+    await s.settle(ALERTS_POLL_MS * 2) // two more successes: the last one at NOW + 2 min
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const first = await s.settle(ALERTS_POLL_MS)
+    expect(first.live).toMatchObject({ staleSpoken: NOW + 2 * ALERTS_POLL_MS, assertive: [], polite: [], spoken: '', seq: 1 })
+    const later = await s.settle(ALERTS_POLL_MS * 5) // five more failed polls
+    expect(reads()).toHaveLength(1 + 2 + 6)
+    expect(later.live.seq).toBe(1) // nothing was said again
+    expect(later.live.staleSpoken).toBeNull() // what was said was cleared 8 s later…
+    expect(later.stale).toBe(NOW + 2 * ALERTS_POLL_MS) // …the visible line is still there, with the same time
+    expect(later.now).toBe(NOW + 8 * ALERTS_POLL_MS)
+  })
+
+  it('the next read that succeeds clears it, silently; a later failure is a new staleness and is said again', async () => {
+    const s = await strip()
+    h.backend.answers.safety_alerts_in_view = FAIL
+    await s.settle(ALERTS_POLL_MS * 3)
+    h.backend.answers.safety_alerts_in_view = { data: [alert()] }
+    const fresh = await s.settle(ALERTS_POLL_MS)
+    expect(fresh.stale).toBeNull()
+    expect(fresh.live.seq).toBe(1) // the recovery announces nothing
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const again = await s.settle(ALERTS_POLL_MS)
+    expect(again.stale).toBe(NOW + 4 * ALERTS_POLL_MS)
+    expect(again.live).toMatchObject({ staleSpoken: NOW + 4 * ALERTS_POLL_MS, seq: 2 })
+  })
+
+  it('a first-ever read that fails: no "last updated" (there is none) — the strip is empty and the failure is logged', async () => {
+    h.backend.answers.safety_alerts_in_view = FAIL
+    const s = await strip()
+    const hook = await s.settle(ALERTS_POLL_MS * 3)
+    expect(hook.stale).toBeNull()
+    expect(hook.alerts).toEqual([])
+    expect(hook.live).toMatchObject({ staleSpoken: null, seq: 0 })
+    expect(h.warns).toEqual([{ name: 'feed.safety_alerts.fetch_failed', code: '57014' }])
+    // Its first success starts the clock; a failure after that is stale since then.
+    h.backend.answers.safety_alerts_in_view = { data: [alert()] }
+    await s.settle(ALERTS_POLL_MS)
+    h.backend.answers.safety_alerts_in_view = FAIL
+    expect((await s.settle(ALERTS_POLL_MS)).stale).toBe(NOW + 4 * ALERTS_POLL_MS)
+  })
+
+  it('another viewer signs in while stale: their strip starts fresh (no line carried over)', async () => {
+    const s = await strip('user-1')
+    h.backend.answers.safety_alerts_in_view = FAIL
+    expect((await s.settle(ALERTS_POLL_MS)).stale).toBe(NOW)
+    s.state.viewer = 'user-2'
+    s.c.rerender()
+    const hook = await s.settle()
+    expect(hook.stale).toBeNull() // user-2 has never had a successful read
+    expect(hook.alerts).toEqual([])
+  })
+
+  it('a withdrawn alert the server no longer returns stays only while reads fail — the first success removes it', async () => {
+    const s = await strip()
+    h.backend.answers.safety_alerts_in_view = FAIL
+    expect((await s.settle(ALERTS_POLL_MS * 4)).alerts).toHaveLength(1) // nothing is hidden on the browser clock
+    h.backend.answers.safety_alerts_in_view = { data: [] }
+    const hook = await s.settle(ALERTS_POLL_MS)
+    expect([hook.alerts.length, hook.stale]).toEqual([0, null])
+  })
+})
+
+// Reviewer mutant N5e.4b: the strip must hand the store the by-id reader.
+describe('an entry the member is on falls out of the top five', () => {
+  it('it is asked for by id and stays live (it was only pushed down by newer alerts)', async () => {
+    const held = alert({ id: 'held', severity: 1 })
+    let top = [held]
+    h.backend.answers.safety_alerts_in_view = (args) => ({ data: 'p_alert_id' in args ? [held] : top })
+    const s = await strip()
+    s.hook().setEngaged('held', true)
+    top = [1, 2, 3, 4, 5].map((i) => alert({ id: `new${i}`, severity: 4 }))
+    const hook = await s.settle(ALERTS_POLL_MS)
+    expect(reads().filter((c) => 'p_alert_id' in c.args).map((c) => c.args)).toEqual([{ p_alert_id: 'held', p_include_resolved: true }])
+    expect(hook.alerts.find((a) => a.id === 'held')).toMatchObject({ status: 'live', shown_state: 'live' })
+    expect(hook.alerts).toHaveLength(6)
+  })
+
+  it('the server no longer shows it at all: it stays under the member, marked no longer listed', async () => {
+    const held = alert({ id: 'held', severity: 1 })
+    let top = [held]
+    h.backend.answers.safety_alerts_in_view = (args) => ({ data: 'p_alert_id' in args ? [] : top })
+    const s = await strip()
+    s.hook().setEngaged('held', true)
+    top = []
+    const hook = await s.settle(ALERTS_POLL_MS)
+    expect(hook.alerts.map((a) => [a.id, a.shown_state])).toEqual([['held', 'gone']])
+  })
+})
+
 describe('what the strip holds', () => {
   it('the server’s is_mine reaches the list', async () => {
     h.backend.answers.safety_alerts_in_view = { data: [alert({ id: 'mine', is_mine: true }), alert({ id: 'theirs', is_mine: false, severity: 1 })] }
@@ -212,6 +316,22 @@ describe('what the strip holds', () => {
     h.backend.answers.safety_alerts_in_view = { data: [] }
     expect((await s.settle(1_000)).alerts).toHaveLength(0)
     expect(reads()).toHaveLength(4)
+  })
+
+  it('a failed read counts as the last read: an entry ending right after it is asked for 5 s after the failure', async () => {
+    let failing = false
+    const entry = alert({ expires_at: iso(61_500) })
+    h.backend.answers.safety_alerts_in_view = () => (failing ? { error: { code: '57014', message: 'timeout' } } : { data: Date.now() < NOW + 61_500 ? [entry] : [] })
+    const s = await strip()
+    await s.settle(59_000)
+    failing = true
+    await s.settle(1_000) // the 60 s poll fails
+    expect(reads()).toHaveLength(2)
+    failing = false
+    await s.settle(4_900) // 64.9 s: past the entry's end plus one second (62.5 s); no read yet
+    expect(reads()).toHaveLength(2)
+    expect((await s.settle(100)).alerts).toEqual([]) // 65 s: five seconds after the failed read
+    expect(reads()).toHaveLength(3)
   })
 
   it('a hidden tab asks nothing when "shown until" passes and keeps the entry; coming back reads once', async () => {
@@ -254,7 +374,7 @@ describe('what a refresh announces', () => {
   it('nothing on the first read; a new alert assertively; an unchanged refresh leaves the regions alone', async () => {
     const s = await strip()
     const first = s.hook().live
-    expect(first).toEqual({ assertive: [], polite: [], spoken: '', notice: '', seq: 0 })
+    expect(first).toEqual({ assertive: [], polite: [], spoken: '', notice: '', staleSpoken: null, seq: 0 })
 
     h.backend.answers.safety_alerts_in_view = { data: [alert(), alert({ id: 'new', alert_type: 'weather', severity: 4 })] }
     const second = (await s.settle(ALERTS_POLL_MS)).live
@@ -337,6 +457,16 @@ describe('where focus goes for an alert that is still on the strip', () => {
 
 describe('read volume: alerts.poll rows', () => {
   const polls = () => h.logs.filter((l) => l.name === 'alerts.poll')
+
+  it('a failing reader over twenty visits to the panel: one report and no row — not one of each per visit', async () => {
+    h.backend.answers.safety_alerts_in_view = { error: { code: 'PGRST202', message: 'Could not find the function' } }
+    for (let i = 0; i < 20; i++) (await strip()).c.unmount()
+    expect(reads()).toHaveLength(20)
+    expect(h.warns).toEqual([{ name: 'feed.safety_alerts.fetch_failed', code: 'PGRST202' }])
+    expect(polls()).toEqual([])
+    flushPollCounters()
+    expect(polls()).toMatchObject([{ surface: 'strip', reads: 20, errors: 20, last_error: 'PGRST202' }])
+  })
 
   it('ten minutes visible: eleven reads, no row; two hours visible: 121 reads in four rows of thirty', async () => {
     const s = await strip()
