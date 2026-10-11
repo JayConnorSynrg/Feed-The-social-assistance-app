@@ -28,6 +28,10 @@
  *     thumbnail_height: 630,
  *   }
  *
+ * Accepted origins: the app's own origin and its www / apex twin (https://sourcetofeed.com and
+ * https://www.sourcetofeed.com). The response's provider_url, iframe src and thumbnail_url always
+ * use the app's canonical origin, whichever of the two the caller submitted.
+ *
  * Error behaviour:
  *   400 — url param missing or not a FEED /s/embed or /s/post URL
  *   404 — post not found or is_hidden
@@ -44,6 +48,17 @@ const DEFAULT_HEIGHT = 270
 // Regex that matches /s/embed/{id} and /s/post/{id} paths
 // Capture group 1 = post UUID
 const EMBED_PATH_RE = /\/s\/(?:embed|post)\/([0-9a-f-]{36})/i
+
+/**
+ * The origins whose share links this provider answers for: the app's own origin and its www / apex
+ * twin (same scheme, same port). FEED is served on both — the apex redirects to www — so a link
+ * copied from either address bar is one of ours. Exact origin comparison: no suffix matching.
+ */
+function ownOrigins(appOrigin: string): Set<string> {
+  const twin = new URL(appOrigin)
+  twin.hostname = twin.hostname.startsWith('www.') ? twin.hostname.slice(4) : `www.${twin.hostname}`
+  return new Set([appOrigin, twin.origin])
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl
@@ -84,8 +99,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     appOrigin = 'https://www.sourcetofeed.com'
   }
 
-  // Reject URLs from foreign origins to prevent open-proxy abuse
-  if (submittedUrl.origin !== appOrigin) {
+  // Reject URLs from foreign origins to prevent open-proxy abuse. Our own apex and www addresses are
+  // both accepted; the URLs in the response always use appUrl, whichever of the two was submitted.
+  if (!ownOrigins(appOrigin).has(submittedUrl.origin)) {
     // In local dev allow localhost regardless of port mismatch
     const isLocalDev =
       submittedUrl.hostname === 'localhost' ||
