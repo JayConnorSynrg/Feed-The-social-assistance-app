@@ -432,6 +432,26 @@ describe('the appreciation picker', () => {
     expect(said(tree())).toBe(appreciationSentNotice('bread', locale))
   })
 
+  it('two presses before the picker has re-rendered (a rapid double press) send once', async () => {
+    const { c, tree } = await picker('en')
+    // The same handler twice: what a second press sees before the first one's state has rendered.
+    const press = byTestId(tree(), 'appreciate-item-bread')[0].props.onClick as () => void
+    press()
+    press()
+    await c.flush()
+    expect(state.gave).toHaveLength(1)
+  })
+
+  it('another item pressed in the same instant waits its turn: one request is on its way at a time', async () => {
+    const { c, tree } = await picker('en')
+    const pressBread = byTestId(tree(), 'appreciate-item-bread')[0].props.onClick as () => void
+    const pressApple = byTestId(tree(), 'appreciate-item-apple')[0].props.onClick as () => void
+    pressBread()
+    pressApple()
+    await c.flush()
+    expect(state.gave.map((g) => (g as unknown[])[1])).toEqual(['bread'])
+  })
+
   it('a second item: the region is emptied when the send starts, then says the new sentence', async () => {
     const { c, tree } = await picker('en')
     ;(byTestId(tree(), 'appreciate-item-bread')[0].props.onClick as () => void)()

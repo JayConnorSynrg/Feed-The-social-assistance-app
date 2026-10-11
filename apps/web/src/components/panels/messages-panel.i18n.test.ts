@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const { state } = vi.hoisted(() => ({
-  state: { language: 'en', guest: false, hook: {} as Record<string, unknown>, review: null as null | { rating: number } },
+  state: { language: 'en', guest: false, hook: {} as Record<string, unknown>, review: null as null | { rating: number }, reviewReads: [] as string[] },
 }))
 vi.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'me' }, isAnonymous: state.guest, profile: { preferred_language: state.language } }),
@@ -35,7 +35,11 @@ vi.mock('@/hooks/use-auth', () => ({
 vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: {} }) }))
 vi.mock('@/hooks/use-conversations', () => ({ useConversations: () => state.hook }))
 vi.mock('@/hooks/use-reviews', () => {
-  const fetchMyReviewForConversation = async () => state.review
+  // Every read of "my review" is recorded, so a test can say how many a flow sent.
+  const fetchMyReviewForConversation = async (conversationId: string) => {
+    state.reviewReads.push(conversationId)
+    return state.review
+  }
   return { useReviews: () => ({ fetchMyReviewForConversation }) }
 })
 vi.mock('@/components/feed/review-modal', () => ({ ReviewModal: () => null }))
@@ -372,6 +376,7 @@ describe('the review dialog: focus returns, and a sent review is said after the 
   ])('a sent review: %s — the sentence is written only when both are done', async (_name, order) => {
     const p = await prompt('pt')
     state.review = { rating: 5 }
+    state.reviewReads.length = 0
     const sent = (p.modal().props.onSubmitted as () => Promise<void>)()
     if (order === 'focus-first') {
       ;(p.modal().props.fallbackFocus as () => void)()
@@ -392,6 +397,9 @@ describe('the review dialog: focus returns, and a sent review is said after the 
     ;(p.modal().props.fallbackFocus as () => void)()
     p.c.rerender()
     expect(p.said()).toBe('Sua avaliação foi enviada')
+    // One re-read of the review in all: the focus and announcement code sends nothing.
+    await p.c.flush()
+    expect(state.reviewReads).toEqual(['c1'])
   })
 
   it('a review that was sent but does not show after the re-read is not announced as shown', async () => {
