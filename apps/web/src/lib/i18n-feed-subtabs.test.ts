@@ -15,6 +15,7 @@ vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.f
 import { logger } from './logger'
 import { messages, type Locale } from './i18n'
 import { feedOrganizationsMessages, orgsT } from './i18n-feed-organizations'
+import { feedPetitionsMessages, petitionsT } from './i18n-feed-petitions'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
@@ -22,10 +23,11 @@ const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
 type Reader = (locale: Locale, key: never) => string
 const DICTS: Array<[name: string, dict: Record<Locale, object>, reader: Reader]> = [
   ['organizations', feedOrganizationsMessages, orgsT as Reader],
+  ['petitions', feedPetitionsMessages, petitionsT as Reader],
 ]
 
 // The same word in a language (a brand, a loanword, a format) may equal English.
-const SAME_AS_EN_OK = new Set<string>([])
+const SAME_AS_EN_OK = new Set<string>(['{action}: {title}'])
 
 describe.each(DICTS)('%s dictionary', (_name, dict, reader) => {
   const en = dict.en as Record<string, string>

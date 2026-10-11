@@ -1991,9 +1991,6 @@ export function FeedPanel() {
           id="feed-panel-petitions"
           aria-labelledby="feed-tab-petitions"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 overflow-y-auto p-1"
         >
           <PetitionsPanel />

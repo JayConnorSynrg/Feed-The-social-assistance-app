@@ -15,8 +15,9 @@ import { fileURLToPath } from 'node:url'
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import type { Locale } from './i18n'
-import { TIME_WORDS } from './i18n-intl'
+import { TIME_WORDS, type PluralForms } from './i18n-intl'
 import { feedOrganizationsMessages } from './i18n-feed-organizations'
+import { SIGNATURES_OF_TARGET, VERIFIED_SIGNATURES, feedPetitionsMessages } from './i18n-feed-petitions'
 
 const REVIEW_LOCALES = ['ht', 'so', 'am', 'hmn'] as const
 type ReviewLocale = (typeof REVIEW_LOCALES)[number]
@@ -42,6 +43,19 @@ function dictionaryRows(file: string, dict: Record<Locale, object>): Draft[] {
   const en = dict.en as Record<string, string>
   return Object.keys(en).flatMap((key) =>
     REVIEW_LOCALES.map((locale) => ({ file, key, locale, en: en[key], text: (dict[locale] as Record<string, string>)[key] })),
+  )
+}
+
+/** Every form of a plural table, in the four review locales. */
+function pluralRows(file: string, name: string, table: Record<Locale, PluralForms>): Draft[] {
+  return REVIEW_LOCALES.flatMap((locale) =>
+    Object.entries(table[locale]).map(([form, text]) => ({
+      file,
+      key: `${name}.${form}`,
+      locale,
+      en: (table.en as Record<string, string>)[form] ?? table.en.other,
+      text: text as string,
+    })),
   )
 }
 
@@ -75,7 +89,13 @@ function timeWordRows(): Draft[] {
 
 /** Every source this list tracks. A new dictionary adds one line here. */
 function expectedRows(): Draft[] {
-  return [...timeWordRows(), ...dictionaryRows('lib/i18n-feed-organizations.ts', feedOrganizationsMessages)]
+  return [
+    ...timeWordRows(),
+    ...dictionaryRows('lib/i18n-feed-organizations.ts', feedOrganizationsMessages),
+    ...dictionaryRows('lib/i18n-feed-petitions.ts', feedPetitionsMessages),
+    ...pluralRows('lib/i18n-feed-petitions.ts', 'SIGNATURES_OF_TARGET', SIGNATURES_OF_TARGET),
+    ...pluralRows('lib/i18n-feed-petitions.ts', 'VERIFIED_SIGNATURES', VERIFIED_SIGNATURES),
+  ]
 }
 
 const cell = (s: string) => s.replace(/\|/g, '\\|')
