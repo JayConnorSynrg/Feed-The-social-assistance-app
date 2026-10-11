@@ -344,6 +344,11 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'oauth.callback.unexpected': ['host'],
   'oauth.start': ['provider'],
   'oauth.start.error': ['provider'],
+  // One row per share-preview image request that reaches the server (lib/og-card.ts serveOgCard).
+  // surface: post | resource | business | organization; kind: the card served (null when not found);
+  // outcome: ok | not_found. Never the item's id or any of its text.
+  'og.image.complete': ['kind', 'outcome', 'surface'],
+  'og.image.error': ['kind', 'outcome', 'surface'],
   'onboarding.complete.failed': ['step'],
   'onboarding.complete.no_user': ['authLoading'],
   'onboarding.complete.outer_abort': [],

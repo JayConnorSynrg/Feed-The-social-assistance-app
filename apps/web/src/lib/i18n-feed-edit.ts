@@ -138,7 +138,6 @@ export interface EditMessages {
   failNetwork: string
   failGeneric: string
   failReasonRequired: string
-  failPetition: string
 }
 
 export const editMessages: Record<Locale, EditMessages> = {
@@ -266,7 +265,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: "Couldn't reach FEED. Check your connection and try again — your changes are kept.",
     failGeneric: 'Something went wrong. Please try again.',
     failReasonRequired: 'Give a reason.',
-    failPetition: "Petitions can't be edited here.",
   },
   es: {
     editTitlePost: 'Editar publicación',
@@ -392,7 +390,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'No se pudo conectar con FEED. Revisa tu conexión e inténtalo de nuevo: tus cambios se conservan.',
     failGeneric: 'Algo salió mal. Inténtalo de nuevo.',
     failReasonRequired: 'Indica un motivo.',
-    failPetition: 'Las peticiones no se pueden editar aquí.',
   },
   ht: {
     editTitlePost: 'Modifye piblikasyon',
@@ -518,7 +515,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Nou pa t ka jwenn FEED. Tcheke koneksyon ou epi eseye ankò — chanjman ou yo rete.',
     failGeneric: 'Gen yon bagay ki mal pase. Tanpri eseye ankò.',
     failReasonRequired: 'Bay yon rezon.',
-    failPetition: 'Ou pa ka modifye petisyon isit la.',
   },
   vi: {
     editTitlePost: 'Sửa bài đăng',
@@ -644,7 +640,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Không kết nối được FEED. Hãy kiểm tra kết nối và thử lại — các thay đổi của bạn vẫn được giữ.',
     failGeneric: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
     failReasonRequired: 'Hãy nêu lý do.',
-    failPetition: 'Không thể sửa kiến nghị ở đây.',
   },
   ar: {
     editTitlePost: 'تعديل المنشور',
@@ -770,7 +765,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'تعذّر الوصول إلى FEED. تحقّق من اتصالك وحاول مرة أخرى — تغييراتك محفوظة.',
     failGeneric: 'حدث خطأ ما. حاول مرة أخرى.',
     failReasonRequired: 'اذكر سببًا.',
-    failPetition: 'لا يمكن تعديل العرائض هنا.',
   },
   zh: {
     editTitlePost: '编辑帖子',
@@ -896,7 +890,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: '无法连接 FEED。请检查网络后重试——你的更改已保留。',
     failGeneric: '出了点问题，请重试。',
     failReasonRequired: '请填写原因。',
-    failPetition: '请愿不能在这里编辑。',
   },
   so: {
     editTitlePost: 'Beddel qoraalka',
@@ -1022,7 +1015,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'FEED lama gaari karin. Hubi xiriirkaaga oo isku day mar kale — isbeddeladaadu way kaydsan yihiin.',
     failGeneric: 'Wax baa khaldamay. Fadlan isku day mar kale.',
     failReasonRequired: 'Sheeg sabab.',
-    failPetition: 'Codsiyada bulshada halkan laguma beddeli karo.',
   },
   fr: {
     editTitlePost: 'Modifier la publication',
@@ -1148,7 +1140,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Impossible de joindre FEED. Vérifiez votre connexion et réessayez — vos changements sont conservés.',
     failGeneric: 'Une erreur est survenue. Veuillez réessayer.',
     failReasonRequired: 'Indiquez un motif.',
-    failPetition: 'Les pétitions ne se modifient pas ici.',
   },
   pt: {
     editTitlePost: 'Editar publicação',
@@ -1274,7 +1265,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Não foi possível acessar o FEED. Verifique sua conexão e tente novamente — suas alterações foram mantidas.',
     failGeneric: 'Algo deu errado. Tente novamente.',
     failReasonRequired: 'Informe um motivo.',
-    failPetition: 'Petições não podem ser editadas aqui.',
   },
   ru: {
     editTitlePost: 'Изменить публикацию',
@@ -1400,7 +1390,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Не удалось связаться с FEED. Проверьте подключение и попробуйте снова — ваши изменения сохранены.',
     failGeneric: 'Что-то пошло не так. Попробуйте снова.',
     failReasonRequired: 'Укажите причину.',
-    failPetition: 'Петиции здесь не редактируются.',
   },
   ko: {
     editTitlePost: '게시물 수정',
@@ -1526,7 +1515,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'FEED에 연결하지 못했습니다. 연결을 확인하고 다시 시도하세요 — 변경 사항은 유지됩니다.',
     failGeneric: '문제가 발생했습니다. 다시 시도하세요.',
     failReasonRequired: '사유를 입력하세요.',
-    failPetition: '청원은 여기에서 수정할 수 없습니다.',
   },
   tl: {
     editTitlePost: 'I-edit ang post',
@@ -1652,7 +1640,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Hindi maabot ang FEED. Tingnan ang koneksyon at subukang muli — itinabi ang iyong mga pagbabago.',
     failGeneric: 'May nangyaring mali. Pakisubukang muli.',
     failReasonRequired: 'Magbigay ng dahilan.',
-    failPetition: 'Hindi maaaring i-edit dito ang mga petisyon.',
   },
   am: {
     editTitlePost: 'ልጥፉን አስተካክል',
@@ -1778,7 +1765,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'FEEDን ማግኘት አልተቻለም። ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ — ለውጦችዎ ተቀምጠዋል።',
     failGeneric: 'የሆነ ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ።',
     failReasonRequired: 'ምክንያት ይስጡ።',
-    failPetition: 'አቤቱታዎችን እዚህ ማስተካከል አይቻልም።',
   },
   hmn: {
     editTitlePost: 'Kho qhov tshaj tawm',
@@ -1904,7 +1890,6 @@ export const editMessages: Record<Locale, EditMessages> = {
     failNetwork: 'Mus txog FEED tsis tau. Kuaj koj qhov kev sib txuas thiab sim dua — koj cov kev hloov tseem khaws cia.',
     failGeneric: 'Muaj qee yam tsis raug. Thov sim dua.',
     failReasonRequired: 'Muab ib qho laj thawj.',
-    failPetition: 'Kho tsis tau daim ntawv thov ntawm no.',
   },
 }
 

@@ -77,7 +77,7 @@ The registry was sourced from every static event name in `apps/web/src` (logger,
 
 ## Uncaught errors (I5)
 
-- **Server**: `src/instrumentation.ts` exports `onRequestError`. Next.js calls it once per uncaught server error; it writes one `request.error` row with `request_id`, the route **pattern** (`/profile/[username]`, never the concrete URL), `route_type`, `method`, the Next.js `digest`, and `error_code`. The raw message is not persisted.
+- **Server**: `src/instrumentation.ts` exports `onRequestError`. Next.js calls it once per uncaught server error; it writes one `request.error` row with `request_id`, the route **pattern** (`/s/post/[id]`, never the concrete URL), `route_type`, `method`, the Next.js `digest`, and `error_code`. The raw message is not persisted.
 - **Client**: `app/error.tsx` (`app.error.boundary`), `app/(admin)/error.tsx` (`admin.error.boundary`), `app/global-error.tsx` (`global-error.boundary`) and the panel `PanelErrorBoundary` in `app/page.tsx` (`panel.error.boundary`) each persist one error row. `src/lib/client-error-capture.ts`, installed once in `app/providers.tsx`, records window `error` (`client.window.error`) and `unhandledrejection` (`client.unhandled_rejection`), de-duplicated (same message at most once per 60 s, at most 20 per page session; `AbortError` rejections skipped).
 
 ## Retention (I6)
@@ -149,7 +149,7 @@ Every admin page shows one **Back to feed** link (the bar in `app/(admin)/layout
 |---|---|---|
 | `admin.nav.back_to_feed` | `source` | `admin_bar` |
 | `admin.nav.member_view` | `kind`, `source`, `view` | `kind`: `post` · `organization` · `business` · `resource` · `event` · `map_focus`; `source`: `reports_queue` · `held_posts` · `focused_post` (the single-post view an Edit in admin link opens) · `manage_resources` · `resources_queue` · `businesses` · `orgs_section` · `org_admin_profile` · `event_scheduler` · `org_admin_events` · `safety_alerts`; `view`: `page` (a `/s/…` page) · `feed` (`event`: the members' Events list) · `map` (`map_focus`) |
-| `admin.nav.edit_in_admin` | `kind`, `source` | the member → admin direction: one row per click / middle-click of an **Edit in admin** link (`components/admin/admin-edit-link.tsx`, shown only to admins the admin screen will accept). `kind`: `post` · `safety_alert` · `resource` · `business` · `organization` · `event`; `source`: `map_popup` · `map_detail` (the map's resource side pane) · `resource_page` · `business_page` · `organization_page` · `showcase_row` (Community → Businesses row) · `organizations_row` (Community → Organizations row) · `post_page` · `feed_post` · `feed_alert` (feed Active Alerts strip) · `feed_event_menu` (an event card's ⋯ menu in the feed) · `events_panel_menu` (an event card's ⋯ menu in the Events tab) · `feed_post_menu` (a post card's ⋯ menu in the feed); rows before Release 1 carry `feed_event` / `events_panel` (the standalone event-card link the menu replaced), rows before Release 2 carry `feed_post` (the standalone post-card footer link the menu replaced) |
+| `admin.nav.edit_in_admin` | `kind`, `source` | the member → admin direction: one row per click / middle-click of an **Edit in admin** link (`components/admin/admin-edit-link.tsx`, shown only to admins the admin screen will accept). `kind`: `post` · `safety_alert` · `resource` · `business` · `organization` · `event`; `source`: `map_popup` · `map_detail` (the map's resource side pane) · `resource_page` · `business_page` · `organization_page` · `showcase_row` (Community → Businesses row) · `organizations_row` (Community → Organizations row) · `post_page` · `feed_alert` (feed Active Alerts strip) · `feed_event_menu` (an event card's ⋯ menu in the feed) · `events_panel_menu` (an event card's ⋯ menu in the Events tab) · `feed_post_menu` (a post card's ⋯ menu in the feed); rows before Release 1 carry `feed_event` / `events_panel` (the standalone event-card link the menu replaced), rows before Release 2 carry `feed_post` (the standalone post-card footer link the menu replaced) |
 | `admin.deeplink.load_failed` | `code`, `kind` | warn: the admin screen an **Edit in admin** link opened could not read the item (`post` · `safety_alert` · `event`); its `admin.deeplink.resolve` row is `not_found` |
 | `admin.deeplink.resolve` | `kind`, `outcome`, `tab` | one row per followed **Edit in admin** link, written by the admin screen it opens (the tab that owns the kind; the shell when no shown tab will take it — `app/(admin)/moderation/admin-focus-session.ts`). `kind` as above, or `unknown` for a malformed focus; `outcome`: `found` · `not_found` (missing, not approved or not readable — and also when the viewer's tier shows the tab but cannot save that item, e.g. a resource admin on a business link) · `forbidden` (the viewer's tier does not show the owning tab) · `invalid` (malformed `focus`, a kind that screen never opens, or a `?tab=` that is not the kind's tab) · `abandoned` (the admin left before it resolved); `tab`: the admin tab (`manage` · `businesses` · `moderation` · `organizations` · `events` · `profile`), or `unknown` |
 | `nav.deeplink.resolve` | `kind`, `outcome`, `panel` | one row per followed focus link (below). `kind`: the focus kind, or `unknown` when malformed; `outcome`: `found` · `not_found` · `invalid` · `abandoned` (the member left the panel before the focus settled — the Events tab before its list loaded, the map before the pin appeared — or, on the map, a newer link replaced it first); `panel`: the subtab when there is one (`events`), else the panel (`map`, `feed`, `chat` …) — a closed set, never the raw hash |
@@ -295,6 +295,29 @@ select count(*) filter (where event = 'feed.post.edit.error' and context->>'erro
        count(*) filter (where event = 'feed.post.edit.complete') as saves
 from public.app_logs
 where created_at > now() - interval '7 days';
+```
+
+---
+
+## Share-preview images
+
+`/api/og/{post,resource,business,organization}/[id]` answer with one of ten pre-rendered cards (`apps/web/src/lib/og-card.ts`; rule and design in [`share-previews.md`](share-previews.md)). The handler still runs for every request the CDN does not answer from its cache — it reads FEED's database for the item's kind and for the 404 — so each run writes exactly one row. The image is cached for a year once served, so a row means a first fetch of that URL (or one after a deployment purged the CDN).
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `og.image.complete` | `surface`, `kind`, `outcome` | one preview-image request. `surface`: `post` · `resource` · `business` · `organization` (which route). `kind`: the card served — `feed` · `resource_post` · `petition` · `seeker_request` · `source_offer` · `event_post` · `poll` · `resource` · `business` · `organization` — or `null` when nothing was served. `outcome`: `ok` (200) · `not_found` (404: hidden, deleted, not approved or unknown). Duration is in `duration_ms`. |
+| `og.image.error` | `surface`, `kind`, `outcome` | the request failed and answered 500 (`Cache-Control: no-store`). `outcome` is `error`; `kind` is the card that was being served, or `null` when the failure came before the kind was known. `error_code` names the failure (a driver or system code, or the error's class); `error_message` is always the fixed text `preview image failed`, never the raw failure text, which could quote the request |
+
+No item id and no text from the item is in either row. CDN cache status is not a label: the handler cannot see it, and a handler run is a CDN miss by definition.
+
+Preview-image requests per day and kind:
+
+```sql
+select date_trunc('day', created_at)::date as day, context->>'kind' as kind, context->>'outcome' as outcome,
+       count(*), round(avg(duration_ms)) as avg_ms
+from public.app_logs
+where event = 'og.image.complete' and created_at > now() - interval '14 days'
+group by 1, 2, 3 order by 1 desc, 4 desc;
 ```
 
 ---

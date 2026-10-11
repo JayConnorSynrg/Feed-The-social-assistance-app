@@ -3,11 +3,14 @@
 // Mission: 24 — posts least-privilege (Invariant 2, feed-fullfeed-h-hygiene)
 // Surface: public.posts table grants (pg_class.relacl)
 // Backend: supabase/migrations/20261002000000_posts_privilege_least.sql
+//          supabase/migrations/20261026500000_post_editing_contract.sql (revokes INSERT)
 //
 // Asserts each role on public.posts holds EXACTLY the privileges its real write
 // paths use:
 //   anon          → no table-write privilege at all (read-only; SELECT is column-level)
-//   authenticated → INSERT only (client composer); UPDATE/DELETE flow through SECDEF fns
+//   authenticated → no table-write privilege at all: posts are created by create_post and
+//                   changed by edit_post / delete_own_post (SECURITY DEFINER), so the
+//                   client holds no direct INSERT / UPDATE / DELETE
 //
 // GATE ON THE LEDGER, NOT ON THE PRIVILEGE STATE. Migration 20261002000000 is applied
 // as a SEPARATE post-deploy step (GIT_PLAN feed-fullfeed-h-hygiene-postdeploy) and then
@@ -43,7 +46,15 @@ const GATE_AND_MATRIX_SQL = `
     has_table_privilege('authenticated','public.posts','DELETE')    AS auth_del,
     has_table_privilege('authenticated','public.posts','TRUNCATE')  AS auth_trunc,
     has_table_privilege('authenticated','public.posts','REFERENCES') AS auth_refs,
-    has_table_privilege('authenticated','public.posts','TRIGGER')   AS auth_trig
+    has_table_privilege('authenticated','public.posts','TRIGGER')   AS auth_trig,
+    -- has_table_privilege sees table-level grants only. A column-level INSERT / UPDATE grant
+    -- (GRANT INSERT (content) ...) would be a client write path it cannot see, so ask per column too.
+    has_any_column_privilege('anon','public.posts','INSERT')          AS anon_col_ins,
+    has_any_column_privilege('anon','public.posts','UPDATE')          AS anon_col_upd,
+    has_any_column_privilege('authenticated','public.posts','INSERT') AS auth_col_ins,
+    has_any_column_privilege('authenticated','public.posts','UPDATE') AS auth_col_upd,
+    -- control: posts SELECT is granted per column, so this is true exactly when the column check works
+    has_any_column_privilege('authenticated','public.posts','SELECT') AS auth_col_sel
 `
 // MAINTAIN is intentionally omitted from the matrix: it is a PG17+ privilege and the
 // migration revokes it only under a server-version guard, so it is not a portable,
@@ -65,9 +76,11 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
     expect(r.anon_trunc, 'anon TRUNCATE must be revoked').toBe(false)
     expect(r.anon_refs, 'anon REFERENCES must be revoked').toBe(false)
     expect(r.anon_trig, 'anon TRIGGER must be revoked').toBe(false)
+    expect(r.anon_col_ins, 'anon must hold INSERT on no column').toBe(false)
+    expect(r.anon_col_upd, 'anon must hold UPDATE on no column').toBe(false)
   })
 
-  it('[post-deploy] authenticated keeps INSERT and nothing else it does not use', async (ctx) => {
+  it('[post-deploy] authenticated holds NO table-write privilege on public.posts', async (ctx) => {
     const rows = await queryProd(GATE_AND_MATRIX_SQL)
     expect(rows.length).toBe(1)
     const r = rows[0]
@@ -75,13 +88,18 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
       ctx.skip()
       return
     }
-    // Kept — the client post composer needs INSERT (post-type-wizard / feed-panel / programs-panel).
-    expect(r.auth_ins, 'authenticated INSERT must remain (client composer)').toBe(true)
+    // Revoked by the post-editing contract (20261026500000): every composer creates a post through
+    // create_post, so a direct client INSERT would bypass its checks and its audit row.
+    expect(r.auth_ins, 'authenticated INSERT must be revoked (create_post only)').toBe(false)
     // Revoked — every UPDATE/DELETE flows through SECURITY DEFINER functions.
     expect(r.auth_upd, 'authenticated UPDATE must be revoked (SECDEF-only)').toBe(false)
     expect(r.auth_del, 'authenticated DELETE must be revoked (SECDEF-only)').toBe(false)
     expect(r.auth_trunc, 'authenticated TRUNCATE must be revoked').toBe(false)
     expect(r.auth_refs, 'authenticated REFERENCES must be revoked').toBe(false)
     expect(r.auth_trig, 'authenticated TRIGGER must be revoked').toBe(false)
+    // No column-level write grant either: a per-column INSERT or UPDATE would reopen a direct write.
+    expect(r.auth_col_sel, 'control: the column-level check sees the per-column SELECT grant').toBe(true)
+    expect(r.auth_col_ins, 'authenticated must hold INSERT on no column (create_post only)').toBe(false)
+    expect(r.auth_col_upd, 'authenticated must hold UPDATE on no column (SECDEF-only)').toBe(false)
   })
 })

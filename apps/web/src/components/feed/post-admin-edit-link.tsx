@@ -53,7 +53,7 @@ export function PostAdminEditLink({
   /** Author display name and post time: the link's name when the post has no text. */
   author?: string | null
   createdAt?: string | Date | null
-  source: Extract<AdminEditSource, 'feed_post' | 'feed_post_menu' | 'post_page'>
+  source: Extract<AdminEditSource, 'feed_post_menu' | 'post_page'>
   locale?: Locale
   /** Leading icon (the menu item shows one, like the other items). */
   icon?: ReactNode
