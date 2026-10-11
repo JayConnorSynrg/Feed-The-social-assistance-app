@@ -39,8 +39,17 @@ what the server last said.
   hands the predicate a time.
 - The browser clock does one thing: when the earliest `shown_until` is in the browser's future, the
   store sets one timer for it, and when it fires the surface **reads once** (it removes nothing by
-  itself). The 60-second poll is the backstop. If reads fail (offline), the last server answer stays
-  on screen until a read succeeds.
+  itself; a hidden tab does not read). Those reads are spaced out: one is asked for no sooner than
+  5 seconds after the last read finished, so alerts that end close together share a read (fifty pins
+  ending 1.5 s apart: 15 extra reads instead of 49). An ended alert can be drawn for up to about
+  6 seconds past its end. The 60-second poll is the backstop.
+- **Stale.** If reads fail (offline, or the server refusing), the last server answer stays on screen
+  until a read succeeds — nothing is hidden on the browser clock — and the strip and the map each say
+  so in one line: "Couldn't refresh alerts — last updated 3:04 PM" (the time of the last read that
+  succeeded, in the member's language and zone; with its date when that was not today). It is
+  announced once, politely, when the surface becomes stale, and goes away with the next read that
+  succeeds. Ages ("5 minutes ago") keep counting from the present meanwhile. A first read that fails
+  has no "last updated" to show: the strip stays empty, and the map hook reports `error`.
 
 | Surface | Reader call | Notes |
 |---|---|---|

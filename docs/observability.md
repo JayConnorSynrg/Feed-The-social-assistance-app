@@ -331,18 +331,23 @@ group by 1;
 
 `surface` is `strip` (the feed's alert strip) or `map`. `is_owner` is the server's `is_mine` for the alert acted on. Every update, escalate, de-escalate and resolve sends the alert's `version`; a `PT409` row means the member was shown the compare step.
 
-**Read volume (`alerts.poll`).** Alerts are not in the realtime publication, so each surface polls the reader: once per viewer (strip) or settled viewport (map), every 60 s while the tab is visible, once on return to the tab, and once after the member's own action. A row per read would be one row a minute per open tab; instead each surface counts in the page's memory (`sharedPollCounter`, one counter per surface for the life of the page) and writes ONE row when 30 reads have accumulated, when the surface unmounts (the member leaves the feed or the map panel), or when the page goes away (`pagehide`). Hiding and showing the tab writes nothing: the counts carry over. `reads` = reader calls in the window, `changed` = how many returned something different from the read before, `errors` = failed reads, `last_error` = the class of the last failure (a server code, or `exception`), `result_count` = alerts in the latest answer, `window_s` = seconds the window covered. `sum(reads)` is the exact call count; a visible, idle tab writes two rows an hour.
+**Read volume (`alerts.poll`).** Alerts are not in the realtime publication, so each surface polls the reader: once per viewer (strip) or settled viewport (map), every 60 s while the tab is visible, once on return to the tab, and once after the member's own action. A row per read would be one row a minute per open tab; instead each surface counts in the page's memory (`sharedPollCounter`, one counter per surface for the life of the page) and writes ONE row when 30 reads have accumulated, or when the page goes away (`pagehide`). Hiding and showing the tab writes nothing, and neither does leaving the feed or the map panel and coming back (the hook unmounts and mounts again; the page's counter keeps counting): no count is lost. `reads` = reader calls in the window, `changed` = how many returned something different from the read before, `errors` = failed reads, `last_error` = the class of the last failure (a server code, or `exception`), `result_count` = alerts in the latest answer, `window_s` = seconds the window covered. `sum(reads)` is the exact call count; a visible, idle tab writes two rows an hour.
 
-Failed reads do not write a row each. The first failure of a window is reported at once (`feed.safety_alerts.fetch_failed` for the strip, `safety-alerts.fetch.error` for the map); the rest are in the window row's `errors` and `last_error`. A reader that fails on every poll therefore writes one report and one row per 30 reads.
+Failed reads do not write a row each. The first failure of a window is reported at once (`feed.safety_alerts.fetch_failed` for the strip, `safety-alerts.fetch.error` for the map); the rest are in the window row's `errors` and `last_error`. A reader that fails on every poll therefore writes one report and one row per 30 reads, however many times the panel is opened in between.
+
+**Stale alerts.** When a read fails after one has succeeded, the surface keeps exactly what the server last returned (nothing is hidden on the browser clock) and shows one line, "Couldn't refresh alerts — last updated HH:MM" (the time of the last read that succeeded, with its date when that was not today). It is announced once when the surface becomes stale and removed by the next read that succeeds. A first read that fails has no "last updated" to show. No event is written for the line itself: the failure is already in `feed.safety_alerts.fetch_failed` / `safety-alerts.fetch.error` and in the window's `errors`.
+
+**Re-reads at `shown_until`.** Besides the poll, a surface asks for one read when the earliest `shown_until` it holds passes (visible tab only). Those reads are spaced: no sooner than 5 seconds after the last read finished, so alerts that end close together share one. Measured on the map with fifty pins ending in a row: 1.5 s apart, 15 extra reads over the two minutes (49 before the spacing; at most 3 in any ten seconds, 7 before); 200 ms apart, 3 (9 before); at the same instant, 1 (1 before). A pin is drawn for at most about 6 seconds past its end.
 
 | Scenario (measured in `hooks/use-safety-strip.test.ts`, `hooks/use-safety-alerts.test.ts`) | Reader calls | `alerts.poll` rows |
 |---|---|---|
-| Strip, 10 minutes visible | 11 | 0 (1 when the strip unmounts or the page goes away) |
+| Strip, 10 minutes visible | 11 | 0 (1 when the page goes away) |
 | Strip, 2 hours visible | 121 | 4 |
-| Strip, 20 tab hide / show cycles | 21 | 0 (1 at unmount, `reads: 21`) |
-| Strip, 20 visits to the panel (mount, one read, unmount) | 20 | 20 (`reads: 1` each) |
-| Map, 50 settled pans | 51 | 1 (`reads: 30`); 1 more at unmount (`reads: 21`) |
-| Strip or map, reader failing for 10 minutes | 11 | 0 + one report; 1 at unmount (`errors: 11`, `last_error`) |
+| Strip, 20 tab hide / show cycles | 21 | 0 (1 on `pagehide`, `reads: 21`) |
+| Strip, 20 visits to the panel (mount, one read, unmount) | 20 | 0 (the 30th read writes one row; `pagehide` writes the rest) |
+| Map, 50 settled pans | 51 | 1 (`reads: 30`); the other 21 on `pagehide` |
+| Strip or map, reader failing for 10 minutes | 11 | 0 + one report; 1 on `pagehide` (`errors: 11`, `last_error`) |
+| Strip, reader failing, 20 visits to the panel | 20 | 0 + one report (20 reports before the counter outlived the panel) |
 
 ```sql
 -- Reader calls per surface per day, and how often a poll found something new.

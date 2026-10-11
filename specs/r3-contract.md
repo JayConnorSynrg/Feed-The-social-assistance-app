@@ -115,10 +115,15 @@ Alerts stay off realtime: poll the reader. The client draws each alert by the `s
 `shown_until` the server returned on the last read; it never uses the browser clock to decide what is
 shown (`apps/web/src/lib/safety-alert-live.ts:55-58`). Changes arrive on the 60-second poll, which runs
 only while the tab is visible and reads once on return (`apps/web/src/lib/safety-alerts-fetch.ts:32,79`;
-`apps/web/src/hooks/use-safety-strip.ts:133`, `apps/web/src/hooks/use-safety-alerts.ts:99`). The browser
+`apps/web/src/hooks/use-safety-strip.ts:167`, `apps/web/src/hooks/use-safety-alerts.ts:122`). The browser
 clock does one thing: when the earliest `shown_until` is still ahead on it, one extra read is asked for
-at that instant (`apps/web/src/lib/safety-alert-store.ts:203-218`; `use-safety-strip.ts:144-146`,
-`use-safety-alerts.ts:109-111`). A row leaves only when the reader stops returning it.
+at that instant (`apps/web/src/lib/safety-alert-store.ts:231-251`; `use-safety-strip.ts:178-180`,
+`use-safety-alerts.ts:132-134`), in a visible tab only. Those extra reads are spaced out: one is asked
+for no sooner than 5 seconds after the last read finished (`safety-alert-store.ts:41`), so alerts that
+end close together share a read; an ended alert can therefore be drawn for up to about 6 seconds past
+its `shown_until`, and never past the next 60-second poll. A row leaves only when the reader stops
+returning it. When a read fails after one has succeeded, the rows stay exactly as last returned and
+the surface says "Couldn't refresh alerts — last updated HH:MM" until a read succeeds.
 
 ### The live / shown rule (one predicate)
 
@@ -149,7 +154,7 @@ Only `live` and `resolved` are ever returned by a reader.
 | Feed strip | `safety_alerts_in_view({ p_include_resolved: true, p_limit: 5 })` — live first, then highest severity, then newest. Works logged out. Replaces the direct table read (which never shows a resolved alert and has no `is_mine`). |
 | Map | `safety_alerts_in_view({ p_min_lng, p_min_lat, p_max_lng, p_max_lat, p_include_resolved: true })` |
 | Popup / map focus (one alert) | `safety_alerts_in_view({ p_alert_id, p_include_resolved: true })` → 0 or 1 row; then `safety_alert_history({ p_alert_id })` for "Updated" details. |
-| Admin list | `safety_alerts_in_view({ p_include_resolved: true, p_limit: 200 })` for live + resolved, or keep today's direct read (`status = 'live' AND expires_at > now`) for live only. Removed, expired, cleared and withdrawn alerts have no reader. |
+| Admin list | `safety_alerts_in_view({ p_include_resolved: true, p_limit: 200 })` for live + resolved. The admin overview's live count is the same call (`apps/web/src/lib/safety-alert-rpc.ts:305`); no client reads the table. Removed, expired, cleared and withdrawn alerts have no reader. |
 
 The deployed client's calls (four bbox arguments; direct reads) keep working and never see a resolved alert.
 
