@@ -53,10 +53,22 @@ describe('SheetContent default close button', () => {
   })
 
   it('sits at the inline end, not a fixed right edge; its icon is hidden from assistive tech', () => {
-    const [button] = all(render({}), (el) => hasClass(el, 'top-4'))
-    expect(hasClass(button, 'end-4')).toBe(true)
-    expect(hasClass(button, 'right-4')).toBe(false)
+    const [button] = all(render({}), (el) => hasClass(el, 'top-3'))
+    expect(hasClass(button, 'end-3')).toBe(true)
+    expect(String(button.props.className)).not.toMatch(/\bright-\d/)
     expect(all(button, (el) => el.props['aria-hidden'] === 'true')).toHaveLength(1)
+  })
+
+  it('is a 24px target (a 16px icon with 4px of padding) and keeps a focus outline in forced-colors mode', () => {
+    for (const props of [{}, { closeLabel: 'Cerrar' }]) {
+      const [button] = all(render(props), (el) => hasClass(el, 'top-3'))
+      expect(hasClass(button, 'p-1')).toBe(true)
+      expect(hasClass(button, 'focus:outline-hidden')).toBe(true)
+      expect(hasClass(button, 'focus:outline-none')).toBe(false)
+      expect(hasClass(button, 'focus:ring-2')).toBe(true)
+      const [icon] = all(button, (el) => el.props['aria-hidden'] === 'true')
+      expect(icon.props.className).toBe('h-4 w-4')
+    }
   })
 
   it('closeLabel is not passed down to the DOM element; hideDefaultClose still removes the button', () => {
