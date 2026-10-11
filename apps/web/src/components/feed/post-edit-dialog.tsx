@@ -333,7 +333,6 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
           />
         </div>
       ) : (
-        <div lang="en" dir="ltr" data-english-only="photo-picker">
         <PostImagePickerField
           previewUrl={picker.previewUrl}
           imageUploading={picker.imageUploading}
@@ -341,8 +340,8 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
           fileInputRef={picker.fileInputRef}
           onFileSelect={picker.handleFileSelect}
           onClear={picker.clearImage}
+          locale={locale}
         />
-        </div>
       )
     ) : undefined
 

@@ -9,6 +9,8 @@ This list starts with Release 3.5. It itemises, string by string:
 
 - the four Community sub-tab dictionaries: `lib/i18n-feed-organizations.ts`,
   `lib/i18n-feed-petitions.ts`, `lib/i18n-feed-messages.ts`, `lib/i18n-feed-businesses.ts`;
+- the feed card dictionaries written after them, each as it lands: `lib/i18n-feed-photo.ts`
+  (photo picker);
 - the hand-written time words in `lib/i18n-intl.ts` (months, weekdays, day periods, "5 minutes
   ago", "In 3 days") for `ht`, `hmn` and `so`;
 - the Arabic petition strings that say "confirmed signature of support" (`مؤكَّد`), listed as a
@@ -869,6 +871,47 @@ step in that test, and the test fails until the list below is regenerated.
 | `VERIFIED_SIGNATURES.few` | ar | {count} verified signatures | {count} توقيعات مؤكَّدة | 2026-10-11 | wording choice, review welcome |
 | `VERIFIED_SIGNATURES.many` | ar | {count} verified signatures | {count} توقيعًا مؤكَّدًا | 2026-10-11 | wording choice, review welcome |
 | `VERIFIED_SIGNATURES.other` | ar | {count} verified signatures | {count} توقيع مؤكَّد | 2026-10-11 | wording choice, review welcome |
+
+### `lib/i18n-feed-photo.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `label` | ht | Photo (optional) | Foto (si ou vle) | 2026-10-11 | machine-drafted, needs native review |
+| `previewAlt` | ht | Selected photo preview | Apèsi foto ou chwazi a | 2026-10-11 | machine-drafted, needs native review |
+| `uploading` | ht | Uploading… | N ap telechaje… | 2026-10-11 | machine-drafted, needs native review |
+| `add` | ht | Add a photo | Ajoute yon foto | 2026-10-11 | machine-drafted, needs native review |
+| `errUploadFailed` | ht | Upload failed. Please try again. | Telechajman an echwe. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnsupported` | ht | That file is not a supported image. | Fichye sa a pa yon imaj nou aksepte. | 2026-10-11 | machine-drafted, needs native review |
+| `errProcess` | ht | Could not process that image. Please try another. | Nou pa kapab trete imaj sa a. Tanpri eseye yon lòt. | 2026-10-11 | machine-drafted, needs native review |
+| `errTooLarge` | ht | Image exceeds the {mb}MB limit. | Imaj la depase limit {mb} MB la. | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | ht | Create a free account to attach a photo. | Kreye yon kont gratis pou w ajoute yon foto. | 2026-10-11 | machine-drafted, needs native review |
+| `label` | so | Photo (optional) | Sawir (ikhtiyaari) | 2026-10-11 | machine-drafted, needs native review |
+| `previewAlt` | so | Selected photo preview | Horudhaca sawirka la doortay | 2026-10-11 | machine-drafted, needs native review |
+| `uploading` | so | Uploading… | Waa la soo gelinayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `add` | so | Add a photo | Ku dar sawir | 2026-10-11 | machine-drafted, needs native review |
+| `errUploadFailed` | so | Upload failed. Please try again. | Soo gelintu way fashilantay. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnsupported` | so | That file is not a supported image. | Faylkaasi ma aha sawir la taageero. | 2026-10-11 | machine-drafted, needs native review |
+| `errProcess` | so | Could not process that image. Please try another. | Sawirkaas lama farsamayn karin. Fadlan mid kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errTooLarge` | so | Image exceeds the {mb}MB limit. | Sawirku wuu ka weyn yahay xadka {mb} MB. | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | so | Create a free account to attach a photo. | Samee akoon bilaash ah si aad sawir ugu lifaaqdo. | 2026-10-11 | machine-drafted, needs native review |
+| `label` | am | Photo (optional) | ፎቶ (አማራጭ) | 2026-10-11 | machine-drafted, needs native review |
+| `previewAlt` | am | Selected photo preview | የተመረጠው ፎቶ ቅድመ እይታ | 2026-10-11 | machine-drafted, needs native review |
+| `uploading` | am | Uploading… | በመስቀል ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `add` | am | Add a photo | ፎቶ አክል | 2026-10-11 | machine-drafted, needs native review |
+| `errUploadFailed` | am | Upload failed. Please try again. | መስቀል አልተሳካም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errUnsupported` | am | That file is not a supported image. | ያ ፋይል የሚደገፍ ምስል አይደለም። | 2026-10-11 | machine-drafted, needs native review |
+| `errProcess` | am | Could not process that image. Please try another. | ያንን ምስል ማስኬድ አልተቻለም። እባክዎ ሌላ ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errTooLarge` | am | Image exceeds the {mb}MB limit. | ምስሉ ከ{mb} ሜባ ገደብ ይበልጣል። | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | am | Create a free account to attach a photo. | ፎቶ ለማያያዝ ነፃ መለያ ይፍጠሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `label` | hmn | Photo (optional) | Duab (xaiv tau) | 2026-10-11 | machine-drafted, needs native review |
+| `previewAlt` | hmn | Selected photo preview | Saib ua ntej daim duab uas xaiv | 2026-10-11 | machine-drafted, needs native review |
+| `uploading` | hmn | Uploading… | Tab tom xa… | 2026-10-11 | machine-drafted, needs native review |
+| `add` | hmn | Add a photo | Ntxiv ib daim duab | 2026-10-11 | machine-drafted, needs native review |
+| `errUploadFailed` | hmn | Upload failed. Please try again. | Xa tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errUnsupported` | hmn | That file is not a supported image. | Cov ntaub ntawv ntawd tsis yog ib daim duab uas siv tau. | 2026-10-11 | machine-drafted, needs native review |
+| `errProcess` | hmn | Could not process that image. Please try another. | Ua tsis tau daim duab ntawd. Thov sim lwm daim. | 2026-10-11 | machine-drafted, needs native review |
+| `errTooLarge` | hmn | Image exceeds the {mb}MB limit. | Daim duab loj tshaj qhov txwv {mb} MB. | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | hmn | Create a free account to attach a photo. | Tsim ib tus account dawb los txuas ib daim duab. | 2026-10-11 | machine-drafted, needs native review |
 
 <!-- END GENERATED -->
 

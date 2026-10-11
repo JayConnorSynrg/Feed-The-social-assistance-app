@@ -275,7 +275,9 @@ describe('feed-panel.tsx wiring', () => {
     expect(panel.match(/<FeedPostCard\b/g)).toHaveLength(1)
     // ...and the card's relative time is the translated one, not the English short form.
     expect(panel).toMatch(/<FeedPostCard[\s\S]{0,200}formatAge=\{\(d\) => relativeAge\(d\.toISOString\(\), locale\)\}/)
-    // Inside the translated composer, the still-English photo picker carries its own mark.
-    expect(src).toMatch(/<div lang="en" dir="ltr" data-english-only="photo-picker">\s*<PostImagePickerField\b/)
+    // Inside the translated composer, the photo picker is translated too (Release 3.5): it gets
+    // the viewer language and sits in no English mark.
+    expect(src).toMatch(/<PostImagePickerField\b[^>]*\blocale=\{locale\}/)
+    expect(src).not.toContain('data-english-only="photo-picker"')
   })
 })

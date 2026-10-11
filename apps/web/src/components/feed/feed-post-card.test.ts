@@ -304,13 +304,12 @@ describe('language marking: English-only pieces say so; translated pieces do not
     expect(history).toContain('Versión actual (nunca editada)')
   })
 
-  it('the English-only photo picker is wrapped with lang="en" wherever a translated form uses it', () => {
+  it('the photo picker is translated: no form that uses it wraps it in an English mark (post-image-picker.i18n.test.ts)', () => {
     const read = (rel: string) => fs.readFileSync(path.resolve(__dirname, rel), 'utf8')
     for (const rel of ['../panels/feed-panel.tsx', '../panels/post-type-wizard.tsx', './post-edit-dialog.tsx']) {
       const src = read(rel)
-      const uses = src.match(/<PostImagePickerField/g)?.length ?? 0
-      const wrapped = src.match(/<div lang="en" dir="ltr" data-english-only="photo-picker">\s*<PostImagePickerField/g)?.length ?? 0
-      expect([rel, wrapped]).toEqual([rel, uses])
+      expect([rel, src.match(/<PostImagePickerField/g)?.length ?? 0]).toEqual([rel, 1])
+      expect([rel, src.match(/data-english-only="photo-picker"/g)?.length ?? 0]).toEqual([rel, 0])
     }
   })
 })

@@ -334,7 +334,6 @@ export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAle
             className="min-h-[72px] bg-white text-stone-900 placeholder:text-stone-500"
             aria-label={composerT(locale, 'composerAria')}
           />
-          <div lang="en" dir="ltr" data-english-only="photo-picker">
           <PostImagePickerField
             previewUrl={previewUrl}
             imageUploading={imageUploading}
@@ -343,8 +342,8 @@ export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAle
             onFileSelect={handleFileSelect}
             onClear={clearImage}
             compact
+            locale={locale}
           />
-          </div>
           <div className="flex justify-end">
             <Button
               type="button"
