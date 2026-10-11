@@ -17,7 +17,7 @@
 import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
 import type { Locale } from '@/lib/i18n'
 import { formatCount, formatFixed } from '@/lib/i18n-intl'
-import { badgesT } from '@/lib/i18n-feed-badges'
+import { badgesT, reviewCountText } from '@/lib/i18n-feed-badges'
 
 interface HarmonyBadgeProps {
   /** Supabase profiles.harmony_score — null when no reviews exist. */
@@ -47,7 +47,9 @@ export function HarmonyBadge({ score, count, userId, locale }: HarmonyBadgeProps
             locale={locale}
           />
           <span>{formatFixed(score, 2, locale)}</span>
-          <span className="text-amber-700">({formatCount(count, locale)})</span>
+          {/* "(12)" for sighted readers; "12 reviews" for a screen reader. */}
+          <span className="text-amber-700" aria-hidden="true">({formatCount(count, locale)})</span>
+          <span className="sr-only">{reviewCountText(count, locale)}</span>
         </>
       ) : (
         <span>{badgesT(locale, 'harmonyNew')}</span>

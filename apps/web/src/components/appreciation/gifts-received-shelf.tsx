@@ -25,6 +25,7 @@ import { formatCount } from '@/lib/i18n-intl'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { appreciationErrorText, appreciationItemLabel, badgesT, giftsFromMessage } from '@/lib/i18n-feed-badges'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { useFeedAnnounceReady } from '@/components/feed/feed-chrome'
 
 export function GiftsReceivedShelf({ userId }: { userId?: string | null }) {
   const supabase = createClient()
@@ -58,6 +59,8 @@ export function GiftsReceivedShelf({ userId }: { userId?: string | null }) {
   }, [load])
 
   const failure = error ? appreciationErrorText(error, locale) : null
+  // The loading status is on the page empty for a frame before its text, so it is spoken.
+  const statusReady = useFeedAnnounceReady(true)
 
   return (
     <div
@@ -68,8 +71,12 @@ export function GiftsReceivedShelf({ userId }: { userId?: string | null }) {
     >
       <h3 className="mb-3 text-sm font-semibold text-stone-500">{badgesT(locale, 'giftsHeading')}</h3>
 
+      <p role="status" aria-live="polite" className="sr-only" data-testid="gifts-received-status">
+        {statusReady && loading ? badgesT(locale, 'giftsLoading') : ''}
+      </p>
       {loading ? (
-        <p role="status" className="flex items-center gap-2 text-sm text-stone-600">
+        // The status region above says it; this line is for sighted readers.
+        <p aria-hidden="true" className="flex items-center gap-2 text-sm text-stone-600">
           <Loader2 className="h-4 w-4 animate-spin text-stone-500" aria-hidden="true" />
           <span>{badgesT(locale, 'giftsLoading')}</span>
         </p>

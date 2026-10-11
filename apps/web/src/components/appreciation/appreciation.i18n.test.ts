@@ -13,7 +13,9 @@
 //   - the appreciation picker: every item named by the word under it first (label in name, 14
 //     locales), failures translated or marked English, the sent check at the inline end;
 //   - a member's own name is shown as written, in its own element, and never looked up;
-//   - sending still calls what it called.
+//   - sending still calls what it called, once; a sent item stays focusable and "… sent." is said
+//     once in a status region that was on the page, empty, before any text;
+//   - closing the sheet returns focus to the control that opened it.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createElement as h, isValidElement } from 'react'
@@ -49,11 +51,18 @@ vi.mock('@/lib/appreciation', async (orig) => ({
   myReceivedShelf: async () => state.shelf,
 }))
 
+// Frames run when the test says so: a status region can be seen empty before its text arrives.
+const frames: Array<() => void> = []
+;(globalThis as Record<string, unknown>).requestAnimationFrame = (cb: () => void) => frames.push(cb)
+;(globalThis as Record<string, unknown>).cancelAnimationFrame = () => {}
+const nextFrame = () => frames.splice(0).forEach((cb) => cb())
+
 import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { cardT, roleLabel } from '@/lib/i18n-feed-card'
+import { tierLabel } from '@/lib/admin-tier'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { APPRECIATION_ITEM_SLUGS, appreciationItemAlt, appreciationItemLabel, appreciationItemName, badgesT } from '@/lib/i18n-feed-badges'
+import { APPRECIATION_ITEM_SLUGS, appreciationItemAlt, appreciationItemLabel, appreciationItemName, appreciationSentNotice, badgesT, reviewCountText } from '@/lib/i18n-feed-badges'
 import { SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { HarmonyBadge } from '@/components/feed/harmony-badge'
@@ -86,6 +95,7 @@ function sheet(locale: Locale, o: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  frames.length = 0
   state.language = 'en'
   state.sent = { ok: true, items: [] }
   state.give = { ok: true, created: true, giftId: 'g1' }
@@ -106,7 +116,8 @@ describe('the Harmony badge', () => {
     const out = badge('es')
     expect(out).toContain('<span data-testid="harmony-badge-stalks-u-row" class="inline-flex items-center gap-0.5" role="img" aria-label="5 de 5 espigas">')
     expect(out).toContain('<span>4,50</span>')
-    expect(out).toContain('>(3)</span>')
+    // "(3)" is for sighted readers; a screen reader hears what the number counts.
+    expect(out).toContain('<span class="text-amber-700" aria-hidden="true">(3)</span><span class="sr-only">3 valoraciones</span>')
     expect(out).not.toMatch(/out of 5 stalks|4\.50/)
   })
 
@@ -115,7 +126,17 @@ describe('the Harmony badge', () => {
     expect(out).toContain(`aria-label="${ar(3)} من ${ar(5)} سنابل"`)
     expect(out).toContain(`<span>${ar(3.2, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`)
     expect(out).toContain(`>(${ar(12)})</span>`)
+    expect(out).toContain(`<span class="sr-only">${ar(12)} تقييمًا</span>`)
     expect(out).not.toMatch(/\blang=|\bdir=/)
+  })
+
+  it.each(LOCALES)('%s: the count beside the score has a spoken label, singular and plural', (locale) => {
+    for (const count of [1, 5]) {
+      const out = badge(locale, { count })
+      expect(out).toContain(`<span class="sr-only">${html(reviewCountText(count, locale))}</span>`)
+      expect(reviewCountText(count, locale)).not.toMatch(/\{\w+\}/)
+    }
+    if (locale === 'en') expect([reviewCountText(1, 'en'), reviewCountText(5, 'en')]).toEqual(['1 review', '5 reviews'])
   })
 
   it('en: reads as before', () => {
@@ -215,6 +236,39 @@ describe('the author sheet (a portal)', () => {
     if (locale !== 'en') expect(content.props.closeLabel).not.toBe('Close')
   })
 
+  it('the sheet has no description and says so (no dangling aria-describedby); the title leaves room for the close button', () => {
+    const tree = sheet('es').tree()
+    const content = (findAll(tree, (e) => e.type === SheetContent) as El[])[0]
+    expect('aria-describedby' in content.props).toBe(true)
+    expect(content.props['aria-describedby']).toBeUndefined()
+    const title = (findAll(tree, (e) => e.type === SheetTitle) as El[])[0]
+    const holder = (findAll(tree, (e) => e.type === 'div' && Array.isArray(e.props.children) && (e.props.children as unknown[]).includes(title)) as El[])[0]
+    expect(holder.props.className).toBe('min-w-0 pe-8')
+  })
+
+  it('closing returns focus to the control that opened it; when that is gone, to the card', () => {
+    const opener = { isConnected: true, focus: vi.fn() }
+    const fallbackFocus = vi.fn()
+    const s = sheet('es', { returnFocusRef: { current: opener }, fallbackFocus })
+    const close = () => {
+      const prevented = vi.fn()
+      ;((findAll(s.tree(), (e) => e.type === SheetContent) as El[])[0].props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+      return prevented.mock.calls.length
+    }
+    expect(close()).toBe(1)
+    expect(opener.focus).toHaveBeenCalledTimes(1)
+    expect(fallbackFocus).not.toHaveBeenCalled()
+    opener.isConnected = false
+    expect(close()).toBe(1)
+    expect(opener.focus).toHaveBeenCalledTimes(1)
+    expect(fallbackFocus).toHaveBeenCalledTimes(1)
+    // A caller that hands in nothing leaves the close to the sheet.
+    const plain = sheet('es')
+    const prevented = vi.fn()
+    ;((findAll(plain.tree(), (e) => e.type === SheetContent) as El[])[0].props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+    expect(prevented).not.toHaveBeenCalled()
+  })
+
   it('the author\'s name is the title, as written: no page language, its own direction', () => {
     const title = (findAll(sheet('es').tree(), (e) => e.type === SheetTitle) as El[])[0]
     expect(title.props).toMatchObject({ lang: '', dir: 'auto', children: 'مريم' })
@@ -231,7 +285,11 @@ describe('the author sheet (a portal)', () => {
     for (const tier of ['community_moderator', 'resource_admin', 'platform_admin'] as const) {
       expect(textOf(byTestId(sheet('es', { author: author({ authorTier: tier }) }).tree(), 'author-sheet-tier')[0])).toBe(roleLabel(tier, 'es'))
     }
-    expect(textOf(byTestId(sheet('es', { author: author({ authorTier: 'platform_admin' }) }).tree(), 'author-sheet-tier')[0])).not.toBe('Admin\u0000')
+    // English is the marker the rest of the app shows (lib/admin-tier.ts), word for word.
+    for (const tier of ['community_moderator', 'resource_admin', 'platform_admin'] as const) {
+      expect(textOf(byTestId(sheet('en', { author: author({ authorTier: tier }) }).tree(), 'author-sheet-tier')[0])).toBe(tierLabel(tier))
+    }
+    expect(roleLabel('resource_admin', 'en')).toBe('Resource Admin')
   })
 
   it('vi: Follow / Following with the card\'s words; the heading reads around the name; Send appreciation', () => {
@@ -280,15 +338,35 @@ describe('the appreciation picker', () => {
   async function picker(locale: Locale) {
     const c = mount(() => AppreciatePicker({ receiverId: 'author', currentUserId: 'me', postId: 'p1', locale }))
     const first = c.tree()
+    nextFrame()
+    const second = c.rerender()
     await c.flush()
-    return { c, first, tree: () => c.tree() }
+    return { c, first, second, tree: () => c.tree() }
   }
+  const said = (tree: unknown) => textOf(byTestId(tree, 'appreciate-picker-status')[0])
 
-  it('while loading: a status line in the member language', async () => {
-    const { first } = await picker('fr')
+  it('while loading: the status region is on the page empty first, then says so in the member language; the visible line is for sighted readers', async () => {
+    const { first, second, tree } = await picker('fr')
+    const region = byTestId(first, 'appreciate-picker-status')[0]
+    expect(region.props).toMatchObject({ role: 'status', 'aria-live': 'polite', className: 'sr-only' })
+    expect(said(first)).toBe('')
+    expect(said(second)).toBe('Chargement…')
     const line = byTestId(first, 'appreciate-picker-loading')[0]
-    expect(line.props.role).toBe('status')
+    expect(line.props['aria-hidden']).toBe('true')
+    expect(line.props.role).toBeUndefined()
     expect(textOf(line)).toBe('Chargement…')
+    // Loaded: the same region, empty again.
+    expect(said(tree())).toBe('')
+    expect(findAll(tree(), (e) => e.props.role === 'status')).toHaveLength(1)
+  })
+
+  it('the picker is a group named by the "Appreciate …" heading that takes focus by script when it replaces the button that opened it', async () => {
+    const { tree } = await picker('es')
+    const root = byTestId(tree(), 'appreciate-picker')[0]
+    expect(root.props).toMatchObject({ role: 'group', 'aria-labelledby': 'appreciate-heading', tabIndex: -1 })
+    expect(root.props.className).toContain('focus-visible:ring-2')
+    // The heading it points at is the sheet's own.
+    expect(findAll(sheet('es').tree(), (e) => e.props.id === 'appreciate-heading')).toHaveLength(1)
   })
 
   it('ko: twelve items, each with its word, its icon title and a name that starts with the word', async () => {
@@ -298,7 +376,9 @@ describe('the appreciation picker', () => {
     expect(buttons).toHaveLength(12)
     const heart = byTestId(tree(), 'appreciate-item-heart')[0]
     expect(heart.props['aria-label']).toBe('하트 — 이미 보냄')
-    expect(heart.props.disabled).toBe(true)
+    // Unavailable, yet still focusable: aria-disabled, never disabled.
+    expect(heart.props['aria-disabled']).toBe(true)
+    expect('disabled' in heart.props).toBe(false)
     const bread = byTestId(tree(), 'appreciate-item-bread')[0]
     expect(bread.props['aria-label']).toBe('빵 — 보내기')
     expect((findAll(bread, (e) => e.type === PixelItemIcon) as El[])[0].props.title).toBe('빵 한 덩이')
@@ -326,12 +406,51 @@ describe('the appreciation picker', () => {
     expect(check.props.className).not.toMatch(/\bright-1\b/)
   })
 
-  it('sending calls the library with the receiver, the slug and the post, and marks the item sent', async () => {
+  it('sending calls the library once with the receiver, the slug and the post, and marks the item sent', async () => {
     const { c, tree } = await picker('es')
     ;(byTestId(tree(), 'appreciate-item-soup')[0].props.onClick as () => void)()
     await c.flush()
     expect(state.gave).toEqual([['author', 'soup', 'p1']])
     expect(byTestId(tree(), 'appreciate-item-soup')[0].props).toMatchObject({ 'data-sent': 'true', 'aria-label': 'Sopa: ya enviado' })
+  })
+
+  it.each(LOCALES)('%s: a send that went through is said once in the status region; the sent item stays focusable', async (locale) => {
+    const { c, tree } = await picker(locale)
+    expect(said(tree())).toBe('')
+    ;(byTestId(tree(), 'appreciate-item-bread')[0].props.onClick as () => void)()
+    await c.flush()
+    expect(said(tree())).toBe(appreciationSentNotice('bread', locale))
+    expect(said(tree())).toContain(appreciationItemLabel('bread', locale))
+    if (locale !== 'en') expect(said(tree())).not.toBe('Bread sent.')
+    const item = byTestId(tree(), 'appreciate-item-bread')[0]
+    expect(item.props['aria-disabled']).toBe(true)
+    expect('disabled' in item.props).toBe(false)
+    // Pressing it again sends nothing more and says nothing new.
+    ;(item.props.onClick as () => void)()
+    await c.flush()
+    expect(state.gave).toHaveLength(1)
+    expect(said(tree())).toBe(appreciationSentNotice('bread', locale))
+  })
+
+  it('a second item: the region is emptied when the send starts, then says the new sentence', async () => {
+    const { c, tree } = await picker('en')
+    ;(byTestId(tree(), 'appreciate-item-bread')[0].props.onClick as () => void)()
+    await c.flush()
+    expect(said(tree())).toBe('Bread sent.')
+    ;(byTestId(tree(), 'appreciate-item-tree')[0].props.onClick as () => void)()
+    expect(said(c.rerender())).toBe('')
+    await c.flush()
+    expect(said(tree())).toBe('Tree sent.')
+    expect(state.gave).toHaveLength(2)
+  })
+
+  it('a failed send says nothing in the status region (the alert speaks)', async () => {
+    state.give = { ok: false, error: "Couldn't send appreciation. Please try again." }
+    const { c, tree } = await picker('en')
+    ;(byTestId(tree(), 'appreciate-item-soup')[0].props.onClick as () => void)()
+    await c.flush()
+    expect(said(tree())).toBe('')
+    expect(byTestId(tree(), 'appreciate-item-soup')[0].props['aria-disabled']).toBe(false)
   })
 
   it('a failed send: the library\'s sentence in the member language, as an alert; the item is unsent again', async () => {
@@ -370,18 +489,27 @@ describe('the "Gifts received" shelf (Settings)', () => {
     state.language = language
     const c = mount(() => GiftsReceivedShelf({ userId: 'me' }))
     const first = c.tree()
+    nextFrame()
+    const second = c.rerender()
     await c.flush()
-    return { first, tree: c.tree() }
+    return { first, second, tree: c.tree() }
   }
   const entry = (slug: string, names: Array<string | null>) => ({ slug, label: 'x', count: names.length, givers: names.map((name, i) => ({ id: `g${i}`, name, avatar: null })) })
   const givers = (names: Array<string | null>, locale: Locale) => renderToStaticMarkup(h(GiversLine, { names, locale }))
 
   it('ht: its own mark (Settings is English), heading and loading line; then the empty sentence', async () => {
-    const { first, tree } = await shelf('ht')
+    const { first, second, tree } = await shelf('ht')
     const root = byTestId(first, 'gifts-received-shelf')[0]
     expect(root.props).toMatchObject({ lang: 'ht', dir: 'ltr' })
-    expect(textOf(first)).toBe('Kado ou resevwaN ap chaje kado ou yo…')
+    // The status region is on the page empty, then says the shelf is loading; the visible line is
+    // for sighted readers.
+    const status = (tree: unknown) => byTestId(tree, 'gifts-received-status')[0]
+    expect(status(first).props).toMatchObject({ role: 'status', 'aria-live': 'polite', className: 'sr-only' })
+    expect(textOf(status(first))).toBe('')
+    expect(textOf(status(second))).toBe('N ap chaje kado ou yo…')
     expect((findAll(first, (e) => e.props.role === 'status') as El[])).toHaveLength(1)
+    expect((findAll(first, (e) => e.props['aria-hidden'] === 'true' && e.type === 'p') as El[]).map(textOf)).toEqual(['N ap chaje kado ou yo…'])
+    expect(textOf(status(tree))).toBe('')
     expect(textOf(tree)).toBe('Kado ou resevwaPoko gen kado — remèsiman kominote a ap parèt isit la.')
   })
 

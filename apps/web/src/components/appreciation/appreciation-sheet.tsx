@@ -21,6 +21,12 @@
 // feed's language mark, so it carries its own lang and dir and a translated close label. The
 // author's name is the author's own text: shown as written, never looked up. A failure the
 // library wrote reads translated; anything else is shown as received and marked English.
+//
+// Focus: closing the sheet (Escape, the close button, outside) returns focus to the control that
+// opened it, or to the caller's stable control when that one has left the page. Opening the picker
+// removes the button that was pressed, so focus moves to the picker; a sent item stays focusable
+// (aria-disabled) and "… sent." is said once in the picker's status region, which is on the page
+// empty before any text is put in it.
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2, Check, Gift } from 'lucide-react'
@@ -44,7 +50,9 @@ import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
 import { cardT, roleLabel } from '@/lib/i18n-feed-card'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { appreciationErrorText, appreciationItemAlt, appreciationItemLabel, appreciationItemName, badgesT } from '@/lib/i18n-feed-badges'
+import { appreciationErrorText, appreciationItemAlt, appreciationItemLabel, appreciationItemName, appreciationSentNotice, badgesT } from '@/lib/i18n-feed-badges'
+import { useFeedAnnounceReady } from '@/components/feed/feed-chrome'
+import { focusWasLost } from '@/lib/focus-lost'
 
 export interface AppreciationAuthor {
   id: string
@@ -72,6 +80,10 @@ interface AppreciationSheetProps {
   postId?: string | null
   /** The viewer's language. */
   locale: Locale
+  /** The control that opened the sheet: focus returns to it when the sheet closes. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+  /** Where focus goes instead when that control is no longer on the page. */
+  fallbackFocus?: () => void
 }
 
 /** A failure line: FEED's sentence in the viewer's language, or received text marked English. */
@@ -104,9 +116,19 @@ export function AppreciatePicker({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [giveError, setGiveError] = useState<string | null>(null)
+  // What the status region says after a send that went through ("Heart sent.").
+  const [sentNotice, setSentNotice] = useState('')
+  // The region is on the page empty for a frame before any text is put in it, so it is spoken.
+  const statusReady = useFeedAnnounceReady(true)
+  const rootRef = useRef<HTMLDivElement>(null)
   // Single-flight gate: flip synchronously before the first await so a rapid second
   // click cannot start a second give (state alone would race).
   const inFlight = useRef(false)
+
+  // The picker took the place of the button that opened it: that button had the focus.
+  useEffect(() => {
+    if (focusWasLost(null)) rootRef.current?.focus()
+  }, [])
 
   const loadSent = useCallback(async () => {
     setLoading(true)
@@ -133,6 +155,7 @@ export function AppreciatePicker({
       inFlight.current = true
       setPending(slug)
       setGiveError(null)
+      setSentNotice('')
       // Optimistic: mark sent immediately, then settle from the server result.
       setSent((prev) => new Set(prev).add(slug))
       const res = await giveAppreciation(supabase, receiverId, slug, postId ?? null)
@@ -144,76 +167,89 @@ export function AppreciatePicker({
           return next
         })
         setGiveError(res.error)
+      } else {
+        // Said once; the pressed item stays focusable, so focus stays where it is.
+        setSentNotice(appreciationSentNotice(slug, locale))
       }
       // On success (created true OR idempotent false) the item stays marked sent.
       setPending(null)
       inFlight.current = false
     },
-    [supabase, receiverId, postId, sent]
+    [supabase, receiverId, postId, sent, locale]
   )
 
-  if (loading) {
-    return (
-      <p role="status" className="flex items-center gap-2 text-sm text-stone-600" data-testid="appreciate-picker-loading">
-        <Loader2 className="h-4 w-4 animate-spin text-stone-500" aria-hidden="true" />
-        <span>{feedChromeT(locale, 'loadingMore')}</span>
-      </p>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div className="flex items-center justify-between gap-3" data-testid="appreciate-picker-error">
-        <FailureText error={loadError} locale={locale} className="text-sm text-stone-600" alert />
-        <Button size="sm" variant="outline" onClick={() => void loadSent()}>
-          {feedChromeT(locale, 'retry')}
-        </Button>
-      </div>
-    )
-  }
-
   return (
-    <div data-testid="appreciate-picker">
-      <ul className="grid grid-cols-4 gap-2" role="list">
-        {APPRECIATION_ITEMS.map((item) => {
-          const isSent = sent.has(item.slug)
-          const isPending = pending === item.slug
-          return (
-            <li key={item.slug}>
-              <button
-                type="button"
-                disabled={isSent || isPending}
-                onClick={() => void handleGive(item.slug)}
-                aria-label={appreciationItemName(item.slug, isSent, locale)}
-                data-testid={`appreciate-item-${item.slug}`}
-                data-sent={isSent ? 'true' : 'false'}
-                className={`relative flex w-full flex-col items-center gap-1 rounded-xl border px-1 py-2 text-stone-900 transition-colors ${
-                  isSent
-                    ? 'border-lime-300 bg-lime-50 cursor-default'
-                    : 'border-stone-200 bg-stone-50/95 hover:border-lime-300 hover:bg-lime-50'
-                }`}
-              >
-                <PixelItemIcon slug={item.slug} size={32} title={appreciationItemAlt(item.slug, locale)} />
-                <span className="text-[10px] font-medium text-stone-600">{appreciationItemLabel(item.slug, locale)}</span>
-                {isSent && (
-                  <span
-                    className="absolute end-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-lime-600 text-white"
-                    aria-hidden="true"
+    // A group named by the "Appreciate …" heading; focusable by script only (see above).
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      role="group"
+      aria-labelledby="appreciate-heading"
+      data-testid="appreciate-picker"
+      className="rounded-xl focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
+    >
+      <p role="status" aria-live="polite" className="sr-only" data-testid="appreciate-picker-status">
+        {statusReady ? (loading ? feedChromeT(locale, 'loadingMore') : sentNotice) : ''}
+      </p>
+      {loading ? (
+        // The status region above says it; this line is for sighted readers.
+        <p aria-hidden="true" className="flex items-center gap-2 text-sm text-stone-600" data-testid="appreciate-picker-loading">
+          <Loader2 className="h-4 w-4 animate-spin text-stone-500" aria-hidden="true" />
+          <span>{feedChromeT(locale, 'loadingMore')}</span>
+        </p>
+      ) : loadError ? (
+        <div className="flex items-center justify-between gap-3" data-testid="appreciate-picker-error">
+          <FailureText error={loadError} locale={locale} className="text-sm text-stone-600" alert />
+          <Button size="sm" variant="outline" onClick={() => void loadSent()}>
+            {feedChromeT(locale, 'retry')}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <ul className="grid grid-cols-4 gap-2" role="list">
+            {APPRECIATION_ITEMS.map((item) => {
+              const isSent = sent.has(item.slug)
+              const isPending = pending === item.slug
+              return (
+                <li key={item.slug}>
+                  {/* aria-disabled, not disabled: a sent item keeps the focus it had when pressed
+                      (handleGive ignores a second press). */}
+                  <button
+                    type="button"
+                    aria-disabled={isSent || isPending}
+                    onClick={() => void handleGive(item.slug)}
+                    aria-label={appreciationItemName(item.slug, isSent, locale)}
+                    data-testid={`appreciate-item-${item.slug}`}
+                    data-sent={isSent ? 'true' : 'false'}
+                    className={`relative flex w-full flex-col items-center gap-1 rounded-xl border px-1 py-2 text-stone-900 transition-colors ${
+                      isSent
+                        ? 'border-lime-300 bg-lime-50 cursor-default'
+                        : 'border-stone-200 bg-stone-50/95 hover:border-lime-300 hover:bg-lime-50'
+                    }`}
                   >
-                    <Check className="h-2.5 w-2.5" strokeWidth={3} />
-                  </span>
-                )}
-                {isPending && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/60" aria-hidden="true">
-                    <Loader2 className="h-4 w-4 animate-spin text-lime-700" />
-                  </span>
-                )}
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-      {giveError && <FailureText error={giveError} locale={locale} className="mt-2 text-xs text-red-700" testId="appreciate-give-error" alert />}
+                    <PixelItemIcon slug={item.slug} size={32} title={appreciationItemAlt(item.slug, locale)} />
+                    <span className="text-[10px] font-medium text-stone-600">{appreciationItemLabel(item.slug, locale)}</span>
+                    {isSent && (
+                      <span
+                        className="absolute end-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-lime-600 text-white"
+                        aria-hidden="true"
+                      >
+                        <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                      </span>
+                    )}
+                    {isPending && (
+                      <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/60" aria-hidden="true">
+                        <Loader2 className="h-4 w-4 animate-spin text-lime-700" />
+                      </span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          {giveError && <FailureText error={giveError} locale={locale} className="mt-2 text-xs text-red-700" testId="appreciate-give-error" alert />}
+        </>
+      )}
     </div>
   )
 }
@@ -232,6 +268,8 @@ export function AppreciationSheet({
   onUnfollow,
   postId,
   locale,
+  returnFocusRef,
+  fallbackFocus,
 }: AppreciationSheetProps) {
   const [showPicker, setShowPicker] = useState(false)
   const [showFollowPrompt, setShowFollowPrompt] = useState(false)
@@ -255,8 +293,22 @@ export function AppreciationSheet({
         lang={locale}
         dir={dir(locale)}
         closeLabel={cardT(locale, 'close')}
+        // The title names the sheet; it has no separate description.
+        aria-describedby={undefined}
         className="overflow-y-auto bg-stone-50/95 text-stone-900"
         data-testid="author-profile-sheet"
+        onCloseAutoFocus={(e) => {
+          // Back to the control that opened the sheet; when it has left the page, to the
+          // caller's stable control. Otherwise Radix leaves focus on the page body.
+          const opener = returnFocusRef?.current
+          if (opener?.isConnected) {
+            e.preventDefault()
+            opener.focus()
+          } else if (fallbackFocus) {
+            e.preventDefault()
+            fallbackFocus()
+          }
+        }}
       >
         <SheetHeader>
           <div className="flex items-center gap-3">
@@ -268,7 +320,8 @@ export function AppreciationSheet({
                 <span className="text-lg font-semibold text-white" aria-hidden="true">{author.name.charAt(0)}</span>
               )}
             </div>
-            <div className="min-w-0">
+            {/* Room at the reading end for the close button, so a long name is cut before it. */}
+            <div className="min-w-0 pe-8">
               {/* The author's own name: its own direction, no page language. */}
               <SheetTitle lang="" dir="auto" className="truncate">{author.name}</SheetTitle>
               {/* The tier marker, with the card's own words (plain members get none). */}

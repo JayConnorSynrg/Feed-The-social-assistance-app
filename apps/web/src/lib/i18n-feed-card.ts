@@ -109,7 +109,7 @@ export const cardMessages: Record<Locale, CardMessages> = {
     categoryOffer: 'Offer',
     roleMember: 'Community member',
     roleModerator: 'Moderator',
-    roleResourceAdmin: 'Resource admin',
+    roleResourceAdmin: 'Resource Admin',
     roleAdmin: 'Admin',
     viewProfile: "View {name}'s profile",
     follow: 'Follow',
