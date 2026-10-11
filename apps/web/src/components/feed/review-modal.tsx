@@ -105,7 +105,8 @@ export function ReviewModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[440px]">
+      {/* Not translated yet: its English copy is marked English wherever it opens from. */}
+      <DialogContent lang="en" dir="ltr" className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle>Review {revieweeName}</DialogTitle>
           <DialogDescription>

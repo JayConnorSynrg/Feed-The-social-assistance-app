@@ -3177,13 +3177,10 @@ export function eventFormT(locale: Locale, key: keyof EventFormMessages): string
   return translate(eventFormMessages, locale, key)
 }
 
-/** Fills {name} placeholders (same rule as i18n-org-forms' formatMessage; kept here so member
- *  surfaces do not pull the org-forms dictionary into their bundle). */
-export function formatMessage(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
-  )
-}
+// formatMessage lives in lib/format-message.ts (its one definition). This re-export serves the
+// importers still reading it from here (post-model.ts, feed-panel.tsx, the moderation pages); new
+// code imports it from './format-message'.
+export { formatMessage } from './format-message'
 
 /** The five event types of assistance_events.event_type (CHECK constraint), in display order. */
 export const EVENT_TYPES = ['distribution', 'meal', 'pantry', 'clinic', 'other'] as const

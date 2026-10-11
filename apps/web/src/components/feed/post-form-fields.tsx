@@ -19,7 +19,7 @@ import type { PostType } from '@/lib/post-rpc'
 import { timeZoneOptions } from '@/lib/event-time'
 import { composerT, requestCategoryLabel, REQUEST_CATEGORIES } from '@/lib/i18n-feed-composer'
 import { editT, fieldErrorText, lockReasonText } from '@/lib/i18n-feed-edit'
-import { formatMessage } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import {
   EDITABLE_FIELDS,
   LIMITS,

@@ -1,5 +1,11 @@
 'use client'
 
+// Community → Messages sub-tab. Every string is read from lib/i18n-feed-messages.ts in the
+// member's language (useProfileLocale); each root — and the confirm dialog, which renders in a
+// portal — carries that language and its direction. Names and message bodies are shown as written
+// (dir="auto", no page language). What is still English is marked English: the rating display,
+// and a failure whose text came from the server.
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   MessageSquare,
@@ -19,6 +25,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
@@ -29,26 +36,23 @@ import { usePanelContext } from '@/components/layout/feed-shell'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
 import type { ReviewRow } from '@/hooks/use-reviews'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatClock, formatCount, formatDate } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { cardT } from '@/lib/i18n-feed-card'
+import { conversationError, conversationStatusLabel, isConversationStatus, messagesT } from '@/lib/i18n-feed-messages'
+import { resourceCategoryLabel, resourceCategoryMessages } from '@/lib/i18n-resource-categories'
 
-const CATEGORY_LABELS: Record<string, string> = {
-  food: 'Food',
-  housing: 'Housing',
-  employment: 'Jobs',
-  transportation: 'Transportation',
-  legal: 'Legal',
-  other: 'General',
-  healthcare: 'Healthcare',
-  education: 'Education',
-  eitc_tax_filing: 'Tax Filing & EITC',
-  free_legal: 'Free Legal Help',
-  prenatal_natal_care: 'Prenatal & Newborn Care',
-  waste_disposal: 'Waste & Disposal',
-  free_camping: 'Free Camping',
-  free_goods_donation: 'Free Goods & Donations',
-}
+/** A stored value FEED has no label for is shown as stored, which is English: mark it so. */
+const englishIfUnlabelled = (labelled: boolean) => (labelled ? undefined : 'en')
+const isResourceCategory = (category: string) => Object.prototype.hasOwnProperty.call(resourceCategoryMessages.en, category)
 
 export function MessagesPanel() {
   const { user, isAnonymous } = useAuth()
+  const locale = useProfileLocale()
   const { panelParams } = usePanelContext()
   const {
     conversations,
@@ -76,6 +80,12 @@ export function MessagesPanel() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel' | 'complete'; id: string } | null
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
+  // The button that opened the confirm dialog: focus returns to it when the dialog closes.
+  const confirmOpenerRef = useRef<HTMLElement | null>(null)
+  const openConfirm = (action: NonNullable<ConfirmAction>, opener: HTMLElement) => {
+    confirmOpenerRef.current = opener
+    setConfirmAction(action)
+  }
 
   // Review state for the selected completed conversation
   const [myReview, setMyReview] = useState<ReviewRow | null | undefined>(undefined) // undefined = not yet fetched
@@ -105,11 +115,17 @@ export function MessagesPanel() {
   // accessor: full name when the viewer is the SOURCER (volunteer) seeing the
   // SEEKER, first-name-only when the viewer is the SEEKER. We never assemble a
   // surname client-side. Fall back to the first-name base join, then 'User'.
+  const unknownUser = messagesT(locale, 'unknownUser')
   const otherUserName = selectedConv
     ? (selectedConv.counterpartyDisplayName
         ?? (isVolunteer ? selectedConv.requester?.first_name : selectedConv.volunteer?.first_name)
-        ?? 'User')
+        ?? unknownUser)
     : ''
+  // A person's name is shown as written (lang=""); the fallback word is FEED's own text.
+  const otherUserLang = otherUserName === unknownUser ? undefined : ''
+  const [beforeWaitingName, afterWaitingName] = splitMessage(messagesT(locale, 'waitingForAccept'), 'name')
+  const [beforeReviewName, afterReviewName] = splitMessage(messagesT(locale, 'reviewPromptBody'), 'name')
+  const failure = error ? conversationError(error, locale) : null
 
   // Fetch review status when a completed conversation is selected
   const convIdForReview = selectedConv?.status === 'completed' ? selectedConv.id : null
@@ -162,8 +178,8 @@ export function MessagesPanel() {
   // ── Guest gate — must come before empty-state (guests always have 0 conversations) ──
   if (isAnonymous) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6">
-        <CreateAccountPrompt message="Create a free account to message volunteers and connect with your community" />
+      <div lang={locale} dir={dir(locale)} className="h-full flex flex-col items-center justify-center p-6">
+        <CreateAccountPrompt message={messagesT(locale, 'guestPrompt')} linkLabel={feedChromeT(locale, 'createAccount')} />
       </div>
     )
   }
@@ -171,32 +187,35 @@ export function MessagesPanel() {
   // ── Empty State ──
   if (!isLoading && conversations.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-8">
+      <div lang={locale} dir={dir(locale)} className="h-full flex flex-col items-center justify-center text-center p-8">
         <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-4">
           <Inbox className="w-8 h-8 text-stone-400" />
         </div>
-        <h3 className="text-lg font-semibold text-stone-700 mb-2">No messages yet</h3>
+        <h3 className="text-lg font-semibold text-stone-700 mb-2">{messagesT(locale, 'emptyTitle')}</h3>
         <p className="text-sm text-stone-500 max-w-xs">
-          Volunteer resources on the map have a Message button. Send a request to start a conversation.
+          {messagesT(locale, 'emptyBody')}
         </p>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex overflow-hidden">
+    <div lang={locale} dir={dir(locale)} className="h-full flex overflow-hidden">
       {/* ── Left: Conversation List ── */}
-      <div className={`${selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-shrink-0 flex-col border-r border-stone-200/50 overflow-y-auto`}>
+      <div className={`${selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-shrink-0 flex-col border-e border-stone-200/50 overflow-y-auto`}>
         <div className="p-4 border-b border-stone-200/50">
           <h2 className="font-semibold text-stone-800 flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            Messages
+            {messagesT(locale, 'title')}
           </h2>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+        {/* The spinner and its status are for the first load only; a refetch keeps the list on
+            screen (and says nothing). */}
+        {isLoading && conversations.length === 0 ? (
+          <div role="status" className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-stone-400" aria-hidden="true" />
+            <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -204,8 +223,8 @@ export function MessagesPanel() {
             {pendingRequests.length > 0 && (
               <div>
                 <div className="px-4 py-2 bg-amber-50">
-                  <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">
-                    Pending Requests ({pendingRequests.length})
+                  <span className="text-xs font-medium text-amber-700 uppercase tracking-wider rtl:tracking-normal">
+                    {formatMessage(messagesT(locale, 'sectionPending'), { n: formatCount(pendingRequests.length, locale) })}
                   </span>
                 </div>
                 {pendingRequests.map(conv => (
@@ -215,6 +234,7 @@ export function MessagesPanel() {
                     userId={user?.id ?? ''}
                     isSelected={conv.id === selectedConversationId}
                     onClick={() => selectConversation(conv.id)}
+                    locale={locale}
                   />
                 ))}
               </div>
@@ -224,8 +244,8 @@ export function MessagesPanel() {
             {activeConversations.length > 0 && (
               <div>
                 <div className="px-4 py-2 bg-green-50">
-                  <span className="text-xs font-medium text-green-700 uppercase tracking-wider">
-                    Active ({activeConversations.length})
+                  <span className="text-xs font-medium text-green-700 uppercase tracking-wider rtl:tracking-normal">
+                    {formatMessage(messagesT(locale, 'sectionActive'), { n: formatCount(activeConversations.length, locale) })}
                   </span>
                 </div>
                 {activeConversations.map(conv => (
@@ -235,6 +255,7 @@ export function MessagesPanel() {
                     userId={user?.id ?? ''}
                     isSelected={conv.id === selectedConversationId}
                     onClick={() => selectConversation(conv.id)}
+                    locale={locale}
                   />
                 ))}
               </div>
@@ -244,8 +265,8 @@ export function MessagesPanel() {
             {completedConversations.length > 0 && (
               <div>
                 <div className="px-4 py-2 bg-lime-50">
-                  <span className="text-xs font-medium text-lime-700 uppercase tracking-wider">
-                    Completed ({completedConversations.length})
+                  <span className="text-xs font-medium text-lime-700 uppercase tracking-wider rtl:tracking-normal">
+                    {formatMessage(messagesT(locale, 'sectionCompleted'), { n: formatCount(completedConversations.length, locale) })}
                   </span>
                 </div>
                 {completedConversations.map(conv => (
@@ -255,6 +276,7 @@ export function MessagesPanel() {
                     userId={user?.id ?? ''}
                     isSelected={conv.id === selectedConversationId}
                     onClick={() => selectConversation(conv.id)}
+                    locale={locale}
                   />
                 ))}
               </div>
@@ -264,8 +286,8 @@ export function MessagesPanel() {
             {history.length > 0 && (
               <div>
                 <div className="px-4 py-2 bg-stone-50">
-                  <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">
-                    History ({history.length})
+                  <span className="text-xs font-medium text-stone-500 uppercase tracking-wider rtl:tracking-normal">
+                    {formatMessage(messagesT(locale, 'sectionHistory'), { n: formatCount(history.length, locale) })}
                   </span>
                 </div>
                 {history.map(conv => (
@@ -275,6 +297,7 @@ export function MessagesPanel() {
                     userId={user?.id ?? ''}
                     isSelected={conv.id === selectedConversationId}
                     onClick={() => selectConversation(conv.id)}
+                    locale={locale}
                   />
                 ))}
               </div>
@@ -291,14 +314,16 @@ export function MessagesPanel() {
             <div className="p-4 border-b border-stone-200/50 flex items-center gap-3">
               <button
                 onClick={() => selectConversation(null)}
+                aria-label={messagesT(locale, 'backToList')}
                 className="md:hidden text-stone-400 hover:text-stone-600"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 rtl:rotate-180" aria-hidden="true" />
               </button>
               <div className="flex-1">
-                <p className="font-medium text-stone-800 text-sm">{otherUserName}</p>
+                <p lang={otherUserLang} dir="auto" className="font-medium text-stone-800 text-sm">{otherUserName}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge
+                    lang={englishIfUnlabelled(isConversationStatus(selectedConv.status))}
                     className={`text-xs ${
                       selectedConv.status === 'active' ? 'bg-green-100 text-green-700' :
                       selectedConv.status === 'pending' ? 'bg-amber-100 text-amber-700' :
@@ -306,11 +331,11 @@ export function MessagesPanel() {
                       'bg-stone-100 text-stone-500'
                     }`}
                   >
-                    {selectedConv.status}
+                    {conversationStatusLabel(selectedConv.status, locale)}
                   </Badge>
                   {selectedConv.resource?.category && (
-                    <span className="text-xs text-stone-600">
-                      {CATEGORY_LABELS[selectedConv.resource.category] ?? selectedConv.resource.category}
+                    <span lang={englishIfUnlabelled(isResourceCategory(selectedConv.resource.category))} className="text-xs text-stone-600">
+                      {resourceCategoryLabel(selectedConv.resource.category, locale)}
                     </span>
                   )}
                 </div>
@@ -321,27 +346,27 @@ export function MessagesPanel() {
                 {selectedConv.status === 'pending' && isVolunteer && (
                   <>
                     <Button size="sm" onClick={() => acceptRequest(selectedConv.id)} className="bg-green-600 hover:bg-green-700 text-white text-xs">
-                      <Check className="w-3 h-3 mr-1" /> Accept
+                      <Check className="w-3 h-3 me-1" /> {messagesT(locale, 'accept')}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'decline', id: selectedConv.id })} className="text-xs">
-                      Decline
+                    <Button size="sm" variant="outline" onClick={(e) => openConfirm({ type: 'decline', id: selectedConv.id }, e.currentTarget)} className="text-xs">
+                      {messagesT(locale, 'decline')}
                     </Button>
                   </>
                 )}
                 {selectedConv.status === 'pending' && !isVolunteer && (
-                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'withdraw', id: selectedConv.id })} className="text-xs">
-                    Withdraw
+                  <Button size="sm" variant="outline" onClick={(e) => openConfirm({ type: 'withdraw', id: selectedConv.id }, e.currentTarget)} className="text-xs">
+                    {messagesT(locale, 'withdraw')}
                   </Button>
                 )}
                 {selectedConv.status === 'active' && isVolunteer && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setConfirmAction({ type: 'complete', id: selectedConv.id })}
+                    onClick={(e) => openConfirm({ type: 'complete', id: selectedConv.id }, e.currentTarget)}
                     className="text-xs text-lime-700 hover:text-lime-800 border-lime-300"
                     data-testid="end-and-review-btn"
                   >
-                    <CheckCircle className="w-3 h-3 mr-1" /> End &amp; review
+                    <CheckCircle className="w-3 h-3 me-1" /> {messagesT(locale, 'endAndReview')}
                   </Button>
                 )}
               </div>
@@ -361,11 +386,12 @@ export function MessagesPanel() {
                         : 'bg-stone-100 text-stone-800'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed">{msg.content}</p>
+                    {/* Written by a member: its own direction, no page language. */}
+                    <p lang="" dir="auto" className="text-sm leading-relaxed">{msg.content}</p>
                     <p className={`text-[10px] mt-1 ${
                       msg.sender_id === user?.id ? 'text-white/60' : 'text-stone-400'
                     }`}>
-                      {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      {msg.created_at ? formatClock(msg.created_at, locale, browserTimeZone()) : ''}
                     </p>
                   </div>
                 </div>
@@ -378,7 +404,11 @@ export function MessagesPanel() {
                 {selectedConv.status === 'pending' ? (
                   <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
                     <Clock className="w-4 h-4" />
-                    <span>Waiting for {otherUserName} to accept your request...</span>
+                    <span>
+                      {beforeWaitingName}
+                      <bdi lang={otherUserLang}>{otherUserName}</bdi>
+                      {afterWaitingName}
+                    </span>
                   </div>
                 ) : (
                   <div className="flex gap-2">
@@ -386,16 +416,19 @@ export function MessagesPanel() {
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Type a message..."
+                      placeholder={messagesT(locale, 'inputPlaceholder')}
+                      aria-label={messagesT(locale, 'inputPlaceholder')}
+                      dir={messageInput ? 'auto' : dir(locale)}
                       className="flex-1 text-stone-900 placeholder:text-stone-400"
                       maxLength={2000}
                     />
                     <Button
                       onClick={handleSend}
                       disabled={isSending || !messageInput.trim()}
+                      aria-label={messagesT(locale, 'send')}
                       className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
                     >
-                      {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {isSending ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Send className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />}
                     </Button>
                   </div>
                 )}
@@ -404,8 +437,9 @@ export function MessagesPanel() {
               /* ── Review prompt card (both parties see this) ── */
               <div className="p-4 border-t border-stone-200/50">
                 {reviewLoading || myReview === undefined ? (
-                  <div className="flex items-center justify-center py-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
+                  <div role="status" className="flex items-center justify-center py-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" aria-hidden="true" />
+                    <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
                   </div>
                 ) : myReview !== null ? (
                   /* Already reviewed — show their rating */
@@ -415,13 +449,16 @@ export function MessagesPanel() {
                   >
                     <CheckCircle className="w-5 h-5 text-lime-600 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-lime-800">Your review was submitted</p>
+                      <p className="text-sm font-medium text-lime-800">{messagesT(locale, 'reviewSubmitted')}</p>
                       <div className="flex items-center gap-1 mt-1">
-                        <WheatStalkRatingDisplay
-                          value={myReview.rating}
-                          size="sm"
-                          testIdPrefix={`my-review-stalks-${selectedConv.id}`}
-                        />
+                        {/* The rating's own name ("4 out of 5 stalks") is not translated yet: marked English. */}
+                        <span lang="en" dir="ltr" data-english-only="rating" className="inline-flex">
+                          <WheatStalkRatingDisplay
+                            value={myReview.rating}
+                            size="sm"
+                            testIdPrefix={`my-review-stalks-${selectedConv.id}`}
+                          />
+                        </span>
                         <span className="text-xs text-lime-700">{myReview.rating}/5</span>
                       </div>
                     </div>
@@ -433,10 +470,12 @@ export function MessagesPanel() {
                     className="bg-amber-50 border border-amber-200 rounded-xl p-4"
                   >
                     <p className="text-sm font-semibold text-stone-800 mb-1">
-                      How did it go?
+                      {messagesT(locale, 'reviewPromptTitle')}
                     </p>
                     <p className="text-sm text-stone-600 mb-3">
-                      Leave a review for <span className="font-medium">{otherUserName}</span>
+                      {beforeReviewName}
+                      <span lang={otherUserLang} dir="auto" className="font-medium">{otherUserName}</span>
+                      {afterReviewName}
                     </p>
                     <Button
                       size="sm"
@@ -444,7 +483,7 @@ export function MessagesPanel() {
                       onClick={() => setReviewModalOpen(true)}
                       className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white text-xs"
                     >
-                      Rate your experience
+                      {messagesT(locale, 'rateExperience')}
                     </Button>
                   </div>
                 )}
@@ -455,39 +494,60 @@ export function MessagesPanel() {
           <div className="flex-1 flex items-center justify-center text-center p-8">
             <div>
               <MessageSquare className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-              <p className="text-sm text-stone-600">Select a conversation to view messages</p>
+              <p className="text-sm text-stone-600">{messagesT(locale, 'selectConversation')}</p>
             </div>
           </div>
         )}
       </div>
 
       {/* Error display */}
-      {error && (
-        <div className="absolute bottom-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
-          {error}
+      {failure && (
+        /* The hook's own sentences read in the member's language; the server's text is English. */
+        <div
+          role="alert"
+          lang={failure.translated ? undefined : 'en'}
+          dir={failure.translated ? undefined : 'ltr'}
+          className="absolute bottom-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600"
+        >
+          {failure.text}
         </div>
       )}
 
       {/* Confirm dialog for conversation actions */}
       <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
-        <DialogContent className="sm:max-w-sm">
+        {/* A portal: it does not inherit the panel's language, so it carries its own. */}
+        <DialogContent
+          lang={locale}
+          dir={dir(locale)}
+          closeLabel={cardT(locale, 'close')}
+          className="sm:max-w-sm"
+          onCloseAutoFocus={(e) => {
+            // Back to the button that opened it, when that button is still on the page (after
+            // a confirmed action it may be gone; then Radix decides).
+            const opener = confirmOpenerRef.current
+            if (opener?.isConnected) {
+              e.preventDefault()
+              opener.focus()
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
-              {confirmAction?.type === 'decline' && 'Decline this request?'}
-              {confirmAction?.type === 'withdraw' && 'Withdraw your request?'}
-              {confirmAction?.type === 'cancel' && 'End this conversation?'}
-              {confirmAction?.type === 'complete' && 'End conversation?'}
+              {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDeclineTitle')}
+              {confirmAction?.type === 'withdraw' && messagesT(locale, 'confirmWithdrawTitle')}
+              {confirmAction?.type === 'cancel' && messagesT(locale, 'confirmCancelTitle')}
+              {confirmAction?.type === 'complete' && messagesT(locale, 'confirmCompleteTitle')}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-stone-600">
-            {confirmAction?.type === 'decline' && 'The requester will be notified that their request was declined.'}
-            {confirmAction?.type === 'withdraw' && 'Your request will be cancelled and cannot be recovered.'}
-            {confirmAction?.type === 'cancel' && 'This conversation will be closed and cannot be reopened.'}
-            {confirmAction?.type === 'complete' && 'Both of you will be able to leave a review once the conversation is marked complete.'}
-          </p>
+          <DialogDescription className="text-sm text-stone-600">
+            {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDeclineBody')}
+            {confirmAction?.type === 'withdraw' && messagesT(locale, 'confirmWithdrawBody')}
+            {confirmAction?.type === 'cancel' && messagesT(locale, 'confirmCancelBody')}
+            {confirmAction?.type === 'complete' && messagesT(locale, 'confirmCompleteBody')}
+          </DialogDescription>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>
-              Keep chatting
+              {messagesT(locale, 'keepChatting')}
             </Button>
             <Button
               variant={confirmAction?.type === 'complete' ? 'default' : 'destructive'}
@@ -503,10 +563,10 @@ export function MessagesPanel() {
                 setConfirmAction(null)
               }}
             >
-              {confirmAction?.type === 'decline' && 'Decline Request'}
-              {confirmAction?.type === 'withdraw' && 'Withdraw Request'}
-              {confirmAction?.type === 'cancel' && 'End Conversation'}
-              {confirmAction?.type === 'complete' && 'End & review'}
+              {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDecline')}
+              {confirmAction?.type === 'withdraw' && messagesT(locale, 'confirmWithdraw')}
+              {confirmAction?.type === 'cancel' && messagesT(locale, 'confirmCancel')}
+              {confirmAction?.type === 'complete' && messagesT(locale, 'endAndReview')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -518,7 +578,9 @@ export function MessagesPanel() {
           open={reviewModalOpen}
           onOpenChange={setReviewModalOpen}
           conversationId={selectedConv.id}
-          revieweeName={otherUserName}
+          // The review modal is still English: with no name it gets the English word, not the
+          // member-language one.
+          revieweeName={otherUserName === unknownUser ? messagesT('en', 'unknownUser') : otherUserName}
           revieweeRole={isVolunteer ? 'requester' : 'volunteer'}
           onSubmitted={handleReviewSubmitted}
         />
@@ -543,33 +605,34 @@ interface ConversationCardProps {
   userId: string
   isSelected: boolean
   onClick: () => void
+  locale: Locale
 }
 
-function ConversationCard({ conversation, userId, isSelected, onClick }: ConversationCardProps) {
+function ConversationCard({ conversation, userId, isSelected, onClick, locale }: ConversationCardProps) {
   const isVolunteer = conversation.volunteer_id === userId
   // Privacy-rule-computed name (full for sourcer→seeker, first-only otherwise);
   // fall back to the first-name base join, then 'User'.
   const otherName = conversation.counterpartyDisplayName
     ?? (isVolunteer ? conversation.requester?.first_name : conversation.volunteer?.first_name)
   const categoryLabel = conversation.resource?.category
-    ? CATEGORY_LABELS[conversation.resource.category] ?? conversation.resource.category
+    ? resourceCategoryLabel(conversation.resource.category, locale)
     : null
 
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-stone-100 transition-colors ${
+      className={`w-full text-start px-4 py-3 border-b border-stone-100 transition-colors ${
         isSelected ? 'bg-[#4a5d23]/10' : 'hover:bg-stone-50'
       }`}
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-stone-800 truncate">{otherName ?? 'User'}</p>
+        <p lang={otherName ? '' : undefined} dir="auto" className="text-sm font-medium text-stone-800 truncate">{otherName ?? messagesT(locale, 'unknownUser')}</p>
         <span className="text-[10px] text-stone-600">
-          {conversation.updated_at ? new Date(conversation.updated_at).toLocaleDateString() : ''}
+          {conversation.updated_at ? formatDate(conversation.updated_at, locale, browserTimeZone()) : ''}
         </span>
       </div>
       {categoryLabel && (
-        <span className="text-xs text-stone-600">{categoryLabel}</span>
+        <span lang={englishIfUnlabelled(isResourceCategory(conversation.resource?.category ?? ''))} className="text-xs text-stone-600">{categoryLabel}</span>
       )}
     </button>
   )

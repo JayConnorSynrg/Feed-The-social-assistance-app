@@ -7,9 +7,15 @@
 // time; when the venue's zone differs from the viewer's, the venue time with its zone
 // abbreviation is shown as well. The server converts wall-clock -> instant (create_org_event /
 // add_event_dates); checkLocalTime gives the same DST answer in the form before submit.
+//
+// Locale lists, formatters and "In 3 days" come from lib/i18n-intl.ts, so an event reads in FEED's
+// own words for ht, hmn and so, Tagalog is asked for as 'fil', and Korean keeps its day period —
+// on every device (see that file for the runtimes probed).
 
 import type { Locale } from './i18n'
-import { eventFormT, formatMessage } from './i18n-event-forms'
+import { eventFormT } from './i18n-event-forms'
+import { formatMessage } from './format-message'
+import { dateTimeFormatter, localeTags, relativeFuture, relativePast, type DateTimeFormatter } from './i18n-intl'
 
 /** Area/Location shape the server accepts (assistance_events_time_zone_shape). */
 export const IANA_ZONE_SHAPE = /^[A-Za-z]+(\/[A-Za-z0-9_+-]+)+$/
@@ -29,32 +35,25 @@ export const COMMON_US_ZONES = [
 const FALLBACK_ZONE = 'America/New_York'
 
 /**
- * The locale list handed to Intl for a FEED locale. 'en-US' is always the last entry, so a
- * locale Intl has no CLDR data for (ht, hmn) renders in US English on every device instead of
- * in the device's own default language.
+ * The BCP 47 tags of a FEED locale for Intl (plural rules, list format, zone names): the locale
+ * itself, Tagalog as 'fil' first, and always 'en-US' last, so a locale a runtime has no data for
+ * reads the same on every device instead of in the device's own default language.
  */
 export function intlLocale(locale: Locale): string[] {
-  return locale === 'en' ? ['en-US'] : [locale, 'en-US']
+  return localeTags(locale)
 }
 
-const formatters = new Map<string, Intl.DateTimeFormat>()
-
-/** One cached Intl.DateTimeFormat per (locale, zone, options); building one is the costly part
- *  of formatting, and every card, chip and form row formats with the same few option sets.
- *  `locale` null = the fixed 'en-US' used for wall-clock arithmetic. */
+/** One cached formatter per (locale, zone, options); building one is the costly part of
+ *  formatting, and every card, chip and form row formats with the same few option sets. It is
+ *  an Intl.DateTimeFormat, with FEED's own month, weekday and day-period words where Intl has
+ *  none for the locale (lib/i18n-intl.ts). `locale` null = the fixed 'en-US' used for wall-clock
+ *  arithmetic. */
 export function dateTimeFormat(
   locale: Locale | null,
   timeZone: string,
   options: Intl.DateTimeFormatOptions,
-): Intl.DateTimeFormat {
-  const tags = locale === null ? ['en-US'] : intlLocale(locale)
-  const key = `${tags.join(',')}|${timeZone}|${JSON.stringify(options)}`
-  let f = formatters.get(key)
-  if (!f) {
-    f = new Intl.DateTimeFormat(tags, { ...options, timeZone })
-    formatters.set(key, f)
-  }
-  return f
+): DateTimeFormatter {
+  return dateTimeFormatter(locale, timeZone, options)
 }
 
 /** The viewer's IANA zone, or America/New_York when the runtime reports none / a non-IANA name. */
@@ -149,7 +148,8 @@ export function checkLocalTime(date: string, time: string, tz: string): LocalTim
 }
 
 function rangeText(start: Date, end: Date, tz: string, locale: Locale, timeOnly: boolean): string {
-  const time: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }
+  const clock: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' }
+  const time: Intl.DateTimeFormatOptions = { ...clock, timeZoneName: 'short' }
   const day: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }
   const f = dateTimeFormat(locale, tz, { ...(timeOnly ? {} : day), ...time })
   // formatRange prints ONE zone abbreviation for the whole range, which is wrong when the range
@@ -157,9 +157,17 @@ function rangeText(start: Date, end: Date, tz: string, locale: Locale, timeOnly:
   // is formatted on its own, so each carries its own abbreviation.
   const crossesOffsetChange = offsetMinutes(start.getTime(), tz) !== offsetMinutes(end.getTime(), tz)
   if (!crossesOffsetChange && typeof f.formatRange === 'function') return f.formatRange(start, end)
-  const sameDay = venueDateKey(start.toISOString(), tz) === venueDateKey(end.toISOString(), tz)
-  const fEnd = sameDay || timeOnly ? dateTimeFormat(locale, tz, time) : f
-  return `${f.format(start)} – ${fEnd.format(end)}`
+  const [startDay, endDay] = [venueDateKey(start.toISOString(), tz), venueDateKey(end.toISOString(), tz)]
+  const sameDay = startDay === endDay
+  // A range that runs into another year names the year on both ends, as Intl's formatRange does
+  // ("Thu, Dec 31, 2026, 11:30 PM – Fri, Jan 1, 2027, 1:30 AM").
+  const dated: Intl.DateTimeFormatOptions = startDay.slice(0, 4) === endDay.slice(0, 4) ? day : { ...day, year: 'numeric' }
+  const full = dated === day ? f : dateTimeFormat(locale, tz, { ...dated, ...time })
+  const fEnd = sameDay || timeOnly ? dateTimeFormat(locale, tz, time) : full
+  // A hand-written locale has no formatRange. With one offset for the whole range the zone
+  // abbreviation is printed once, after the end ("3:05 PM – 4:05 PM EDT").
+  const fStart = timeOnly ? dateTimeFormat(locale, tz, crossesOffsetChange ? time : clock) : crossesOffsetChange ? full : dateTimeFormat(locale, tz, { ...dated, ...clock })
+  return `${fStart.format(start)} – ${fEnd.format(end)}`
 }
 
 export interface EventWhen {
@@ -207,13 +215,19 @@ export function formatEventWhen(
   }
 }
 
-/** Long localized name of a zone ("Eastern Standard Time"), or the IANA id when Intl has none. */
+const zoneNameFormats = new Map<string, Intl.DateTimeFormat>()
+
+/** Long localized name of a zone ("Eastern Standard Time"), or the IANA id when Intl has none.
+ *  Zone names are Intl's own in every locale (FEED writes none by hand). */
 function zoneLongName(tz: string, locale: Locale, at: Date): string {
   try {
-    const part = dateTimeFormat(locale, tz, { timeZoneName: 'long' })
-      .formatToParts(at)
-      .find((p) => p.type === 'timeZoneName')
-    return part?.value ?? tz
+    const key = `${locale}|${tz}`
+    let f = zoneNameFormats.get(key)
+    if (!f) {
+      f = new Intl.DateTimeFormat(intlLocale(locale), { timeZone: tz, timeZoneName: 'long' })
+      zoneNameFormats.set(key, f)
+    }
+    return f.formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? tz
   } catch {
     return tz
   }
@@ -280,26 +294,13 @@ export function formatShortDate(iso: string, locale: Locale, viewerTz: string = 
   return dateTimeFormat(locale, viewerTz, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(iso))
 }
 
-const relativeFormats = new Map<Locale, Intl.RelativeTimeFormat | null>()
-
 /**
- * "In 3 days" — a future amount in the viewer's language through Intl.RelativeTimeFormat, which
- * carries each language's plural forms (Arabic dual, Russian few/many). Sentence-cased for a
- * label. null when this runtime has no relative-time data for the locale (ht and hmn have none
- * in CLDR): the caller then uses its own translated phrase rather than an English one.
+ * "In 3 days" — a coming amount in the viewer's language (a negative amount reads "3 days ago"),
+ * sentence-cased for a label: FEED's own words for ht, hmn and so, Intl.RelativeTimeFormat with
+ * each language's plural forms (Arabic dual, Russian few/many) for the rest. null when this
+ * runtime has no relative-time data for a locale FEED does not write by hand: the caller then
+ * uses its own translated phrase rather than an English one.
  */
 export function relativeTimeText(n: number, unit: 'minute' | 'hour' | 'day', locale: Locale): string | null {
-  let f = relativeFormats.get(locale)
-  if (f === undefined) {
-    const tags = intlLocale(locale)
-    f =
-      typeof Intl.RelativeTimeFormat === 'function' && Intl.RelativeTimeFormat.supportedLocalesOf(tags[0]).length > 0
-        ? new Intl.RelativeTimeFormat(tags, { numeric: 'always', style: 'long' })
-        : null
-    relativeFormats.set(locale, f)
-  }
-  if (!f) return null
-  const text = f.format(n, unit)
-  const tag = f.resolvedOptions().locale
-  return text.charAt(0).toLocaleUpperCase(tag) + text.slice(1)
+  return n < 0 ? relativePast(-n, unit, locale) : relativeFuture(n, unit, locale)
 }

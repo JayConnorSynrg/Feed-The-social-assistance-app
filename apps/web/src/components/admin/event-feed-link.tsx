@@ -11,7 +11,7 @@
 
 import type { Locale } from '@/lib/i18n'
 import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
-import { formatMessage } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { formatCalendarDate, venueDateKey } from '@/lib/event-time'
 import { eventFeedStatus, type FeedWindowEvent, type FeedWindowOccurrence } from '@/lib/event-feed-window'
 import { MemberViewLink, REASON_CLASS, type MemberViewSource } from './member-view-link'

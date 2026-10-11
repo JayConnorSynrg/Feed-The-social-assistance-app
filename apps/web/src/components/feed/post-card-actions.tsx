@@ -16,7 +16,7 @@
 // items depend on the signed-in session), the same rule as the event card menu.
 
 import type { Locale } from '@/lib/i18n'
-import { formatMessage } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { cardT } from '@/lib/i18n-feed-card'
 import { relativeAge } from '@/lib/relative-age'
 import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'

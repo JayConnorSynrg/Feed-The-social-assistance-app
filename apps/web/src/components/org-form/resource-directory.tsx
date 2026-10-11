@@ -17,7 +17,8 @@ import { fetchDirectoryPage, type DirectoryResource } from '@/lib/resource-direc
 import { getCategoryTailwind } from '@/lib/resource-categories'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { dir, type Locale } from '@/lib/i18n'
-import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { orgFormT, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { formatMessage } from '@/lib/format-message'
 import { categoryKey } from './org-labels'
 import {
   applyClear,

@@ -23,29 +23,25 @@ import { logger } from '@/lib/logger'
 import { distanceBucketLabel } from '@/components/feed/post-model'
 import { bucketForKm, parseGeographyPoint, sortByDistanceKm } from '@/lib/business'
 import { fetchApprovedOrganizations, type Organization } from '@/lib/org-data'
-import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
 import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canCreateOrganizations } from '@/lib/admin-tier'
-import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
+import { dir } from '@/lib/i18n'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { orgFormT } from '@/lib/i18n-org-forms'
+import { orgsT } from '@/lib/i18n-feed-organizations'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { orgTypeKey } from '@/components/org-form/org-labels'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
-
-/** Human label for an org_type, falling back to the raw value for any unexpected type. */
-function orgTypeLabel(orgType: string): string {
-  return isNonBusinessOrgType(orgType) ? ORG_TYPE_LABELS[orgType] : orgType
-}
 
 export function OrganizationsPanel() {
   const { position, getCurrentPosition } = useGeolocation()
   const { profile } = useAuth()
   const { tier } = useAdminTier()
-  // The admin link speaks the admin's profile language (the rest of this panel is English).
-  const adminLocale: Locale = profile
-    ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null)
-    : 'en'
+  // The whole panel reads in the viewer's profile language.
+  const locale = useProfileLocale()
   const supabase = createClient()
 
   // Device GPS only with the explicit Share Location opt-in, requested once on mount.
@@ -56,17 +52,18 @@ export function OrganizationsPanel() {
 
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Only whether the read failed: the server's own text goes to the log, the member reads FEED's sentence.
+  const [loadError, setLoadError] = useState(false)
 
   const loadOrganizations = useCallback(async () => {
     setLoading(true)
-    setLoadError(null)
+    setLoadError(false)
     try {
       const rows = await fetchApprovedOrganizations(supabase)
       setOrganizations(rows)
     } catch (err) {
       logger.error('organizations.list.failed', err instanceof Error ? err : new Error(String(err)))
-      setLoadError(err instanceof Error ? err.message : 'Failed to load organizations')
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -102,13 +99,13 @@ export function OrganizationsPanel() {
       if (!origin) return null
       const pt = parseGeographyPoint(o.location)
       if (!pt) return null
-      return distanceBucketLabel(bucketForKm(calculateDistance(origin.latitude, origin.longitude, pt.lat, pt.lng)))
+      return distanceBucketLabel(bucketForKm(calculateDistance(origin.latitude, origin.longitude, pt.lat, pt.lng)), locale)
     },
-    [origin]
+    [origin, locale]
   )
 
   return (
-    <div className="h-full overflow-y-auto p-4 sm:p-6">
+    <div lang={locale} dir={dir(locale)} className="h-full overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-2xl space-y-5">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-2">
@@ -116,34 +113,35 @@ export function OrganizationsPanel() {
             <Building2 className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold text-stone-800">Local Organizations</h1>
-            <p className="text-xs text-stone-500">Food banks, shelters, clinics, and community organizations near you</p>
+            <h1 className="text-lg font-bold text-stone-800">{orgsT(locale, 'title')}</h1>
+            <p className="text-xs text-stone-500">{orgsT(locale, 'subtitle')}</p>
           </div>
           {canCreateOrganizations(tier) && (
             <a
               href="/moderation?tab=organizations&org=new"
-              lang={adminLocale}
-              dir={dir(adminLocale)}
+              lang={locale}
+              dir={dir(locale)}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              {orgFormT(adminLocale, 'addOrganization')}
+              {orgFormT(locale, 'addOrganization')}
             </a>
           )}
         </div>
 
         {/* Showcase list */}
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-stone-600">
-            <Loader2 className="h-6 w-6 animate-spin" />
+          <div role="status" className="flex items-center justify-center py-10 text-stone-600">
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+            <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
           </div>
         ) : loadError ? (
           <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">
-            {loadError}
+            {orgsT(locale, 'loadFailed')}
           </div>
         ) : sorted.length === 0 ? (
           <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-500">
-            No organizations yet.
+            {orgsT(locale, 'empty')}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -161,20 +159,21 @@ export function OrganizationsPanel() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="truncate font-semibold text-stone-800">{o.name}</h3>
+                        {/* Written by the organization: its own direction, no page language. */}
+                        <h3 lang="" dir="auto" className="truncate font-semibold text-stone-800">{o.name}</h3>
                         <ExternalLink className="h-4 w-4 shrink-0 text-stone-400" />
                       </div>
                       {o.description && (
-                        <p className="mt-0.5 line-clamp-2 text-sm text-stone-600">{o.description}</p>
+                        <p lang="" dir="auto" className="mt-0.5 line-clamp-2 text-sm text-stone-600">{o.description}</p>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
                         <span className="rounded-full bg-org/10 px-2 py-0.5 font-medium text-org">
-                          {orgTypeLabel(o.org_type)}
+                          {orgFormT(locale, orgTypeKey(o.org_type))}
                         </span>
                         {addr && (
                           <span className="flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5" />
-                            {addr}
+                            <span lang="" dir="auto">{addr}</span>
                           </span>
                         )}
                         {label && <span>{label}</span>}
@@ -187,9 +186,9 @@ export function OrganizationsPanel() {
                     target={{ kind: 'organization', id: o.id }}
                     itemName={o.name}
                     source="organizations_row"
-                    locale={adminLocale}
-                    lang={adminLocale}
-                    dir={dir(adminLocale)}
+                    locale={locale}
+                    lang={locale}
+                    dir={dir(locale)}
                     className={`${ADMIN_EDIT_LINK_CLASS} self-end`}
                   />
                 </li>

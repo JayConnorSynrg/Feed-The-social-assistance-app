@@ -1944,9 +1944,6 @@ export function FeedPanel() {
           id="feed-panel-messages"
           aria-labelledby="feed-tab-messages"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <MessagesPanel />
@@ -1967,9 +1964,6 @@ export function FeedPanel() {
           id="feed-panel-businesses"
           aria-labelledby="feed-tab-businesses"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <BusinessesPanel />
@@ -1980,9 +1974,6 @@ export function FeedPanel() {
           id="feed-panel-organizations"
           aria-labelledby="feed-tab-organizations"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <OrganizationsPanel />
@@ -1993,9 +1984,6 @@ export function FeedPanel() {
           id="feed-panel-petitions"
           aria-labelledby="feed-tab-petitions"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 overflow-y-auto p-1"
         >
           <PetitionsPanel />
