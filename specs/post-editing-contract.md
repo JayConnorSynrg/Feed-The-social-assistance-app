@@ -1,7 +1,8 @@
 # Post editing — RPC contract (PR-2, migrations `20261026000000_post_editing_foundation` + `20261026500000_post_editing_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [post-editing-model.md](post-editing-model.md).
-Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (208 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Behavioural proof: `supabase/tests/posts_editing.smoke.sql` (209 checks, passing in both release states) + `supabase/tests/posts_editing.race.sh` (20 races).
+Release 3 builds on this contract ([r3-contract.md](r3-contract.md)): reports also cover comments and org events and answer `accepted`; opt-in decisions go through `decide_opt_in`; the posts realtime list gains seven columns; `ranked_feed_v2` gains `p_filter`.
 
 ## Release: expand / contract
 

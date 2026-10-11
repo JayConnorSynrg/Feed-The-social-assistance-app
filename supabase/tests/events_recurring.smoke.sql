@@ -1038,9 +1038,12 @@ BEGIN
      AND (SELECT md5(pg_get_functiondef('public.event_local_to_utc(timestamp,text)'::regprocedure))) = 'aa78328d8bdf1b33506b72aa5b24e117',
     'R11: ranked_feed (v1) dropped (20261026000000); event_local_to_utc unchanged';
   ASSERT (SELECT md5(substring(d FROM position('  visible AS (' IN d) FOR position('  -- EVENTS branch' IN d) - position('  visible AS (' IN d)))
-          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure) d) s)
-         = 'eab880757418ffbd2ddc13566f7032bc',
-    'R11: ranked_feed_v2 posts branch = W1.3 ranking + the deleted-post filter (20261026000000)';
+          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure) d) s)
+         = '5e94a6696de65a5c784f45c10e166b69',
+    'R11: ranked_feed_v2 posts branch = W1.3 ranking + the deleted-post filter (20261026000000) + the pin expiry (20261026600000)';
+  ASSERT (SELECT count(*) FROM pg_proc WHERE proname = 'ranked_feed_v2' AND pronamespace = 'public'::regnamespace) = 1
+     AND to_regprocedure('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)') IS NULL,
+    'R11: ranked_feed_v2 has exactly one signature (the five-argument one was dropped, no PostgREST overload)';
   ASSERT (SELECT prosrc !~* 'temp' FROM pg_proc WHERE oid = 'public.event_apply_rule_change(uuid)'::regprocedure),
     'R11: the rule-edit step uses no temp table';
   FOREACH v_fn IN ARRAY ARRAY[
@@ -1049,7 +1052,7 @@ BEGIN
       'public.add_event_dates(uuid,timestamp[],timestamp[])', 'public.cancel_event_occurrence(uuid)',
       'public.preview_event_recurrence(jsonb,timestamp,timestamp,text,integer)', 'public.extend_event_series(uuid,uuid)',
       'public.org_events_ending_soon(uuid,integer)', 'public.upcoming_events(integer)',
-      'public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'] LOOP
+      'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'] LOOP
     ASSERT (SELECT p.prosecdef AND array_to_string(p.proconfig, ',') LIKE 'search_path=public%pg_temp%' FROM pg_proc p WHERE p.oid = v_fn::regprocedure),
       'R11: '||v_fn||' must be SECURITY DEFINER with a pinned search_path';
     ASSERT has_function_privilege('authenticated', v_fn, 'EXECUTE'), 'R11: authenticated must EXECUTE '||v_fn;
@@ -1080,13 +1083,16 @@ BEGIN
   -- R12 — return-column invariant (agreed with Settings C2): ranked_feed_v2 keeps its shape and its
   --        single profiles reference; no function of this migration returns profile display columns
   -- =====================================================================
-  ASSERT pg_get_function_result('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure)
+  ASSERT pg_get_function_result('public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure)
          = 'TABLE(id uuid, kind text, score real, distance_bucket text)', 'R12: ranked_feed_v2 RETURNS unchanged';
+  ASSERT (SELECT pronargs = 6 AND pronargdefaults = 6 FROM pg_proc
+           WHERE oid = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure),
+    'R12: every ranked_feed_v2 argument has a DEFAULT (the five-argument call of an older client still resolves)';
   ASSERT pg_get_function_result('public.upcoming_events(integer)'::regprocedure)
          = 'TABLE(event_id uuid, occurrence_id uuid, starts_at timestamp with time zone, ends_at timestamp with time zone, cancelled_occurrence_id uuid, cancelled_starts_at timestamp with time zone)',
     'R12: upcoming_events returns ids + times only';
   ASSERT (SELECT (length(d) - length(replace(d, 'public.profiles', ''))) / length('public.profiles')
-          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure) d) s) = 1,
+          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure) d) s) = 1,
     'R12: ranked_feed_v2 references public.profiles exactly once (posts branch)';
   ASSERT NOT EXISTS (
     SELECT 1 FROM pg_proc p

@@ -181,8 +181,11 @@ SELECT pg_temp.run('B', $q$INSERT INTO public.post_likes (post_id, user_id) VALU
 SELECT pg_temp.run('B', $q$INSERT INTO public.post_comments (id, post_id, user_id, content) VALUES ('0d000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-a000-000000000002', auth.uid(), 'first') RETURNING 'commented'$q$);
 SELECT pg_temp.t('M4a', 'B opts in to offer P3 (pending)', '^OK pending', 'B', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000003')).status$q$);
 SELECT pg_temp.run('B2', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000003')).status$q$);
-SELECT pg_temp.t('M4b', 'author declines B2 (the slot stays held until unblock)', '^OK declined', 'A',
-  $q$UPDATE public.resource_opt_ins SET status = 'declined' WHERE post_id = '00000000-0000-4000-a000-000000000003' AND seeker_id = '30000000-0000-4000-8000-000000000009' RETURNING status$q$);
+SELECT pg_temp.t('M4b', 'author declines B2 through decide_opt_in (20261026600000; the direct UPDATE goes with 20261026700000); the slot stays held until unblock', '^OK declined$', 'A',
+  $q$SELECT public.decide_opt_in((SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000003' AND seeker_id = '30000000-0000-4000-8000-000000000009'), 'decline') ->> 'status'$q$);
+SELECT pg_temp.ck('M4b2', '... and the decision is on the opt-in trail, once, as the author''s', '^declined:pending:declined:author$',
+  (SELECT string_agg(event || ':' || from_status || ':' || to_status || ':' || actor_role, ',') FROM public.resource_opt_in_events
+    WHERE post_id = '00000000-0000-4000-a000-000000000003' AND seeker_id = '30000000-0000-4000-8000-000000000009' AND event <> 'opted_in'));
 SELECT pg_temp.run('B', $q$SELECT public.submit_content_report('post', '00000000-0000-4000-a000-000000000009', 'spam')::text$q$);
 SELECT pg_temp.run('CM', $q$SELECT public.admin_hold_post('00000000-0000-4000-a000-000000000009')::text$q$);
 SELECT pg_temp.ck('M4', 'like / comment / opt-in / decline / report / hold leave version 1, edit_count 0, edited_at NULL',
@@ -1027,8 +1030,11 @@ SELECT pg_temp.t('F1', 'anon hydration select of the public new columns (column 
   $q$SELECT count(*)::text FROM (SELECT id, version, edited_at, edit_count, image_alt FROM public.posts) x$q$);
 SELECT pg_temp.t('F1b', 'anon cannot select the moderation columns', '^ERR 42501 permission denied for table posts', 'anon',
   $q$SELECT count(*)::text FROM (SELECT id, deleted_at FROM public.posts) x$q$);
-SELECT pg_temp.ck('F2', 'ranked_feed_v2 still returns ids only', '^TABLE\(id uuid, kind text, score real, distance_bucket text\)$',
-  pg_get_function_result('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure));
+SELECT pg_temp.ck('F2', 'ranked_feed_v2 still returns ids only, under its one signature (six arguments since 20261026600000; the five-argument one is gone)',
+  '^TABLE\(id uuid, kind text, score real, distance_bucket text\)\|1\|t$',
+  pg_get_function_result('public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure) || '|' ||
+  (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname = 'ranked_feed_v2') || '|' ||
+  (to_regprocedure('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)') IS NULL)::char);
 SELECT pg_temp.ck('F3', 'ranked_feed (v1) is gone; v2 runs for anon', '^t\|OK [1-9]',
   (to_regprocedure('public.ranked_feed(double precision,double precision,integer,real,uuid)') IS NULL)::char || '|' ||
   pg_temp.run('anon', $q$SELECT count(*)::text FROM public.ranked_feed_v2(NULL, NULL, 50)$q$));
@@ -1067,8 +1073,8 @@ SELECT pg_temp.ck('Q3', 'new tables: RLS on + a SELECT policy; no client write g
                                  OR has_table_privilege('authenticated', c.oid, 'DELETE') OR has_table_privilege('anon', c.oid, 'INSERT')
                                  OR has_table_privilege('anon', c.oid, 'UPDATE') OR has_table_privilege('anon', c.oid, 'DELETE'))
    FROM pg_class c WHERE c.oid IN ('public.post_revisions'::regclass, 'public.post_comment_revisions'::regclass)));
-SELECT pg_temp.ck('Q4', 'realtime: posts column list = the 18 previous columns + the 6 new; the other signal members unchanged',
-  '^poll_votes:id,poll_id\|post_comments:id,post_id\|posts:id,user_id,content,image_url,is_pinned,is_hidden,created_at,updated_at,resource_id,max_seekers,slots_remaining,post_type,petition_id,hidden_at,hidden_reason,metadata,like_count,comment_count,version,edited_at,edit_count,image_alt,deleted_at,needs_review_at$',
+SELECT pg_temp.ck('Q4', 'realtime: posts column list = the 18 previous columns + the 6 of post editing + the 7 of 20261026600000; the other signal members unchanged',
+  '^poll_votes:id,poll_id\|post_comments:id,post_id\|posts:id,user_id,content,image_url,is_pinned,is_hidden,created_at,updated_at,resource_id,max_seekers,slots_remaining,post_type,petition_id,hidden_at,hidden_reason,metadata,like_count,comment_count,version,edited_at,edit_count,image_alt,deleted_at,needs_review_at,labels,comments_locked_at,comments_locked_reason,comments_locked_by_role,closed_at,closed_reason,pinned_until$',
   (SELECT string_agg(tablename || ':' || array_to_string(attnames, ','), '|' ORDER BY tablename) FROM pg_publication_tables
    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename IN ('posts', 'poll_votes', 'post_comments')));
 SELECT pg_temp.ck('Q4b', 'revision id sequences: no anon / authenticated USAGE, SELECT or UPDATE', '^ffffffffffff$',

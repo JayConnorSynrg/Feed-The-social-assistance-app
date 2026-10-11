@@ -24,7 +24,8 @@ import { queryProd, isTokenAvailable } from './prod-client'
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
-const SIG = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'
+// Six arguments since 20261026600000 (p_filter added; DROP + CREATE, never an overload).
+const SIG = 'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'
 const MGMT_URL = 'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
 // v1 prosrc md5 captured on origin/develop 2026-09-24 (I5 — v1 must stay byte-identical).
 const V1_MD5 = '2cca92d907df6b60fbc840214a9df485'

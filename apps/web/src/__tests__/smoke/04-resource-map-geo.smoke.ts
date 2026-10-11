@@ -54,9 +54,21 @@ maybeDescribe('04 — Resource Map & Geo (PROD read-only)', () => {
     `)
     expect(rows.length).toBeGreaterThan(0)
     const resultType = rows[0].result_type as string
-    // The RETURNS TABLE must NOT include created_by — only is_mine as the derived boolean
+    // The RETURNS TABLE must NOT include created_by — only is_mine as the derived boolean.
+    // 20261026600000: nor verified_by / the raw location; id and the 13 columns the map reads keep their
+    // order, followed by the seven new ones.
+    expect(rows.length, 'exactly one safety_alerts_in_view signature').toBe(1)
     expect(resultType).not.toContain('created_by')
+    expect(resultType).not.toContain('verified_by')
+    expect(resultType).not.toContain('location')
     expect(resultType).toContain('is_mine')
+    expect(resultType.startsWith(
+      'TABLE(id uuid, alert_type text, severity integer, description text, lng double precision, lat double precision, ' +
+      'status text, confirm_count integer, clear_count integer, created_at timestamp with time zone, ' +
+      'expires_at timestamp with time zone, verified boolean, is_mine boolean, version integer,'
+    )).toBe(true)
+    expect(resultType).toContain('shown_state text')
+    expect(resultType).toContain('shown_until timestamp with time zone')
   })
 
   it('resources table has RLS enabled', async () => {

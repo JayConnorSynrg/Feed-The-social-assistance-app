@@ -31,6 +31,12 @@ const GATE_AND_STATE_SQL = `
     has_column_privilege('authenticated','public.resource_opt_ins','seeker_id','UPDATE') AS optins_seeker_upd,
     has_column_privilege('authenticated','public.resource_opt_ins','status','UPDATE')     AS optins_status_upd,
     has_table_privilege('authenticated','public.resource_opt_ins','UPDATE')               AS optins_tbl_upd,
+    -- Release 3: decide_opt_in is the audited path; the direct UPDATE (status) goes with the contract step.
+    EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261026700000') AS r3_contract,
+    to_regprocedure('public.decide_opt_in(uuid,text,text)') IS NOT NULL                    AS decide_rpc,
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relname='resource_opt_ins' AND t.tgenabled <> 'D'
+       AND t.tgname IN ('trg_resource_opt_ins_audit','trg_resource_opt_ins_return_slot'))  AS optins_r3_triggers,
     has_column_privilege('authenticated','public.conversations','volunteer_id','UPDATE')  AS conv_volunteer_upd,
     has_column_privilege('authenticated','public.conversations','status','UPDATE')         AS conv_status_upd,
     has_table_privilege('authenticated','public.conversations','UPDATE')                   AS conv_tbl_upd,
@@ -88,7 +94,18 @@ const GATE_AND_STATE_SQL = `
     (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='public'
        AND p.proname IN ('delete_safety_alert','update_safety_alert','withdraw_petition_signature')
-       AND position('is_anonymous' IN pg_get_functiondef(p.oid)) > 0)                      AS secdef_guards,
+       AND (position('is_anonymous' IN pg_get_functiondef(p.oid)) > 0
+            OR position('public.safety_alert_require_member()' IN pg_get_functiondef(p.oid)) > 0)) AS secdef_guards,
+    -- Release 3: the seven alert writers share ONE gate (JWT claim AND auth.users flag); each must call it.
+    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public'
+       AND p.proname IN ('place_safety_alert','update_safety_alert','resolve_safety_alert','delete_safety_alert',
+                         'vote_safety_alert','admin_verify_safety_alert','admin_remove_safety_alert')
+       AND position('public.safety_alert_require_member()' IN pg_get_functiondef(p.oid)) > 0) AS alert_writers_gated,
+    (SELECT position('is_anonymous'')::boolean' IN pg_get_functiondef(p.oid)) > 0
+            AND position('is_anonymous IS TRUE' IN pg_get_functiondef(p.oid)) > 0
+       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname='safety_alert_require_member')                AS alert_gate_both_checks,
     has_function_privilege('anon','public.delete_safety_alert(uuid)','EXECUTE')            AS anon_exec_del_alert,
     has_function_privilege('anon','public.withdraw_petition_signature(uuid)','EXECUTE')    AS anon_exec_withdraw_sig,
     has_function_privilege('authenticated','public.delete_safety_alert(uuid)','EXECUTE')  AS auth_exec_del_alert,
@@ -106,7 +123,11 @@ maybeDescribe('25 — P2.0 integrity (PROD read-only)', () => {
     }
     // resource_opt_ins: only `status` is client-writable; seeker_id/table locked.
     expect(r.optins_seeker_upd, 'opt_ins.seeker_id must NOT be client-writable').toBe(false)
-    expect(r.optins_status_upd, 'opt_ins.status must remain client-writable (author flow)').toBe(true)
+    // Release 3: client-writable until the contract step (20261026700000), closed after it; decide_opt_in
+    // is there in both states, and every opt-in change is audited and slot-safe by trigger.
+    expect(r.optins_status_upd, 'opt_ins.status is client-writable exactly until the Release 3 contract step').toBe(r.r3_contract !== true)
+    expect(r.decide_rpc, 'decide_opt_in (the audited author decision) must exist').toBe(true)
+    expect(Number(r.optins_r3_triggers), 'the opt-in audit + slot-return triggers must be present and enabled').toBe(2)
     expect(r.optins_tbl_upd, 'opt_ins table-level UPDATE must be revoked').toBe(false)
     // conversations: only `status` is client-writable; participants/table locked.
     expect(r.conv_volunteer_upd, 'conversations.volunteer_id must NOT be client-writable').toBe(false)
@@ -139,6 +160,8 @@ maybeDescribe('25 — P2.0 integrity (PROD read-only)', () => {
     expect(Number(r.mfa_guest_blocks), 'mfa_backup_codes must block guest INSERT/UPDATE/DELETE').toBe(3)
     // Every owner-scoped SECDEF writer carries the is_anonymous guard, EXECUTE authenticated-only.
     expect(Number(r.secdef_guards), 'all 3 SECDEF guest guards must be present').toBe(3)
+    expect(Number(r.alert_writers_gated), 'all 7 alert writers must call the shared guest gate').toBe(7)
+    expect(r.alert_gate_both_checks, 'the shared alert gate must check the JWT claim AND the auth.users flag').toBe(true)
     expect(r.anon_exec_del_alert, 'anon must NOT EXECUTE delete_safety_alert').toBe(false)
     expect(r.anon_exec_withdraw_sig, 'anon must NOT EXECUTE withdraw_petition_signature').toBe(false)
     expect(r.auth_exec_del_alert, 'authenticated must EXECUTE delete_safety_alert').toBe(true)

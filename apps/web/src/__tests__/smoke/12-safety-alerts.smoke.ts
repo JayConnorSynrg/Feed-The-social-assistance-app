@@ -55,25 +55,54 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
     expect(rows[0].can_select, 'anon must NOT have SELECT on safety_alerts.created_by').toBe(false)
   })
 
-  it('safety alert RPCs are SECDEF', async () => {
-    // Backend: place_safety_alert, vote_safety_alert, admin_verify_safety_alert, admin_remove_safety_alert
-    // Surface: use-safety-alerts.ts:165 (place), :201 (vote), safety-alerts-review.tsx:93 (verify)
+  it('all nine safety alert RPCs are SECDEF with search_path = public, pg_temp, one signature each', async () => {
+    // Backend: 20261026600000 — place / update / resolve / delete (withdraw) / vote / admin_verify / admin_remove,
+    // and the two readers safety_alerts_in_view + safety_alert_history.
+    // Surface: use-safety-alerts.ts (place, vote, update, delete, read), safety-alerts-review.tsx (verify, remove)
     const rows = await queryProd(`
-      SELECT proname, prosecdef
+      SELECT proname, prosecdef, proconfig
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
         AND proname IN (
-          'place_safety_alert',
-          'vote_safety_alert',
-          'safety_alerts_in_view',
-          'admin_verify_safety_alert'
+          'place_safety_alert', 'update_safety_alert', 'resolve_safety_alert', 'delete_safety_alert',
+          'vote_safety_alert', 'admin_verify_safety_alert', 'admin_remove_safety_alert',
+          'safety_alerts_in_view', 'safety_alert_history'
         )
     `)
-    expect(rows.length).toBe(4)
+    expect(rows.length).toBe(9)
     for (const row of rows) {
       expect(row.prosecdef, `${row.proname} must be SECDEF`).toBe(true)
+      expect(row.proconfig, `${row.proname} must pin search_path = public, pg_temp`).toEqual(['search_path=public, pg_temp'])
     }
+  })
+
+  it('no client role can SELECT safety_alerts.verified_by (the verifying moderator stays anonymous too)', async () => {
+    const rows = await queryProd(`
+      SELECT has_column_privilege('anon', 'public.safety_alerts', 'verified_by', 'SELECT')          AS anon_sel,
+             has_column_privilege('authenticated', 'public.safety_alerts', 'verified_by', 'SELECT') AS auth_sel
+    `)
+    expect(rows[0].anon_sel, 'anon must NOT have SELECT on safety_alerts.verified_by').toBe(false)
+    expect(rows[0].auth_sel, 'authenticated must NOT have SELECT on safety_alerts.verified_by').toBe(false)
+  })
+
+  it('no alert RPC returns the safety_alerts row or an identity column; clients hold no write bit and no grant on the history', async () => {
+    const rows = await queryProd(`
+      SELECT
+        (SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname ~ 'safety_alert' AND p.prorettype <> 'trigger'::regtype
+            AND pg_get_function_result(p.oid) ~ '(created_by|verified_by|actor_id|safety_alerts$)')         AS identity_returners,
+        (SELECT count(*)::int FROM unnest(ARRAY['anon','authenticated']) r,
+                unnest(ARRAY['public.safety_alerts','public.safety_alert_votes','public.safety_alert_updates']) t,
+                unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE']) pr WHERE has_table_privilege(r, t, pr)) AS client_write_bits,
+        has_table_privilege('authenticated', 'public.safety_alert_updates', 'SELECT')                       AS history_select,
+        (SELECT count(*)::int FROM pg_publication_tables
+          WHERE pubname = 'supabase_realtime' AND tablename IN ('safety_alert_votes', 'safety_alert_updates')) AS published
+    `)
+    expect(rows[0].identity_returners).toBe(0)
+    expect(rows[0].client_write_bits).toBe(0)
+    expect(rows[0].history_select).toBe(false)
+    expect(rows[0].published).toBe(0)
   })
 
   it('admin_verify_safety_alert has pinned search_path', async () => {
@@ -86,8 +115,8 @@ maybeDescribe('12 — Safety Alerts (PROD read-only)', () => {
       WHERE n.nspname = 'public' AND proname = 'admin_verify_safety_alert'
     `)
     expect(rows.length).toBeGreaterThan(0)
+    expect(rows.length, 'exactly one admin_verify_safety_alert signature (no PostgREST overload)').toBe(1)
     const config = rows[0].proconfig as string[] | null
-    const hasSearchPath = config?.some((c: string) => c.startsWith('search_path='))
-    expect(hasSearchPath).toBe(true)
+    expect(config).toEqual(['search_path=public, pg_temp'])
   })
 })

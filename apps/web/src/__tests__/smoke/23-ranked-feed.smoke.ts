@@ -21,7 +21,8 @@ import { queryProd, isTokenAvailable } from './prod-client'
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
-const SIG = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid)"
+// Six arguments since 20261026600000 (p_filter added; DROP + CREATE, never an overload).
+const SIG = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)"
 const MGMT_URL = 'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
 
 function loadTokenForProbe(): string {
@@ -96,6 +97,33 @@ maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
     for (const banned of ['lat', 'lng', 'latitude', 'longitude', 'location', 'geog', 'geom', 'coord', 'dist_km']) {
       expect(sig).not.toContain(banned)
     }
+  })
+
+  it('has exactly one signature, every argument defaulted (the five-argument call still resolves, no PostgREST overload)', async () => {
+    const rows = await queryProd(`
+      SELECT count(*)::int AS signatures,
+             bool_and(p.pronargs = 6 AND p.pronargdefaults = 6) AS all_defaulted,
+             to_regprocedure('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)') IS NULL AS five_arg_gone
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed_v2'
+    `)
+    expect(rows[0].signatures).toBe(1)
+    expect(rows[0].all_defaulted).toBe(true)
+    expect(rows[0].five_arg_gone).toBe(true)
+  })
+
+  it('the Announcements filter returns only pinned posts and org events; an unknown filter returns nothing', async () => {
+    const rows = await queryProd(`
+      SELECT
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'announcements') r
+          WHERE NOT (r.kind = 'event' OR EXISTS (SELECT 1 FROM public.posts p WHERE p.id = r.id AND p.is_pinned AND (p.pinned_until IS NULL OR p.pinned_until > now())))) AS not_announcements,
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'no-such-filter')) AS unknown_filter_rows,
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'all')) = (SELECT count(*)::int FROM ranked_feed_v2(NULL, NULL, 1000, NULL, NULL)) AS all_is_everything
+    `)
+    expect(rows[0].not_announcements).toBe(0)
+    expect(rows[0].unknown_filter_rows).toBe(0)
+    expect(rows[0].all_is_everything).toBe(true)
   })
 
   it('EXECUTE is granted to anon, authenticated, service_role (INV-D)', async () => {
