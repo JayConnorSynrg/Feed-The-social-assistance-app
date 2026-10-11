@@ -10,7 +10,11 @@
 //   - a business's own name, description and place keep their direction, no page language;
 //   - the panel's own failure fallbacks read in the member's language; text from the server or
 //     from lib/business-data.ts is English and marked English;
-//   - each day switch's accessible name starts with the word on the switch, in all 14 locales.
+//   - each day switch is named by the day shown beside it, in all 14 locales, and the name does
+//     not change when the switch is flipped;
+//   - a business's own words are never handed to a translation function;
+//   - data fields in US formats read left to right, an empty text field takes the page
+//     direction, the photo pickers can be reached with the keyboard, loading says so.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createElement as h, type ReactElement } from 'react'
@@ -28,6 +32,7 @@ const { state } = vi.hoisted(() => ({
     loadError: null as unknown,
     outcome: { ok: true, id: 'new' } as unknown,
     submitThrows: null as unknown,
+    upload: { url: null, path: null, error: null } as { url: string | null; path: string | null; error: string | null },
   },
 }))
 vi.mock('@/hooks/use-auth', () => ({
@@ -44,7 +49,7 @@ vi.mock('@/lib/logger', () => ({
 }))
 vi.mock('@/hooks/use-geolocation', () => ({ useGeolocation: () => ({ position: null, getCurrentPosition: vi.fn() }), calculateDistance: () => 0 }))
 vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: { businessSubmit: true } }) }))
-vi.mock('@/lib/post-image-upload', () => ({ uploadPostImage: vi.fn(), deletePostImage: vi.fn() }))
+vi.mock('@/lib/post-image-upload', () => ({ uploadPostImage: async () => state.upload, deletePostImage: vi.fn() }))
 vi.mock('@/lib/business-data', () => ({
   fetchApprovedBusinesses: async () => {
     if (state.loadError) throw state.loadError
@@ -62,7 +67,7 @@ import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { BUSINESS_ATTRIBUTES, BUSINESS_CATEGORIES } from '@/lib/business-vocab'
 import { businessAttributeLabel, businessCategoryLabel, businessFailure, businessesT, costModelLabel } from '@/lib/i18n-feed-businesses'
-import { BusinessesPanel, hoursSwitchName } from './businesses-panel'
+import { BusinessesPanel, hoursDayName } from './businesses-panel'
 
 const LOCALES = Object.keys(messages) as Locale[]
 type El = { type: unknown; props: Record<string, unknown> }
@@ -87,6 +92,7 @@ beforeEach(() => {
   state.loadError = null
   state.outcome = { ok: true, id: 'new' }
   state.submitThrows = null
+  state.upload = { url: null, path: null, error: null }
 })
 
 describe('Businesses sub-tab in the member language', () => {
@@ -103,14 +109,14 @@ describe('Businesses sub-tab in the member language', () => {
     expect(html).toContain('<option value="childcare">Cuidado infantil</option>')
     expect(html).toMatch(/role="group" aria-label="Tipo de costo"/)
     expect(html).toMatch(/>Escala móvil<\/button>/)
-    expect(html).toContain('>dom</span>')
-    expect(html).toContain('>lun</span>')
+    expect(html).toContain('>domingo</span>')
+    expect(html).toContain('>lunes</span>')
     expect(html).toContain('Copiar el lunes a los días laborables')
     expect(html).toMatch(/>Acepta EBT<\/button>/)
     expect(html).toContain('+ Añadir servicio')
     expect(html).toMatch(/>Enviar para revisión<\/button>/)
     expect(html).toMatch(/>Cancelar<\/button>/)
-    expect(html).not.toMatch(/Local Businesses|Business name|>Details<|>Hours<|>Sun<|>Mon<|Sliding scale|Accepts EBT|Submit for review|>Cancel<|Select…/)
+    expect(html).not.toMatch(/Local Businesses|Business name|>Details<|>Hours<|>Sun<|>Mon<|>Sunday<|>Monday<|Sliding scale|Accepts EBT|Submit for review|>Cancel<|Select…/)
   })
 
   it('ar: Arabic copy, dir="rtl", logical spacing and a mirrored disclosure arrow', async () => {
@@ -157,8 +163,62 @@ describe('member-written text', () => {
     expect(html).toContain('<h3 lang="" dir="auto" class="truncate font-semibold text-stone-800">مخبز الحي</h3>')
     expect(html).toMatch(/<p lang="" dir="auto"[^>]*>خبز طازج كل صباح<\/p>/)
     expect(html).toContain('<span lang="" dir="auto">Winooski, VT</span>')
-    expect(html).toMatch(/<input id="biz-name"[^>]*dir="auto"/)
-    expect(html).toMatch(/<textarea id="biz-desc"[^>]*dir="auto"/)
+  })
+
+  it('is never handed to a translation function: a name or description that equals a code is shown as written', async () => {
+    // A business named, word for word, like this panel's own failure codes.
+    state.rows = [row({ name: 'load_failed', description: 'upload_failed' })]
+    const { html } = await panel('ko')
+    expect(html).toContain('<h3 lang="" dir="auto" class="truncate font-semibold text-stone-800">load_failed</h3>')
+    expect(html).toMatch(/<p lang="" dir="auto"[^>]*>upload_failed<\/p>/)
+    expect(html).not.toContain('업체를 불러오지 못했습니다')
+    expect(html).not.toContain('업로드하지 못했습니다')
+  })
+})
+
+describe('direction of the form fields', () => {
+  it('address, phone, website, email, ZIP and social links read left to right in a right-to-left locale', async () => {
+    const { html } = await panel('ar')
+    for (const id of ['biz-address', 'biz-phone', 'biz-website', 'biz-email', 'biz-zip', 'social-facebook', 'social-instagram', 'social-x', 'social-linkedin', 'social-youtube', 'social-tiktok']) {
+      expect(html, id).toMatch(new RegExp(`<input id="${id}"[^>]*dir="ltr"`))
+    }
+  })
+
+  it('an empty name, description or service field takes the page direction (the placeholder sits on its side); typed text takes its own', async () => {
+    const { c, html } = await panel('ar')
+    expect(html).toMatch(/<input id="biz-name"[^>]*dir="rtl"/)
+    expect(html).toMatch(/<textarea id="biz-desc"[^>]*dir="rtl"/)
+    const field = (id: string) => (findAll(c.tree(), (e: El) => e.props.id === id) as El[])[0]
+    ;(field('biz-name').props.onChange as (e: unknown) => void)({ target: { value: 'Corner Cafe' } })
+    ;(field('biz-desc').props.onChange as (e: unknown) => void)({ target: { value: 'Coffee' } })
+    // Add a service row: empty at first.
+    const addService = (findAll(c.tree(), (e: El) => e.type === 'button' && Array.isArray(e.props.children) && (e.props.children as unknown[]).includes('إضافة خدمة')) as El[])[0]
+    ;(addService.props.onClick as () => void)()
+    const after = renderToStaticMarkup(c.rerender() as unknown as ReactElement)
+    expect(after).toMatch(/<input id="biz-name"[^>]*dir="auto"/)
+    expect(after).toMatch(/<textarea id="biz-desc"[^>]*dir="auto"/)
+    expect(after).toMatch(/<input aria-label="اسم الخدمة 1"[^>]*dir="rtl"/)
+    expect(after).toMatch(/<input aria-label="وصف الخدمة 1"[^>]*dir="rtl"/)
+  })
+})
+
+describe('photo pickers and loading', () => {
+  it('each file input stays in the tab order (sr-only, not hidden) and its label shows the focus', async () => {
+    const { html } = await panel('en')
+    const inputs = html.match(/<input type="file"[^>]*>/g) ?? []
+    expect(inputs).toHaveLength(3)
+    for (const input of inputs) {
+      expect(input).toContain('class="sr-only"')
+      expect(input).not.toMatch(/class="[^"]*\bhidden\b/)
+    }
+    expect(html.match(/<label class="[^"]*focus-within:ring-2 focus-within:ring-lime-600[^"]*">/g)).toHaveLength(3)
+  })
+
+  it('the list spinner is a status with the word "Loading" for a screen reader', () => {
+    // First render, before the list has answered.
+    state.language = 'fr'
+    const html = renderToStaticMarkup(h(BusinessesPanel))
+    expect(html).toMatch(/<div role="status" class="flex items-center justify-center py-10 text-stone-600"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span class="sr-only">Chargement…<\/span><\/div>/)
   })
 })
 
@@ -207,6 +267,26 @@ describe('failures', () => {
     expect(html).toMatch(/>完成<\/button>/)
   })
 
+  async function pickLogo(language: string) {
+    const { c } = await panel(language)
+    const slot = (findAll(c.tree(), (e: El) => typeof e.props.onSelect === 'function') as El[])[0]
+    ;(slot.props.onSelect as (f: unknown) => void)({ type: 'image/png', size: 9_000_000 })
+    await c.flush()
+    return renderToStaticMarkup(c.rerender() as unknown as ReactElement)
+  }
+
+  it("a refused photo: the uploader's own message reaches the photo alert, marked English", async () => {
+    state.upload = { url: null, path: null, error: 'That image is too large. The limit is 5 MB.' }
+    const html = await pickLogo('vi')
+    expect(html).toContain('<p role="alert" lang="en" dir="ltr" class="text-xs text-red-600">That image is too large. The limit is 5 MB.</p>')
+  })
+
+  it('a refused photo with no message from the uploader reads as the translated failure, unmarked', async () => {
+    state.upload = { url: null, path: null, error: null }
+    const html = await pickLogo('vi')
+    expect(html).toContain('<p role="alert" class="text-xs text-red-600">Tải ảnh lên không thành công. Vui lòng thử lại.</p>')
+  })
+
   it.each(LOCALES)('%s: each of the three codes has its own sentence; other text passes through flagged', (locale) => {
     const texts = ['load_failed', 'upload_failed', 'submit_failed'].map((code) => businessFailure(code, locale))
     expect(texts.every((t) => t.translated)).toBe(true)
@@ -215,25 +295,47 @@ describe('failures', () => {
   })
 })
 
-describe('label in name (WCAG 2.5.3)', () => {
+describe('the day switches: label in name (WCAG 2.5.3) and a stable name', () => {
   it('has the 14 locales', () => expect(LOCALES).toHaveLength(14))
 
-  it.each(LOCALES)('%s: each day switch is named by its visible state, then the day', (locale) => {
-    for (let dow = 0; dow < 7; dow++) {
-      for (const closed of [true, false]) {
-        const visible = businessesT(locale, closed ? 'hoursClosed' : 'hoursOpen')
-        const name = hoursSwitchName(locale, closed, dow)
-        expect(name.startsWith(visible), `${locale} ${dow} ${closed}: ${name}`).toBe(true)
-        expect(name.length).toBeGreaterThan(visible.length + 3)
-        expect(name).not.toMatch(/\{\w+\}/)
-      }
+  it.each(LOCALES)('%s: each switch is named exactly by the day shown beside it; the seven names differ', async (locale) => {
+    const { html } = await panel(locale)
+    // <span aria-hidden>DAY</span> … <button role="switch" aria-checked aria-label="DAY">
+    const rows = [...html.matchAll(/<span aria-hidden="true" class="text-xs font-semibold text-stone-700">([^<]+)<\/span><span class="inline-flex items-center gap-2"><button type="button" role="switch" aria-checked="(true|false)" aria-label="([^"]+)"/g)]
+    expect(rows).toHaveLength(7)
+    rows.forEach((m, dow) => {
+      expect(m[3], `${locale} day ${dow}`).toBe(m[1])
+      expect(m[1]).toBe(hoursDayName(locale, dow))
+    })
+    expect(new Set(rows.map((m) => m[3])).size).toBe(7)
+    // The name holds neither state word.
+    for (const m of rows) {
+      expect(m[3]).not.toContain(businessesT(locale, 'hoursOpen'))
+      expect(m[3]).not.toContain(businessesT(locale, 'hoursClosed'))
     }
-    expect(new Set(Array.from({ length: 7 }, (_, d) => hoursSwitchName(locale, true, d))).size).toBe(7)
   })
 
-  it('the rendered switch carries that name and that visible word', async () => {
-    const { html } = await panel('es')
-    expect(html).toMatch(/role="switch" aria-checked="false" aria-label="Cerrado — lunes"[^>]*>.*?Cerrado<\/button>/)
+  it('flipping a switch changes aria-checked and the word beside it, never the name', async () => {
+    const { c } = await panel('es')
+    const monday = () => (findAll(c.tree(), (e: El) => e.props.role === 'switch') as El[])[1]
+    expect(monday().props['aria-label']).toBe('lunes')
+    expect(monday().props['aria-checked']).toBe(false)
+    ;(monday().props.onClick as () => void)()
+    c.rerender()
+    expect(monday().props['aria-label']).toBe('lunes')
+    expect(monday().props['aria-checked']).toBe(true)
+    const html = renderToStaticMarkup(c.tree() as unknown as ReactElement)
+    // The state word is for sighted members: outside the button, hidden from assistive tech.
+    expect(html).toMatch(/aria-label="lunes"[^>]*><span[^>]*aria-hidden="true"><\/span><\/button><span aria-hidden="true" class="[^"]*">Abierto<\/span>/)
+    expect(html).toMatch(/aria-label="martes"[^>]*><span[^>]*aria-hidden="true"><\/span><\/button><span aria-hidden="true" class="[^"]*">Cerrado<\/span>/)
+    // The time fields of the open day name the day too.
+    expect(html).toContain('aria-label="Hora de apertura, lunes"')
+    expect(html).toContain('aria-label="Hora de cierre, lunes"')
+  })
+
+  it('the switch thumb mirrors in a right-to-left locale', async () => {
+    const { html } = await panel('ar')
+    expect(html).toContain('translate-x-1 rtl:-translate-x-1')
   })
 
   it('the cost model group is named by its visible label', async () => {
@@ -274,12 +376,18 @@ describe('businesses-panel.tsx source', () => {
   it('no English copy is left in the component', () => {
     for (const literal of [
       'Local Businesses', 'Add a local business', 'Submit a local business', 'Could not submit', 'Submitted for review', 'Business name', 'Corner Cafe',
-      'Street address', 'title="', "label: '", 'Cost model', 'ZIP code', 'Service radius', 'Copy Monday', "'Closed'", "'Open'", ' open time', 'Remove interval',
+      'Street address', 'title="', "label: '", 'Cost model', 'ZIP code', 'Service radius', 'Copy Monday', "'Closed'", "'Open'", ' open time', 'Remove interval', 'className="hidden"',
       'Add interval', 'label="', 'Remove gallery photo', 'Service name', 'Remove service', 'Short description', 'Add service', 'Submitting…', "'Submit for review'",
       'No local businesses yet', 'Be the first', 'Failed to load businesses', 'Upload failed', "'Submission failed'", '.toLowerCase()', '{c.label}', '{attr.label}', '{opt.label}', 'DAY_LABELS[dow]',
     ]) {
       expect(code, literal).not.toContain(literal)
     }
+  })
+
+  it('no translation reader is given a business\'s own words', () => {
+    const READERS = 't|businessesT|feedChromeT|businessFailure|businessCategoryLabel|businessAttributeLabel|costModelLabel'
+    const MEMBER_TEXT = 'b\\.name|b\\.description|b\\.city|b\\.state|addr|form\\.name|form\\.description|s\\.name|s\\.description'
+    expect(code).not.toMatch(new RegExp(`\\b(${READERS})\\([^()]*\\b(${MEMBER_TEXT})\\b`))
   })
 
   it('example data placeholders (US formats) stay as written', () => {

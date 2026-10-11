@@ -139,7 +139,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `copyMonday` | ht | Copy Monday to weekdays | Kopye lendi sou jou travay yo | 2026-10-11 | machine-drafted, needs native review |
 | `hoursOpen` | ht | Open | Ouvri | 2026-10-11 | machine-drafted, needs native review |
 | `hoursClosed` | ht | Closed | Fèmen | 2026-10-11 | machine-drafted, needs native review |
-| `hoursDayAria` | ht | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
 | `openTimeAria` | ht | {day} opening time | Lè ouvèti, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `closeTimeAria` | ht | {day} closing time | Lè fèmti, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `hoursTo` | ht | to | rive | 2026-10-11 | machine-drafted, needs native review |
@@ -224,7 +223,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `copyMonday` | so | Copy Monday to weekdays | U koobiyee Isniinta maalmaha shaqada | 2026-10-11 | machine-drafted, needs native review |
 | `hoursOpen` | so | Open | Furan | 2026-10-11 | machine-drafted, needs native review |
 | `hoursClosed` | so | Closed | Xiran | 2026-10-11 | machine-drafted, needs native review |
-| `hoursDayAria` | so | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
 | `openTimeAria` | so | {day} opening time | Waqtiga furitaanka, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `closeTimeAria` | so | {day} closing time | Waqtiga xiritaanka, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `hoursTo` | so | to | ilaa | 2026-10-11 | machine-drafted, needs native review |
@@ -309,7 +307,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `copyMonday` | am | Copy Monday to weekdays | ሰኞን ወደ የሥራ ቀናት ቅዳ | 2026-10-11 | machine-drafted, needs native review |
 | `hoursOpen` | am | Open | ክፍት | 2026-10-11 | machine-drafted, needs native review |
 | `hoursClosed` | am | Closed | ዝግ | 2026-10-11 | machine-drafted, needs native review |
-| `hoursDayAria` | am | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
 | `openTimeAria` | am | {day} opening time | የመክፈቻ ሰዓት፣ {day} | 2026-10-11 | machine-drafted, needs native review |
 | `closeTimeAria` | am | {day} closing time | የመዝጊያ ሰዓት፣ {day} | 2026-10-11 | machine-drafted, needs native review |
 | `hoursTo` | am | to | እስከ | 2026-10-11 | machine-drafted, needs native review |
@@ -394,7 +391,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `copyMonday` | hmn | Copy Monday to weekdays | Luam Hnub Ib rau cov hnub ua hauj lwm | 2026-10-11 | machine-drafted, needs native review |
 | `hoursOpen` | hmn | Open | Qhib | 2026-10-11 | machine-drafted, needs native review |
 | `hoursClosed` | hmn | Closed | Kaw | 2026-10-11 | machine-drafted, needs native review |
-| `hoursDayAria` | hmn | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
 | `openTimeAria` | hmn | {day} opening time | Sij hawm qhib, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `closeTimeAria` | hmn | {day} closing time | Sij hawm kaw, {day} | 2026-10-11 | machine-drafted, needs native review |
 | `hoursTo` | hmn | to | txog | 2026-10-11 | machine-drafted, needs native review |

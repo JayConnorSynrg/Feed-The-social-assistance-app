@@ -87,12 +87,9 @@ const INPUT_CLASS =
 // editor; the names a member reads come from weekdayName (WEEKDAY_DISPLAY_ORDER has the same order).
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
-/** A day switch's accessible name: its visible state first ("Open" / "Closed"), then the day. */
-export function hoursSwitchName(locale: Locale, closed: boolean, dow: number): string {
-  return formatMessage(businessesT(locale, 'hoursDayAria'), {
-    state: businessesT(locale, closed ? 'hoursClosed' : 'hoursOpen'),
-    day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale),
-  })
+/** A day's name as the hours editor shows it and as its switch is named (dow 0 = Sunday). */
+export function hoursDayName(locale: Locale, dow: number): string {
+  return weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale)
 }
 interface Interval {
   open: string
@@ -488,7 +485,7 @@ export function BusinessesPanel() {
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     className={INPUT_CLASS}
-                    dir="auto"
+                    dir={form.name ? 'auto' : dir(locale)}
                     placeholder={t('phName')}
                   />
                 </div>
@@ -502,7 +499,7 @@ export function BusinessesPanel() {
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                     className={INPUT_CLASS}
                     rows={3}
-                    dir="auto"
+                    dir={form.description ? 'auto' : dir(locale)}
                     placeholder={t('phDescription')}
                   />
                 </div>
@@ -515,6 +512,7 @@ export function BusinessesPanel() {
                     value={form.address ?? ''}
                     onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                     className={INPUT_CLASS}
+                    dir="ltr"
                     placeholder="123 Main St"
                   />
                 </div>
@@ -554,6 +552,7 @@ export function BusinessesPanel() {
                       value={form.phone ?? ''}
                       onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                       className={INPUT_CLASS}
+                      dir="ltr"
                       placeholder="(802) 555-0100"
                     />
                   </div>
@@ -567,6 +566,7 @@ export function BusinessesPanel() {
                       value={form.website ?? ''}
                       onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
                       className={INPUT_CLASS}
+                      dir="ltr"
                       placeholder="https://example.com"
                     />
                   </div>
@@ -603,6 +603,7 @@ export function BusinessesPanel() {
                         value={form.email ?? ''}
                         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                         className={INPUT_CLASS}
+                        dir="ltr"
                         placeholder="hello@example.com"
                       />
                     </div>
@@ -641,6 +642,7 @@ export function BusinessesPanel() {
                         value={form.zip_code ?? ''}
                         onChange={(e) => setForm((f) => ({ ...f, zip_code: e.target.value }))}
                         className={INPUT_CLASS}
+                        dir="ltr"
                         placeholder="05401"
                       />
                     </div>
@@ -687,25 +689,35 @@ export function BusinessesPanel() {
                   {hours.map((day, dow) => (
                     <div key={dow} className="rounded-lg border border-stone-100 p-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-stone-700">{weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale, 'short')}</span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={!day.closed}
-                          aria-label={hoursSwitchName(locale, day.closed, dow)}
-                          onClick={() =>
-                            setHours((days) => days.map((d, i) => (i === dow ? { ...d, closed: !d.closed } : d)))
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium ${
-                            day.closed ? 'bg-stone-100 text-stone-500' : 'bg-lime-100 text-lime-700'
-                          }`}
-                        >
-                          <span
-                            className={`h-2 w-2 rounded-full ${day.closed ? 'bg-stone-400' : 'bg-lime-600'}`}
-                            aria-hidden="true"
-                          />
-                          {day.closed ? t('hoursClosed') : t('hoursOpen')}
-                        </button>
+                        {/* The day, shown once and spoken once: it is the switch's name. */}
+                        <span aria-hidden="true" className="text-xs font-semibold text-stone-700">{hoursDayName(locale, dow)}</span>
+                        <span className="inline-flex items-center gap-2">
+                          {/* Named by the day alone, so the name never changes with the state
+                              (aria-checked carries it). The state word sits outside, for sighted
+                              members, as in components/org-form/hours-editor.tsx. */}
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={!day.closed}
+                            aria-label={hoursDayName(locale, dow)}
+                            onClick={() =>
+                              setHours((days) => days.map((d, i) => (i === dow ? { ...d, closed: !d.closed } : d)))
+                            }
+                            className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:ring-offset-2 ${
+                              day.closed ? 'bg-stone-500' : 'bg-lime-700'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                                day.closed ? 'translate-x-1 rtl:-translate-x-1' : 'translate-x-6 rtl:-translate-x-6'
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                          <span aria-hidden="true" className={`text-xs font-medium ${day.closed ? 'text-stone-600' : 'text-lime-800'}`}>
+                            {day.closed ? t('hoursClosed') : t('hoursOpen')}
+                          </span>
+                        </span>
                       </div>
                       {!day.closed && (
                         <div className="mt-2 space-y-2">
@@ -713,7 +725,7 @@ export function BusinessesPanel() {
                             <div key={ii} className="flex items-center gap-2">
                               <input
                                 type="time"
-                                aria-label={formatMessage(t('openTimeAria'), { day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale) })}
+                                aria-label={formatMessage(t('openTimeAria'), { day: hoursDayName(locale, dow) })}
                                 value={iv.open}
                                 onChange={(e) =>
                                   setHours((days) =>
@@ -734,7 +746,7 @@ export function BusinessesPanel() {
                               <span className="text-xs text-stone-400">{t('hoursTo')}</span>
                               <input
                                 type="time"
-                                aria-label={formatMessage(t('closeTimeAria'), { day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale) })}
+                                aria-label={formatMessage(t('closeTimeAria'), { day: hoursDayName(locale, dow) })}
                                 value={iv.close}
                                 onChange={(e) =>
                                   setHours((days) =>
@@ -839,7 +851,7 @@ export function BusinessesPanel() {
                         </div>
                       ))}
                       <label
-                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 ${
+                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-600 focus-within:ring-offset-2 ${
                           photoBusy.gallery ? 'opacity-60' : ''
                         }`}
                       >
@@ -854,7 +866,7 @@ export function BusinessesPanel() {
                         <input
                           type="file"
                           accept={ACCEPT}
-                          className="hidden"
+                          className="sr-only"
                           disabled={photoBusy.gallery}
                           onChange={(e) => {
                             void handlePhotoSelect('gallery', e.target.files?.[0])
@@ -876,7 +888,7 @@ export function BusinessesPanel() {
                           value={s.name}
                           onChange={(e) => setServices((rows) => rows.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))}
                           className={`${INPUT_CLASS} flex-1`}
-                          dir="auto"
+                          dir={s.name ? 'auto' : dir(locale)}
                           placeholder={t('phServiceName')}
                         />
                         <button
@@ -895,7 +907,7 @@ export function BusinessesPanel() {
                           setServices((rows) => rows.map((r, j) => (j === i ? { ...r, description: e.target.value } : r)))
                         }
                         className={INPUT_CLASS}
-                        dir="auto"
+                        dir={s.description ? 'auto' : dir(locale)}
                         placeholder={t('phServiceDescription')}
                       />
                     </div>
@@ -945,6 +957,7 @@ export function BusinessesPanel() {
                         value={social[p.key] ?? ''}
                         onChange={(e) => setSocial((s) => ({ ...s, [p.key]: e.target.value }))}
                         className={INPUT_CLASS}
+                        dir="ltr"
                         placeholder={p.base}
                       />
                     </div>
@@ -985,8 +998,9 @@ export function BusinessesPanel() {
 
         {/* Showcase list */}
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-stone-600">
-            <Loader2 className="h-6 w-6 animate-spin" />
+          <div role="status" className="flex items-center justify-center py-10 text-stone-600">
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+            <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
           </div>
         ) : loadFailure ? (
           <div
@@ -1105,7 +1119,7 @@ function PhotoSingleSlot({
         </div>
       ) : (
         <label
-          className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 ${
+          className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-600 focus-within:ring-offset-2 ${
             busy ? 'opacity-60' : ''
           }`}
         >
@@ -1120,7 +1134,7 @@ function PhotoSingleSlot({
           <input
             type="file"
             accept={ACCEPT}
-            className="hidden"
+            className="sr-only"
             disabled={busy}
             onChange={(e) => {
               onSelect(e.target.files?.[0])

@@ -20,7 +20,7 @@ vi.mock('react', async (importOriginal) => {
 })
 
 const { state, errorLog } = vi.hoisted(() => ({
-  state: { language: 'en' as string, rows: [] as unknown[], fail: null as Error | null },
+  state: { language: 'en' as string, rows: [] as unknown[], fail: null as Error | null, pending: false },
   errorLog: [] as unknown[][],
 }))
 vi.mock('@/hooks/use-auth', () => ({
@@ -42,6 +42,7 @@ vi.mock('@/hooks/use-geolocation', () => ({
 vi.mock('@/lib/privacy-prefs', () => ({ readShareLocationPref: () => false }))
 vi.mock('@/lib/org-data', () => ({
   fetchApprovedOrganizations: async () => {
+    if (state.pending) return new Promise<never>(() => {})
     if (state.fail) throw state.fail
     return state.rows
   },
@@ -66,6 +67,7 @@ beforeEach(() => {
   resetAdminTierCache()
   state.rows = [row()]
   state.fail = null
+  state.pending = false
   errorLog.length = 0
 })
 
@@ -100,6 +102,22 @@ describe('Organizations sub-tab in the member language', () => {
     expect(html).toContain('<span lang="" dir="auto">Rutland, VT</span>')
   })
 
+  it('is never handed to a translation function: a name or description that equals a stored type or a key is shown as written', async () => {
+    state.rows = [row({ name: 'food_bank', description: 'loadFailed', org_type: 'clinic' })]
+    const html = await render('es')
+    expect(html).toContain('<h3 lang="" dir="auto" class="truncate font-semibold text-stone-800">food_bank</h3>')
+    expect(html).toMatch(/<p lang="" dir="auto"[^>]*>loadFailed<\/p>/)
+    expect(html).not.toContain('Banco de alimentos')
+    expect(html).not.toContain('No pudimos cargar')
+    expect(html).toContain('>Clínica</span>')
+  })
+
+  it('while the list loads, the spinner is a status with the word "Loading" for a screen reader', async () => {
+    state.pending = true
+    const html = await render('pt')
+    expect(html).toMatch(/<div role="status" class="flex items-center justify-center py-10 text-stone-600"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span class="sr-only">Carregando…<\/span><\/div>/)
+  })
+
   it('no organization yet: the empty sentence in the member language', async () => {
     state.rows = []
     expect(await render('ht')).toContain('Poko gen òganizasyon.')
@@ -125,6 +143,11 @@ describe('organizations-panel.tsx source', () => {
     for (const literal of ['Local Organizations', 'Food banks, shelters', 'No organizations yet', 'Failed to load organizations', 'ORG_TYPE_LABELS']) {
       expect(src, literal).not.toContain(literal)
     }
+  })
+
+  it('no translation reader is given an organization\'s own words', () => {
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(code).not.toMatch(/\b(orgsT|orgFormT|feedChromeT|orgTypeKey)\([^()]*\b(o\.name|o\.description|o\.city|o\.state|addr)\b/)
   })
 
   it('the type label is the vocabulary’s one translation and the distance follows the locale', () => {

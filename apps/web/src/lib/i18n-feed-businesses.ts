@@ -70,11 +70,9 @@ export interface FeedBusinessesMessages {
   catOther: string
   sectionHours: string
   copyMonday: string
-  /** The day switch's visible state. */
+  /** The state word beside a day's switch (the switch itself is named by the day). */
   hoursOpen: string
   hoursClosed: string
-  /** Accessible name of a day's switch: its visible state, then the day. */
-  hoursDayAria: string
   openTimeAria: string
   closeTimeAria: string
   /** Between an opening and a closing time. */
@@ -166,7 +164,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Copy Monday to weekdays',
     hoursOpen: 'Open',
     hoursClosed: 'Closed',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: '{day} opening time',
     closeTimeAria: '{day} closing time',
     hoursTo: 'to',
@@ -253,7 +250,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Copiar el lunes a los días laborables',
     hoursOpen: 'Abierto',
     hoursClosed: 'Cerrado',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Hora de apertura, {day}',
     closeTimeAria: 'Hora de cierre, {day}',
     hoursTo: 'a',
@@ -341,7 +337,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Kopye lendi sou jou travay yo',
     hoursOpen: 'Ouvri',
     hoursClosed: 'Fèmen',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Lè ouvèti, {day}',
     closeTimeAria: 'Lè fèmti, {day}',
     hoursTo: 'rive',
@@ -428,7 +423,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Sao chép Thứ Hai sang các ngày trong tuần',
     hoursOpen: 'Mở cửa',
     hoursClosed: 'Đóng cửa',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Giờ mở cửa, {day}',
     closeTimeAria: 'Giờ đóng cửa, {day}',
     hoursTo: 'đến',
@@ -515,7 +509,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'نسخ يوم الاثنين إلى أيام الأسبوع',
     hoursOpen: 'مفتوح',
     hoursClosed: 'مغلق',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'وقت الفتح، {day}',
     closeTimeAria: 'وقت الإغلاق، {day}',
     hoursTo: 'إلى',
@@ -602,7 +595,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: '将周一复制到工作日',
     hoursOpen: '营业',
     hoursClosed: '休息',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: '{day}开门时间',
     closeTimeAria: '{day}关门时间',
     hoursTo: '至',
@@ -690,7 +682,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'U koobiyee Isniinta maalmaha shaqada',
     hoursOpen: 'Furan',
     hoursClosed: 'Xiran',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Waqtiga furitaanka, {day}',
     closeTimeAria: 'Waqtiga xiritaanka, {day}',
     hoursTo: 'ilaa',
@@ -777,7 +768,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Copier le lundi sur les jours de semaine',
     hoursOpen: 'Ouvert',
     hoursClosed: 'Fermé',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Heure d’ouverture, {day}',
     closeTimeAria: 'Heure de fermeture, {day}',
     hoursTo: 'à',
@@ -864,7 +854,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Copiar segunda-feira para os dias úteis',
     hoursOpen: 'Aberto',
     hoursClosed: 'Fechado',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Horário de abertura, {day}',
     closeTimeAria: 'Horário de fechamento, {day}',
     hoursTo: 'até',
@@ -951,7 +940,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Скопировать понедельник на будни',
     hoursOpen: 'Открыто',
     hoursClosed: 'Закрыто',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Время открытия, {day}',
     closeTimeAria: 'Время закрытия, {day}',
     hoursTo: 'до',
@@ -1038,7 +1026,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: '월요일을 평일에 복사',
     hoursOpen: '영업',
     hoursClosed: '휴무',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: '{day} 여는 시간',
     closeTimeAria: '{day} 닫는 시간',
     hoursTo: '~',
@@ -1125,7 +1112,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Kopyahin ang Lunes sa mga araw ng trabaho',
     hoursOpen: 'Bukas',
     hoursClosed: 'Sarado',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Oras ng pagbubukas, {day}',
     closeTimeAria: 'Oras ng pagsasara, {day}',
     hoursTo: 'hanggang',
@@ -1213,7 +1199,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'ሰኞን ወደ የሥራ ቀናት ቅዳ',
     hoursOpen: 'ክፍት',
     hoursClosed: 'ዝግ',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'የመክፈቻ ሰዓት፣ {day}',
     closeTimeAria: 'የመዝጊያ ሰዓት፣ {day}',
     hoursTo: 'እስከ',
@@ -1301,7 +1286,6 @@ export const feedBusinessesMessages: Record<Locale, FeedBusinessesMessages> = {
     copyMonday: 'Luam Hnub Ib rau cov hnub ua hauj lwm',
     hoursOpen: 'Qhib',
     hoursClosed: 'Kaw',
-    hoursDayAria: '{state} — {day}',
     openTimeAria: 'Sij hawm qhib, {day}',
     closeTimeAria: 'Sij hawm kaw, {day}',
     hoursTo: 'txog',

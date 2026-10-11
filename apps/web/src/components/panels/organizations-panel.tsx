@@ -31,6 +31,7 @@ import { dir } from '@/lib/i18n'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { orgsT } from '@/lib/i18n-feed-organizations'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { orgTypeKey } from '@/components/org-form/org-labels'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
@@ -130,8 +131,9 @@ export function OrganizationsPanel() {
 
         {/* Showcase list */}
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-stone-600">
-            <Loader2 className="h-6 w-6 animate-spin" />
+          <div role="status" className="flex items-center justify-center py-10 text-stone-600">
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+            <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
           </div>
         ) : loadError ? (
           <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">
