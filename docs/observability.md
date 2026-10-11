@@ -193,7 +193,7 @@ item: `#<panel>?focus=<kind>:<uuid>`, kinds `event` · `resource` · `organizati
 - The map (`components/panels/map-panel.tsx`, `lib/map-focus.ts`) takes `resource`, `organization`,
   `business` and `safety_alert`. It reads the item by id under exactly the predicate of the layer that
   draws it (resource: approved + located; organization: active, non-business, located; business:
-  approved, active, located; safety alert: shown — live, or resolved less than 6 hours ago — read
+  approved, active, located; safety alert: shown — live, or resolved less than 6 hours ago, by the server's verdict on the row — read
   through the alert reader by id and checked again on the returned row), flies to it at zoom 17 (above the cluster `maxZoom` 16, so a
   clustered pin becomes a leaf; instant under FEED's or the OS's reduced motion), and claims the camera
   so a later GPS fix or profile geocode does not move it. The whole lifecycle is `MapFocusSession`;
@@ -303,7 +303,7 @@ where created_at > now() - interval '7 days';
 
 ## Safety alerts (member actions and read volume)
 
-Every member write on a safety alert goes through `apps/web/src/lib/safety-alert-rpc.ts`: one `privilegedRpc` call per action, so each action persists exactly one `<op>.complete` or `<op>.error` row with its `duration_ms`, and its `request_id` is the `x-request-id` the database saw (it joins the `admin_actions` row a moderator's update or resolve of someone else's alert writes). A refusal is the `.error` row; `error_code` is the SQLSTATE (`PT409` stale version, `PT410` no longer live, `PT404` gone, `42501` guest / not the owner, `22023` invalid field). Labels are ids and enums only — never the description, an address or a coordinate, and no identity beyond the `user_id` the route derives from the session. Before Release 3.1 these actions logged with `logger.info` (`pin.place`, `pin.confirm`, `pin.clear`, `safety-alerts.*.success`), which is console-only: nothing reached `app_logs`. The bypass guard (`privileged-action-guard.ts`) fails any alert write outside the wrapper.
+Every member write on a safety alert goes through `apps/web/src/lib/safety-alert-rpc.ts`: one `privilegedRpc` call per action, so each action persists exactly one `<op>.complete` or `<op>.error` row with its `duration_ms`, and its `request_id` is the `x-request-id` the database saw (it joins the `admin_actions` row a moderator's update or resolve of someone else's alert writes). A refusal is the `.error` row; `error_code` is the SQLSTATE (`PT409` stale version, `PT410` no longer live, `PT404` gone, `42501` guest / not the owner, `22023` invalid field). Labels are ids and enums only — never the description, an address or a coordinate, and no identity beyond the `user_id` the route derives from the session. Before Release 3.1 these actions logged with `logger.info` (`pin.place`, `pin.confirm`, `pin.clear`, `safety-alerts.update.success`, `safety-alerts.delete.success`, `hazard.geocode`, `hazard.pin.placed`), which is console-only: nothing reached `app_logs`. Those seven names have no emitter and are no longer in the registry. Each write is bounded by a 12 s `AbortSignal`; a write that times out is the `.error` row with no SQLSTATE. The bypass guard (`privileged-action-guard.ts`) fails any alert write outside the wrapper.
 
 | Event | Labels | Meaning |
 |---|---|---|
@@ -315,12 +315,34 @@ Every member write on a safety alert goes through `apps/web/src/lib/safety-alert
 | `alerts.withdraw.complete` / `.error` | same (`severity_after` null) | `delete_safety_alert`: the reporter's recorded withdrawal |
 | `alerts.vote.complete` / `.error` | same + `vote` (`confirm` · `clear`) | `vote_safety_alert` ("Still here" / "Gone now") |
 | `alerts.history.open.complete` / `.error` | `target_id`, `surface` | one read of `safety_alert_history` (`withMetric`, so it carries the read's duration) |
-| `alerts.poll` | `surface`, `reads`, `changed`, `errors`, `result_count`, `window_s` | read volume of the alert reader, aggregated in the browser (below) |
-| `feed.safety_alerts.fetch_failed` | `code` | warn: one strip read failed (the strip keeps what it had) |
+| `alerts.poll` | `surface`, `reads`, `changed`, `errors`, `last_error`, `result_count`, `window_s` | read volume of the alert reader, aggregated in the browser (below) |
+| `feed.safety_alerts.fetch_failed` | `code` | warn: the FIRST failed strip read of an `alerts.poll` window (the strip keeps what it had); later failures of the window are counted in that window's row |
+| `safety-alerts.fetch.error` | — (`code`, `message` in the error payload) | error: the FIRST failed map read of an `alerts.poll` window; at most one per window |
+| `alerts.shown_state.missing` | `status` | warn, once per page load: an alert row or answer carried no `shown_state`, so the client fell back to the rule on the browser clock. Expected count: 0 once `20261026600000_r3_foundation` is applied |
+
+Four names are kept only for clients older than Release 3.1, which still post them: `safety-alerts.place.error`, `safety-alerts.vote.error`, `safety-alerts.update.error`, `safety-alerts.delete.error` (those writes now log as `alerts.<action>.error`). Remove them from `lib/event-registry.ts` once `app_logs` shows none for 30 days after the Release 3.1 deploy:
+
+```sql
+select event, count(*), max(created_at) from public.app_logs
+where event in ('safety-alerts.place.error','safety-alerts.vote.error','safety-alerts.update.error','safety-alerts.delete.error')
+  and created_at > now() - interval '30 days'
+group by 1;
+```
 
 `surface` is `strip` (the feed's alert strip) or `map`. `is_owner` is the server's `is_mine` for the alert acted on. Every update, escalate, de-escalate and resolve sends the alert's `version`; a `PT409` row means the member was shown the compare step.
 
-**Read volume (`alerts.poll`).** Alerts are not in the realtime publication, so each surface polls the reader: once per viewer (strip) or settled viewport (map), every 60 s while the tab is visible, once on return to the tab, and once after the member's own action. A row per read would be one row a minute per open tab; instead each surface counts in memory and writes ONE row when 30 reads have accumulated, when the tab is hidden, or when the surface unmounts (`PollCounter`, `lib/safety-alerts-fetch.ts`). `reads` = reader calls in the window, `changed` = how many returned something different from the read before, `errors` = failed reads, `result_count` = alerts in the latest answer, `window_s` = seconds the window covered. `sum(reads)` is the exact call count; a visible, idle tab writes two rows an hour.
+**Read volume (`alerts.poll`).** Alerts are not in the realtime publication, so each surface polls the reader: once per viewer (strip) or settled viewport (map), every 60 s while the tab is visible, once on return to the tab, and once after the member's own action. A row per read would be one row a minute per open tab; instead each surface counts in the page's memory (`sharedPollCounter`, one counter per surface for the life of the page) and writes ONE row when 30 reads have accumulated, when the surface unmounts (the member leaves the feed or the map panel), or when the page goes away (`pagehide`). Hiding and showing the tab writes nothing: the counts carry over. `reads` = reader calls in the window, `changed` = how many returned something different from the read before, `errors` = failed reads, `last_error` = the class of the last failure (a server code, or `exception`), `result_count` = alerts in the latest answer, `window_s` = seconds the window covered. `sum(reads)` is the exact call count; a visible, idle tab writes two rows an hour.
+
+Failed reads do not write a row each. The first failure of a window is reported at once (`feed.safety_alerts.fetch_failed` for the strip, `safety-alerts.fetch.error` for the map); the rest are in the window row's `errors` and `last_error`. A reader that fails on every poll therefore writes one report and one row per 30 reads.
+
+| Scenario (measured in `hooks/use-safety-strip.test.ts`, `hooks/use-safety-alerts.test.ts`) | Reader calls | `alerts.poll` rows |
+|---|---|---|
+| Strip, 10 minutes visible | 11 | 0 (1 when the strip unmounts or the page goes away) |
+| Strip, 2 hours visible | 121 | 4 |
+| Strip, 20 tab hide / show cycles | 21 | 0 (1 at unmount, `reads: 21`) |
+| Strip, 20 visits to the panel (mount, one read, unmount) | 20 | 20 (`reads: 1` each) |
+| Map, 50 settled pans | 51 | 1 (`reads: 30`); 1 more at unmount (`reads: 21`) |
+| Strip or map, reader failing for 10 minutes | 11 | 0 + one report; 1 at unmount (`errors: 11`, `last_error`) |
 
 ```sql
 -- Reader calls per surface per day, and how often a poll found something new.
@@ -328,6 +350,7 @@ select created_at::date as day, context->>'surface' as surface,
        sum((context->>'reads')::int) as reads,
        sum((context->>'changed')::int) as changed,
        sum((context->>'errors')::int) as errors,
+       max(context->>'last_error') as an_error_class,
        count(*) as rows_written
 from public.app_logs
 where event = 'alerts.poll' and created_at > now() - interval '7 days'

@@ -6,7 +6,8 @@ and expire on a severity-based clock. The member who reported an alert can updat
 its severity, mark it resolved or withdraw it, from the map popup or the feed strip. Moderators
 (`community_moderator` and up, see [admin-tiers.md](admin-tiers.md)) can verify or remove alerts.
 Nobody is ever shown who reported or verified an alert: the client receives ownership only as
-`is_mine`.
+`is_mine`, and the history and the resolved state credit a role ("by the reporter", "by a
+moderator"), never a name.
 
 Client contract: [specs/r3-contract.md](../specs/r3-contract.md) ("Safety alerts"); model and
 invariants: [specs/r3-model.md](../specs/r3-model.md). Migrations `20261026600000_r3_foundation`
@@ -21,11 +22,25 @@ gone      everything else                               expired, cleared, remove
 shown  =  live or resolved
 ```
 
-The server applies it in the one reader, `safety_alerts_in_view` (the only place a resolved alert
-can be read). The client applies the same rule, on the browser clock, in
-`apps/web/src/lib/safety-alert-live.ts` (`alertShownState`), and nowhere else:
-`lib/safety-alert-live.test.ts` scans the tree and fails when a file reads alerts another way or
-writes its own status comparison.
+**The server decides.** It applies the rule in the one reader, `safety_alerts_in_view` (the only
+place a resolved alert can be read), and stamps its verdict on every row and every RPC answer:
+`shown_state` (`live` · `resolved` · `gone`) and `shown_until` (the instant it ends, on the server's
+clock). The client reads those two fields through `apps/web/src/lib/safety-alert-live.ts`
+(`alertShownState`) and nowhere else. The browser clock never hides a row the server returned and
+never keeps one the server dropped: a phone whose clock is hours ahead or a day behind shows exactly
+what the server last said.
+
+- `lib/safety-alert-rpc.ts` copies `shown_state` / `shown_until` from each row (`toSafetyAlert`) and
+  keeps or drops a row by them. A row that carries no verdict (a pre-Release-3 answer shape) falls
+  back to the rule on the browser clock and logs `alerts.shown_state.missing` once per page load.
+- The strip, the marker and popup, the map-focus link and the admin list draw from
+  `alert.shown_state`. No surface passes a clock to the predicate; `lib/safety-alert-live.test.ts`
+  scans the tree and fails when a file reads alerts another way, writes its own status comparison, or
+  hands the predicate a time.
+- The browser clock does one thing: when the earliest `shown_until` is in the browser's future, the
+  store sets one timer for it, and when it fires the surface **reads once** (it removes nothing by
+  itself). The 60-second poll is the backstop. If reads fail (offline), the last server answer stays
+  on screen until a read succeeds.
 
 | Surface | Reader call | Notes |
 |---|---|---|
@@ -34,11 +49,11 @@ writes its own status comparison.
 | Dialog (fresh read), conflict re-read, map-focus link, admin "Edit in admin" pin | `safety_alerts_in_view({ p_alert_id, p_include_resolved: true })` | 0 or 1 row |
 | History | `safety_alert_history({ p_alert_id })` | newest first; empty once the alert is gone |
 | Admin review list | `safety_alerts_in_view({ p_include_resolved: true, p_limit: 200 })` | resolved rows are labelled and never counted as live |
-| Admin Overview "Live Safety Alerts" count | table head count through `whereSafetyAlertLive` | live only (RLS `safety_alerts_select` is `status = 'live'`); the one table read left |
+| Admin Overview "Live Safety Alerts" count | the admin list read above (`countLiveSafetyAlerts`) | counts the rows the server calls live; exact up to 200; a resolved alert is never counted |
+| An alert whose popup or strip entry the member is on, after a read stopped returning it | `safety_alerts_in_view({ p_alert_id, p_include_resolved: true })` | asked once before it is marked "no longer listed" (a pin that only left the viewport stays live) |
 
-All of them go through `apps/web/src/lib/safety-alert-rpc.ts`, which copies each row field by field
-and drops any row the rule calls gone. A slow browser clock is corrected by the next read; a fast one
-hides an alert early by the size of the skew.
+All of them go through `apps/web/src/lib/safety-alert-rpc.ts`, which copies each row field by field.
+No client code reads the `safety_alerts` table.
 
 ## Lifecycle
 
@@ -64,9 +79,16 @@ Updates (`update_safety_alert`, the reporter or a moderator, live alerts only):
   repeats it when the answer comes back unverified. A moderator's edit of someone else's alert keeps
   the mark.
 - **History.** One message per version (`safety_alert_history`): reported, updated (what changed),
-  marked resolved — with the expiry that version carries. It never says who.
+  marked resolved — with the expiry that version carries, credited to the ROLE that acted
+  (`actor_role`: "Updated by the reporter", "Marked resolved by a moderator"). A resolved alert says
+  "Resolved by the reporter" or "Resolved by a moderator" (`resolved_by_role`). Never a name or an id;
+  a message without a role keeps the plain wording.
 - **Ended first.** Any write on an alert that is no longer live is refused `PT410`; the dialog
   closes, says so, and the surface re-reads.
+- **A write that never answers.** Every alert write (place, update, resolve, withdraw, vote, and the
+  moderators' verify and remove) gives up after 12 seconds (`QUERY_TIMEOUT_MS`, passed to
+  `privilegedRpc` as an `AbortSignal`). The dialog's single-flight gate is released and it says the
+  connection failed, so Save works again; each opening of the dialog has its own gate.
 
 No self-moderation: a moderator cannot verify an alert they reported (the admin list offers no
 Approve on it); resolving or updating their own alert is the reporter's act.
@@ -82,34 +104,58 @@ Both surfaces read through one scheduler (`apps/web/src/lib/safety-alerts-fetch.
   calls a second per open map, and the poll never fired.)
 - every **60 seconds** while the tab is visible; a hidden tab reads nothing and reads once on return;
 - once after the member's own action (place, vote, update, resolve, withdraw);
+- once when the earliest `shown_until` passes (the server then says whether the alert is gone);
 - only the latest read's answer is applied.
 
 Between reads the store (`lib/safety-alert-store.ts`) merges an RPC answer onto the alert it holds
 — the pin keeps its coordinates unless the answer carries new ones, keeps `is_mine`, and its open
-popup stays open — takes out an alert the member withdrew or their vote cleared at once, and drops an
-alert at its "shown until" instant (expiry, or resolved + 6 h) with no read. Panels unmount on
-switch, so placing or voting on the map and returning to the feed reads the strip again.
+popup stays open — and takes out an alert the member withdrew or their vote cleared at once. It
+removes nothing on a clock. An alert the member is on (focus or the pointer inside its strip entry,
+or its popup open) is never taken away under them: when a read stops returning it the store asks for
+it by id, keeps it live if the server still shows it (it only left the viewport), and otherwise
+marks it "no longer listed" until they move on. Panels unmount on switch, so placing or voting on
+the map and returning to the feed reads the strip again.
 
-Read volume is measured by `alerts.poll` (one row per 30 reads / tab hide / unmount) and every
-action by one `alerts.*` row: see [observability.md](observability.md#safety-alerts-member-actions-and-read-volume).
+Read volume is measured by `alerts.poll` (one row per 30 reads, per unmount of the surface, or when
+the page goes away — never per tab hide; failed reads are counted in the same row) and every action
+by one `alerts.*` row: see [observability.md](observability.md#safety-alerts-member-actions-and-read-volume).
 
 ## Surfaces
 
 - **Feed strip** (`components/feed/safety-strip.tsx`, `hooks/use-safety-strip.ts`): up to five shown
   alerts in the viewer's language. An entry opens the map on that alert. The reporter gets Update /
-  Mark resolved / Withdraw; everyone gets History once an alert has changed. Two live regions are
-  mounted from the first render: `role="alert"` for a new alert or a raised severity only;
-  `role="status"` for an update, a resolution, an alert no longer listed and the member's own outcome.
-  A refresh that changes nothing announces nothing. An entry never leaves while focus is inside it.
+  Mark resolved / Withdraw (never a guest: the strip asks the session itself); everyone gets History
+  once an alert has changed. Each action button is described by its entry's title, text and time.
+  Two live regions are mounted from the first render: `role="alert"` for an alert created after the
+  list before, or a raised severity, only; `role="status"` for an update, a resolution, an alert no
+  longer listed and the member's own outcome. A refresh that changes nothing announces nothing, and
+  what a region said is cleared 8 seconds later. The member's own outcome is also a visible line with
+  a Dismiss control; it goes away when they start the next action. An entry never leaves while focus
+  or the pointer is inside it; when the server drops the alert whose button held focus (so focus fell
+  to the page), focus moves to the entry. Focus the member has put anywhere else is never taken.
 - **Map marker + popup** (`components/map/safety-alert-marker.tsx`, `hooks/use-safety-alerts.ts`):
-  votes (members only, live alerts only), the same actions, a full date and time, "Updated …" and
-  the expiry; the popup sets its own `lang` / `dir`.
-- **Dialogs** (`components/alerts/`): update / resolve / withdraw with the compare step, and the history.
-- **Hazard menu** (`components/map/hazard-bubble-menu.tsx`): the report flow. Its address search sends
-  the typed address to Mapbox's geocoding API when the member presses Find or Enter; nothing typed is
-  written to a log.
+  votes (members only, live alerts only; a counted vote is announced once, "Vote recorded."), the same
+  actions, a full date and time, "Updated …" and the expiry. The marker button and the popup's dialog
+  (Close included) carry their own `lang` / `dir`. The marker face says severity and state without
+  colour: low is a circle, moderate a rounded square, high a circle with a "!" badge, critical a
+  square with "!!", resolved a check mark, no longer listed a hollow dashed circle; 32 px, with a dark
+  2 px outline. The member's own outcome is a line above the map (`MapAlertNotice`), in the page's
+  flow so it never covers a marker, with a Dismiss control. When an alert ends under an open popup
+  and the button that held focus is gone, focus moves to the popup itself; focus placed elsewhere
+  (the search box) stays there.
+- **Dialogs** (`components/alerts/`): update / resolve / withdraw with the compare step, and the
+  history. Cancel is offered in every state, including while the alert is being read; the two
+  confirmations expose their text as the dialog's description; the history announces "History loaded"
+  with the number of entries. On close, focus returns to the control that opened the dialog; when that
+  is gone (the alert was just marked resolved) to the alert's own entry or popup; when the alert left,
+  to the next entry, the strip heading or the map.
+- **Hazard menu** (`components/map/hazard-bubble-menu.tsx`): the report flow, for members. A guest
+  sees the create-account prompt instead of the report entries. Its address search sends the typed
+  address to Mapbox's geocoding API when the member presses Find or Enter; nothing typed is written
+  to a log.
 - **Admin review** (`app/(admin)/moderation/safety-alerts-review.tsx`): English; verify and remove
-  send the version on screen.
+  send the version on screen; live, resolved and the map link follow the server's verdict; the list is
+  read once per mount and once per stale refusal.
 - Copy: `lib/i18n-feed-alerts.ts` (14 locales), also the one source of the type and severity names.
 
 ## Operations
