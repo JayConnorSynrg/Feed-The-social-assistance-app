@@ -8,6 +8,7 @@ import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 import { ogLocaleForLang } from '@/lib/og-locale'
+import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -25,7 +26,7 @@ const readSharedPost = cache(async (id: string) => {
   const supabase = await createClient()
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, lang, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
+    .select('id, content, lang, post_type, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -51,6 +52,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(`${appUrl}/s/embed/${id}`)}`
   // og:locale from the post's own language; left out when the post has none or no valid value exists.
   const ogLocale = ogLocaleForLang(post.lang)
+  // The preview picture is the fixed card for the post's type; its description says what the card
+  // shows (og:image:alt and twitter:image:alt), never the post's text or author.
+  const imageAlt = ogCardAlt(postCardKind(post.post_type))
 
   return {
     title: `${authorName} on FEED`,
@@ -67,7 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           url: `${appUrl}/api/og/post/${id}`,
           width: 1200,
           height: 630,
-          alt: `Post by ${authorName}`,
+          alt: imageAlt,
         },
       ],
     },
@@ -75,7 +79,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title: `${authorName} on FEED`,
       description,
-      images: [`${appUrl}/api/og/post/${id}`],
+      images: [{ url: `${appUrl}/api/og/post/${id}`, alt: imageAlt }],
     },
     alternates: {
       types: {

@@ -4,6 +4,7 @@ import { MapPin, Phone, Mail, Leaf, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
+import { ogCardAlt } from '@/lib/og-card-kinds'
 import { normalizeUrl } from '@/lib/utils/url'
 import { serializeJsonLd } from '@/lib/json-ld'
 import {
@@ -183,7 +184,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           url: `${appUrl}/api/og/business/${id}`,
           width: 1200,
           height: 630,
-          alt: business.name,
+          // What the fixed preview card shows (the name is in og:title).
+          alt: ogCardAlt('business'),
         },
       ],
     },
@@ -191,7 +193,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title: business.name,
       description,
-      images: [`${appUrl}/api/og/business/${id}`],
+      images: [{ url: `${appUrl}/api/og/business/${id}`, alt: ogCardAlt('business') }],
     },
   }
 }

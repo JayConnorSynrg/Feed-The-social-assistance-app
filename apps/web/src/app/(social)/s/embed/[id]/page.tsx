@@ -15,6 +15,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { ogLocaleForLang } from '@/lib/og-locale'
+import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -70,6 +71,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(canonicalUrl)}`
   // og:locale from the post's own language; left out when the post has none or no valid value exists.
   const ogLocale = ogLocaleForLang(post.lang)
+  // The preview picture is the fixed card for the post's type; its description says what the card
+  // shows (og:image:alt and twitter:image:alt), never the post's text or author.
+  const imageAlt = ogCardAlt(postCardKind(postType))
 
   return {
     title,
@@ -86,7 +90,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           url: `${appUrl}/api/og/post/${id}`,
           width: 1200,
           height: 630,
-          alt: title,
+          alt: imageAlt,
         },
       ],
     },
@@ -94,7 +98,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title,
       description,
-      images: [`${appUrl}/api/og/post/${id}`],
+      images: [{ url: `${appUrl}/api/og/post/${id}`, alt: imageAlt }],
     },
     alternates: {
       types: {

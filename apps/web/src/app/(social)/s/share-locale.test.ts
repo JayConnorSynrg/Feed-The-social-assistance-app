@@ -127,7 +127,7 @@ describe('the post read', () => {
       {
         table: 'posts',
         columns:
-          'id, content, lang, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)',
+          'id, content, lang, post_type, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)',
       },
     ])
   })
