@@ -338,6 +338,85 @@ describe('review prompt and the rating', () => {
   })
 })
 
+describe('the review dialog: focus returns, and a sent review is said after the focus move', () => {
+  async function prompt(language: string) {
+    state.language = language
+    state.review = null
+    state.hook = hook({ conversations: [conv({ status: 'completed' })] })
+    const c = mount(() => MessagesPanel())
+    await c.flush()
+    const tree = c.rerender()
+    const opener = { isConnected: true, focus: vi.fn() }
+    const thread = vi.fn()
+    ;((findAll(tree, (e: El) => e.type === 'p' && e.props.tabIndex === -1) as El[])[0].props.ref as { current: unknown }).current = { focus: thread }
+    ;((findAll(tree, (e: El) => e.props['data-testid'] === 'open-review-modal-btn') as El[])[0].props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    c.rerender()
+    const modal = () => (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0]
+    const said = () => textOf((findAll(c.tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0])
+    return { c, opener, thread, modal, said }
+  }
+
+  it('the dialog gets the button that opened it, and the thread heading as the stable control', async () => {
+    const p = await prompt('pt')
+    expect(p.modal().props.open).toBe(true)
+    expect((p.modal().props.returnFocusRef as { current: unknown }).current).toBe(p.opener)
+    ;(p.modal().props.fallbackFocus as () => void)()
+    expect(p.thread).toHaveBeenCalledTimes(1)
+    // Nothing was sent: nothing is said.
+    expect(p.said()).toBe('')
+  })
+
+  it.each([
+    ['the dialog hands focus over first, then the re-read shows the submitted card', 'focus-first'],
+    ['the re-read lands first, then the dialog hands focus over', 'read-first'],
+  ])('a sent review: %s — the sentence is written only when both are done', async (_name, order) => {
+    const p = await prompt('pt')
+    state.review = { rating: 5 }
+    const sent = (p.modal().props.onSubmitted as () => Promise<void>)()
+    if (order === 'focus-first') {
+      ;(p.modal().props.fallbackFocus as () => void)()
+      p.c.rerender()
+      expect(p.said()).toBe('')
+      await sent
+      await p.c.flush()
+    } else {
+      await sent
+      await p.c.flush()
+      expect(p.said()).toBe('')
+      ;(p.modal().props.fallbackFocus as () => void)()
+      p.c.rerender()
+    }
+    expect(p.thread).toHaveBeenCalledTimes(1)
+    expect(p.said()).toBe('Sua avaliação foi enviada')
+    // Said once: handing focus over again adds nothing new.
+    ;(p.modal().props.fallbackFocus as () => void)()
+    p.c.rerender()
+    expect(p.said()).toBe('Sua avaliação foi enviada')
+  })
+
+  it('a review that was sent but does not show after the re-read is not announced as shown', async () => {
+    const p = await prompt('pt')
+    state.review = null
+    await (p.modal().props.onSubmitted as () => Promise<void>)()
+    ;(p.modal().props.fallbackFocus as () => void)()
+    await p.c.flush()
+    expect(p.said()).toBe('')
+  })
+
+  it.each(LOCALES)('%s: the sentence is the one the submitted card shows', (locale) => {
+    expect(messagesT(locale, 'reviewSubmitted').trim()).not.toBe('')
+    if (locale !== 'en') expect(messagesT(locale, 'reviewSubmitted')).not.toBe(messagesT('en', 'reviewSubmitted'))
+  })
+})
+
+describe('contrast', () => {
+  it('the message box placeholder is stone-500 on white (4.8:1), not stone-400', () => {
+    const input = html('en').match(/<input[^>]*>/)?.[0] ?? ''
+    expect(input).toContain('placeholder:text-stone-500')
+    expect(input).not.toContain('placeholder:text-stone-400')
+  })
+})
+
 describe('confirm dialog (a portal)', () => {
   function open(language: string, over: Record<string, unknown>, buttonText: string) {
     state.language = language
@@ -539,6 +618,28 @@ describe('after a confirmed action the opener is gone: focus moves to something 
     expect(a.said()).toBe('Solicitud rechazada.')
   })
 
+  it('a member who moved on while the request ran keeps their place; focus that was lost (on the page body) is moved', () => {
+    const g = globalThis as Record<string, unknown>
+    try {
+      // The opener is gone, but focus sits on another live control: nothing is taken.
+      const elsewhere = confirmed('es', CASES[0])
+      elsewhere.opener.isConnected = false
+      g.document = { body: {}, activeElement: { isConnected: true } }
+      elsewhere.hookShows('declined')
+      expect(elsewhere.threadName).not.toHaveBeenCalled()
+      expect(elsewhere.said()).toBe('Solicitud rechazada.')
+      // The opener is gone and the browser put focus on the body: it goes to the thread heading.
+      const lost = confirmed('es', CASES[0])
+      lost.opener.isConnected = false
+      const body = {}
+      g.document = { body, activeElement: body }
+      lost.hookShows('declined')
+      expect(lost.threadName).toHaveBeenCalledTimes(1)
+    } finally {
+      delete g.document
+    }
+  })
+
   it('with no thread open, focus goes to the inbox heading', () => {
     const a = confirmed('en', CASES[1])
     a.opener.isConnected = false
@@ -606,7 +707,7 @@ describe('messages-panel.tsx source', () => {
 
   it('the review dialog it opens is translated: it carries the member language itself (a portal has no translated parent)', () => {
     const modal = readFileSync(fileURLToPath(new URL('../feed/review-modal.tsx', import.meta.url)), 'utf8')
-    expect(modal).toMatch(/<DialogContent lang=\{locale\} dir=\{dir\(locale\)\} closeLabel=\{cardT\(locale, 'close'\)\}/)
+    expect(modal).toMatch(/<DialogContent\s+lang=\{locale\}\s+dir=\{dir\(locale\)\}\s+closeLabel=\{cardT\(locale, 'close'\)\}/)
     expect(modal).not.toMatch(/lang="en"/)
     expect(modal.match(/<DialogContent\b/g)).toHaveLength(1)
   })

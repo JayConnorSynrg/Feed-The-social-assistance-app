@@ -9,7 +9,12 @@
 // A confirmed decline, withdraw or end removes the button that opened the dialog (it belonged to
 // the conversation's old status). Once the conversation shows its new status, focus moves to the
 // thread heading — the other member's name; the inbox heading when no thread is open — and a
-// polite status region says what happened.
+// polite status region says what happened. Focus is moved only when it was actually lost: a
+// member who tabbed elsewhere while the request ran keeps their place.
+//
+// The review dialog returns focus to "Rate your experience" when it is closed unsent. A sent
+// review removes that button, so focus goes to the thread heading and "Your review was
+// submitted" is said — after the focus move, once the new state is on screen.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
@@ -50,6 +55,7 @@ import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { cardT } from '@/lib/i18n-feed-card'
 import { conversationError, conversationStatusLabel, isConversationStatus, messagesT, type FeedMessagesMessages } from '@/lib/i18n-feed-messages'
 import { resourceCategoryLabel, resourceCategoryMessages } from '@/lib/i18n-resource-categories'
+import { focusWasLost } from '@/lib/focus-lost'
 
 /** A stored value FEED has no label for is shown as stored, which is English: mark it so. */
 const englishIfUnlabelled = (labelled: boolean) => (labelled ? undefined : 'en')
@@ -120,7 +126,7 @@ export function MessagesPanel() {
     const status = conversations.find((c) => c.id === awaited.id)?.status
     if (outcome && status === outcome.status) {
       awaitedOutcomeRef.current = null
-      if (!confirmOpenerRef.current?.isConnected) (threadNameRef.current ?? inboxHeadingRef.current)?.focus()
+      if (!confirmOpenerRef.current?.isConnected && focusWasLost(confirmOpenerRef.current)) (threadNameRef.current ?? inboxHeadingRef.current)?.focus()
       setAnnouncement(messagesT(locale, outcome.says))
       return
     }
@@ -194,7 +200,26 @@ export function MessagesPanel() {
     const result = await fetchMyReviewForConversation(convId)
     setMyReview(result)
     setReviewLoading(false)
+    return result
   }, [fetchMyReviewForConversation])
+
+  // The button that opened the review dialog, and what a sent review still has to do before it
+  // is announced: hand focus to the thread heading (the dialog does, as it closes) and show the
+  // submitted card (the re-read does). The sentence is written when both are done, so it always
+  // follows the focus move.
+  const reviewOpenerRef = useRef<HTMLElement | null>(null)
+  const sentReviewRef = useRef<{ focused: boolean; shown: boolean } | null>(null)
+  const announceSentReview = () => {
+    const sent = sentReviewRef.current
+    if (!sent?.focused || !sent.shown) return
+    sentReviewRef.current = null
+    setAnnouncement(messagesT(locale, 'reviewSubmitted'))
+  }
+  const focusAfterReview = () => {
+    ;(threadNameRef.current ?? inboxHeadingRef.current)?.focus()
+    if (sentReviewRef.current) sentReviewRef.current.focused = true
+    announceSentReview()
+  }
 
   const handleSend = async () => {
     if (!messageInput.trim()) return
@@ -211,8 +236,12 @@ export function MessagesPanel() {
 
   const handleReviewSubmitted = async () => {
     setReviewModalOpen(false)
+    setAnnouncement('')
+    sentReviewRef.current = { focused: false, shown: false }
     if (selectedConv?.id) {
-      await checkReviewStatus(selectedConv.id)
+      const review = await checkReviewStatus(selectedConv.id)
+      if (review && sentReviewRef.current) sentReviewRef.current.shown = true
+      announceSentReview()
     }
   }
 
@@ -460,7 +489,7 @@ export function MessagesPanel() {
                       placeholder={messagesT(locale, 'inputPlaceholder')}
                       aria-label={messagesT(locale, 'inputPlaceholder')}
                       dir={messageInput ? 'auto' : dir(locale)}
-                      className="flex-1 text-stone-900 placeholder:text-stone-400"
+                      className="flex-1 text-stone-900 placeholder:text-stone-500"
                       maxLength={2000}
                     />
                     <Button
@@ -519,7 +548,10 @@ export function MessagesPanel() {
                     <Button
                       size="sm"
                       data-testid="open-review-modal-btn"
-                      onClick={() => setReviewModalOpen(true)}
+                      onClick={(e) => {
+                        reviewOpenerRef.current = e.currentTarget
+                        setReviewModalOpen(true)
+                      }}
                       className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white text-xs"
                     >
                       {messagesT(locale, 'rateExperience')}
@@ -627,6 +659,8 @@ export function MessagesPanel() {
           revieweeNameLang={otherUserLang}
           revieweeRole={isVolunteer ? 'requester' : 'volunteer'}
           onSubmitted={handleReviewSubmitted}
+          returnFocusRef={reviewOpenerRef}
+          fallbackFocus={focusAfterReview}
         />
       )}
     </div>
