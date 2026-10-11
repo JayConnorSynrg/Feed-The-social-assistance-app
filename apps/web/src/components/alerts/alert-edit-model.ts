@@ -3,11 +3,13 @@
 //
 // The plain rules of the alert dialogs (components/alerts/alert-editor-dialog.tsx): what the form
 // holds, what a save sends (only what changed, against the alert the form opened with), and what the
-// member is told afterwards. Dates and times go through the app's formatter (lib/event-time.ts).
+// member is told afterwards. Dates and times go through the app's formatter (lib/i18n-intl.ts), so
+// they read the same on every device, in all 14 locales.
 
 import type { Locale } from '@/lib/i18n'
-import { formatMessage } from '@/lib/i18n-event-forms'
-import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'
+import { formatMessage } from '@/lib/format-message'
+import { browserTimeZone } from '@/lib/event-time'
+import { dateTimeFormatter } from '@/lib/i18n-intl'
 import { alertsT } from '@/lib/i18n-feed-alerts'
 import { RESOLVED_SHOWN_MS } from '@/lib/safety-alert-live'
 import type { AlertChanges, AlertType, SafetyAlert } from '@/lib/safety-alert-rpc'
@@ -57,7 +59,7 @@ export function rebaseAlertDraft(
 export function formatAlertDateTime(iso: string, locale: Locale, tz: string = browserTimeZone()): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return dateTimeFormat(locale, tz, { dateStyle: 'medium', timeStyle: 'short' }).format(d)
+  return dateTimeFormatter(locale, tz, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d)
 }
 
 /** What the member is told after a save: the new expiry when the save moved it (a severity change

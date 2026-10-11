@@ -6,13 +6,14 @@
 // and the hazard report menu (with its "Suggest a resource" form). It is also the ONE source of the
 // alert type and severity labels: the admin review list reads them here in English, so a type can
 // never be named two ways. Same shape and rules as its siblings (i18n-feed-chrome.ts): look up with
-// alertsT(locale, key) (English fallback), fill {placeholders} with formatMessage. Ages come from
-// lib/relative-age.ts, dates and times from lib/event-time.ts. Parity is enforced by
-// i18n-feed-alerts.test.ts. ht, so, am and hmn need native-speaker review.
+// alertsT(locale, key) (English fallback), fill {placeholders} with formatMessage
+// (lib/format-message.ts). Ages come from lib/relative-age.ts, dates and times from lib/i18n-intl.ts.
+// Parity is enforced by i18n-feed-alerts.test.ts. The ht, so, am and hmn strings are machine-drafted
+// and listed, string by string, in docs/i18n-native-review.md until a native speaker has read them.
 
 import { translate, type Locale } from './i18n'
-import { formatMessage } from './i18n-event-forms'
-import { intlLocale } from './event-time'
+import { formatMessage } from './format-message'
+import { localeTags } from './i18n-intl'
 import { relativeAge } from './relative-age'
 import type { AlertRpcFailure, AlertType } from './safety-alert-rpc'
 import type { StripEvent } from './safety-alert-announce'
@@ -2351,7 +2352,7 @@ export function alertName(alert: { alert_type: string; severity: number }, local
  *  here it sits inside one, so its first letter is lower-cased in the viewer's language. */
 export function alertUpdatedText(updatedAt: string, locale: Locale, now: number, tz?: string): string {
   const age = relativeAge(updatedAt, locale, now, tz)
-  return formatMessage(alertsT(locale, 'updatedAgo'), { age: age.charAt(0).toLocaleLowerCase(intlLocale(locale)) + age.slice(1) })
+  return formatMessage(alertsT(locale, 'updatedAgo'), { age: age.charAt(0).toLocaleLowerCase(localeTags(locale)) + age.slice(1) })
 }
 
 /** The sentence a refused alert action shows (never the server's text). */
