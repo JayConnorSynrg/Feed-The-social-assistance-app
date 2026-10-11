@@ -1808,6 +1808,7 @@ export function FeedPanel() {
           aria-describedby={undefined}
           lang={locale}
           dir={dir(locale)}
+          closeLabel={cardT(locale, 'close')}
           onCloseAutoFocus={(e) => {
             if (dialogTriggerRef.current) {
               e.preventDefault()

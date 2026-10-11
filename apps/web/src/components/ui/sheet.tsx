@@ -42,14 +42,18 @@ interface SheetContentProps
   /** When set, an outside click / pointer-down-outside does NOT dismiss the sheet. Escape and the
    *  close button stay intentional close paths (same contract as DialogContent). */
   disableOutsideClose?: boolean
-  /** Omit the built-in top-right close button (the caller renders its own). */
+  /** Omit the built-in close button (the caller renders its own). */
   hideDefaultClose?: boolean
+  /** Screen-reader name of the default close button, in the sheet's language. Without it — or
+   *  with an empty one — the name is the English "Close", marked lang="en" so a translated sheet
+   *  does not mislabel it and the button is never left unnamed (same contract as DialogContent). */
+  closeLabel?: string
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = "right", overlayClassName, disableOutsideClose, hideDefaultClose, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
+>(({ className, children, side = "right", overlayClassName, disableOutsideClose, hideDefaultClose, closeLabel, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay className={overlayClassName} />
     <DialogPrimitive.Content
@@ -71,9 +75,9 @@ const SheetContent = React.forwardRef<
     >
       {children}
       {!hideDefaultClose && (
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+        <DialogPrimitive.Close className="absolute end-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only" lang={closeLabel ? undefined : 'en'}>{closeLabel || 'Close'}</span>
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>

@@ -352,6 +352,7 @@ export function PostEditDialog({ post, locale, onClose, returnFocusRef, onSaved,
         disableOutsideClose
         lang={locale}
         dir={dir(locale)}
+        closeLabel={editT(locale, 'close')}
         className="max-h-[90vh] max-w-xl overflow-y-auto"
         data-testid="post-edit-dialog"
         onCloseAutoFocus={(e) => {

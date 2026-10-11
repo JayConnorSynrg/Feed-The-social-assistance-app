@@ -241,6 +241,7 @@ export function PostHistoryDialog({
       <DialogContent
         lang={locale}
         dir={dir(locale)}
+        closeLabel={editT(locale, 'close')}
         className="max-h-[90vh] max-w-xl overflow-y-auto"
         aria-describedby={undefined}
         data-testid="post-history-dialog"
