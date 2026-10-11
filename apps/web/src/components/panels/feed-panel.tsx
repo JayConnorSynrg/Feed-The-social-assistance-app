@@ -1945,9 +1945,6 @@ export function FeedPanel() {
           id="feed-panel-messages"
           aria-labelledby="feed-tab-messages"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <MessagesPanel />

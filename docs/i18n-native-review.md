@@ -252,6 +252,227 @@ This file is the one list of what awaits that review.
 | `VERIFIED_SIGNATURES.other` | am | {count} verified signatures | {count} የተረጋገጡ ፊርማዎች | 2026-10-11 | machine-drafted, needs native review |
 | `VERIFIED_SIGNATURES.other` | hmn | {count} verified signatures | {count} tus kos npe uas tau txheeb xyuas | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-feed-messages.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `guestPrompt` | ht | Create a free account to message volunteers and connect with your community | Kreye yon kont gratis pou w voye mesaj bay volontè yo epi konekte ak kominote w la | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | so | Create a free account to message volunteers and connect with your community | Samee akoon bilaash ah si aad fariin ugu dirto tabaruceyaasha oo aad ula xiriirto bulshadaada | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | am | Create a free account to message volunteers and connect with your community | ለበጎ ፈቃደኞች መልዕክት ለመላክ እና ከማኅበረሰብዎ ጋር ለመገናኘት ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | hmn | Create a free account to message volunteers and connect with your community | Tsim ib tus account dawb los xa lus rau cov neeg pab dawb thiab txuas nrog koj lub zej zog | 2026-10-11 | machine-drafted, needs native review |
+| `emptyTitle` | ht | No messages yet | Poko gen mesaj | 2026-10-11 | machine-drafted, needs native review |
+| `emptyTitle` | so | No messages yet | Weli fariimo ma jiraan | 2026-10-11 | machine-drafted, needs native review |
+| `emptyTitle` | am | No messages yet | እስካሁን ምንም መልዕክት የለም | 2026-10-11 | machine-drafted, needs native review |
+| `emptyTitle` | hmn | No messages yet | Tseem tsis tau muaj lus | 2026-10-11 | machine-drafted, needs native review |
+| `emptyBody` | ht | Volunteer resources on the map have a Message button. Send a request to start a conversation. | Resous volontè yo sou kat la gen yon bouton Mesaj. Voye yon demann pou kòmanse yon konvèsasyon. | 2026-10-11 | machine-drafted, needs native review |
+| `emptyBody` | so | Volunteer resources on the map have a Message button. Send a request to start a conversation. | Agabka tabaruceyaasha ee khariidadda ku yaal waxay leeyihiin badhan Fariin ah. Dir codsi si aad wada hadal u bilowdo. | 2026-10-11 | machine-drafted, needs native review |
+| `emptyBody` | am | Volunteer resources on the map have a Message button. Send a request to start a conversation. | በካርታው ላይ ያሉ የበጎ ፈቃደኞች ግብዓቶች የመልዕክት አዝራር አላቸው። ውይይት ለመጀመር ጥያቄ ይላኩ። | 2026-10-11 | machine-drafted, needs native review |
+| `emptyBody` | hmn | Volunteer resources on the map have a Message button. Send a request to start a conversation. | Cov neeg pab dawb li kev pab hauv daim ntawv qhia chaw muaj ib lub khawm Xa Lus. Xa ib qho kev thov los pib sib tham. | 2026-10-11 | machine-drafted, needs native review |
+| `title` | ht | Messages | Mesaj | 2026-10-11 | machine-drafted, needs native review |
+| `title` | so | Messages | Fariimo | 2026-10-11 | machine-drafted, needs native review |
+| `title` | am | Messages | መልዕክቶች | 2026-10-11 | machine-drafted, needs native review |
+| `title` | hmn | Messages | Cov lus | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPending` | ht | Pending Requests ({n}) | Demann k ap tann ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPending` | so | Pending Requests ({n}) | Codsiyo sugaya ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPending` | am | Pending Requests ({n}) | በመጠባበቅ ላይ ያሉ ጥያቄዎች ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPending` | hmn | Pending Requests ({n}) | Cov kev thov uas tos ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionActive` | ht | Active ({n}) | Aktif ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionActive` | so | Active ({n}) | Firfircoon ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionActive` | am | Active ({n}) | ንቁ ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionActive` | hmn | Active ({n}) | Tab tom sib tham ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionCompleted` | ht | Completed ({n}) | Fini ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionCompleted` | so | Completed ({n}) | La dhammeeyay ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionCompleted` | am | Completed ({n}) | የተጠናቀቁ ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionCompleted` | hmn | Completed ({n}) | Tiav lawm ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHistory` | ht | History ({n}) | Istwa ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHistory` | so | History ({n}) | Taariikh ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHistory` | am | History ({n}) | ታሪክ ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHistory` | hmn | History ({n}) | Keeb kwm ({n}) | 2026-10-11 | machine-drafted, needs native review |
+| `backToList` | ht | Back to conversations | Tounen nan konvèsasyon yo | 2026-10-11 | machine-drafted, needs native review |
+| `backToList` | so | Back to conversations | Ku noqo wada hadallada | 2026-10-11 | machine-drafted, needs native review |
+| `backToList` | am | Back to conversations | ወደ ውይይቶች ተመለስ | 2026-10-11 | machine-drafted, needs native review |
+| `backToList` | hmn | Back to conversations | Rov qab mus rau cov kev sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `unknownUser` | ht | User | Itilizatè | 2026-10-11 | machine-drafted, needs native review |
+| `unknownUser` | so | User | Isticmaale | 2026-10-11 | machine-drafted, needs native review |
+| `unknownUser` | am | User | ተጠቃሚ | 2026-10-11 | machine-drafted, needs native review |
+| `unknownUser` | hmn | User | Tus neeg siv | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | ht | pending | ap tann | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | so | pending | sugaya | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | am | pending | በመጠባበቅ ላይ | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | hmn | pending | tos | 2026-10-11 | machine-drafted, needs native review |
+| `statusActive` | ht | active | aktif | 2026-10-11 | machine-drafted, needs native review |
+| `statusActive` | so | active | firfircoon | 2026-10-11 | machine-drafted, needs native review |
+| `statusActive` | am | active | ንቁ | 2026-10-11 | machine-drafted, needs native review |
+| `statusActive` | hmn | active | tab tom sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | ht | completed | fini | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | so | completed | la dhammeeyay | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | am | completed | ተጠናቋል | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | hmn | completed | tiav lawm | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | ht | declined | refize | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | so | declined | la diiday | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | am | declined | ተቀባይነት አላገኘም | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | hmn | declined | tsis kam txais | 2026-10-11 | machine-drafted, needs native review |
+| `statusCancelled` | ht | cancelled | anile | 2026-10-11 | machine-drafted, needs native review |
+| `statusCancelled` | so | cancelled | la joojiyay | 2026-10-11 | machine-drafted, needs native review |
+| `statusCancelled` | am | cancelled | ተሰርዟል | 2026-10-11 | machine-drafted, needs native review |
+| `statusCancelled` | hmn | cancelled | raug tshem | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | ht | Accept | Aksepte | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | so | Accept | Aqbal | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | am | Accept | ተቀበል | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | hmn | Accept | Txais | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | ht | Decline | Refize | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | so | Decline | Diid | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | am | Decline | አትቀበል | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | hmn | Decline | Tsis kam | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | ht | Withdraw | Retire | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | so | Withdraw | Ka noqo | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | hmn | Withdraw | Thim | 2026-10-11 | machine-drafted, needs native review |
+| `endAndReview` | ht | End & review | Fini epi evalye | 2026-10-11 | machine-drafted, needs native review |
+| `endAndReview` | so | End & review | Dhammee oo qiimee | 2026-10-11 | machine-drafted, needs native review |
+| `endAndReview` | am | End & review | ጨርስ እና ገምግም | 2026-10-11 | machine-drafted, needs native review |
+| `endAndReview` | hmn | End & review | Xaus thiab ntsuam xyuas | 2026-10-11 | machine-drafted, needs native review |
+| `waitingForAccept` | ht | Waiting for {name} to accept your request... | N ap tann {name} aksepte demann ou an... | 2026-10-11 | machine-drafted, needs native review |
+| `waitingForAccept` | so | Waiting for {name} to accept your request... | Waxaa la sugayaa in {name} aqbalo codsigaaga... | 2026-10-11 | machine-drafted, needs native review |
+| `waitingForAccept` | am | Waiting for {name} to accept your request... | {name} ጥያቄዎን እስኪቀበሉ በመጠባበቅ ላይ... | 2026-10-11 | machine-drafted, needs native review |
+| `waitingForAccept` | hmn | Waiting for {name} to accept your request... | Tab tom tos {name} txais koj qhov kev thov... | 2026-10-11 | machine-drafted, needs native review |
+| `inputPlaceholder` | ht | Type a message... | Ekri yon mesaj... | 2026-10-11 | machine-drafted, needs native review |
+| `inputPlaceholder` | so | Type a message... | Qor fariin... | 2026-10-11 | machine-drafted, needs native review |
+| `inputPlaceholder` | am | Type a message... | መልዕክት ይጻፉ... | 2026-10-11 | machine-drafted, needs native review |
+| `inputPlaceholder` | hmn | Type a message... | Ntaus ib cov lus... | 2026-10-11 | machine-drafted, needs native review |
+| `send` | ht | Send message | Voye mesaj | 2026-10-11 | machine-drafted, needs native review |
+| `send` | so | Send message | Dir fariinta | 2026-10-11 | machine-drafted, needs native review |
+| `send` | am | Send message | መልዕክት ላክ | 2026-10-11 | machine-drafted, needs native review |
+| `send` | hmn | Send message | Xa cov lus | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSubmitted` | ht | Your review was submitted | Evalyasyon ou an voye | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSubmitted` | so | Your review was submitted | Qiimayntaada waa la diray | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSubmitted` | am | Your review was submitted | ግምገማዎ ተልኳል | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSubmitted` | hmn | Your review was submitted | Koj qhov kev ntsuam xyuas raug xa lawm | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptTitle` | ht | How did it go? | Kijan sa te pase? | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptTitle` | so | How did it go? | Sidee bay u dhacday? | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptTitle` | am | How did it go? | እንዴት ነበር? | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptTitle` | hmn | How did it go? | Nws mus li cas? | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptBody` | ht | Leave a review for {name} | Kite yon evalyasyon pou {name} | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptBody` | so | Leave a review for {name} | U reeb qiimayn {name} | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptBody` | am | Leave a review for {name} | ለ{name} ግምገማ ይተዉ | 2026-10-11 | machine-drafted, needs native review |
+| `reviewPromptBody` | hmn | Leave a review for {name} | Tso ib qho kev ntsuam xyuas rau {name} | 2026-10-11 | machine-drafted, needs native review |
+| `rateExperience` | ht | Rate your experience | Evalye eksperyans ou | 2026-10-11 | machine-drafted, needs native review |
+| `rateExperience` | so | Rate your experience | Qiimee waayo-aragnimadaada | 2026-10-11 | machine-drafted, needs native review |
+| `rateExperience` | am | Rate your experience | ተሞክሮዎን ይገምግሙ | 2026-10-11 | machine-drafted, needs native review |
+| `rateExperience` | hmn | Rate your experience | Ntsuam xyuas koj qhov kev paub dhau los | 2026-10-11 | machine-drafted, needs native review |
+| `selectConversation` | ht | Select a conversation to view messages | Chwazi yon konvèsasyon pou w wè mesaj yo | 2026-10-11 | machine-drafted, needs native review |
+| `selectConversation` | so | Select a conversation to view messages | Dooro wada hadal si aad u aragto fariimaha | 2026-10-11 | machine-drafted, needs native review |
+| `selectConversation` | am | Select a conversation to view messages | መልዕክቶችን ለማየት ውይይት ይምረጡ | 2026-10-11 | machine-drafted, needs native review |
+| `selectConversation` | hmn | Select a conversation to view messages | Xaiv ib qho kev sib tham los saib cov lus | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineTitle` | ht | Decline this request? | Refize demann sa a? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineTitle` | so | Decline this request? | Ma diidaysaa codsigan? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineTitle` | am | Decline this request? | ይህን ጥያቄ አይቀበሉም? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineTitle` | hmn | Decline this request? | Tsis kam txais qhov kev thov no? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawTitle` | ht | Withdraw your request? | Retire demann ou an? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawTitle` | so | Withdraw your request? | Ma ka noqonaysaa codsigaaga? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawTitle` | am | Withdraw your request? | ጥያቄዎን ያነሳሉ? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawTitle` | hmn | Withdraw your request? | Thim koj qhov kev thov? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelTitle` | ht | End this conversation? | Fini konvèsasyon sa a? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelTitle` | so | End this conversation? | Ma dhammaynaysaa wada hadalkan? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelTitle` | am | End this conversation? | ይህን ውይይት ያቆማሉ? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelTitle` | hmn | End this conversation? | Xaus qhov kev sib tham no? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteTitle` | ht | End conversation? | Fini konvèsasyon an? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteTitle` | so | End conversation? | Ma dhammaynaysaa wada hadalka? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteTitle` | am | End conversation? | ውይይቱን ይጨርሳሉ? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteTitle` | hmn | End conversation? | Xaus kev sib tham? | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineBody` | ht | The requester will be notified that their request was declined. | Moun ki fè demann lan ap resevwa yon avi ke demann li an refize. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineBody` | so | The requester will be notified that their request was declined. | Qofka codsaday waxaa lagu wargelin doonaa in codsigiisa la diiday. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineBody` | am | The requester will be notified that their request was declined. | ጠያቂው ጥያቄው ተቀባይነት እንዳላገኘ ማሳወቂያ ይደርሰዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDeclineBody` | hmn | The requester will be notified that their request was declined. | Tus neeg thov yuav tau txais kev ceeb toom tias nws qhov kev thov tsis raug txais. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawBody` | ht | Your request will be cancelled and cannot be recovered. | Demann ou an ap anile epi ou pa p ka jwenn li ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawBody` | so | Your request will be cancelled and cannot be recovered. | Codsigaaga waa la joojin doonaa lamana soo celin karo. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawBody` | am | Your request will be cancelled and cannot be recovered. | ጥያቄዎ ይሰረዛል፤ መልሶ ማግኘትም አይቻልም። | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdrawBody` | hmn | Your request will be cancelled and cannot be recovered. | Koj qhov kev thov yuav raug tshem thiab muab rov qab tsis tau. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelBody` | ht | This conversation will be closed and cannot be reopened. | Konvèsasyon sa a ap fèmen epi li pa p ka relouvri. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelBody` | so | This conversation will be closed and cannot be reopened. | Wada hadalkan waa la xiri doonaa dibna looma furi karo. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelBody` | am | This conversation will be closed and cannot be reopened. | ይህ ውይይት ይዘጋል፤ እንደገና መክፈትም አይቻልም። | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancelBody` | hmn | This conversation will be closed and cannot be reopened. | Qhov kev sib tham no yuav raug kaw thiab qhib dua tsis tau. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteBody` | ht | Both of you will be able to leave a review once the conversation is marked complete. | Nou toulède ap ka kite yon evalyasyon lè konvèsasyon an make kòm fini. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteBody` | so | Both of you will be able to leave a review once the conversation is marked complete. | Labadiinuba waxaad reebi kartaan qiimayn marka wada hadalka lagu calaamadiyo inuu dhammaaday. | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteBody` | am | Both of you will be able to leave a review once the conversation is marked complete. | ውይይቱ እንደተጠናቀቀ ከተመዘገበ በኋላ ሁለታችሁም ግምገማ መተው ትችላላችሁ። | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCompleteBody` | hmn | Both of you will be able to leave a review once the conversation is marked complete. | Neb ob leeg puav leej tso tau kev ntsuam xyuas thaum qhov kev sib tham raug cim tias tiav lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `keepChatting` | ht | Keep chatting | Kontinye pale | 2026-10-11 | machine-drafted, needs native review |
+| `keepChatting` | so | Keep chatting | Sii wad wada hadalka | 2026-10-11 | machine-drafted, needs native review |
+| `keepChatting` | am | Keep chatting | ውይይቱን ቀጥል | 2026-10-11 | machine-drafted, needs native review |
+| `keepChatting` | hmn | Keep chatting | Sib tham ntxiv | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDecline` | ht | Decline Request | Refize demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDecline` | so | Decline Request | Diid codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDecline` | am | Decline Request | ጥያቄውን አትቀበል | 2026-10-11 | machine-drafted, needs native review |
+| `confirmDecline` | hmn | Decline Request | Tsis kam txais kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdraw` | ht | Withdraw Request | Retire demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdraw` | so | Withdraw Request | Ka noqo codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdraw` | am | Withdraw Request | ጥያቄውን አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `confirmWithdraw` | hmn | Withdraw Request | Thim kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancel` | ht | End Conversation | Fini konvèsasyon an | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancel` | so | End Conversation | Dhammee wada hadalka | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancel` | am | End Conversation | ውይይቱን አቁም | 2026-10-11 | machine-drafted, needs native review |
+| `confirmCancel` | hmn | End Conversation | Xaus kev sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `errTimeout` | ht | Messages timed out — please check your connection and retry. | Mesaj yo pran twòp tan. Tanpri tcheke koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errTimeout` | so | Messages timed out — please check your connection and retry. | Fariimuhu waqti badan bay qaateen. Fadlan hubi xiriirkaaga oo isku day mar kale. | 2026-10-11 | machine-drafted, needs native review |
+| `errTimeout` | am | Messages timed out — please check your connection and retry. | መልዕክቶቹ በጣም ዘግይተዋል። እባክዎ ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errTimeout` | hmn | Messages timed out — please check your connection and retry. | Cov lus siv sij hawm ntev dhau. Thov xyuas koj txoj kev sib txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadConversations` | ht | Failed to fetch conversations | Nou pa t kapab chaje konvèsasyon yo | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadConversations` | so | Failed to fetch conversations | Lama soo shubi karin wada hadallada | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadConversations` | am | Failed to fetch conversations | ውይይቶችን መጫን አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadConversations` | hmn | Failed to fetch conversations | Thauj tsis tau cov kev sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadMessages` | ht | Failed to fetch messages | Nou pa t kapab chaje mesaj yo | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadMessages` | so | Failed to fetch messages | Lama soo shubi karin fariimaha | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadMessages` | am | Failed to fetch messages | መልዕክቶችን መጫን አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errLoadMessages` | hmn | Failed to fetch messages | Thauj tsis tau cov lus | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToRequest` | ht | Please sign in to send a request | Tanpri konekte pou w voye yon demann | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToRequest` | so | Please sign in to send a request | Fadlan soo gal si aad codsi u dirto | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToRequest` | am | Please sign in to send a request | ጥያቄ ለመላክ እባክዎ ይግቡ | 2026-10-11 | machine-drafted, needs native review |
+| `errSignInToRequest` | hmn | Please sign in to send a request | Thov nkag mus los xa ib qho kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `errPendingExists` | ht | This volunteer already has a pending request. Please try again later. | Volontè sa a gen yon demann k ap tann deja. Tanpri eseye pita. | 2026-10-11 | machine-drafted, needs native review |
+| `errPendingExists` | so | This volunteer already has a pending request. Please try again later. | Tabaruc-hahan mar hore ayuu leeyahay codsi sugaya. Fadlan isku day goor dambe. | 2026-10-11 | machine-drafted, needs native review |
+| `errPendingExists` | am | This volunteer already has a pending request. Please try again later. | ይህ በጎ ፈቃደኛ አስቀድሞ በመጠባበቅ ላይ ያለ ጥያቄ አለው። እባክዎ ቆይተው እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errPendingExists` | hmn | This volunteer already has a pending request. Please try again later. | Tus neeg pab dawb no twb muaj ib qho kev thov uas tos lawm. Thov sim dua tom qab. | 2026-10-11 | machine-drafted, needs native review |
+| `errNotAccepting` | ht | This member isn't accepting new messages right now. | Manm sa a pa aksepte nouvo mesaj kounye a. | 2026-10-11 | machine-drafted, needs native review |
+| `errNotAccepting` | so | This member isn't accepting new messages right now. | Xubintani hadda ma aqbalayso fariimo cusub. | 2026-10-11 | machine-drafted, needs native review |
+| `errNotAccepting` | am | This member isn't accepting new messages right now. | ይህ አባል አሁን አዲስ መልዕክቶችን አይቀበልም። | 2026-10-11 | machine-drafted, needs native review |
+| `errNotAccepting` | hmn | This member isn't accepting new messages right now. | Tus tswv cuab no tsis txais lus tshiab tam sim no. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendRequest` | ht | Failed to send request | Nou pa t kapab voye demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `errSendRequest` | so | Failed to send request | Lama diri karin codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `errSendRequest` | am | Failed to send request | ጥያቄውን መላክ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errSendRequest` | hmn | Failed to send request | Xa tsis tau qhov kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `errAccept` | ht | Failed to accept request | Nou pa t kapab aksepte demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `errAccept` | so | Failed to accept request | Lama aqbali karin codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `errAccept` | am | Failed to accept request | ጥያቄውን መቀበል አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errAccept` | hmn | Failed to accept request | Txais tsis tau qhov kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `errDecline` | ht | Failed to decline request | Nou pa t kapab refize demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `errDecline` | so | Failed to decline request | Lama diidi karin codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `errDecline` | am | Failed to decline request | ጥያቄውን አለመቀበል አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errDecline` | hmn | Failed to decline request | Tsis kam tsis tau qhov kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `errCancel` | ht | Failed to cancel conversation | Nou pa t kapab anile konvèsasyon an | 2026-10-11 | machine-drafted, needs native review |
+| `errCancel` | so | Failed to cancel conversation | Lama joojin karin wada hadalka | 2026-10-11 | machine-drafted, needs native review |
+| `errCancel` | am | Failed to cancel conversation | ውይይቱን መሰረዝ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errCancel` | hmn | Failed to cancel conversation | Tshem tsis tau qhov kev sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `errComplete` | ht | Failed to complete conversation | Nou pa t kapab fini konvèsasyon an | 2026-10-11 | machine-drafted, needs native review |
+| `errComplete` | so | Failed to complete conversation | Lama dhammayn karin wada hadalka | 2026-10-11 | machine-drafted, needs native review |
+| `errComplete` | am | Failed to complete conversation | ውይይቱን ማጠናቀቅ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errComplete` | hmn | Failed to complete conversation | Ua tsis tau kom qhov kev sib tham tiav | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdraw` | ht | Failed to withdraw request | Nou pa t kapab retire demann lan | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdraw` | so | Failed to withdraw request | Lagama noqon karin codsiga | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdraw` | am | Failed to withdraw request | ጥያቄውን ማንሳት አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdraw` | hmn | Failed to withdraw request | Thim tsis tau qhov kev thov | 2026-10-11 | machine-drafted, needs native review |
+| `errNoConversation` | ht | No conversation selected | Pa gen konvèsasyon ki chwazi | 2026-10-11 | machine-drafted, needs native review |
+| `errNoConversation` | so | No conversation selected | Wada hadal lama dooran | 2026-10-11 | machine-drafted, needs native review |
+| `errNoConversation` | am | No conversation selected | ምንም ውይይት አልተመረጠም | 2026-10-11 | machine-drafted, needs native review |
+| `errNoConversation` | hmn | No conversation selected | Tsis tau xaiv kev sib tham | 2026-10-11 | machine-drafted, needs native review |
+| `errSendMessage` | ht | Failed to send message | Nou pa t kapab voye mesaj la | 2026-10-11 | machine-drafted, needs native review |
+| `errSendMessage` | so | Failed to send message | Lama diri karin fariinta | 2026-10-11 | machine-drafted, needs native review |
+| `errSendMessage` | am | Failed to send message | መልዕክቱን መላክ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errSendMessage` | hmn | Failed to send message | Xa tsis tau cov lus | 2026-10-11 | machine-drafted, needs native review |
+| `errMarkRead` | ht | Failed to mark messages as read | Nou pa t kapab make mesaj yo kòm li | 2026-10-11 | machine-drafted, needs native review |
+| `errMarkRead` | so | Failed to mark messages as read | Fariimaha laguma calaamadin karin in la akhriyay | 2026-10-11 | machine-drafted, needs native review |
+| `errMarkRead` | am | Failed to mark messages as read | መልዕክቶቹን እንደተነበቡ ምልክት ማድረግ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `errMarkRead` | hmn | Failed to mark messages as read | Cim tsis tau tias cov lus raug nyeem lawm | 2026-10-11 | machine-drafted, needs native review |
+
 <!-- END GENERATED -->
 
 ## Dictionaries written before this list existed
