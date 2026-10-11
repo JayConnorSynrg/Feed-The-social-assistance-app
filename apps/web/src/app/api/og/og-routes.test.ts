@@ -282,10 +282,15 @@ describe('share-preview images: no user text in the picture', () => {
     expect(db.reads.map((r) => `${r.table}: ${r.columns}`)).toEqual(['posts: id, post_type'])
   })
 
-  it('the resource route asks the database for the id only', async () => {
-    seed('resources', surface('resource').row('resource', INPUTS[1]))
-    await call(resourceGET)
-    expect(db.reads.map((r) => `${r.table}: ${r.columns}`)).toEqual(['resources: id'])
+  it.each([
+    ['resource', 'resources'],
+    ['business', 'organizations'],
+    ['organization', 'organizations'],
+  ] as const)('the %s route asks the database for the id only — no name, description or place', async (name, table) => {
+    const s = surface(name)
+    seed(table, s.row(s.kinds[0], INPUTS[1]))
+    expect((await call(s.handler)).status).toBe(200)
+    expect(db.reads.map((r) => `${r.table}: ${r.columns}`)).toEqual([`${table}: id`])
   })
 })
 

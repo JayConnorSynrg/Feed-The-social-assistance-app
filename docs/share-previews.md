@@ -66,8 +66,12 @@ To change the design, or add a kind:
 | a hidden or deleted post; a pending or rejected resource; a business or organization that is not public | 404 | `Post not found` / `Resource not found` / `Business not found` / `Organization not found` |
 | an id that does not exist | 404 | the same text |
 
-The only thing the handler reads is whether the item is public and, for a post, its type. That read
-goes to FEED's own database.
+Each handler makes one read of FEED's own database, and asks for the `id` column only — plus
+`post_type` for a post, which picks the card. Nothing else about the item (its text, name, place or
+contact details) is read to make a preview image. The business and organization routes use
+`isPublicBusiness` / `isPublicOrganization`, which run the same query as the public pages' readers
+(one shared filter chain per kind in `lib/business-data.ts` and `lib/org-data.ts`), so "public" means
+the same thing for the page and for its picture.
 
 ## Caching
 
