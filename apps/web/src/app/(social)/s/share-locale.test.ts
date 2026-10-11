@@ -127,16 +127,20 @@ describe('the post read', () => {
       {
         table: 'posts',
         columns:
-          'id, content, lang, post_type, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)',
+          'id, content, lang, post_type, image_url, image_alt, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)',
       },
     ])
   })
 
-  it('/s/embed reads lang; its author columns are the same two as before', async () => {
+  it('/s/embed reads lang with the widget columns; its author columns are the same two as before', async () => {
     db.row = post('ar', TEXT.ar)
     await embedMetadata({ params })
     expect(db.selects).toEqual([
-      { table: 'posts', columns: 'content, lang, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username)' },
+      {
+        table: 'posts',
+        columns:
+          'id, content, lang, slots_remaining, max_seekers, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username), resource:resources(name)',
+      },
     ])
   })
 })

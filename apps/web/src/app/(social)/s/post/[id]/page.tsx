@@ -26,7 +26,7 @@ const readSharedPost = cache(async (id: string) => {
   const supabase = await createClient()
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, lang, post_type, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
+    .select('id, content, lang, post_type, image_url, image_alt, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
@@ -156,7 +156,8 @@ export default async function SharedPostPage({ params }: Props) {
           )}
           <div>
             <p className="font-semibold text-stone-800">
-              {displayName}
+              {/* A name takes its direction from its own letters; the post's language is not the name's. */}
+              <span dir="auto">{displayName}</span>
               {tierLabel(user?.admin_tier) && (
                 <span className="ml-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
                   {tierLabel(user?.admin_tier)}
@@ -171,7 +172,10 @@ export default async function SharedPostPage({ params }: Props) {
 
         {/* Content */}
         <div className="px-4 pb-3">
-          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed">{post.content}</p>
+          {/* The member's text: marked with the language it was written in, direction from the text. */}
+          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed" lang={post.lang ?? undefined} dir="auto">
+            {post.content}
+          </p>
         </div>
 
         {/* Image */}
@@ -179,7 +183,7 @@ export default async function SharedPostPage({ params }: Props) {
           <div className="relative aspect-video">
             <Image
               src={post.image_url}
-              alt="Post image"
+              alt={post.image_alt?.trim() || 'Post image'}
               fill
               className="object-cover"
               sizes="(max-width: 672px) 100vw, 672px"
@@ -209,7 +213,9 @@ export default async function SharedPostPage({ params }: Props) {
       {/* Support section */}
       {hasPayment && (
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-3">
-          <h2 className="text-lg font-semibold text-stone-800">Support {displayName}</h2>
+          <h2 className="text-lg font-semibold text-stone-800">
+            Support <span dir="auto">{displayName}</span>
+          </h2>
           <p className="text-sm text-stone-500">Send direct support through their preferred payment method.</p>
           <div className="flex flex-col sm:flex-row gap-3">
             {handles.venmo_username && (

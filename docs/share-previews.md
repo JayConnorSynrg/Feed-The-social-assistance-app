@@ -117,6 +117,23 @@ duration), or one `og.image.error` row (`outcome` `error`, the failure's code) w
 No id and no text, including in the error row: it stores a fixed message, not the raw failure. See
 [`observability.md`](observability.md#share-preview-images).
 
+## Member text on the share pages
+
+The share pages' own chrome is English, so what a member wrote is marked up to keep its language and
+direction:
+
+- **The post's text** (`/s/post` body, `/s/embed` body) carries `lang` from `posts.lang` when the post
+  has one, and `dir="auto"`, so a screen reader picks the right voice and right-to-left text is laid
+  out right-to-left.
+- **Names and titles that are not the post's text** — the author's name, a petition's title and
+  summary, a linked resource's name — carry `dir="auto"` only. They are not written in "the post's
+  language", and a wrong `lang` is worse than none.
+- **A post's photo** on `/s/post` is described by the author's own description (`posts.image_alt`)
+  when there is one, and by "Post image" otherwise.
+
+`/s/post` and `/s/embed` each read their post once per request: the metadata and the page share one
+cached reader (and `/s/embed` one cached petition reader), which send one identical query.
+
 ## oEmbed
 
 `/api/oembed?url=…` answers for a FEED share link on either of FEED's addresses
