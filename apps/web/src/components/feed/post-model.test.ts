@@ -55,7 +55,6 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
       id: 'u1',
       first_name: 'Ada',
       avatar_url: null,
-      is_staff: false,
       admin_tier: null,
       harmony_score: null,
       harmony_reviews_count: 0,
@@ -69,6 +68,34 @@ function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
 describe('rowToPost — public tier marker (P3.1 T4)', () => {
   it('FEED_POST_SELECT embeds admin_tier on the author join', () => {
     expect(FEED_POST_SELECT).toContain('admin_tier')
+  })
+
+  // Release 3.0: the feed asks for an author column only when the card uses it. A selected column
+  // nothing reads is a liability: a later column-level REVOKE on profiles would fail every feed read
+  // (42501) for no benefit. profiles.is_staff was such a column (roles come from admin_tier).
+  it('every author column FEED_POST_SELECT asks for is read by rowToPost — no unread profile column', () => {
+    const segment = FEED_POST_SELECT.match(/user:profiles!posts_user_id_fkey\(([^)]*)\)/)
+    expect(segment).not.toBeNull()
+    const columns = segment![1].split(',').map((c) => c.trim())
+    expect(columns).toEqual(['id', 'first_name', 'avatar_url', 'admin_tier', 'harmony_score', 'harmony_reviews_count', 'badge_summary'])
+
+    // A value for each column that differs from the fixture's, to show the view model follows it.
+    const other: Record<string, unknown> = {
+      id: 'author-2',
+      first_name: 'Zed',
+      avatar_url: 'https://example.test/a.png',
+      admin_tier: 'platform_admin',
+      harmony_score: 4.9,
+      harmony_reviews_count: 7,
+      badge_summary: { categories: [{ category: 'helper', level: 2 }] },
+    }
+    const author = (user: Record<string, unknown>) =>
+      JSON.stringify(rowToPost(makeRow({ user: user as FeedPostRow['user'] }), { isLiked: false }).author)
+    const fixture = makeRow().user as unknown as Record<string, unknown>
+    for (const column of columns) {
+      expect(column in other, `${column} has a known reader`).toBe(true)
+      expect(author({ ...fixture, [column]: other[column] }), `${column} reaches the card`).not.toBe(author(fixture))
+    }
   })
   it('maps a moderator/resource-admin/platform-admin tier to the public label', () => {
     expect(rowToPost(makeRow({ user: { ...makeRow().user!, admin_tier: 'community_moderator' } }), { isLiked: false }).author.role).toBe('Moderator')

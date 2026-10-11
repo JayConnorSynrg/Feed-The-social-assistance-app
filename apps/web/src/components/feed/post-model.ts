@@ -225,7 +225,7 @@ export const FEED_POST_SELECT =
   'max_seekers, slots_remaining, post_type, petition_id, resource_id, ' +
   'version, edited_at, edit_count, image_alt, hidden_reason, ' +
   'metadata, like_count, comment_count, ' +
-  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, is_staff, admin_tier, harmony_score, harmony_reviews_count, badge_summary), ' +
+  'user:profiles!posts_user_id_fkey(id, first_name, avatar_url, admin_tier, harmony_score, harmony_reviews_count, badge_summary), ' +
   'resource:resources(id, name, category)'
 
 /** The joined row shape returned by FEED_POST_SELECT. */
@@ -254,7 +254,6 @@ export interface FeedPostRow {
     id: string
     first_name: string | null
     avatar_url: string | null
-    is_staff: boolean | null
     admin_tier: AdminTier | null
     harmony_score: number | null
     harmony_reviews_count: number | null
