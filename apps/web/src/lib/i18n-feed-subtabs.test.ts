@@ -17,6 +17,7 @@ import { messages, type Locale } from './i18n'
 import { feedOrganizationsMessages, orgsT } from './i18n-feed-organizations'
 import { feedPetitionsMessages, petitionsT } from './i18n-feed-petitions'
 import { feedMessagesMessages, messagesT } from './i18n-feed-messages'
+import { businessesT, feedBusinessesMessages } from './i18n-feed-businesses'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
@@ -26,10 +27,11 @@ const DICTS: Array<[name: string, dict: Record<Locale, object>, reader: Reader]>
   ['organizations', feedOrganizationsMessages, orgsT as Reader],
   ['petitions', feedPetitionsMessages, petitionsT as Reader],
   ['messages', feedMessagesMessages, messagesT as Reader],
+  ['businesses', feedBusinessesMessages, businessesT as Reader],
 ]
 
 // The same word in a language (a brand, a loanword, a format) may equal English.
-const SAME_AS_EN_OK = new Set<string>(['{action}: {title}', 'Messages'])
+const SAME_AS_EN_OK = new Set<string>(['{action}: {title}', 'Messages', '{state} — {day}', 'Logo', 'Email', 'Website', 'Legal', 'ZIP code'])
 
 describe.each(DICTS)('%s dictionary', (_name, dict, reader) => {
   const en = dict.en as Record<string, string>

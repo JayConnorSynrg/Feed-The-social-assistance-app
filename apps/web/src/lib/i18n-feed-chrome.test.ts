@@ -242,13 +242,25 @@ describe('feed-panel.tsx wiring', () => {
   it('a translated sub-tab carries no English mark; one still in English is marked (so the root language never mislabels it)', () => {
     /** The opening tag of a sub-tab's tabpanel wrapper. */
     const wrapper = (id: string) => panel.match(new RegExp(`<div\\s+role="tabpanel"\\s+id="feed-panel-${id}"[^>]*>`))?.[0] ?? ''
-    const TRANSLATED = ['feed', 'events', 'organizations', 'petitions', 'messages']
-    const STILL_ENGLISH = ['businesses']
-    for (const id of TRANSLATED) {
-      expect(wrapper(id), id).toContain(`aria-labelledby="feed-tab-${id}"`)
-      expect(wrapper(id), id).not.toMatch(/\blang=|\bdir=/)
+    // Release 3.5: all six sub-tabs are translated. A sub-tab added in English goes in as 'english'.
+    const SUBTABS: Record<string, 'translated' | 'english'> = {
+      feed: 'translated',
+      events: 'translated',
+      businesses: 'translated',
+      organizations: 'translated',
+      petitions: 'translated',
+      messages: 'translated',
     }
-    for (const id of STILL_ENGLISH) expect(wrapper(id), id).toMatch(/lang="en"\s+dir="ltr"/)
+    for (const [id, state] of Object.entries(SUBTABS)) {
+      expect(wrapper(id), id).toContain(`aria-labelledby="feed-tab-${id}"`)
+      if (state === 'translated') expect(wrapper(id), id).not.toMatch(/\blang=|\bdir=/)
+      else expect(wrapper(id), id).toMatch(/lang="en"\s+dir="ltr"/)
+    }
+    // Every tabpanel wrapper in the file is in the table (a new sub-tab cannot go unlisted).
+    expect([...panel.matchAll(/role="tabpanel"\s+id="feed-panel-([a-z]+)"/g)].map((m) => m[1]).sort()).toEqual(Object.keys(SUBTABS).sort())
+    // What is still English inside a translated sub-tab keeps its own mark: the Feed tab's parts
+    // below, the rating display in Messages (messages-panel.i18n.test.ts), and server text in
+    // Messages and Businesses (their *.i18n.test.ts).
   })
 
   it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {

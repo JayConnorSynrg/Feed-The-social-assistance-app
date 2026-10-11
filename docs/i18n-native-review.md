@@ -473,6 +473,351 @@ This file is the one list of what awaits that review.
 | `errMarkRead` | am | Failed to mark messages as read | መልዕክቶቹን እንደተነበቡ ምልክት ማድረግ አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
 | `errMarkRead` | hmn | Failed to mark messages as read | Cim tsis tau tias cov lus raug nyeem lawm | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-feed-businesses.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `title` | ht | Local Businesses | Biznis lokal yo | 2026-10-11 | machine-drafted, needs native review |
+| `title` | so | Local Businesses | Ganacsiyada deegaanka | 2026-10-11 | machine-drafted, needs native review |
+| `title` | am | Local Businesses | የአካባቢ ንግዶች | 2026-10-11 | machine-drafted, needs native review |
+| `title` | hmn | Local Businesses | Cov lag luam hauv zos | 2026-10-11 | machine-drafted, needs native review |
+| `subtitle` | ht | Community-submitted local businesses near you | Biznis lokal toupre w, kominote a ajoute | 2026-10-11 | machine-drafted, needs native review |
+| `subtitle` | so | Community-submitted local businesses near you | Ganacsiyo deegaanka ah oo kuu dhow oo ay bulshadu soo gudbisay | 2026-10-11 | machine-drafted, needs native review |
+| `subtitle` | am | Community-submitted local businesses near you | ማኅበረሰቡ ያስገባቸው በአቅራቢያዎ ያሉ የአካባቢ ንግዶች | 2026-10-11 | machine-drafted, needs native review |
+| `subtitle` | hmn | Community-submitted local businesses near you | Cov lag luam hauv zos nyob ze koj uas zej zog tau xa tuaj | 2026-10-11 | machine-drafted, needs native review |
+| `addBusiness` | ht | Add a local business | Ajoute yon biznis lokal | 2026-10-11 | machine-drafted, needs native review |
+| `addBusiness` | so | Add a local business | Ku dar ganacsi deegaanka ah | 2026-10-11 | machine-drafted, needs native review |
+| `addBusiness` | am | Add a local business | የአካባቢ ንግድ አክል | 2026-10-11 | machine-drafted, needs native review |
+| `addBusiness` | hmn | Add a local business | Ntxiv ib lub lag luam hauv zos | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | ht | Create a free account to add a local business to the map | Kreye yon kont gratis pou w ajoute yon biznis lokal sou kat la | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | so | Create a free account to add a local business to the map | Samee akoon bilaash ah si aad khariidadda ugu darto ganacsi deegaanka ah | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | am | Create a free account to add a local business to the map | የአካባቢ ንግድን በካርታው ላይ ለማከል ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
+| `guestPrompt` | hmn | Create a free account to add a local business to the map | Tsim ib tus account dawb los ntxiv ib lub lag luam hauv zos rau daim ntawv qhia chaw | 2026-10-11 | machine-drafted, needs native review |
+| `formLabel` | ht | Submit a local business | Soumèt yon biznis lokal | 2026-10-11 | machine-drafted, needs native review |
+| `formLabel` | so | Submit a local business | Soo gudbi ganacsi deegaanka ah | 2026-10-11 | machine-drafted, needs native review |
+| `formLabel` | am | Submit a local business | የአካባቢ ንግድ አስገባ | 2026-10-11 | machine-drafted, needs native review |
+| `formLabel` | hmn | Submit a local business | Xa ib lub lag luam hauv zos | 2026-10-11 | machine-drafted, needs native review |
+| `submitError` | ht | Could not submit: {message}. Please try again. | Nou pa t kapab soumèt li: {message}. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `submitError` | so | Could not submit: {message}. Please try again. | Lama gudbin karin: {message}. Fadlan isku day mar kale. | 2026-10-11 | machine-drafted, needs native review |
+| `submitError` | am | Could not submit: {message}. Please try again. | ማስገባት አልተቻለም፦ {message}። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `submitError` | hmn | Could not submit: {message}. Please try again. | Xa tsis tau: {message}. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `submitFailed` | ht | Could not submit. Please try again. | Nou pa t kapab soumèt li. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `submitFailed` | so | Could not submit. Please try again. | Lama gudbin karin. Fadlan isku day mar kale. | 2026-10-11 | machine-drafted, needs native review |
+| `submitFailed` | am | Could not submit. Please try again. | ማስገባት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `submitFailed` | hmn | Could not submit. Please try again. | Xa tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `submittedTitle` | ht | Submitted for review | Soumèt pou revizyon | 2026-10-11 | machine-drafted, needs native review |
+| `submittedTitle` | so | Submitted for review | Waxaa loo gudbiyay dib-u-eegis | 2026-10-11 | machine-drafted, needs native review |
+| `submittedTitle` | am | Submitted for review | ለግምገማ ገብቷል | 2026-10-11 | machine-drafted, needs native review |
+| `submittedTitle` | hmn | Submitted for review | Xa mus tshuaj xyuas lawm | 2026-10-11 | machine-drafted, needs native review |
+| `submittedBody` | ht | Your business is pending review. A resource admin will approve it before it appears on the map. | Biznis ou an ap tann revizyon. Yon administratè resous ap apwouve l anvan li parèt sou kat la. | 2026-10-11 | machine-drafted, needs native review |
+| `submittedBody` | so | Your business is pending review. A resource admin will approve it before it appears on the map. | Ganacsigaagu wuxuu sugayaa dib-u-eegis. Maamule agabka ayaa ansixin doona ka hor inta uusan khariidadda ka soo muuqan. | 2026-10-11 | machine-drafted, needs native review |
+| `submittedBody` | am | Your business is pending review. A resource admin will approve it before it appears on the map. | ንግድዎ ግምገማ በመጠባበቅ ላይ ነው። በካርታው ላይ ከመታየቱ በፊት የግብዓት አስተዳዳሪ ያጸድቀዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `submittedBody` | hmn | Your business is pending review. A resource admin will approve it before it appears on the map. | Koj lub lag luam tab tom tos kev tshuaj xyuas. Ib tug thawj tswj kev pab yuav pom zoo ua ntej nws tshwm rau ntawm daim ntawv qhia chaw. | 2026-10-11 | machine-drafted, needs native review |
+| `done` | ht | Done | Fini | 2026-10-11 | machine-drafted, needs native review |
+| `done` | so | Done | Dhammaad | 2026-10-11 | machine-drafted, needs native review |
+| `done` | am | Done | ተከናውኗል | 2026-10-11 | machine-drafted, needs native review |
+| `done` | hmn | Done | Tiav lawm | 2026-10-11 | machine-drafted, needs native review |
+| `fieldName` | ht | Business name | Non biznis la | 2026-10-11 | machine-drafted, needs native review |
+| `fieldName` | so | Business name | Magaca ganacsiga | 2026-10-11 | machine-drafted, needs native review |
+| `fieldName` | am | Business name | የንግዱ ስም | 2026-10-11 | machine-drafted, needs native review |
+| `fieldName` | hmn | Business name | Lub lag luam lub npe | 2026-10-11 | machine-drafted, needs native review |
+| `phName` | ht | Corner Cafe | Kafe Kwen an | 2026-10-11 | machine-drafted, needs native review |
+| `phName` | so | Corner Cafe | Maqaaxida Geeska | 2026-10-11 | machine-drafted, needs native review |
+| `phName` | am | Corner Cafe | የማዕዘን ካፌ | 2026-10-11 | machine-drafted, needs native review |
+| `phName` | hmn | Corner Cafe | Tsev Kas Fes Ntawm Ces Kaum | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | ht | Description | Deskripsyon | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | so | Description | Sharaxaad | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | am | Description | መግለጫ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | hmn | Description | Lus piav qhia | 2026-10-11 | machine-drafted, needs native review |
+| `phDescription` | ht | What does this business offer the community? | Kisa biznis sa a ofri kominote a? | 2026-10-11 | machine-drafted, needs native review |
+| `phDescription` | so | What does this business offer the community? | Maxuu ganacsigani bulshada u hayaa? | 2026-10-11 | machine-drafted, needs native review |
+| `phDescription` | am | What does this business offer the community? | ይህ ንግድ ለማኅበረሰቡ ምን ያቀርባል? | 2026-10-11 | machine-drafted, needs native review |
+| `phDescription` | hmn | What does this business offer the community? | Lub lag luam no muab dab tsi rau zej zog? | 2026-10-11 | machine-drafted, needs native review |
+| `fieldAddress` | ht | Street address | Adrès | 2026-10-11 | machine-drafted, needs native review |
+| `fieldAddress` | so | Street address | Cinwaanka waddada | 2026-10-11 | machine-drafted, needs native review |
+| `fieldAddress` | am | Street address | የመንገድ አድራሻ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldAddress` | hmn | Street address | Chaw nyob ntawm txoj kev | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCity` | ht | City | Vil | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCity` | so | City | Magaalo | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCity` | am | City | ከተማ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCity` | hmn | City | Nroog | 2026-10-11 | machine-drafted, needs native review |
+| `fieldState` | ht | State | Eta | 2026-10-11 | machine-drafted, needs native review |
+| `fieldState` | so | State | Gobol | 2026-10-11 | machine-drafted, needs native review |
+| `fieldState` | am | State | ግዛት | 2026-10-11 | machine-drafted, needs native review |
+| `fieldState` | hmn | State | Xeev | 2026-10-11 | machine-drafted, needs native review |
+| `fieldPhone` | ht | Phone | Telefòn | 2026-10-11 | machine-drafted, needs native review |
+| `fieldPhone` | so | Phone | Telefoon | 2026-10-11 | machine-drafted, needs native review |
+| `fieldPhone` | am | Phone | ስልክ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldPhone` | hmn | Phone | Xov tooj | 2026-10-11 | machine-drafted, needs native review |
+| `fieldWebsite` | ht | Website | Sit entènèt | 2026-10-11 | machine-drafted, needs native review |
+| `fieldWebsite` | so | Website | Bogga internetka | 2026-10-11 | machine-drafted, needs native review |
+| `fieldWebsite` | am | Website | ድረ-ገጽ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldWebsite` | hmn | Website | Lub vev xaib | 2026-10-11 | machine-drafted, needs native review |
+| `sectionDetails` | ht | Details | Detay | 2026-10-11 | machine-drafted, needs native review |
+| `sectionDetails` | so | Details | Faahfaahin | 2026-10-11 | machine-drafted, needs native review |
+| `sectionDetails` | am | Details | ዝርዝሮች | 2026-10-11 | machine-drafted, needs native review |
+| `sectionDetails` | hmn | Details | Cov ntsiab lus | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCategory` | ht | Category | Kategori | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCategory` | so | Category | Qaybta | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCategory` | am | Category | ምድብ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCategory` | hmn | Category | Pawg | 2026-10-11 | machine-drafted, needs native review |
+| `selectPlaceholder` | ht | Select… | Chwazi… | 2026-10-11 | machine-drafted, needs native review |
+| `selectPlaceholder` | so | Select… | Dooro… | 2026-10-11 | machine-drafted, needs native review |
+| `selectPlaceholder` | am | Select… | ይምረጡ… | 2026-10-11 | machine-drafted, needs native review |
+| `selectPlaceholder` | hmn | Select… | Xaiv… | 2026-10-11 | machine-drafted, needs native review |
+| `fieldEmail` | ht | Email | Imèl | 2026-10-11 | machine-drafted, needs native review |
+| `fieldEmail` | so | Email | Iimayl | 2026-10-11 | machine-drafted, needs native review |
+| `fieldEmail` | am | Email | ኢሜይል | 2026-10-11 | machine-drafted, needs native review |
+| `fieldEmail` | hmn | Email | Email | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCostModel` | ht | Cost model | Kalite pri | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCostModel` | so | Cost model | Nooca kharashka | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCostModel` | am | Cost model | የክፍያ ዓይነት | 2026-10-11 | machine-drafted, needs native review |
+| `fieldCostModel` | hmn | Cost model | Hom nqi | 2026-10-11 | machine-drafted, needs native review |
+| `costFree` | ht | Free | Gratis | 2026-10-11 | machine-drafted, needs native review |
+| `costFree` | so | Free | Bilaash | 2026-10-11 | machine-drafted, needs native review |
+| `costFree` | am | Free | ነፃ | 2026-10-11 | machine-drafted, needs native review |
+| `costFree` | hmn | Free | Dawb | 2026-10-11 | machine-drafted, needs native review |
+| `costSlidingScale` | ht | Sliding scale | Pri selon mwayen | 2026-10-11 | machine-drafted, needs native review |
+| `costSlidingScale` | so | Sliding scale | Qiimo ku xiran awoodda | 2026-10-11 | machine-drafted, needs native review |
+| `costSlidingScale` | am | Sliding scale | እንደ አቅም የሚከፈል | 2026-10-11 | machine-drafted, needs native review |
+| `costSlidingScale` | hmn | Sliding scale | Nqi raws li them taus | 2026-10-11 | machine-drafted, needs native review |
+| `costPaid` | ht | Paid | Peyan | 2026-10-11 | machine-drafted, needs native review |
+| `costPaid` | so | Paid | Lacag leh | 2026-10-11 | machine-drafted, needs native review |
+| `costPaid` | am | Paid | በክፍያ | 2026-10-11 | machine-drafted, needs native review |
+| `costPaid` | hmn | Paid | Them nqi | 2026-10-11 | machine-drafted, needs native review |
+| `fieldZip` | ht | ZIP code | Kòd postal | 2026-10-11 | machine-drafted, needs native review |
+| `fieldZip` | so | ZIP code | Koodhka boostada | 2026-10-11 | machine-drafted, needs native review |
+| `fieldZip` | am | ZIP code | የፖስታ ኮድ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldZip` | hmn | ZIP code | Tus lej ZIP | 2026-10-11 | machine-drafted, needs native review |
+| `fieldRadius` | ht | Service radius (miles) | Reyon sèvis (mil) | 2026-10-11 | machine-drafted, needs native review |
+| `fieldRadius` | so | Service radius (miles) | Baaxadda adeegga (mayl) | 2026-10-11 | machine-drafted, needs native review |
+| `fieldRadius` | am | Service radius (miles) | የአገልግሎት ክልል (ማይል) | 2026-10-11 | machine-drafted, needs native review |
+| `fieldRadius` | hmn | Service radius (miles) | Thaj tsam pab (mais) | 2026-10-11 | machine-drafted, needs native review |
+| `catFood` | ht | Food | Manje | 2026-10-11 | machine-drafted, needs native review |
+| `catFood` | so | Food | Cunto | 2026-10-11 | machine-drafted, needs native review |
+| `catFood` | am | Food | ምግብ | 2026-10-11 | machine-drafted, needs native review |
+| `catFood` | hmn | Food | Zaub mov | 2026-10-11 | machine-drafted, needs native review |
+| `catHousing` | ht | Housing | Lojman | 2026-10-11 | machine-drafted, needs native review |
+| `catHousing` | so | Housing | Guriyeyn | 2026-10-11 | machine-drafted, needs native review |
+| `catHousing` | am | Housing | መኖሪያ ቤት | 2026-10-11 | machine-drafted, needs native review |
+| `catHousing` | hmn | Housing | Vaj tse | 2026-10-11 | machine-drafted, needs native review |
+| `catHealth` | ht | Health | Sante | 2026-10-11 | machine-drafted, needs native review |
+| `catHealth` | so | Health | Caafimaad | 2026-10-11 | machine-drafted, needs native review |
+| `catHealth` | am | Health | ጤና | 2026-10-11 | machine-drafted, needs native review |
+| `catHealth` | hmn | Health | Kev noj qab haus huv | 2026-10-11 | machine-drafted, needs native review |
+| `catLegal` | ht | Legal | Legal | 2026-10-11 | machine-drafted, needs native review |
+| `catLegal` | so | Legal | Sharci | 2026-10-11 | machine-drafted, needs native review |
+| `catLegal` | am | Legal | ሕግ | 2026-10-11 | machine-drafted, needs native review |
+| `catLegal` | hmn | Legal | Kev cai lij choj | 2026-10-11 | machine-drafted, needs native review |
+| `catEmployment` | ht | Employment | Travay | 2026-10-11 | machine-drafted, needs native review |
+| `catEmployment` | so | Employment | Shaqo | 2026-10-11 | machine-drafted, needs native review |
+| `catEmployment` | am | Employment | ሥራ | 2026-10-11 | machine-drafted, needs native review |
+| `catEmployment` | hmn | Employment | Hauj lwm | 2026-10-11 | machine-drafted, needs native review |
+| `catChildcare` | ht | Childcare | Gadri timoun | 2026-10-11 | machine-drafted, needs native review |
+| `catChildcare` | so | Childcare | Daryeelka carruurta | 2026-10-11 | machine-drafted, needs native review |
+| `catChildcare` | am | Childcare | የሕፃናት እንክብካቤ | 2026-10-11 | machine-drafted, needs native review |
+| `catChildcare` | hmn | Childcare | Kev zov me nyuam | 2026-10-11 | machine-drafted, needs native review |
+| `catTransportation` | ht | Transportation | Transpò | 2026-10-11 | machine-drafted, needs native review |
+| `catTransportation` | so | Transportation | Gaadiid | 2026-10-11 | machine-drafted, needs native review |
+| `catTransportation` | am | Transportation | መጓጓዣ | 2026-10-11 | machine-drafted, needs native review |
+| `catTransportation` | hmn | Transportation | Kev thauj mus los | 2026-10-11 | machine-drafted, needs native review |
+| `catEducation` | ht | Education | Edikasyon | 2026-10-11 | machine-drafted, needs native review |
+| `catEducation` | so | Education | Waxbarasho | 2026-10-11 | machine-drafted, needs native review |
+| `catEducation` | am | Education | ትምህርት | 2026-10-11 | machine-drafted, needs native review |
+| `catEducation` | hmn | Education | Kev kawm | 2026-10-11 | machine-drafted, needs native review |
+| `catFinancial` | ht | Financial | Finans | 2026-10-11 | machine-drafted, needs native review |
+| `catFinancial` | so | Financial | Maaliyad | 2026-10-11 | machine-drafted, needs native review |
+| `catFinancial` | am | Financial | ፋይናንስ | 2026-10-11 | machine-drafted, needs native review |
+| `catFinancial` | hmn | Financial | Nyiaj txiag | 2026-10-11 | machine-drafted, needs native review |
+| `catRetail` | ht | Retail | Komès | 2026-10-11 | machine-drafted, needs native review |
+| `catRetail` | so | Retail | Tafaariiq | 2026-10-11 | machine-drafted, needs native review |
+| `catRetail` | am | Retail | ችርቻሮ | 2026-10-11 | machine-drafted, needs native review |
+| `catRetail` | hmn | Retail | Khw muag khoom | 2026-10-11 | machine-drafted, needs native review |
+| `catOther` | ht | Other | Lòt | 2026-10-11 | machine-drafted, needs native review |
+| `catOther` | so | Other | Kale | 2026-10-11 | machine-drafted, needs native review |
+| `catOther` | am | Other | ሌላ | 2026-10-11 | machine-drafted, needs native review |
+| `catOther` | hmn | Other | Lwm yam | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHours` | ht | Hours | Orè | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHours` | so | Hours | Saacadaha | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHours` | am | Hours | የሥራ ሰዓታት | 2026-10-11 | machine-drafted, needs native review |
+| `sectionHours` | hmn | Hours | Sij hawm qhib | 2026-10-11 | machine-drafted, needs native review |
+| `copyMonday` | ht | Copy Monday to weekdays | Kopye lendi sou jou travay yo | 2026-10-11 | machine-drafted, needs native review |
+| `copyMonday` | so | Copy Monday to weekdays | U koobiyee Isniinta maalmaha shaqada | 2026-10-11 | machine-drafted, needs native review |
+| `copyMonday` | am | Copy Monday to weekdays | ሰኞን ወደ የሥራ ቀናት ቅዳ | 2026-10-11 | machine-drafted, needs native review |
+| `copyMonday` | hmn | Copy Monday to weekdays | Luam Hnub Ib rau cov hnub ua hauj lwm | 2026-10-11 | machine-drafted, needs native review |
+| `hoursOpen` | ht | Open | Ouvri | 2026-10-11 | machine-drafted, needs native review |
+| `hoursOpen` | so | Open | Furan | 2026-10-11 | machine-drafted, needs native review |
+| `hoursOpen` | am | Open | ክፍት | 2026-10-11 | machine-drafted, needs native review |
+| `hoursOpen` | hmn | Open | Qhib | 2026-10-11 | machine-drafted, needs native review |
+| `hoursClosed` | ht | Closed | Fèmen | 2026-10-11 | machine-drafted, needs native review |
+| `hoursClosed` | so | Closed | Xiran | 2026-10-11 | machine-drafted, needs native review |
+| `hoursClosed` | am | Closed | ዝግ | 2026-10-11 | machine-drafted, needs native review |
+| `hoursClosed` | hmn | Closed | Kaw | 2026-10-11 | machine-drafted, needs native review |
+| `hoursDayAria` | ht | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
+| `hoursDayAria` | so | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
+| `hoursDayAria` | am | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
+| `hoursDayAria` | hmn | {state} — {day} | {state} — {day} | 2026-10-11 | machine-drafted, needs native review |
+| `openTimeAria` | ht | {day} opening time | Lè ouvèti, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `openTimeAria` | so | {day} opening time | Waqtiga furitaanka, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `openTimeAria` | am | {day} opening time | የመክፈቻ ሰዓት፣ {day} | 2026-10-11 | machine-drafted, needs native review |
+| `openTimeAria` | hmn | {day} opening time | Sij hawm qhib, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `closeTimeAria` | ht | {day} closing time | Lè fèmti, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `closeTimeAria` | so | {day} closing time | Waqtiga xiritaanka, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `closeTimeAria` | am | {day} closing time | የመዝጊያ ሰዓት፣ {day} | 2026-10-11 | machine-drafted, needs native review |
+| `closeTimeAria` | hmn | {day} closing time | Sij hawm kaw, {day} | 2026-10-11 | machine-drafted, needs native review |
+| `hoursTo` | ht | to | rive | 2026-10-11 | machine-drafted, needs native review |
+| `hoursTo` | so | to | ilaa | 2026-10-11 | machine-drafted, needs native review |
+| `hoursTo` | am | to | እስከ | 2026-10-11 | machine-drafted, needs native review |
+| `hoursTo` | hmn | to | txog | 2026-10-11 | machine-drafted, needs native review |
+| `removeInterval` | ht | Remove interval | Retire entèval la | 2026-10-11 | machine-drafted, needs native review |
+| `removeInterval` | so | Remove interval | Ka saar muddada | 2026-10-11 | machine-drafted, needs native review |
+| `removeInterval` | am | Remove interval | የጊዜ ክፍተቱን አስወግድ | 2026-10-11 | machine-drafted, needs native review |
+| `removeInterval` | hmn | Remove interval | Tshem lub sij hawm no | 2026-10-11 | machine-drafted, needs native review |
+| `addInterval` | ht | Add interval | Ajoute yon entèval | 2026-10-11 | machine-drafted, needs native review |
+| `addInterval` | so | Add interval | Ku dar muddo | 2026-10-11 | machine-drafted, needs native review |
+| `addInterval` | am | Add interval | የጊዜ ክፍተት አክል | 2026-10-11 | machine-drafted, needs native review |
+| `addInterval` | hmn | Add interval | Ntxiv lub sij hawm | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPhotos` | ht | Photos | Foto | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPhotos` | so | Photos | Sawirro | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPhotos` | am | Photos | ፎቶዎች | 2026-10-11 | machine-drafted, needs native review |
+| `sectionPhotos` | hmn | Photos | Cov duab | 2026-10-11 | machine-drafted, needs native review |
+| `photoLogo` | ht | Logo | Logo | 2026-10-11 | machine-drafted, needs native review |
+| `photoLogo` | so | Logo | Astaan | 2026-10-11 | machine-drafted, needs native review |
+| `photoLogo` | am | Logo | አርማ | 2026-10-11 | machine-drafted, needs native review |
+| `photoLogo` | hmn | Logo | Lub cim | 2026-10-11 | machine-drafted, needs native review |
+| `photoCover` | ht | Cover | Kouvèti | 2026-10-11 | machine-drafted, needs native review |
+| `photoCover` | so | Cover | Sawirka daboolka | 2026-10-11 | machine-drafted, needs native review |
+| `photoCover` | am | Cover | የሽፋን ፎቶ | 2026-10-11 | machine-drafted, needs native review |
+| `photoCover` | hmn | Cover | Daim duab npog | 2026-10-11 | machine-drafted, needs native review |
+| `photoGallery` | ht | Gallery | Galri | 2026-10-11 | machine-drafted, needs native review |
+| `photoGallery` | so | Gallery | Sawir-qaadaha | 2026-10-11 | machine-drafted, needs native review |
+| `photoGallery` | am | Gallery | የፎቶ ስብስብ | 2026-10-11 | machine-drafted, needs native review |
+| `photoGallery` | hmn | Gallery | Chav duab | 2026-10-11 | machine-drafted, needs native review |
+| `removeGalleryPhoto` | ht | Remove gallery photo | Retire foto galri a | 2026-10-11 | machine-drafted, needs native review |
+| `removeGalleryPhoto` | so | Remove gallery photo | Ka saar sawirka sawir-qaadaha | 2026-10-11 | machine-drafted, needs native review |
+| `removeGalleryPhoto` | am | Remove gallery photo | የስብስቡን ፎቶ አስወግድ | 2026-10-11 | machine-drafted, needs native review |
+| `removeGalleryPhoto` | hmn | Remove gallery photo | Tshem daim duab hauv chav duab | 2026-10-11 | machine-drafted, needs native review |
+| `photoAdd` | ht | Add | Ajoute | 2026-10-11 | machine-drafted, needs native review |
+| `photoAdd` | so | Add | Ku dar | 2026-10-11 | machine-drafted, needs native review |
+| `photoAdd` | am | Add | አክል | 2026-10-11 | machine-drafted, needs native review |
+| `photoAdd` | hmn | Add | Ntxiv | 2026-10-11 | machine-drafted, needs native review |
+| `addLogo` | ht | Add logo | Ajoute logo | 2026-10-11 | machine-drafted, needs native review |
+| `addLogo` | so | Add logo | Ku dar astaan | 2026-10-11 | machine-drafted, needs native review |
+| `addLogo` | am | Add logo | አርማ አክል | 2026-10-11 | machine-drafted, needs native review |
+| `addLogo` | hmn | Add logo | Ntxiv lub cim | 2026-10-11 | machine-drafted, needs native review |
+| `addCover` | ht | Add cover | Ajoute kouvèti | 2026-10-11 | machine-drafted, needs native review |
+| `addCover` | so | Add cover | Ku dar sawirka daboolka | 2026-10-11 | machine-drafted, needs native review |
+| `addCover` | am | Add cover | የሽፋን ፎቶ አክል | 2026-10-11 | machine-drafted, needs native review |
+| `addCover` | hmn | Add cover | Ntxiv daim duab npog | 2026-10-11 | machine-drafted, needs native review |
+| `removeLogo` | ht | Remove logo | Retire logo a | 2026-10-11 | machine-drafted, needs native review |
+| `removeLogo` | so | Remove logo | Ka saar astaanta | 2026-10-11 | machine-drafted, needs native review |
+| `removeLogo` | am | Remove logo | አርማውን አስወግድ | 2026-10-11 | machine-drafted, needs native review |
+| `removeLogo` | hmn | Remove logo | Tshem lub cim | 2026-10-11 | machine-drafted, needs native review |
+| `removeCover` | ht | Remove cover | Retire kouvèti a | 2026-10-11 | machine-drafted, needs native review |
+| `removeCover` | so | Remove cover | Ka saar sawirka daboolka | 2026-10-11 | machine-drafted, needs native review |
+| `removeCover` | am | Remove cover | የሽፋን ፎቶውን አስወግድ | 2026-10-11 | machine-drafted, needs native review |
+| `removeCover` | hmn | Remove cover | Tshem daim duab npog | 2026-10-11 | machine-drafted, needs native review |
+| `sectionServices` | ht | Services | Sèvis | 2026-10-11 | machine-drafted, needs native review |
+| `sectionServices` | so | Services | Adeegyo | 2026-10-11 | machine-drafted, needs native review |
+| `sectionServices` | am | Services | አገልግሎቶች | 2026-10-11 | machine-drafted, needs native review |
+| `sectionServices` | hmn | Services | Cov kev pab | 2026-10-11 | machine-drafted, needs native review |
+| `serviceNameAria` | ht | Service {n} name | Non sèvis {n} | 2026-10-11 | machine-drafted, needs native review |
+| `serviceNameAria` | so | Service {n} name | Magaca adeegga {n} | 2026-10-11 | machine-drafted, needs native review |
+| `serviceNameAria` | am | Service {n} name | የአገልግሎት {n} ስም | 2026-10-11 | machine-drafted, needs native review |
+| `serviceNameAria` | hmn | Service {n} name | Kev pab {n} lub npe | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceName` | ht | Service name | Non sèvis la | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceName` | so | Service name | Magaca adeegga | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceName` | am | Service name | የአገልግሎት ስም | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceName` | hmn | Service name | Kev pab lub npe | 2026-10-11 | machine-drafted, needs native review |
+| `removeService` | ht | Remove service | Retire sèvis la | 2026-10-11 | machine-drafted, needs native review |
+| `removeService` | so | Remove service | Ka saar adeegga | 2026-10-11 | machine-drafted, needs native review |
+| `removeService` | am | Remove service | አገልግሎቱን አስወግድ | 2026-10-11 | machine-drafted, needs native review |
+| `removeService` | hmn | Remove service | Tshem kev pab | 2026-10-11 | machine-drafted, needs native review |
+| `serviceDescriptionAria` | ht | Service {n} description | Deskripsyon sèvis {n} | 2026-10-11 | machine-drafted, needs native review |
+| `serviceDescriptionAria` | so | Service {n} description | Sharaxaadda adeegga {n} | 2026-10-11 | machine-drafted, needs native review |
+| `serviceDescriptionAria` | am | Service {n} description | የአገልግሎት {n} መግለጫ | 2026-10-11 | machine-drafted, needs native review |
+| `serviceDescriptionAria` | hmn | Service {n} description | Lus piav qhia txog kev pab {n} | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceDescription` | ht | Short description (optional) | Ti deskripsyon (si ou vle) | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceDescription` | so | Short description (optional) | Sharaxaad gaaban (ikhtiyaari) | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceDescription` | am | Short description (optional) | አጭር መግለጫ (አማራጭ) | 2026-10-11 | machine-drafted, needs native review |
+| `phServiceDescription` | hmn | Short description (optional) | Lus piav qhia luv (tsis yuam) | 2026-10-11 | machine-drafted, needs native review |
+| `addService` | ht | Add service | Ajoute yon sèvis | 2026-10-11 | machine-drafted, needs native review |
+| `addService` | so | Add service | Ku dar adeeg | 2026-10-11 | machine-drafted, needs native review |
+| `addService` | am | Add service | አገልግሎት አክል | 2026-10-11 | machine-drafted, needs native review |
+| `addService` | hmn | Add service | Ntxiv kev pab | 2026-10-11 | machine-drafted, needs native review |
+| `sectionAttributes` | ht | Attributes | Karakteristik | 2026-10-11 | machine-drafted, needs native review |
+| `sectionAttributes` | so | Attributes | Astaamaha | 2026-10-11 | machine-drafted, needs native review |
+| `sectionAttributes` | am | Attributes | መለያ ባህሪያት | 2026-10-11 | machine-drafted, needs native review |
+| `sectionAttributes` | hmn | Attributes | Cov yam ntxwv | 2026-10-11 | machine-drafted, needs native review |
+| `attrWheelchairAccessible` | ht | Wheelchair accessible | Aksesib pou chèz woulant | 2026-10-11 | machine-drafted, needs native review |
+| `attrWheelchairAccessible` | so | Wheelchair accessible | Kursiga curyaanka waa lagu geli karaa | 2026-10-11 | machine-drafted, needs native review |
+| `attrWheelchairAccessible` | am | Wheelchair accessible | ለዊልቸር ተደራሽ | 2026-10-11 | machine-drafted, needs native review |
+| `attrWheelchairAccessible` | hmn | Wheelchair accessible | Lub rooj zaum muaj log nkag tau | 2026-10-11 | machine-drafted, needs native review |
+| `attrWifi` | ht | Free Wi-Fi | Wi-Fi gratis | 2026-10-11 | machine-drafted, needs native review |
+| `attrWifi` | so | Free Wi-Fi | Wi-Fi bilaash ah | 2026-10-11 | machine-drafted, needs native review |
+| `attrWifi` | am | Free Wi-Fi | ነፃ Wi-Fi | 2026-10-11 | machine-drafted, needs native review |
+| `attrWifi` | hmn | Free Wi-Fi | Wi-Fi dawb | 2026-10-11 | machine-drafted, needs native review |
+| `attrParking` | ht | Parking available | Gen pakin | 2026-10-11 | machine-drafted, needs native review |
+| `attrParking` | so | Parking available | Baarkin waa la heli karaa | 2026-10-11 | machine-drafted, needs native review |
+| `attrParking` | am | Parking available | የመኪና ማቆሚያ አለ | 2026-10-11 | machine-drafted, needs native review |
+| `attrParking` | hmn | Parking available | Muaj chaw nres tsheb | 2026-10-11 | machine-drafted, needs native review |
+| `attrAcceptsEbt` | ht | Accepts EBT | Aksepte EBT | 2026-10-11 | machine-drafted, needs native review |
+| `attrAcceptsEbt` | so | Accepts EBT | Wuxuu aqbalaa EBT | 2026-10-11 | machine-drafted, needs native review |
+| `attrAcceptsEbt` | am | Accepts EBT | EBT ይቀበላል | 2026-10-11 | machine-drafted, needs native review |
+| `attrAcceptsEbt` | hmn | Accepts EBT | Txais EBT | 2026-10-11 | machine-drafted, needs native review |
+| `attrMultilingual` | ht | Multilingual staff | Anplwaye ki pale plizyè lang | 2026-10-11 | machine-drafted, needs native review |
+| `attrMultilingual` | so | Multilingual staff | Shaqaale ku hadla luqado badan | 2026-10-11 | machine-drafted, needs native review |
+| `attrMultilingual` | am | Multilingual staff | ብዙ ቋንቋ የሚናገሩ ሠራተኞች | 2026-10-11 | machine-drafted, needs native review |
+| `attrMultilingual` | hmn | Multilingual staff | Cov neeg ua hauj lwm hais tau ntau hom lus | 2026-10-11 | machine-drafted, needs native review |
+| `attrWomanOwned` | ht | Woman-owned | Pwopriyetè a se yon fanm | 2026-10-11 | machine-drafted, needs native review |
+| `attrWomanOwned` | so | Woman-owned | Waxaa leh haweeney | 2026-10-11 | machine-drafted, needs native review |
+| `attrWomanOwned` | am | Woman-owned | የሴት ባለቤትነት | 2026-10-11 | machine-drafted, needs native review |
+| `attrWomanOwned` | hmn | Woman-owned | Poj niam yog tus tswv | 2026-10-11 | machine-drafted, needs native review |
+| `attrVeteranOwned` | ht | Veteran-owned | Pwopriyetè a se yon veteran | 2026-10-11 | machine-drafted, needs native review |
+| `attrVeteranOwned` | so | Veteran-owned | Waxaa leh halyeey ciidan | 2026-10-11 | machine-drafted, needs native review |
+| `attrVeteranOwned` | am | Veteran-owned | የአርበኛ ባለቤትነት | 2026-10-11 | machine-drafted, needs native review |
+| `attrVeteranOwned` | hmn | Veteran-owned | Qub tub rog yog tus tswv | 2026-10-11 | machine-drafted, needs native review |
+| `attrLgbtqFriendly` | ht | LGBTQ+ friendly | Akeyan pou moun LGBTQ+ | 2026-10-11 | machine-drafted, needs native review |
+| `attrLgbtqFriendly` | so | LGBTQ+ friendly | Soo dhaweeya dadka LGBTQ+ | 2026-10-11 | machine-drafted, needs native review |
+| `attrLgbtqFriendly` | am | LGBTQ+ friendly | ለLGBTQ+ ምቹ | 2026-10-11 | machine-drafted, needs native review |
+| `attrLgbtqFriendly` | hmn | LGBTQ+ friendly | Txais tos cov neeg LGBTQ+ | 2026-10-11 | machine-drafted, needs native review |
+| `attrBlackOwned` | ht | Black-owned | Pwopriyetè a se yon moun nwa | 2026-10-11 | machine-drafted, needs native review |
+| `attrBlackOwned` | so | Black-owned | Waxaa leh qof madow | 2026-10-11 | machine-drafted, needs native review |
+| `attrBlackOwned` | am | Black-owned | የጥቁር ባለቤትነት | 2026-10-11 | machine-drafted, needs native review |
+| `attrBlackOwned` | hmn | Black-owned | Neeg tawv dub yog tus tswv | 2026-10-11 | machine-drafted, needs native review |
+| `sectionSocial` | ht | Social links | Rezo sosyal | 2026-10-11 | machine-drafted, needs native review |
+| `sectionSocial` | so | Social links | Xiriiriyeyaasha baraha bulshada | 2026-10-11 | machine-drafted, needs native review |
+| `sectionSocial` | am | Social links | የማኅበራዊ ሚዲያ አገናኞች | 2026-10-11 | machine-drafted, needs native review |
+| `sectionSocial` | hmn | Social links | Cov txuas rau social media | 2026-10-11 | machine-drafted, needs native review |
+| `submitting` | ht | Submitting… | N ap soumèt… | 2026-10-11 | machine-drafted, needs native review |
+| `submitting` | so | Submitting… | Waa la gudbinayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `submitting` | am | Submitting… | በማስገባት ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `submitting` | hmn | Submitting… | Tab tom xa… | 2026-10-11 | machine-drafted, needs native review |
+| `submitForReview` | ht | Submit for review | Soumèt pou revizyon | 2026-10-11 | machine-drafted, needs native review |
+| `submitForReview` | so | Submit for review | U gudbi dib-u-eegis | 2026-10-11 | machine-drafted, needs native review |
+| `submitForReview` | am | Submit for review | ለግምገማ አስገባ | 2026-10-11 | machine-drafted, needs native review |
+| `submitForReview` | hmn | Submit for review | Xa mus tshuaj xyuas | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | ht | Cancel | Anile | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | so | Cancel | Jooji | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | am | Cancel | ሰርዝ | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | hmn | Cancel | Thim | 2026-10-11 | machine-drafted, needs native review |
+| `empty` | ht | No local businesses yet. | Poko gen biznis lokal. | 2026-10-11 | machine-drafted, needs native review |
+| `empty` | so | No local businesses yet. | Weli ma jiraan ganacsiyo deegaanka ah. | 2026-10-11 | machine-drafted, needs native review |
+| `empty` | am | No local businesses yet. | እስካሁን ምንም የአካባቢ ንግድ የለም። | 2026-10-11 | machine-drafted, needs native review |
+| `empty` | hmn | No local businesses yet. | Tseem tsis tau muaj lag luam hauv zos. | 2026-10-11 | machine-drafted, needs native review |
+| `emptyAddFirst` | ht | Be the first to add one. | Se ou ki ka premye ajoute youn. | 2026-10-11 | machine-drafted, needs native review |
+| `emptyAddFirst` | so | Be the first to add one. | Noqo qofka ugu horreeya ee mid ku dara. | 2026-10-11 | machine-drafted, needs native review |
+| `emptyAddFirst` | am | Be the first to add one. | የመጀመሪያውን ለማከል ቀዳሚ ይሁኑ። | 2026-10-11 | machine-drafted, needs native review |
+| `emptyAddFirst` | hmn | Be the first to add one. | Koj ua thawj tus ntxiv ib lub. | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | ht | Failed to load businesses | Nou pa t kapab chaje biznis yo | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | so | Failed to load businesses | Lama soo shubi karin ganacsiyada | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | am | Failed to load businesses | ንግዶችን መጫን አልተቻለም | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | hmn | Failed to load businesses | Thauj tsis tau cov lag luam | 2026-10-11 | machine-drafted, needs native review |
+| `uploadFailed` | ht | Upload failed. Please try again. | Foto a pa t rive monte. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `uploadFailed` | so | Upload failed. Please try again. | Sawirka lama soo gelin karin. Fadlan isku day mar kale. | 2026-10-11 | machine-drafted, needs native review |
+| `uploadFailed` | am | Upload failed. Please try again. | መስቀል አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `uploadFailed` | hmn | Upload failed. Please try again. | Xa daim duab tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+
 <!-- END GENERATED -->
 
 ## Dictionaries written before this list existed

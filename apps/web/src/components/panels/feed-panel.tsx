@@ -1965,9 +1965,6 @@ export function FeedPanel() {
           id="feed-panel-businesses"
           aria-labelledby="feed-tab-businesses"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <BusinessesPanel />

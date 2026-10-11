@@ -19,6 +19,7 @@ import { TIME_WORDS, type PluralForms } from './i18n-intl'
 import { feedOrganizationsMessages } from './i18n-feed-organizations'
 import { SIGNATURES_OF_TARGET, VERIFIED_SIGNATURES, feedPetitionsMessages } from './i18n-feed-petitions'
 import { feedMessagesMessages } from './i18n-feed-messages'
+import { feedBusinessesMessages } from './i18n-feed-businesses'
 
 const REVIEW_LOCALES = ['ht', 'so', 'am', 'hmn'] as const
 type ReviewLocale = (typeof REVIEW_LOCALES)[number]
@@ -97,6 +98,7 @@ function expectedRows(): Draft[] {
     ...pluralRows('lib/i18n-feed-petitions.ts', 'SIGNATURES_OF_TARGET', SIGNATURES_OF_TARGET),
     ...pluralRows('lib/i18n-feed-petitions.ts', 'VERIFIED_SIGNATURES', VERIFIED_SIGNATURES),
     ...dictionaryRows('lib/i18n-feed-messages.ts', feedMessagesMessages),
+    ...dictionaryRows('lib/i18n-feed-businesses.ts', feedBusinessesMessages),
   ]
 }
 

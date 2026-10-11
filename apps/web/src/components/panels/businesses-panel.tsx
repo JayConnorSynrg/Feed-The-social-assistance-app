@@ -14,6 +14,11 @@
 //     attributes, and social links. It enters review as pending (truthful-optimistic — never
 //     shown as already-live; reverts with a banner on failure; a partial-child failure is
 //     surfaced honestly — CINV4). Guests see a create-account prompt instead of the form.
+//
+// Every string is read from lib/i18n-feed-businesses.ts in the member's language
+// (useProfileLocale); the panel root carries that language and its direction. A business's own
+// name and description are shown as written (dir="auto", no page language). A failure whose text
+// came from the server or from lib/business-data.ts is English and is marked English.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -33,7 +38,22 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
-import { dir } from '@/lib/i18n'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import {
+  BUSINESS_LOAD_FAILED,
+  BUSINESS_SUBMIT_FAILED,
+  BUSINESS_UPLOAD_FAILED,
+  businessAttributeLabel,
+  businessCategoryLabel,
+  businessFailure,
+  businessesT,
+  costModelLabel,
+  type FeedBusinessesMessages,
+} from '@/lib/i18n-feed-businesses'
+import { weekdayName } from '@/lib/event-recurrence-format'
+import { WEEKDAY_DISPLAY_ORDER } from '@/lib/event-recurrence'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
 import { useGeolocation, calculateDistance } from '@/hooks/use-geolocation'
@@ -63,8 +83,17 @@ const INPUT_CLASS =
   'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500'
 
 // ---- Hours editor model -------------------------------------------------------------------------
-// index 0..6 == Sunday..Saturday, matching BusinessHours.day_of_week.
+// index 0..6 == Sunday..Saturday, matching BusinessHours.day_of_week. The seven slots of the
+// editor; the names a member reads come from weekdayName (WEEKDAY_DISPLAY_ORDER has the same order).
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+/** A day switch's accessible name: its visible state first ("Open" / "Closed"), then the day. */
+export function hoursSwitchName(locale: Locale, closed: boolean, dow: number): string {
+  return formatMessage(businessesT(locale, 'hoursDayAria'), {
+    state: businessesT(locale, closed ? 'hoursClosed' : 'hoursOpen'),
+    day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale),
+  })
+}
 interface Interval {
   open: string
   close: string
@@ -88,11 +117,8 @@ function serializeHours(days: DayHours[]): BusinessHours[] {
   return out
 }
 
-const COST_OPTIONS: { value: CostModel; label: string }[] = [
-  { value: 'free', label: 'Free' },
-  { value: 'sliding_scale', label: 'Sliding scale' },
-  { value: 'paid', label: 'Paid' },
-]
+// The label of each is costModelLabel(value, locale).
+const COST_OPTIONS: { value: CostModel }[] = [{ value: 'free' }, { value: 'sliding_scale' }, { value: 'paid' }]
 
 const ACCEPT = 'image/jpeg,image/png,image/webp'
 
@@ -137,10 +163,10 @@ function Section({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold text-stone-700 hover:bg-stone-50"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-start text-sm font-semibold text-stone-700 hover:bg-stone-50"
       >
         <span className="flex items-center gap-2">
-          {open ? <ChevronDown className="h-4 w-4 text-stone-400" /> : <ChevronRight className="h-4 w-4 text-stone-400" />}
+          {open ? <ChevronDown className="h-4 w-4 text-stone-400" /> : <ChevronRight className="h-4 w-4 text-stone-400 rtl:rotate-180" />}
           {title}
         </span>
         {hint && <span className="text-xs font-normal text-stone-400">{hint}</span>}
@@ -152,8 +178,9 @@ function Section({
 
 export function BusinessesPanel() {
   const { user, isAnonymous } = useAuth()
-  // The admin-only "Edit in admin" link speaks the viewer's profile language (the panel is English).
-  const adminLocale = useProfileLocale()
+  // The whole panel reads in the viewer's profile language.
+  const locale = useProfileLocale()
+  const t = (key: keyof FeedBusinessesMessages) => businessesT(locale, key)
   const { position } = useGeolocation()
   const { panelParams } = usePanelContext()
   const supabase = createClient()
@@ -201,7 +228,7 @@ export function BusinessesPanel() {
       const rows = await fetchApprovedBusinesses(supabase)
       setBusinesses(rows)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load businesses')
+      setLoadError(err instanceof Error ? err.message : BUSINESS_LOAD_FAILED)
     } finally {
       setLoading(false)
     }
@@ -229,9 +256,9 @@ export function BusinessesPanel() {
       if (!origin) return null
       const pt = parseGeographyPoint(b.location)
       if (!pt) return null
-      return distanceBucketLabel(bucketForKm(calculateDistance(origin.latitude, origin.longitude, pt.lat, pt.lng)))
+      return distanceBucketLabel(bucketForKm(calculateDistance(origin.latitude, origin.longitude, pt.lat, pt.lng)), locale)
     },
-    [origin]
+    [origin, locale]
   )
 
   // Clear every editor after a successful submit. Does NOT delete uploaded blobs — they now belong
@@ -261,14 +288,14 @@ export function BusinessesPanel() {
       try {
         const uploaded = await withPhotoUploadMetric(photoImageType(file.type), file.size, async () => {
           const { url, path, error } = await uploadPostImage(file)
-          if (error || !url || !path) throw new Error(error ?? 'Upload failed. Please try again.')
+          if (error || !url || !path) throw new Error(error ?? BUSINESS_UPLOAD_FAILED)
           return { url, path }
         })
         if (kind === 'logo') setLogo(uploaded)
         else if (kind === 'cover') setCover(uploaded)
         else setGallery((g) => [...g, uploaded])
       } catch (err) {
-        setPhotoError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
+        setPhotoError(err instanceof Error ? err.message : BUSINESS_UPLOAD_FAILED)
       } finally {
         setPhotoBusy((b) => ({ ...b, [kind]: false }))
       }
@@ -349,7 +376,7 @@ export function BusinessesPanel() {
         // Defense-in-depth: submitBusiness honors a non-throwing contract, but should any future
         // code path here throw, settle to a truthful error phase so the form can never hang on
         // "Submitting…" with no banner.
-        setPhase({ kind: 'error', message: err instanceof Error ? err.message : 'Submission failed' })
+        setPhase({ kind: 'error', message: err instanceof Error ? err.message : BUSINESS_SUBMIT_FAILED })
       } finally {
         submittingRef.current = false
       }
@@ -359,8 +386,15 @@ export function BusinessesPanel() {
 
   const submitting = phase.kind === 'submitting'
 
+  // A failure is one of this panel's codes (FEED's sentence in the member's language) or English
+  // text from the server / lib/business-data.ts, which is shown as received and marked English.
+  const loadFailure = loadError ? businessFailure(loadError, locale) : null
+  const photoFailure = photoError ? businessFailure(photoError, locale) : null
+  const submitFailure = phase.kind === 'error' ? businessFailure(phase.message, locale) : null
+  const [beforeSubmitMessage, afterSubmitMessage] = splitMessage(t('submitError'), 'message')
+
   return (
-    <div className="h-full overflow-y-auto p-4 sm:p-6">
+    <div lang={locale} dir={dir(locale)} className="h-full overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
@@ -369,8 +403,8 @@ export function BusinessesPanel() {
               <Leaf className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-stone-800">Local Businesses</h1>
-              <p className="text-xs text-stone-500">Community-submitted local businesses near you</p>
+              <h1 className="text-lg font-bold text-stone-800">{t('title')}</h1>
+              <p className="text-xs text-stone-500">{t('subtitle')}</p>
             </div>
           </div>
           {canSubmit && !showForm && (
@@ -382,15 +416,15 @@ export function BusinessesPanel() {
                 setShowForm(true)
               }}
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Add a local business
+              <Plus className="h-4 w-4 me-1" />
+              {t('addBusiness')}
             </Button>
           )}
         </div>
 
         {/* Submit affordance for guests */}
         {!canSubmit && (
-          <CreateAccountPrompt message="Create a free account to add a local business to the map" />
+          <CreateAccountPrompt message={t('guestPrompt')} linkLabel={feedChromeT(locale, 'createAccount')} />
         )}
 
         {/* Submit form (member-only) */}
@@ -398,13 +432,21 @@ export function BusinessesPanel() {
           <form
             onSubmit={handleSubmit}
             className="rounded-xl border border-stone-200 bg-white p-4 space-y-3"
-            aria-label="Submit a local business"
+            aria-label={t('formLabel')}
           >
-            <h2 className="text-sm font-semibold text-stone-800">Add a local business</h2>
+            <h2 className="text-sm font-semibold text-stone-800">{t('addBusiness')}</h2>
 
-            {phase.kind === 'error' && (
+            {submitFailure && (
               <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800">
-                Could not submit: {phase.message}. Please try again.
+                {submitFailure.translated ? (
+                  submitFailure.text
+                ) : (
+                  <>
+                    {beforeSubmitMessage}
+                    <span lang="en" dir="ltr">{submitFailure.text}</span>
+                    {afterSubmitMessage}
+                  </>
+                )}
               </div>
             )}
 
@@ -412,10 +454,11 @@ export function BusinessesPanel() {
               <div className="flex items-start gap-2 rounded-lg bg-lime-50 px-3 py-3 text-sm text-stone-700">
                 <CheckCircle className="h-5 w-5 shrink-0 text-lime-700" />
                 <div>
-                  <p className="font-medium text-stone-800">Submitted for review</p>
-                  <p>Your business is pending review. A resource admin will approve it before it appears on the map.</p>
+                  <p className="font-medium text-stone-800">{t('submittedTitle')}</p>
+                  <p>{t('submittedBody')}</p>
                   {phase.warning && (
-                    <p className="mt-1 flex items-start gap-1 text-amber-700">
+                    /* Written in English by lib/business-data.ts (not translated yet): marked English. */
+                    <p lang="en" dir="ltr" className="mt-1 flex items-start gap-1 text-amber-700">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       {phase.warning}
                     </p>
@@ -428,7 +471,7 @@ export function BusinessesPanel() {
                       setShowForm(false)
                     }}
                   >
-                    Done
+                    {t('done')}
                   </button>
                 </div>
               </div>
@@ -437,7 +480,7 @@ export function BusinessesPanel() {
                 {/* --- Core fields (always visible) --- */}
                 <div>
                   <label htmlFor="biz-name" className="mb-1 block text-xs font-medium text-stone-600">
-                    Business name <span className="text-red-600">*</span>
+                    {t('fieldName')} <span className="text-red-600">*</span>
                   </label>
                   <input
                     id="biz-name"
@@ -445,12 +488,13 @@ export function BusinessesPanel() {
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     className={INPUT_CLASS}
-                    placeholder="Corner Cafe"
+                    dir="auto"
+                    placeholder={t('phName')}
                   />
                 </div>
                 <div>
                   <label htmlFor="biz-desc" className="mb-1 block text-xs font-medium text-stone-600">
-                    Description
+                    {t('fieldDescription')}
                   </label>
                   <textarea
                     id="biz-desc"
@@ -458,12 +502,13 @@ export function BusinessesPanel() {
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                     className={INPUT_CLASS}
                     rows={3}
-                    placeholder="What does this business offer the community?"
+                    dir="auto"
+                    placeholder={t('phDescription')}
                   />
                 </div>
                 <div>
                   <label htmlFor="biz-address" className="mb-1 block text-xs font-medium text-stone-600">
-                    Street address
+                    {t('fieldAddress')}
                   </label>
                   <input
                     id="biz-address"
@@ -476,7 +521,7 @@ export function BusinessesPanel() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="biz-city" className="mb-1 block text-xs font-medium text-stone-600">
-                      City
+                      {t('fieldCity')}
                     </label>
                     <input
                       id="biz-city"
@@ -488,7 +533,7 @@ export function BusinessesPanel() {
                   </div>
                   <div>
                     <label htmlFor="biz-state" className="mb-1 block text-xs font-medium text-stone-600">
-                      State
+                      {t('fieldState')}
                     </label>
                     <input
                       id="biz-state"
@@ -502,7 +547,7 @@ export function BusinessesPanel() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="biz-phone" className="mb-1 block text-xs font-medium text-stone-600">
-                      Phone
+                      {t('fieldPhone')}
                     </label>
                     <input
                       id="biz-phone"
@@ -514,7 +559,7 @@ export function BusinessesPanel() {
                   </div>
                   <div>
                     <label htmlFor="biz-website" className="mb-1 block text-xs font-medium text-stone-600">
-                      Website
+                      {t('fieldWebsite')}
                     </label>
                     <input
                       id="biz-website"
@@ -528,11 +573,11 @@ export function BusinessesPanel() {
                 </div>
 
                 {/* --- Details section --- */}
-                <Section title="Details" open={!!openSections.details} onToggle={() => toggleSection('details')}>
+                <Section title={t('sectionDetails')} open={!!openSections.details} onToggle={() => toggleSection('details')}>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="biz-category" className="mb-1 block text-xs font-medium text-stone-600">
-                        Category
+                        {t('fieldCategory')}
                       </label>
                       <select
                         id="biz-category"
@@ -540,17 +585,17 @@ export function BusinessesPanel() {
                         onChange={(e) => setForm((f) => ({ ...f, business_category: e.target.value || null }))}
                         className={INPUT_CLASS}
                       >
-                        <option value="">Select…</option>
+                        <option value="">{t('selectPlaceholder')}</option>
                         {BUSINESS_CATEGORIES.map((c) => (
                           <option key={c.value} value={c.value}>
-                            {c.label}
+                            {businessCategoryLabel(c.value, locale)}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div>
                       <label htmlFor="biz-email" className="mb-1 block text-xs font-medium text-stone-600">
-                        Email
+                        {t('fieldEmail')}
                       </label>
                       <input
                         id="biz-email"
@@ -563,8 +608,8 @@ export function BusinessesPanel() {
                     </div>
                   </div>
                   <div>
-                    <span className="mb-1 block text-xs font-medium text-stone-600">Cost model</span>
-                    <div className="inline-flex rounded-lg border border-stone-200 p-0.5" role="group" aria-label="Cost model">
+                    <span className="mb-1 block text-xs font-medium text-stone-600">{t('fieldCostModel')}</span>
+                    <div className="inline-flex rounded-lg border border-stone-200 p-0.5" role="group" aria-label={t('fieldCostModel')}>
                       {COST_OPTIONS.map((opt) => {
                         const active = form.cost_model === opt.value
                         return (
@@ -579,7 +624,7 @@ export function BusinessesPanel() {
                               active ? 'bg-lime-700 text-white' : 'text-stone-600 hover:bg-stone-100'
                             }`}
                           >
-                            {opt.label}
+                            {costModelLabel(opt.value, locale)}
                           </button>
                         )
                       })}
@@ -588,7 +633,7 @@ export function BusinessesPanel() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="biz-zip" className="mb-1 block text-xs font-medium text-stone-600">
-                        ZIP code
+                        {t('fieldZip')}
                       </label>
                       <input
                         id="biz-zip"
@@ -601,7 +646,7 @@ export function BusinessesPanel() {
                     </div>
                     <div>
                       <label htmlFor="biz-radius" className="mb-1 block text-xs font-medium text-stone-600">
-                        Service radius (miles)
+                        {t('fieldRadius')}
                       </label>
                       <input
                         id="biz-radius"
@@ -623,7 +668,7 @@ export function BusinessesPanel() {
                 </Section>
 
                 {/* --- Hours section --- */}
-                <Section title="Hours" open={!!openSections.hours} onToggle={() => toggleSection('hours')}>
+                <Section title={t('sectionHours')} open={!!openSections.hours} onToggle={() => toggleSection('hours')}>
                   <div className="flex justify-end">
                     <button
                       type="button"
@@ -636,18 +681,18 @@ export function BusinessesPanel() {
                       }
                       className="text-xs font-medium text-lime-700 hover:underline"
                     >
-                      Copy Monday to weekdays
+                      {t('copyMonday')}
                     </button>
                   </div>
                   {hours.map((day, dow) => (
                     <div key={dow} className="rounded-lg border border-stone-100 p-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-stone-700">{DAY_LABELS[dow]}</span>
+                        <span className="text-xs font-semibold text-stone-700">{weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale, 'short')}</span>
                         <button
                           type="button"
                           role="switch"
                           aria-checked={!day.closed}
-                          aria-label={`${DAY_LABELS[dow]} open`}
+                          aria-label={hoursSwitchName(locale, day.closed, dow)}
                           onClick={() =>
                             setHours((days) => days.map((d, i) => (i === dow ? { ...d, closed: !d.closed } : d)))
                           }
@@ -659,7 +704,7 @@ export function BusinessesPanel() {
                             className={`h-2 w-2 rounded-full ${day.closed ? 'bg-stone-400' : 'bg-lime-600'}`}
                             aria-hidden="true"
                           />
-                          {day.closed ? 'Closed' : 'Open'}
+                          {day.closed ? t('hoursClosed') : t('hoursOpen')}
                         </button>
                       </div>
                       {!day.closed && (
@@ -668,7 +713,7 @@ export function BusinessesPanel() {
                             <div key={ii} className="flex items-center gap-2">
                               <input
                                 type="time"
-                                aria-label={`${DAY_LABELS[dow]} open time`}
+                                aria-label={formatMessage(t('openTimeAria'), { day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale) })}
                                 value={iv.open}
                                 onChange={(e) =>
                                   setHours((days) =>
@@ -686,10 +731,10 @@ export function BusinessesPanel() {
                                 }
                                 className={`${INPUT_CLASS} flex-1`}
                               />
-                              <span className="text-xs text-stone-400">to</span>
+                              <span className="text-xs text-stone-400">{t('hoursTo')}</span>
                               <input
                                 type="time"
-                                aria-label={`${DAY_LABELS[dow]} close time`}
+                                aria-label={formatMessage(t('closeTimeAria'), { day: weekdayName(WEEKDAY_DISPLAY_ORDER[dow], locale) })}
                                 value={iv.close}
                                 onChange={(e) =>
                                   setHours((days) =>
@@ -710,7 +755,7 @@ export function BusinessesPanel() {
                               {day.intervals.length > 1 && (
                                 <button
                                   type="button"
-                                  aria-label="Remove interval"
+                                  aria-label={t('removeInterval')}
                                   onClick={() =>
                                     setHours((days) =>
                                       days.map((d, i) =>
@@ -736,7 +781,7 @@ export function BusinessesPanel() {
                             }
                             className="text-xs font-medium text-lime-700 hover:underline"
                           >
-                            + Add interval
+                            + {t('addInterval')}
                           </button>
                         </div>
                       )}
@@ -745,22 +790,31 @@ export function BusinessesPanel() {
                 </Section>
 
                 {/* --- Photos section --- */}
-                <Section title="Photos" open={!!openSections.photos} onToggle={() => toggleSection('photos')}>
-                  {photoError && (
-                    <p role="alert" className="text-xs text-red-600">
-                      {photoError}
+                <Section title={t('sectionPhotos')} open={!!openSections.photos} onToggle={() => toggleSection('photos')}>
+                  {photoFailure && (
+                    <p
+                      role="alert"
+                      lang={photoFailure.translated ? undefined : 'en'}
+                      dir={photoFailure.translated ? undefined : 'ltr'}
+                      className="text-xs text-red-600"
+                    >
+                      {photoFailure.text}
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <PhotoSingleSlot
-                      label="Logo"
+                      label={t('photoLogo')}
+                      addLabel={t('addLogo')}
+                      removeLabel={t('removeLogo')}
                       photo={logo}
                       busy={photoBusy.logo}
                       onSelect={(file) => handlePhotoSelect('logo', file)}
                       onRemove={() => removePhoto('logo')}
                     />
                     <PhotoSingleSlot
-                      label="Cover"
+                      label={t('photoCover')}
+                      addLabel={t('addCover')}
+                      removeLabel={t('removeCover')}
                       photo={cover}
                       busy={photoBusy.cover}
                       onSelect={(file) => handlePhotoSelect('cover', file)}
@@ -768,7 +822,7 @@ export function BusinessesPanel() {
                     />
                   </div>
                   <div>
-                    <span className="mb-1 block text-xs font-medium text-stone-600">Gallery</span>
+                    <span className="mb-1 block text-xs font-medium text-stone-600">{t('photoGallery')}</span>
                     <div className="flex flex-wrap gap-2">
                       {gallery.map((g, i) => (
                         <div key={g.path} className="relative h-20 w-20 overflow-hidden rounded-lg border border-stone-200">
@@ -776,9 +830,9 @@ export function BusinessesPanel() {
                           <img src={g.url} alt="" className="h-full w-full object-cover" />
                           <button
                             type="button"
-                            aria-label="Remove gallery photo"
+                            aria-label={t('removeGalleryPhoto')}
                             onClick={() => removePhoto('gallery', i)}
-                            className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+                            className="absolute end-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -794,7 +848,7 @@ export function BusinessesPanel() {
                         ) : (
                           <>
                             <ImagePlus className="h-5 w-5" />
-                            <span className="text-[10px]">Add</span>
+                            <span className="text-[10px]">{t('photoAdd')}</span>
                           </>
                         )}
                         <input
@@ -813,20 +867,21 @@ export function BusinessesPanel() {
                 </Section>
 
                 {/* --- Services section --- */}
-                <Section title="Services" open={!!openSections.services} onToggle={() => toggleSection('services')}>
+                <Section title={t('sectionServices')} open={!!openSections.services} onToggle={() => toggleSection('services')}>
                   {services.map((s, i) => (
                     <div key={i} className="rounded-lg border border-stone-100 p-2 space-y-2">
                       <div className="flex items-center gap-2">
                         <input
-                          aria-label={`Service ${i + 1} name`}
+                          aria-label={formatMessage(t('serviceNameAria'), { n: i + 1 })}
                           value={s.name}
                           onChange={(e) => setServices((rows) => rows.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))}
                           className={`${INPUT_CLASS} flex-1`}
-                          placeholder="Service name"
+                          dir="auto"
+                          placeholder={t('phServiceName')}
                         />
                         <button
                           type="button"
-                          aria-label="Remove service"
+                          aria-label={t('removeService')}
                           onClick={() => setServices((rows) => rows.filter((_, j) => j !== i))}
                           className="rounded p-1 text-stone-400 hover:text-red-600"
                         >
@@ -834,13 +889,14 @@ export function BusinessesPanel() {
                         </button>
                       </div>
                       <input
-                        aria-label={`Service ${i + 1} description`}
+                        aria-label={formatMessage(t('serviceDescriptionAria'), { n: i + 1 })}
                         value={s.description}
                         onChange={(e) =>
                           setServices((rows) => rows.map((r, j) => (j === i ? { ...r, description: e.target.value } : r)))
                         }
                         className={INPUT_CLASS}
-                        placeholder="Short description (optional)"
+                        dir="auto"
+                        placeholder={t('phServiceDescription')}
                       />
                     </div>
                   ))}
@@ -849,12 +905,12 @@ export function BusinessesPanel() {
                     onClick={() => setServices((rows) => [...rows, { name: '', description: '' }])}
                     className="text-xs font-medium text-lime-700 hover:underline"
                   >
-                    + Add service
+                    + {t('addService')}
                   </button>
                 </Section>
 
                 {/* --- Attributes section --- */}
-                <Section title="Attributes" open={!!openSections.attributes} onToggle={() => toggleSection('attributes')}>
+                <Section title={t('sectionAttributes')} open={!!openSections.attributes} onToggle={() => toggleSection('attributes')}>
                   <div className="flex flex-wrap gap-2">
                     {BUSINESS_ATTRIBUTES.map((attr) => {
                       const active = !!attributes[attr.key]
@@ -870,7 +926,7 @@ export function BusinessesPanel() {
                               : 'border-stone-200 text-stone-600 hover:border-lime-300'
                           }`}
                         >
-                          {attr.label}
+                          {businessAttributeLabel(attr.key, locale)}
                         </button>
                       )
                     })}
@@ -878,7 +934,7 @@ export function BusinessesPanel() {
                 </Section>
 
                 {/* --- Social section --- */}
-                <Section title="Social links" open={!!openSections.social} onToggle={() => toggleSection('social')}>
+                <Section title={t('sectionSocial')} open={!!openSections.social} onToggle={() => toggleSection('social')}>
                   {SOCIAL_PLATFORMS.map((p) => (
                     <div key={p.key}>
                       <label htmlFor={`social-${p.key}`} className="mb-1 block text-xs font-medium text-stone-600">
@@ -903,11 +959,11 @@ export function BusinessesPanel() {
                   >
                     {submitting ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        Submitting…
+                        <Loader2 className="h-4 w-4 me-1 animate-spin" />
+                        {t('submitting')}
                       </>
                     ) : (
-                      'Submit for review'
+                      t('submitForReview')
                     )}
                   </Button>
                   <Button
@@ -919,7 +975,7 @@ export function BusinessesPanel() {
                     }}
                     disabled={submitting}
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                 </div>
               </>
@@ -932,13 +988,18 @@ export function BusinessesPanel() {
           <div className="flex items-center justify-center py-10 text-stone-600">
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
-        ) : loadError ? (
-          <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">
-            {loadError}
+        ) : loadFailure ? (
+          <div
+            role="alert"
+            lang={loadFailure.translated ? undefined : 'en'}
+            dir={loadFailure.translated ? undefined : 'ltr'}
+            className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800"
+          >
+            {loadFailure.text}
           </div>
         ) : sorted.length === 0 ? (
           <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-500">
-            No local businesses yet. {canSubmit ? 'Be the first to add one.' : ''}
+            {t('empty')} {canSubmit ? t('emptyAddFirst') : ''}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -965,17 +1026,18 @@ export function BusinessesPanel() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="truncate font-semibold text-stone-800">{b.name}</h3>
+                        {/* Written by the business: its own direction, no page language. */}
+                        <h3 lang="" dir="auto" className="truncate font-semibold text-stone-800">{b.name}</h3>
                         <ExternalLink className="h-4 w-4 shrink-0 text-stone-400" />
                       </div>
                       {b.description && (
-                        <p className="mt-0.5 line-clamp-2 text-sm text-stone-600">{b.description}</p>
+                        <p lang="" dir="auto" className="mt-0.5 line-clamp-2 text-sm text-stone-600">{b.description}</p>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
                         {addr && (
                           <span className="flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5" />
-                            {addr}
+                            <span lang="" dir="auto">{addr}</span>
                           </span>
                         )}
                         {label && <span>{label}</span>}
@@ -988,9 +1050,9 @@ export function BusinessesPanel() {
                     target={{ kind: 'business', id: b.id }}
                     itemName={b.name}
                     source="showcase_row"
-                    locale={adminLocale}
-                    lang={adminLocale}
-                    dir={dir(adminLocale)}
+                    locale={locale}
+                    lang={locale}
+                    dir={dir(locale)}
                     className={`${ADMIN_EDIT_LINK_CLASS} self-end`}
                   />
                 </li>
@@ -1008,12 +1070,18 @@ export function BusinessesPanel() {
 // index). The add affordance reappears after removal.
 function PhotoSingleSlot({
   label,
+  addLabel,
+  removeLabel,
   photo,
   busy,
   onSelect,
   onRemove,
 }: {
   label: string
+  /** "Add logo": the slot's visible text, a whole phrase in the member's language. */
+  addLabel: string
+  /** "Remove logo": the remove button's name. */
+  removeLabel: string
   photo: UploadedPhoto | null
   busy: boolean
   onSelect: (file: File | undefined) => void
@@ -1028,9 +1096,9 @@ function PhotoSingleSlot({
           <img src={photo.url} alt="" className="h-full w-full object-cover" />
           <button
             type="button"
-            aria-label={`Remove ${label.toLowerCase()}`}
+            aria-label={removeLabel}
             onClick={onRemove}
-            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+            className="absolute end-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1046,7 +1114,7 @@ function PhotoSingleSlot({
           ) : (
             <>
               <ImagePlus className="h-5 w-5" />
-              <span className="text-[10px]">Add {label.toLowerCase()}</span>
+              <span className="text-[10px]">{addLabel}</span>
             </>
           )}
           <input
