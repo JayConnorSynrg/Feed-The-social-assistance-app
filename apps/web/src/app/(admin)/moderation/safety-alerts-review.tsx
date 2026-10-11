@@ -1,30 +1,36 @@
 'use client'
 
 /**
- * SafetyAlertsReview — admin post-hoc review of live safety alerts (status 'live'
- * and not yet past expires_at — see lib/safety-alert-live.ts).
+ * SafetyAlertsReview — admin post-hoc review of the safety alerts members can see: live ones, and
+ * resolved ones for six hours (the shown rule, lib/safety-alert-live.ts).
  *
- * Pins go live immediately (publish-then-review). Admins can set status='removed'
- * via the admin_remove_safety_alert SECDEF RPC (gated to is_staff=true at the DB level).
+ * Pins go live immediately (publish-then-review). A moderator verifies an alert (admin_verify_safety_alert)
+ * or removes it (admin_remove_safety_alert); both are SECURITY DEFINER RPCs gated to moderators at the
+ * DB level, both send the version the row was showing, and both answer the alert as members see it.
  *
- * Auth pattern mirrors moderation-queue.tsx: client-side Supabase call.
- * Logging: logger.info('pin.removed', { alertId }) on admin removal.
+ * The list is read through the one alert reader (lib/safety-alert-rpc.ts readSafetyAlertList), so it
+ * shows exactly what the strip and the map show, with the server's is_mine:
+ *   - a resolved alert is labelled "Resolved", is never counted as live and cannot be verified;
+ *   - no self-moderation: a moderator gets no Approve on an alert they reported (the server refuses
+ *     it with self_moderation_refused; the button is not offered).
+ * A stale version (someone changed the alert first), an alert that ended, and a refused action each
+ * say what happened and re-read the list; nothing is sent again on its own.
+ *
+ * Copy is English. The type and severity names come from the alert dictionary
+ * (lib/i18n-feed-alerts.ts, read with 'en'), the same source the member surfaces use.
  *
  * Each row offers "View on map" (/#map?focus=safety_alert:<id>, opened in the reused feed-preview
- * tab) while the members' map shows the pin: safetyAlertMapVisibility, the safety_alerts_in_view
- * rule. The list already holds only live, unexpired alerts, so today every row links; the predicate
- * stays so a list change can never hand an admin a link to a pin members do not see.
+ * tab) while the members' map shows the pin (safetyAlertMapVisibility — the same shown rule).
  * SafetyAlertsReviewView is the stateless rendering (tested with react-dom/server).
  *
  * "Edit in admin" on an alert (/moderation?tab=moderation&focus=safety_alert:<id>) opens this sub-tab
  * with that alert read by id and pinned at the top (marked "Opened from link"), once, even when it is
- * beyond the newest 50. Only a live, unexpired alert can be read (RLS safety_alerts_select is
- * status='live'; the expiry filter is lib/safety-alert-live.ts), so a removed or expired one is
+ * beyond the list. Only a shown alert can be read, so a removed, withdrawn, cleared or expired one is
  * not_found and says so. One admin.deeplink.resolve row per link (use-admin-focus.ts).
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { AlertTriangle, CheckCircle2, Cloud, Construction, Gauge, Trash2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -34,8 +40,21 @@ import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { adminNavT } from '@/lib/i18n-admin-nav'
+import { alertName, alertSeverityLabel, alertTypeLabel } from '@/lib/i18n-feed-alerts'
 import { safetyAlertMapVisibility } from '@/lib/member-visibility'
-import { whereSafetyAlertLive } from '@/lib/safety-alert-live'
+import { alertShownState, isAlertLive } from '@/lib/safety-alert-live'
+import {
+  AlertReadError,
+  parseAlertRpcError,
+  readSafetyAlertById,
+  readSafetyAlertList,
+  toSafetyAlert,
+  type AlertRpcError,
+  type AlertRpcFailure,
+  type SafetyAlert,
+} from '@/lib/safety-alert-rpc'
+import { mergeAlertAnswer } from '@/lib/safety-alert-store'
+import { AlertTypeIcon } from '@/components/alerts/alert-parts'
 import { useAdminFocusSession } from './use-admin-focus'
 import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 
@@ -43,78 +62,72 @@ import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface LiveAlert {
-  id: string
-  status: string
-  alert_type: string
-  severity: number
-  description: string | null
-  confirm_count: number
-  clear_count: number
-  created_at: string
-  expires_at: string
-  verified: boolean
-}
+/** An alert in the review list: exactly what the reader returns (live or resolved). */
+export type ReviewAlert = SafetyAlert
 
-const ALERT_ICONS: Record<string, React.FC<{ className?: string }>> = {
-  weather: Cloud,
-  road_closure: Construction,
-  speeding: Gauge,
-  general: AlertTriangle,
-}
-
-const ALERT_LABELS: Record<string, string> = {
-  weather: 'Weather Hazard',
-  road_closure: 'Road Closure',
-  speeding: 'Speeding Area',
-  general: 'Safety Alert',
-}
-
-const SEVERITY_LABELS: Record<number, string> = { 1: 'Low', 2: 'Moderate', 3: 'High', 4: 'Critical' }
-
-const ALERT_COLUMNS = 'id, status, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'
-
-/** The linked alert, read by id while it is live: found, not_found (removed, expired or no such
- *  alert — none of them is readable), or error. Same query shape as the list, narrowed to one id. */
+/** The linked alert, read by id while it is shown: found, not_found (removed, withdrawn, cleared,
+ *  expired or no such alert — none of them is readable), or error. */
 export async function loadFocusedAlert(
   supabase: SupabaseClient<Database>,
   alertId: string,
-  now: Date
-): Promise<{ status: 'found'; alert: LiveAlert } | { status: 'not_found' } | { status: 'error' }> {
+): Promise<{ status: 'found'; alert: ReviewAlert } | { status: 'not_found' } | { status: 'error' }> {
   try {
-    const { data, error } = await whereSafetyAlertLive(
-      supabase.from('safety_alerts').select(ALERT_COLUMNS).eq('id', alertId),
-      now,
-    ).maybeSingle()
-    if (error) {
-      logger.warn('admin.deeplink.load_failed', { kind: 'safety_alert', code: error.code ?? 'unknown' })
-      return { status: 'error' }
-    }
-    return data ? { status: 'found', alert: data as LiveAlert } : { status: 'not_found' }
-  } catch {
-    logger.warn('admin.deeplink.load_failed', { kind: 'safety_alert', code: 'exception' })
+    const alert = await readSafetyAlertById(supabase, alertId)
+    return alert ? { status: 'found', alert } : { status: 'not_found' }
+  } catch (err) {
+    logger.warn('admin.deeplink.load_failed', { kind: 'safety_alert', code: err instanceof AlertReadError && err.code ? err.code : 'exception' })
     return { status: 'error' }
   }
 }
 
 /** The list with the linked alert first (once — not repeated where the list also has it). */
-export function pinFocusedAlert(alerts: LiveAlert[], focused: LiveAlert | null): LiveAlert[] {
+export function pinFocusedAlert(alerts: ReviewAlert[], focused: ReviewAlert | null): ReviewAlert[] {
   if (!focused) return alerts
   return [focused, ...alerts.filter((a) => a.id !== focused.id)]
+}
+
+/** Review order: live alerts first, then resolved ones; newest first within each. */
+export function sortForReview(alerts: readonly ReviewAlert[], now: number): ReviewAlert[] {
+  return [...alerts].sort((a, b) => {
+    const live = Number(isAlertLive(b, now)) - Number(isAlertLive(a, now))
+    return live !== 0 ? live : Date.parse(b.created_at) - Date.parse(a.created_at)
+  })
 }
 
 type FocusedAlert =
   | { status: 'none' }
   | { status: 'loading' }
-  | { status: 'found'; alert: LiveAlert }
+  | { status: 'found'; alert: ReviewAlert }
   | { status: 'not_found' }
   | { status: 'error' }
 
 /** The line shown above the list for a linked alert that is not pinned. */
 export function focusedAlertNotice(focused: { status: string }): string | null {
-  if (focused.status === 'not_found') return 'The linked safety alert is no longer live (it was removed or has expired).'
+  if (focused.status === 'not_found') return 'The linked safety alert is no longer live (it was removed, withdrawn or has expired).'
   if (focused.status === 'error') return 'The linked safety alert could not be loaded. The list below still works.'
   return null
+}
+
+/** Whether Approve is offered: a live, unverified alert that this moderator did not report. */
+export function canVerifyAlert(alert: ReviewAlert, now: number): boolean {
+  return isAlertLive(alert, now) && !alert.verified && !alert.is_mine
+}
+
+/** What a refused verify / remove says (never the server's text). `reread`: read the list again. */
+export function moderationFailure(action: 'verify' | 'remove', failure: AlertRpcFailure): { message: string; reread: boolean } {
+  switch (failure.kind) {
+    case 'conflict':
+      return { message: 'This alert changed since the list was loaded. The list was refreshed: check the alert and try again.', reread: true }
+    case 'not_live':
+    case 'not_found':
+      return { message: 'This alert is no longer live. The list was refreshed.', reread: true }
+    case 'forbidden':
+      return failure.token === 'self_moderation_refused'
+        ? { message: 'You reported this alert, so another moderator has to verify it.', reread: false }
+        : { message: 'You do not have permission to do this.', reread: false }
+    default:
+      return { message: action === 'verify' ? 'Approve failed' : 'Remove failed', reread: false }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,7 +136,7 @@ export function focusedAlertNotice(focused: { status: string }): string | null {
 
 export function SafetyAlertsReview() {
   const supabase = createClient()
-  const [alerts, setAlerts] = useState<LiveAlert[]>([])
+  const [alerts, setAlerts] = useState<ReviewAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
@@ -138,7 +151,7 @@ export function SafetyAlertsReview() {
     if (!session) return
     let active = true
     setFocused({ status: 'loading' })
-    void loadFocusedAlert(supabase, session.focus.id, new Date()).then((res) => {
+    void loadFocusedAlert(supabase, session.focus.id).then((res) => {
       if (!active) return
       session.resolve(res.status === 'found' ? 'found' : 'not_found')
       setFocused(res)
@@ -149,90 +162,85 @@ export function SafetyAlertsReview() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
-  // Fetch live alerts for admin review
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const now = new Date()
-        setLoadedAt(now)
-        const { data, error: fetchErr } = await whereSafetyAlertLive(
-          supabase
-            .from('safety_alerts')
-            .select('id, status, alert_type, severity, description, confirm_count, clear_count, created_at, expires_at, verified'),
-          now,
-        )
-          .order('created_at', { ascending: false })
-          .limit(50)
-
-        if (fetchErr) throw fetchErr
-        setAlerts((data ?? []) as LiveAlert[])
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load alerts')
-      } finally {
-        setLoading(false)
-      }
+  /** Read the shown alerts (live and resolved) through the one reader. */
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const now = new Date()
+      setLoadedAt(now)
+      setAlerts(sortForReview(await readSafetyAlertList(supabase), now.getTime()))
+    } catch {
+      setError('Failed to load alerts')
+    } finally {
+      setLoading(false)
     }
+  }, [supabase])
+
+  useEffect(() => {
     void load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [load])
+
+  /** A refused action: say what happened; re-read when the list is stale. Nothing is sent again. */
+  const refused = useCallback(
+    (action: 'verify' | 'remove', rpcErr: AlertRpcError, requestId: string) => {
+      logger.warn('admin.denied', { action: `safety_alert.${action}`, code: rpcErr.code ?? 'unknown', request_id: requestId })
+      const { message, reread } = moderationFailure(action, parseAlertRpcError(rpcErr))
+      setError(message)
+      if (reread) {
+        setFocused((f) => (f.status === 'found' ? { status: 'none' } : f))
+        void load()
+      }
+    },
+    [load]
+  )
 
   const handleApprove = useCallback(
-    async (alertId: string) => {
-      setApprovingId(alertId)
+    async (alert: ReviewAlert) => {
+      setApprovingId(alert.id)
       setError(null)
       try {
-        const { error: rpcErr, requestId } = await privilegedRpc(
+        const { data, error: rpcErr, requestId } = await privilegedRpc(
           supabase,
           'admin.safety_alert.verify',
           'admin_verify_safety_alert',
-          { p_alert_id: alertId },
-          { action: 'safety_alert.verify', target_id: alertId },
+          { p_alert_id: alert.id, p_expected_version: alert.version },
+          { action: 'safety_alert.verify', target_id: alert.id },
         )
-        if (rpcErr) {
-          logger.warn('admin.denied', { action: 'safety_alert.verify', code: rpcErr.code ?? 'unknown', request_id: requestId })
-          throw rpcErr
-        }
-        setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, verified: true } : a))
-        setFocused((f) => (f.status === 'found' && f.alert.id === alertId ? { ...f, alert: { ...f.alert, verified: true } } : f))
-        logger.info('pin.verified', { alertId, request_id: requestId })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Approve failed')
+        if (rpcErr) return refused('verify', rpcErr as AlertRpcError, requestId)
+        // The answer is the alert as members see it; the row keeps its place and its is_mine.
+        const answer = toSafetyAlert(data)
+        const apply = (held: ReviewAlert): ReviewAlert => (answer ? mergeAlertAnswer(held, answer) : { ...held, verified: true })
+        setAlerts((prev) => prev.map((a) => (a.id === alert.id ? apply(a) : a)))
+        setFocused((f) => (f.status === 'found' && f.alert.id === alert.id ? { ...f, alert: apply(f.alert) } : f))
+        logger.info('pin.verified', { alertId: alert.id, request_id: requestId })
       } finally {
         setApprovingId(null)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [supabase, refused]
   )
 
   const handleRemove = useCallback(
-    async (alertId: string) => {
-      setRemovingId(alertId)
+    async (alert: ReviewAlert) => {
+      setRemovingId(alert.id)
       setError(null)
       try {
         const { error: rpcErr, requestId } = await privilegedRpc(
           supabase,
           'admin.safety_alert.remove',
           'admin_remove_safety_alert',
-          { p_alert_id: alertId },
-          { action: 'safety_alert.remove', target_id: alertId },
+          { p_alert_id: alert.id, p_expected_version: alert.version },
+          { action: 'safety_alert.remove', target_id: alert.id },
         )
-        if (rpcErr) {
-          logger.warn('admin.denied', { action: 'safety_alert.remove', code: rpcErr.code ?? 'unknown', request_id: requestId })
-          throw rpcErr
-        }
-        setAlerts((prev) => prev.filter((a) => a.id !== alertId))
-        setFocused((f) => (f.status === 'found' && f.alert.id === alertId ? { status: 'none' } : f))
-        logger.info('pin.removed', { alertId, request_id: requestId })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Remove failed')
+        if (rpcErr) return refused('remove', rpcErr as AlertRpcError, requestId)
+        setAlerts((prev) => prev.filter((a) => a.id !== alert.id))
+        setFocused((f) => (f.status === 'found' && f.alert.id === alert.id ? { status: 'none' } : f))
+        logger.info('pin.removed', { alertId: alert.id, request_id: requestId })
       } finally {
         setRemovingId(null)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [supabase, refused]
   )
 
   const pinned = focused.status === 'found' ? focused.alert : null
@@ -255,15 +263,15 @@ export function SafetyAlertsReview() {
 }
 
 export interface SafetyAlertsReviewViewProps {
-  alerts: LiveAlert[]
+  alerts: ReviewAlert[]
   loading: boolean
   error: string | null
   approvingId: string | null
   removingId: string | null
   /** The clock the list was read with. */
   now: Date
-  onApprove: (alertId: string) => void
-  onRemove: (alertId: string) => void
+  onApprove: (alert: ReviewAlert) => void
+  onRemove: (alert: ReviewAlert) => void
   /** The alert an "Edit in admin" link opened (listed first, marked). */
   pinnedId?: string | null
   /** Why a linked alert is not pinned (no longer live / could not be loaded). */
@@ -300,6 +308,10 @@ export function SafetyAlertsReviewView({
     </p>
   )
 
+  const clock = now.getTime()
+  const liveCount = alerts.filter((a) => isAlertLive(a, clock)).length
+  const resolvedCount = alerts.filter((a) => alertShownState(a, clock) === 'resolved').length
+
   if (loading) {
     return (
       <>
@@ -319,8 +331,9 @@ export function SafetyAlertsReviewView({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Safety Alerts Review</h2>
-        <span className="text-sm text-muted-foreground">
-          {alerts.length} live alert{alerts.length !== 1 ? 's' : ''}
+        <span className="text-sm text-muted-foreground" data-testid="alert-review-count">
+          {liveCount} live alert{liveCount !== 1 ? 's' : ''}
+          {resolvedCount > 0 && ` · ${resolvedCount} resolved`}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -336,13 +349,13 @@ export function SafetyAlertsReviewView({
       {alerts.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No live safety alerts to review.
+            No safety alerts to review.
           </CardContent>
         </Card>
       ) : (
         alerts.map((alert) => {
-          const Icon = ALERT_ICONS[alert.alert_type] ?? AlertTriangle
           const isPinned = alert.id === pinnedId
+          const resolved = alertShownState(alert, clock) === 'resolved'
           return (
             <Card
               key={alert.id}
@@ -354,21 +367,28 @@ export function SafetyAlertsReviewView({
                   <p className="mb-1 text-xs font-semibold text-lime-800">Opened from link</p>
                 )}
                 <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <AlertTypeIcon type={alert.alert_type} className="w-4 h-4 text-amber-700 flex-shrink-0" />
                   <CardTitle className="text-base">
-                    {ALERT_LABELS[alert.alert_type] ?? alert.alert_type}
+                    {alertTypeLabel(alert.alert_type, 'en')}
                   </CardTitle>
-                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
-                    {SEVERITY_LABELS[alert.severity] ?? `Sev ${alert.severity}`}
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-medium">
+                    {alertSeverityLabel(alert.severity, 'en')}
                   </span>
+                  {resolved && (
+                    <span className="text-xs px-2 py-0.5 rounded border border-green-300 bg-green-50 text-green-900 font-medium" data-testid={`admin-alert-resolved-${alert.id}`}>
+                      Resolved
+                    </span>
+                  )}
                 </div>
                 <CardDescription className="text-xs">
-                  Reported {formatDate(alert.created_at)} · Expires {formatDate(alert.expires_at)}
+                  Reported {formatDate(alert.created_at)}
+                  {alert.updated_at && ` · Updated ${formatDate(alert.updated_at)}`}
+                  {resolved && alert.resolved_at ? ` · Resolved ${formatDate(alert.resolved_at)}` : ` · Expires ${formatDate(alert.expires_at)}`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
                 {alert.description && (
-                  <p className="text-sm text-stone-700 mb-3">{alert.description}</p>
+                  <p lang="" dir="auto" className="text-sm text-stone-700 mb-3">{alert.description}</p>
                 )}
                 <div className="flex items-center gap-4 text-xs text-stone-500 mb-3">
                   <span>{alert.confirm_count} still-here votes</span>
@@ -376,18 +396,24 @@ export function SafetyAlertsReviewView({
                   <span>{alert.clear_count} gone-now votes</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {alert.verified ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1 font-medium">
-                      <CheckCircle2 className="w-3 h-3" />
+                  {alert.verified && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-800 bg-green-50 border border-green-200 rounded px-2 py-1 font-medium">
+                      <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
                       Verified
                     </span>
-                  ) : (
+                  )}
+                  {!alert.verified && alert.is_mine && !resolved && (
+                    <span className="text-xs text-stone-700" data-testid={`admin-own-alert-${alert.id}`}>
+                      You reported this alert: another moderator verifies it.
+                    </span>
+                  )}
+                  {canVerifyAlert(alert, clock) && (
                     <Button
                       size="sm"
                       variant="outline"
                       className="border-green-300 text-green-700 hover:bg-green-50"
                       disabled={approvingId === alert.id}
-                      onClick={() => onApprove(alert.id)}
+                      onClick={() => onApprove(alert)}
                       data-testid={`admin-approve-alert-${alert.id}`}
                     >
                       {approvingId === alert.id ? (
@@ -403,7 +429,7 @@ export function SafetyAlertsReviewView({
                     variant="destructive"
                     className={DESTRUCTIVE_BUTTON_CLASS}
                     disabled={removingId === alert.id}
-                    onClick={() => onRemove(alert.id)}
+                    onClick={() => onRemove(alert)}
                     data-testid={`admin-remove-alert-${alert.id}`}
                   >
                     {removingId === alert.id ? (
@@ -417,7 +443,7 @@ export function SafetyAlertsReviewView({
                     to={{ kind: 'map_focus', focus: { kind: 'safety_alert', id: alert.id } }}
                     visibility={safetyAlertMapVisibility(alert, now)}
                     label={adminNavT('en', 'viewOnMap')}
-                    itemName={`${ALERT_LABELS[alert.alert_type] ?? alert.alert_type}, ${SEVERITY_LABELS[alert.severity] ?? `severity ${alert.severity}`}`}
+                    itemName={alertName(alert, 'en')}
                     source="safety_alerts"
                   />
                 </div>

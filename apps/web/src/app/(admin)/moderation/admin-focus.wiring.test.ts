@@ -53,7 +53,15 @@ vi.mock('@/lib/supabase/client', () => ({
       chain.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(res)
       return chain
     },
-    rpc: () => Promise.resolve({ data: null, error: null }),
+    // The alert reader answers one shown alert (the safety alerts review reads through it).
+    rpc: (name: string, args: { p_alert_id?: string } = {}) => {
+      const data =
+        name === 'safety_alerts_in_view'
+          ? [{ id: args.p_alert_id ?? 'x', status: 'live', alert_type: 'general', severity: 1, description: null, lng: -72.9, lat: 43.6, confirm_count: 0, clear_count: 0, created_at: '2026-10-01T00:00:00Z', expires_at: '2099-01-01T00:00:00Z', verified: false, is_mine: false, version: 1, updated_at: null, update_count: 0, resolved_at: null }]
+          : null
+      const result = Promise.resolve({ data, error: null })
+      return Object.assign(result, { abortSignal: () => result })
+    },
   }),
 }))
 

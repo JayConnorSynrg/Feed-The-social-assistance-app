@@ -2,11 +2,12 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // "Edit in admin" on a safety alert (I2): the Moderation tab opens on Safety Alerts, the alert is read
-// by id while live and pinned at the top ONCE (even when it is not among the newest 50), with its
-// Approve / Remove; a removed or expired alert (unreadable by RLS) is not_found with a plain line.
-// One resolve per link. Wiring runs SafetyAlertsReview itself against a mocked client.
+// by id through the alert reader while it is shown and pinned at the top ONCE (even when it is not in
+// the list), with its Approve / Remove; a removed, withdrawn or expired alert (no reader returns it)
+// is not_found with a plain line. One resolve per link. Wiring runs SafetyAlertsReview itself against
+// a mocked client.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 type Instance = { state: unknown[]; i: number; effects: Array<() => unknown> }
 let current: Instance | null = null
@@ -46,18 +47,15 @@ vi.mock('@/lib/logger', () => ({
 }))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
-    from: () => {
-      const calls: Array<[string, ...unknown[]]> = []
-      const chain: Record<string, unknown> = {}
-      for (const m of ['select', 'eq', 'gt', 'order', 'limit']) {
-        chain[m] = (...a: unknown[]) => (calls.push([m, ...a]), chain)
+    // The one alert reader: by id (the linked alert) or the list.
+    rpc: (name: string, args: Record<string, unknown>) => {
+      h.focusedCalls.push([name, args])
+      const data = args.p_alert_id ? (h.focused ? [h.focused] : []) : h.list
+      const builder = {
+        abortSignal: () => builder,
+        then: (res: (v: unknown) => unknown) => Promise.resolve({ data, error: null }).then(res),
       }
-      chain.maybeSingle = async () => {
-        h.focusedCalls.push(...calls)
-        return { data: h.focused, error: null }
-      }
-      chain.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: h.list, error: null }).then(res)
-      return chain
+      return builder
     },
   }),
 }))
@@ -69,23 +67,30 @@ import {
   SafetyAlertsReviewView,
   focusedAlertNotice,
   pinFocusedAlert,
-  type LiveAlert,
+  type ReviewAlert,
   type SafetyAlertsReviewViewProps,
 } from './safety-alerts-review'
 import { initialModerationSubtab } from './moderation-tab'
 
 const NOW = new Date('2026-10-08T19:00:00.000Z')
-const alert = (id: string, extra: Partial<LiveAlert> = {}): LiveAlert => ({
+const alert = (id: string, extra: Partial<ReviewAlert> = {}): ReviewAlert => ({
   id,
   status: 'live',
   alert_type: 'road_closure',
   severity: 3,
   description: `Alert ${id.slice(0, 4)}`,
+  lng: -72.97,
+  lat: 43.61,
   confirm_count: 0,
   clear_count: 0,
   created_at: '2026-10-08T18:00:00.000Z',
   expires_at: '2026-10-08T21:00:00.000Z',
   verified: false,
+  is_mine: false,
+  version: 1,
+  updated_at: null,
+  update_count: 0,
+  resolved_at: null,
   ...extra,
 })
 const A = '55555555-5555-4555-8555-555555555555'
@@ -108,6 +113,8 @@ const view = (over: Partial<SafetyAlertsReviewViewProps>) =>
   )
 
 beforeEach(() => {
+  // The reader drops gone rows on the browser clock: the fixtures' NOW is that clock.
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   harness = false
   h.resolved.length = 0
   h.focusedCalls.length = 0
@@ -118,6 +125,10 @@ beforeEach(() => {
     isOpen: () => h.resolved.length === 0,
     resolve: (o: string) => (h.resolved.length ? false : (h.resolved.push(o), true)),
   }
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('Moderation tab opens on the right sub-tab', () => {
@@ -192,16 +203,18 @@ describe('SafetyAlertsReview wiring (mocked client)', () => {
     return render().props
   }
 
-  it('reads the linked alert by id while live, resolves found once, pins it above the newest 50', async () => {
+  it('reads the linked alert by id through the reader, resolves found once, pins it above the list', async () => {
     h.list = Array.from({ length: 50 }, (_, i) => alert(`${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`))
     h.focused = alert(C)
     const props = await run()
-    expect(h.focusedCalls).toEqual([
-      ['select', expect.stringContaining('id, status, alert_type')],
-      ['eq', 'id', C],
-      ['eq', 'status', 'live'],
-      ['gt', 'expires_at', expect.any(String)],
-    ])
+    // Two reader calls, never the table: the linked alert by id, and the list (live + resolved, 200).
+    expect(h.focusedCalls).toEqual(
+      expect.arrayContaining([
+        ['safety_alerts_in_view', { p_alert_id: C, p_include_resolved: true }],
+        ['safety_alerts_in_view', { p_limit: 200, p_include_resolved: true }],
+      ]),
+    )
+    expect(h.focusedCalls).toHaveLength(2)
     expect(h.resolved).toEqual(['found'])
     expect(props.pinnedId).toBe(C)
     expect(props.alerts[0].id).toBe(C)
@@ -218,11 +231,20 @@ describe('SafetyAlertsReview wiring (mocked client)', () => {
     expect(props.alerts.map((a) => a.id)).toEqual([A])
   })
 
+  it('a linked alert that is resolved (still shown) is found and pinned, labelled resolved', async () => {
+    h.list = [alert(A)]
+    h.focused = alert(C, { status: 'resolved', resolved_at: '2026-10-08T18:30:00.000Z', version: 2 })
+    const props = await run()
+    expect(h.resolved).toEqual(['found'])
+    expect(props.pinnedId).toBe(C)
+    expect(view({ alerts: props.alerts, pinnedId: props.pinnedId })).toContain(`data-testid="admin-alert-resolved-${C}"`)
+  })
+
   it('no alert link: no by-id read', async () => {
     h.session = null
     h.list = [alert(A)]
     const props = await run()
-    expect(h.focusedCalls).toEqual([])
+    expect(h.focusedCalls).toEqual([['safety_alerts_in_view', { p_limit: 200, p_include_resolved: true }]])
     expect(props.pinnedId).toBeNull()
   })
 })
