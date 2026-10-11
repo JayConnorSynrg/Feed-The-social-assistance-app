@@ -56,6 +56,15 @@ export interface FeedOptInsMessages {
   errPostClosed: string
   errOwnPost: string
   errAlreadyOptedIn: string
+  // Said in the feed's card-notice region once a sign-up action has gone through
+  /** To the member who opted in / withdrew. */
+  announceOptedIn: string
+  announceWithdrawn: string
+  /** To the author, about the person in {name}. */
+  announceAccepted: string
+  announceDeclined: string
+  announceCompleted: string
+  announceUnblocked: string
 }
 
 export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
@@ -84,6 +93,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'This post is closed',
     errOwnPost: 'You cannot opt in to your own post',
     errAlreadyOptedIn: 'Already opted in',
+    announceOptedIn: 'You are opted in.',
+    announceWithdrawn: 'Your opt-in was withdrawn.',
+    announceAccepted: '{name} accepted.',
+    announceDeclined: '{name} declined.',
+    announceCompleted: 'Marked completed for {name}.',
+    announceUnblocked: '{name} unblocked. They can request again.',
   },
   es: {
     optIn: 'Apuntarme',
@@ -110,6 +125,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Esta publicación está cerrada',
     errOwnPost: 'No puedes apuntarte a tu propia publicación',
     errAlreadyOptedIn: 'Ya te apuntaste',
+    announceOptedIn: 'Te apuntaste.',
+    announceWithdrawn: 'Retiraste tu solicitud.',
+    announceAccepted: 'Aceptaste a {name}.',
+    announceDeclined: 'Rechazaste a {name}.',
+    announceCompleted: 'Marcada como completada: {name}.',
+    announceUnblocked: 'Desbloqueaste a {name}. Podrá volver a solicitarlo.',
   },
   // machine-drafted, needs native review
   ht: {
@@ -137,6 +158,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Piblikasyon sa a fèmen',
     errOwnPost: 'Ou pa ka enskri nan pwòp piblikasyon ou',
     errAlreadyOptedIn: 'Ou deja enskri',
+    announceOptedIn: 'Ou enskri.',
+    announceWithdrawn: 'Ou retire enskripsyon ou.',
+    announceAccepted: 'Ou aksepte {name}.',
+    announceDeclined: 'Ou refize {name}.',
+    announceCompleted: 'Make kòm fini pou {name}.',
+    announceUnblocked: 'Ou debloke {name}. Li ka mande ankò.',
   },
   vi: {
     optIn: 'Đăng ký',
@@ -163,6 +190,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Bài đăng này đã đóng',
     errOwnPost: 'Bạn không thể đăng ký vào bài đăng của chính mình',
     errAlreadyOptedIn: 'Bạn đã đăng ký rồi',
+    announceOptedIn: 'Bạn đã đăng ký.',
+    announceWithdrawn: 'Bạn đã rút lại đăng ký.',
+    announceAccepted: 'Đã chấp nhận {name}.',
+    announceDeclined: 'Đã từ chối {name}.',
+    announceCompleted: 'Đã đánh dấu hoàn tất cho {name}.',
+    announceUnblocked: 'Đã bỏ chặn {name}. Họ có thể yêu cầu lại.',
   },
   ar: {
     optIn: 'سجّلني',
@@ -189,6 +222,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'هذا المنشور مغلق',
     errOwnPost: 'لا يمكنك التسجيل في منشورك',
     errAlreadyOptedIn: 'سبق أن سجّلت',
+    announceOptedIn: 'تم تسجيلك.',
+    announceWithdrawn: 'تم سحب تسجيلك.',
+    announceAccepted: 'تم قبول {name}.',
+    announceDeclined: 'تم رفض {name}.',
+    announceCompleted: 'تم التحديد كمكتمل لـ {name}.',
+    announceUnblocked: 'تم إلغاء حظر {name}. يمكنه الطلب مجددًا.',
   },
   zh: {
     optIn: '报名',
@@ -215,6 +254,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: '此帖子已关闭',
     errOwnPost: '您不能报名自己的帖子',
     errAlreadyOptedIn: '您已报名',
+    announceOptedIn: '您已报名。',
+    announceWithdrawn: '您已撤回报名。',
+    announceAccepted: '已接受 {name}。',
+    announceDeclined: '已拒绝 {name}。',
+    announceCompleted: '已为 {name} 标记为已完成。',
+    announceUnblocked: '已解除对 {name} 的限制。对方可再次申请。',
   },
   // machine-drafted, needs native review
   so: {
@@ -242,6 +287,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Qoraalkani wuu xiran yahay',
     errOwnPost: 'Iskuma qori kartid qoraalkaaga',
     errAlreadyOptedIn: 'Hore ayaad isu qortay',
+    announceOptedIn: 'Waad is qortay.',
+    announceWithdrawn: 'Is-qoristaadii waad ka noqotay.',
+    announceAccepted: '{name} waa la aqbalay.',
+    announceDeclined: '{name} waa la diiday.',
+    announceCompleted: 'Waxaa loo calaamadeeyay in la dhammeeyay: {name}.',
+    announceUnblocked: '{name} xannibaaddii waa laga qaaday. Mar kale ayuu codsan karaa.',
   },
   fr: {
     optIn: "M'inscrire",
@@ -268,6 +319,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Cette publication est fermée',
     errOwnPost: 'Vous ne pouvez pas vous inscrire à votre propre publication',
     errAlreadyOptedIn: 'Inscription déjà enregistrée',
+    announceOptedIn: 'Votre inscription est enregistrée.',
+    announceWithdrawn: 'Votre inscription est retirée.',
+    announceAccepted: '{name} : demande acceptée.',
+    announceDeclined: '{name} : demande refusée.',
+    announceCompleted: '{name} : marquée comme terminée.',
+    announceUnblocked: '{name} : déblocage fait. Une nouvelle demande est possible.',
   },
   pt: {
     optIn: 'Inscrever-me',
@@ -294,6 +351,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Esta publicação está fechada',
     errOwnPost: 'Você não pode se inscrever na sua própria publicação',
     errAlreadyOptedIn: 'Você já se inscreveu',
+    announceOptedIn: 'Sua inscrição foi feita.',
+    announceWithdrawn: 'Sua inscrição foi retirada.',
+    announceAccepted: 'Você aceitou {name}.',
+    announceDeclined: 'Você recusou {name}.',
+    announceCompleted: 'Marcada como concluída: {name}.',
+    announceUnblocked: 'Você desbloqueou {name}. A pessoa poderá pedir de novo.',
   },
   ru: {
     optIn: 'Записаться',
@@ -320,6 +383,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Эта публикация закрыта',
     errOwnPost: 'Нельзя записаться на собственную публикацию',
     errAlreadyOptedIn: 'Вы уже записаны на это',
+    announceOptedIn: 'Вы записаны.',
+    announceWithdrawn: 'Ваша запись отозвана.',
+    announceAccepted: 'Заявка принята: {name}.',
+    announceDeclined: 'Заявка отклонена: {name}.',
+    announceCompleted: 'Отмечено как завершённое: {name}.',
+    announceUnblocked: 'Блокировка снята: {name}. Можно подать заявку снова.',
   },
   ko: {
     optIn: '신청하기',
@@ -346,6 +415,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: '이 게시물은 닫혔습니다',
     errOwnPost: '자신의 게시물에는 신청할 수 없습니다',
     errAlreadyOptedIn: '이미 신청했습니다',
+    announceOptedIn: '신청되었습니다.',
+    announceWithdrawn: '신청이 취소되었습니다.',
+    announceAccepted: '{name} 님을 수락했습니다.',
+    announceDeclined: '{name} 님을 거절했습니다.',
+    announceCompleted: '{name} 님 건을 완료로 표시했습니다.',
+    announceUnblocked: '{name} 님의 차단을 해제했습니다. 다시 신청할 수 있습니다.',
   },
   tl: {
     optIn: 'Mag-opt in',
@@ -372,6 +447,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Sarado na ang post na ito',
     errOwnPost: 'Hindi ka maaaring mag-opt in sa sarili mong post',
     errAlreadyOptedIn: 'Naka-opt in ka na',
+    announceOptedIn: 'Naka-opt in ka na ngayon.',
+    announceWithdrawn: 'Binawi ang opt-in mo.',
+    announceAccepted: 'Tinanggap si {name}.',
+    announceDeclined: 'Tinanggihan si {name}.',
+    announceCompleted: 'Minarkahang tapos na para kay {name}.',
+    announceUnblocked: 'Na-unblock si {name}. Maaari siyang humiling muli.',
   },
   // machine-drafted, needs native review
   am: {
@@ -399,6 +480,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'ይህ ልጥፍ ተዘግቷል',
     errOwnPost: 'በራስዎ ልጥፍ ላይ መመዝገብ አይችሉም',
     errAlreadyOptedIn: 'አስቀድመው ተመዝግበዋል',
+    announceOptedIn: 'ተመዝግበዋል።',
+    announceWithdrawn: 'ምዝገባዎ ተነስቷል።',
+    announceAccepted: '{name} ተቀባይነት አግኝቷል።',
+    announceDeclined: '{name} ተቀባይነት አላገኘም።',
+    announceCompleted: 'ለ{name} እንደተጠናቀቀ ምልክት ተደርጓል።',
+    announceUnblocked: 'የ{name} እገዳ ተነስቷል። እንደገና መጠየቅ ይችላል።',
   },
   // machine-drafted, needs native review
   hmn: {
@@ -426,6 +513,12 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Qhov tshaj tawm no kaw lawm',
     errOwnPost: 'Koj sau npe rau koj tus kheej qhov tshaj tawm tsis tau',
     errAlreadyOptedIn: 'Koj twb sau npe lawm',
+    announceOptedIn: 'Koj sau npe lawm.',
+    announceWithdrawn: 'Koj thim kev sau npe lawm.',
+    announceAccepted: 'Txais {name} lawm.',
+    announceDeclined: 'Tsis txais {name} lawm.',
+    announceCompleted: 'Kos tias tiav lawm rau {name}.',
+    announceUnblocked: 'Tshem kev thaiv {name} lawm. Nws thov tau dua.',
   },
 }
 
@@ -545,6 +638,30 @@ export type OptInRowAction = 'accept' | 'decline' | 'markCompleted' | 'unblock' 
  */
 export function optInActionName(locale: Locale, action: OptInRowAction, name: string): string {
   return formatMessage(optInsT(locale, 'actionForPersonAria'), { action: optInsT(locale, action), name: isolate(name) })
+}
+
+// ---------------------------------------------------------------------------
+// What the feed says once a sign-up action has gone through
+// ---------------------------------------------------------------------------
+
+/** The sign-up actions a card offers: the member's two and the author's four. */
+export type SignUpKind = 'optIn' | 'withdraw' | 'accept' | 'decline' | 'complete' | 'unblock'
+
+const NOTICE_KEYS: Record<SignUpKind, keyof FeedOptInsMessages> = {
+  optIn: 'announceOptedIn',
+  withdraw: 'announceWithdrawn',
+  accept: 'announceAccepted',
+  decline: 'announceDeclined',
+  complete: 'announceCompleted',
+  unblock: 'announceUnblocked',
+}
+
+/**
+ * The sentence for the feed's card-notice region once an action has gone through. The author's
+ * four name the person: their name is their own text, isolated and never looked up.
+ */
+export function signUpNotice(kind: SignUpKind, name: string | null, locale: Locale): string {
+  return formatMessage(optInsT(locale, NOTICE_KEYS[kind]), { name: isolate(name ?? '') })
 }
 
 // ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ import {
   BADGE_COMMUNITY_POINTS,
   COMMUNITY_BADGES,
   GIFTS_FROM_MORE,
+  REVIEW_COUNT,
   REVIEW_ERROR_SENTENCES,
   REVIEW_RATING_REQUIRED,
   REVIEW_ROLES,
@@ -36,6 +37,7 @@ import {
   appreciationItemAlt,
   appreciationItemLabel,
   appreciationItemName,
+  appreciationSentNotice,
   badgeAriaText,
   badgeLabel,
   badgeTitleText,
@@ -43,6 +45,7 @@ import {
   feedBadgesMessages,
   giftsFromMessage,
   ratingText,
+  reviewCountText,
   reviewDescription,
   reviewErrorText,
   stalksText,
@@ -63,6 +66,7 @@ const ar = (n: number) => new Intl.NumberFormat(['ar', 'en-US']).format(n)
 
 describe('counts', () => {
   const TABLES = [
+    ['REVIEW_COUNT', REVIEW_COUNT, ['{count}']],
     ['STALKS', STALKS, ['{n}']],
     ['BADGE_CATEGORY_POINTS', BADGE_CATEGORY_POINTS, ['{label}', '{level}', '{count}']],
     ['BADGE_COMMUNITY_POINTS', BADGE_COMMUNITY_POINTS, ['{label}', '{level}', '{count}']],
@@ -95,6 +99,15 @@ describe('counts', () => {
     it.each(LOCALES.filter((l) => l !== 'en'))('%s is translated', (locale) => {
       expect(table[locale].other).not.toBe(table.en.other)
     })
+  })
+
+  it('the review count beside a score: each language its own form', () => {
+    expect([0, 1, 12].map((n) => reviewCountText(n, 'en'))).toEqual(['0 reviews', '1 review', '12 reviews'])
+    expect([1, 3].map((n) => reviewCountText(n, 'es'))).toEqual(['1 valoración', '3 valoraciones'])
+    expect([1, 2, 5, 21].map((n) => reviewCountText(n, 'ru'))).toEqual(['1 отзыв', '2 отзыва', '5 отзывов', '21 отзыв'])
+    expect(reviewCountText(2, 'ar')).toBe(`${ar(2)} تقييمان`)
+    expect(reviewCountText(12, 'ko')).toBe('리뷰 12개')
+    expect(reviewCountText(12, 'ht')).toBe('12 evalyasyon')
   })
 
   it('a rating button and a rating: English as before, each language its own form', () => {
@@ -203,6 +216,16 @@ describe('appreciation items (lib/appreciation.ts slugs)', () => {
   it('English names', () => {
     expect(appreciationItemName('heart', false, 'en')).toBe('Heart — send')
     expect(appreciationItemName('heart', true, 'en')).toBe('Heart — already sent')
+    expect(appreciationSentNotice('heart', 'en')).toBe('Heart sent.')
+  })
+
+  it.each(LOCALES)('%s: what is said after a send names the item and differs from both button names', (locale) => {
+    for (const slug of APPRECIATION_ITEM_SLUGS) {
+      const said = appreciationSentNotice(slug, locale)
+      expect(said).toContain(appreciationItemLabel(slug, locale))
+      expect(said).not.toMatch(/\{\w+\}/)
+      expect([appreciationItemName(slug, false, locale), appreciationItemName(slug, true, locale)]).not.toContain(said)
+    }
   })
 })
 
@@ -311,7 +334,7 @@ describe('machinery added for these surfaces', () => {
 
   it('English wording the surfaces showed before', () => {
     const en = feedBadgesMessages.en
-    expect([en.harmonyNew, en.ratingGroupLabel, en.badgesHeading, en.privateHeading]).toEqual(['New', 'Wheat stalk rating', 'Community Badges', 'Private — only you can see this'])
+    expect([en.harmonyNew, en.badgesHeading, en.privateHeading]).toEqual(['New', 'Community Badges', 'Private — only you can see this'])
     expect([en.giftsHeading, en.giftsLoading, en.sendAppreciation, en.appreciateSelf]).toEqual(['Gifts received', 'Loading your gifts…', 'Send appreciation', 'This is you — appreciation comes from the community.'])
     expect([en.ratingLabel, en.recommendQuestion, en.commentLabel, en.commentPlaceholder, en.submitReview]).toEqual(['Rating', 'Would you recommend this person?', 'Comment', 'Describe your experience...', 'Submit Review'])
     expect(formatMessage(en.levelShort, { level: 'II' })).toBe('Lv II')

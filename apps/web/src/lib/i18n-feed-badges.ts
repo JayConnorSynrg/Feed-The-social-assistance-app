@@ -31,8 +31,6 @@ export interface FeedBadgesMessages {
   // Harmony badge and the wheat-stalk rating
   /** No reviews yet. */
   harmonyNew: string
-  /** Name of the group of five rating buttons. */
-  ratingGroupLabel: string
   /** Name of a rating shown as stalks. */
   ratingOutOf: string
   // The six community badges (profiles.badge_summary.badges keys); the ten category
@@ -87,6 +85,8 @@ export interface FeedBadgesMessages {
   /** Accessible name of a picker button: the word under the icon first. */
   itemSentAria: string
   itemSendAria: string
+  /** Said once an item has been sent. */
+  itemSentNotice: string
   /** Guest prompt in place of following; {name} is the author. */
   guestFollowPrompt: string
   /** Around the author's own name. */
@@ -144,7 +144,6 @@ export interface FeedBadgesMessages {
 export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   en: {
     harmonyNew: 'New',
-    ratingGroupLabel: 'Wheat stalk rating',
     ratingOutOf: '{value} out of {max} stalks',
     badgeHelper: 'Helper',
     badgeConnector: 'Connector',
@@ -186,6 +185,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'A tree',
     itemSentAria: '{item} — already sent',
     itemSendAria: '{item} — send',
+    itemSentNotice: '{item} sent.',
     guestFollowPrompt: 'Create a free account to follow {name}',
     appreciateHeading: 'Appreciate {name}',
     appreciateSelf: 'This is you — appreciation comes from the community.',
@@ -225,7 +225,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   es: {
     harmonyNew: 'Nuevo',
-    ratingGroupLabel: 'Valoración con espigas de trigo',
     ratingOutOf: '{value} de {max} espigas',
     badgeHelper: 'Ayudante',
     badgeConnector: 'Conector',
@@ -267,6 +266,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Un árbol',
     itemSentAria: '{item}: ya enviado',
     itemSendAria: '{item}: enviar',
+    itemSentNotice: 'Enviado: {item}.',
     guestFollowPrompt: 'Crea una cuenta gratuita para seguir a {name}',
     appreciateHeading: 'Agradece a {name}',
     appreciateSelf: 'Eres tú: el agradecimiento viene de la comunidad.',
@@ -307,7 +307,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   // machine-drafted, needs native review
   ht: {
     harmonyNew: 'Nouvo',
-    ratingGroupLabel: 'Evalyasyon ak zepi ble',
     ratingOutOf: '{value} sou {max} zepi',
     badgeHelper: 'Moun k ap ede',
     badgeConnector: 'Moun k ap konekte',
@@ -349,6 +348,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Yon pyebwa',
     itemSentAria: '{item} — deja voye',
     itemSendAria: '{item} — voye',
+    itemSentNotice: '{item} voye.',
     guestFollowPrompt: 'Kreye yon kont gratis pou w swiv {name}',
     appreciateHeading: 'Remèsye {name}',
     appreciateSelf: 'Sa se ou menm — remèsiman an soti nan kominote a.',
@@ -388,7 +388,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   vi: {
     harmonyNew: 'Mới',
-    ratingGroupLabel: 'Đánh giá bằng bông lúa mì',
     ratingOutOf: '{value} trên {max} bông lúa',
     badgeHelper: 'Người giúp đỡ',
     badgeConnector: 'Người kết nối',
@@ -430,6 +429,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Một cái cây',
     itemSentAria: '{item} — đã gửi',
     itemSendAria: '{item} — gửi',
+    itemSentNotice: 'Đã gửi {item}.',
     guestFollowPrompt: 'Tạo tài khoản miễn phí để theo dõi {name}',
     appreciateHeading: 'Cảm ơn {name}',
     appreciateSelf: 'Đây là bạn — lời cảm ơn đến từ cộng đồng.',
@@ -469,7 +469,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   ar: {
     harmonyNew: 'جديد',
-    ratingGroupLabel: 'التقييم بسنابل القمح',
     ratingOutOf: '{value} من {max} سنابل',
     badgeHelper: 'مُعين',
     badgeConnector: 'واصل',
@@ -511,6 +510,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'شجرة',
     itemSentAria: '{item} — أُرسل من قبل',
     itemSendAria: '{item} — إرسال',
+    itemSentNotice: 'تم إرسال {item}.',
     guestFollowPrompt: 'أنشئ حسابًا مجانيًا لمتابعة {name}',
     appreciateHeading: 'عبّر عن تقديرك لـ {name}',
     appreciateSelf: 'هذا أنت — التقدير يأتي من المجتمع.',
@@ -550,7 +550,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   zh: {
     harmonyNew: '新成员',
-    ratingGroupLabel: '麦穗评分',
     ratingOutOf: '{value}/{max} 麦穗',
     badgeHelper: '帮手',
     badgeConnector: '联络人',
@@ -592,6 +591,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: '一棵树',
     itemSentAria: '{item} — 已送出',
     itemSendAria: '{item} — 送出',
+    itemSentNotice: '已送出{item}。',
     guestFollowPrompt: '创建免费账户即可关注 {name}',
     appreciateHeading: '向 {name} 表达感谢',
     appreciateSelf: '这是您自己 — 感谢来自社区。',
@@ -632,7 +632,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   // machine-drafted, needs native review
   so: {
     harmonyNew: 'Cusub',
-    ratingGroupLabel: 'Qiimaynta sabuullada qamadiga',
     ratingOutOf: '{value} ka mid ah {max} sabuul',
     badgeHelper: 'Caawiye',
     badgeConnector: 'Isku-xire',
@@ -674,6 +673,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Geed',
     itemSentAria: '{item} — hore loo diray',
     itemSendAria: '{item} — dir',
+    itemSentNotice: '{item} waa la diray.',
     guestFollowPrompt: 'Samee akoon bilaash ah si aad u raacdo {name}',
     appreciateHeading: 'U mahadceli {name}',
     appreciateSelf: 'Kani waa adiga — mahadcelintu waxay ka timaaddaa bulshada.',
@@ -713,7 +713,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   fr: {
     harmonyNew: 'Nouveau',
-    ratingGroupLabel: 'Évaluation en épis de blé',
     ratingOutOf: '{value} épis sur {max}',
     badgeHelper: 'Entraide',
     badgeConnector: 'Lien',
@@ -755,6 +754,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Un arbre',
     itemSentAria: '{item} — déjà envoyé',
     itemSendAria: '{item} — envoyer',
+    itemSentNotice: 'Envoyé : {item}.',
     guestFollowPrompt: 'Créez un compte gratuit pour suivre {name}',
     appreciateHeading: 'Remercier {name}',
     appreciateSelf: "C'est vous — les remerciements viennent de la communauté.",
@@ -794,7 +794,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   pt: {
     harmonyNew: 'Novo',
-    ratingGroupLabel: 'Avaliação com espigas de trigo',
     ratingOutOf: '{value} de {max} espigas',
     badgeHelper: 'Ajudante',
     badgeConnector: 'Conector',
@@ -836,6 +835,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Uma árvore',
     itemSentAria: '{item} — já enviado',
     itemSendAria: '{item} — enviar',
+    itemSentNotice: 'Enviado: {item}.',
     guestFollowPrompt: 'Crie uma conta gratuita para seguir {name}',
     appreciateHeading: 'Agradeça a {name}',
     appreciateSelf: 'Este é você — o agradecimento vem da comunidade.',
@@ -875,7 +875,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   ru: {
     harmonyNew: 'Новичок',
-    ratingGroupLabel: 'Оценка колосками',
     ratingOutOf: '{value} из {max} колосков',
     badgeHelper: 'Помощник',
     badgeConnector: 'Связующий',
@@ -917,6 +916,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Дерево',
     itemSentAria: '{item} — уже отправлено',
     itemSendAria: '{item} — отправить',
+    itemSentNotice: 'Отправлено: {item}.',
     guestFollowPrompt: 'Создайте бесплатный аккаунт, чтобы подписаться на {name}',
     appreciateHeading: 'Поблагодарить: {name}',
     appreciateSelf: 'Это вы — благодарность приходит от сообщества.',
@@ -956,7 +956,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   ko: {
     harmonyNew: '신규',
-    ratingGroupLabel: '밀 이삭 평점',
     ratingOutOf: '이삭 {max}개 중 {value}개',
     badgeHelper: '도우미',
     badgeConnector: '연결자',
@@ -998,6 +997,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: '나무 한 그루',
     itemSentAria: '{item} — 이미 보냄',
     itemSendAria: '{item} — 보내기',
+    itemSentNotice: '{item} 보냄.',
     guestFollowPrompt: '{name} 님을 팔로우하려면 무료 계정을 만드세요',
     appreciateHeading: '{name} 님에게 감사 표현하기',
     appreciateSelf: '본인입니다 — 감사는 커뮤니티가 보내는 것입니다.',
@@ -1037,7 +1037,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   },
   tl: {
     harmonyNew: 'Bago',
-    ratingGroupLabel: 'Rating gamit ang uhay ng trigo',
     ratingOutOf: '{value} sa {max} uhay',
     badgeHelper: 'Katuwang',
     badgeConnector: 'Tagapag-ugnay',
@@ -1079,6 +1078,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Isang puno',
     itemSentAria: '{item} — naipadala na',
     itemSendAria: '{item} — ipadala',
+    itemSentNotice: 'Naipadala: {item}.',
     guestFollowPrompt: 'Gumawa ng libreng account para masundan si {name}',
     appreciateHeading: 'Pasalamatan si {name}',
     appreciateSelf: 'Ikaw ito — nagmumula sa komunidad ang pasasalamat.',
@@ -1119,7 +1119,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   // machine-drafted, needs native review
   am: {
     harmonyNew: 'አዲስ',
-    ratingGroupLabel: 'በስንዴ ዛላ ደረጃ መስጠት',
     ratingOutOf: '{value} ከ{max} ዛላ',
     badgeHelper: 'ረዳት',
     badgeConnector: 'አገናኝ',
@@ -1161,6 +1160,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'አንድ ዛፍ',
     itemSentAria: '{item} — አስቀድሞ ተልኳል',
     itemSendAria: '{item} — ላክ',
+    itemSentNotice: '{item} ተልኳል።',
     guestFollowPrompt: '{name}ን ለመከተል ነፃ መለያ ይፍጠሩ',
     appreciateHeading: '{name}ን አመስግኑ',
     appreciateSelf: 'ይህ እርስዎ ነዎት — ምስጋና የሚመጣው ከማኅበረሰቡ ነው።',
@@ -1201,7 +1201,6 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
   // machine-drafted, needs native review
   hmn: {
     harmonyNew: 'Tshiab',
-    ratingGroupLabel: 'Kev ntsuas nrog cov nplej',
     ratingOutOf: '{value} ntawm {max} tus nplej',
     badgeHelper: 'Tus pab',
     badgeConnector: 'Tus txuas',
@@ -1243,6 +1242,7 @@ export const feedBadgesMessages: Record<Locale, FeedBadgesMessages> = {
     altTree: 'Ib tsob ntoo',
     itemSentAria: '{item} — twb xa lawm',
     itemSendAria: '{item} — xa',
+    itemSentNotice: 'Xa {item} lawm.',
     guestFollowPrompt: 'Tsim ib tus account dawb los raws {name}',
     appreciateHeading: 'Ua tsaug rau {name}',
     appreciateSelf: 'Qhov no yog koj — kev ris txiaj los ntawm zej zog.',
@@ -1290,6 +1290,36 @@ export function badgesT(locale: Locale, key: keyof FeedBadgesMessages): string {
 // Counts — plural tables, selected through Intl.PluralRules (lib/i18n-intl.ts)
 // ---------------------------------------------------------------------------
 //
+// What the "(12)" beside a Harmony score means, for a screen reader: "12 reviews".
+export const REVIEW_COUNT: Record<Locale, PluralForms> = {
+  en: { one: '{count} review', other: '{count} reviews' },
+  es: { one: '{count} valoración', other: '{count} valoraciones' },
+  ht: { other: '{count} evalyasyon' },
+  vi: { other: '{count} đánh giá' },
+  ar: {
+    zero: '{count} تقييم',
+    one: '{count} تقييم',
+    two: '{count} تقييمان',
+    few: '{count} تقييمات',
+    many: '{count} تقييمًا',
+    other: '{count} تقييم',
+  },
+  zh: { other: '{count} 条评价' },
+  so: { other: '{count} qiimayn' },
+  fr: { one: '{count} évaluation', other: '{count} évaluations' },
+  pt: { one: '{count} avaliação', other: '{count} avaliações' },
+  ru: {
+    one: '{count} отзыв',
+    few: '{count} отзыва',
+    many: '{count} отзывов',
+    other: '{count} отзыва',
+  },
+  ko: { other: '리뷰 {count}개' },
+  tl: { other: '{count} na review' },
+  am: { one: '{count} ግምገማ', other: '{count} ግምገማዎች' },
+  hmn: { other: '{count} qhov kev ntsuam xyuas' },
+}
+
 // Name of one rating button: "3 stalks".
 export const STALKS: Record<Locale, PluralForms> = {
   en: { one: '{n} stalk', other: '{n} stalks' },
@@ -1447,6 +1477,11 @@ export function stalksText(n: number, locale: Locale): string {
   return formatMessage(pluralMessage(STALKS[locale] ?? STALKS.en, n, locale), { n: formatCount(n, locale) })
 }
 
+/** "12 reviews": what the count beside a Harmony score means. */
+export function reviewCountText(count: number, locale: Locale): string {
+  return formatMessage(pluralMessage(REVIEW_COUNT[locale] ?? REVIEW_COUNT.en, count, locale), { count: formatCount(count, locale) })
+}
+
 /** The name of a rating shown as stalks: "4 out of 5 stalks". */
 export function ratingText(value: number, max: number, locale: Locale): string {
   return formatMessage(badgesT(locale, 'ratingOutOf'), { value: formatCount(value, locale), max: formatCount(max, locale) })
@@ -1537,6 +1572,11 @@ export function appreciationItemAlt(slug: string, locale: Locale): string {
  */
 export function appreciationItemName(slug: string, sent: boolean, locale: Locale): string {
   return formatMessage(badgesT(locale, sent ? 'itemSentAria' : 'itemSendAria'), { item: appreciationItemLabel(slug, locale) })
+}
+
+/** What the picker says once an item has been sent: "Heart sent." */
+export function appreciationSentNotice(slug: string, locale: Locale): string {
+  return formatMessage(badgesT(locale, 'itemSentNotice'), { item: appreciationItemLabel(slug, locale) })
 }
 
 /**

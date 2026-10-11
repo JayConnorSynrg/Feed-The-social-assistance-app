@@ -101,7 +101,6 @@ step in that test, and the test fails until the list below is regenerated.
 | Key | Locale | English | Text | Added | Status |
 |---|---|---|---|---|---|
 | `harmonyNew` | ht | New | Nouvo | 2026-10-11 | machine-drafted, needs native review |
-| `ratingGroupLabel` | ht | Wheat stalk rating | Evalyasyon ak zepi ble | 2026-10-11 | machine-drafted, needs native review |
 | `ratingOutOf` | ht | {value} out of {max} stalks | {value} sou {max} zepi | 2026-10-11 | machine-drafted, needs native review |
 | `badgeHelper` | ht | Helper | Moun k ap ede | 2026-10-11 | machine-drafted, needs native review |
 | `badgeConnector` | ht | Connector | Moun k ap konekte | 2026-10-11 | machine-drafted, needs native review |
@@ -143,6 +142,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `altTree` | ht | A tree | Yon pyebwa | 2026-10-11 | machine-drafted, needs native review |
 | `itemSentAria` | ht | {item} — already sent | {item} — deja voye | 2026-10-11 | machine-drafted, needs native review |
 | `itemSendAria` | ht | {item} — send | {item} — voye | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentNotice` | ht | {item} sent. | {item} voye. | 2026-10-11 | machine-drafted, needs native review |
 | `guestFollowPrompt` | ht | Create a free account to follow {name} | Kreye yon kont gratis pou w swiv {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateHeading` | ht | Appreciate {name} | Remèsye {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateSelf` | ht | This is you — appreciation comes from the community. | Sa se ou menm — remèsiman an soti nan kominote a. | 2026-10-11 | machine-drafted, needs native review |
@@ -180,7 +180,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `errReviewTimeout` | ht | Review submission timed out — please check your connection and retry. | Voye evalyasyon an pran twòp tan. Tanpri verifye koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
 | `errReviewFailed` | ht | Couldn't submit review. Please try again. | Nou pa kapab voye evalyasyon an. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
 | `harmonyNew` | so | New | Cusub | 2026-10-11 | machine-drafted, needs native review |
-| `ratingGroupLabel` | so | Wheat stalk rating | Qiimaynta sabuullada qamadiga | 2026-10-11 | machine-drafted, needs native review |
 | `ratingOutOf` | so | {value} out of {max} stalks | {value} ka mid ah {max} sabuul | 2026-10-11 | machine-drafted, needs native review |
 | `badgeHelper` | so | Helper | Caawiye | 2026-10-11 | machine-drafted, needs native review |
 | `badgeConnector` | so | Connector | Isku-xire | 2026-10-11 | machine-drafted, needs native review |
@@ -222,6 +221,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `altTree` | so | A tree | Geed | 2026-10-11 | machine-drafted, needs native review |
 | `itemSentAria` | so | {item} — already sent | {item} — hore loo diray | 2026-10-11 | machine-drafted, needs native review |
 | `itemSendAria` | so | {item} — send | {item} — dir | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentNotice` | so | {item} sent. | {item} waa la diray. | 2026-10-11 | machine-drafted, needs native review |
 | `guestFollowPrompt` | so | Create a free account to follow {name} | Samee akoon bilaash ah si aad u raacdo {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateHeading` | so | Appreciate {name} | U mahadceli {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateSelf` | so | This is you — appreciation comes from the community. | Kani waa adiga — mahadcelintu waxay ka timaaddaa bulshada. | 2026-10-11 | machine-drafted, needs native review |
@@ -259,7 +259,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `errReviewTimeout` | so | Review submission timed out — please check your connection and retry. | Dirista qiimayntu way daahday. Fadlan hubi xiriirkaaga oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
 | `errReviewFailed` | so | Couldn't submit review. Please try again. | Qiimaynta lama diri karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
 | `harmonyNew` | am | New | አዲስ | 2026-10-11 | machine-drafted, needs native review |
-| `ratingGroupLabel` | am | Wheat stalk rating | በስንዴ ዛላ ደረጃ መስጠት | 2026-10-11 | machine-drafted, needs native review |
 | `ratingOutOf` | am | {value} out of {max} stalks | {value} ከ{max} ዛላ | 2026-10-11 | machine-drafted, needs native review |
 | `badgeHelper` | am | Helper | ረዳት | 2026-10-11 | machine-drafted, needs native review |
 | `badgeConnector` | am | Connector | አገናኝ | 2026-10-11 | machine-drafted, needs native review |
@@ -301,6 +300,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `altTree` | am | A tree | አንድ ዛፍ | 2026-10-11 | machine-drafted, needs native review |
 | `itemSentAria` | am | {item} — already sent | {item} — አስቀድሞ ተልኳል | 2026-10-11 | machine-drafted, needs native review |
 | `itemSendAria` | am | {item} — send | {item} — ላክ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentNotice` | am | {item} sent. | {item} ተልኳል። | 2026-10-11 | machine-drafted, needs native review |
 | `guestFollowPrompt` | am | Create a free account to follow {name} | {name}ን ለመከተል ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateHeading` | am | Appreciate {name} | {name}ን አመስግኑ | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateSelf` | am | This is you — appreciation comes from the community. | ይህ እርስዎ ነዎት — ምስጋና የሚመጣው ከማኅበረሰቡ ነው። | 2026-10-11 | machine-drafted, needs native review |
@@ -338,7 +338,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `errReviewTimeout` | am | Review submission timed out — please check your connection and retry. | ግምገማ ማስገባት ጊዜ ወሰደ። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
 | `errReviewFailed` | am | Couldn't submit review. Please try again. | ግምገማ ማስገባት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
 | `harmonyNew` | hmn | New | Tshiab | 2026-10-11 | machine-drafted, needs native review |
-| `ratingGroupLabel` | hmn | Wheat stalk rating | Kev ntsuas nrog cov nplej | 2026-10-11 | machine-drafted, needs native review |
 | `ratingOutOf` | hmn | {value} out of {max} stalks | {value} ntawm {max} tus nplej | 2026-10-11 | machine-drafted, needs native review |
 | `badgeHelper` | hmn | Helper | Tus pab | 2026-10-11 | machine-drafted, needs native review |
 | `badgeConnector` | hmn | Connector | Tus txuas | 2026-10-11 | machine-drafted, needs native review |
@@ -380,6 +379,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `altTree` | hmn | A tree | Ib tsob ntoo | 2026-10-11 | machine-drafted, needs native review |
 | `itemSentAria` | hmn | {item} — already sent | {item} — twb xa lawm | 2026-10-11 | machine-drafted, needs native review |
 | `itemSendAria` | hmn | {item} — send | {item} — xa | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentNotice` | hmn | {item} sent. | Xa {item} lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `guestFollowPrompt` | hmn | Create a free account to follow {name} | Tsim ib tus account dawb los raws {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateHeading` | hmn | Appreciate {name} | Ua tsaug rau {name} | 2026-10-11 | machine-drafted, needs native review |
 | `appreciateSelf` | hmn | This is you — appreciation comes from the community. | Qhov no yog koj — kev ris txiaj los ntawm zej zog. | 2026-10-11 | machine-drafted, needs native review |
@@ -416,6 +416,11 @@ step in that test, and the test fails until the list below is regenerated.
 | `errSubmitFailed` | hmn | Submission failed. Please try again. | Xa tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
 | `errReviewTimeout` | hmn | Review submission timed out — please check your connection and retry. | Kev xa kev ntsuam xyuas siv sijhawm ntev dhau. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
 | `errReviewFailed` | hmn | Couldn't submit review. Please try again. | Xa tsis tau kev ntsuam xyuas. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `REVIEW_COUNT.other` | ht | {count} reviews | {count} evalyasyon | 2026-10-11 | machine-drafted, needs native review |
+| `REVIEW_COUNT.other` | so | {count} reviews | {count} qiimayn | 2026-10-11 | machine-drafted, needs native review |
+| `REVIEW_COUNT.one` | am | {count} review | {count} ግምገማ | 2026-10-11 | machine-drafted, needs native review |
+| `REVIEW_COUNT.other` | am | {count} reviews | {count} ግምገማዎች | 2026-10-11 | machine-drafted, needs native review |
+| `REVIEW_COUNT.other` | hmn | {count} reviews | {count} qhov kev ntsuam xyuas | 2026-10-11 | machine-drafted, needs native review |
 | `STALKS.other` | ht | {n} stalks | {n} zepi | 2026-10-11 | machine-drafted, needs native review |
 | `STALKS.other` | so | {n} stalks | {n} sabuul | 2026-10-11 | machine-drafted, needs native review |
 | `STALKS.one` | am | {n} stalk | {n} ዛላ | 2026-10-11 | machine-drafted, needs native review |
@@ -1068,6 +1073,12 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | ht | This post is closed | Piblikasyon sa a fèmen | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | ht | You cannot opt in to your own post | Ou pa ka enskri nan pwòp piblikasyon ou | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | ht | Already opted in | Ou deja enskri | 2026-10-11 | machine-drafted, needs native review |
+| `announceOptedIn` | ht | You are opted in. | Ou enskri. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | ht | Your opt-in was withdrawn. | Ou retire enskripsyon ou. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | ht | {name} accepted. | Ou aksepte {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | ht | {name} declined. | Ou refize {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceCompleted` | ht | Marked completed for {name}. | Make kòm fini pou {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceUnblocked` | ht | {name} unblocked. They can request again. | Ou debloke {name}. Li ka mande ankò. | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | so | Opt In | Isu qor | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | so | Opted In | Waad is qortay | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | so | Withdraw | Ka noqo | 2026-10-11 | machine-drafted, needs native review |
@@ -1092,6 +1103,12 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | so | This post is closed | Qoraalkani wuu xiran yahay | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | so | You cannot opt in to your own post | Iskuma qori kartid qoraalkaaga | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | so | Already opted in | Hore ayaad isu qortay | 2026-10-11 | machine-drafted, needs native review |
+| `announceOptedIn` | so | You are opted in. | Waad is qortay. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | so | Your opt-in was withdrawn. | Is-qoristaadii waad ka noqotay. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | so | {name} accepted. | {name} waa la aqbalay. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | so | {name} declined. | {name} waa la diiday. | 2026-10-11 | machine-drafted, needs native review |
+| `announceCompleted` | so | Marked completed for {name}. | Waxaa loo calaamadeeyay in la dhammeeyay: {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceUnblocked` | so | {name} unblocked. They can request again. | {name} xannibaaddii waa laga qaaday. Mar kale ayuu codsan karaa. | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | am | Opt In | ተመዝገብ | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | am | Opted In | ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
@@ -1116,6 +1133,12 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | am | This post is closed | ይህ ልጥፍ ተዘግቷል | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | am | You cannot opt in to your own post | በራስዎ ልጥፍ ላይ መመዝገብ አይችሉም | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | am | Already opted in | አስቀድመው ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
+| `announceOptedIn` | am | You are opted in. | ተመዝግበዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | am | Your opt-in was withdrawn. | ምዝገባዎ ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | am | {name} accepted. | {name} ተቀባይነት አግኝቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | am | {name} declined. | {name} ተቀባይነት አላገኘም። | 2026-10-11 | machine-drafted, needs native review |
+| `announceCompleted` | am | Marked completed for {name}. | ለ{name} እንደተጠናቀቀ ምልክት ተደርጓል። | 2026-10-11 | machine-drafted, needs native review |
+| `announceUnblocked` | am | {name} unblocked. They can request again. | የ{name} እገዳ ተነስቷል። እንደገና መጠየቅ ይችላል። | 2026-10-11 | machine-drafted, needs native review |
 | `optIn` | hmn | Opt In | Sau npe | 2026-10-11 | machine-drafted, needs native review |
 | `optedIn` | hmn | Opted In | Sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
 | `withdraw` | hmn | Withdraw | Thim | 2026-10-11 | machine-drafted, needs native review |
@@ -1140,6 +1163,12 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | hmn | This post is closed | Qhov tshaj tawm no kaw lawm | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | hmn | You cannot opt in to your own post | Koj sau npe rau koj tus kheej qhov tshaj tawm tsis tau | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | hmn | Already opted in | Koj twb sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
+| `announceOptedIn` | hmn | You are opted in. | Koj sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceWithdrawn` | hmn | Your opt-in was withdrawn. | Koj thim kev sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceAccepted` | hmn | {name} accepted. | Txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceDeclined` | hmn | {name} declined. | Tsis txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `announceCompleted` | hmn | Marked completed for {name}. | Kos tias tiav lawm rau {name}. | 2026-10-11 | machine-drafted, needs native review |
+| `announceUnblocked` | hmn | {name} unblocked. They can request again. | Tshem kev thaiv {name} lawm. Nws thov tau dua. | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.other` | ht | {left} of {max} spots left | {left} sou {max} plas ki rete | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.other` | so | {left} of {max} spots left | {left} ka mid ah {max} boos ayaa haray | 2026-10-11 | machine-drafted, needs native review |
 | `SPOTS_LEFT.one` | am | {left} of {max} spot left | {left} ከ{max} ቦታ ቀርቷል | 2026-10-11 | machine-drafted, needs native review |
