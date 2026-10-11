@@ -901,7 +901,7 @@
       "branch": "feature/feed-r3-5b-card-i18n",
       "base": "origin/develop 0ee7f6d",
       "docs": "docs/i18n-native-review.md (native-review list)",
-      "note": "Release 3.5 translation lane, slice 2 (no migration). Commit 1, source hygiene: the five raw invisible characters are \\u escapes; lib/source-characters.test.ts guards the source tree. See checklist 1.6.29."
+      "note": "Release 3.5 translation lane, slice 2 (no migration). Commit 1, source hygiene: the five raw invisible characters are \\u escapes; lib/source-characters.test.ts guards the source tree. Commit 2, list joiner: joinList hand-written for ht, hmn and so on every device, Tagalog asked as fil; pinned against a runtime that claims every locale. See checklist 1.6.29."
     }
   }
 }
