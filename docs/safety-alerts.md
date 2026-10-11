@@ -116,9 +116,10 @@ it by id, keeps it live if the server still shows it (it only left the viewport)
 marks it "no longer listed" until they move on. Panels unmount on switch, so placing or voting on
 the map and returning to the feed reads the strip again.
 
-Read volume is measured by `alerts.poll` (one row per 30 reads, per unmount of the surface, or when
-the page goes away — never per tab hide; failed reads are counted in the same row) and every action
-by one `alerts.*` row: see [observability.md](observability.md#safety-alerts-member-actions-and-read-volume).
+Read volume is measured by `alerts.poll` (one row per 30 reads, or when the page goes away — never
+per tab hide and never per panel switch: the counter lives in the page's memory, so leaving the feed
+or the map and coming back loses no count; failed reads are counted in the same row) and every
+action by one `alerts.*` row: see [observability.md](observability.md#safety-alerts-member-actions-and-read-volume).
 
 ## Surfaces
 
@@ -130,19 +131,27 @@ by one `alerts.*` row: see [observability.md](observability.md#safety-alerts-mem
   list before, or a raised severity, only; `role="status"` for an update, a resolution, an alert no
   longer listed and the member's own outcome. A refresh that changes nothing announces nothing, and
   what a region said is cleared 8 seconds later. The member's own outcome is also a visible line with
-  a Dismiss control; it goes away when they start the next action. An entry never leaves while focus
-  or the pointer is inside it; when the server drops the alert whose button held focus (so focus fell
-  to the page), focus moves to the entry. Focus the member has put anywhere else is never taken.
+  a Dismiss control; it goes away when they start the next action. Dismiss takes its own button away,
+  so focus goes to the strip's heading first (the feed's heading when no alert is listed). An entry
+  never leaves while focus or the pointer is inside it. The strip never moves focus when the list
+  changes: an action button that has focus when its action stops being offered (the alert ended, or
+  someone resolved it) stays where it is, disabled, until focus leaves it. Focus never falls to the
+  page, and a screen-reader user reading elsewhere is not pulled back.
 - **Map marker + popup** (`components/map/safety-alert-marker.tsx`, `hooks/use-safety-alerts.ts`):
   votes (members only, live alerts only; a counted vote is announced once, "Vote recorded."), the same
   actions, a full date and time, "Updated …" and the expiry. The marker button and the popup's dialog
   (Close included) carry their own `lang` / `dir`. The marker face says severity and state without
-  colour: low is a circle, moderate a rounded square, high a circle with a "!" badge, critical a
-  square with "!!", resolved a check mark, no longer listed a hollow dashed circle; 32 px, with a dark
-  2 px outline. The member's own outcome is a line above the map (`MapAlertNotice`), in the page's
-  flow so it never covers a marker, with a Dismiss control. When an alert ends under an open popup
-  and the button that held focus is gone, focus moves to the popup itself; focus placed elsewhere
-  (the search box) stays there.
+  colour: low is a circle, moderate a diamond (a square stood on its corner, drawn inside the 32 px
+  target), high a circle with a "!" badge, critical a rounded square with "!!", resolved a check mark,
+  no longer listed a hollow dashed circle; each with a dark 2 px outline. The outline colours (and the
+  edges of the alert buttons and form fields) are marked important in the class list (`border-…!`):
+  `app/globals.css` sets `* { border-color }` outside any cascade layer, which otherwise beats every
+  border-colour utility and draws the edge pale grey. Closing the popup clears "Vote recorded.", so a
+  reopened popup starts clean. The member's own outcome is a line above the map (`MapAlertNotice`),
+  in the page's flow so it never covers a marker; while there is nothing to say its wrapper is out of
+  the layout (the map sits where it would without it) and its status region stays mounted. Its
+  Dismiss control gives focus to the map first. When an alert ends under an open popup, the control
+  that has focus stays, disabled, until focus leaves it; nothing moves focus.
 - **Dialogs** (`components/alerts/`): update / resolve / withdraw with the compare step, and the
   history. Cancel is offered in every state, including while the alert is being read; the two
   confirmations expose their text as the dialog's description; the history announces "History loaded"

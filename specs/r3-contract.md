@@ -111,8 +111,14 @@ below; calling anything else answers `401 42501 permission denied for function â
 
 ## Safety alerts (3.1)
 
-Alerts stay off realtime: poll the reader (the existing scheduler), and use `shown_until` to drop an alert
-locally between polls.
+Alerts stay off realtime: poll the reader. The client draws each alert by the `shown_state` and
+`shown_until` the server returned on the last read; it never uses the browser clock to decide what is
+shown (`apps/web/src/lib/safety-alert-live.ts:55-58`). Changes arrive on the 60-second poll, which runs
+only while the tab is visible and reads once on return (`apps/web/src/lib/safety-alerts-fetch.ts:32,79`;
+`apps/web/src/hooks/use-safety-strip.ts:133`, `apps/web/src/hooks/use-safety-alerts.ts:99`). The browser
+clock does one thing: when the earliest `shown_until` is still ahead on it, one extra read is asked for
+at that instant (`apps/web/src/lib/safety-alert-store.ts:203-218`; `use-safety-strip.ts:144-146`,
+`use-safety-alerts.ts:109-111`). A row leaves only when the reader stops returning it.
 
 ### The live / shown rule (one predicate)
 
@@ -127,8 +133,11 @@ function shownState(a: { status: string; expires_at: string; resolved_at: string
 // shown <=> shownState !== 'gone'      (drawn on the strip / map; history readable; owner may withdraw, staff may remove)
 ```
 
-The server computes it (`shown_state`, `shown_until`) in every row it returns; use those and fall back to
-the function only to expire a row locally. Statuses: `live`, `resolved` (all-clear by the owner or a
+The server computes it (`shown_state`, `shown_until`) in every row it returns; the client shows exactly
+those. The function above is the server's rule: the client applies it only to a row that carries no
+`shown_state` (a pre-Release-3 answer shape) and logs `alerts.shown_state.missing` when it does
+(`apps/web/src/lib/safety-alert-rpc.ts:110-117`). It never hides or expires a row the server returned.
+Statuses: `live`, `resolved` (all-clear by the owner or a
 moderator, shown for 6 hours), `expired` (the 5-minute job), `cleared` (three "Gone now" votes that
 outnumber "Still here": gone at once), `removed` (a moderator), `withdrawn` (the owner's "delete").
 Only `live` and `resolved` are ever returned by a reader.
