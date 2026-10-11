@@ -148,14 +148,19 @@ export function PostImagePickerField({
   const captionId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
-  // The "Add a photo" button and the preview take each other's place. Whichever had the focus is
-  // gone then: put it on the one that is there now (never when the member has moved elsewhere).
+  // The "Add a photo" button and the preview take each other's place. When the member pressed the
+  // one that is now gone ("Add a photo", or the preview's Remove) and focus went with it, focus is
+  // put on the one that is there now. A photo that clears for another reason — the post was sent —
+  // moves nothing, and neither does a swap after the member has moved elsewhere.
+  const pressedHere = useRef(false)
   const hadPreview = useRef(Boolean(previewUrl))
   useEffect(() => {
     const has = Boolean(previewUrl)
     if (has === hadPreview.current) return
     hadPreview.current = has
-    if (focusWasLost(null)) (has ? previewRef : triggerRef).current?.focus()
+    const pressed = pressedHere.current
+    pressedHere.current = false
+    if (pressed && focusWasLost(null)) (has ? previewRef : triggerRef).current?.focus()
   }, [previewUrl])
   return (
     <div role={compact ? undefined : 'group'} aria-labelledby={compact ? undefined : captionId}>
@@ -181,6 +186,9 @@ export function PostImagePickerField({
         <div
           ref={previewRef}
           tabIndex={-1}
+          // A named group: it takes focus when the photo appears, and says what it is.
+          role="group"
+          aria-label={photoT(locale, 'previewAlt')}
           data-testid="post-image-preview"
           className="relative w-full max-w-xs overflow-hidden rounded-xl border border-stone-200 bg-stone-100 aspect-video focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
         >
@@ -196,7 +204,10 @@ export function PostImagePickerField({
           {!imageUploading && (
             <button
               type="button"
-              onClick={onClear}
+              onClick={() => {
+                pressedHere.current = true
+                onClear()
+              }}
               aria-label={editT(locale, 'removePhoto')}
               data-testid="post-image-remove"
               className="absolute top-1.5 end-1.5 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80"
@@ -209,7 +220,10 @@ export function PostImagePickerField({
         <button
           ref={triggerRef}
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            pressedHere.current = true
+            fileInputRef.current?.click()
+          }}
           data-testid="post-image-trigger"
           className={`flex items-center gap-2 rounded-lg border border-dashed border-stone-300 text-stone-600 hover:border-[#4a5d23] hover:text-[#4a5d23] transition-colors ${
             compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'

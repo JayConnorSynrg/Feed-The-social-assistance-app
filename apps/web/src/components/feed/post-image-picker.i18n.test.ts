@@ -120,8 +120,14 @@ describe('caption, status and focus', () => {
     return { c, props, focused }
   }
 
-  it('a chosen photo replaces the button that had the focus: focus moves to the preview; removing it moves focus back to the button', () => {
+  const press = (c: { tree: () => unknown }, testId: string) => ((findAll(c.tree(), (e) => e.props['data-testid'] === testId) as Array<{ props: Record<string, unknown> }>)[0].props.onClick as () => void)()
+
+  it('the member pressed "Add a photo" and a photo came: focus moves to the preview; they pressed Remove: focus moves back to the button', () => {
     const { c, props, focused } = swapping()
+    let cleared = 0
+    props.onClear = () => void cleared++
+    props.fileInputRef = { current: { click: () => {} } } as never
+    press(c, 'post-image-trigger')
     props.previewUrl = 'blob:second'
     c.rerender()
     expect(focused).toEqual(['post-image-preview'])
@@ -131,22 +137,50 @@ describe('caption, status and focus', () => {
     props.imageUploading = false
     c.rerender()
     expect(focused).toEqual(['post-image-preview'])
+    press(c, 'post-image-remove')
+    expect(cleared).toBe(1)
     props.previewUrl = null
     c.rerender()
     expect(focused).toEqual(['post-image-preview', 'post-image-trigger'])
   })
 
+  it('a photo that clears because the post was sent pulls no focus, even with focus on the page body (a mouse click in Safari leaves it there)', () => {
+    const { c, props, focused } = swapping()
+    props.fileInputRef = { current: { click: () => {} } } as never
+    press(c, 'post-image-trigger')
+    props.previewUrl = 'blob:second'
+    c.rerender()
+    focused.length = 0
+    const body = {}
+    ;(globalThis as Record<string, unknown>).document = { activeElement: body, body }
+    try {
+      // Nothing in the field was pressed: the composer cleared the photo after sending the post.
+      props.previewUrl = null
+      c.rerender()
+      expect(focused).toEqual([])
+      // And a photo that appears without a press here (the form was filled in) pulls none either.
+      props.previewUrl = 'blob:third'
+      c.rerender()
+      expect(focused).toEqual([])
+    } finally {
+      delete (globalThis as Record<string, unknown>).document
+    }
+  })
+
   it('a member who moved on keeps their place: nothing is focused when focus sits on another live control', () => {
     const { c, props, focused } = swapping()
+    props.fileInputRef = { current: { click: () => {} } } as never
     const elsewhere = { isConnected: true }
     ;(globalThis as Record<string, unknown>).document = { activeElement: elsewhere, body: {} }
     try {
+      press(c, 'post-image-trigger')
       props.previewUrl = 'blob:second'
       c.rerender()
       expect(focused).toEqual([])
-      // Focus on the page body is focus that was lost: it is moved.
+      // Focus on the page body after a press on Remove is focus that was lost: it is moved.
       const body = {}
       ;(globalThis as Record<string, unknown>).document = { activeElement: body, body }
+      press(c, 'post-image-remove')
       props.previewUrl = null
       c.rerender()
       expect(focused).toEqual(['post-image-trigger'])
@@ -155,8 +189,15 @@ describe('caption, status and focus', () => {
     }
   })
 
-  it('the preview takes focus by script only and shows a ring', () => {
-    expect(field('en', { previewUrl: 'blob:x' })).toMatch(/<div tabindex="-1" data-testid="post-image-preview" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
+  it('the preview is a named group that takes focus by script only and shows a ring', () => {
+    expect(field('en', { previewUrl: 'blob:x' })).toMatch(/<div tabindex="-1" role="group" aria-label="Selected photo preview" data-testid="post-image-preview" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
+  })
+
+  it.each(LOCALES)('%s: the preview group is named with the preview text of that language', (locale) => {
+    const out = field(locale, { previewUrl: 'blob:x' })
+    const name = /role="group" aria-label="([^"]*)" data-testid="post-image-preview"/.exec(out)?.[1] ?? ''
+    expect(name).toBe(photoT(locale, 'previewAlt').replace(/&/g, '&amp;').replace(/'/g, '&#x27;'))
+    expect(name.trim()).not.toBe('')
   })
 })
 
