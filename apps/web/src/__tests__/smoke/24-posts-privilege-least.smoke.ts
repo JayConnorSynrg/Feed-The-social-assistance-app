@@ -3,11 +3,14 @@
 // Mission: 24 — posts least-privilege (Invariant 2, feed-fullfeed-h-hygiene)
 // Surface: public.posts table grants (pg_class.relacl)
 // Backend: supabase/migrations/20261002000000_posts_privilege_least.sql
+//          supabase/migrations/20261026500000_post_editing_contract.sql (revokes INSERT)
 //
 // Asserts each role on public.posts holds EXACTLY the privileges its real write
 // paths use:
 //   anon          → no table-write privilege at all (read-only; SELECT is column-level)
-//   authenticated → INSERT only (client composer); UPDATE/DELETE flow through SECDEF fns
+//   authenticated → no table-write privilege at all: posts are created by create_post and
+//                   changed by edit_post / delete_own_post (SECURITY DEFINER), so the
+//                   client holds no direct INSERT / UPDATE / DELETE
 //
 // GATE ON THE LEDGER, NOT ON THE PRIVILEGE STATE. Migration 20261002000000 is applied
 // as a SEPARATE post-deploy step (GIT_PLAN feed-fullfeed-h-hygiene-postdeploy) and then
@@ -67,7 +70,7 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
     expect(r.anon_trig, 'anon TRIGGER must be revoked').toBe(false)
   })
 
-  it('[post-deploy] authenticated keeps INSERT and nothing else it does not use', async (ctx) => {
+  it('[post-deploy] authenticated holds NO table-write privilege on public.posts', async (ctx) => {
     const rows = await queryProd(GATE_AND_MATRIX_SQL)
     expect(rows.length).toBe(1)
     const r = rows[0]
@@ -75,8 +78,9 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
       ctx.skip()
       return
     }
-    // Kept — the client post composer needs INSERT (post-type-wizard / feed-panel / programs-panel).
-    expect(r.auth_ins, 'authenticated INSERT must remain (client composer)').toBe(true)
+    // Revoked by the post-editing contract (20261026500000): every composer creates a post through
+    // create_post, so a direct client INSERT would bypass its checks and its audit row.
+    expect(r.auth_ins, 'authenticated INSERT must be revoked (create_post only)').toBe(false)
     // Revoked — every UPDATE/DELETE flows through SECURITY DEFINER functions.
     expect(r.auth_upd, 'authenticated UPDATE must be revoked (SECDEF-only)').toBe(false)
     expect(r.auth_del, 'authenticated DELETE must be revoked (SECDEF-only)').toBe(false)
