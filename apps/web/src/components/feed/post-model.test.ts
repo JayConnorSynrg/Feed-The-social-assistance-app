@@ -31,8 +31,11 @@ import {
   type FeedPostRow,
   type PostType,
   type PollVoteState,
-  type RankedFeedRow,
+  type RankedFeedV2Row,
 } from './post-model'
+
+/** The post rows of a ranked_feed_v2 page, as orderByRankAndAttachBucket takes them. */
+type RankedPostRow = Pick<RankedFeedV2Row, 'id' | 'score' | 'distance_bucket'>
 
 // A minimal valid joined row; override per test.
 function makeRow(overrides: Partial<FeedPostRow> = {}): FeedPostRow {
@@ -364,7 +367,7 @@ describe('ranked feed client re-sort + distance-bucket attach (W1.3)', () => {
 
   it('returns posts in the RPC score order, not the hydrate order', () => {
     // RPC order (score DESC): c, a, b. Hydrate arrives in an unrelated order.
-    const ranked: RankedFeedRow[] = [
+    const ranked: RankedPostRow[] = [
       { id: 'c', score: 9, distance_bucket: '<2km' },
       { id: 'a', score: 5, distance_bucket: '2-10km' },
       { id: 'b', score: 1, distance_bucket: '>50km' },
@@ -375,7 +378,7 @@ describe('ranked feed client re-sort + distance-bucket attach (W1.3)', () => {
   })
 
   it('attaches each row its own distance bucket by id', () => {
-    const ranked: RankedFeedRow[] = [
+    const ranked: RankedPostRow[] = [
       { id: 'a', score: 5, distance_bucket: '2-10km' },
       { id: 'b', score: 1, distance_bucket: 'unknown' },
     ]
@@ -385,7 +388,7 @@ describe('ranked feed client re-sort + distance-bucket attach (W1.3)', () => {
   })
 
   it('drops a ranked id that the hydrate did not surface (RLS-filtered row)', () => {
-    const ranked: RankedFeedRow[] = [
+    const ranked: RankedPostRow[] = [
       { id: 'a', score: 5, distance_bucket: '<2km' },
       { id: 'gone', score: 4, distance_bucket: '<2km' },
     ]

@@ -196,7 +196,7 @@ export interface Post {
   /** Category chips (seeker_request / source_offer). */
   requestCategories: string[]
   /**
-   * Coarse distance label from the ranked_feed RPC ('<2km' | '2-10km' | '10-50km'
+   * Coarse distance label from the ranked_feed_v2 RPC ('<2km' | '2-10km' | '10-50km'
    * | '>50km' | 'unknown'). Present ONLY in ranked mode with caller geo; the raw
    * coordinate/distance is never sent to the client (W1.3 INV-A). Undefined in the
    * chronological feed and in the single-row realtime hydration path.
@@ -329,24 +329,18 @@ export function rowToPost(row: FeedPostRow, opts: { isLiked: boolean }): Post {
 // Ranked feed (W1.3) — client re-sort + distance-bucket attach
 // ---------------------------------------------------------------------------
 
-/** One row from the ranked_feed RPC. The RPC emits ONLY these three fields — no
- *  latitude/longitude/distance ever reaches the client (W1.3 INV-A). */
-export interface RankedFeedRow {
-  id: string
-  score: number
-  distance_bucket: string
-}
-
 /**
  * Re-order the hydrated posts to match the RPC's exact score order and attach each
- * row's distance bucket by id (W1.3). The RPC returns ids already ordered by
+ * row's distance bucket by id (W1.3). `ranked` is the post rows of a ranked_feed_v2
+ * page: the RPC emits only an id, a score and a coarse bucket — no latitude, longitude
+ * or distance ever reaches the client (W1.3 INV-A). It returns ids already ordered by
  * (score DESC, id DESC); the hydrate fetch (`.in('id', ids)`) returns them in an
  * arbitrary order, so this restores rank order and drops any id the RPC returned but
  * the hydrate did not surface (e.g. a row filtered by the explicit-column read).
  * Pure + JSX-free so the ranked-ordering invariant is unit-testable directly.
  */
 export function orderByRankAndAttachBucket(
-  ranked: readonly RankedFeedRow[],
+  ranked: readonly Pick<RankedFeedV2Row, 'id' | 'score' | 'distance_bucket'>[],
   hydrated: readonly Post[]
 ): Post[] {
   const byId = new Map(hydrated.map((p) => [p.id, p]))
@@ -362,9 +356,9 @@ export function orderByRankAndAttachBucket(
 // Events in the ranked feed (W1.6b)
 // ---------------------------------------------------------------------------
 
-/** One row from the ranked_feed_v2 RPC. Adds `kind` to distinguish a post row
- *  (id = post id) from an event row (id = the event's next occurrence id). Like
- *  RankedFeedRow, it carries no coordinate/distance — only the coarse bucket. */
+/** One row from the ranked_feed_v2 RPC. `kind` distinguishes a post row (id = post id)
+ *  from an event row (id = the event's next occurrence id). It carries no
+ *  coordinate/distance — only the coarse bucket. */
 export interface RankedFeedV2Row {
   id: string
   kind: 'post' | 'event'
