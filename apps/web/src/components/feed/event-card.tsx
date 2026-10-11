@@ -30,7 +30,8 @@ import {
 } from '@/components/feed/post-model'
 import { dir, type Locale } from '@/lib/i18n'
 import { formatEventWhen } from '@/lib/event-time'
-import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel, formatMessage } from '@/lib/i18n-event-forms'
+import { checkinButtonLabel, eventFormT, eventTypeColor, eventTypeLabel } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { eventMemberT } from '@/lib/i18n-event-member'
 import { EventCardAdminMenu, type EventCardChange, type EventMenuSource } from '@/components/events/event-card-admin-menu'
 

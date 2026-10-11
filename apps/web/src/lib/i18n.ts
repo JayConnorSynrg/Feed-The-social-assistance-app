@@ -451,3 +451,12 @@ export function resolveUserLocale(profileLanguage?: string | null): Locale {
   if (profileLanguage && LOCALE_SET.has(profileLanguage)) return profileLanguage as Locale
   return resolveLocale()
 }
+
+/**
+ * The viewer's locale from their loaded profile — the one place this rule is written. 'en' while
+ * there is no profile yet, so the server render and the first client render agree; then
+ * resolveUserLocale on its preferred language. hooks/use-profile-locale.ts is the hook around it.
+ */
+export function resolveProfileLocale(profile: object | null | undefined): Locale {
+  return profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'
+}

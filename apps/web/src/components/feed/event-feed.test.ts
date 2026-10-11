@@ -229,10 +229,10 @@ describe('timing / distance / check-in labels follow the viewer locale', () => {
     expect(eventTimingLabel(now, now + 3 * 3600000, now + 4 * 3600000, 'ru').label).toBe('Через 3 часа')
     expect(eventTimingLabel(now, now + 5 * 3600000, now + 6 * 3600000, 'ru').label).toBe('Через 5 часов')
   })
-  it('timing in a locale with no relative-time data (ht, hmn) uses the dictionary phrase, not English', () => {
+  it("timing in a locale Intl has no data for (ht, hmn) reads in FEED's own words on every device, not English", () => {
     expect(eventTimingLabel(now, now + 72 * 3600000, now + 73 * 3600000, 'ht').label).toBe('Nan 3 jou')
-    expect(eventTimingLabel(now, now + 20 * 60000, now + 80 * 60000, 'ht').label).toBe('Kòmanse nan 20 min')
-    expect(eventTimingLabel(now, now + 24 * 3600000, now + 25 * 3600000, 'hmn').label).not.toMatch(/^In /)
+    expect(eventTimingLabel(now, now + 20 * 60000, now + 80 * 60000, 'ht').label).toBe('Nan 20 minit')
+    expect(eventTimingLabel(now, now + 24 * 3600000, now + 25 * 3600000, 'hmn').label).toBe('Hauv 1 hnub')
   })
   it('distance', () => {
     expect(distanceBucketLabel('<2km', 'fr')).toBe('À moins de 2 km')

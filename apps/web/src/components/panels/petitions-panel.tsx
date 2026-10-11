@@ -9,6 +9,11 @@
  *
  * UI copy rule: NEVER "legally binding" / "legal contract".
  * Petitions are First-Amendment community advocacy only.
+ *
+ * Every string is read from lib/i18n-feed-petitions.ts in the member's language
+ * (useProfileLocale); the panel root carries that language and its direction. A
+ * petition's title and summary and the member's own name are shown as written
+ * (dir="auto", no page language).
  */
 
 import React, { useState, useCallback } from 'react'
@@ -18,26 +23,17 @@ import { usePetitions } from '@/hooks/use-petitions'
 import type { PetitionWithMeta } from '@/hooks/use-petitions'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { logEvent } from '@/lib/logger'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
+import { formatCount, formatPercent } from '@/lib/i18n-intl'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { isPetitionCategory, petitionCategoryLabel, petitionErrorText, petitionsT, signatureCountMessage } from '@/lib/i18n-feed-petitions'
+import { nextTabIndex } from '@/components/feed/feed-chrome'
 
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
-
-const CATEGORY_LABELS: Record<string, string> = {
-  land_rights: 'Land Rights',
-  infrastructure: 'Infrastructure',
-  housing: 'Housing',
-  food_access: 'Food Access',
-  healthcare: 'Healthcare',
-  education: 'Education',
-  environment: 'Environment',
-  civil_rights: 'Civil Rights',
-}
-
-function categoryLabel(cat: string | null): string {
-  if (!cat) return 'Community'
-  return CATEGORY_LABELS[cat] ?? cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
 
 function categoryColor(cat: string | null): string {
   const map: Record<string, string> = {
@@ -68,7 +64,14 @@ interface PetitionCardProps {
   onSign: (id: string) => void
   onWithdraw: (id: string) => void
   isSigning: boolean
+  /** A failure code from usePetitions (never a sentence). */
   signError: string | null
+  locale: Locale
+}
+
+/** A card button's accessible name: its visible text first, then the petition it acts on. */
+export function petitionActionName(locale: Locale, action: 'sign' | 'withdraw', title: string): string {
+  return formatMessage(petitionsT(locale, 'actionForPetitionAria'), { action: petitionsT(locale, action), title: isolate(title) })
 }
 
 function PetitionCard({
@@ -78,9 +81,18 @@ function PetitionCard({
   onWithdraw,
   isSigning,
   signError,
+  locale,
 }: PetitionCardProps) {
   const pct = progressPercent(petition.signatureCount, petition.target_signatures)
   const hasTarget = petition.target_signatures > 0
+  // "12 of 100 signatures" in the member's plural form; the count keeps its own bold element.
+  const [beforeCount, afterCount] = splitMessage(
+    formatMessage(signatureCountMessage(petition.signatureCount, petition.target_signatures, locale), {
+      target: formatCount(petition.target_signatures, locale),
+    }),
+    'count'
+  )
+  const [beforeName, afterName] = splitMessage(petitionsT(locale, 'signingAs'), 'name')
 
   return (
     <div
@@ -95,10 +107,12 @@ function PetitionCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 mb-1">
+            {/* A category FEED has no label for is shown as stored, which is English. */}
             <span
+              lang={isPetitionCategory(petition.cause_category) ? undefined : 'en'}
               className={`text-xs font-semibold px-2 py-0.5 rounded-full ${categoryColor(petition.cause_category)}`}
             >
-              {categoryLabel(petition.cause_category)}
+              {petitionCategoryLabel(petition.cause_category, locale)}
             </span>
           </div>
           <h3 className="text-base font-semibold text-stone-900 leading-snug" lang="" dir="auto">
@@ -116,17 +130,15 @@ function PetitionCard({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-xs text-stone-600">
           <span>
-            <span className="font-semibold text-stone-900">{petition.signatureCount.toLocaleString()}</span>
-            {hasTarget && (
-              <> of {petition.target_signatures.toLocaleString()} signatures</>
-            )}
-            {!hasTarget && <> verified signatures</>}
+            {beforeCount}
+            <span className="font-semibold text-stone-900">{formatCount(petition.signatureCount, locale)}</span>
+            {afterCount}
           </span>
-          {hasTarget && <span className="font-medium">{pct}%</span>}
+          {hasTarget && <span className="font-medium">{formatPercent(pct, locale)}</span>}
         </div>
 
         {hasTarget && (
-          <div className="w-full bg-stone-200 rounded-full h-1.5" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="w-full bg-stone-200 rounded-full h-1.5" role="progressbar" aria-label={petitionsT(locale, 'progressLabel')} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
             <div
               className="bg-lime-600 h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${pct}%` }}
@@ -140,19 +152,19 @@ function PetitionCard({
         <div className="flex flex-col gap-2 mt-1">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-lime-700 flex-shrink-0" aria-hidden="true" />
-            <span className="text-sm font-medium text-lime-800">Signed</span>
+            <span className="text-sm font-medium text-lime-800">{petitionsT(locale, 'signed')}</span>
           </div>
 
           {petition.isLocked ? (
             <p className="flex items-center gap-1.5 text-xs text-stone-500">
               <Lock className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
-              Signatures are final (the list has been exported).
+              {petitionsT(locale, 'signaturesFinal')}
             </p>
           ) : (
             <button
               onClick={() => onWithdraw(petition.id)}
               disabled={isSigning}
-              aria-label={`Withdraw your signature from: ${petition.title}`}
+              aria-label={petitionActionName(locale, 'withdraw', petition.title)}
               data-testid={`withdraw-${petition.id}`}
               className="self-start flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-red-700 disabled:opacity-60 transition-colors"
             >
@@ -161,14 +173,14 @@ function PetitionCard({
               ) : (
                 <X className="w-3 h-3" aria-hidden="true" />
               )}
-              Withdraw my signature
+              {petitionsT(locale, 'withdraw')}
             </button>
           )}
 
           {signError && (
             <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{signError}</span>
+              <span>{petitionErrorText(signError, locale)}</span>
             </div>
           )}
         </div>
@@ -177,14 +189,16 @@ function PetitionCard({
           {/* Microcopy: signing-as + retention notice */}
           {signerDisplayName && (
             <p className="text-xs text-stone-500">
-              Signing as <span className="font-medium text-stone-700">{signerDisplayName}</span>
+              {beforeName}
+              <span lang="" dir="auto" className="font-medium text-stone-700">{signerDisplayName}</span>
+              {afterName}
             </p>
           )}
 
           <button
             onClick={() => onSign(petition.id)}
             disabled={isSigning}
-            aria-label={`Add your verified signature of support to: ${petition.title}`}
+            aria-label={petitionActionName(locale, 'sign', petition.title)}
             data-testid={`sign-${petition.id}`}
             className="w-full flex items-center justify-center gap-2 bg-lime-700 hover:bg-lime-800 disabled:opacity-60 text-white font-semibold text-sm rounded-xl py-2.5 px-4 transition-colors"
           >
@@ -193,17 +207,17 @@ function PetitionCard({
             ) : (
               <ScrollText className="w-4 h-4" aria-hidden="true" />
             )}
-            Add your verified signature of support
+            {petitionsT(locale, 'sign')}
           </button>
 
           <p className="text-xs text-stone-600 text-center leading-snug">
-            Your name, the date, and a record of this petition version are kept as your verified signature of support.
+            {petitionsT(locale, 'retentionNotice')}
           </p>
 
           {signError && (
             <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{signError}</span>
+              <span>{petitionErrorText(signError, locale)}</span>
             </div>
           )}
         </div>
@@ -218,6 +232,7 @@ function PetitionCard({
 
 export function PetitionsPanel() {
   const { profile, isAuthenticated, isAnonymous } = useAuth()
+  const locale = useProfileLocale()
   const { petitions, loading, error, sign, withdraw, signingId, signError, refresh } = usePetitions()
   const [faqOpen, setFaqOpen] = useState(false)
   const [activeSubtab, setActiveSubtab] = useState<'all' | 'signed'>('all')
@@ -233,39 +248,37 @@ export function PetitionsPanel() {
   const handleTabKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLButtonElement>, currentIdx: number) => {
       const tabs: Array<'all' | 'signed'> = ['all', 'signed']
-      let next = currentIdx
-      if (e.key === 'ArrowRight') { e.preventDefault(); next = (currentIdx + 1) % tabs.length }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); next = (currentIdx - 1 + tabs.length) % tabs.length }
-      else if (e.key === 'Home') { e.preventDefault(); next = 0 }
-      else if (e.key === 'End') { e.preventDefault(); next = tabs.length - 1 }
-      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
-      else return
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSubtabSwitch(tabs[currentIdx]); return }
+      // ArrowRight / ArrowLeft follow the reading direction (Arabic: ArrowLeft is forward); Home / End jump.
+      const next = nextTabIndex(e.key, currentIdx, tabs.length, locale)
+      if (next === null) return
+      e.preventDefault()
       const tabEls = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null)?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
       tabEls?.[next]?.focus()
       handleSubtabSwitch(tabs[next])
     },
-    [handleSubtabSwitch]
+    [handleSubtabSwitch, locale]
   )
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3">
+      <div role="status" lang={locale} dir={dir(locale)} className="flex flex-col items-center justify-center h-48 gap-3">
         <Loader2 className="w-7 h-7 text-lime-700 animate-spin" aria-hidden="true" />
-        <p className="text-sm text-stone-500">Loading petitions…</p>
+        <p className="text-sm text-stone-500">{petitionsT(locale, 'loading')}</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
+      <div lang={locale} dir={dir(locale)} className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
         <AlertCircle className="w-7 h-7 text-red-400" aria-hidden="true" />
-        <p className="text-sm text-stone-700">{error}</p>
+        <p className="text-sm text-stone-700">{petitionErrorText(error, locale)}</p>
         <button
           onClick={refresh}
           className="text-sm text-lime-700 underline underline-offset-2"
         >
-          Try again
+          {petitionsT(locale, 'tryAgain')}
         </button>
       </div>
     )
@@ -273,11 +286,11 @@ export function PetitionsPanel() {
 
   if (petitions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
+      <div lang={locale} dir={dir(locale)} className="flex flex-col items-center justify-center h-48 gap-3 p-6 text-center">
         <ScrollText className="w-8 h-8 text-stone-300" aria-hidden="true" />
-        <p className="text-sm text-stone-500 font-medium">No active petitions</p>
+        <p className="text-sm text-stone-500 font-medium">{petitionsT(locale, 'emptyTitle')}</p>
         <p className="text-xs text-stone-600">
-          Community petitions will appear here when published.
+          {petitionsT(locale, 'emptyBody')}
         </p>
       </div>
     )
@@ -286,17 +299,17 @@ export function PetitionsPanel() {
   const signedPetitions = petitions.filter((p) => p.hasSigned)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div lang={locale} dir={dir(locale)} className="flex flex-col gap-4">
       {/* Panel header */}
       <div className="flex items-center gap-2 pb-1">
         <ScrollText className="w-5 h-5 text-lime-700 flex-shrink-0" aria-hidden="true" />
-        <h2 className="text-lg font-bold text-stone-900">Community Petitions</h2>
+        <h2 className="text-lg font-bold text-stone-900">{petitionsT(locale, 'title')}</h2>
       </div>
 
       {/* Subtab list — ARIA tablist (W3C APG Tabs) */}
       <div
         role="tablist"
-        aria-label="Petitions view"
+        aria-label={petitionsT(locale, 'tabsLabel')}
         className="flex gap-2 border-b border-stone-200 pb-3"
       >
         <button
@@ -314,7 +327,7 @@ export function PetitionsPanel() {
               : 'text-stone-600 hover:bg-stone-100'
           }`}
         >
-          All petitions
+          {petitionsT(locale, 'tabAll')}
         </button>
         <button
           role="tab"
@@ -331,7 +344,7 @@ export function PetitionsPanel() {
               : 'text-stone-600 hover:bg-stone-100'
           }`}
         >
-          Signed
+          {petitionsT(locale, 'tabSigned')}
         </button>
       </div>
 
@@ -343,7 +356,7 @@ export function PetitionsPanel() {
           data-testid="petition-faq-toggle"
           className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium text-stone-700"
         >
-          About petition signatures
+          {petitionsT(locale, 'faqToggle')}
           <ChevronDown
             className={`w-4 h-4 flex-shrink-0 transition-transform ${faqOpen ? 'rotate-180' : ''}`}
             aria-hidden="true"
@@ -354,18 +367,9 @@ export function PetitionsPanel() {
             data-testid="petition-faq-content"
             className="px-3 pb-3 text-xs text-stone-600 leading-relaxed space-y-2"
           >
-            <p>
-              Only administrators can see signers&rsquo; names; the public count
-              never reveals who signed.
-            </p>
-            <p>
-              You can withdraw your signature anytime — until the organizer exports
-              the signed list, after which signatures become final.
-            </p>
-            <p>
-              &ldquo;Verified signature of support&rdquo; means your signature is
-              recorded with a secure timestamp.
-            </p>
+            <p>{petitionsT(locale, 'faqPrivacy')}</p>
+            <p>{petitionsT(locale, 'faqWithdraw')}</p>
+            <p>{petitionsT(locale, 'faqVerified')}</p>
           </div>
         )}
       </div>
@@ -373,10 +377,10 @@ export function PetitionsPanel() {
       {(!isAuthenticated || isAnonymous) && (
         <div className="mb-1">
           {isAnonymous ? (
-            <CreateAccountPrompt message="Create a free account to add your verified signature of support to petitions" />
+            <CreateAccountPrompt message={petitionsT(locale, 'guestPrompt')} linkLabel={feedChromeT(locale, 'createAccount')} />
           ) : (
             <div className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-xl p-3">
-              Sign in to add your verified signature of support to any petition.
+              {petitionsT(locale, 'signInPrompt')}
             </div>
           )}
         </div>
@@ -399,6 +403,7 @@ export function PetitionsPanel() {
             onWithdraw={withdraw}
             isSigning={signingId === petition.id}
             signError={signingId === petition.id ? signError : null}
+            locale={locale}
           />
         ))}
       </div>
@@ -414,9 +419,9 @@ export function PetitionsPanel() {
         {signedPetitions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 gap-3 p-6 text-center">
             <CheckCircle2 className="w-7 h-7 text-stone-300" aria-hidden="true" />
-            <p className="text-sm text-stone-500 font-medium">No signed petitions yet</p>
+            <p className="text-sm text-stone-500 font-medium">{petitionsT(locale, 'signedEmptyTitle')}</p>
             <p className="text-xs text-stone-600">
-              Petitions you sign will appear here.
+              {petitionsT(locale, 'signedEmptyBody')}
             </p>
           </div>
         ) : (
@@ -429,6 +434,7 @@ export function PetitionsPanel() {
               onWithdraw={withdraw}
               isSigning={signingId === petition.id}
               signError={signingId === petition.id ? signError : null}
+              locale={locale}
             />
           ))
         )}

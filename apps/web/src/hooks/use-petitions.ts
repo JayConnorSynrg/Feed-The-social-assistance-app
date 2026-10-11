@@ -11,6 +11,11 @@
  * Design: signed state lives in a single `signedMap` (petition_id → boolean).
  * Counts live in `countMap` (petition_id → number). No dual-state ??-fallback
  * patterns — single source of truth per-petition per-map.
+ *
+ * Failures are reported as codes (error: 'load_failed'; signError: 'sign_failed',
+ * 'withdraw_locked', 'withdraw_failed', or the sign route's own `error` code such as
+ * 'account_required'). The panel turns a code into a sentence in the member's language
+ * (petitionErrorText in lib/i18n-feed-petitions.ts).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -123,7 +128,7 @@ export function usePetitions() {
         setLoading(false)
         return
       }
-      setError('Unable to load petitions. Please try again.')
+      setError('load_failed')
       console.error('use-petitions fetch error:', err)
     } finally {
       setLoading(false)
@@ -211,9 +216,9 @@ export function usePetitions() {
 
       logger.info('petition.sign.attempt', { petitionId })
 
-      // Server-supplied, user-facing message (e.g. the guest 403) surfaced verbatim
+      // The sign route's error code (e.g. account_required for the guest 403), reported
       // in the genuine-error branch below.
-      let serverMessage: string | undefined
+      let serverCode: string | undefined
 
       try {
         const res = await fetch('/api/petitions/sign', {
@@ -232,7 +237,7 @@ export function usePetitions() {
         }
 
         if (!res.ok && !json.alreadySigned) {
-          serverMessage = json.message
+          serverCode = json.error
           throw new Error(json.error || 'sign_failed')
         }
 
@@ -303,7 +308,7 @@ export function usePetitions() {
           )
         )
 
-        setSignError(serverMessage || 'Unable to add your signature. Please try again.')
+        setSignError(serverCode || 'sign_failed')
         logger.error('petition.sign.failed', {
           petitionId,
           error: err instanceof Error ? err.message : String(err),
@@ -366,11 +371,9 @@ export function usePetitions() {
 
         const msg = err instanceof Error ? err.message : ''
         if (msg.includes('locked') || msg.includes('exported')) {
-          setSignError(
-            'Signatures are final — the organizer has exported this list.'
-          )
+          setSignError('withdraw_locked')
         } else {
-          setSignError('Unable to withdraw your signature. Please try again.')
+          setSignError('withdraw_failed')
         }
         console.error('use-petitions withdraw error:', err)
       } finally {

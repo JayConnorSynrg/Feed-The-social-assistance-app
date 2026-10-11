@@ -135,9 +135,9 @@ describe('formatCancelledNotice — "{date} cancelled — next: {next}"', () => 
   it('no later date: the cancellation alone', () => {
     expect(formatCancelledNotice(OCT10, null, 'en', 'America/New_York')).toBe('Sat, Oct 10 cancelled')
   })
-  it('follows the viewer locale; ht dates fall back to English, the words stay Creole', () => {
+  it('follows the viewer locale; ht dates read in Creole too (FEED writes them, lib/i18n-intl.ts)', () => {
     expect(formatCancelledNotice(OCT10, OCT24, 'es', 'America/New_York')).toBe('sáb, 10 oct cancelada — próxima: sáb, 24 oct')
-    expect(formatCancelledNotice(OCT10, OCT24, 'ht', 'America/New_York')).toBe('Sat, Oct 10 anile — pwochen: Sat, Oct 24')
+    expect(formatCancelledNotice(OCT10, OCT24, 'ht', 'America/New_York')).toBe('sam 10 okt anile — pwochen: sam 24 okt')
   })
   it('adds the venue date when it reads differently from the viewer date (never a date that contradicts the venue day)', () => {
     // Sat Oct 10 01:00 in New York = Fri Oct 9 22:00 in Los Angeles.

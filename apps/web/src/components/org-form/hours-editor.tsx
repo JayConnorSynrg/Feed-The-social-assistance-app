@@ -16,7 +16,8 @@ import { Switch } from '@/components/ui/switch'
 import { logEvent } from '@/lib/logger'
 import type { BusinessHours } from '@/lib/business'
 import type { Locale } from '@/lib/i18n'
-import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { orgFormT, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { formatMessage } from '@/lib/format-message'
 import {
   DISPLAY_DAY_ORDER,
   addInterval,

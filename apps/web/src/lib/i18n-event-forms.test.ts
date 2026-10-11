@@ -16,10 +16,10 @@ import {
   eventFormT,
   eventTypeColor,
   eventTypeLabel,
-  formatMessage,
   EVENT_TYPES,
   type EventFormMessages,
 } from './i18n-event-forms'
+import { formatMessage } from './format-message'
 import { messages, translate, type Locale } from './i18n'
 
 const LOCALES = Object.keys(messages) as Locale[]

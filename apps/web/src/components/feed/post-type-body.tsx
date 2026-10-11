@@ -33,7 +33,7 @@ import { usePollData, castVote, revokeVote, POLL_CLOSED } from '@/hooks/use-poll
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
 import type { Locale } from '@/lib/i18n'
-import { formatMessage } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { cardT } from '@/lib/i18n-feed-card'
 import { requestCategoryLabel } from '@/lib/i18n-feed-composer'
 import { checkLocalTime, dateTimeFormat, browserTimeZone, formatEventWhen } from '@/lib/event-time'

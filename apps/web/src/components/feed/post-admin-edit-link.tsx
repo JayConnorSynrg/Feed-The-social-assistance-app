@@ -12,7 +12,7 @@ import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import type { AdminEditLinkProps, AdminEditSource } from '@/components/admin/admin-edit-link'
 import type { ReactNode } from 'react'
 import type { Locale } from '@/lib/i18n'
-import { formatMessage } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { cardT } from '@/lib/i18n-feed-card'
 import { dateTimeFormat } from '@/lib/event-time'
 

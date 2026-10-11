@@ -24,7 +24,7 @@ import { ManageResourcesTab } from './manage-resources-tab'
 import { OrgsSection } from './orgs-section'
 import { PeopleTab } from './people-tab'
 import { useAuth } from '@/hooks/use-auth'
-import { resolveUserLocale, type Locale } from '@/lib/i18n'
+import { resolveProfileLocale, type Locale } from '@/lib/i18n'
 import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
 import { OrgFormPanel, type OrgFormPanelHandle } from '@/components/org-form/org-form-panel'
 import type { OrgFormKind } from '@/components/org-form/org-form-model'
@@ -73,7 +73,7 @@ export function AdminShell() {
   // first client render both use 'en', so hydration matches).
   const { profile, user } = useAuth()
   const locale: Locale = useMemo(
-    () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
+    () => resolveProfileLocale(profile),
     [profile]
   )
   const canManageOrgs = canCreateOrganizations(tier)

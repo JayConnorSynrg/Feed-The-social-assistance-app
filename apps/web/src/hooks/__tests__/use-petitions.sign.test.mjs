@@ -88,11 +88,15 @@ async function runSign({
     )
   )
 
+  // The sign route's error code; the hook reports a code and the panel shows its sentence.
+  let serverCode
+
   try {
     const res = await fetchImpl()
     const json = await res.json()
 
     if (!res.ok && !json.alreadySigned) {
+      serverCode = json.error
       throw new Error(json.error || 'sign_failed')
     }
 
@@ -151,7 +155,7 @@ async function runSign({
           : p
       )
     )
-    setSignError('Unable to add your signature. Please try again.')
+    setSignError(serverCode || 'sign_failed')
   } finally {
     setSigningId(null)
   }
@@ -360,7 +364,7 @@ describe('sign() — genuine error path', () => {
       assert.equal(petition.hasSigned, false, 'hasSigned must be rolled back')
       assert.equal(petition.signatureCount, 0, 'signatureCount must be rolled back')
       assert.notEqual(result.signError, null, 'signError must be set on genuine error')
-      assert.match(result.signError, /Unable to add your signature/, 'signError message is user-facing')
+      assert.equal(result.signError, 'boom', 'signError carries the route error code (the panel turns it into a sentence)')
     }
   )
 

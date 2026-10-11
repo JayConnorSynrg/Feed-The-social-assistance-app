@@ -9,7 +9,7 @@
 // hmn need native-speaker review.
 
 import { translate, type Locale } from './i18n'
-import { formatMessage } from './i18n-event-forms'
+import { formatMessage } from './format-message'
 import { composerT } from './i18n-feed-composer'
 import type { PostRpcFailure, PostType } from './post-rpc'
 import type { EditField, FieldError, LockReason } from '@/components/feed/post-edit-model'

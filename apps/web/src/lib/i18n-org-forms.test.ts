@@ -11,7 +11,8 @@ vi.mock('./logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-import { orgFormMessages, orgFormT, formatMessage, type OrgFormMessages } from './i18n-org-forms'
+import { orgFormMessages, orgFormT, type OrgFormMessages } from './i18n-org-forms'
+import { formatMessage } from './format-message'
 import { dir, translate, resolveUserLocale, RTL_LOCALES, messages, type Locale } from './i18n'
 import { GUEST_LANGUAGE_KEY } from './languages'
 

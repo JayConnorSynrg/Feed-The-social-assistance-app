@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import { spawnSync } from 'node:child_process'
+import { messages, type Locale } from './i18n'
 import {
   checkLocalTime,
   dateTimeFormat,
@@ -148,7 +149,7 @@ describe('venueDateKey / timeZoneOptions', () => {
   })
 })
 
-describe('intlLocale — locales without CLDR data render in US English on every device', () => {
+describe('intlLocale — the tag list ends in en-US, so raw Intl never takes the device language', () => {
   it('every FEED locale ends with en-US', () => {
     expect(intlLocale('en')).toEqual(['en-US'])
     expect(intlLocale('ht')).toEqual(['ht', 'en-US'])
@@ -169,6 +170,8 @@ describe('intlLocale — locales without CLDR data render in US English on every
     expect(run('ht')).toBe('sábado') // control: a bare 'ht' takes the device language
     expect(run(intlLocale('ht'))).toBe('Saturday')
     expect(run(intlLocale('hmn'))).toBe('Saturday')
+    // ...and FEED's own formatter writes the Creole word whatever the device language is.
+    expect(dateTimeFormat('ht', 'UTC', { weekday: 'long' }).format(new Date(sat))).toBe('samdi')
   })
 })
 
@@ -224,17 +227,121 @@ describe('time-zone picker leaves out zones the server converts differently', ()
 describe('calendar dates and relative time', () => {
   it('a venue calendar date reads the same in every device zone', () => {
     expect(plain(formatCalendarDate('2027-04-30', 'en'))).toBe('Fri, Apr 30, 2027')
-    expect(plain(formatCalendarDate('2027-04-30', 'ht'))).toBe('Fri, Apr 30, 2027')
+    expect(plain(formatCalendarDate('2027-04-30', 'ht'))).toBe('van 30 avr 2027')
   })
   it('the short date of an instant follows the viewer zone', () => {
     // 2026-10-11 03:00Z is still Oct 10 in Los Angeles.
     expect(formatShortDate('2026-10-11T03:00:00Z', 'en', 'America/Los_Angeles')).toBe('Sat, Oct 10')
     expect(formatShortDate('2026-10-11T03:00:00Z', 'en', 'Europe/London')).toBe('Sun, Oct 11')
+    expect(formatShortDate('2026-10-11T03:00:00Z', 'ht', 'America/Los_Angeles')).toBe('sam 10 okt')
+    expect(formatShortDate('2026-10-11T03:00:00Z', 'ht', 'Europe/London')).toBe('dim 11 okt')
   })
-  it('relative time: Intl wording, sentence-cased; null where the runtime has no data', () => {
+  it('relative time: sentence-cased; FEED\'s own words where Intl has none; a negative amount is past', () => {
     expect(relativeTimeText(3, 'day', 'en')).toBe('In 3 days')
     expect(relativeTimeText(2, 'hour', 'ru')).toBe('Через 2 часа')
-    expect(relativeTimeText(3, 'day', 'ht')).toBeNull()
-    expect(relativeTimeText(3, 'day', 'hmn')).toBeNull()
+    expect(relativeTimeText(3, 'day', 'ht')).toBe('Nan 3 jou')
+    expect(relativeTimeText(3, 'day', 'hmn')).toBe('Hauv 3 hnub')
+    expect(relativeTimeText(-3, 'day', 'en')).toBe('3 days ago')
+    expect(relativeTimeText(-3, 'day', 'ht')).toBe('Sa gen 3 jou')
+  })
+})
+
+describe('an event reads in the viewer language, all 14 locales', () => {
+  // Saturday 2026-10-10, 3:05–4:30 PM in New York, seen from New York.
+  const WHEN_START = '2026-10-10T19:05:00Z'
+  const WHEN_END = '2026-10-10T20:30:00Z'
+  const NY = 'America/New_York'
+  // CLDR 47 (Node 22) abbreviates Vietnamese weekdays "Th 7"; CLDR 48 writes "Thứ 7". Both are
+  // Vietnamese; compare on the CLDR 48 spelling.
+  const cldr48 = (s: string | null) => (plain(s) ?? '').replace(/\bTh (\d)/g, 'Thứ $1')
+
+  // [start–end with its zone, short date, calendar date, in 20 minutes, in 1 hour, in 3 days]
+  const PINNED: Record<Locale, readonly string[]> = {
+    en: ['Sat, Oct 10, 3:05 – 4:30 PM EDT', 'Sat, Oct 10', 'Fri, Apr 30, 2027', 'In 20 minutes', 'In 1 hour', 'In 3 days'],
+    es: ['sáb, 10 oct, 15:05–16:30 GMT-4', 'sáb, 10 oct', 'vie, 30 abr 2027', 'Dentro de 20 minutos', 'Dentro de 1 hora', 'Dentro de 3 días'],
+    ht: ['sam 10 okt, 3:05 PM – 4:30 PM EDT', 'sam 10 okt', 'van 30 avr 2027', 'Nan 20 minit', 'Nan 1 èdtan', 'Nan 3 jou'],
+    vi: ['15:05–16:30 EDT Thứ 7, 10 thg 10', 'Thứ 7, 10 thg 10', 'Thứ 6, 30 thg 4, 2027', 'Sau 20 phút nữa', 'Sau 1 giờ nữa', 'Sau 3 ngày nữa'],
+    ar: ['السبت، 10 أكتوبر، 3:05–4:30 م غرينتش-4', 'السبت، 10 أكتوبر', 'الجمعة، 30 أبريل 2027', 'خلال 20 دقيقة', 'خلال ساعة واحدة', 'خلال 3 أيام'],
+    zh: ['10/10周六 GMT-4 15:05–16:30', '10月10日周六', '2027年4月30日周五', '20分钟后', '1小时后', '3天后'],
+    so: ['Sbti, Okt 10 ee 3:05 GD – 4:30 GD EDT', 'Sbti, Okt 10', 'Jmc, Abr 30, 2027', '20 daqiiqadood kadib', '1 saacad kadib', '3 maalmood kadib'],
+    fr: ['sam. 10 oct., 15:05 – 16:30 UTC−4', 'sam. 10 oct.', 'ven. 30 avr. 2027', 'Dans 20 minutes', 'Dans 1 heure', 'Dans 3 jours'],
+    pt: ['sáb., 10 de out. 15:05 – 16:30 GMT-4', 'sáb., 10 de out.', 'sex., 30 de abr. de 2027', 'Em 20 minutos', 'Em 1 hora', 'Em 3 dias'],
+    ru: ['сб, 10 окт., 15:05–16:30 GMT-4', 'сб, 10 окт.', 'пт, 30 апр. 2027 г.', 'Через 20 минут', 'Через 1 час', 'Через 3 дня'],
+    ko: ['10월 10일 (토) 오후 3:05~4:30 GMT-4', '10월 10일 (토)', '2027년 4월 30일 (금)', '20분 후', '1시간 후', '3일 후'],
+    tl: ['Sab, Okt 10, 3:05–4:30 PM GMT-4', 'Sab, Okt 10', 'Biy, Abr 30, 2027', 'Sa 20 minuto', 'Sa 1 oras', 'Sa 3 araw'],
+    am: ['ቅዳሜ፣ ኦክቶ 10 3:05 – 4:30 ከሰዓት ጂ ኤም ቲ-4', 'ቅዳሜ፣ ኦክቶ 10', 'ዓርብ፣ ኤፕሪ 30 2027', 'በ20 ደቂቃዎች ውስጥ', 'በ1 ሰዓት ውስጥ', 'በ3 ቀናት ውስጥ'],
+    hmn: ['Hnub Rau, Lub Kaum Hli 10, 3:05 PM – 4:30 PM EDT', 'Hnub Rau, Lub Kaum Hli 10', 'Hnub Tsib, Lub Plaub Hlis 30, 2027', 'Hauv 20 feeb', 'Hauv 1 teev', 'Hauv 3 hnub'],
+  }
+  const LOCALES = Object.keys(PINNED) as Locale[]
+  const actual = (locale: Locale) =>
+    [
+      formatRaw(WHEN_START, WHEN_END, NY, locale, { viewerTz: NY }).text,
+      formatShortDate(WHEN_START, locale, NY),
+      formatCalendarDate('2027-04-30', locale),
+      relativeTimeText(20, 'minute', locale),
+      relativeTimeText(1, 'hour', locale),
+      relativeTimeText(3, 'day', locale),
+    ].map(cldr48)
+
+  it('pins the 14 locales of lib/i18n.ts', () => {
+    expect([...LOCALES].sort()).toEqual(Object.keys(messages).sort())
+    expect(LOCALES).toHaveLength(14)
+  })
+
+  it.each(LOCALES)('%s: start–end, short date, calendar date, in 20 minutes / 1 hour / 3 days', (locale) => {
+    expect(actual(locale)).toEqual(PINNED[locale])
+  })
+
+  it.each(LOCALES.filter((l) => l !== 'en'))('%s: no cell is the English text or a runtime placeholder', (locale) => {
+    const en = actual('en')
+    const got = actual(locale)
+    for (let i = 0; i < got.length; i++) {
+      expect(got[i], `${locale}[${i}]`).not.toBe(en[i])
+      expect(got[i], `${locale}[${i}]`).not.toMatch(/\bM\d\d\b|^[+-]\d/)
+    }
+    // No English month or weekday name anywhere in the line.
+    expect(got.join(' | '), locale).not.toMatch(/\b(Sat|Fri|Oct|Apr|Saturday|October)\b/)
+  })
+
+  it('the venue line of a far-away viewer reads in the locale too', () => {
+    const w = formatRaw(WHEN_START, WHEN_END, NY, 'ht', { viewerTz: 'America/Los_Angeles' })
+    expect(plain(w.text)).toBe('sam 10 okt, 12:05 PM – 1:30 PM PDT')
+    expect(plain(w.venue)).toContain('sam 10 okt, 3:05 PM – 4:30 PM EDT')
+  })
+
+  it('a range across a clock change still names each zone (hand-written locale)', () => {
+    // 2026-11-01 in New York: 1:30 AM EDT … 1:30 AM EST (clocks fall back at 2:00).
+    const w = formatRaw('2026-11-01T05:30:00Z', '2026-11-01T06:30:00Z', NY, 'ht', { viewerTz: NY })
+    expect(plain(w.text)).toBe('dim 1 nov, 1:30 AM EDT – 1:30 AM EST')
+  })
+
+  it('a range that runs into another year names the year on both ends — in the hand-written locales too', () => {
+    // Thu 2026-12-31 11:30 PM … Fri 2027-01-01 1:30 AM in New York.
+    const range = (locale: Locale) => plain(formatRaw('2027-01-01T04:30:00Z', '2027-01-01T06:30:00Z', NY, locale, { viewerTz: NY }).text)
+    expect(range('en')).toBe('Thu, Dec 31, 2026, 11:30 PM EST – Fri, Jan 1, 2027, 1:30 AM EST')
+    expect(range('ht')).toBe('jed 31 des 2026, 11:30 PM – van 1 jan 2027, 1:30 AM EST')
+    expect(range('hmn')).toBe('Hnub Plaub, Lub Kaum Ob Hlis 31, 2026, 11:30 PM – Hnub Tsib, Lub Ib Hlis 1, 2027, 1:30 AM EST')
+    expect(range('so')).toBe('Khms, Dis 31, 2026 ee 11:30 GD – Jmc, Jan 1, 2027 ee 1:30 GH EST')
+    for (const locale of ['ht', 'hmn', 'so'] as const) {
+      expect(range(locale), locale).toContain('2026')
+      expect(range(locale), locale).toContain('2027')
+    }
+  })
+
+  it('a range across two days of the same year prints no year (hand-written locale)', () => {
+    const w = plain(formatRaw('2026-10-11T03:30:00Z', '2026-10-11T05:30:00Z', NY, 'ht', { viewerTz: NY }).text)
+    expect(w).toBe('sam 10 okt, 11:30 PM – dim 11 okt, 1:30 AM EDT')
+  })
+
+  it('a times-only range (calendar chip) never prints a date or a year', () => {
+    const w = plain(formatRaw('2027-01-01T04:30:00Z', '2027-01-01T06:30:00Z', NY, 'ht', { viewerTz: NY, timeOnly: true }).text)
+    expect(w).toBe('11:30 PM – 1:30 AM EST')
+  })
+
+  it("Intl is asked for the locale itself, Tagalog as 'fil' first, en-US last", () => {
+    expect(intlLocale('en')).toEqual(['en-US'])
+    expect(intlLocale('tl')).toEqual(['fil', 'tl', 'en-US'])
+    expect(intlLocale('ht')).toEqual(['ht', 'en-US'])
+    expect(intlLocale('ko')).toEqual(['ko', 'en-US'])
   })
 })

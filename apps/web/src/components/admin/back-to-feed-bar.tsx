@@ -10,11 +10,11 @@
 // (feed-shell.tsx SIDEBAR_ICONS) so the destination reads the same in both places. Copy follows the
 // viewer's profile language (organization admins may not read English).
 
-import { useMemo, type MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import { Newspaper } from 'lucide-react'
-import { useAuth } from '@/hooks/use-auth'
-import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { logEvent } from '@/lib/logger'
 import { memberUrl } from '@/lib/member-url'
@@ -27,12 +27,8 @@ function logBackToFeed() {
 
 export function BackToFeedBar() {
   // Server render and the first client render both use 'en' (profile not loaded yet), so hydration
-  // matches; the profile language applies once it loads (same as admin-shell.tsx).
-  const { profile } = useAuth()
-  const locale: Locale = useMemo(
-    () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
-    [profile]
-  )
+  // matches; the profile language applies once it loads.
+  const locale = useProfileLocale()
 
   return (
     <nav
