@@ -8,6 +8,9 @@
 // providers, "Add yourself as a resource". Every string is in the viewer's language
 // (lib/i18n-feed-alerts.ts); the panel and the dialog carry their own lang / dir. A refused report
 // shows a translated sentence chosen by the refusal's kind, never the server's text.
+// A guest (anonymous session) cannot report: instead of the four report entries they get the
+// create-account prompt (the same as the feed's composer), so nobody fills in a form the server
+// will refuse at the last step.
 //
 // Address search: the typed address is sent to Mapbox's geocoding API (lib/mapbox-geocode-v6.ts) when
 // the member presses Find or Enter. It is never written to a log.
@@ -44,6 +47,8 @@ import type { Database } from '@feed/database'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { dir, type Locale } from '@/lib/i18n'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { formatMessage } from '@/lib/format-message'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { ALERT_SEVERITIES, alertFailureText, alertSeverityHint, alertsT, type AlertMessages } from '@/lib/i18n-feed-alerts'
@@ -111,7 +116,7 @@ interface SuggestResourceDialogProps {
   locale: Locale
 }
 
-function SuggestResourceDialog({
+export function SuggestResourceDialog({
   open,
   onClose,
   prefillCity,
@@ -232,7 +237,7 @@ function SuggestResourceDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={example('Rutland Community Pantry')}
-                className="text-stone-900 placeholder:text-stone-400"
+                className="text-stone-900 placeholder:text-stone-500"
                 data-testid="suggest-name-input"
                 required
               />
@@ -248,13 +253,21 @@ function SuggestResourceDialog({
                 onChange={(e) => setDescription(e.target.value)}
                 dir="auto"
                 placeholder={t('suggestDescriptionPlaceholder')}
-                className="text-stone-900 placeholder:text-stone-400 resize-none"
+                className="text-stone-900 placeholder:text-stone-500 resize-none"
                 rows={3}
                 data-testid="suggest-description-input"
                 required
+                aria-describedby="suggest-description-count"
+                aria-invalid={descriptionLength > 0 && !descriptionValid ? true : undefined}
               />
-              <p className={`text-xs ${descriptionLength > 0 && !descriptionValid ? 'text-red-700' : 'text-stone-600'}`}>
+              {/* The count belongs to the field; an out-of-range text is said in words, not by colour. */}
+              <p id="suggest-description-count" className="text-xs text-stone-700" data-testid="suggest-description-count">
                 {formatMessage(t('suggestCount'), { n: descriptionLength })}
+                {descriptionLength > 0 && !descriptionValid && (
+                  <span className="block font-medium text-red-800" data-testid="suggest-description-invalid">
+                    {t('suggestCountInvalid')}
+                  </span>
+                )}
               </p>
             </div>
 
@@ -266,7 +279,7 @@ function SuggestResourceDialog({
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder={example('Rutland')}
-                  className="text-stone-900 placeholder:text-stone-400"
+                  className="text-stone-900 placeholder:text-stone-500"
                   data-testid="suggest-city-input"
                 />
               </div>
@@ -277,7 +290,7 @@ function SuggestResourceDialog({
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   placeholder={example('VT')}
-                  className="text-stone-900 placeholder:text-stone-400"
+                  className="text-stone-900 placeholder:text-stone-500"
                   data-testid="suggest-state-input"
                 />
               </div>
@@ -289,10 +302,12 @@ function SuggestResourceDialog({
               </Label>
               <Input
                 id="suggest-phone"
+                type="tel"
+                dir="ltr"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="(802) 555-0100"
-                className="text-stone-900 placeholder:text-stone-400"
+                className="text-stone-900 placeholder:text-stone-500"
                 data-testid="suggest-phone-input"
               />
             </div>
@@ -303,10 +318,11 @@ function SuggestResourceDialog({
               </Label>
               <Input
                 id="suggest-website"
+                dir="ltr"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
                 placeholder="https://..."
-                className="text-stone-900 placeholder:text-stone-400"
+                className="text-stone-900 placeholder:text-stone-500"
                 data-testid="suggest-website-input"
               />
             </div>
@@ -474,6 +490,7 @@ export function HazardBubbleMenu({
         )}
         aria-label={panelOpen ? t('hazardClose') : t('hazardOpen')}
         aria-expanded={panelOpen}
+        aria-controls="hazard-panel"
         data-testid="hazard-menu-trigger"
         onClick={() => (panelOpen ? handlePanelClose() : setPanelOpen(true))}
       >
@@ -491,6 +508,7 @@ export function HazardBubbleMenu({
         inert={!panelOpen}
         lang={locale}
         dir={dir(locale)}
+        id="hazard-panel"
         data-testid="hazard-panel"
       >
         {/* Panel header */}
@@ -511,7 +529,13 @@ export function HazardBubbleMenu({
         {/* Menu view */}
         {view === 'menu' && (
           <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
-            {HAZARD_ENTRIES.map((entry) => {
+            {/* A guest cannot report a hazard: the prompt replaces the entries. */}
+            {isAnonymous && (
+              <div data-testid="hazard-guest-prompt">
+                <CreateAccountPrompt message={t('failGuest')} linkLabel={feedChromeT(locale, 'createAccount')} />
+              </div>
+            )}
+            {!isAnonymous && HAZARD_ENTRIES.map((entry) => {
               const EntryIcon = ALERT_ICONS[entry.type]
               return (
                 <button
@@ -532,7 +556,7 @@ export function HazardBubbleMenu({
               )
             })}
 
-            <hr className="my-2 border-stone-200" />
+            {!isAnonymous && <hr className="my-2 border-stone-200" />}
 
             {!isAnonymous && (
               <button
@@ -601,7 +625,7 @@ export function HazardBubbleMenu({
                   onChange={(e) => { setAddress(e.target.value); setGeocodeSuccess(false) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGeocode() } }}
                   placeholder={t('addressPlaceholder')}
-                  className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-stone-300 bg-white text-stone-900 placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-stone-500 bg-white text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
                 />
                 <button
                   type="button"
