@@ -11,7 +11,8 @@ This list starts with Release 3.5. It itemises, string by string:
   `lib/i18n-feed-petitions.ts`, `lib/i18n-feed-messages.ts`, `lib/i18n-feed-businesses.ts`;
 - the feed card dictionaries written after them, each as it lands: `lib/i18n-feed-photo.ts`
   (photo picker), `lib/i18n-feed-follows.ts` (follow errors), `lib/i18n-friendly-error.ts` (the
-  two general failure sentences);
+  two general failure sentences), `lib/i18n-feed-optins.ts` (the sign-up controls of a post
+  card);
 - the hand-written time words in `lib/i18n-intl.ts` (months, weekdays, day periods, "5 minutes
   ago", "In 3 days") for `ht`, `hmn` and `so`;
 - the Arabic petition strings that say "confirmed signature of support" (`مؤكَّد`), listed as a
@@ -697,6 +698,117 @@ step in that test, and the test fails until the list below is regenerated.
 | `announceWithdrawn` | hmn | Request withdrawn. | Thim qhov kev thov lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `announceEnded` | hmn | Conversation ended. | Kev sib tham xaus lawm. | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-feed-optins.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `optIn` | ht | Opt In | Enskri | 2026-10-11 | machine-drafted, needs native review |
+| `optedIn` | ht | Opted In | Ou enskri | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | ht | Withdraw | Retire | 2026-10-11 | machine-drafted, needs native review |
+| `full` | ht | Full | Plen | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | ht | pending | ann atant | 2026-10-11 | machine-drafted, needs native review |
+| `statusAccepted` | ht | accepted | aksepte | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | ht | declined | refize | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | ht | completed | fini | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBefore` | ht | Declined before | Refize deja | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBeforeTitle` | ht | You have declined this person before | Ou te deja refize moun sa a | 2026-10-11 | machine-drafted, needs native review |
+| `unblock` | ht | Unblock — they can request again | Debloke — li ka mande ankò | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | ht | Accept | Aksepte | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | ht | Decline | Refize | 2026-10-11 | machine-drafted, needs native review |
+| `markCompleted` | ht | Mark Completed | Make kòm fini | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSeeker` | ht | Review seeker | Evalye moun ki mande a | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSourcer` | ht | Review sourcer | Evalye moun ki ofri a | 2026-10-11 | machine-drafted, needs native review |
+| `actionForPersonAria` | ht | {action}: {name} | {action}: {name} | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | ht | Create a free account to opt in. | Kreye yon kont gratis pou w enskri. | 2026-10-11 | machine-drafted, needs native review |
+| `errOptInFailed` | ht | Couldn't opt in. Please try again. | Nou pa kapab enskri w. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdrawFailed` | ht | Couldn't withdraw opt-in. Please try again. | Nou pa kapab retire enskripsyon ou. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errOfferFull` | ht | This offer is full | Òf sa a plen | 2026-10-11 | machine-drafted, needs native review |
+| `errPostClosed` | ht | This post is closed | Piblikasyon sa a fèmen | 2026-10-11 | machine-drafted, needs native review |
+| `errOwnPost` | ht | You cannot opt in to your own post | Ou pa ka enskri nan pwòp piblikasyon ou | 2026-10-11 | machine-drafted, needs native review |
+| `errAlreadyOptedIn` | ht | Already opted in | Ou deja enskri | 2026-10-11 | machine-drafted, needs native review |
+| `optIn` | so | Opt In | Isu qor | 2026-10-11 | machine-drafted, needs native review |
+| `optedIn` | so | Opted In | Waad is qortay | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | so | Withdraw | Ka noqo | 2026-10-11 | machine-drafted, needs native review |
+| `full` | so | Full | Buuxa | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | so | pending | la sugayo | 2026-10-11 | machine-drafted, needs native review |
+| `statusAccepted` | so | accepted | la aqbalay | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | so | declined | la diiday | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | so | completed | la dhammeeyay | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBefore` | so | Declined before | Hore loo diiday | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBeforeTitle` | so | You have declined this person before | Qofkan hore ayaad u diiday | 2026-10-11 | machine-drafted, needs native review |
+| `unblock` | so | Unblock — they can request again | Ka qaad xannibaadda — mar kale ayuu codsan karaa | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | so | Accept | Aqbal | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | so | Decline | Diid | 2026-10-11 | machine-drafted, needs native review |
+| `markCompleted` | so | Mark Completed | Calaamadee in la dhammeeyay | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSeeker` | so | Review seeker | Qiimee codsadaha | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSourcer` | so | Review sourcer | Qiimee bixiyaha | 2026-10-11 | machine-drafted, needs native review |
+| `actionForPersonAria` | so | {action}: {name} | {action}: {name} | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | so | Create a free account to opt in. | Samee akoon bilaash ah si aad isu qorto. | 2026-10-11 | machine-drafted, needs native review |
+| `errOptInFailed` | so | Couldn't opt in. Please try again. | Lama is qori karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdrawFailed` | so | Couldn't withdraw opt-in. Please try again. | Is-qoristaada lagama noqon karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errOfferFull` | so | This offer is full | Deeqdani way buuxdaa | 2026-10-11 | machine-drafted, needs native review |
+| `errPostClosed` | so | This post is closed | Qoraalkani wuu xiran yahay | 2026-10-11 | machine-drafted, needs native review |
+| `errOwnPost` | so | You cannot opt in to your own post | Iskuma qori kartid qoraalkaaga | 2026-10-11 | machine-drafted, needs native review |
+| `errAlreadyOptedIn` | so | Already opted in | Hore ayaad isu qortay | 2026-10-11 | machine-drafted, needs native review |
+| `optIn` | am | Opt In | ተመዝገብ | 2026-10-11 | machine-drafted, needs native review |
+| `optedIn` | am | Opted In | ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `full` | am | Full | ሞልቷል | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | am | pending | በመጠባበቅ ላይ | 2026-10-11 | machine-drafted, needs native review |
+| `statusAccepted` | am | accepted | ተቀባይነት አግኝቷል | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | am | declined | ተቀባይነት አላገኘም | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | am | completed | ተጠናቋል | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBefore` | am | Declined before | ከዚህ በፊት ውድቅ ተደርጓል | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBeforeTitle` | am | You have declined this person before | ይህን ሰው ከዚህ በፊት አልተቀበሉትም | 2026-10-11 | machine-drafted, needs native review |
+| `unblock` | am | Unblock — they can request again | እገዳውን አንሳ — እንደገና መጠየቅ ይችላል | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | am | Accept | ተቀበል | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | am | Decline | አትቀበል | 2026-10-11 | machine-drafted, needs native review |
+| `markCompleted` | am | Mark Completed | እንደተጠናቀቀ ምልክት አድርግ | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSeeker` | am | Review seeker | ጠያቂውን ገምግም | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSourcer` | am | Review sourcer | አቅራቢውን ገምግም | 2026-10-11 | machine-drafted, needs native review |
+| `actionForPersonAria` | am | {action}: {name} | {action}: {name} | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | am | Create a free account to opt in. | ለመመዝገብ ነፃ መለያ ይፍጠሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errOptInFailed` | am | Couldn't opt in. Please try again. | መመዝገብ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdrawFailed` | am | Couldn't withdraw opt-in. Please try again. | ምዝገባዎን ማንሳት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errOfferFull` | am | This offer is full | ይህ አቅርቦት ሞልቷል | 2026-10-11 | machine-drafted, needs native review |
+| `errPostClosed` | am | This post is closed | ይህ ልጥፍ ተዘግቷል | 2026-10-11 | machine-drafted, needs native review |
+| `errOwnPost` | am | You cannot opt in to your own post | በራስዎ ልጥፍ ላይ መመዝገብ አይችሉም | 2026-10-11 | machine-drafted, needs native review |
+| `errAlreadyOptedIn` | am | Already opted in | አስቀድመው ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
+| `optIn` | hmn | Opt In | Sau npe | 2026-10-11 | machine-drafted, needs native review |
+| `optedIn` | hmn | Opted In | Sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
+| `withdraw` | hmn | Withdraw | Thim | 2026-10-11 | machine-drafted, needs native review |
+| `full` | hmn | Full | Puv lawm | 2026-10-11 | machine-drafted, needs native review |
+| `statusPending` | hmn | pending | tab tom tos | 2026-10-11 | machine-drafted, needs native review |
+| `statusAccepted` | hmn | accepted | txais lawm | 2026-10-11 | machine-drafted, needs native review |
+| `statusDeclined` | hmn | declined | tsis txais | 2026-10-11 | machine-drafted, needs native review |
+| `statusCompleted` | hmn | completed | tiav lawm | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBefore` | hmn | Declined before | Tsis txais ua ntej lawm | 2026-10-11 | machine-drafted, needs native review |
+| `declinedBeforeTitle` | hmn | You have declined this person before | Koj twb tsis txais tus neeg no ua ntej lawm | 2026-10-11 | machine-drafted, needs native review |
+| `unblock` | hmn | Unblock — they can request again | Tshem kev thaiv — nws thov tau dua | 2026-10-11 | machine-drafted, needs native review |
+| `accept` | hmn | Accept | Txais | 2026-10-11 | machine-drafted, needs native review |
+| `decline` | hmn | Decline | Tsis txais | 2026-10-11 | machine-drafted, needs native review |
+| `markCompleted` | hmn | Mark Completed | Kos tias tiav lawm | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSeeker` | hmn | Review seeker | Ntsuam xyuas tus neeg thov | 2026-10-11 | machine-drafted, needs native review |
+| `reviewSourcer` | hmn | Review sourcer | Ntsuam xyuas tus neeg muab | 2026-10-11 | machine-drafted, needs native review |
+| `actionForPersonAria` | hmn | {action}: {name} | {action}: {name} | 2026-10-11 | machine-drafted, needs native review |
+| `errAccountRequired` | hmn | Create a free account to opt in. | Tsim ib tus account dawb los sau npe. | 2026-10-11 | machine-drafted, needs native review |
+| `errOptInFailed` | hmn | Couldn't opt in. Please try again. | Sau npe tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errWithdrawFailed` | hmn | Couldn't withdraw opt-in. Please try again. | Thim kev sau npe tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errOfferFull` | hmn | This offer is full | Qhov kev muab no puv lawm | 2026-10-11 | machine-drafted, needs native review |
+| `errPostClosed` | hmn | This post is closed | Qhov tshaj tawm no kaw lawm | 2026-10-11 | machine-drafted, needs native review |
+| `errOwnPost` | hmn | You cannot opt in to your own post | Koj sau npe rau koj tus kheej qhov tshaj tawm tsis tau | 2026-10-11 | machine-drafted, needs native review |
+| `errAlreadyOptedIn` | hmn | Already opted in | Koj twb sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
+| `SPOTS_LEFT.other` | ht | {left} of {max} spots left | {left} sou {max} plas ki rete | 2026-10-11 | machine-drafted, needs native review |
+| `SPOTS_LEFT.other` | so | {left} of {max} spots left | {left} ka mid ah {max} boos ayaa haray | 2026-10-11 | machine-drafted, needs native review |
+| `SPOTS_LEFT.one` | am | {left} of {max} spot left | {left} ከ{max} ቦታ ቀርቷል | 2026-10-11 | machine-drafted, needs native review |
+| `SPOTS_LEFT.other` | am | {left} of {max} spots left | {left} ከ{max} ቦታዎች ቀርተዋል | 2026-10-11 | machine-drafted, needs native review |
+| `SPOTS_LEFT.other` | hmn | {left} of {max} spots left | Tshuav {left} ntawm {max} qhov chaw | 2026-10-11 | machine-drafted, needs native review |
+| `OPTED_IN_COUNT.other` | ht | {count} opted in | {count} moun enskri | 2026-10-11 | machine-drafted, needs native review |
+| `OPTED_IN_COUNT.other` | so | {count} opted in | {count} qof ayaa is qoray | 2026-10-11 | machine-drafted, needs native review |
+| `OPTED_IN_COUNT.one` | am | {count} opted in | {count} ሰው ተመዝግቧል | 2026-10-11 | machine-drafted, needs native review |
+| `OPTED_IN_COUNT.other` | am | {count} opted in | {count} ሰዎች ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
+| `OPTED_IN_COUNT.other` | hmn | {count} opted in | {count} tus neeg sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
+
 ### `lib/i18n-feed-organizations.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -761,6 +873,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAffirmationRequired` | ht | You must affirm to add your verified signature of support. | Ou dwe konfime pou w ajoute siyati verifye pou sipò ou. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawLocked` | ht | Signatures are final — the organizer has exported this list. | Siyati yo definitif: òganizatè a deja ekspòte lis sa a. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawFailed` | ht | Unable to withdraw your signature. Please try again. | Nou pa kapab retire siyati ou. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `embedLabel` | ht | Petition | Petisyon | 2026-10-11 | machine-drafted, needs native review |
 | `catLandRights` | so | Land Rights | Xuquuqda dhulka | 2026-10-11 | machine-drafted, needs native review |
 | `catInfrastructure` | so | Infrastructure | Kaabayaasha | 2026-10-11 | machine-drafted, needs native review |
 | `catHousing` | so | Housing | Guriyeyn | 2026-10-11 | machine-drafted, needs native review |
@@ -800,6 +913,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAffirmationRequired` | so | You must affirm to add your verified signature of support. | Waa inaad xaqiijisaa si aad ugu darto saxiixaaga taageerada ee la xaqiijiyay. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawLocked` | so | Signatures are final — the organizer has exported this list. | Saxiixyadu waa kama dambays: qabanqaabiyuhu wuu soo dejiyay liiskan. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawFailed` | so | Unable to withdraw your signature. Please try again. | Lagama noqon karo saxiixaaga. Fadlan isku day mar kale. | 2026-10-11 | machine-drafted, needs native review |
+| `embedLabel` | so | Petition | Codsi | 2026-10-11 | machine-drafted, needs native review |
 | `catLandRights` | am | Land Rights | የመሬት መብቶች | 2026-10-11 | machine-drafted, needs native review |
 | `catInfrastructure` | am | Infrastructure | መሠረተ ልማት | 2026-10-11 | machine-drafted, needs native review |
 | `catHousing` | am | Housing | መኖሪያ ቤት | 2026-10-11 | machine-drafted, needs native review |
@@ -839,6 +953,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAffirmationRequired` | am | You must affirm to add your verified signature of support. | የተረጋገጠ የድጋፍ ፊርማዎን ለማከል ማረጋገጥ አለብዎት። | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawLocked` | am | Signatures are final — the organizer has exported this list. | ፊርማዎቹ የመጨረሻ ናቸው፦ አዘጋጁ ይህን ዝርዝር አውጥቷል። | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawFailed` | am | Unable to withdraw your signature. Please try again. | ፊርማዎን ማንሳት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `embedLabel` | am | Petition | አቤቱታ | 2026-10-11 | machine-drafted, needs native review |
 | `catLandRights` | hmn | Land Rights | Cai txog av | 2026-10-11 | machine-drafted, needs native review |
 | `catInfrastructure` | hmn | Infrastructure | Kev tsim kho vaj tse thiab kev | 2026-10-11 | machine-drafted, needs native review |
 | `catHousing` | hmn | Housing | Vaj tse | 2026-10-11 | machine-drafted, needs native review |
@@ -878,6 +993,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errAffirmationRequired` | hmn | You must affirm to add your verified signature of support. | Koj yuav tsum lees paub thiaj ntxiv tau koj qhov kos npe txhawb nqa uas tau txheeb xyuas. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawLocked` | hmn | Signatures are final — the organizer has exported this list. | Cov kos npe hloov tsis tau lawm: tus neeg npaj twb rho daim npe no tawm lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `errWithdrawFailed` | hmn | Unable to withdraw your signature. Please try again. | Thim tsis tau koj qhov kos npe. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `embedLabel` | hmn | Petition | Ntawv thov | 2026-10-11 | machine-drafted, needs native review |
 | `SIGNATURES_OF_TARGET.other` | ht | {count} of {target} signatures | {count} sou {target} siyati | 2026-10-11 | machine-drafted, needs native review |
 | `SIGNATURES_OF_TARGET.other` | so | {count} of {target} signatures | {count} ka mid ah {target} saxiix | 2026-10-11 | machine-drafted, needs native review |
 | `SIGNATURES_OF_TARGET.one` | am | {count} of {target} signature | {count} ከ{target} ፊርማ | 2026-10-11 | machine-drafted, needs native review |

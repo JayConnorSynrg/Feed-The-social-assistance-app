@@ -26,6 +26,14 @@ export type OptInRow = Database['public']['Tables']['resource_opt_ins']['Row']
 /** Map of post_id → status for the current user's existing opt-ins. */
 export type OptInMap = Map<string, OptInRow['status']>
 
+/**
+ * What opt_in_to_post answers when it refuses for a reason the member can act on. Each is handed
+ * to the card as it is — a code the card turns into the member's sentence
+ * (lib/i18n-feed-optins.ts) — so "This offer is full" is no longer replaced by the plain
+ * "Couldn't opt in". Any other server text still becomes the plain failure and is never shown.
+ */
+export const OPT_IN_REFUSALS: readonly string[] = ['This offer is full', 'This post is closed', 'You cannot opt in to your own post', 'Already opted in']
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -90,7 +98,9 @@ export function useOptIns() {
         p_post_id: postId,
       })
       if (rpcError) {
-        const msg = getFriendlyErrorMessage(rpcError, "Couldn't opt in. Please try again.")
+        const msg = OPT_IN_REFUSALS.includes(rpcError.message)
+          ? rpcError.message
+          : getFriendlyErrorMessage(rpcError, "Couldn't opt in. Please try again.")
         setError(msg)
         throw new Error(msg)
       }

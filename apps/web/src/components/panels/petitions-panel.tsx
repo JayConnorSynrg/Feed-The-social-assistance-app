@@ -25,10 +25,10 @@ import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { logEvent } from '@/lib/logger'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir, type Locale } from '@/lib/i18n'
-import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
+import { formatMessage, splitMessage } from '@/lib/format-message'
 import { formatCount, formatPercent } from '@/lib/i18n-intl'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { isPetitionCategory, petitionCategoryLabel, petitionErrorText, petitionsT, signatureCountMessage } from '@/lib/i18n-feed-petitions'
+import { isPetitionCategory, petitionCategoryLabel, petitionErrorText, petitionsT, signatureCountMessage, petitionActionName } from '@/lib/i18n-feed-petitions'
 import { nextTabIndex } from '@/components/feed/feed-chrome'
 
 // ─────────────────────────────────────────────────────────
@@ -67,11 +67,6 @@ interface PetitionCardProps {
   /** A failure code from usePetitions (never a sentence). */
   signError: string | null
   locale: Locale
-}
-
-/** A card button's accessible name: its visible text first, then the petition it acts on. */
-export function petitionActionName(locale: Locale, action: 'sign' | 'withdraw', title: string): string {
-  return formatMessage(petitionsT(locale, 'actionForPetitionAria'), { action: petitionsT(locale, action), title: isolate(title) })
 }
 
 function PetitionCard({

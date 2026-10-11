@@ -44,7 +44,8 @@ vi.mock('@/lib/logger', () => ({
 import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { petitionsT } from '@/lib/i18n-feed-petitions'
-import { PetitionsPanel, petitionActionName } from './petitions-panel'
+import { PetitionsPanel } from './petitions-panel'
+import { petitionActionName } from '@/lib/i18n-feed-petitions'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const petition = (over: Record<string, unknown> = {}) => ({
@@ -300,8 +301,11 @@ describe('petitions-panel.tsx and use-petitions.ts sources', () => {
     const READERS = 'petitionsT|feedChromeT|petitionErrorText|petitionCategoryLabel|isPetitionCategory|signatureCountMessage'
     const MEMBER_TEXT = 'petition\\.title|petition\\.summary|petition\\.body|signerDisplayName|full_name'
     expect(code).not.toMatch(new RegExp(`\\b(${READERS})\\([^()]*\\b(${MEMBER_TEXT})\\b`))
-    // The one place a title meets a dictionary value: as a variable of formatMessage, isolated.
-    expect(code).toContain("{ action: petitionsT(locale, action), title: isolate(title) }")
+    // The one place a title meets a dictionary value: as a variable of formatMessage, isolated
+    // (petitionActionName, in the dictionary module since the feed card names its button too).
+    const dictionary = readFileSync(fileURLToPath(new URL('../../lib/i18n-feed-petitions.ts', import.meta.url)), 'utf8')
+    expect(dictionary).toContain("{ action: petitionsT(locale, action), title: isolate(title) }")
+    expect(code).not.toContain('isolate(')
   })
 
   it('the arrow keys go through the direction-aware helper', () => {

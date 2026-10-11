@@ -279,18 +279,21 @@ describe('the public edit history', () => {
 describe('language marking: English-only pieces say so; translated pieces do not', () => {
   const es = (post: Post, o: Partial<FeedPostCardProps> = {}) => card(post, { locale: 'es', ...o })
 
-  it('the translated card itself carries no lang="en"; its English-only opt-in row and petition embed do', () => {
+  it('the translated card carries no lang="en" except its still-English author badge; the opt-in row and the petition embed are translated', () => {
     const plain = es(rowToPost(row({ edited_at: '2026-10-09T21:53:18Z' }), { isLiked: false }))
     // The only English piece of a plain card: the author badges (not translated yet).
     expect(plain.match(/lang="en"/g)).toHaveLength(1)
     expect(plain).toMatch(/<span lang="en" dir="ltr" data-testid="harmony-badge-author"/)
     expect(plain).not.toContain('class="contents"')
+    // Translated (Release 3.5, feed-post-card.optins.i18n.test.ts): no mark of their own.
     const capped = es(rowToPost(row({ max_seekers: 5, slots_remaining: 2 }), { isLiked: false }))
-    expect(capped).toMatch(/<div lang="en" dir="ltr" data-testid="capacity-row-p1"/)
+    expect(capped).toMatch(/<div data-testid="capacity-row-p1" class=/)
+    expect(capped.match(/lang="en"/g)).toHaveLength(1)
     const petition = es(rowToPost(row({ post_type: 'petition', petition_id: 'pt' }), { isLiked: false }), {
       petitionEmbed: { title: 'T', summary: 'S', signatureCount: 1, targetSignatures: 10, hasSigned: false, isSigning: false },
     })
-    expect(petition).toMatch(/data-testid="petition-embed-p1" lang="en" dir="ltr"/)
+    expect(petition).toMatch(/<div data-testid="petition-embed-p1" class=/)
+    expect(petition.match(/lang="en"/g)).toHaveLength(1)
   })
 
   it('the shared fields, the conflict comparison and the history list are translated: no lang="en"', () => {

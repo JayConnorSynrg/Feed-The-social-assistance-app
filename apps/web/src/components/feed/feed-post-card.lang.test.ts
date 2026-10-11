@@ -2,8 +2,8 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Language marks on the post card: the still-English author badges are marked English; a member's own
-// words (petition title and summary, a seeker's name) inside an English-marked block do not inherit
-// "English" (lang="") and take their direction from the text (dir="auto").
+// words (petition title and summary, a seeker's name) do not inherit the card's language (lang="")
+// and take their direction from the text (dir="auto").
 
 import { describe, it, expect, vi } from 'vitest'
 
