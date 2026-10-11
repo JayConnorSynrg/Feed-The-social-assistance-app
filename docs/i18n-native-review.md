@@ -124,7 +124,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `actionResolve` | ht | Mark resolved | Make kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
 | `actionWithdraw` | ht | Withdraw | Retire | 2026-10-11 | machine-drafted, needs native review |
 | `actionHistory` | ht | History | Istwa | 2026-10-11 | machine-drafted, needs native review |
-| `ownerActions` | ht | Your alert | Alèt ou a | 2026-10-11 | machine-drafted, needs native review |
 | `close` | ht | Close | Fèmen | 2026-10-11 | machine-drafted, needs native review |
 | `countConfirmed` | ht | {n} confirmed still here | {n} konfime li toujou la | 2026-10-11 | machine-drafted, needs native review |
 | `countGone` | ht | {n} reported gone | {n} di li pa la ankò | 2026-10-11 | machine-drafted, needs native review |
@@ -244,6 +243,16 @@ step in that test, and the test fails until the list below is regenerated.
 | `suggestSubmit` | ht | Submit suggestion | Voye pwopozisyon an | 2026-10-11 | machine-drafted, needs native review |
 | `suggestSubmitting` | ht | Submitting… | Ap voye… | 2026-10-11 | machine-drafted, needs native review |
 | `suggestFailed` | ht | Couldn’t send the suggestion. Try again. | Nou pa t kapab voye pwopozisyon an. Eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | ht | Vote recorded. | Vòt la anrejistre. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | ht | Dismiss | Fèmen avi a | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | ht | History loaded. Entries: {n}. | Istwa a chaje. Antre: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | ht | Write between 10 and 500 characters. | Ekri ant 10 ak 500 karaktè. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | ht | Updated by the reporter | Moun ki te rapòte li a mete li ajou | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | ht | Updated by a moderator | Yon moderatè mete li ajou | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | ht | Marked resolved by the reporter | Moun ki te rapòte li a make li kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | ht | Marked resolved by a moderator | Yon moderatè make li kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | ht | Resolved by the reporter | Moun ki te rapòte li a rezoud li | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | ht | Resolved by a moderator | Yon moderatè rezoud li | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | so | Weather Hazard | Khatar cimilo | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | so | Road Closure | Waddo xiran | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | so | Speeding Area | Goob xawaare dheeraad ah | 2026-10-11 | machine-drafted, needs native review |
@@ -273,7 +282,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `actionResolve` | so | Mark resolved | U calaamadee inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
 | `actionWithdraw` | so | Withdraw | Dib ula noqo | 2026-10-11 | machine-drafted, needs native review |
 | `actionHistory` | so | History | Taariikhda | 2026-10-11 | machine-drafted, needs native review |
-| `ownerActions` | so | Your alert | Digniintaada | 2026-10-11 | machine-drafted, needs native review |
 | `close` | so | Close | Xir | 2026-10-11 | machine-drafted, needs native review |
 | `countConfirmed` | so | {n} confirmed still here | {n} ayaa xaqiijiyay inay weli jirto | 2026-10-11 | machine-drafted, needs native review |
 | `countGone` | so | {n} reported gone | {n} ayaa sheegay inay tagtay | 2026-10-11 | machine-drafted, needs native review |
@@ -393,6 +401,16 @@ step in that test, and the test fails until the list below is regenerated.
 | `suggestSubmit` | so | Submit suggestion | Dir soo jeedinta | 2026-10-11 | machine-drafted, needs native review |
 | `suggestSubmitting` | so | Submitting… | Waa la dirayaa… | 2026-10-11 | machine-drafted, needs native review |
 | `suggestFailed` | so | Couldn’t send the suggestion. Try again. | Soo jeedinta lama diri karin. Mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | so | Vote recorded. | Codkaaga waa la diiwaangeliyay. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | so | Dismiss | Xir ogeysiiska | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | so | History loaded. Entries: {n}. | Taariikhda waa la soo raray. Tirada: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | so | Write between 10 and 500 characters. | Qor inta u dhaxaysa 10 iyo 500 xaraf. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | so | Updated by the reporter | Waxaa cusboonaysiiyay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | so | Updated by a moderator | Waxaa cusboonaysiiyay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | so | Marked resolved by the reporter | Waxaa u calaamadeeyay inay xallisantay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | so | Marked resolved by a moderator | Waxaa u calaamadeeyay inay xallisantay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | so | Resolved by the reporter | Waxaa xalliyay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | so | Resolved by a moderator | Waxaa xalliyay maamule | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | am | Weather Hazard | የአየር ሁኔታ አደጋ | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | am | Road Closure | የተዘጋ መንገድ | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | am | Speeding Area | ከፍጥነት በላይ የሚነዳበት ቦታ | 2026-10-11 | machine-drafted, needs native review |
@@ -422,7 +440,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `actionResolve` | am | Mark resolved | ተፈትቷል ብለው ያመልክቱ | 2026-10-11 | machine-drafted, needs native review |
 | `actionWithdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
 | `actionHistory` | am | History | ታሪክ | 2026-10-11 | machine-drafted, needs native review |
-| `ownerActions` | am | Your alert | የእርስዎ ማስጠንቀቂያ | 2026-10-11 | machine-drafted, needs native review |
 | `close` | am | Close | ዝጋ | 2026-10-11 | machine-drafted, needs native review |
 | `countConfirmed` | am | {n} confirmed still here | {n} አሁንም እንዳለ አረጋግጠዋል | 2026-10-11 | machine-drafted, needs native review |
 | `countGone` | am | {n} reported gone | {n} እንደሌለ አሳውቀዋል | 2026-10-11 | machine-drafted, needs native review |
@@ -542,6 +559,16 @@ step in that test, and the test fails until the list below is regenerated.
 | `suggestSubmit` | am | Submit suggestion | ጥቆማውን ላክ | 2026-10-11 | machine-drafted, needs native review |
 | `suggestSubmitting` | am | Submitting… | በመላክ ላይ… | 2026-10-11 | machine-drafted, needs native review |
 | `suggestFailed` | am | Couldn’t send the suggestion. Try again. | ጥቆማውን መላክ አልተቻለም። እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | am | Vote recorded. | ድምጽዎ ተመዝግቧል። | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | am | Dismiss | ማሳወቂያውን ዝጋ | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | am | History loaded. Entries: {n}. | ታሪኩ ተጭኗል። ግቤቶች፦ {n}። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | am | Write between 10 and 500 characters. | ከ10 እስከ 500 ፊደላት ይጻፉ። | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | am | Updated by the reporter | ሪፖርት ያደረገው ሰው አዘምኖታል | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | am | Updated by a moderator | አወያይ አዘምኖታል | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | am | Marked resolved by the reporter | ሪፖርት ያደረገው ሰው ተፈትቷል ብሎ አመልክቷል | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | am | Marked resolved by a moderator | አወያይ ተፈትቷል ብሎ አመልክቷል | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | am | Resolved by the reporter | ሪፖርት ያደረገው ሰው ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | am | Resolved by a moderator | አወያይ ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | hmn | Weather Hazard | Kev phom sij vim huab cua | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | hmn | Road Closure | Kev raug kaw | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | hmn | Speeding Area | Thaj chaw tsav tsheb ceev dhau | 2026-10-11 | machine-drafted, needs native review |
@@ -571,7 +598,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `actionResolve` | hmn | Mark resolved | Cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
 | `actionWithdraw` | hmn | Withdraw | Rho tawm | 2026-10-11 | machine-drafted, needs native review |
 | `actionHistory` | hmn | History | Keeb kwm | 2026-10-11 | machine-drafted, needs native review |
-| `ownerActions` | hmn | Your alert | Koj lo lus ceeb toom | 2026-10-11 | machine-drafted, needs native review |
 | `close` | hmn | Close | Kaw | 2026-10-11 | machine-drafted, needs native review |
 | `countConfirmed` | hmn | {n} confirmed still here | {n} tus lees tias tseem muaj | 2026-10-11 | machine-drafted, needs native review |
 | `countGone` | hmn | {n} reported gone | {n} tus qhia tias tsis muaj lawm | 2026-10-11 | machine-drafted, needs native review |
@@ -691,6 +717,16 @@ step in that test, and the test fails until the list below is regenerated.
 | `suggestSubmit` | hmn | Submit suggestion | Xa cov lus pom zoo | 2026-10-11 | machine-drafted, needs native review |
 | `suggestSubmitting` | hmn | Submitting… | Tab tom xa… | 2026-10-11 | machine-drafted, needs native review |
 | `suggestFailed` | hmn | Couldn’t send the suggestion. Try again. | Xa tsis tau cov lus pom zoo. Sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | hmn | Vote recorded. | Koj lub suab raug sau cia lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | hmn | Dismiss | Kaw daim ntawv ceeb toom | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | hmn | History loaded. Entries: {n}. | Keeb kwm tau thauj lawm. Cov nkag: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | hmn | Write between 10 and 500 characters. | Sau li ntawm 10 mus txog 500 tus ntawv. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | hmn | Updated by the reporter | Tus uas qhia tau hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | hmn | Updated by a moderator | Ib tug neeg saib xyuas tau hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | hmn | Marked resolved by the reporter | Tus uas qhia tau cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | hmn | Marked resolved by a moderator | Ib tug neeg saib xyuas tau cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | hmn | Resolved by the reporter | Tus uas qhia tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | hmn | Resolved by a moderator | Ib tug neeg saib xyuas tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
 
 ### `lib/i18n-feed-businesses.ts`
 
