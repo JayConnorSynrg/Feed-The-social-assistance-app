@@ -12,7 +12,8 @@ This list starts with Release 3.5. It itemises, string by string:
 - the feed card dictionaries written after them, each as it lands: `lib/i18n-feed-photo.ts`
   (photo picker), `lib/i18n-feed-follows.ts` (follow errors), `lib/i18n-friendly-error.ts` (the
   two general failure sentences), `lib/i18n-feed-optins.ts` (the sign-up controls of a post
-  card);
+  card), `lib/i18n-feed-badges.ts` (author badges, the author sheet and its appreciation picker,
+  the gifts shelf, the review dialog);
 - the hand-written time words in `lib/i18n-intl.ts` (months, weekdays, day periods, "5 minutes
   ago", "In 3 days") for `ht`, `hmn` and `so`;
 - the Arabic petition strings that say "confirmed signature of support" (`مؤكَّد`), listed as a
@@ -94,6 +95,347 @@ step in that test, and the test fails until the list below is regenerated.
 | `TIME_WORDS.future.hour.other` | so | In {n} hours | {n} saacadood kadib | 2026-10-11 | machine-drafted, needs native review |
 | `TIME_WORDS.future.day.one` | so | In {n} days | {n} maalin kadib | 2026-10-11 | machine-drafted, needs native review |
 | `TIME_WORDS.future.day.other` | so | In {n} days | {n} maalmood kadib | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-feed-badges.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `harmonyNew` | ht | New | Nouvo | 2026-10-11 | machine-drafted, needs native review |
+| `ratingGroupLabel` | ht | Wheat stalk rating | Evalyasyon ak zepi ble | 2026-10-11 | machine-drafted, needs native review |
+| `ratingOutOf` | ht | {value} out of {max} stalks | {value} sou {max} zepi | 2026-10-11 | machine-drafted, needs native review |
+| `badgeHelper` | ht | Helper | Moun k ap ede | 2026-10-11 | machine-drafted, needs native review |
+| `badgeConnector` | ht | Connector | Moun k ap konekte | 2026-10-11 | machine-drafted, needs native review |
+| `badgeVoice` | ht | Voice | Vwa | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAdvocate` | ht | Advocate | Defansè | 2026-10-11 | machine-drafted, needs native review |
+| `badgeWatcher` | ht | Watcher | Veyatif | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAppreciated` | ht | Appreciated | Yo apresye | 2026-10-11 | machine-drafted, needs native review |
+| `badgeTitle` | ht | {label} · level {level} | {label} · nivo {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCategoryAria` | ht | {label} category badge, level {level} | Badj kategori {label}, nivo {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCommunityAria` | ht | {label} community badge, level {level} | Badj kominote {label}, nivo {level} | 2026-10-11 | machine-drafted, needs native review |
+| `levelShort` | ht | Lv {level} | Nivo {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgesHeading` | ht | Community Badges | Badj kominote | 2026-10-11 | machine-drafted, needs native review |
+| `badgesEmpty` | ht | No badges yet — {name} earns badges by helping, connecting, and taking part. | Poko gen badj — {name} ap genyen badj lè li ede, konekte ak patisipe. | 2026-10-11 | machine-drafted, needs native review |
+| `privateHeading` | ht | Private — only you can see this | Prive — se ou sèl ki ka wè sa | 2026-10-11 | machine-drafted, needs native review |
+| `privateBody` | ht | Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else. | Rekonesans pou èd ou resevwa, ak pou sa ou sove epi make. Pèsonn lòt pa wè li. | 2026-10-11 | machine-drafted, needs native review |
+| `itemHeart` | ht | Heart | Kè | 2026-10-11 | machine-drafted, needs native review |
+| `itemSmile` | ht | Smile | Souri | 2026-10-11 | machine-drafted, needs native review |
+| `itemCheer` | ht | Cheer | Bravo | 2026-10-11 | machine-drafted, needs native review |
+| `itemFlower` | ht | Flower | Flè | 2026-10-11 | machine-drafted, needs native review |
+| `itemSunflower` | ht | Sunflower | Flè solèy | 2026-10-11 | machine-drafted, needs native review |
+| `itemLeaf` | ht | Leaf | Fèy | 2026-10-11 | machine-drafted, needs native review |
+| `itemBread` | ht | Bread | Pen | 2026-10-11 | machine-drafted, needs native review |
+| `itemApple` | ht | Apple | Pòm | 2026-10-11 | machine-drafted, needs native review |
+| `itemSoup` | ht | Soup | Bouyon | 2026-10-11 | machine-drafted, needs native review |
+| `itemSun` | ht | Sun | Solèy | 2026-10-11 | machine-drafted, needs native review |
+| `itemSeedling` | ht | Seedling | Ti plant | 2026-10-11 | machine-drafted, needs native review |
+| `itemTree` | ht | Tree | Pyebwa | 2026-10-11 | machine-drafted, needs native review |
+| `altHeart` | ht | A heart | Yon kè | 2026-10-11 | machine-drafted, needs native review |
+| `altSmile` | ht | A smiling face | Yon figi k ap souri | 2026-10-11 | machine-drafted, needs native review |
+| `altCheer` | ht | Cheering hands | Men k ap bat bravo | 2026-10-11 | machine-drafted, needs native review |
+| `altFlower` | ht | A flower | Yon flè | 2026-10-11 | machine-drafted, needs native review |
+| `altSunflower` | ht | A sunflower | Yon flè solèy | 2026-10-11 | machine-drafted, needs native review |
+| `altLeaf` | ht | A leaf | Yon fèy | 2026-10-11 | machine-drafted, needs native review |
+| `altBread` | ht | A loaf of bread | Yon pen | 2026-10-11 | machine-drafted, needs native review |
+| `altApple` | ht | An apple | Yon pòm | 2026-10-11 | machine-drafted, needs native review |
+| `altSoup` | ht | A bowl of soup | Yon bòl bouyon | 2026-10-11 | machine-drafted, needs native review |
+| `altSun` | ht | The sun | Solèy la | 2026-10-11 | machine-drafted, needs native review |
+| `altSeedling` | ht | A seedling | Yon ti plant | 2026-10-11 | machine-drafted, needs native review |
+| `altTree` | ht | A tree | Yon pyebwa | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentAria` | ht | {item} — already sent | {item} — deja voye | 2026-10-11 | machine-drafted, needs native review |
+| `itemSendAria` | ht | {item} — send | {item} — voye | 2026-10-11 | machine-drafted, needs native review |
+| `guestFollowPrompt` | ht | Create a free account to follow {name} | Kreye yon kont gratis pou w swiv {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateHeading` | ht | Appreciate {name} | Remèsye {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateSelf` | ht | This is you — appreciation comes from the community. | Sa se ou menm — remèsiman an soti nan kominote a. | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateGuestPrompt` | ht | Create a free account to send appreciation | Kreye yon kont gratis pou w voye remèsiman | 2026-10-11 | machine-drafted, needs native review |
+| `sendAppreciation` | ht | Send appreciation | Voye remèsiman | 2026-10-11 | machine-drafted, needs native review |
+| `errItemUnavailable` | ht | That appreciation item is not available. | Kado remèsiman sa a pa disponib. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendTimeout` | ht | Sending appreciation timed out — please try again. | Voye remèsiman an pran twòp tan. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendFailed` | ht | Couldn't send appreciation. Please try again. | Nou pa kapab voye remèsiman an. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentTimeout` | ht | Loading sent gifts timed out — please try again. | Chajman kado ou voye yo pran twòp tan. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentFailed` | ht | Couldn't load sent gifts. | Nou pa kapab chaje kado ou voye yo. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfTimeout` | ht | Loading your gifts timed out — please try again. | Chajman kado ou yo pran twòp tan. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfFailed` | ht | Couldn't load your gifts. | Nou pa kapab chaje kado ou yo. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsHeading` | ht | Gifts received | Kado ou resevwa | 2026-10-11 | machine-drafted, needs native review |
+| `giftsLoading` | ht | Loading your gifts… | N ap chaje kado ou yo… | 2026-10-11 | machine-drafted, needs native review |
+| `giftsEmpty` | ht | No gifts yet — appreciation from the community shows up here. | Poko gen kado — remèsiman kominote a ap parèt isit la. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromCommunity` | ht | from the community | nan men kominote a | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromOne` | ht | from {a} | nan men {a} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromTwo` | ht | from {a} & {b} | nan men {a} ak {b} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromThree` | ht | from {a}, {b} & {c} | nan men {a}, {b} ak {c} | 2026-10-11 | machine-drafted, needs native review |
+| `someone` | ht | Someone | Yon moun | 2026-10-11 | machine-drafted, needs native review |
+| `reviewTitle` | ht | Review {name} | Evalye {name} | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSourcer` | ht | Share your experience with this sourcer. Your rating contributes to their Harmony Score. | Pataje eksperyans ou ak moun ki ofri èd sa a. Evalyasyon ou a konte nan Nòt Amoni li. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSeeker` | ht | Share your experience with this seeker. Your rating contributes to their Harmony Score. | Pataje eksperyans ou ak moun ki mande èd sa a. Evalyasyon ou a konte nan Nòt Amoni li. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescRequester` | ht | Share your experience with this requester. Your rating contributes to their Harmony Score. | Pataje eksperyans ou ak moun ki fè demann lan. Evalyasyon ou a konte nan Nòt Amoni li. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescVolunteer` | ht | Share your experience with this volunteer. Your rating contributes to their Harmony Score. | Pataje eksperyans ou ak volontè sa a. Evalyasyon ou a konte nan Nòt Amoni li. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescPerson` | ht | Share your experience with this person. Your rating contributes to their Harmony Score. | Pataje eksperyans ou ak moun sa a. Evalyasyon ou a konte nan Nòt Amoni li. | 2026-10-11 | machine-drafted, needs native review |
+| `ratingLabel` | ht | Rating | Evalyasyon | 2026-10-11 | machine-drafted, needs native review |
+| `recommendQuestion` | ht | Would you recommend this person? | Èske ou ta rekòmande moun sa a? | 2026-10-11 | machine-drafted, needs native review |
+| `commentLabel` | ht | Comment | Kòmantè | 2026-10-11 | machine-drafted, needs native review |
+| `commentHint` | ht | (optional, max {max} chars) | (si ou vle, {max} karaktè maksimòm) | 2026-10-11 | machine-drafted, needs native review |
+| `commentPlaceholder` | ht | Describe your experience... | Dekri eksperyans ou... | 2026-10-11 | machine-drafted, needs native review |
+| `submitReview` | ht | Submit Review | Voye evalyasyon an | 2026-10-11 | machine-drafted, needs native review |
+| `errRatingRequired` | ht | Please select a stalk rating before submitting. | Tanpri chwazi yon evalyasyon ak zepi anvan ou voye. | 2026-10-11 | machine-drafted, needs native review |
+| `errSubmitFailed` | ht | Submission failed. Please try again. | Voye a echwe. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewTimeout` | ht | Review submission timed out — please check your connection and retry. | Voye evalyasyon an pran twòp tan. Tanpri verifye koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewFailed` | ht | Couldn't submit review. Please try again. | Nou pa kapab voye evalyasyon an. Tanpri eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `harmonyNew` | so | New | Cusub | 2026-10-11 | machine-drafted, needs native review |
+| `ratingGroupLabel` | so | Wheat stalk rating | Qiimaynta sabuullada qamadiga | 2026-10-11 | machine-drafted, needs native review |
+| `ratingOutOf` | so | {value} out of {max} stalks | {value} ka mid ah {max} sabuul | 2026-10-11 | machine-drafted, needs native review |
+| `badgeHelper` | so | Helper | Caawiye | 2026-10-11 | machine-drafted, needs native review |
+| `badgeConnector` | so | Connector | Isku-xire | 2026-10-11 | machine-drafted, needs native review |
+| `badgeVoice` | so | Voice | Cod | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAdvocate` | so | Advocate | U-doode | 2026-10-11 | machine-drafted, needs native review |
+| `badgeWatcher` | so | Watcher | Ilaaliye | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAppreciated` | so | Appreciated | La qaddariyo | 2026-10-11 | machine-drafted, needs native review |
+| `badgeTitle` | so | {label} · level {level} | {label} · heerka {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCategoryAria` | so | {label} category badge, level {level} | Calaamadda qaybta {label}, heerka {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCommunityAria` | so | {label} community badge, level {level} | Calaamadda bulshada {label}, heerka {level} | 2026-10-11 | machine-drafted, needs native review |
+| `levelShort` | so | Lv {level} | Heer {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgesHeading` | so | Community Badges | Calaamadaha bulshada | 2026-10-11 | machine-drafted, needs native review |
+| `badgesEmpty` | so | No badges yet — {name} earns badges by helping, connecting, and taking part. | Weli calaamado ma jiraan — {name} wuxuu calaamado ku helaa caawinta, isku xirka iyo ka qaybgalka. | 2026-10-11 | machine-drafted, needs native review |
+| `privateHeading` | so | Private — only you can see this | Gaar ah — adiga oo keliya ayaa arki kara | 2026-10-11 | machine-drafted, needs native review |
+| `privateBody` | so | Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else. | Abaal-marin caawimaadda aad hesho iyo waxa aad kaydiso ama calaamadiso. Cid kale looma muujiyo. | 2026-10-11 | machine-drafted, needs native review |
+| `itemHeart` | so | Heart | Wadne | 2026-10-11 | machine-drafted, needs native review |
+| `itemSmile` | so | Smile | Dhoolla-caddayn | 2026-10-11 | machine-drafted, needs native review |
+| `itemCheer` | so | Cheer | Sacab | 2026-10-11 | machine-drafted, needs native review |
+| `itemFlower` | so | Flower | Ubax | 2026-10-11 | machine-drafted, needs native review |
+| `itemSunflower` | so | Sunflower | Gabbaldaye | 2026-10-11 | machine-drafted, needs native review |
+| `itemLeaf` | so | Leaf | Caleen | 2026-10-11 | machine-drafted, needs native review |
+| `itemBread` | so | Bread | Rooti | 2026-10-11 | machine-drafted, needs native review |
+| `itemApple` | so | Apple | Tufaax | 2026-10-11 | machine-drafted, needs native review |
+| `itemSoup` | so | Soup | Maraq | 2026-10-11 | machine-drafted, needs native review |
+| `itemSun` | so | Sun | Qorrax | 2026-10-11 | machine-drafted, needs native review |
+| `itemSeedling` | so | Seedling | Geed yar | 2026-10-11 | machine-drafted, needs native review |
+| `itemTree` | so | Tree | Geed | 2026-10-11 | machine-drafted, needs native review |
+| `altHeart` | so | A heart | Wadne | 2026-10-11 | machine-drafted, needs native review |
+| `altSmile` | so | A smiling face | Weji dhoolla-caddaynaya | 2026-10-11 | machine-drafted, needs native review |
+| `altCheer` | so | Cheering hands | Gacmo sacbinaya | 2026-10-11 | machine-drafted, needs native review |
+| `altFlower` | so | A flower | Ubax | 2026-10-11 | machine-drafted, needs native review |
+| `altSunflower` | so | A sunflower | Gabbaldaye | 2026-10-11 | machine-drafted, needs native review |
+| `altLeaf` | so | A leaf | Caleen | 2026-10-11 | machine-drafted, needs native review |
+| `altBread` | so | A loaf of bread | Xabbad rooti ah | 2026-10-11 | machine-drafted, needs native review |
+| `altApple` | so | An apple | Tufaax | 2026-10-11 | machine-drafted, needs native review |
+| `altSoup` | so | A bowl of soup | Baaquli maraq ah | 2026-10-11 | machine-drafted, needs native review |
+| `altSun` | so | The sun | Qorraxda | 2026-10-11 | machine-drafted, needs native review |
+| `altSeedling` | so | A seedling | Geed yar | 2026-10-11 | machine-drafted, needs native review |
+| `altTree` | so | A tree | Geed | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentAria` | so | {item} — already sent | {item} — hore loo diray | 2026-10-11 | machine-drafted, needs native review |
+| `itemSendAria` | so | {item} — send | {item} — dir | 2026-10-11 | machine-drafted, needs native review |
+| `guestFollowPrompt` | so | Create a free account to follow {name} | Samee akoon bilaash ah si aad u raacdo {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateHeading` | so | Appreciate {name} | U mahadceli {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateSelf` | so | This is you — appreciation comes from the community. | Kani waa adiga — mahadcelintu waxay ka timaaddaa bulshada. | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateGuestPrompt` | so | Create a free account to send appreciation | Samee akoon bilaash ah si aad mahadcelin u dirto | 2026-10-11 | machine-drafted, needs native review |
+| `sendAppreciation` | so | Send appreciation | Dir mahadcelin | 2026-10-11 | machine-drafted, needs native review |
+| `errItemUnavailable` | so | That appreciation item is not available. | Hadiyaddaas mahadcelinta lama heli karo. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendTimeout` | so | Sending appreciation timed out — please try again. | Dirista mahadcelintu way daahday. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendFailed` | so | Couldn't send appreciation. Please try again. | Mahadcelinta lama diri karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentTimeout` | so | Loading sent gifts timed out — please try again. | Soo dejinta hadiyadaha la diray way daahday. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentFailed` | so | Couldn't load sent gifts. | Hadiyadaha la diray lama soo dejin karin. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfTimeout` | so | Loading your gifts timed out — please try again. | Soo dejinta hadiyadahaaga way daahday. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfFailed` | so | Couldn't load your gifts. | Hadiyadahaaga lama soo dejin karin. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsHeading` | so | Gifts received | Hadiyadaha la helay | 2026-10-11 | machine-drafted, needs native review |
+| `giftsLoading` | so | Loading your gifts… | Hadiyadahaaga waa la soo shubayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `giftsEmpty` | so | No gifts yet — appreciation from the community shows up here. | Weli hadiyado ma jiraan — mahadcelinta bulshada halkan ayay ka soo muuqataa. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromCommunity` | so | from the community | ka timid bulshada | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromOne` | so | from {a} | ka timid {a} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromTwo` | so | from {a} & {b} | ka timid {a} iyo {b} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromThree` | so | from {a}, {b} & {c} | ka timid {a}, {b} iyo {c} | 2026-10-11 | machine-drafted, needs native review |
+| `someone` | so | Someone | Qof | 2026-10-11 | machine-drafted, needs native review |
+| `reviewTitle` | so | Review {name} | Qiimee {name} | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSourcer` | so | Share your experience with this sourcer. Your rating contributes to their Harmony Score. | La wadaag waayo-aragnimadaada bixiyahan. Qiimayntaadu waxay qayb ka noqotaa Dhibcaha Wada-noolaanshaha ee qofkan. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSeeker` | so | Share your experience with this seeker. Your rating contributes to their Harmony Score. | La wadaag waayo-aragnimadaada codsadahan. Qiimayntaadu waxay qayb ka noqotaa Dhibcaha Wada-noolaanshaha ee qofkan. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescRequester` | so | Share your experience with this requester. Your rating contributes to their Harmony Score. | La wadaag waayo-aragnimadaada qofka codsiga soo diray. Qiimayntaadu waxay qayb ka noqotaa Dhibcaha Wada-noolaanshaha ee qofkan. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescVolunteer` | so | Share your experience with this volunteer. Your rating contributes to their Harmony Score. | La wadaag waayo-aragnimadaada tabaruc-hahan. Qiimayntaadu waxay qayb ka noqotaa Dhibcaha Wada-noolaanshaha ee qofkan. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescPerson` | so | Share your experience with this person. Your rating contributes to their Harmony Score. | La wadaag waayo-aragnimadaada qofkan. Qiimayntaadu waxay qayb ka noqotaa Dhibcaha Wada-noolaanshaha ee qofkan. | 2026-10-11 | machine-drafted, needs native review |
+| `ratingLabel` | so | Rating | Qiimayn | 2026-10-11 | machine-drafted, needs native review |
+| `recommendQuestion` | so | Would you recommend this person? | Ma ku talin lahayd qofkan? | 2026-10-11 | machine-drafted, needs native review |
+| `commentLabel` | so | Comment | Faallo | 2026-10-11 | machine-drafted, needs native review |
+| `commentHint` | so | (optional, max {max} chars) | (ikhtiyaari, ugu badnaan {max} xaraf) | 2026-10-11 | machine-drafted, needs native review |
+| `commentPlaceholder` | so | Describe your experience... | Sharax waayo-aragnimadaada... | 2026-10-11 | machine-drafted, needs native review |
+| `submitReview` | so | Submit Review | Dir qiimaynta | 2026-10-11 | machine-drafted, needs native review |
+| `errRatingRequired` | so | Please select a stalk rating before submitting. | Fadlan dooro qiimayn sabuul ka hor intaadan dirin. | 2026-10-11 | machine-drafted, needs native review |
+| `errSubmitFailed` | so | Submission failed. Please try again. | Diristu way fashilantay. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewTimeout` | so | Review submission timed out — please check your connection and retry. | Dirista qiimayntu way daahday. Fadlan hubi xiriirkaaga oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewFailed` | so | Couldn't submit review. Please try again. | Qiimaynta lama diri karin. Fadlan mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `harmonyNew` | am | New | አዲስ | 2026-10-11 | machine-drafted, needs native review |
+| `ratingGroupLabel` | am | Wheat stalk rating | በስንዴ ዛላ ደረጃ መስጠት | 2026-10-11 | machine-drafted, needs native review |
+| `ratingOutOf` | am | {value} out of {max} stalks | {value} ከ{max} ዛላ | 2026-10-11 | machine-drafted, needs native review |
+| `badgeHelper` | am | Helper | ረዳት | 2026-10-11 | machine-drafted, needs native review |
+| `badgeConnector` | am | Connector | አገናኝ | 2026-10-11 | machine-drafted, needs native review |
+| `badgeVoice` | am | Voice | ድምፅ | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAdvocate` | am | Advocate | ተሟጋች | 2026-10-11 | machine-drafted, needs native review |
+| `badgeWatcher` | am | Watcher | ጠባቂ | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAppreciated` | am | Appreciated | የተመሰገነ | 2026-10-11 | machine-drafted, needs native review |
+| `badgeTitle` | am | {label} · level {level} | {label} · ደረጃ {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCategoryAria` | am | {label} category badge, level {level} | የ{label} ምድብ ባጅ፣ ደረጃ {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCommunityAria` | am | {label} community badge, level {level} | የ{label} የማኅበረሰብ ባጅ፣ ደረጃ {level} | 2026-10-11 | machine-drafted, needs native review |
+| `levelShort` | am | Lv {level} | ደረጃ {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgesHeading` | am | Community Badges | የማኅበረሰብ ባጆች | 2026-10-11 | machine-drafted, needs native review |
+| `badgesEmpty` | am | No badges yet — {name} earns badges by helping, connecting, and taking part. | እስካሁን ባጅ የለም — {name} በመርዳት፣ በማገናኘት እና በመሳተፍ ባጆችን ያገኛል። | 2026-10-11 | machine-drafted, needs native review |
+| `privateHeading` | am | Private — only you can see this | የግል — እርስዎ ብቻ ነዎት የሚያዩት | 2026-10-11 | machine-drafted, needs native review |
+| `privateBody` | am | Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else. | ለሚያገኙት እርዳታ እና ለሚያስቀምጡትና ዕልባት ለሚያደርጉት ዕውቅና። ለሌላ ለማንም አይታይም። | 2026-10-11 | machine-drafted, needs native review |
+| `itemHeart` | am | Heart | ልብ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSmile` | am | Smile | ፈገግታ | 2026-10-11 | machine-drafted, needs native review |
+| `itemCheer` | am | Cheer | ማበረታቻ | 2026-10-11 | machine-drafted, needs native review |
+| `itemFlower` | am | Flower | አበባ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSunflower` | am | Sunflower | የሱፍ አበባ | 2026-10-11 | machine-drafted, needs native review |
+| `itemLeaf` | am | Leaf | ቅጠል | 2026-10-11 | machine-drafted, needs native review |
+| `itemBread` | am | Bread | ዳቦ | 2026-10-11 | machine-drafted, needs native review |
+| `itemApple` | am | Apple | ፖም | 2026-10-11 | machine-drafted, needs native review |
+| `itemSoup` | am | Soup | ሾርባ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSun` | am | Sun | ፀሐይ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSeedling` | am | Seedling | ችግኝ | 2026-10-11 | machine-drafted, needs native review |
+| `itemTree` | am | Tree | ዛፍ | 2026-10-11 | machine-drafted, needs native review |
+| `altHeart` | am | A heart | አንድ ልብ | 2026-10-11 | machine-drafted, needs native review |
+| `altSmile` | am | A smiling face | ፈገግ ያለ ፊት | 2026-10-11 | machine-drafted, needs native review |
+| `altCheer` | am | Cheering hands | የሚያጨበጭቡ እጆች | 2026-10-11 | machine-drafted, needs native review |
+| `altFlower` | am | A flower | አንድ አበባ | 2026-10-11 | machine-drafted, needs native review |
+| `altSunflower` | am | A sunflower | አንድ የሱፍ አበባ | 2026-10-11 | machine-drafted, needs native review |
+| `altLeaf` | am | A leaf | አንድ ቅጠል | 2026-10-11 | machine-drafted, needs native review |
+| `altBread` | am | A loaf of bread | አንድ ዳቦ | 2026-10-11 | machine-drafted, needs native review |
+| `altApple` | am | An apple | አንድ ፖም | 2026-10-11 | machine-drafted, needs native review |
+| `altSoup` | am | A bowl of soup | አንድ ሳህን ሾርባ | 2026-10-11 | machine-drafted, needs native review |
+| `altSun` | am | The sun | ፀሐይ | 2026-10-11 | machine-drafted, needs native review |
+| `altSeedling` | am | A seedling | አንድ ችግኝ | 2026-10-11 | machine-drafted, needs native review |
+| `altTree` | am | A tree | አንድ ዛፍ | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentAria` | am | {item} — already sent | {item} — አስቀድሞ ተልኳል | 2026-10-11 | machine-drafted, needs native review |
+| `itemSendAria` | am | {item} — send | {item} — ላክ | 2026-10-11 | machine-drafted, needs native review |
+| `guestFollowPrompt` | am | Create a free account to follow {name} | {name}ን ለመከተል ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateHeading` | am | Appreciate {name} | {name}ን አመስግኑ | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateSelf` | am | This is you — appreciation comes from the community. | ይህ እርስዎ ነዎት — ምስጋና የሚመጣው ከማኅበረሰቡ ነው። | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateGuestPrompt` | am | Create a free account to send appreciation | ምስጋና ለመላክ ነፃ መለያ ይፍጠሩ | 2026-10-11 | machine-drafted, needs native review |
+| `sendAppreciation` | am | Send appreciation | ምስጋና ላክ | 2026-10-11 | machine-drafted, needs native review |
+| `errItemUnavailable` | am | That appreciation item is not available. | ያ የምስጋና ስጦታ አይገኝም። | 2026-10-11 | machine-drafted, needs native review |
+| `errSendTimeout` | am | Sending appreciation timed out — please try again. | ምስጋና መላክ ጊዜ ወሰደ። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSendFailed` | am | Couldn't send appreciation. Please try again. | ምስጋና መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSentTimeout` | am | Loading sent gifts timed out — please try again. | የተላኩ ስጦታዎችን መጫን ጊዜ ወሰደ። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSentFailed` | am | Couldn't load sent gifts. | የተላኩ ስጦታዎችን መጫን አልተቻለም። | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfTimeout` | am | Loading your gifts timed out — please try again. | ስጦታዎችዎን መጫን ጊዜ ወሰደ። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfFailed` | am | Couldn't load your gifts. | ስጦታዎችዎን መጫን አልተቻለም። | 2026-10-11 | machine-drafted, needs native review |
+| `giftsHeading` | am | Gifts received | የተቀበሏቸው ስጦታዎች | 2026-10-11 | machine-drafted, needs native review |
+| `giftsLoading` | am | Loading your gifts… | ስጦታዎችዎን በመጫን ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `giftsEmpty` | am | No gifts yet — appreciation from the community shows up here. | እስካሁን ስጦታ የለም — የማኅበረሰቡ ምስጋና እዚህ ይታያል። | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromCommunity` | am | from the community | ከማኅበረሰቡ | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromOne` | am | from {a} | ከ{a} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromTwo` | am | from {a} & {b} | ከ{a} እና {b} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromThree` | am | from {a}, {b} & {c} | ከ{a}፣ {b} እና {c} | 2026-10-11 | machine-drafted, needs native review |
+| `someone` | am | Someone | አንድ ሰው | 2026-10-11 | machine-drafted, needs native review |
+| `reviewTitle` | am | Review {name} | {name}ን ይገምግሙ | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSourcer` | am | Share your experience with this sourcer. Your rating contributes to their Harmony Score. | ከዚህ አቅራቢ ጋር ያለዎትን ተሞክሮ ያካፍሉ። የእርስዎ ደረጃ ወደ ስምምነት ነጥባቸው ይታከላል። | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSeeker` | am | Share your experience with this seeker. Your rating contributes to their Harmony Score. | ከዚህ ጠያቂ ጋር ያለዎትን ተሞክሮ ያካፍሉ። የእርስዎ ደረጃ ወደ ስምምነት ነጥባቸው ይታከላል። | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescRequester` | am | Share your experience with this requester. Your rating contributes to their Harmony Score. | ጥያቄውን ከላከው ሰው ጋር ያለዎትን ተሞክሮ ያካፍሉ። የእርስዎ ደረጃ ወደ ስምምነት ነጥባቸው ይታከላል። | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescVolunteer` | am | Share your experience with this volunteer. Your rating contributes to their Harmony Score. | ከዚህ በጎ ፈቃደኛ ጋር ያለዎትን ተሞክሮ ያካፍሉ። የእርስዎ ደረጃ ወደ ስምምነት ነጥባቸው ይታከላል። | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescPerson` | am | Share your experience with this person. Your rating contributes to their Harmony Score. | ከዚህ ሰው ጋር ያለዎትን ተሞክሮ ያካፍሉ። የእርስዎ ደረጃ ወደ ስምምነት ነጥባቸው ይታከላል። | 2026-10-11 | machine-drafted, needs native review |
+| `ratingLabel` | am | Rating | ደረጃ | 2026-10-11 | machine-drafted, needs native review |
+| `recommendQuestion` | am | Would you recommend this person? | ይህን ሰው ይመክራሉ? | 2026-10-11 | machine-drafted, needs native review |
+| `commentLabel` | am | Comment | አስተያየት | 2026-10-11 | machine-drafted, needs native review |
+| `commentHint` | am | (optional, max {max} chars) | (አማራጭ፣ ቢበዛ {max} ፊደላት) | 2026-10-11 | machine-drafted, needs native review |
+| `commentPlaceholder` | am | Describe your experience... | ተሞክሮዎን ይግለጹ... | 2026-10-11 | machine-drafted, needs native review |
+| `submitReview` | am | Submit Review | ግምገማ አስገባ | 2026-10-11 | machine-drafted, needs native review |
+| `errRatingRequired` | am | Please select a stalk rating before submitting. | ከማስገባትዎ በፊት እባክዎ የዛላ ደረጃ ይምረጡ። | 2026-10-11 | machine-drafted, needs native review |
+| `errSubmitFailed` | am | Submission failed. Please try again. | ማስገባት አልተሳካም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewTimeout` | am | Review submission timed out — please check your connection and retry. | ግምገማ ማስገባት ጊዜ ወሰደ። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewFailed` | am | Couldn't submit review. Please try again. | ግምገማ ማስገባት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `harmonyNew` | hmn | New | Tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `ratingGroupLabel` | hmn | Wheat stalk rating | Kev ntsuas nrog cov nplej | 2026-10-11 | machine-drafted, needs native review |
+| `ratingOutOf` | hmn | {value} out of {max} stalks | {value} ntawm {max} tus nplej | 2026-10-11 | machine-drafted, needs native review |
+| `badgeHelper` | hmn | Helper | Tus pab | 2026-10-11 | machine-drafted, needs native review |
+| `badgeConnector` | hmn | Connector | Tus txuas | 2026-10-11 | machine-drafted, needs native review |
+| `badgeVoice` | hmn | Voice | Lub suab | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAdvocate` | hmn | Advocate | Tus tawm tswv yim | 2026-10-11 | machine-drafted, needs native review |
+| `badgeWatcher` | hmn | Watcher | Tus saib xyuas | 2026-10-11 | machine-drafted, needs native review |
+| `badgeAppreciated` | hmn | Appreciated | Tau txais kev ris txiaj | 2026-10-11 | machine-drafted, needs native review |
+| `badgeTitle` | hmn | {label} · level {level} | {label} · theem {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCategoryAria` | hmn | {label} category badge, level {level} | Daim paib pawg {label}, theem {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgeCommunityAria` | hmn | {label} community badge, level {level} | Daim paib zej zog {label}, theem {level} | 2026-10-11 | machine-drafted, needs native review |
+| `levelShort` | hmn | Lv {level} | Theem {level} | 2026-10-11 | machine-drafted, needs native review |
+| `badgesHeading` | hmn | Community Badges | Cov paib zej zog | 2026-10-11 | machine-drafted, needs native review |
+| `badgesEmpty` | hmn | No badges yet — {name} earns badges by helping, connecting, and taking part. | Tseem tsis tau muaj paib — {name} tau paib los ntawm kev pab, kev txuas, thiab kev koom tes. | 2026-10-11 | machine-drafted, needs native review |
+| `privateHeading` | hmn | Private — only you can see this | Ntiag tug — koj tib leeg thiaj pom tau | 2026-10-11 | machine-drafted, needs native review |
+| `privateBody` | hmn | Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else. | Kev lees paub rau kev pab uas koj tau txais, thiab rau yam koj khaws thiab cim tseg. Tsis qhia rau lwm tus. | 2026-10-11 | machine-drafted, needs native review |
+| `itemHeart` | hmn | Heart | Lub plawv | 2026-10-11 | machine-drafted, needs native review |
+| `itemSmile` | hmn | Smile | Luag ntxhi | 2026-10-11 | machine-drafted, needs native review |
+| `itemCheer` | hmn | Cheer | Qhuas | 2026-10-11 | machine-drafted, needs native review |
+| `itemFlower` | hmn | Flower | Paj | 2026-10-11 | machine-drafted, needs native review |
+| `itemSunflower` | hmn | Sunflower | Paj noob hnub | 2026-10-11 | machine-drafted, needs native review |
+| `itemLeaf` | hmn | Leaf | Nplooj | 2026-10-11 | machine-drafted, needs native review |
+| `itemBread` | hmn | Bread | Ncuav | 2026-10-11 | machine-drafted, needs native review |
+| `itemApple` | hmn | Apple | Txiv apple | 2026-10-11 | machine-drafted, needs native review |
+| `itemSoup` | hmn | Soup | Kua zaub | 2026-10-11 | machine-drafted, needs native review |
+| `itemSun` | hmn | Sun | Lub hnub | 2026-10-11 | machine-drafted, needs native review |
+| `itemSeedling` | hmn | Seedling | Yub ntoo | 2026-10-11 | machine-drafted, needs native review |
+| `itemTree` | hmn | Tree | Ntoo | 2026-10-11 | machine-drafted, needs native review |
+| `altHeart` | hmn | A heart | Ib lub plawv | 2026-10-11 | machine-drafted, needs native review |
+| `altSmile` | hmn | A smiling face | Ib lub ntsej muag luag ntxhi | 2026-10-11 | machine-drafted, needs native review |
+| `altCheer` | hmn | Cheering hands | Ob txhais tes npuaj | 2026-10-11 | machine-drafted, needs native review |
+| `altFlower` | hmn | A flower | Ib lub paj | 2026-10-11 | machine-drafted, needs native review |
+| `altSunflower` | hmn | A sunflower | Ib lub paj noob hnub | 2026-10-11 | machine-drafted, needs native review |
+| `altLeaf` | hmn | A leaf | Ib daim nplooj | 2026-10-11 | machine-drafted, needs native review |
+| `altBread` | hmn | A loaf of bread | Ib lub ncuav | 2026-10-11 | machine-drafted, needs native review |
+| `altApple` | hmn | An apple | Ib lub txiv apple | 2026-10-11 | machine-drafted, needs native review |
+| `altSoup` | hmn | A bowl of soup | Ib tais kua zaub | 2026-10-11 | machine-drafted, needs native review |
+| `altSun` | hmn | The sun | Lub hnub | 2026-10-11 | machine-drafted, needs native review |
+| `altSeedling` | hmn | A seedling | Ib tsob yub ntoo | 2026-10-11 | machine-drafted, needs native review |
+| `altTree` | hmn | A tree | Ib tsob ntoo | 2026-10-11 | machine-drafted, needs native review |
+| `itemSentAria` | hmn | {item} — already sent | {item} — twb xa lawm | 2026-10-11 | machine-drafted, needs native review |
+| `itemSendAria` | hmn | {item} — send | {item} — xa | 2026-10-11 | machine-drafted, needs native review |
+| `guestFollowPrompt` | hmn | Create a free account to follow {name} | Tsim ib tus account dawb los raws {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateHeading` | hmn | Appreciate {name} | Ua tsaug rau {name} | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateSelf` | hmn | This is you — appreciation comes from the community. | Qhov no yog koj — kev ris txiaj los ntawm zej zog. | 2026-10-11 | machine-drafted, needs native review |
+| `appreciateGuestPrompt` | hmn | Create a free account to send appreciation | Tsim ib tus account dawb los xa kev ris txiaj | 2026-10-11 | machine-drafted, needs native review |
+| `sendAppreciation` | hmn | Send appreciation | Xa kev ris txiaj | 2026-10-11 | machine-drafted, needs native review |
+| `errItemUnavailable` | hmn | That appreciation item is not available. | Qhov khoom plig ris txiaj ntawd tsis muaj. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendTimeout` | hmn | Sending appreciation timed out — please try again. | Kev xa kev ris txiaj siv sijhawm ntev dhau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errSendFailed` | hmn | Couldn't send appreciation. Please try again. | Xa tsis tau kev ris txiaj. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentTimeout` | hmn | Loading sent gifts timed out — please try again. | Kev thauj cov khoom plig uas xa lawm siv sijhawm ntev dhau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errSentFailed` | hmn | Couldn't load sent gifts. | Thauj tsis tau cov khoom plig uas xa lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfTimeout` | hmn | Loading your gifts timed out — please try again. | Kev thauj koj cov khoom plig siv sijhawm ntev dhau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errShelfFailed` | hmn | Couldn't load your gifts. | Thauj tsis tau koj cov khoom plig. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsHeading` | hmn | Gifts received | Cov khoom plig tau txais | 2026-10-11 | machine-drafted, needs native review |
+| `giftsLoading` | hmn | Loading your gifts… | Tab tom thauj koj cov khoom plig… | 2026-10-11 | machine-drafted, needs native review |
+| `giftsEmpty` | hmn | No gifts yet — appreciation from the community shows up here. | Tseem tsis tau muaj khoom plig — kev ris txiaj los ntawm zej zog yuav tshwm ntawm no. | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromCommunity` | hmn | from the community | los ntawm zej zog | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromOne` | hmn | from {a} | los ntawm {a} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromTwo` | hmn | from {a} & {b} | los ntawm {a} thiab {b} | 2026-10-11 | machine-drafted, needs native review |
+| `giftsFromThree` | hmn | from {a}, {b} & {c} | los ntawm {a}, {b}, thiab {c} | 2026-10-11 | machine-drafted, needs native review |
+| `someone` | hmn | Someone | Ib tug neeg | 2026-10-11 | machine-drafted, needs native review |
+| `reviewTitle` | hmn | Review {name} | Ntsuam xyuas {name} | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSourcer` | hmn | Share your experience with this sourcer. Your rating contributes to their Harmony Score. | Qhia koj qhov kev paub dhau los nrog tus neeg muab no. Koj qhov kev ntsuas yuav suav rau nws tus Qhab Nia Sib Haum. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescSeeker` | hmn | Share your experience with this seeker. Your rating contributes to their Harmony Score. | Qhia koj qhov kev paub dhau los nrog tus neeg thov no. Koj qhov kev ntsuas yuav suav rau nws tus Qhab Nia Sib Haum. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescRequester` | hmn | Share your experience with this requester. Your rating contributes to their Harmony Score. | Qhia koj qhov kev paub dhau los nrog tus neeg xa qhov kev thov no. Koj qhov kev ntsuas yuav suav rau nws tus Qhab Nia Sib Haum. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescVolunteer` | hmn | Share your experience with this volunteer. Your rating contributes to their Harmony Score. | Qhia koj qhov kev paub dhau los nrog tus neeg pab dawb no. Koj qhov kev ntsuas yuav suav rau nws tus Qhab Nia Sib Haum. | 2026-10-11 | machine-drafted, needs native review |
+| `reviewDescPerson` | hmn | Share your experience with this person. Your rating contributes to their Harmony Score. | Qhia koj qhov kev paub dhau los nrog tus neeg no. Koj qhov kev ntsuas yuav suav rau nws tus Qhab Nia Sib Haum. | 2026-10-11 | machine-drafted, needs native review |
+| `ratingLabel` | hmn | Rating | Kev ntsuas | 2026-10-11 | machine-drafted, needs native review |
+| `recommendQuestion` | hmn | Would you recommend this person? | Koj puas xav pom zoo tus neeg no? | 2026-10-11 | machine-drafted, needs native review |
+| `commentLabel` | hmn | Comment | Lus tawm tswv yim | 2026-10-11 | machine-drafted, needs native review |
+| `commentHint` | hmn | (optional, max {max} chars) | (xaiv tau, ntau tshaj {max} tus ntawv) | 2026-10-11 | machine-drafted, needs native review |
+| `commentPlaceholder` | hmn | Describe your experience... | Piav koj qhov kev paub dhau los... | 2026-10-11 | machine-drafted, needs native review |
+| `submitReview` | hmn | Submit Review | Xa kev ntsuam xyuas | 2026-10-11 | machine-drafted, needs native review |
+| `errRatingRequired` | hmn | Please select a stalk rating before submitting. | Thov xaiv ib qho kev ntsuas ua ntej xa. | 2026-10-11 | machine-drafted, needs native review |
+| `errSubmitFailed` | hmn | Submission failed. Please try again. | Xa tsis tau. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewTimeout` | hmn | Review submission timed out — please check your connection and retry. | Kev xa kev ntsuam xyuas siv sijhawm ntev dhau. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `errReviewFailed` | hmn | Couldn't submit review. Please try again. | Xa tsis tau kev ntsuam xyuas. Thov sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `STALKS.other` | ht | {n} stalks | {n} zepi | 2026-10-11 | machine-drafted, needs native review |
+| `STALKS.other` | so | {n} stalks | {n} sabuul | 2026-10-11 | machine-drafted, needs native review |
+| `STALKS.one` | am | {n} stalk | {n} ዛላ | 2026-10-11 | machine-drafted, needs native review |
+| `STALKS.other` | am | {n} stalks | {n} ዛላዎች | 2026-10-11 | machine-drafted, needs native review |
+| `STALKS.other` | hmn | {n} stalks | {n} tus nplej | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_CATEGORY_POINTS.other` | ht | {label} category badge, level {level}, {count} points earned | Badj kategori {label}, nivo {level}, {count} pwen genyen | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_CATEGORY_POINTS.other` | so | {label} category badge, level {level}, {count} points earned | Calaamadda qaybta {label}, heerka {level}, {count} dhibcood la helay | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_CATEGORY_POINTS.one` | am | {label} category badge, level {level}, {count} point earned | የ{label} ምድብ ባጅ፣ ደረጃ {level}፣ {count} ነጥብ ተገኝቷል | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_CATEGORY_POINTS.other` | am | {label} category badge, level {level}, {count} points earned | የ{label} ምድብ ባጅ፣ ደረጃ {level}፣ {count} ነጥቦች ተገኝተዋል | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_CATEGORY_POINTS.other` | hmn | {label} category badge, level {level}, {count} points earned | Daim paib pawg {label}, theem {level}, tau {count} qhab nia | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_COMMUNITY_POINTS.other` | ht | {label} community badge, level {level}, {count} points earned | Badj kominote {label}, nivo {level}, {count} pwen genyen | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_COMMUNITY_POINTS.other` | so | {label} community badge, level {level}, {count} points earned | Calaamadda bulshada {label}, heerka {level}, {count} dhibcood la helay | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_COMMUNITY_POINTS.one` | am | {label} community badge, level {level}, {count} point earned | የ{label} የማኅበረሰብ ባጅ፣ ደረጃ {level}፣ {count} ነጥብ ተገኝቷል | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_COMMUNITY_POINTS.other` | am | {label} community badge, level {level}, {count} points earned | የ{label} የማኅበረሰብ ባጅ፣ ደረጃ {level}፣ {count} ነጥቦች ተገኝተዋል | 2026-10-11 | machine-drafted, needs native review |
+| `BADGE_COMMUNITY_POINTS.other` | hmn | {label} community badge, level {level}, {count} points earned | Daim paib zej zog {label}, theem {level}, tau {count} qhab nia | 2026-10-11 | machine-drafted, needs native review |
+| `GIFTS_FROM_MORE.other` | ht | from {a}, {b} & {n} others | nan men {a}, {b} ak {n} lòt moun | 2026-10-11 | machine-drafted, needs native review |
+| `GIFTS_FROM_MORE.other` | so | from {a}, {b} & {n} others | ka timid {a}, {b} iyo {n} kale | 2026-10-11 | machine-drafted, needs native review |
+| `GIFTS_FROM_MORE.one` | am | from {a}, {b} & {n} other | ከ{a}፣ {b} እና {n} ሌላ ሰው | 2026-10-11 | machine-drafted, needs native review |
+| `GIFTS_FROM_MORE.other` | am | from {a}, {b} & {n} others | ከ{a}፣ {b} እና {n} ሌሎች ሰዎች | 2026-10-11 | machine-drafted, needs native review |
+| `GIFTS_FROM_MORE.other` | hmn | from {a}, {b} & {n} others | los ntawm {a}, {b}, thiab {n} tus ntxiv | 2026-10-11 | machine-drafted, needs native review |
 
 ### `lib/i18n-feed-businesses.ts`
 

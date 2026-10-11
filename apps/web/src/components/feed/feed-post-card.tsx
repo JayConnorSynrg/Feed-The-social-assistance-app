@@ -11,8 +11,9 @@
 // edit, history, copy link, report or the create-account prompt, delete, and for moderators hold /
 // remove / restore / Edit in admin). Chrome is translated (lib/i18n-feed-card.ts), and so are the
 // petition embed (lib/i18n-feed-petitions.ts, the sub-tab's own words) and the sign-up ("opt-in")
-// controls (lib/i18n-feed-optins.ts): the card carries no English mark except around an opt-in
-// failure or a stored status FEED has no sentence for. The opt-in handlers are the panel's, unchanged.
+// controls (lib/i18n-feed-optins.ts), the author badges and the author sheet
+// (lib/i18n-feed-badges.ts): the card carries no English mark except around an opt-in failure or a
+// stored status FEED has no sentence for. The opt-in handlers are the panel's, unchanged.
 
 import React, { useId, useState } from 'react'
 import { m, useReducedMotion } from 'motion/react'
@@ -313,9 +314,9 @@ export function FeedPostCard({
             >
               {authorName}
             </button>
-            {/* Each badge marks its own (English-only) root lang="en" dir="ltr". */}
-            <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} />
-            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
+            {/* The badges are in the viewer's language and inherit the card's mark. */}
+            <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} locale={locale} />
+            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} locale={locale} />
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${categoryColor}`}>{categoryChipLabel(post.category, locale)}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
@@ -357,6 +358,7 @@ export function FeedPostCard({
           onFollow={onFollow}
           onUnfollow={onUnfollow}
           postId={post.id}
+          locale={locale}
         />
 
         {followGate !== 'hidden' && (
@@ -526,7 +528,7 @@ export function FeedPostCard({
                 <span className="truncate text-xs font-medium text-stone-700" lang="" dir="auto" data-member-text="seeker-name">
                   {oi.seekerName}
                 </span>
-                <HarmonyBadge score={oi.seekerHarmonyScore} count={oi.seekerHarmonyCount} userId={oi.seekerId} />
+                <HarmonyBadge score={oi.seekerHarmonyScore} count={oi.seekerHarmonyCount} userId={oi.seekerId} locale={locale} />
                 {/* A status FEED has no label for is shown as stored, which is English. */}
                 <span
                   lang={isOptInStatus(oi.status) ? undefined : 'en'}

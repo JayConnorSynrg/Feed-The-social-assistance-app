@@ -175,6 +175,14 @@ export function formatCount(n: number, locale: Locale): string {
   return cached(`count|${locale}`, () => new Intl.NumberFormat(intlTags(locale))).format(n)
 }
 
+/** "4.50" — a number with a fixed count of decimals, in the locale's digits and decimal mark. */
+export function formatFixed(n: number, digits: number, locale: Locale): string {
+  return cached(
+    `fixed|${locale}|${digits}`,
+    () => new Intl.NumberFormat(intlTags(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits }),
+  ).format(n)
+}
+
 /** "45%" for a whole percentage (0–100). */
 export function formatPercent(percent: number, locale: Locale): string {
   return cached(

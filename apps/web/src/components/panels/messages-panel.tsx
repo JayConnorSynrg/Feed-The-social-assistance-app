@@ -3,8 +3,8 @@
 // Community → Messages sub-tab. Every string is read from lib/i18n-feed-messages.ts in the
 // member's language (useProfileLocale); each root — and the confirm dialog, which renders in a
 // portal — carries that language and its direction. Names and message bodies are shown as written
-// (dir="auto", no page language). What is still English is marked English: the rating display,
-// and a failure whose text came from the server.
+// (dir="auto", no page language). What is still English is marked English: a failure whose text
+// came from the server.
 //
 // A confirmed decline, withdraw or end removes the button that opened the dialog (it belonged to
 // the conversation's old status). Once the conversation shows its new status, focus moves to the
@@ -39,7 +39,7 @@ import { useConversations } from '@/hooks/use-conversations'
 import { useReviews } from '@/hooks/use-reviews'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { ReviewModal } from '@/components/feed/review-modal'
-import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
+import { MAX_STALKS, WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
 import type { ReviewRow } from '@/hooks/use-reviews'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir, type Locale } from '@/lib/i18n'
@@ -492,15 +492,13 @@ export function MessagesPanel() {
                     <div>
                       <p className="text-sm font-medium text-lime-800">{messagesT(locale, 'reviewSubmitted')}</p>
                       <div className="flex items-center gap-1 mt-1">
-                        {/* The rating's own name ("4 out of 5 stalks") is not translated yet: marked English. */}
-                        <span lang="en" dir="ltr" data-english-only="rating" className="inline-flex">
-                          <WheatStalkRatingDisplay
-                            value={myReview.rating}
-                            size="sm"
-                            testIdPrefix={`my-review-stalks-${selectedConv.id}`}
-                          />
-                        </span>
-                        <span className="text-xs text-lime-700">{myReview.rating}/5</span>
+                        <WheatStalkRatingDisplay
+                          value={myReview.rating}
+                          size="sm"
+                          testIdPrefix={`my-review-stalks-${selectedConv.id}`}
+                          locale={locale}
+                        />
+                        <span className="text-xs text-lime-700" aria-hidden="true">{formatCount(myReview.rating, locale)}/{formatCount(MAX_STALKS, locale)}</span>
                       </div>
                     </div>
                   </div>
@@ -624,9 +622,9 @@ export function MessagesPanel() {
           open={reviewModalOpen}
           onOpenChange={setReviewModalOpen}
           conversationId={selectedConv.id}
-          // The review modal is still English: with no name it gets the English word, not the
-          // member-language one.
-          revieweeName={otherUserName === unknownUser ? messagesT('en', 'unknownUser') : otherUserName}
+          // A person's name is shown as written; the fallback word is FEED's own text.
+          revieweeName={otherUserName}
+          revieweeNameLang={otherUserLang}
           revieweeRole={isVolunteer ? 'requester' : 'volunteer'}
           onSubmitted={handleReviewSubmitted}
         />

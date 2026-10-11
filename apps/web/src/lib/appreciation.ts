@@ -143,7 +143,9 @@ export async function listSentTo(
 
 export interface ShelfGiver {
   id: string
-  name: string
+  /** The giver's own name; null when their profile has none (the shelf writes "Someone" in the
+   *  viewer's language — an English word here would sit among real names, untranslatable). */
+  name: string | null
   avatar: string | null
 }
 
@@ -183,7 +185,7 @@ export function aggregateShelf(rows: ShelfRow[]): ShelfEntry[] {
     bucket.count += 1
     bucket.givers.push({
       id: row.giver?.id ?? '',
-      name: row.giver?.first_name || 'Someone',
+      name: row.giver?.first_name || null,
       avatar: row.giver?.avatar_url ?? null,
     })
     byItem.set(row.item, bucket)

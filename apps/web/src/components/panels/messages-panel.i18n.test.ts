@@ -9,7 +9,7 @@
 //   - a message time and a conversation date format for the locale, hand-written for ht / hmn;
 //   - names and message bodies keep their own direction and take no page language;
 //   - the hook's fixed sentences become the member's sentence; server text is marked English;
-//   - what is still English (the rating's name) is marked English;
+//   - the rating shown after a review is named in the member's language (no English mark);
 //   - every icon button has a name, and the message box's name is the text shown in it;
 //   - a member's own words are never handed to a translation function;
 //   - loading says so to a screen reader, a failure is an alert, the confirm dialog has a
@@ -48,6 +48,7 @@ import { messages, type Locale } from '@/lib/i18n'
 import { CONVERSATION_ERROR_SENTENCES, CONVERSATION_STATUSES, conversationError, conversationStatusLabel, messagesT } from '@/lib/i18n-feed-messages'
 import { cardT } from '@/lib/i18n-feed-card'
 import { DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
 import { MessagesPanel } from './messages-panel'
 
 const LOCALES = Object.keys(messages) as Locale[]
@@ -302,7 +303,7 @@ describe('accessible names', () => {
   })
 })
 
-describe('review prompt and the still-English rating', () => {
+describe('review prompt and the rating', () => {
   async function completed(language: string) {
     state.language = language
     state.hook = hook({ conversations: [conv({ status: 'completed' })] })
@@ -321,15 +322,19 @@ describe('review prompt and the still-English rating', () => {
     expect(name.map((e) => e.props.children)).toContain('مريم')
   })
 
-  it('reviewed: the sentence is translated and the rating display sits inside an English mark', async () => {
+  it('reviewed: the sentence is translated and the rating display gets the member language, with no English mark around it', async () => {
     state.review = { rating: 4 }
     const tree = await completed('tl')
     expect(textOf(tree)).toContain('Naipasa na ang iyong review')
-    const island = findAll(tree, (e: El) => e.props['data-english-only'] === 'rating') as El[]
-    expect(island).toHaveLength(1)
-    expect(island[0].props.lang).toBe('en')
-    expect(island[0].props.dir).toBe('ltr')
-    expect((island[0].props.children as El).props.value).toBe(4)
+    expect(findAll(tree, (e: El) => e.props['data-english-only'] === 'rating')).toHaveLength(0)
+    const rating = (findAll(tree, (e: El) => e.type === WheatStalkRatingDisplay) as El[])[0]
+    expect(rating.props).toMatchObject({ value: 4, locale: 'tl' })
+    const card = (findAll(tree, (e: El) => e.props['data-testid'] === 'review-submitted-card') as El[])[0]
+    expect(findAll(card, (e: El) => e.props.lang === 'en')).toHaveLength(0)
+    // The rating's name, as the display renders it; the "4/5" beside it is for sighted readers only.
+    expect(renderToStaticMarkup(h(WheatStalkRatingDisplay, { value: 4, locale: 'tl' }))).toContain('role="img" aria-label="4 sa 5 uhay"')
+    const figures = (findAll(card, (e: El) => e.props['aria-hidden'] === 'true' && e.type === 'span') as El[])[0]
+    expect(textOf(figures)).toBe('4/5')
   })
 })
 
@@ -579,21 +584,23 @@ describe('messages-panel.tsx source', () => {
     }
   })
 
-  it('the English review modal gets the English fallback word when the other person has no name, and the name as written otherwise', () => {
+  it('the review dialog gets the name as written (no page language), or the member-language fallback word marked as FEED text; the role is a code', () => {
     const reviewee = (language: string, over: Record<string, unknown>) => {
       state.language = language
       state.hook = hook({ conversations: [conv({ status: 'completed', ...over })] })
       const c = mount(() => MessagesPanel())
-      return (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0].props.revieweeName
+      return (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0].props
     }
-    expect(reviewee('ru', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
-    expect(reviewee('ar', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
-    expect(reviewee('ru', {})).toBe('مريم')
+    expect(reviewee('ru', { counterpartyDisplayName: null, volunteer: null })).toMatchObject({ revieweeName: 'Пользователь', revieweeNameLang: undefined, revieweeRole: 'volunteer' })
+    expect(reviewee('ar', { counterpartyDisplayName: null, volunteer: null }).revieweeName).toBe('مستخدم')
+    expect(reviewee('ru', {})).toMatchObject({ revieweeName: 'مريم', revieweeNameLang: '' })
+    expect(reviewee('ru', { volunteer_id: 'me', requester_id: 'r' }).revieweeRole).toBe('requester')
   })
 
-  it('the review modal it opens is still English and marks itself English (a portal has no translated parent)', () => {
+  it('the review dialog it opens is translated: it carries the member language itself (a portal has no translated parent)', () => {
     const modal = readFileSync(fileURLToPath(new URL('../feed/review-modal.tsx', import.meta.url)), 'utf8')
-    expect(modal).toMatch(/<DialogContent lang="en" dir="ltr"/)
+    expect(modal).toMatch(/<DialogContent lang=\{locale\} dir=\{dir\(locale\)\} closeLabel=\{cardT\(locale, 'close'\)\}/)
+    expect(modal).not.toMatch(/lang="en"/)
     expect(modal.match(/<DialogContent\b/g)).toHaveLength(1)
   })
 

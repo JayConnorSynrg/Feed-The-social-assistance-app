@@ -108,8 +108,7 @@ describe('the sign-up controls in the member language', () => {
     expect(out).toContain(`>${ar(2)} من ${ar(5)} أماكن متاحة</span>`)
     expect(out).toContain('تم تسجيلك')
     expect(out).toContain('>انسحاب</button>')
-    // The one mark left on this card is the author badge, translated with the badges.
-    expect(out.match(/\blang="en"/g)).toHaveLength(1)
+    expect(out).not.toMatch(/\blang="en"/)
   })
 
   it.each(LOCALES)('%s: every state of the member\'s controls reads from the dictionary', (locale) => {

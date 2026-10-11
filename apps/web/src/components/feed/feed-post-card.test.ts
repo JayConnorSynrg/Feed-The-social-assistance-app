@@ -274,26 +274,31 @@ describe('the public edit history', () => {
   })
 })
 
-// Release 1 marks every still-English piece of the (translated) feed with lang="en" dir="ltr" so
-// assistive tech switches voice; a piece translated through a 14-locale dictionary must not carry it.
+// Release 1 marked every still-English piece of the (translated) feed with lang="en" dir="ltr" so
+// assistive tech switches voice; a piece translated through a 14-locale dictionary must not carry
+// it. Since Release 3.5 a feed post card has no such piece left.
 describe('language marking: English-only pieces say so; translated pieces do not', () => {
   const es = (post: Post, o: Partial<FeedPostCardProps> = {}) => card(post, { locale: 'es', ...o })
 
-  it('the translated card carries no lang="en" except its still-English author badge; the opt-in row and the petition embed are translated', () => {
+  it('no English island is left on a translated card: the author badges, the opt-in row and the petition embed are all translated', () => {
     const plain = es(rowToPost(row({ edited_at: '2026-10-09T21:53:18Z' }), { isLiked: false }))
-    // The only English piece of a plain card: the author badges (not translated yet).
-    expect(plain.match(/lang="en"/g)).toHaveLength(1)
-    expect(plain).toMatch(/<span lang="en" dir="ltr" data-testid="harmony-badge-author"/)
+    expect(plain).not.toMatch(/lang="en"/)
+    // The author badge inherits the card's language (Release 3.5, appreciation.i18n.test.ts).
+    expect(plain).toMatch(/<span data-testid="harmony-badge-author" class="[^"]*"><span>Nuevo<\/span><\/span>/)
     expect(plain).not.toContain('class="contents"')
-    // Translated (Release 3.5, feed-post-card.optins.i18n.test.ts): no mark of their own.
+    // Translated (feed-post-card.optins.i18n.test.ts): no mark of their own.
     const capped = es(rowToPost(row({ max_seekers: 5, slots_remaining: 2 }), { isLiked: false }))
     expect(capped).toMatch(/<div data-testid="capacity-row-p1" class=/)
-    expect(capped.match(/lang="en"/g)).toHaveLength(1)
+    expect(capped).not.toMatch(/lang="en"/)
     const petition = es(rowToPost(row({ post_type: 'petition', petition_id: 'pt' }), { isLiked: false }), {
       petitionEmbed: { title: 'T', summary: 'S', signatureCount: 1, targetSignatures: 10, hasSigned: false, isSigning: false },
     })
     expect(petition).toMatch(/<div data-testid="petition-embed-p1" class=/)
-    expect(petition.match(/lang="en"/g)).toHaveLength(1)
+    expect(petition).not.toMatch(/lang="en"/)
+    // A badge strip and a rated author, in Arabic: still nothing marked English.
+    const rated = card(rowToPost(row({ user: { id: 'author', first_name: 'Ada', avatar_url: null, admin_tier: null, harmony_score: 4.5, harmony_reviews_count: 3, badge_summary: { families: { food: { level: 2 } }, badges: { helper: { level: 1 } } } } }), { isLiked: false }), { locale: 'ar' })
+    expect(rated).toContain('data-testid="author-badge-strip-author"')
+    expect(rated).not.toMatch(/lang="en"/)
   })
 
   it('the shared fields, the conflict comparison and the history list are translated: no lang="en"', () => {

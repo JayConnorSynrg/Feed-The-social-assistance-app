@@ -12,7 +12,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { messages, type Locale } from './i18n'
 import { feedChromeMessages, feedChromeT, type FeedChromeMessages } from './i18n-feed-chrome'
@@ -258,9 +259,10 @@ describe('feed-panel.tsx wiring', () => {
     }
     // Every tabpanel wrapper in the file is in the table (a new sub-tab cannot go unlisted).
     expect([...panel.matchAll(/role="tabpanel"\s+id="feed-panel-([a-z]+)"/g)].map((m) => m[1]).sort()).toEqual(Object.keys(SUBTABS).sort())
-    // What is still English inside a translated sub-tab keeps its own mark: the Feed tab's parts
-    // below, the rating display in Messages (messages-panel.i18n.test.ts), and server text in
-    // Messages and Businesses (their *.i18n.test.ts).
+    // What is still English inside a translated sub-tab keeps its own mark: the Feed tab's safety
+    // strip (below) and text FEED did not write — server and data-layer failures, a stored value
+    // with no label (the *.i18n.test.ts of each surface). "English marks across the member app"
+    // below counts every fixed mark.
   })
 
   it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {
@@ -284,5 +286,85 @@ describe('feed-panel.tsx wiring', () => {
     // the viewer language and sits in no English mark.
     expect(src).toMatch(/<PostImagePickerField\b[^>]*\blocale=\{locale\}/)
     expect(src).not.toContain('data-english-only="photo-picker"')
+  })
+})
+
+// The island guard, in both directions. An "island" is a fixed lang="en" mark: English copy inside
+// a surface that carries the viewer's language. A translated surface must not keep one (it would
+// make a screen reader read the member's language with an English voice); copy still in English
+// must keep its mark. Every fixed mark in the member app is counted here, so adding one, or
+// leaving one behind after a translation, fails until this table says so.
+describe('English marks across the member app', () => {
+  const SRC = fileURLToPath(new URL('..', import.meta.url))
+  // Other owners: the admin console, and the safety-alert lane's files (strip, map, alerts).
+  const NOT_COUNTED = [/^app\/\(admin\)\//, /^components\/map\//, /^components\/alerts\//, /^components\/feed\/safety-strip\.tsx$/]
+  const files: string[] = []
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name)
+      if (statSync(path).isDirectory()) walk(path)
+      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(relative(SRC, path))
+    }
+  }
+  walk(SRC)
+  const counted = files.filter((f) => !NOT_COUNTED.some((re) => re.test(f)))
+  /** Source with comments removed (a comment may talk about lang="en"). */
+  const code = (file: string) =>
+    readFileSync(join(SRC, file), 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  const fixedMarks = (file: string) => (code(file).match(/\blang=(?:"en"|'en'|\{'en'\}|\{"en"\})/g) ?? []).length
+
+  // Still English, and marked. Remove a row with the translation, in the same change.
+  const STILL_ENGLISH: Record<string, { marks: number; what: string }> = {
+    'app/layout.tsx': { marks: 1, what: 'the document language (<html lang="en">): each translated surface sets its own' },
+    'components/panels/feed-panel.tsx': { marks: 1, what: 'the safety strip (Release 3, the safety-alert lane)' },
+    'components/panels/businesses-panel.tsx': { marks: 2, what: "the data layer's own English text beside a translated sentence (submit failure, photo warning)" },
+  }
+  // Translated in Release 3.5: each held an island before.
+  const TRANSLATED = [
+    'components/feed/feed-post-card.tsx',
+    'components/feed/harmony-badge.tsx',
+    'components/appreciation/author-badge-strip.tsx',
+    'components/appreciation/appreciation-sheet.tsx',
+    'components/appreciation/gifts-received-shelf.tsx',
+    'components/profile/engagement-badges.tsx',
+    'components/ui/wheat-stalk-rating.tsx',
+    'components/feed/review-modal.tsx',
+    'components/feed/post-image-picker.tsx',
+    'components/feed/post-edit-dialog.tsx',
+    'components/panels/post-type-wizard.tsx',
+    'components/feed/follow-error-banner.tsx',
+    'components/panels/messages-panel.tsx',
+    'components/panels/petitions-panel.tsx',
+    'components/panels/organizations-panel.tsx',
+  ]
+
+  it('reads the member app', () => {
+    expect(counted.length).toBeGreaterThan(300)
+    for (const file of [...Object.keys(STILL_ENGLISH), ...TRANSLATED]) expect(counted, file).toContain(file)
+  })
+
+  it('what is still English is marked: each listed file holds exactly its marks', () => {
+    for (const [file, { marks, what }] of Object.entries(STILL_ENGLISH)) expect([file, fixedMarks(file)], what).toEqual([file, marks])
+    expect(code('components/panels/feed-panel.tsx')).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">/)
+  })
+
+  it('what is translated is not marked: no other file holds a fixed English mark', () => {
+    const marked = counted.filter((f) => fixedMarks(f) > 0).sort()
+    expect(marked).toEqual(Object.keys(STILL_ENGLISH).sort())
+    for (const file of TRANSLATED) expect([file, fixedMarks(file)]).toEqual([file, 0])
+  })
+
+  it('a feed post card and everything it mounts hold no fixed English mark', () => {
+    for (const file of ['components/feed/feed-post-card.tsx', 'components/feed/harmony-badge.tsx', 'components/appreciation/author-badge-strip.tsx', 'components/appreciation/appreciation-sheet.tsx', 'components/feed/post-type-body.tsx', 'components/feed/post-card-actions.tsx']) {
+      expect([file, fixedMarks(file)]).toEqual([file, 0])
+    }
+  })
+
+  it('a conditional mark is only ever "English when FEED has no sentence for it"', () => {
+    // lang={x ? undefined : 'en'} around received text or an unlabelled stored value; the default
+    // close label of the shared dialog and sheet.
+    const conditional = counted.flatMap((f) => (code(f).match(/\blang=\{[^}]*'en'[^}]*\}/g) ?? []).map((m) => `${f}: ${m}`)).filter((m) => !/lang=\{'en'\}/.test(m))
+    expect(conditional.length).toBeGreaterThanOrEqual(10)
+    for (const mark of conditional) expect(mark).toMatch(/\? undefined : 'en'\}$/)
   })
 })

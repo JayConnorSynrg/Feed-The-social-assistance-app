@@ -10,9 +10,25 @@
  * Two modes:
  *  - interactive: role="radiogroup", keyboard accessible, hover preview
  *  - display: read-only, optional size sm
+ *
+ * Names are in the viewer's language (lib/i18n-feed-badges.ts). The stalks run in reading order,
+ * so in a right-to-left locale ArrowLeft raises the rating and ArrowRight lowers it.
  */
 
 import { useState } from 'react'
+import { dir, type Locale } from '@/lib/i18n'
+import { badgesT, ratingText, stalksText } from '@/lib/i18n-feed-badges'
+
+/** The highest rating. */
+export const MAX_STALKS = 5
+
+/** What an arrow key does to a rating in a locale: +1, -1, or 0 for any other key. */
+export function ratingKeyStep(key: string, locale: Locale): -1 | 0 | 1 {
+  const rtl = dir(locale) === 'rtl'
+  if (key === 'ArrowUp' || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) return 1
+  if (key === 'ArrowDown' || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) return -1
+  return 0
+}
 
 // ---------------------------------------------------------------------------
 // Single wheat stalk SVG (stem + spikelets, ~24×28 viewBox)
@@ -65,12 +81,15 @@ interface WheatStalkRatingInteractiveProps {
   onChange: (value: number) => void
   /** testid prefix, e.g. "review" → data-testid="review-stalk-3" */
   testIdPrefix?: string
+  /** The viewer's language. */
+  locale: Locale
 }
 
 export function WheatStalkRatingInteractive({
   value,
   onChange,
   testIdPrefix = 'stalk',
+  locale,
 }: WheatStalkRatingInteractiveProps) {
   const [hovered, setHovered] = useState(0)
   const display = hovered || value
@@ -79,7 +98,7 @@ export function WheatStalkRatingInteractive({
     <div
       data-testid={`${testIdPrefix}-stalks`}
       role="radiogroup"
-      aria-label="Wheat stalk rating"
+      aria-label={badgesT(locale, 'ratingGroupLabel')}
       className="flex gap-1"
     >
       {[1, 2, 3, 4, 5].map((n) => (
@@ -88,7 +107,7 @@ export function WheatStalkRatingInteractive({
           type="button"
           role="radio"
           aria-checked={value === n}
-          aria-label={`${n} stalk${n !== 1 ? 's' : ''}`}
+          aria-label={stalksText(n, locale)}
           data-testid={`${testIdPrefix}-stalk-${n}`}
           onClick={() => onChange(n)}
           onMouseEnter={() => setHovered(n)}
@@ -96,15 +115,12 @@ export function WheatStalkRatingInteractive({
           onFocus={() => setHovered(n)}
           onBlur={() => setHovered(0)}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-              e.preventDefault()
-              onChange(Math.min(5, value + 1))
-            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-              e.preventDefault()
-              onChange(Math.max(1, value - 1))
-            }
+            const step = ratingKeyStep(e.key, locale)
+            if (step === 0) return
+            e.preventDefault()
+            onChange(step > 0 ? Math.min(MAX_STALKS, value + 1) : Math.max(1, value - 1))
           }}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 rounded"
+          className="focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 rounded"
         >
           <WheatStalk filled={n <= display} aria-hidden />
         </button>
@@ -121,18 +137,23 @@ interface WheatStalkRatingDisplayProps {
   value: number
   size?: 'sm' | 'md'
   testIdPrefix?: string
+  /** The viewer's language. */
+  locale: Locale
 }
 
 export function WheatStalkRatingDisplay({
   value,
   size = 'md',
   testIdPrefix = 'stalk-display',
+  locale,
 }: WheatStalkRatingDisplayProps) {
   return (
+    // An image named by its rating (a name on a plain span is not announced).
     <span
       data-testid={`${testIdPrefix}-row`}
       className="inline-flex items-center gap-0.5"
-      aria-label={`${value} out of 5 stalks`}
+      role="img"
+      aria-label={ratingText(value, MAX_STALKS, locale)}
     >
       {[1, 2, 3, 4, 5].map((n) => (
         <WheatStalk key={n} filled={n <= value} size={size} aria-hidden />
