@@ -866,9 +866,9 @@
       "branch": "feature/feed-r3-5-subtab-i18n",
       "base": "origin/develop 9c559e6",
       "docs": "docs/i18n-native-review.md (native-review list)",
-      "note": "Release 3.5 translation lane, slice 1 (no migration). Commit 1, shared machinery: one formatMessage (lib/format-message.ts), one profile-locale resolver (hooks/use-profile-locale.ts), lib/i18n-intl.ts with hand-written ht / hmn / so time words and Tagalog asked as fil, relative-age on it, 14-locale pinned time test, native-review list with its sync test. See checklist 1.6.26.",
+      "note": "Release 3.5 translation lane, slice 1 (no migration). Commit 1, shared machinery: one formatMessage (lib/format-message.ts), one profile-locale resolver (hooks/use-profile-locale.ts), lib/i18n-intl.ts with hand-written ht / hmn / so time words and Tagalog asked as fil, relative-age on it, 14-locale pinned time test, native-review list with its sync test. See checklist 1.6.26. Commit 2: Organizations sub-tab translated (lib/i18n-feed-organizations.ts), island mark removed.",
       "open": [
-        "Organizations, Petitions, Messages, Businesses sub-tab dictionaries (next commits on this branch)",
+        "Petitions, Messages, Businesses sub-tab dictionaries (next commits on this branch)",
         "moderation shells still inline the locale rule; 8 files still import formatMessage through a dictionary re-export",
         "native-speaker review of ht / so / am / hmn",
         "adversarial and a11y reviews"

@@ -14,9 +14,12 @@ import { fileURLToPath } from 'node:url'
 
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
+import type { Locale } from './i18n'
 import { TIME_WORDS } from './i18n-intl'
+import { feedOrganizationsMessages } from './i18n-feed-organizations'
 
-type ReviewLocale = 'ht' | 'so' | 'am' | 'hmn'
+const REVIEW_LOCALES = ['ht', 'so', 'am', 'hmn'] as const
+type ReviewLocale = (typeof REVIEW_LOCALES)[number]
 const DRAFT = 'machine-drafted, needs native review'
 const TODAY = '2026-10-11'
 const DOC = fileURLToPath(new URL('../../../../docs/i18n-native-review.md', import.meta.url))
@@ -33,6 +36,14 @@ interface Row {
   status: string
 }
 type Draft = Omit<Row, 'added' | 'status'> & { status?: string }
+
+/** Every string of a Record<Locale, M> dictionary, in the four review locales. */
+function dictionaryRows(file: string, dict: Record<Locale, object>): Draft[] {
+  const en = dict.en as Record<string, string>
+  return Object.keys(en).flatMap((key) =>
+    REVIEW_LOCALES.map((locale) => ({ file, key, locale, en: en[key], text: (dict[locale] as Record<string, string>)[key] })),
+  )
+}
 
 const EN_TIME = {
   months: 'Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec',
@@ -64,7 +75,7 @@ function timeWordRows(): Draft[] {
 
 /** Every source this list tracks. A new dictionary adds one line here. */
 function expectedRows(): Draft[] {
-  return [...timeWordRows()]
+  return [...timeWordRows(), ...dictionaryRows('lib/i18n-feed-organizations.ts', feedOrganizationsMessages)]
 }
 
 const cell = (s: string) => s.replace(/\|/g, '\\|')

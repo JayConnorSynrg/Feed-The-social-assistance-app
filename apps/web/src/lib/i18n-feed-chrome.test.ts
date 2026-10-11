@@ -239,10 +239,16 @@ describe('feed-panel.tsx wiring', () => {
     }
   })
 
-  it('sub-tabs not translated yet are marked English (so the root language never mislabels them)', () => {
-    for (const id of ['messages', 'businesses', 'organizations', 'petitions']) {
-      expect(panel).toMatch(new RegExp(`id="feed-panel-${id}"[\\s\\S]{0,200}lang="en"\\s+dir="ltr"`))
+  it('a translated sub-tab carries no English mark; one still in English is marked (so the root language never mislabels it)', () => {
+    /** The opening tag of a sub-tab's tabpanel wrapper. */
+    const wrapper = (id: string) => panel.match(new RegExp(`<div\\s+role="tabpanel"\\s+id="feed-panel-${id}"[^>]*>`))?.[0] ?? ''
+    const TRANSLATED = ['feed', 'events', 'organizations']
+    const STILL_ENGLISH = ['messages', 'businesses', 'petitions']
+    for (const id of TRANSLATED) {
+      expect(wrapper(id), id).toContain(`aria-labelledby="feed-tab-${id}"`)
+      expect(wrapper(id), id).not.toMatch(/\blang=|\bdir=/)
     }
+    for (const id of STILL_ENGLISH) expect(wrapper(id), id).toMatch(/lang="en"\s+dir="ltr"/)
   })
 
   it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {

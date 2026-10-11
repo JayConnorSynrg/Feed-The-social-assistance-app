@@ -1981,9 +1981,6 @@ export function FeedPanel() {
           id="feed-panel-organizations"
           aria-labelledby="feed-tab-organizations"
           tabIndex={0}
-          /* Not translated yet (Release 3): its English copy is marked English. */
-          lang="en"
-          dir="ltr"
           className="flex-1 min-h-0"
         >
           <OrganizationsPanel />
