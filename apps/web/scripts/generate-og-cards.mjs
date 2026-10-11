@@ -1,23 +1,31 @@
 // apps/web/scripts/generate-og-cards.mjs
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// Renders the ten share-preview cards served by /api/og/*/[id] and writes them to
-// src/lib/og-cards/<kind>.png. Run from apps/web after changing the design:
+// Renders the ten share-preview cards served by /api/og/*/[id] and writes them, with a manifest, to
+// src/lib/og-cards/. Run from apps/web after changing the design or a label:
 //
 //   node scripts/generate-og-cards.mjs
 //
 // Rule (docs/share-previews.md): a preview image carries no user text. Everything drawn here is a
-// constant in this file or the logo in public/feed-logo.svg — a kind icon, a fixed English label,
-// the FEED logo and wordmark. The routes serve the committed bytes; no renderer runs per request.
+// constant: the kind's label (src/lib/og-card-labels.mjs, the same map that describes the picture in
+// og:image:alt), a kind icon and colour from this file, and the logo in public/feed-logo.svg. The
+// routes serve the committed bytes; no renderer runs per request.
+//
+// Layout: 1200 x 630. Platforms that show a compact preview crop the picture to its centre square,
+// so everything is drawn inside that square (x 285 to 915) with a 30 px margin. The kind label is
+// the largest text on the card: 80 px, centred, directly under the kind icon, wrapping to a second
+// line when it is long.
 //
 // The render is closed to the network: any fetch other than a data: or file: URL throws, so a design
 // change that would need a remote font or emoji image fails here instead of at request time.
 
 import { createElement as h } from 'react'
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { OG_CARD_LABELS } from '../src/lib/og-card-labels.mjs'
 
 // next/og is CommonJS with no package "exports" map, so plain Node resolves it through require.
 const { ImageResponse } = createRequire(import.meta.url)('next/og')
@@ -27,25 +35,32 @@ const outDir = join(appDir, 'src', 'lib', 'og-cards')
 
 const WIDTH = 1200
 const HEIGHT = 630
+/** The centre square a compact preview keeps, and the margin kept clear inside it. */
+const SAFE = 630
+const MARGIN = 30
+const LABEL_SIZE = 80
 
 /** Brand green (the app's primary control colour). */
 const BRAND = '#4a5d23'
 const INK = '#292524'
 const MUTED = '#57534e'
 
-// Keep the keys in step with OG_CARD_KINDS in src/lib/og-card.ts (og-card.test.ts checks every kind
-// has a file). business / organization use the map marker colours (src/lib/map-marker-colors.ts).
+// Icon and colour per kind. The keys are the kinds of OG_CARD_KINDS in src/lib/og-card-kinds.ts.
+// Two tests hold the output to it: src/lib/og-card-kinds.test.ts (every kind has a 1200 x 630 card,
+// drawn with its current label) and src/app/api/og/og-routes.test.ts (the routes serve those bytes).
+// business / organization use the map marker colours (src/lib/map-marker-colors.ts). Every colour is
+// at least 4.5:1 against white (the icon); the label ink is 14:1 against the background.
 const KINDS = {
-  feed: { label: 'Community post', color: BRAND, icon: 'chat' },
-  resource_post: { label: 'Shared resource', color: '#15803d', icon: 'pin' },
-  petition: { label: 'Petition', color: '#6d28d9', icon: 'pen' },
-  seeker_request: { label: 'Request for help', color: '#c2410c', icon: 'help' },
-  source_offer: { label: 'Offer of help', color: '#0e7490', icon: 'gift' },
-  event_post: { label: 'Community event', color: '#1d4ed8', icon: 'calendar' },
-  poll: { label: 'Poll', color: '#a16207', icon: 'bars' },
-  resource: { label: 'Community resource', color: '#15803d', icon: 'pin' },
-  business: { label: 'Local business', color: '#134e4a', icon: 'shop' },
-  organization: { label: 'Local organization', color: '#6b2d5c', icon: 'building' },
+  feed: { color: BRAND, icon: 'chat' },
+  resource_post: { color: '#15803d', icon: 'pin' },
+  petition: { color: '#6d28d9', icon: 'pen' },
+  seeker_request: { color: '#c2410c', icon: 'help' },
+  source_offer: { color: '#0e7490', icon: 'gift' },
+  event_post: { color: '#1d4ed8', icon: 'calendar' },
+  poll: { color: '#a16207', icon: 'bars' },
+  resource: { color: '#15803d', icon: 'pin' },
+  business: { color: '#134e4a', icon: 'shop' },
+  organization: { color: '#6b2d5c', icon: 'building' },
 }
 
 const ICON_PATHS = {
@@ -85,48 +100,78 @@ function card(kind, logoDataUri) {
         width: '100%',
         height: '100%',
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: '64px',
+        justifyContent: 'center',
         background: 'linear-gradient(135deg, #fafaf9 0%, #f7fee7 100%)',
       },
     },
+    // The centre square: everything on the card is inside it.
     h(
       'div',
-      { style: { display: 'flex', alignItems: 'center', gap: '24px' } },
-      h(
-        'div',
-        {
-          style: {
-            width: '96px',
-            height: '96px',
-            borderRadius: '48px',
-            background: k.color,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          },
+      {
+        style: {
+          width: `${SAFE}px`,
+          height: `${HEIGHT}px`,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: `40px ${MARGIN}px 36px`,
         },
-        icon(k.icon, 52, '#ffffff')
-      ),
-      h('span', { style: { fontSize: '48px', color: INK } }, k.label)
-    ),
-    h(
-      'div',
-      { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px', flex: 1 } },
-      h('img', { src: logoDataUri, width: 230, height: 230 }),
+      },
+      // Kind: icon, then the label — the largest text on the card.
       h(
         'div',
-        { style: { display: 'flex', flexDirection: 'column' } },
-        h('span', { style: { fontSize: '132px', letterSpacing: '6px', color: BRAND, lineHeight: 1 } }, 'FEED'),
-        h('span', { style: { fontSize: '30px', color: MUTED, marginTop: '8px' } }, 'Mutual Aid Resource Sharing')
+        { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' } },
+        h(
+          'div',
+          {
+            style: {
+              width: '104px',
+              height: '104px',
+              borderRadius: '52px',
+              background: k.color,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          },
+          icon(k.icon, 58, '#ffffff')
+        ),
+        h(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              justifyContent: 'center',
+              textAlign: 'center',
+              width: '100%',
+              marginTop: '20px',
+              fontSize: `${LABEL_SIZE}px`,
+              lineHeight: 1.1,
+              color: INK,
+            },
+          },
+          OG_CARD_LABELS[kind]
+        )
+      ),
+      // Brand: logo and wordmark, then the address.
+      h(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: '24px' } },
+          h('img', { src: logoDataUri, width: 112, height: 112 }),
+          h('span', { style: { fontSize: '88px', letterSpacing: '4px', color: BRAND, lineHeight: 1 } }, 'FEED')
+        ),
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: '16px', marginTop: '14px' } },
+          h('div', { style: { display: 'flex', width: '48px', height: '8px', borderRadius: '4px', background: k.color } }),
+          h('span', { style: { fontSize: '26px', color: MUTED } }, 'sourcetofeed.com'),
+          h('div', { style: { display: 'flex', width: '48px', height: '8px', borderRadius: '4px', background: k.color } })
+        )
       )
-    ),
-    h(
-      'div',
-      { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-      h('span', { style: { fontSize: '26px', color: MUTED } }, 'sourcetofeed.com'),
-      h('div', { style: { display: 'flex', width: '160px', height: '10px', borderRadius: '5px', background: k.color } })
     )
   )
 }
@@ -141,10 +186,21 @@ globalThis.fetch = async (input, init) => {
 const logoSvg = await readFile(join(appDir, 'public', 'feed-logo.svg'))
 const logoDataUri = `data:image/svg+xml;base64,${logoSvg.toString('base64')}`
 
+const kinds = Object.keys(OG_CARD_LABELS)
+const undrawn = kinds.filter((kind) => !KINDS[kind])
+if (undrawn.length > 0 || kinds.length !== Object.keys(KINDS).length) {
+  throw new Error(`generate-og-cards: every labelled kind needs an icon and colour, and no others (${undrawn.join(', ') || 'extra kinds in KINDS'})`)
+}
+
 await mkdir(outDir, { recursive: true })
-for (const kind of Object.keys(KINDS)) {
+// The manifest records the label each picture was drawn with and the picture's hash, so a test can
+// tell when a label changed without the cards being regenerated.
+const manifest = {}
+for (const kind of kinds) {
   const response = new ImageResponse(card(kind, logoDataUri), { width: WIDTH, height: HEIGHT })
   const bytes = Buffer.from(await response.arrayBuffer())
   await writeFile(join(outDir, `${kind}.png`), bytes)
+  manifest[kind] = { label: OG_CARD_LABELS[kind], sha256: createHash('sha256').update(bytes).digest('hex') }
   console.log(`${kind}.png ${bytes.length} bytes`)
 }
+await writeFile(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

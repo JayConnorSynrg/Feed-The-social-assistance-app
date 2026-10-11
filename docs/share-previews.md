@@ -32,31 +32,49 @@ script the picture can get wrong.
 
 ## The ten cards
 
-| Kind | Used for | Label on the card |
-|---|---|---|
-| `feed` | a general post (and any post type added later, until it gets its own card) | Community post |
-| `resource_post` | a post sharing a resource | Shared resource |
-| `petition` | a petition post | Petition |
-| `seeker_request` | a request for help | Request for help |
-| `source_offer` | an offer of help | Offer of help |
-| `event_post` | an event post | Community event |
-| `poll` | a poll | Poll |
-| `resource` | `/s/resource/<id>` | Community resource |
-| `business` | `/s/business/<id>` | Local business |
-| `organization` | `/s/organization/<id>` | Local organization |
+| Kind | Used for | Label on the card | Description of the picture |
+|---|---|---|---|
+| `feed` | a general post (and any post type added later, until it gets its own card) | Community post | FEED — Community post |
+| `resource_post` | a post sharing a resource | Shared resource | FEED — Shared resource |
+| `petition` | a petition post | Petition | FEED — Petition |
+| `seeker_request` | a request for help | Request for help | FEED — Request for help |
+| `source_offer` | an offer of help | Offer of help | FEED — Offer of help |
+| `event_post` | an event post | Community event | FEED — Community event |
+| `poll` | a poll | Poll | FEED — Poll |
+| `resource` | `/s/resource/<id>` | Community resource | FEED — Community resource |
+| `business` | `/s/business/<id>` | Local business | FEED — Local business |
+| `organization` | `/s/organization/<id>` | Local organization | FEED — Local organization |
 
-The cards are PNG files in `apps/web/src/lib/og-cards/` (1200 × 630). They are drawn once, by
-`apps/web/scripts/generate-og-cards.mjs`, from constants in that script and
+The labels live in one map, `apps/web/src/lib/og-card-labels.mjs`. The generator draws the label on
+the card, and the share pages describe the picture with it: `ogCardAlt(kind)`
+(`src/lib/og-card-kinds.ts`) gives "FEED — <label>", sent as both `og:image:alt` and
+`twitter:image:alt`. The description says what the picture shows and nothing about the item, whose
+title and text are in `og:title` / `og:description`.
+
+**Layout.** 1200 × 630. Platforms that show a compact preview crop the picture to its centre square,
+so everything is drawn inside that square (x 285 to 915): the measured content spans x 331 to 866.
+The kind label is the largest text on the card — 80 px, centred on x = 600, starting 178 px from the
+top, directly under the 104 px kind icon, wrapping to a second line when it is long. Below it sit the
+logo with the FEED wordmark (88 px) and the address. Contrast: label 14.5:1, wordmark 7.0:1, address
+7.3:1 against the background; the white icon is at least 4.9:1 on every kind colour.
+
+The cards are PNG files in `apps/web/src/lib/og-cards/`, with a `manifest.json` that records, per
+kind, the label the picture was drawn with and the picture's SHA-256. They are drawn once, by
+`apps/web/scripts/generate-og-cards.mjs`, from the label map, constants in that script and
 `apps/web/public/feed-logo.svg`, and committed. The script refuses any network request while it
 draws, so a design that would need a remote font fails at the desk, not in production.
 
-To change the design, or add a kind:
+To change a label or the design, or add a kind:
 
-1. Edit `scripts/generate-og-cards.mjs` (and, for a new kind, `OG_CARD_KINDS` in
-   `src/lib/og-card.ts`; a new post type is a type error there until it has a card).
+1. Edit the label in `src/lib/og-card-labels.mjs`, or the design in `scripts/generate-og-cards.mjs`.
+   For a new kind, add it to `OG_CARD_KINDS` in `src/lib/og-card-kinds.ts`, to the label map, and to
+   the generator's icon and colour table; a new post type is a type error in `og-card-kinds.ts` until
+   it has a card.
 2. From `apps/web`: `node scripts/generate-og-cards.mjs`
-3. Commit the changed PNG files with the script. `src/app/api/og/og-routes.test.ts` checks every kind
-   has a 1200 × 630 PNG and that the routes serve it unchanged.
+3. Commit the changed PNG files and `manifest.json` with the source change.
+   `src/lib/og-card-kinds.test.ts` fails while a picture, the manifest and the label map disagree
+   (for example a label changed but the cards not regenerated); `src/app/api/og/og-routes.test.ts`
+   checks the routes serve those bytes.
 
 ## What each request answers
 
