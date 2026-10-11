@@ -46,7 +46,15 @@ const GATE_AND_MATRIX_SQL = `
     has_table_privilege('authenticated','public.posts','DELETE')    AS auth_del,
     has_table_privilege('authenticated','public.posts','TRUNCATE')  AS auth_trunc,
     has_table_privilege('authenticated','public.posts','REFERENCES') AS auth_refs,
-    has_table_privilege('authenticated','public.posts','TRIGGER')   AS auth_trig
+    has_table_privilege('authenticated','public.posts','TRIGGER')   AS auth_trig,
+    -- has_table_privilege sees table-level grants only. A column-level INSERT / UPDATE grant
+    -- (GRANT INSERT (content) ...) would be a client write path it cannot see, so ask per column too.
+    has_any_column_privilege('anon','public.posts','INSERT')          AS anon_col_ins,
+    has_any_column_privilege('anon','public.posts','UPDATE')          AS anon_col_upd,
+    has_any_column_privilege('authenticated','public.posts','INSERT') AS auth_col_ins,
+    has_any_column_privilege('authenticated','public.posts','UPDATE') AS auth_col_upd,
+    -- control: posts SELECT is granted per column, so this is true exactly when the column check works
+    has_any_column_privilege('authenticated','public.posts','SELECT') AS auth_col_sel
 `
 // MAINTAIN is intentionally omitted from the matrix: it is a PG17+ privilege and the
 // migration revokes it only under a server-version guard, so it is not a portable,
@@ -68,6 +76,8 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
     expect(r.anon_trunc, 'anon TRUNCATE must be revoked').toBe(false)
     expect(r.anon_refs, 'anon REFERENCES must be revoked').toBe(false)
     expect(r.anon_trig, 'anon TRIGGER must be revoked').toBe(false)
+    expect(r.anon_col_ins, 'anon must hold INSERT on no column').toBe(false)
+    expect(r.anon_col_upd, 'anon must hold UPDATE on no column').toBe(false)
   })
 
   it('[post-deploy] authenticated holds NO table-write privilege on public.posts', async (ctx) => {
@@ -87,5 +97,9 @@ maybeDescribe('24 — posts least-privilege (PROD read-only)', () => {
     expect(r.auth_trunc, 'authenticated TRUNCATE must be revoked').toBe(false)
     expect(r.auth_refs, 'authenticated REFERENCES must be revoked').toBe(false)
     expect(r.auth_trig, 'authenticated TRIGGER must be revoked').toBe(false)
+    // No column-level write grant either: a per-column INSERT or UPDATE would reopen a direct write.
+    expect(r.auth_col_sel, 'control: the column-level check sees the per-column SELECT grant').toBe(true)
+    expect(r.auth_col_ins, 'authenticated must hold INSERT on no column (create_post only)').toBe(false)
+    expect(r.auth_col_upd, 'authenticated must hold UPDATE on no column (SECDEF-only)').toBe(false)
   })
 })
