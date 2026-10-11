@@ -897,6 +897,12 @@ const STATUS_KEYS: Record<string, keyof FeedMessagesMessages> = {
 /** The five conversation states (hooks/use-conversations.ts). */
 export const CONVERSATION_STATUSES = Object.keys(STATUS_KEYS)
 
+/** True when the badge for this status is one of FEED's labels; false when it is the stored
+ *  value itself, which is English. */
+export function isConversationStatus(status: string): boolean {
+  return Object.prototype.hasOwnProperty.call(STATUS_KEYS, status)
+}
+
 /** The status badge in the viewer's language; an unknown stored value is shown as stored. */
 export function conversationStatusLabel(status: string, locale: Locale): string {
   return Object.prototype.hasOwnProperty.call(STATUS_KEYS, status) ? messagesT(locale, STATUS_KEYS[status]) : status

@@ -10,7 +10,11 @@
 //   - names and message bodies keep their own direction and take no page language;
 //   - the hook's fixed sentences become the member's sentence; server text is marked English;
 //   - what is still English (the rating's name) is marked English;
-//   - every icon button has a name, and the message box's name is the text shown in it.
+//   - every icon button has a name, and the message box's name is the text shown in it;
+//   - a member's own words are never handed to a translation function;
+//   - loading says so to a screen reader, a failure is an alert, the confirm dialog has a
+//     description, a translated close label, and returns focus to the button that opened it;
+//   - Accept accepts and Decline asks first (the handlers are wired to the right buttons).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createElement as h, isValidElement } from 'react'
@@ -40,7 +44,8 @@ vi.mock('@/lib/event-time', async (orig) => ({ ...(await orig<object>()), browse
 import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { CONVERSATION_ERROR_SENTENCES, CONVERSATION_STATUSES, conversationError, conversationStatusLabel, messagesT } from '@/lib/i18n-feed-messages'
-import { DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { cardT } from '@/lib/i18n-feed-card'
+import { DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { MessagesPanel } from './messages-panel'
 
 const LOCALES = Object.keys(messages) as Locale[]
@@ -159,7 +164,29 @@ describe('member-written text', () => {
     expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">مرحبا، كيف أساعد؟</p>')
     expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">مريم</p>')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
-    expect(out).toMatch(/<input[^>]*dir="auto"/)
+  })
+
+  it('is never handed to a translation function: text that equals a code or a known sentence is shown as written', () => {
+    // A message that is, word for word, one of the hook's failure sentences; a name that is a status.
+    const out = html('es', { messages: [msg({ content: 'Failed to send message' })], conversations: [conv({ counterpartyDisplayName: 'pending' })] })
+    expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">Failed to send message</p>')
+    expect(out).not.toContain('No se pudo enviar el mensaje')
+    expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">pending</p>')
+    expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">pending</p>')
+    expect(out).not.toMatch(/>pendiente<\/p>/)
+  })
+
+  it('the message box follows what is typed; while empty it takes the page direction, so the placeholder sits on the right side', () => {
+    expect(html('ar')).toMatch(/<input[^>]*placeholder="اكتب رسالة..."[^>]*dir="rtl"/)
+    expect(html('en')).toMatch(/<input[^>]*dir="ltr"/)
+    state.language = 'ar'
+    state.hook = hook()
+    const c = mount(() => MessagesPanel())
+    const input = () => (findAll(c.tree(), (e: El) => typeof e.props.placeholder === 'string') as El[])[0]
+    expect(input().props.dir).toBe('rtl')
+    ;(input().props.onChange as (e: unknown) => void)({ target: { value: 'hello' } })
+    c.rerender()
+    expect(input().props.dir).toBe('auto')
   })
 
   it('with no name, the fallback word is FEED’s own text in the member language (no lang="")', () => {
@@ -172,13 +199,17 @@ describe('member-written text', () => {
 describe('failures', () => {
   it("the hook's own sentence reads in the member language, with no English mark", () => {
     const out = html('zh', { error: 'This volunteer already has a pending request. Please try again later.' })
-    expect(out).toMatch(/<div class="absolute bottom-4[^"]*">这位志愿者已有一个待处理的请求。请稍后再试。<\/div>/)
+    expect(out).toMatch(/<div role="alert" class="absolute bottom-4[^"]*">这位志愿者已有一个待处理的请求。请稍后再试。<\/div>/)
     expect(out).not.toContain('This volunteer already')
   })
 
   it("the server's own text is shown as received and marked English", () => {
     const out = html('zh', { error: 'new row violates row-level security policy for table "messages"' })
-    expect(out).toMatch(/<div lang="en" dir="ltr" class="absolute bottom-4[^"]*">new row violates row-level security policy/)
+    expect(out).toMatch(/<div role="alert" lang="en" dir="ltr" class="absolute bottom-4[^"]*">new row violates row-level security policy/)
+  })
+
+  it('a failure is announced: the banner is an alert', () => {
+    expect(html('zh', { error: 'Failed to send message' })).toMatch(/<div role="alert" class="absolute bottom-4/)
   })
 
   it('every sentence use-conversations.ts can report has a key, and no key is stale', () => {
@@ -199,6 +230,34 @@ describe('failures', () => {
 
   it('English members read the sentences exactly as before', () => {
     for (const sentence of Object.keys(CONVERSATION_ERROR_SENTENCES)) expect(conversationError(sentence, 'en').text).toBe(sentence)
+  })
+})
+
+describe('a stored value FEED has no label for', () => {
+  it('is shown as stored and marked English: an unknown status, an unknown category', () => {
+    const out = html('es', { conversations: [conv({ status: 'archived', resource: { name: 'Rides', category: 'pet_care' } })] })
+    expect(out).toMatch(/<div class="[^"]*" lang="en">archived<\/div>/)
+    expect(out.match(/<span lang="en" class="text-xs text-stone-600">Pet Care<\/span>/g)).toHaveLength(1)
+  })
+
+  it('a labelled status and category carry no English mark', () => {
+    const out = html('es')
+    expect(out).toMatch(/<div class="[^"]*bg-green-100 text-green-700">activa<\/div>/)
+    expect(out).toContain('<span class="text-xs text-stone-600">Empleo</span>')
+    expect(out).not.toMatch(/lang="en"/)
+  })
+})
+
+describe('loading', () => {
+  it('the inbox spinner is a status with the word "Loading" for a screen reader', () => {
+    const out = html('fr', { isLoading: true })
+    expect(out).toMatch(/<div role="status" class="flex items-center justify-center py-12"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span class="sr-only">Chargement…<\/span><\/div>/)
+  })
+
+  it('the review check on a completed conversation says so too', () => {
+    // First render: the review lookup has not answered yet.
+    const out = html('ko', { conversations: [conv({ status: 'completed' })] })
+    expect(out).toMatch(/<div role="status" class="flex items-center justify-center py-3">.*?<span class="sr-only">불러오는 중…<\/span><\/div>/)
   })
 })
 
@@ -266,16 +325,25 @@ describe('confirm dialog (a portal)', () => {
   function open(language: string, over: Record<string, unknown>, buttonText: string) {
     state.language = language
     state.hook = hook(over)
+    const opener = { isConnected: true, focus: vi.fn() }
     const c = mount(() => MessagesPanel())
     const button = (findAll(c.tree(), (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === buttonText) as El[])[0]
-    ;(button.props.onClick as () => void)()
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: opener })
     const tree = c.rerender()
     const content = (findAll(tree, (e: El) => e.type === DialogContent) as El[])[0]
-    return { content, title: textOf((findAll(content, (e: El) => e.type === DialogTitle) as El[])[0]), text: textOf(content) }
+    return {
+      c,
+      opener,
+      content,
+      title: textOf((findAll(content, (e: El) => e.type === DialogTitle) as El[])[0]),
+      description: (findAll(content, (e: El) => e.type === DialogDescription) as El[]).map(textOf),
+      text: textOf(content),
+    }
   }
+  const asVolunteerPending = { conversations: [conv({ status: 'pending', volunteer_id: 'me', requester_id: 'r' })] }
 
   it('ar: the dialog carries lang="ar" dir="rtl" and reads in Arabic', () => {
-    const d = open('ar', { conversations: [conv({ status: 'pending', volunteer_id: 'me', requester_id: 'r' })] }, 'رفض')
+    const d = open('ar', asVolunteerPending, 'رفض')
     expect(d.content.props.lang).toBe('ar')
     expect(d.content.props.dir).toBe('rtl')
     expect(d.title).toBe('رفض هذا الطلب؟')
@@ -293,6 +361,73 @@ describe('confirm dialog (a portal)', () => {
     expect(end.content.props.lang).toBe('hmn')
     expect(end.content.props.dir).toBe('ltr')
   })
+
+  it('the body is the dialog description (so it is read with the title)', () => {
+    const d = open('es', asVolunteerPending, 'Rechazar')
+    expect(d.description).toEqual(['Se avisará a quien hizo la solicitud de que fue rechazada.'])
+    // Radix wires aria-describedby to it; the dialog must not opt out.
+    expect('aria-describedby' in d.content.props).toBe(false)
+  })
+
+  it.each(LOCALES)('%s: the close button of the dialog is named in the member language', (locale) => {
+    const d = open(locale, asVolunteerPending, messagesT(locale, 'decline'))
+    expect(d.content.props.closeLabel).toBe(cardT(locale, 'close'))
+    if (locale !== 'en') expect(d.content.props.closeLabel).not.toBe('Close')
+  })
+
+  it('closing returns focus to the button that opened it', () => {
+    const d = open('en', { conversations: [conv({ status: 'pending' })] }, 'Withdraw')
+    const prevented = vi.fn()
+    ;(d.content.props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+    expect(d.opener.focus).toHaveBeenCalledTimes(1)
+    expect(prevented).toHaveBeenCalledTimes(1)
+  })
+
+  it('when that button has left the page, focus is left to the dialog (no call on a detached element)', () => {
+    const d = open('en', { conversations: [conv({ status: 'pending' })] }, 'Withdraw')
+    d.opener.isConnected = false
+    const prevented = vi.fn()
+    ;(d.content.props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+    expect(d.opener.focus).not.toHaveBeenCalled()
+    expect(prevented).not.toHaveBeenCalled()
+  })
+})
+
+describe('the buttons do what they say', () => {
+  const click = (c: { tree: () => unknown }, label: string) => {
+    const button = (findAll(c.tree(), (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === label) as El[])[0]
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: { isConnected: true, focus: () => {} } })
+  }
+
+  it('Accept accepts the request at once; nothing else is called', () => {
+    state.language = 'en'
+    const h0 = hook({ conversations: [conv({ status: 'pending', volunteer_id: 'me', requester_id: 'r' })] })
+    state.hook = h0
+    const c = mount(() => MessagesPanel())
+    click(c, 'Accept')
+    expect(h0.acceptRequest).toHaveBeenCalledWith('c1')
+    for (const other of [h0.declineRequest, h0.withdrawRequest, h0.completeConversation, h0.cancelConversation]) expect(other).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['Decline', 'Decline Request', 'declineRequest', { status: 'pending', volunteer_id: 'me', requester_id: 'r' }],
+    ['Withdraw', 'Withdraw Request', 'withdrawRequest', { status: 'pending' }],
+    ['End & review', 'End & review', 'completeConversation', { status: 'active', volunteer_id: 'me', requester_id: 'r' }],
+  ] as const)('%s asks first; confirming calls only %s', (label, confirmLabel, method, over) => {
+    state.language = 'en'
+    const h0 = hook({ conversations: [conv(over)] })
+    state.hook = h0
+    const c = mount(() => MessagesPanel())
+    click(c, label)
+    const methods = ['acceptRequest', 'declineRequest', 'withdrawRequest', 'completeConversation', 'cancelConversation'] as const
+    for (const m of methods) expect(h0[m], `${m} before confirming`).not.toHaveBeenCalled()
+    const content = (findAll(c.rerender(), (e: El) => e.type === DialogContent) as El[])[0]
+    const confirm = (findAll(content, (e: El) => e.props['data-testid'] === 'confirm-end-btn') as El[])[0]
+    expect(textOf(confirm).trim()).toBe(confirmLabel)
+    ;(confirm.props.onClick as () => void)()
+    expect(h0[method]).toHaveBeenCalledWith('c1')
+    for (const m of methods.filter((x) => x !== method)) expect(h0[m], m).not.toHaveBeenCalled()
+  })
 })
 
 describe('messages-panel.tsx source', () => {
@@ -305,8 +440,20 @@ describe('messages-panel.tsx source', () => {
     }
   })
 
+  it('the review modal it opens is still English and marks itself English (a portal has no translated parent)', () => {
+    const modal = readFileSync(fileURLToPath(new URL('../feed/review-modal.tsx', import.meta.url)), 'utf8')
+    expect(modal).toMatch(/<DialogContent lang="en" dir="ltr"/)
+    expect(modal.match(/<DialogContent\b/g)).toHaveLength(1)
+  })
+
   it('status and category go through their label functions', () => {
     expect(code).toContain('{conversationStatusLabel(selectedConv.status, locale)}')
     expect(code.match(/resourceCategoryLabel\(/g)).toHaveLength(2)
+  })
+
+  it('no translation reader is given a member\'s own words', () => {
+    const READERS = 'messagesT|feedChromeT|cardT|conversationError|conversationStatusLabel|resourceCategoryLabel'
+    const MEMBER_TEXT = 'msg\\.content|otherUserName|otherName|counterpartyDisplayName|first_name|resource\\.name'
+    expect(code).not.toMatch(new RegExp(`\\b(${READERS})\\([^()]*\\b(${MEMBER_TEXT})\\b`))
   })
 })

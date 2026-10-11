@@ -25,6 +25,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
@@ -41,8 +42,13 @@ import { formatMessage, splitMessage } from '@/lib/format-message'
 import { formatClock, formatCount, formatDate } from '@/lib/i18n-intl'
 import { browserTimeZone } from '@/lib/event-time'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
-import { conversationError, conversationStatusLabel, messagesT } from '@/lib/i18n-feed-messages'
-import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
+import { cardT } from '@/lib/i18n-feed-card'
+import { conversationError, conversationStatusLabel, isConversationStatus, messagesT } from '@/lib/i18n-feed-messages'
+import { resourceCategoryLabel, resourceCategoryMessages } from '@/lib/i18n-resource-categories'
+
+/** A stored value FEED has no label for is shown as stored, which is English: mark it so. */
+const englishIfUnlabelled = (labelled: boolean) => (labelled ? undefined : 'en')
+const isResourceCategory = (category: string) => Object.prototype.hasOwnProperty.call(resourceCategoryMessages.en, category)
 
 export function MessagesPanel() {
   const { user, isAnonymous } = useAuth()
@@ -74,6 +80,12 @@ export function MessagesPanel() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   type ConfirmAction = { type: 'decline' | 'withdraw' | 'cancel' | 'complete'; id: string } | null
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
+  // The button that opened the confirm dialog: focus returns to it when the dialog closes.
+  const confirmOpenerRef = useRef<HTMLElement | null>(null)
+  const openConfirm = (action: NonNullable<ConfirmAction>, opener: HTMLElement) => {
+    confirmOpenerRef.current = opener
+    setConfirmAction(action)
+  }
 
   // Review state for the selected completed conversation
   const [myReview, setMyReview] = useState<ReviewRow | null | undefined>(undefined) // undefined = not yet fetched
@@ -199,8 +211,9 @@ export function MessagesPanel() {
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+          <div role="status" className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-stone-400" aria-hidden="true" />
+            <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -308,6 +321,7 @@ export function MessagesPanel() {
                 <p lang={otherUserLang} dir="auto" className="font-medium text-stone-800 text-sm">{otherUserName}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge
+                    lang={englishIfUnlabelled(isConversationStatus(selectedConv.status))}
                     className={`text-xs ${
                       selectedConv.status === 'active' ? 'bg-green-100 text-green-700' :
                       selectedConv.status === 'pending' ? 'bg-amber-100 text-amber-700' :
@@ -318,7 +332,7 @@ export function MessagesPanel() {
                     {conversationStatusLabel(selectedConv.status, locale)}
                   </Badge>
                   {selectedConv.resource?.category && (
-                    <span className="text-xs text-stone-600">
+                    <span lang={englishIfUnlabelled(isResourceCategory(selectedConv.resource.category))} className="text-xs text-stone-600">
                       {resourceCategoryLabel(selectedConv.resource.category, locale)}
                     </span>
                   )}
@@ -332,13 +346,13 @@ export function MessagesPanel() {
                     <Button size="sm" onClick={() => acceptRequest(selectedConv.id)} className="bg-green-600 hover:bg-green-700 text-white text-xs">
                       <Check className="w-3 h-3 me-1" /> {messagesT(locale, 'accept')}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'decline', id: selectedConv.id })} className="text-xs">
+                    <Button size="sm" variant="outline" onClick={(e) => openConfirm({ type: 'decline', id: selectedConv.id }, e.currentTarget)} className="text-xs">
                       {messagesT(locale, 'decline')}
                     </Button>
                   </>
                 )}
                 {selectedConv.status === 'pending' && !isVolunteer && (
-                  <Button size="sm" variant="outline" onClick={() => setConfirmAction({ type: 'withdraw', id: selectedConv.id })} className="text-xs">
+                  <Button size="sm" variant="outline" onClick={(e) => openConfirm({ type: 'withdraw', id: selectedConv.id }, e.currentTarget)} className="text-xs">
                     {messagesT(locale, 'withdraw')}
                   </Button>
                 )}
@@ -346,7 +360,7 @@ export function MessagesPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setConfirmAction({ type: 'complete', id: selectedConv.id })}
+                    onClick={(e) => openConfirm({ type: 'complete', id: selectedConv.id }, e.currentTarget)}
                     className="text-xs text-lime-700 hover:text-lime-800 border-lime-300"
                     data-testid="end-and-review-btn"
                   >
@@ -402,7 +416,7 @@ export function MessagesPanel() {
                       onKeyDown={handleKeyDown}
                       placeholder={messagesT(locale, 'inputPlaceholder')}
                       aria-label={messagesT(locale, 'inputPlaceholder')}
-                      dir="auto"
+                      dir={messageInput ? 'auto' : dir(locale)}
                       className="flex-1 text-stone-900 placeholder:text-stone-400"
                       maxLength={2000}
                     />
@@ -421,8 +435,9 @@ export function MessagesPanel() {
               /* ── Review prompt card (both parties see this) ── */
               <div className="p-4 border-t border-stone-200/50">
                 {reviewLoading || myReview === undefined ? (
-                  <div className="flex items-center justify-center py-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
+                  <div role="status" className="flex items-center justify-center py-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" aria-hidden="true" />
+                    <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
                   </div>
                 ) : myReview !== null ? (
                   /* Already reviewed — show their rating */
@@ -487,6 +502,7 @@ export function MessagesPanel() {
       {failure && (
         /* The hook's own sentences read in the member's language; the server's text is English. */
         <div
+          role="alert"
           lang={failure.translated ? undefined : 'en'}
           dir={failure.translated ? undefined : 'ltr'}
           className="absolute bottom-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600"
@@ -498,7 +514,21 @@ export function MessagesPanel() {
       {/* Confirm dialog for conversation actions */}
       <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
         {/* A portal: it does not inherit the panel's language, so it carries its own. */}
-        <DialogContent lang={locale} dir={dir(locale)} className="sm:max-w-sm">
+        <DialogContent
+          lang={locale}
+          dir={dir(locale)}
+          closeLabel={cardT(locale, 'close')}
+          className="sm:max-w-sm"
+          onCloseAutoFocus={(e) => {
+            // Back to the button that opened it, when that button is still on the page (after
+            // a confirmed action it may be gone; then Radix decides).
+            const opener = confirmOpenerRef.current
+            if (opener?.isConnected) {
+              e.preventDefault()
+              opener.focus()
+            }
+          }}
+        >
           <DialogHeader className="sm:text-start">
             <DialogTitle>
               {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDeclineTitle')}
@@ -507,12 +537,12 @@ export function MessagesPanel() {
               {confirmAction?.type === 'complete' && messagesT(locale, 'confirmCompleteTitle')}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-stone-600">
+          <DialogDescription className="text-sm text-stone-600">
             {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDeclineBody')}
             {confirmAction?.type === 'withdraw' && messagesT(locale, 'confirmWithdrawBody')}
             {confirmAction?.type === 'cancel' && messagesT(locale, 'confirmCancelBody')}
             {confirmAction?.type === 'complete' && messagesT(locale, 'confirmCompleteBody')}
-          </p>
+          </DialogDescription>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>
               {messagesT(locale, 'keepChatting')}
@@ -598,7 +628,7 @@ function ConversationCard({ conversation, userId, isSelected, onClick, locale }:
         </span>
       </div>
       {categoryLabel && (
-        <span className="text-xs text-stone-600">{categoryLabel}</span>
+        <span lang={englishIfUnlabelled(isResourceCategory(conversation.resource?.category ?? ''))} className="text-xs text-stone-600">{categoryLabel}</span>
       )}
     </button>
   )
