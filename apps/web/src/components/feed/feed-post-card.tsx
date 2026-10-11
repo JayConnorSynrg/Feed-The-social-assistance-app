@@ -15,7 +15,7 @@
 // (lib/i18n-feed-badges.ts): the card carries no English mark except around an opt-in failure or a
 // stored status FEED has no sentence for. The opt-in handlers are the panel's, unchanged.
 
-import React, { useId, useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
 import { m, useReducedMotion } from 'motion/react'
 import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, ScrollText, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { Locale } from '@/lib/i18n'
@@ -250,6 +250,14 @@ export function FeedPostCard({
 
   const [optInListOpen, setOptInListOpen] = useState(false)
   const [profileSheetOpen, setProfileSheetOpen] = useState(false)
+  // The control that opened the author sheet (focus returns to it when the sheet closes), and
+  // the card itself (where focus goes if that control has left the page).
+  const sheetOpenerRef = useRef<HTMLElement | null>(null)
+  const articleRef = useRef<HTMLElement | null>(null)
+  const openProfileSheet = (opener: HTMLElement) => {
+    sheetOpenerRef.current = opener
+    setProfileSheetOpen(true)
+  }
 
   const showReviewSourcerBtn = !isAuthor && optInStatus === 'completed' && !seekerHasReviewed && currentUserOptInId != null
 
@@ -274,7 +282,7 @@ export function FeedPostCard({
   })
 
   return (
-    <article aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
+    <article ref={articleRef} aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
       <h3 id={headingId} className="sr-only">
         {formatMessage(cardT(locale, 'postHeading'), { name: authorName })}
       </h3>
@@ -290,7 +298,7 @@ export function FeedPostCard({
       <div data-card-actions="" className="mb-3 flex items-start gap-3">
         <button
           type="button"
-          onClick={() => setProfileSheetOpen(true)}
+          onClick={(e) => openProfileSheet(e.currentTarget)}
           aria-label={formatMessage(cardT(locale, 'viewProfile'), { name: authorName })}
           data-testid={`author-open-${post.author.id}`}
           className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4a5d23] focus:outline-hidden focus:ring-2 focus:ring-lime-700"
@@ -307,7 +315,7 @@ export function FeedPostCard({
           <div className="mb-0.5 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setProfileSheetOpen(true)}
+              onClick={(e) => openProfileSheet(e.currentTarget)}
               className="truncate text-sm font-medium hover:underline focus:underline focus:outline-hidden"
               data-testid={`author-name-${post.author.id}`}
               dir="auto"
@@ -359,14 +367,16 @@ export function FeedPostCard({
           onUnfollow={onUnfollow}
           postId={post.id}
           locale={locale}
+          returnFocusRef={sheetOpenerRef}
+          fallbackFocus={() => articleRef.current?.focus()}
         />
 
         {followGate !== 'hidden' && (
           <button
             type="button"
             data-testid={`follow-btn-${post.author.id}`}
-            onClick={() => {
-              if (followGate === 'guest-prompt') setProfileSheetOpen(true)
+            onClick={(e) => {
+              if (followGate === 'guest-prompt') openProfileSheet(e.currentTarget)
               else if (isFollowingAuthor) onUnfollow!(post.author.id)
               else onFollow!(post.author.id)
             }}
@@ -522,7 +532,7 @@ export function FeedPostCard({
       {isAuthor && optInListOpen && authorOptIns && authorOptIns.length > 0 && (
         <div data-testid={`opt-in-list-${post.id}`} className="mb-3 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
           {authorOptIns.map((oi) => (
-            <div key={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+            <div key={oi.id} data-opt-in-row={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <User className="h-3 w-3 flex-shrink-0 text-stone-500" aria-hidden="true" />
                 <span className="truncate text-xs font-medium text-stone-700" lang="" dir="auto" data-member-text="seeker-name">
@@ -563,7 +573,7 @@ export function FeedPostCard({
                     data-testid={`unblock-optin-${oi.id}`}
                     onClick={() => onAuthorUnblockOptIn?.(oi.id)}
                     aria-label={optInActionName(locale, 'unblock', oi.seekerName)}
-                    className="rounded bg-lime-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                    className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
                   >
                     {optInsT(locale, 'unblock')}
                   </button>
@@ -575,7 +585,7 @@ export function FeedPostCard({
                       data-testid={`accept-optin-${oi.id}`}
                       onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
                       aria-label={optInActionName(locale, 'accept', oi.seekerName)}
-                      className="rounded bg-lime-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                      className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
                     >
                       {optInsT(locale, 'accept')}
                     </button>
@@ -584,7 +594,7 @@ export function FeedPostCard({
                       data-testid={`decline-optin-${oi.id}`}
                       onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
                       aria-label={optInActionName(locale, 'decline', oi.seekerName)}
-                      className="rounded bg-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300"
+                      className="rounded bg-stone-200 px-2 py-1.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300"
                     >
                       {optInsT(locale, 'decline')}
                     </button>
@@ -596,7 +606,7 @@ export function FeedPostCard({
                     data-testid={`complete-optin-${oi.id}`}
                     onClick={() => onAuthorUpdateOptIn?.(oi.id, 'completed')}
                     aria-label={optInActionName(locale, 'markCompleted', oi.seekerName)}
-                    className="rounded bg-blue-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800"
+                    className="rounded bg-blue-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800"
                   >
                     {optInsT(locale, 'markCompleted')}
                   </button>
@@ -607,7 +617,7 @@ export function FeedPostCard({
                     onClick={() => onAuthorReviewSeeker?.(oi.id, oi.seekerName)}
                     data-testid={`review-seeker-${oi.id}`}
                     aria-label={optInActionName(locale, 'reviewSeeker', oi.seekerName)}
-                    className="flex items-center gap-0.5 rounded bg-amber-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-amber-800"
+                    className="flex items-center gap-0.5 rounded bg-amber-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-amber-800"
                   >
                     <Star className="h-2.5 w-2.5" aria-hidden="true" />
                     {optInsT(locale, 'reviewSeeker')}
@@ -633,9 +643,11 @@ export function FeedPostCard({
         </div>
       )}
 
-      {/* A sentence FEED wrote reads in the member's language; anything else is English. */}
+      {/* A sentence FEED wrote reads in the member's language; anything else is English. An alert:
+          nothing else tells a screen-reader user the opt-in did not go through. Focus stays put. */}
       {optInFailure && (
         <div
+          role="alert"
           lang={optInFailure.translated ? undefined : 'en'}
           dir={optInFailure.translated ? undefined : 'ltr'}
           data-testid={`opt-in-error-${post.id}`}

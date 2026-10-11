@@ -6,6 +6,11 @@
 // goes and what is announced after the edit / report / remove dialogs, and that a realtime patch
 // announces nothing. Children are not rendered: the test reads the props FeedPanel gives them
 // (FeedPostCard, PostEditDialog, ReportDialog, ConfirmDeleteDialog) and calls them as React would.
+//
+// Also the sign-up ("opt-in") actions of a card: each sends exactly the request it always sent,
+// once; its outcome is said in the card-notice region and focus goes to the control that replaced
+// the pressed one (or stays, when the member moved on); a failure is said and moves nothing; the
+// list stays on screen while the feed is re-read; and the review dialog gets its opener back.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -27,6 +32,11 @@ const h = vi.hoisted(() => ({
   elements: new Map<string, { focus: () => void; isConnected: boolean }>(),
   // Hook results are stable objects, as the real hooks' callbacks are (useCallback).
   stable: {} as Record<string, unknown>,
+  // Sign-ups: the viewer's own statuses (post id → status), the rows of resource_opt_ins, and
+  // what a write to that table answers.
+  memberStatuses: new Map<string, string>(),
+  optIns: [] as Row[],
+  writeError: null as unknown,
 }))
 const once = <T,>(k: string, make: () => T): T => (h.stable[k] ??= make()) as T
 
@@ -48,7 +58,7 @@ vi.mock('@/hooks/use-admin-viewer', async (orig) => ({
 }))
 vi.mock('@/hooks/use-saved-resources', () => ({ useSavedResources: () => once('saved', () => ({ savedResources: [] })) }))
 vi.mock('@/hooks/use-opt-ins', () => ({
-  useOptIns: () => once('optins', () => ({ fetchOptInsForPosts: async () => new Map(), optIn: vi.fn(), withdrawOptIn: vi.fn() })),
+  useOptIns: () => once('optins', () => ({ fetchOptInsForPosts: async () => new Map(h.memberStatuses), optIn: vi.fn(), withdrawOptIn: vi.fn() })),
 }))
 vi.mock('@/hooks/use-reviews', () => ({ useReviews: () => once('reviews', () => ({ fetchMyReviewsForOptIns: async () => new Map() })) }))
 vi.mock('@/hooks/use-follows', () => ({
@@ -92,6 +102,11 @@ vi.mock('@/lib/supabase/client', () => {
       const calls: Call[] = []
       h.reads.push({ table, calls })
       const result = () => {
+        if (table === 'resource_opt_ins') {
+          if (calls.some((c) => c.m === 'update')) return { data: null, error: h.writeError }
+          const full = calls.some((c) => c.m === 'select' && String(c.a[0]).includes('seeker:profiles'))
+          return { data: full ? h.optIns : h.optIns.map((o) => ({ post_id: o.post_id })), error: null }
+        }
         if (table !== 'posts') return { data: [], error: null }
         const idEq = calls.find((c) => c.m === 'eq' && c.a[0] === 'id')?.a[1]
         const idIn = calls.find((c) => c.m === 'in' && c.a[0] === 'id')?.a[1] as string[] | undefined
@@ -163,6 +178,9 @@ import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 import { FEED_POST_SELECT } from '@/components/feed/post-model'
 import { cardT } from '@/lib/i18n-feed-card'
 import { FeedHeader } from '@/components/feed/feed-chrome'
+import { ReviewModal } from '@/components/feed/review-modal'
+import { isolate } from '@/lib/format-message'
+import { optInsT } from '@/lib/i18n-feed-optins'
 
 const AUTHOR = 'aaaaaaaa-0000-4000-8000-000000000001'
 const OTHER = 'bbbbbbbb-0000-4000-8000-000000000002'
@@ -221,6 +239,9 @@ beforeEach(() => {
   h.elements.clear()
   h.realtime = null
   h.rpcReply = () => ({ data: { success: true }, error: null })
+  h.memberStatuses = new Map()
+  h.optIns = []
+  h.writeError = null
   signIn('member')
 })
 
@@ -462,5 +483,309 @@ describe('dialogs without a description say so (no dangling aria-describedby)', 
     const content = findAll(tree, (e) => e.props.className === 'max-w-sm' && 'aria-describedby' in e.props)
     expect(content).toHaveLength(1)
     expect(content[0].props['aria-describedby']).toBeUndefined()
+  })
+})
+
+describe('sign-up actions: what is sent, what is said, where focus goes', () => {
+  type Spy = ReturnType<typeof vi.fn>
+  const optInSpies = () => h.stable.optins as { optIn: Spy; withdrawOptIn: Spy }
+  const doc = () => (globalThis as unknown as { document: Record<string, unknown> }).document
+  const seeker = (id: string, name: string) => ({ id, first_name: name, harmony_score: null, harmony_reviews_count: 0 })
+  const optIn = (id: string, name: string, status = 'pending', post = 'p1'): Row => ({ id, post_id: post, seeker_id: `s-${id}`, status, seeker: seeker(`s-${id}`, name) })
+  /** Writes to resource_opt_ins (each `from('resource_opt_ins')` chain that called update). */
+  const updates = () => h.reads.filter((r) => r.table === 'resource_opt_ins' && r.calls.some((c) => c.m === 'update')).map((r) => r.calls.filter((c) => c.m === 'update' || c.m === 'eq').map((c) => c.a))
+  const card = (c: { tree: () => unknown }, id: string) => cardsOf(c.tree()).find((x) => (x.props.post as { id: string }).id === id) as El
+  const rowAction = (id: string) => `[data-opt-in-row="${id}"] button:not([disabled])`
+  /** The pressed control has left the page and focus went with it (the browser puts it on the body). */
+  const gone = (e: { isConnected: boolean }) => {
+    e.isConnected = false
+    doc().activeElement = doc().body
+  }
+
+  beforeEach(() => {
+    h.rows = [row('p1', { max_seekers: 2, slots_remaining: 2 }), row('p3', { user_id: OTHER, user: { ...(row('x').user as Row), id: OTHER, first_name: 'Bo' } })]
+    optInSpies()?.optIn.mockReset().mockResolvedValue({ id: 'o9', post_id: 'p1', status: 'pending' })
+    optInSpies()?.withdrawOptIn.mockReset().mockResolvedValue(true)
+    doc().body = {}
+    doc().activeElement = doc().body
+  })
+
+  describe('the member', () => {
+    it('Opt In: one request; then "You are opted in." and focus on Withdraw, which took the button\'s place', async () => {
+      const c = await feed()
+      optInSpies().optIn.mockClear()
+      const pressed = el('opt-in-btn-p1')
+      el('withdraw-btn-p1')
+      const sent = (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      // Nothing is said or moved before the request has come back and the card shows it.
+      expect(h.notices).toEqual([])
+      h.memberStatuses.set('p1', 'pending')
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(optInSpies().optIn).toHaveBeenCalledTimes(1)
+      expect(optInSpies().optIn).toHaveBeenCalledWith('p1')
+      expect(optInSpies().withdrawOptIn).not.toHaveBeenCalled()
+      expect(card(c, 'p1').props.optInStatus).toBe('pending')
+      expect(h.focused).toEqual(['withdraw-btn-p1'])
+      expect(h.notices).toEqual([optInsT('en', 'announceOptedIn')])
+      // Said once: later renders and re-reads add nothing.
+      c.rerender()
+      await c.flush()
+      expect(h.notices).toHaveLength(1)
+      expect(h.focused).toHaveLength(1)
+      expect(optInSpies().optIn).toHaveBeenCalledTimes(1)
+    })
+
+    it('Opt In refused ("This offer is full"): the card gets the sentence for its alert line; nothing is announced here and focus stays', async () => {
+      const c = await feed()
+      optInSpies().optIn.mockReset().mockRejectedValue(new Error('This offer is full'))
+      el('opt-in-btn-p1')
+      el('withdraw-btn-p1')
+      await (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      await c.flush()
+      expect(optInSpies().optIn).toHaveBeenCalledTimes(1)
+      expect(card(c, 'p1').props.optInError).toBe('This offer is full')
+      expect(h.notices).toEqual([])
+      expect(h.focused).toEqual([])
+    })
+
+    it('Withdraw: one request; then "Your opt-in was withdrawn." and focus on Opt In', async () => {
+      h.memberStatuses.set('p1', 'pending')
+      const c = await feed()
+      expect(card(c, 'p1').props.optInStatus).toBe('pending')
+      const pressed = el('withdraw-btn-p1')
+      el('opt-in-btn-p1')
+      const sent = (card(c, 'p1').props.onWithdraw as (id: string) => Promise<void>)('p1')
+      h.memberStatuses.delete('p1')
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(optInSpies().withdrawOptIn).toHaveBeenCalledTimes(1)
+      expect(optInSpies().withdrawOptIn).toHaveBeenCalledWith('p1')
+      expect(optInSpies().optIn).not.toHaveBeenCalled()
+      expect(h.focused).toEqual(['opt-in-btn-p1'])
+      expect(h.notices).toEqual([optInsT('en', 'announceWithdrawn')])
+    })
+
+    it('a member who moved on keeps their place: the result is said, focus is not taken', async () => {
+      const c = await feed()
+      const pressed = el('opt-in-btn-p1')
+      el('withdraw-btn-p1')
+      const sent = (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      h.memberStatuses.set('p1', 'pending')
+      pressed.isConnected = false
+      doc().activeElement = { isConnected: true }
+      await sent
+      await c.flush()
+      expect(h.notices).toEqual([optInsT('en', 'announceOptedIn')])
+      expect(h.focused).toEqual([])
+    })
+
+    it('a pressed control that is still on the page keeps the focus', async () => {
+      const c = await feed()
+      el('opt-in-btn-p1')
+      el('withdraw-btn-p1')
+      const sent = (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      h.memberStatuses.set('p1', 'pending')
+      await sent
+      await c.flush()
+      expect(h.notices).toHaveLength(1)
+      expect(h.focused).toEqual([])
+    })
+  })
+
+  describe('the author', () => {
+    const asAuthor = async (rows: Row[]) => {
+      signIn('author')
+      h.optIns = rows
+      const c = await feed()
+      h.reads.length = 0
+      h.rpcs.length = 0
+      return c
+    }
+    const update = (c: { tree: () => unknown }, id: string, status: string) => (card(c, 'p1').props.onAuthorUpdateOptIn as (id: string, s: string) => Promise<void>)(id, status)
+
+    it('the card gets the rows of its sign-up list', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      expect((card(c, 'p1').props.authorOptIns as Array<{ id: string; seekerName: string }>).map((o) => [o.id, o.seekerName])).toEqual([['o1', 'Bo'], ['o2', 'Cy']])
+    })
+
+    it('Accept: one write; then "… accepted." and focus on that row\'s Mark Completed', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const pressed = el('accept-optin-o1')
+      el('complete-optin-o1')
+      const sent = update(c, 'o1', 'accepted')
+      h.optIns = [optIn('o1', 'Bo', 'accepted'), optIn('o2', 'Cy')]
+      gone(pressed)
+      // The feed is re-read with the list left on screen: the card, and the author's place in its
+      // open list, are not unmounted.
+      c.rerender()
+      expect(cardIds(c.tree())).toContain('p1')
+      await sent
+      c.rerender()
+      expect(cardIds(c.tree())).toContain('p1')
+      await c.flush()
+      expect(updates()).toEqual([[[{ status: 'accepted' }], ['id', 'o1']]])
+      expect(h.focused).toEqual(['complete-optin-o1'])
+      expect(h.notices).toEqual([`${isolate('Bo')} accepted.`])
+      c.rerender()
+      await c.flush()
+      expect(updates()).toHaveLength(1)
+      expect(h.notices).toHaveLength(1)
+    })
+
+    it('Decline: one write; then "… declined." and focus on the next row\'s first action', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const pressed = el('decline-optin-o1')
+      el(rowAction('o2'))
+      el('opt-in-manage-p1')
+      const sent = update(c, 'o1', 'declined')
+      h.optIns = [optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')]
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(updates()).toEqual([[[{ status: 'declined' }], ['id', 'o1']]])
+      expect(h.focused).toEqual([rowAction('o2')])
+      expect(h.notices).toEqual([`${isolate('Bo')} declined.`])
+    })
+
+    it('Decline on the last row with an action: focus goes to the sign-up list toggle', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const pressed = el('decline-optin-o2')
+      el('opt-in-manage-p1')
+      const sent = update(c, 'o2', 'declined')
+      h.optIns = [optIn('o1', 'Bo'), optIn('o2', 'Cy', 'declined')]
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      expect(h.notices).toEqual([`${isolate('Cy')} declined.`])
+    })
+
+    it('Mark Completed: one write; then "Marked completed for …" and focus on the sign-up list toggle', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'accepted')])
+      const pressed = el('complete-optin-o1')
+      el('opt-in-manage-p1')
+      const sent = update(c, 'o1', 'completed')
+      h.optIns = [optIn('o1', 'Bo', 'completed')]
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(updates()).toEqual([[[{ status: 'completed' }], ['id', 'o1']]])
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      expect(h.notices).toEqual([`Marked completed for ${isolate('Bo')}.`])
+    })
+
+    it('Unblock: one request; then "… unblocked." and focus on the next row or the toggle', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+      const pressed = el('unblock-optin-o1')
+      el(rowAction('o2'))
+      const sent = (card(c, 'p1').props.onAuthorUnblockOptIn as (id: string) => Promise<void>)('o1')
+      h.optIns = [optIn('o2', 'Cy')]
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(h.rpcs.filter((r) => r.fn === 'unblock_opt_in')).toEqual([{ fn: 'unblock_opt_in', args: { p_opt_in_id: 'o1' } }])
+      expect(updates()).toEqual([])
+      expect(h.focused).toEqual([rowAction('o2')])
+      expect(h.notices).toEqual([`${isolate('Bo')} unblocked. They can request again.`])
+    })
+
+    it.each(['accepted', 'declined', 'completed'] as const)('a failed %s: said in the same region; one write; focus stays on the pressed button', async (status) => {
+      const c = await asAuthor([optIn('o1', 'Bo', status === 'completed' ? 'accepted' : 'pending'), optIn('o2', 'Cy')])
+      h.writeError = { code: '42501', message: 'permission denied' }
+      el(status === 'accepted' ? 'accept-optin-o1' : status === 'declined' ? 'decline-optin-o1' : 'complete-optin-o1')
+      el('complete-optin-o1')
+      el('opt-in-manage-p1')
+      el(rowAction('o2'))
+      await update(c, 'o1', status)
+      await c.flush()
+      expect(updates()).toHaveLength(1)
+      expect(h.notices).toEqual([cardT('en', 'statusModerationFailed')])
+      expect(h.focused).toEqual([])
+      // No re-read of the feed follows a failed write.
+      expect(h.reads.filter((r) => r.table === 'posts')).toEqual([])
+    })
+
+    it('a failed unblock is said too, and sends nothing else', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined')])
+      h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: null, error: { message: 'Only a declined opt-in can be unblocked' } } : { data: null, error: null })
+      el('unblock-optin-o1')
+      await (card(c, 'p1').props.onAuthorUnblockOptIn as (id: string) => Promise<void>)('o1')
+      await c.flush()
+      expect(h.rpcs.filter((r) => r.fn === 'unblock_opt_in')).toHaveLength(1)
+      expect(h.notices).toEqual([cardT('en', 'statusModerationFailed')])
+      expect(h.focused).toEqual([])
+    })
+
+    it('a name that reads like a status or a sentence is said as written, isolated', async () => {
+      const c = await asAuthor([optIn('o1', 'accepted')])
+      const pressed = el('accept-optin-o1')
+      el('complete-optin-o1')
+      const sent = update(c, 'o1', 'accepted')
+      h.optIns = [optIn('o1', 'accepted', 'accepted')]
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(h.notices).toEqual([`${isolate('accepted')} accepted.`])
+    })
+  })
+
+  describe('the review dialog', () => {
+    const openFromList = async () => {
+      signIn('author')
+      h.optIns = [optIn('o1', 'Bo', 'completed')]
+      const c = await feed()
+      const opener = el('review-seeker-o1')
+      ;(card(c, 'p1').props.onAuthorReviewSeeker as (id: string, name: string) => void)('o1', 'Bo')
+      c.rerender()
+      return { c, opener, modal: () => one(c.tree(), ReviewModal) }
+    }
+
+    it('gets the button that opened it (focus returns there when it closes unsent) and the role as a code', async () => {
+      const { opener, modal } = await openFromList()
+      expect((modal().props.returnFocusRef as { current: unknown }).current).toBe(opener)
+      expect(modal().props).toMatchObject({ optInId: 'o1', revieweeName: 'Bo', revieweeRole: 'seeker' })
+    })
+
+    it('when that button is gone, focus goes to the sign-up list toggle of that post; with no toggle, to the post card', async () => {
+      const { modal } = await openFromList()
+      el('opt-in-manage-p1')
+      el('post-card-p1')
+      ;(modal().props.fallbackFocus as () => void)()
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      h.elements.delete('opt-in-manage-p1')
+      ;(modal().props.fallbackFocus as () => void)()
+      expect(h.focused).toEqual(['opt-in-manage-p1', 'post-card-p1'])
+    })
+
+    it('a sent review: focus first, then "Your review was submitted", and the feed is re-read with the list left on screen', async () => {
+      const { c, modal } = await openFromList()
+      el('opt-in-manage-p1')
+      h.reads.length = 0
+      ;(modal().props.onSubmitted as () => void)()
+      c.rerender()
+      expect(cardIds(c.tree())).toContain('p1')
+      await c.flush()
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      expect(h.notices).toEqual(['Your review was submitted'])
+      expect(h.reads.filter((r) => r.table === 'posts')).toHaveLength(1)
+    })
+
+    it('opened from "Review sourcer": the opener is that button, and the stable control is the post card', async () => {
+      h.memberStatuses.set('p1', 'completed')
+      h.optIns = [{ ...optIn('o7', 'Me', 'completed'), seeker_id: OTHER }]
+      const c = await feed()
+      const opener = el('review-sourcer-p1')
+      el('post-card-p1')
+      ;(card(c, 'p1').props.onReviewSourcer as (postId: string, optInId: string) => void)('p1', 'o7')
+      c.rerender()
+      const modal = one(c.tree(), ReviewModal)
+      expect((modal.props.returnFocusRef as { current: unknown }).current).toBe(opener)
+      expect(modal.props.revieweeRole).toBe('sourcer')
+      ;(modal.props.fallbackFocus as () => void)()
+      expect(h.focused).toEqual(['post-card-p1'])
+    })
   })
 })

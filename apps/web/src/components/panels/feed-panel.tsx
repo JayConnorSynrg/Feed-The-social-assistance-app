@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
+import { useSignUpOutcomes } from '@/hooks/use-sign-up-outcomes'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
 import { useFollows } from '@/hooks/use-follows'
 import { MessagesPanel } from './messages-panel'
@@ -64,6 +65,7 @@ import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocaleSettled, useFeedAnnounceReady, nextTabIndex, type FeedLoadError, type FeedRankMode, type FilterType } from '@/components/feed/feed-chrome'
 import { PostTypeWizard } from './post-type-wizard'
 import { ReviewModal } from '@/components/feed/review-modal'
+import { messagesT } from '@/lib/i18n-feed-messages'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
@@ -620,6 +622,12 @@ export function FeedPanel() {
     .map((r) => ({ id: r.resource_id as string, name: r.resource_name }))
   const { fetchOptInsForPosts, optIn: doOptIn, withdrawOptIn: doWithdraw } = useOptIns()
   const { fetchMyReviewsForOptIns } = useReviews()
+  // What a sign-up action says and where focus goes once its outcome is on screen. It sends
+  // nothing: the handlers below tell it when an attempt begins and how its request came back.
+  const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap })
+  // The button that opened the review dialog and the post it sits on (where focus returns).
+  const reviewOpenerRef = useRef<HTMLElement | null>(null)
+  const reviewPostIdRef = useRef<string | null>(null)
   const { followingIds, fetchFollowing, follow: doFollow, unfollow: doUnfollow, error: followError } = useFollows()
   const { petitions: petitionsList, sign: signPetition, signingId: signingPetitionId } = usePetitions()
 
@@ -745,9 +753,12 @@ export function FeedPanel() {
   // Fetch posts from Supabase
   // When cursor is provided, fetches the NEXT page after that cursor position.
   // When cursor is null, fetches the first page.
-  const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null) => {
+  // `quiet` re-reads the first page with the list left on screen (no loading state): the same
+  // requests, used after a sign-up or review action so the card the member is on — its open
+  // sign-up list, and their focus — is not unmounted and re-created around them.
+  const fetchPosts = useCallback(async (cursor: { createdAt: string; id: string } | null = null, quiet = false) => {
     if (cursor === null) {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       // Recent (chronological) mode shows posts only (W1.6b): drop any events held
       // from a prior ranked page so nothing stale lingers behind the render gate.
       setEventItems([])
@@ -1325,8 +1336,10 @@ export function FeedPanel() {
       return
     }
     setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
+    const attempt = signUps.begin('optIn', { postId })
     try {
       await doOptIn(postId)
+      signUps.succeeded(attempt)
       // Refresh opt-in map and slots
       fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
       // Decrement slots_remaining optimistically
@@ -1347,8 +1360,10 @@ export function FeedPanel() {
 
   const handleWithdraw = async (postId: string) => {
     setOptInErrors((prev) => ({ ...prev, [postId]: '' }))
+    const attempt = signUps.begin('withdraw', { postId })
     try {
       await doWithdraw(postId)
+      signUps.succeeded(attempt)
       // Refresh opt-in map
       fetchOptInsForPosts(posts.map((p) => p.id)).then(setOptInMap)
       // Restore slot optimistically
@@ -1378,6 +1393,7 @@ export function FeedPanel() {
     optInId: string,
     status: 'accepted' | 'declined' | 'completed'
   ) => {
+    const attempt = signUps.begin(status === 'accepted' ? 'accept' : status === 'declined' ? 'decline' : 'complete', { optInId })
     try {
       const { error: updErr } = await supabase
         .from('resource_opt_ins')
@@ -1385,10 +1401,14 @@ export function FeedPanel() {
         .eq('id', optInId)
         .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       if (updErr) throw updErr
-      // Refresh post data so the management list and seeker view stay in sync
-      fetchPosts()
+      signUps.succeeded(attempt)
+      // Refresh post data so the management list and seeker view stay in sync (the list stays on
+      // screen meanwhile: the author's place in it is kept)
+      fetchPosts(null, true)
     } catch (err: unknown) {
       logger.error('feed.optin.update', err, { optInId, status })
+      // The author hears that it did not go through; focus stays on the button they pressed.
+      signUps.failed()
     }
   }
 
@@ -1399,20 +1419,25 @@ export function FeedPanel() {
   // second concurrent call deletes 0 rows and restores no slot).
   const handleAuthorUnblockOptIn = async (optInId: string) => {
     await unblockGateRef.current.run(async () => {
+      const attempt = signUps.begin('unblock', { optInId })
       try {
         const { error: rpcErr } = await supabase
           .rpc('unblock_opt_in', { p_opt_in_id: optInId })
           .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
         if (rpcErr) throw rpcErr
-        fetchPosts()
+        signUps.succeeded(attempt)
+        fetchPosts(null, true)
       } catch (err: unknown) {
         logger.error('feed.optin.unblock', err, { optInId })
+        signUps.failed()
       }
     })
   }
 
   // Author opens review modal for a specific seeker
   const handleAuthorReviewSeeker = (optInId: string, seekerName: string) => {
+    reviewOpenerRef.current = document.querySelector<HTMLElement>(`[data-testid="review-seeker-${CSS.escape(optInId)}"]`)
+    reviewPostIdRef.current = Object.values(authorOptInsMap).flat().find((o) => o.id === optInId)?.postId ?? null
     setReviewModalOptInId(optInId)
     setReviewModalRevieweeName(seekerName)
     setReviewModalRevieweeRole('seeker')
@@ -1422,15 +1447,31 @@ export function FeedPanel() {
   // Seeker opens review modal for the sourcer
   const handleReviewSourcer = (_postId: string, optInId: string) => {
     const post = posts.find((p) => p.id === _postId)
+    reviewOpenerRef.current = document.querySelector<HTMLElement>(`[data-testid="review-sourcer-${CSS.escape(_postId)}"]`)
+    reviewPostIdRef.current = _postId
     setReviewModalOptInId(optInId)
     setReviewModalRevieweeName(post?.author.name ?? 'Sourcer')
     setReviewModalRevieweeRole('sourcer')
     setReviewModalOpen(true)
   }
 
-  // After a review is submitted — refresh data
+  // Where focus goes when the review dialog closes and its button is gone (a sent review removes
+  // it): the sign-up list toggle of that post, else the post card, else the feed's heading.
+  const focusAfterReview = () => {
+    const postId = reviewPostIdRef.current
+    const stable = postId
+      ? document.querySelector<HTMLElement>(`[data-testid="opt-in-manage-${CSS.escape(postId)}"]`) ??
+        document.querySelector<HTMLElement>(`[data-testid="post-card-${CSS.escape(postId)}"]`)
+      : null
+    if (stable) stable.focus()
+    else focusFeedTitle()
+  }
+
+  // After a review is submitted — say so (focus first, then the sentence, in one frame) and
+  // refresh data with the list left on screen
   const handleReviewSubmitted = () => {
-    fetchPosts()
+    announceCardNotice(messagesT(locale, 'reviewSubmitted'), focusAfterReview)
+    fetchPosts(null, true)
   }
 
   const handleLike = async (postId: string) => {
@@ -1700,6 +1741,8 @@ export function FeedPanel() {
         revieweeName={reviewModalRevieweeName}
         revieweeRole={reviewModalRevieweeRole}
         onSubmitted={handleReviewSubmitted}
+        returnFocusRef={reviewOpenerRef}
+        fallbackFocus={focusAfterReview}
       />
     )}
     {/* Post editing (PR-2): the card dialogs, one at a time, at panel root. Their announcements go

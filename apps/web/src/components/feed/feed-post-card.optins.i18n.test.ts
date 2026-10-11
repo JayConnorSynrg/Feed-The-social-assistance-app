@@ -29,6 +29,7 @@ import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { optInActionName, optInsT, optInStatusLabel, OPT_IN_STATUSES } from '@/lib/i18n-feed-optins'
 import { petitionActionName, petitionsT } from '@/lib/i18n-feed-petitions'
+import { AppreciationSheet } from '@/components/appreciation/appreciation-sheet'
 import { FeedPostCard, type EnrichedOptIn, type FeedPostCardProps } from './feed-post-card'
 import { rowToPost, type FeedPostRow } from './post-model'
 
@@ -193,6 +194,47 @@ describe('accessible names (label in name)', () => {
   })
 })
 
+describe('the author sheet opens from the card and gets its opener back', () => {
+  it.each(['author-open-author', 'author-name-author'])('opened from %s: the sheet is handed that control; when it is gone, focus goes to the card', (testId) => {
+    const p = props('es')
+    const c = mount(() => FeedPostCard(p))
+    const opener = { isConnected: true, focus: vi.fn() }
+    const article = { focus: vi.fn() }
+    ;((findAll(c.tree(), (e) => e.type === 'article') as El[])[0].props.ref as { current: unknown }).current = article
+    ;(byTestId(c.tree(), testId)[0].props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    const sheet = (findAll(c.rerender(), (e) => e.type === AppreciationSheet) as El[])[0]
+    expect(sheet.props.open).toBe(true)
+    expect((sheet.props.returnFocusRef as { current: unknown }).current).toBe(opener)
+    ;(sheet.props.fallbackFocus as () => void)()
+    expect(article.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('a guest\'s Follow button opens the sheet too, and is its opener', () => {
+    const p = props('es', { currentUserIsGuest: true, viewer: { id: 'member', isGuest: true, tier: null }, onFollow: vi.fn(), onUnfollow: vi.fn() })
+    const c = mount(() => FeedPostCard(p))
+    const opener = { isConnected: true, focus: vi.fn() }
+    ;(byTestId(c.tree(), 'follow-btn-author')[0].props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    const sheet = (findAll(c.rerender(), (e) => e.type === AppreciationSheet) as El[])[0]
+    expect(sheet.props.open).toBe(true)
+    expect((sheet.props.returnFocusRef as { current: unknown }).current).toBe(opener)
+  })
+})
+
+describe('the rows of the author\'s list', () => {
+  it('each row is findable by its id, and each row button is tall enough to press (py-1.5)', () => {
+    const tree = authorTree('en', [optIn(), optIn({ id: 'o2', seekerId: 's2', status: 'accepted' }), optIn({ id: 'o3', seekerId: 's3', status: 'declined' }), optIn({ id: 'o4', seekerId: 's4', status: 'completed' })])
+    expect((findAll(tree, (e) => typeof e.props['data-opt-in-row'] === 'string') as El[]).map((r) => r.props['data-opt-in-row'])).toEqual(['o1', 'o2', 'o3', 'o4'])
+    const buttons = ['accept-optin-o1', 'decline-optin-o1', 'complete-optin-o2', 'unblock-optin-o3', 'review-seeker-o4'].map((id) => byTestId(tree, id)[0])
+    for (const b of buttons) {
+      expect(String(b.props.className).split(' ')).toContain('py-1.5')
+      expect(String(b.props.className).split(' ')).not.toContain('py-0.5')
+    }
+    // The row that holds a button is the row with that id.
+    const row = (findAll(tree, (e) => e.props['data-opt-in-row'] === 'o2') as El[])[0]
+    expect(byTestId(row, 'complete-optin-o2')).toHaveLength(1)
+  })
+})
+
 describe('member-written text', () => {
   it("a person's name keeps its own direction and takes no page language", () => {
     const name = findAll(authorTree('es', [optIn()]), (e) => e.props['data-member-text'] === 'seeker-name')[0] as El
@@ -218,7 +260,7 @@ describe('member-written text', () => {
 
 describe('the opt-in failure line', () => {
   it('a sentence the handlers or the hook wrote reads in the member language, unmarked', () => {
-    expect(card('zh', { optInError: "Couldn't opt in. Please try again." })).toContain('<div data-testid="opt-in-error-p1" class="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">无法报名。请重试。</div>')
+    expect(card('zh', { optInError: "Couldn't opt in. Please try again." })).toContain('<div role="alert" data-testid="opt-in-error-p1" class="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">无法报名。请重试。</div>')
     expect(card('es', { optInError: 'Create a free account to opt in.' })).toContain('>Crea una cuenta gratuita para apuntarte.</div>')
   })
 
@@ -230,12 +272,21 @@ describe('the opt-in failure line', () => {
 
   it('anything else is shown as received and marked English', () => {
     expect(card('zh', { optInError: 'canceling statement due to statement timeout' })).toContain(
-      '<div lang="en" dir="ltr" data-testid="opt-in-error-p1" class="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">canceling statement due to statement timeout</div>',
+      '<div role="alert" lang="en" dir="ltr" data-testid="opt-in-error-p1" class="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">canceling statement due to statement timeout</div>',
     )
   })
 
   it('no failure, no line', () => {
     expect(card('zh', { optInError: null })).not.toContain('opt-in-error-p1')
+  })
+
+  it.each(LOCALES)('%s: the failure line is an alert (nothing else tells a screen-reader user the opt-in did not go through)', (locale) => {
+    for (const error of ['Create a free account to opt in.', 'This offer is full', 'some server text']) {
+      const line = card(locale, { optInError: error }).match(/<div[^>]*data-testid="opt-in-error-p1"[^>]*>/)?.[0] ?? ''
+      expect(line, error).toContain('role="alert"')
+    }
+    // The Opt In button is still there: focus stays on it.
+    expect(card(locale, { optInError: 'This offer is full' })).toContain('data-testid="opt-in-btn-p1"')
   })
 })
 
