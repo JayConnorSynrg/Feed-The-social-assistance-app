@@ -91,7 +91,10 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
           .eq('is_hidden', true)
           .in('hidden_reason', ['admin_removal', 'hold_for_review'])
           .order('hidden_at', { ascending: false })
-        if (hiddenPostsData) setHeldPosts(hiddenPostsData as unknown as HeldPost[]) // TODO: regen types after migration is applied
+        // The filter above admits only is_hidden = true rows with a hold / removal reason; the
+        // generated row type cannot express that (is_hidden and created_at are nullable columns), so
+        // the rows are narrowed to HeldPost here.
+        if (hiddenPostsData) setHeldPosts(hiddenPostsData as HeldPost[])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load reports')
       } finally {

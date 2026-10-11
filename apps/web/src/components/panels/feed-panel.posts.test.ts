@@ -189,7 +189,7 @@ function row(id: string, o: Row = {}): Row {
     edit_count: 0,
     image_alt: null,
     hidden_reason: null,
-    user: { id: AUTHOR, first_name: 'Ada', avatar_url: null, is_staff: false, admin_tier: null, harmony_score: null, harmony_reviews_count: 0, badge_summary: null },
+    user: { id: AUTHOR, first_name: 'Ada', avatar_url: null, admin_tier: null, harmony_score: null, harmony_reviews_count: 0, badge_summary: null },
     resource: null,
     ...o,
   }

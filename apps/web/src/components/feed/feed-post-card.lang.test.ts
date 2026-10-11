@@ -27,7 +27,7 @@ const row: FeedPostRow = {
   id: 'p1', content: 'Sign our petition', created_at: '2026-10-01T12:00:00.000Z', is_pinned: false, is_hidden: false, image_url: null,
   max_seekers: 3, slots_remaining: 2, post_type: 'petition', petition_id: 'pt1', resource_id: null, metadata: null, like_count: 0, comment_count: 0,
   version: 1, edited_at: null, edit_count: 0, image_alt: null, hidden_reason: null,
-  user: { id: 'me', first_name: 'Ada', avatar_url: null, is_staff: false, admin_tier: null, harmony_score: 4.5, harmony_reviews_count: 3, badge_summary: null },
+  user: { id: 'me', first_name: 'Ada', avatar_url: null, admin_tier: null, harmony_score: 4.5, harmony_reviews_count: 3, badge_summary: null },
   resource: null,
 }
 

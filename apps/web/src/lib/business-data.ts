@@ -277,8 +277,24 @@ export async function fetchAdminBusinessList(
 }
 
 /**
+ * The ONE query that decides "this id is a public business": an approved, ACTIVE business org.
+ * fetchApprovedBusinessById (the page's full row) and isPublicBusiness (id only) both run it and
+ * differ only in the columns they ask for, so the visibility rule is written once.
+ */
+function publicBusinessById(supabase: SupabaseClient<Database>, id: string, columns: string) {
+  return loose(supabase)
+    .from('organizations')
+    .select(columns)
+    .eq('id', id)
+    .eq('org_type', 'business')
+    .eq('status', 'approved')
+    .eq('is_active', true)
+    .single()
+}
+
+/**
  * Public single-business reader by id — approved, ACTIVE business orgs only. Used by the standalone
- * public page + OG route (outside FeedShell). Returns null when the org is missing, inactive or not an
+ * public page (outside FeedShell). Returns null when the org is missing, inactive or not an
  * approved business, so callers can notFound() (CINV5). RLS also enforces both gates for members;
  * the is_active filter keeps an admin (orgs_admin_select) from seeing a page members get a 404 for.
  */
@@ -286,16 +302,19 @@ export async function fetchApprovedBusinessById(
   supabase: SupabaseClient<Database>,
   id: string
 ): Promise<Business | null> {
-  const { data, error } = await loose(supabase)
-    .from('organizations')
-    .select(BUSINESS_COLUMNS)
-    .eq('id', id)
-    .eq('org_type', 'business')
-    .eq('status', 'approved')
-    .eq('is_active', true)
-    .single()
+  const { data, error } = await publicBusinessById(supabase, id, BUSINESS_COLUMNS)
   if (error || !data) return null
   return data as unknown as Business
+}
+
+/**
+ * Whether this id is a public business — the same rule as fetchApprovedBusinessById, reading the id
+ * column only. For callers that need the yes/no and nothing about the business (the share-preview
+ * image route).
+ */
+export async function isPublicBusiness(supabase: SupabaseClient<Database>, id: string): Promise<boolean> {
+  const { data, error } = await publicBusinessById(supabase, id, 'id')
+  return !error && !!data
 }
 
 /**

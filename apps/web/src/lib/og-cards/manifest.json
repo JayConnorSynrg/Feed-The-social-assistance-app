@@ -1,0 +1,42 @@
+{
+  "feed": {
+    "label": "Community post",
+    "sha256": "df0310892b0bd0a5a4ade22a8786215a195d07e78cb61418f96d132ef175e58f"
+  },
+  "resource_post": {
+    "label": "Shared resource",
+    "sha256": "28b5d8534e8ef05c770307cf4a4fa89f3c98b1c3fda5230a9d1b680c8e6b2bee"
+  },
+  "petition": {
+    "label": "Petition",
+    "sha256": "afd051ed163c9cab12c8820226d708d1d55e0da9edfbacde19baa78ca7221625"
+  },
+  "seeker_request": {
+    "label": "Request for help",
+    "sha256": "5f60dc0a30a2137c2e15615a9f6aeafb568798414e5640b0c13496fe84a0eb69"
+  },
+  "source_offer": {
+    "label": "Offer of help",
+    "sha256": "e541415a1915c9664a4f364ad286d67eea56b3f558d06549fd864a2f8c021ea9"
+  },
+  "event_post": {
+    "label": "Community event",
+    "sha256": "8405e731cd6f5b4d044e15f95f4ae74da2bf8c9e1c4fddf82ab6b78b388ad4b4"
+  },
+  "poll": {
+    "label": "Poll",
+    "sha256": "dfd067a16d2009ad882bddcbb0a15a1fb45220c2289bdd8c668efce62c49a3e5"
+  },
+  "resource": {
+    "label": "Community resource",
+    "sha256": "207aab747919cdecf065f8d12ebd4499e24ffc8c3a515195f2289114956fb5d8"
+  },
+  "business": {
+    "label": "Local business",
+    "sha256": "104cc02ce612c4f472d4299e8f01c76f0b4b77e9a3e7c6a421b6fafd604dd0e7"
+  },
+  "organization": {
+    "label": "Local organization",
+    "sha256": "fbe9e1969f79d613b4004316d48952caca01674d75380473979dc9f997646c59"
+  }
+}

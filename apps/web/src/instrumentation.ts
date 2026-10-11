@@ -10,7 +10,7 @@ import { serializeError } from '@/lib/with-metric-core.mjs'
  * through the server logger. The row carries only PII-free fields:
  *   - request_id: the proxy-stamped `x-request-id`, so it joins every other row
  *     written during the same request (I4)
- *   - route: the route PATTERN (e.g. /profile/[username]), never the concrete URL
+ *   - route: the route PATTERN (e.g. /s/post/[id]), never the concrete URL
  *   - route_type / method, the Next.js error `digest` (the "ref" a user sees)
  *   - error_code: the SQLSTATE / PostgREST code when present, else the error name
  * The raw error message is not persisted (it can echo user data); Next.js itself

@@ -399,11 +399,6 @@ function OverviewStats({ selectedOrgId }: { selectedOrgId: string }) {
 
     async function load() {
       try {
-        // RPCs added in migration 20260614150000_w5_dashboard_rpcs.sql;
-        // types.ts predates this migration — cast until next regen.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rpc = supabase.rpc.bind(supabase) as (fn: string, args?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>
-
         const [
           adoptionRes,
           resourcesRes,
@@ -417,19 +412,19 @@ function OverviewStats({ selectedOrgId }: { selectedOrgId: string }) {
           completedProfilesRes,
           usersRes,
         ] = await Promise.all([
-          rpc('dashboard_adoption_stats'),
-          rpc('dashboard_resource_stats'),
-          rpc('dashboard_petition_momentum'),
-          rpc('dashboard_event_stats'),
-          rpc('community_people_fed', { p_start_date: thirtyDaysAgo(), p_end_date: todayIso() }),
+          supabase.rpc('dashboard_adoption_stats'),
+          supabase.rpc('dashboard_resource_stats'),
+          supabase.rpc('dashboard_petition_momentum'),
+          supabase.rpc('dashboard_event_stats'),
+          supabase.rpc('community_people_fed', { p_start_date: thirtyDaysAgo(), p_end_date: todayIso() }),
           supabase.from('organizations').select('id, name').eq('is_active', true).limit(10),
           supabase.from('resources').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
           whereSafetyAlertLive(supabase.from('safety_alerts').select('id', { count: 'exact', head: true }), new Date()),
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
           // SECDEF RPC: avoids 42501 on phone (no SELECT grant) + uses onboarding_completed
           // (the authoritative signal — full_name+phone proxy always returned 0 on prod)
-          rpc('dashboard_completed_profiles'),
-          rpc('admin_list_users'),
+          supabase.rpc('dashboard_completed_profiles'),
+          supabase.rpc('admin_list_users'),
         ])
 
         if (adoptionRes.error) throw new Error(adoptionRes.error.message)

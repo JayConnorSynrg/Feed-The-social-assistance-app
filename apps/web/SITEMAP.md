@@ -42,7 +42,6 @@ FEED uses a **Single-Page App (SPA) architecture** with a persistent shell and d
 | `/blog` | Static | Community blog/news |
 | `/login` | Auth | User login |
 | `/signup` | Auth | New user registration |
-| `/profile/[username]` | Public Profile | View user profiles |
 
 ### Dashboard Routes (Authentication Required)
 
@@ -266,7 +265,6 @@ Each panel manages its own local state:
 /about
 /mission
 /blog
-/profile/[username]
 
 # Admin routes
 /moderation

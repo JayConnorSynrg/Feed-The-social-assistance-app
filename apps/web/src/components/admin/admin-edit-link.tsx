@@ -43,7 +43,6 @@ export type AdminEditSource =
   | 'business_page'
   | 'organization_page'
   | 'post_page'
-  | 'feed_post'
   | 'feed_alert'
   /** The ⋯ menu of an event card in the community feed / in the Events tab. */
   | 'feed_event_menu'

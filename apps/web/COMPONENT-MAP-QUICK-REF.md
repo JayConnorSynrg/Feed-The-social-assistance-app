@@ -97,7 +97,6 @@ npm install @kibocorp/ui-pill @kibocorp/ui-banner @kibocorp/ui-dialog-stack
 npm install @kibocorp/ui-status @kibocorp/ui-list @kibocorp/ui-reel @kibocorp/ui-avatar-stack @kibocorp/ui-relative-time
 ```
 **Files to update**:
-- `apps/web/src/components/feed/post-card.tsx` (→ Reel)
 - `apps/web/src/components/dashboard/application-list.tsx` (Status)
 - `apps/web/src/components/dashboard/stat-card.tsx` (Status)
 - `apps/web/src/components/profile/avatar.tsx` (Avatar Stack)

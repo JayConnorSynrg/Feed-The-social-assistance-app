@@ -46,7 +46,7 @@ function row(o: Partial<FeedPostRow> = {}): FeedPostRow {
     edit_count: 0,
     image_alt: null,
     hidden_reason: null,
-    user: { id: 'author', first_name: 'Ada', avatar_url: null, is_staff: false, admin_tier: null, harmony_score: null, harmony_reviews_count: 0, badge_summary: null },
+    user: { id: 'author', first_name: 'Ada', avatar_url: null, admin_tier: null, harmony_score: null, harmony_reviews_count: 0, badge_summary: null },
     resource: null,
     ...o,
   }

@@ -17,12 +17,6 @@
 //
 // Default semantics: only an explicit false is OFF; NULL / absent / any read failure → true
 // (default-ON), matching the DB COALESCE(...,true) gate so the toggle is never silently OFF.
-//
-// NOTE ON TYPES: allow_messages and get_my_allow_messages are added by this wave's migration;
-// packages/database/types.ts is regenerated from prod AFTER the migration is applied. Until then
-// the column and RPC are unknown to the generated Database type, so each call is made through a
-// narrow, local structural cast (never a blanket `as any`) — the same approach as
-// notification-prefs.ts for the Wave B accessor.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
@@ -30,18 +24,6 @@ import { logger } from '@/lib/logger'
 
 /** The default when no explicit preference exists (default-ON). */
 export const DEFAULT_ALLOW_MESSAGES = true
-
-// Minimal structural views of the not-yet-regenerated calls (see NOTE ON TYPES).
-type AllowRpcClient = {
-  rpc: (fn: 'get_my_allow_messages') => PromiseLike<{ data: unknown; error: unknown }>
-}
-type AllowUpdateClient = {
-  from: (table: 'profiles') => {
-    update: (row: { allow_messages: boolean }) => {
-      eq: (col: 'id', val: string) => PromiseLike<{ error: unknown }>
-    }
-  }
-}
 
 /**
  * Read the signed-in caller's allow_messages flag via the get_my_allow_messages() RPC (a scalar
@@ -52,7 +34,7 @@ export async function readAllowMessages(
   supabase: SupabaseClient<Database>
 ): Promise<boolean> {
   try {
-    const { data, error } = await (supabase as unknown as AllowRpcClient).rpc('get_my_allow_messages')
+    const { data, error } = await supabase.rpc('get_my_allow_messages')
     if (error) throw error
     // Only an explicit `false` turns the flag off; anything else → default ON.
     return data === false ? false : true
@@ -81,7 +63,7 @@ export async function writeAllowMessages(
     return false
   }
   try {
-    const { error } = await (supabase as unknown as AllowUpdateClient)
+    const { error } = await supabase
       .from('profiles')
       .update({ allow_messages: value })
       .eq('id', userId)

@@ -162,7 +162,6 @@ PHASE 1:
   ✏️  apps/web/src/components/*/modal-*.tsx (all modals)
 
 PHASE 2:
-  ✏️  apps/web/src/components/feed/post-card.tsx
   ✏️  apps/web/src/components/dashboard/application-*.tsx
   ✏️  apps/web/src/components/dashboard/stat-card.tsx
   ✏️  apps/web/src/components/profile/avatar.tsx

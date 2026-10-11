@@ -144,17 +144,36 @@ export async function fetchOrganizationById(
 ): Promise<Organization | null> {
   const attrs: Record<string, number> = { result_count: 0 }
   return withMetric('org.read.by_id', attrs, async () => {
-    const { data, error } = await loose(supabase)
-      .from('organizations')
-      .select(ORG_COLUMNS)
-      .eq('id', id)
-      .in('org_type', [...NON_BUSINESS_ORG_TYPES])
-      .eq('is_active', true)
-      .single()
+    const { data, error } = await publicOrganizationById(supabase, id, ORG_COLUMNS)
     if (error || !data) return null
     attrs.result_count = 1
     return data as unknown as Organization
   })
+}
+
+/**
+ * The ONE query that decides "this id is a public organization": an ACTIVE org of a non-business
+ * type. fetchOrganizationById (the page's full row) and isPublicOrganization (id only) both run it
+ * and differ only in the columns they ask for, so the visibility rule is written once.
+ */
+function publicOrganizationById(supabase: SupabaseClient<Database>, id: string, columns: string) {
+  return loose(supabase)
+    .from('organizations')
+    .select(columns)
+    .eq('id', id)
+    .in('org_type', [...NON_BUSINESS_ORG_TYPES])
+    .eq('is_active', true)
+    .single()
+}
+
+/**
+ * Whether this id is a public organization — the same rule as fetchOrganizationById, reading the id
+ * column only. For callers that need the yes/no and nothing about the organization (the
+ * share-preview image route, which writes its own log row).
+ */
+export async function isPublicOrganization(supabase: SupabaseClient<Database>, id: string): Promise<boolean> {
+  const { data, error } = await publicOrganizationById(supabase, id, 'id')
+  return !error && !!data
 }
 
 /**

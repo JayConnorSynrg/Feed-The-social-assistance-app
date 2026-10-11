@@ -26,9 +26,9 @@ export function useAdminOrgs({ enabled = true }: { enabled?: boolean } = {}) {
     if (authLoading) return
 
     const supabase = createClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase.rpc as any)('get_admin_org_list')
-      .then(({ data, error: rpcError }: { data: AdminOrg[] | null; error: unknown }) => {
+    supabase
+      .rpc('get_admin_org_list')
+      .then(({ data, error: rpcError }) => {
         if (rpcError) {
           // Surface the failure instead of silently rendering an empty org list.
           const message =

@@ -15,12 +15,6 @@
 // the user turns it OFF — matches the DB COALESCE(...,true) gate, I2). A write
 // returns a success boolean so the UI can revert/annotate on failure (never show
 // a value that did not persist).
-//
-// NOTE ON TYPES: the notification_preferences table and get_my_notification_prefs
-// RPC are added by the Wave B migration; packages/database/types.ts is
-// regenerated from prod AFTER that migration is applied. Until then those two
-// calls are unknown to the generated Database type, so each is made through a
-// narrow, local structural cast (never a blanket `as any` on the client).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
@@ -45,16 +39,6 @@ interface NotificationPrefsRow {
   resource_alerts: boolean
   application_updates: boolean
   community_posts: boolean
-}
-
-// Minimal structural views of the not-yet-regenerated calls (see NOTE ON TYPES).
-type PrefsRpcClient = {
-  rpc: (fn: 'get_my_notification_prefs') => PromiseLike<{ data: unknown; error: unknown }>
-}
-type PrefsUpsertClient = {
-  from: (table: 'notification_preferences') => {
-    upsert: (row: Record<string, unknown>, opts: { onConflict: string }) => PromiseLike<{ error: unknown }>
-  }
 }
 
 function rowToTopicPrefs(row: Partial<NotificationPrefsRow> | null | undefined): NotificationTopicPrefs {
@@ -84,7 +68,7 @@ export async function readNotificationPrefs(
   supabase: SupabaseClient<Database>
 ): Promise<NotificationTopicPrefs> {
   try {
-    const { data, error } = await (supabase as unknown as PrefsRpcClient).rpc('get_my_notification_prefs')
+    const { data, error } = await supabase.rpc('get_my_notification_prefs')
     if (error) throw error
     // The SECDEF fn RETURNS a single row (object), not an array.
     const row = Array.isArray(data) ? data[0] : data
@@ -119,7 +103,7 @@ export async function writeNotificationPrefs(
     return false
   }
   try {
-    const { error } = await (supabase as unknown as PrefsUpsertClient)
+    const { error } = await supabase
       .from('notification_preferences')
       .upsert(
         { user_id: userId, ...topicPrefsToRow(prefs), updated_at: new Date().toISOString() },
