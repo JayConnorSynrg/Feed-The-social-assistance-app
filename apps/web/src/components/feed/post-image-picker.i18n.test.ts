@@ -8,7 +8,10 @@
 //   - the remove button sits at the inline end (the left in a right-to-left form);
 //   - a failure the uploader, the client check or the edge function wrote reads in the member's
 //     language; anything else is shown as received and marked English; either way it is an alert;
-//   - every sentence those three sources can report is known here, in both directions.
+//   - every sentence those three sources can report is known here, in both directions;
+//   - the caption names the field as a group; "Uploading…" is said through a status region that
+//     is on the page before the upload starts; the remove button is a 24px target; and when the
+//     button and the preview take each other's place, focus moves to the one that is there.
 
 import { describe, it, expect, vi } from 'vitest'
 import { createElement as h, createRef } from 'react'
@@ -16,9 +19,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logEvent: vi.fn() }))
 
+import { mount, findAll } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
 import { editT } from '@/lib/i18n-feed-edit'
 import { PHOTO_ERROR_SENTENCES, feedPhotoMessages, photoErrorText, photoT } from '@/lib/i18n-feed-photo'
@@ -37,7 +42,7 @@ function field(locale: Locale, over: Record<string, unknown> = {}): string {
 describe('the photo picker in the member language', () => {
   it('vi: the label and the button', () => {
     const out = field('vi')
-    expect(out).toContain('<label class="mb-2 block text-sm font-medium text-stone-700">Ảnh (không bắt buộc)</label>')
+    expect(out).toMatch(/<p id="[^"]+" class="mb-2 block text-sm font-medium text-stone-700">Ảnh \(không bắt buộc\)<\/p>/)
     expect(out).toMatch(/<button type="button" data-testid="post-image-trigger"[^>]*>.*?<\/svg>Thêm ảnh<\/button>/)
     expect(out).not.toMatch(/Photo \(optional\)|Add a photo/)
   })
@@ -51,7 +56,7 @@ describe('the photo picker in the member language', () => {
   it('ar: a chosen photo — translated alt and remove name, the remove button at the inline end', () => {
     const out = field('ar', { previewUrl: 'blob:x' })
     expect(out).toContain('alt="معاينة الصورة المحددة"')
-    expect(out).toMatch(/<button type="button" aria-label="إزالة الصورة" data-testid="post-image-remove" class="absolute top-1\.5 end-1\.5 /)
+    expect(out).toMatch(/<button type="button" aria-label="إزالة الصورة" data-testid="post-image-remove" class="absolute top-1\.5 end-1\.5 rounded-full bg-black\/60 p-1\.5 /)
     expect(out).not.toMatch(/\bright-1\.5\b|\bml-2\b/)
   })
 
@@ -59,6 +64,9 @@ describe('the photo picker in the member language', () => {
     const out = field('ht', { previewUrl: 'blob:x', imageUploading: true })
     expect(out).toContain('<span class="ms-2 text-xs">N ap telechaje…</span>')
     expect(out).not.toContain('post-image-remove')
+    // Said through the status region; the overlay on the photo is for sighted readers.
+    expect(out).toContain('<p role="status" aria-live="polite" class="sr-only" data-testid="post-image-status">N ap telechaje…</p>')
+    expect(out).toMatch(/<div aria-hidden="true" class="absolute inset-0 flex items-center justify-center bg-black\/60 text-white">/)
   })
 
   it.each(LOCALES)('%s: nothing in the field is marked English, and no state shows English copy', (locale) => {
@@ -67,6 +75,88 @@ describe('the photo picker in the member language', () => {
       expect(out).not.toMatch(/\blang=|\bdir=/)
       if (locale !== 'en') expect(out).not.toMatch(/Photo \(optional\)|Add a photo|Remove photo|Selected photo preview|Uploading…|Upload failed/)
     }
+  })
+})
+
+describe('caption, status and focus', () => {
+  it('the caption names the field as a group (it is tied to no single control); the compact field has no caption and no group', () => {
+    const out = field('es')
+    const id = /<div role="group" aria-labelledby="([^"]+)">/.exec(out)?.[1]
+    expect(id).toBeTruthy()
+    expect(out).toContain(`<p id="${id}" class="mb-2 block text-sm font-medium text-stone-700">Foto (opcional)</p>`)
+    expect(out).not.toContain('<label')
+    const compact = field('es', { compact: true })
+    expect(compact).toMatch(/^<div><input /)
+    expect(compact).not.toMatch(/role="group"|aria-labelledby/)
+  })
+
+  it('the status region is on the page, empty, before any upload: its text arriving is what gets spoken', () => {
+    for (const state of [field('fr'), field('fr', { previewUrl: 'blob:x' })]) {
+      expect(state).toContain('<p role="status" aria-live="polite" class="sr-only" data-testid="post-image-status"></p>')
+    }
+    expect(field('fr', { previewUrl: 'blob:x', imageUploading: true })).toContain('data-testid="post-image-status">Envoi en cours…</p>')
+  })
+
+  it('the remove button is a 24px target or larger (14px icon, 6px padding each side)', () => {
+    const out = field('en', { previewUrl: 'blob:x' })
+    expect(out).toMatch(/data-testid="post-image-remove" class="[^"]*\bp-1\.5\b[^"]*"><svg[^>]*class="[^"]*w-3\.5 h-3\.5/)
+    expect(out).not.toMatch(/data-testid="post-image-remove" class="[^"]* p-1 /)
+  })
+
+  /** The field on the mini runtime, its two focus targets given elements that record focus. */
+  function swapping() {
+    const props = { previewUrl: 'blob:first' as string | null, imageUploading: false, imageError: null, fileInputRef: createRef<HTMLInputElement>(), onFileSelect: () => {}, onClear: () => {}, locale: 'es' as Locale }
+    const c = mount(() => PostImagePickerField(props))
+    const focused: string[] = []
+    const give = (testId: string) => {
+      const el = (findAll(c.tree(), (e) => e.props['data-testid'] === testId) as Array<{ props: Record<string, unknown> }>)[0]
+      ;(el.props.ref as { current: unknown }).current = { focus: () => void focused.push(testId) }
+    }
+    give('post-image-preview')
+    props.previewUrl = null
+    c.rerender()
+    give('post-image-trigger')
+    focused.length = 0
+    return { c, props, focused }
+  }
+
+  it('a chosen photo replaces the button that had the focus: focus moves to the preview; removing it moves focus back to the button', () => {
+    const { c, props, focused } = swapping()
+    props.previewUrl = 'blob:second'
+    c.rerender()
+    expect(focused).toEqual(['post-image-preview'])
+    // The upload finishes: the preview is still the preview, nothing moves.
+    props.imageUploading = true
+    c.rerender()
+    props.imageUploading = false
+    c.rerender()
+    expect(focused).toEqual(['post-image-preview'])
+    props.previewUrl = null
+    c.rerender()
+    expect(focused).toEqual(['post-image-preview', 'post-image-trigger'])
+  })
+
+  it('a member who moved on keeps their place: nothing is focused when focus sits on another live control', () => {
+    const { c, props, focused } = swapping()
+    const elsewhere = { isConnected: true }
+    ;(globalThis as Record<string, unknown>).document = { activeElement: elsewhere, body: {} }
+    try {
+      props.previewUrl = 'blob:second'
+      c.rerender()
+      expect(focused).toEqual([])
+      // Focus on the page body is focus that was lost: it is moved.
+      const body = {}
+      ;(globalThis as Record<string, unknown>).document = { activeElement: body, body }
+      props.previewUrl = null
+      c.rerender()
+      expect(focused).toEqual(['post-image-trigger'])
+    } finally {
+      delete (globalThis as Record<string, unknown>).document
+    }
+  })
+
+  it('the preview takes focus by script only and shows a ring', () => {
+    expect(field('en', { previewUrl: 'blob:x' })).toMatch(/<div tabindex="-1" data-testid="post-image-preview" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
   })
 })
 
