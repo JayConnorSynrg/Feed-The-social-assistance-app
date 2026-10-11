@@ -11,26 +11,50 @@
  * generateMetadata: per-post og:title/description/image/url + oEmbed discovery link.
  */
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
+import { ogLocaleForLang } from '@/lib/og-locale'
+import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
 
 interface Props {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params
+/**
+ * The one read of the embedded post. React `cache` keys it by id for the length of a request, so
+ * generateMetadata and the widget below send one identical query and share one database round trip.
+ * Explicit column list (never select('*') on posts); author columns are the two the metadata needs.
+ */
+const readEmbedPost = cache(async (id: string) => {
   const supabase = await createClient()
-  const appUrl = await getAppUrlFromHeaders()
-
   const { data: post } = await supabase
     .from('posts')
     // Use explicit FK hint to avoid PGRST201 ambiguity (posts has 2 FK paths to profiles)
-    .select('content, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username)')
+    .select('id, content, lang, slots_remaining, max_seekers, post_type, petition_id, user:profiles!posts_user_id_fkey(first_name, username), resource:resources(name)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
+  return post
+})
+
+/** The one read of an approved petition (title and summary for the metadata, the rest for the widget). */
+const readApprovedPetition = cache(async (petitionId: string) => {
+  const supabase = await createClient()
+  const { data: petition } = await supabase
+    .from('petitions')
+    .select('id, title, summary, target_signatures')
+    .eq('id', petitionId)
+    .eq('status', 'approved')
+    .single()
+  return petition
+})
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const appUrl = await getAppUrlFromHeaders()
+  const post = await readEmbedPost(id)
 
   if (!post) {
     return { title: 'Post Not Found - FEED' }
@@ -46,12 +70,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   let rawDescription = post.content
 
   if (postType === 'petition' && petitionId) {
-    const { data: petition } = await supabase
-      .from('petitions')
-      .select('title, summary')
-      .eq('id', petitionId)
-      .eq('status', 'approved')
-      .single()
+    const petition = await readApprovedPetition(petitionId)
 
     if (petition?.title) {
       title = `${petition.title} — FEED Community Petition`
@@ -67,6 +86,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const canonicalUrl = `${appUrl}/s/embed/${id}`
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(canonicalUrl)}`
+  // og:locale from the post's own language; left out when the post has none or no valid value exists.
+  const ogLocale = ogLocaleForLang(post.lang)
+  // The preview picture is the fixed card for the post's type; its description says what the card
+  // shows (og:image:alt and twitter:image:alt), never the post's text or author.
+  const imageAlt = ogCardAlt(postCardKind(postType))
 
   return {
     title,
@@ -77,12 +101,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       siteName: 'FEED',
       url: canonicalUrl,
+      ...(ogLocale ? { locale: ogLocale } : {}),
       images: [
         {
           url: `${appUrl}/api/og/post/${id}`,
           width: 1200,
           height: 630,
-          alt: title,
+          alt: imageAlt,
         },
       ],
     },
@@ -90,7 +115,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title,
       description,
-      images: [`${appUrl}/api/og/post/${id}`],
+      images: [{ url: `${appUrl}/api/og/post/${id}`, alt: imageAlt }],
     },
     alternates: {
       types: {
@@ -105,26 +130,25 @@ export default async function EmbedWidgetPage({ params }: Props) {
   const supabase = await createClient()
   const appUrl = await getAppUrlFromHeaders()
 
-  const { data: post } = await supabase
-    .from('posts')
-    .select('id, content, slots_remaining, max_seekers, post_type, petition_id, resource:resources(name)')
-    .eq('id', id)
-    .eq('is_hidden', false)
-    .single()
+  const post = await readEmbedPost(id)
 
   if (!post) notFound()
+
+  // Language of member text. The page itself is lang="en", and text with no lang attribute inherits
+  // that, so every piece of member text says what it is:
+  //   - the post's own text carries posts.lang — the author's app language when they posted, the best
+  //     signal there is, not a detected language — or lang="" (unknown) when the post has none;
+  //   - a petition's title and summary and a resource's name are not the post's text and have no
+  //     recorded language, so they carry lang="" (unknown).
+  // All of it takes its direction from its own first strong character (dir="auto").
+  const postLang = post.lang ?? ''
 
   const postType = (post.post_type as string | null) ?? 'feed'
   const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
 
   // ── Petition branch ──────────────────────────────────────────────────────
   if (postType === 'petition' && petitionId) {
-    const { data: petition } = await supabase
-      .from('petitions')
-      .select('id, title, summary, target_signatures')
-      .eq('id', petitionId)
-      .eq('status', 'approved')
-      .single()
+    const petition = await readApprovedPetition(petitionId)
 
     const { data: countData } = await supabase
       .rpc('get_petition_signature_count', { p_petition_id: petitionId })
@@ -145,13 +169,17 @@ export default async function EmbedWidgetPage({ params }: Props) {
         </p>
 
         {/* Title */}
-        <p className="text-stone-900 font-semibold leading-snug line-clamp-2 mb-1">
+        <p
+          className="text-stone-900 font-semibold leading-snug line-clamp-2 mb-1"
+          lang={petition?.title ? '' : postLang}
+          dir="auto"
+        >
           {petition?.title ?? post.content}
         </p>
 
         {/* Summary */}
         {petition?.summary && (
-          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed mb-2">
+          <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed mb-2" lang="" dir="auto">
             {petition.summary}
           </p>
         )}
@@ -205,13 +233,13 @@ export default async function EmbedWidgetPage({ params }: Props) {
     >
       {/* Resource label */}
       {resource?.name && (
-        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1">
+        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1" lang="" dir="auto">
           {resource.name}
         </p>
       )}
 
       {/* Post content */}
-      <p className="text-stone-800 leading-snug line-clamp-3 mb-2">
+      <p className="text-stone-800 leading-snug line-clamp-3 mb-2" lang={postLang} dir="auto">
         {post.content}
       </p>
 

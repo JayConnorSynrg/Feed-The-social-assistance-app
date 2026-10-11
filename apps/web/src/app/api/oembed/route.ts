@@ -9,8 +9,9 @@
  *
  * Query params:
  *   url        — the page URL to resolve (required)
- *   maxwidth   — optional max iframe width hint
- *   maxheight  — optional max iframe height hint
+ *   maxwidth   — optional max iframe width: a whole number of pixels, 1 or more. The response never
+ *                exceeds it; zero, a negative number or a non-number is treated as not sent.
+ *   maxheight  — optional max iframe height, same rule
  *   format     — optional; "json" (default) supported; "xml" → 501
  *
  * Response shape (type=rich):
@@ -28,6 +29,15 @@
  *     thumbnail_height: 630,
  *   }
  *
+ * Accepted origins: the app's own origin and its www / apex twin (https://sourcetofeed.com and
+ * https://www.sourcetofeed.com). Outside production, http(s)://localhost and 127.0.0.1 are accepted
+ * too, for local development. The response's provider_url, iframe src and thumbnail_url always use
+ * the app's canonical origin and the id of the post row the database returned, never text taken
+ * from the submitted URL.
+ *
+ * Accepted paths: exactly /s/embed/{uuid} or /s/post/{uuid} (one optional trailing slash). An id
+ * written in uppercase is the same post and is looked up in lowercase.
+ *
  * Error behaviour:
  *   400 — url param missing or not a FEED /s/embed or /s/post URL
  *   404 — post not found or is_hidden
@@ -41,9 +51,52 @@ import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 const DEFAULT_WIDTH = 480
 const DEFAULT_HEIGHT = 270
 
-// Regex that matches /s/embed/{id} and /s/post/{id} paths
-// Capture group 1 = post UUID
-const EMBED_PATH_RE = /\/s\/(?:embed|post)\/([0-9a-f-]{36})/i
+// Exactly /s/embed/{uuid} or /s/post/{uuid}: nothing before, nothing after but one optional
+// trailing slash. Capture group 1 = the post id, lowercase hex in the 8-4-4-4-12 shape.
+const EMBED_PATH_RE = /^\/s\/(?:embed|post)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/
+
+/**
+ * The post id a share path names, or null when the path is not one of ours. A UUID is the same id
+ * in either letter case (the share pages accept both), so the id segment — and only it — is
+ * lowercased before the match.
+ */
+function sharedPostId(pathname: string): string | null {
+  const path = pathname.replace(/\/[0-9A-Fa-f-]{36}\/?$/, (idSegment) => idSegment.toLowerCase())
+  return EMBED_PATH_RE.exec(path)?.[1] ?? null
+}
+
+/**
+ * Local development only: http(s)://localhost or http(s)://127.0.0.1, on any port. Exact host names,
+ * never a suffix or prefix match, and never in production.
+ */
+function isLocalDevUrl(url: URL): boolean {
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    (url.protocol === 'http:' || url.protocol === 'https:') &&
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1')
+  )
+}
+
+/**
+ * A maxwidth / maxheight hint as pixels: a whole number from 1 up to our default size. Absent, zero,
+ * negative or not a number means no usable limit was sent, so the default applies; a larger number
+ * is capped at the default (the response must not exceed the requested maximum).
+ */
+function dimension(raw: string | null, fallback: number): number {
+  const asked = raw === null ? NaN : Number.parseInt(raw, 10)
+  return Number.isFinite(asked) && asked >= 1 ? Math.min(asked, fallback) : fallback
+}
+
+/**
+ * The origins whose share links this provider answers for: the app's own origin and its www / apex
+ * twin (same scheme, same port). FEED is served on both — the apex redirects to www — so a link
+ * copied from either address bar is one of ours. Exact origin comparison: no suffix matching.
+ */
+function ownOrigins(appOrigin: string): Set<string> {
+  const twin = new URL(appOrigin)
+  twin.hostname = twin.hostname.startsWith('www.') ? twin.hostname.slice(4) : `www.${twin.hostname}`
+  return new Set([appOrigin, twin.origin])
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl
@@ -84,29 +137,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     appOrigin = 'https://www.sourcetofeed.com'
   }
 
-  // Reject URLs from foreign origins to prevent open-proxy abuse
-  if (submittedUrl.origin !== appOrigin) {
-    // In local dev allow localhost regardless of port mismatch
-    const isLocalDev =
-      submittedUrl.hostname === 'localhost' ||
-      submittedUrl.hostname === '127.0.0.1'
-    if (!isLocalDev) {
-      return NextResponse.json(
-        { error: 'URL origin does not match this provider' },
-        { status: 400 }
-      )
-    }
+  // Reject URLs from foreign origins to prevent open-proxy abuse. Our own apex and www addresses are
+  // both accepted; the URLs in the response always use appUrl, whichever of the two was submitted.
+  if (!ownOrigins(appOrigin).has(submittedUrl.origin) && !isLocalDevUrl(submittedUrl)) {
+    return NextResponse.json(
+      { error: 'URL origin does not match this provider' },
+      { status: 400 }
+    )
   }
 
   // Extract post ID from path
-  const match = EMBED_PATH_RE.exec(submittedUrl.pathname)
-  if (!match) {
+  const postId = sharedPostId(submittedUrl.pathname)
+  if (!postId) {
     return NextResponse.json(
       { error: 'URL does not match a supported FEED embed or post path (/s/embed/{id} or /s/post/{id})' },
       { status: 400 }
     )
   }
-  const postId = match[1]
 
   // Fetch post — anon client (posts_select_public RLS: NOT is_hidden)
   const supabase = await createClient()
@@ -146,17 +193,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Resolve maxwidth / maxheight hints from query params
-  const maxwidth = parseInt(searchParams.get('maxwidth') ?? `${DEFAULT_WIDTH}`, 10) || DEFAULT_WIDTH
-  const maxheight = parseInt(searchParams.get('maxheight') ?? `${DEFAULT_HEIGHT}`, 10) || DEFAULT_HEIGHT
+  // maxwidth / maxheight hints (oEmbed spec: the response must not exceed the requested maximum)
+  const width = dimension(searchParams.get('maxwidth'), DEFAULT_WIDTH)
+  const height = dimension(searchParams.get('maxheight'), DEFAULT_HEIGHT)
 
-  // Clamp to requested max dimensions (oEmbed spec: response must not exceed requested max)
-  const width = Math.min(maxwidth, DEFAULT_WIDTH)
-  const height = Math.min(maxheight, DEFAULT_HEIGHT)
-
-  // Canonical embed URL is always /s/embed/{id}
-  const embedUrl = `${appUrl}/s/embed/${postId}`
-  const thumbnailUrl = `${appUrl}/api/og/post/${postId}`
+  // Canonical embed URL is always /s/embed/{id}. Both URLs are built from the id of the row the
+  // database returned, so nothing from the submitted URL is copied into the response.
+  const embedUrl = `${appUrl}/s/embed/${post.id}`
+  const thumbnailUrl = `${appUrl}/api/og/post/${post.id}`
 
   const html =
     `<iframe ` +

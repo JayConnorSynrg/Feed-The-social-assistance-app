@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-09T00:00:00.000Z",
+  "lastUpdated": "2026-10-11T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -859,6 +859,23 @@
         "adversarial and a11y reviews",
         "release (apply 026 -> deploy -> apply 0265)",
         "logged-in browser verification"
+      ]
+    },
+    "feed-r3-0-share-privacy": {
+      "status": "BUILT",
+      "branch": "feature/feed-r3-0-share-privacy",
+      "migrations": [],
+      "docs": "docs/share-previews.md, docs/observability.md (Share-preview images)",
+      "note": "Release 3.0, client only. Preview images are ten pre-rendered cards chosen by kind (no user text, no renderer, no outbound request); og:locale from posts.lang on /s/post and /s/embed with one post read per request; oEmbed accepts apex and www; JSON-LD on /s/business and /s/organization escaped by lib/json-ld.ts; profiles.is_staff dropped from FEED_POST_SELECT; legacy /profile/[username] route and components/feed/post-card.tsx deleted; smoke 24 asserts the posts INSERT revoke; dead code removed. See checklist 1.6.26. Review fix round (checklist 1.6.27): the image routes' 404 rule is tested against a filter-applying stand-in for every not-public state; the business and organization image routes read the id only through readers that share one query with the page readers; oEmbed refuses localhost in production, accepts only exact share paths and builds URLs from the returned row; a failed image request is logged as error and answers 500 no-store; all five share pages describe the preview picture with the card's fixed description (og:image:alt and twitter:image:alt) from the label map the generator draws from; cards regenerated with the kind label largest and inside the centre square; member text on /s/post and /s/embed carries lang and dir; /s/post uses image_alt; /s/embed reads its post once per request. Pre-release lows: member text of unknown language is marked lang=\"\" instead of inheriting the page language; hidden posts and unapproved petitions are guarded by tests on /s/post, /s/embed and oEmbed; unused ogCardLabel export removed.",
+      "gates": "apps/web, no access token, final tree: type-check 0 errors; lint 0 errors (114 warnings); vitest 198 files / 2910 passed, 14 todo; test:unit 62/62; build ok",
+      "notShipped": [
+        "proxy two-factor guard match (item 5): the requested change would open /moderation and /federation/* to a session that has not completed the second factor; proxy.ts untouched, owner decision needed"
+      ],
+      "open": [
+        "release (security MERGE-READY and accessibility A11Y-PASS at 312fdb3)",
+        "post-deploy check of /api/og/* on production (200 image/png + cache header per kind)",
+        "one shared link per script to confirm platform rendering of og:title/description",
+        "owner decision on the proxy two-factor guard"
       ]
     }
   }

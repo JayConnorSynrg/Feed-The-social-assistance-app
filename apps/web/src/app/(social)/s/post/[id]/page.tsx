@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import { Heart, MessageCircle } from 'lucide-react'
@@ -6,24 +7,36 @@ import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { tierLabel, type AdminTier } from '@/lib/admin-tier'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
+import { ogLocaleForLang } from '@/lib/og-locale'
+import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
 
 interface Props {
   params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params
+/**
+ * The one read of the shared post. React `cache` keys it by id for the length of a request, so
+ * generateMetadata and the page below share a single database round trip.
+ *
+ * Explicit column list (omits posts.location — W1.3 V1b column-privacy gate): this anon-facing SSR
+ * read must never select('*') on posts. Author columns are the safe public ones only (PII hardening:
+ * no venmo/paypal in the FK join).
+ */
+const readSharedPost = cache(async (id: string) => {
   const supabase = await createClient()
-  const appUrl = await getAppUrlFromHeaders()
-
-  // Explicit column list (omits posts.location — W1.3 V1b column-privacy gate):
-  // this anon-facing SSR read must never select('*') on posts.
   const { data: post } = await supabase
     .from('posts')
-    .select('id, content, user:profiles!posts_user_id_fkey(first_name, username)')
+    .select('id, content, lang, post_type, image_url, image_alt, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
     .eq('id', id)
     .eq('is_hidden', false)
     .single()
+  return post
+})
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const appUrl = await getAppUrlFromHeaders()
+  const post = await readSharedPost(id)
 
   if (!post) {
     return { title: 'Post Not Found - FEED' }
@@ -37,6 +50,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const canonicalUrl = `${appUrl}/s/post/${id}`
   const oEmbedUrl = `${appUrl}/api/oembed?url=${encodeURIComponent(`${appUrl}/s/embed/${id}`)}`
+  // og:locale from the post's own language; left out when the post has none or no valid value exists.
+  const ogLocale = ogLocaleForLang(post.lang)
+  // The preview picture is the fixed card for the post's type; its description says what the card
+  // shows (og:image:alt and twitter:image:alt), never the post's text or author.
+  const imageAlt = ogCardAlt(postCardKind(post.post_type))
 
   return {
     title: `${authorName} on FEED`,
@@ -47,12 +65,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       siteName: 'FEED',
       url: canonicalUrl,
+      ...(ogLocale ? { locale: ogLocale } : {}),
       images: [
         {
           url: `${appUrl}/api/og/post/${id}`,
           width: 1200,
           height: 630,
-          alt: `Post by ${authorName}`,
+          alt: imageAlt,
         },
       ],
     },
@@ -60,7 +79,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title: `${authorName} on FEED`,
       description,
-      images: [`${appUrl}/api/og/post/${id}`],
+      images: [{ url: `${appUrl}/api/og/post/${id}`, alt: imageAlt }],
     },
     alternates: {
       types: {
@@ -74,14 +93,7 @@ export default async function SharedPostPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  // Fetch post with safe public author columns only (PII hardening: no venmo/paypal in FK join).
-  // Explicit column list (omits posts.location — W1.3 V1b): renders content + image only.
-  const { data: post } = await supabase
-    .from('posts')
-    .select('id, content, image_url, like_count, comment_count, user:profiles!posts_user_id_fkey(id, first_name, username, avatar_url, admin_tier)')
-    .eq('id', id)
-    .eq('is_hidden', false)
-    .single()
+  const post = await readSharedPost(id)
 
   if (!post) notFound()
 
@@ -109,6 +121,8 @@ export default async function SharedPostPage({ params }: Props) {
     : { paypal_email: null, venmo_username: null }
 
   const displayName = user?.first_name || 'Community Member'
+  // The author's description of the photo (posts.image_alt), when they wrote one.
+  const authorImageAlt = post.image_alt?.trim() || null
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const hasPayment = handles.venmo_username || handles.paypal_email
 
@@ -144,7 +158,8 @@ export default async function SharedPostPage({ params }: Props) {
           )}
           <div>
             <p className="font-semibold text-stone-800">
-              {displayName}
+              {/* A name takes its direction from its own letters; the post's language is not the name's. */}
+              <span dir="auto">{displayName}</span>
               {tierLabel(user?.admin_tier) && (
                 <span className="ml-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
                   {tierLabel(user?.admin_tier)}
@@ -159,15 +174,23 @@ export default async function SharedPostPage({ params }: Props) {
 
         {/* Content */}
         <div className="px-4 pb-3">
-          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed">{post.content}</p>
+          {/* The member's text. posts.lang is the author's app language when they posted — the best
+              signal there is, not a detected language; a post without one is marked lang="" (unknown)
+              so it does not inherit the page's lang="en". Direction comes from the text itself. */}
+          <p className="text-stone-700 whitespace-pre-wrap leading-relaxed" lang={post.lang ?? ''} dir="auto">
+            {post.content}
+          </p>
         </div>
 
         {/* Image */}
         {post.image_url && (
-          <div className="relative aspect-video">
+          // The photo's description is the author's own words when they wrote one, so the wrapper
+          // carries the post's language for it (lang="" when unknown). The fallback text is this
+          // page's own English, so then the wrapper sets no language.
+          <div className="relative aspect-video" lang={authorImageAlt ? (post.lang ?? '') : undefined}>
             <Image
               src={post.image_url}
-              alt="Post image"
+              alt={authorImageAlt || 'Post image'}
               fill
               className="object-cover"
               sizes="(max-width: 672px) 100vw, 672px"
@@ -197,7 +220,9 @@ export default async function SharedPostPage({ params }: Props) {
       {/* Support section */}
       {hasPayment && (
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-3">
-          <h2 className="text-lg font-semibold text-stone-800">Support {displayName}</h2>
+          <h2 className="text-lg font-semibold text-stone-800">
+            Support <span dir="auto">{displayName}</span>
+          </h2>
           <p className="text-sm text-stone-500">Send direct support through their preferred payment method.</p>
           <div className="flex flex-col sm:flex-row gap-3">
             {handles.venmo_username && (

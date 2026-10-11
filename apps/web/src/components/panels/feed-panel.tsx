@@ -35,7 +35,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage } from '@/lib/i18n-event-forms'
 import { relativeAge } from '@/lib/relative-age'
-import { cardT } from '@/lib/i18n-feed-card'
+import { cardT, type ReportReason } from '@/lib/i18n-feed-card'
 import { composerT } from '@/lib/i18n-feed-composer'
 import { failureText } from '@/lib/i18n-feed-edit'
 import { createPost, deleteOwnPost } from '@/lib/post-rpc'
@@ -52,7 +52,7 @@ import { usePostImagePicker, PostImagePickerField } from '@/components/feed/post
 import { createSingleFlight, composerSubmitOutcome } from '@/components/feed/composer-guards'
 import { postEnterExit } from '@/components/feed/feed-motion'
 import { resolveFeedSubtab, type FeedSubtab } from '@/components/feed/feed-subtab'
-import { rowToPost, visibleInFeed, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, classifyPostUpdate, rowPatchFromFeedRow, editFallbackPatch, assertNever, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
+import { rowToPost, visibleInFeed, FEED_POST_SELECT, orderByRankAndAttachBucket, applyPostRowPatch, classifyPostUpdate, rowPatchFromFeedRow, editFallbackPatch, assertNever, partitionRankedRows, mergeRankedFeedItems, feedIncludesEvents, rankedEventRefs, rankEventCards, appendNewEvents, type Post, type FeedPostRow, type RankedFeedV2Row, type EventFeedItem, type FeedItem } from '@/components/feed/post-model'
 import { EventCard } from '@/components/feed/event-card'
 import { useFeedEventCards } from '@/hooks/use-feed-event-cards'
 import { emptyCheckinState, checkinResultEffect } from '@/lib/event-checkin-state'
@@ -79,7 +79,7 @@ import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
  * Read the caller's coordinates ONLY when geolocation permission is already granted —
  * this never triggers a new permission prompt (W1.3). Returns null on any browser
  * without the Permissions API, when permission is not 'granted', on native (no
- * Permissions API), or on any error. A null result makes ranked_feed fall back to
+ * Permissions API), or on any error. A null result makes ranked_feed_v2 fall back to
  * recency-only ranking (no distance factor), which is the graceful default.
  */
 async function readGeoIfGranted(): Promise<{ lat: number; lng: number } | null> {
@@ -925,7 +925,7 @@ export function FeedPanel() {
     }
   }, [supabase, user, loadPostSideData, setEventItems, setEventMyStatuses, setEventAnonClaims])
 
-  // Ranked feed (W1.3): fetch a page via the hardened ranked_feed RPC, then hydrate
+  // Ranked feed (W1.3): fetch a page via the hardened ranked_feed_v2 RPC, then hydrate
   // full rows with the SAME explicit FEED_POST_SELECT + rowToPost transform the
   // chronological path uses (single-transform invariant). The RPC returns only
   // id + score + distance_bucket (never coords). Caller geo is read at most once and
@@ -950,7 +950,7 @@ export function FeedPanel() {
         if (geoRef.current === undefined) {
           // INV-H: device location is used only when the user has explicitly
           // opted in via Settings → Privacy → Share Location. When off (default),
-          // skip the read entirely; ranked_feed then falls back to recency+
+          // skip the read entirely; ranked_feed_v2 then falls back to recency+
           // engagement ranking (the graceful no-geo path).
           geoRef.current = readShareLocationPref() ? await readGeoIfGranted() : null
         }
@@ -991,7 +991,7 @@ export function FeedPanel() {
           return
         }
         // The post-kind ranked rows carry the score+bucket for orderByRankAndAttachBucket.
-        const postRankRows = ranked.filter((r) => r.kind === 'post') as unknown as RankedFeedRow[]
+        const postRankRows = ranked.filter((r) => r.kind === 'post')
 
         // Hydrate the ranked POST ids with the SAME explicit select as the chronological
         // feed (omits location). RLS still applies to this SECURITY INVOKER read.
@@ -1180,7 +1180,7 @@ export function FeedPanel() {
         isLiked = liked != null
       }
       const hydrated = rowToPost(data as unknown as FeedPostRow, { isLiked })
-      if (hydrated.isHidden && hydrated.author.id !== user?.id) return
+      if (!visibleInFeed(hydrated, user?.id ?? null)) return
       removedHiddenIdsRef.current.delete(postId)
       setPosts((prev) => (prev.some((p) => p.id === hydrated.id) ? prev : [hydrated, ...prev]))
     } catch (err) {
@@ -1503,7 +1503,6 @@ export function FeedPanel() {
     reason: string,
     details: string | null
   ): Promise<{ hidden: boolean }> => {
-    type ReportReason = 'spam' | 'abusive' | 'harassment' | 'misinformation' | 'illegal' | 'off_topic' | 'other'
     const { data, error } = await supabase.rpc('submit_content_report', {
       p_content_type: 'post',
       p_content_id: postId,
