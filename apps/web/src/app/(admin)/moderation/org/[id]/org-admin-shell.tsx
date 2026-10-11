@@ -26,7 +26,7 @@ import { organizationMapVisibility, organizationVisibility, showsMapControl } fr
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/use-auth'
-import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
+import { dir, resolveProfileLocale, type Locale } from '@/lib/i18n'
 import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
 import { ORG_ADMIN_INDEX } from '@/lib/org-admin-paths'
 import { orgTypeKey } from '@/components/org-form/org-labels'
@@ -70,7 +70,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   const router = useRouter()
   const { profile } = useAuth()
   const locale: Locale = useMemo(
-    () => (profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'),
+    () => resolveProfileLocale(profile),
     [profile]
   )
 

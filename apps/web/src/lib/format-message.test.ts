@@ -100,6 +100,17 @@ describe('splitMessage and isolate', () => {
   })
 
   it('isolates member-written text for a plain-text channel', () => {
-    expect(isolate('أنقذوا الحديقة')).toBe('⁨أنقذوا الحديقة⁩')
+    expect(isolate('أنقذوا الحديقة')).toBe('\u2068أنقذوا الحديقة\u2069')
+  })
+
+  it('removes directional controls already in the text, so the isolate cannot be closed or overridden from inside', () => {
+    // A title that tries to end the isolate early and flip what follows it.
+    expect(isolate('Save\u2069\u202e the park')).toBe('\u2068Save the park\u2069')
+    for (const control of ['\u2066', '\u2067', '\u2068', '\u2069', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e']) {
+      expect(isolate(`a${control}b`), `U+${control.charCodeAt(0).toString(16)}`).toBe('\u2068ab\u2069')
+    }
+    // Marks that carry meaning stay: LRM / RLM, and the zero-width joiner of Arabic and emoji.
+    expect(isolate('a\u200eb\u200fc\u200dd')).toBe('\u2068a\u200eb\u200fc\u200dd\u2069')
+    expect([...isolate('x\u2069y')].filter((c) => c === '\u2068' || c === '\u2069')).toHaveLength(2)
   })
 })

@@ -27,11 +27,16 @@ export function splitMessage(template: string, name: string): [before: string, a
   return at < 0 ? [template, ''] : [template.slice(0, at), template.slice(at + token.length)]
 }
 
+/** Directional isolates (U+2066–U+2069) and embeddings / overrides (U+202A–U+202E). */
+const BIDI_CONTROLS = /[\u2066-\u2069\u202a-\u202e]/g
+
 /**
  * Member-written text for an attribute or other plain-text channel: FIRST STRONG ISOLATE …
  * POP DIRECTIONAL ISOLATE, the character form of dir="auto" (W3C "Inline markup and
- * bidirectional text"), so a right-to-left title cannot reorder the words around it.
+ * bidirectional text"), so a right-to-left title cannot reorder the words around it. Any
+ * directional control already in the text is removed first: a stray POP DIRECTIONAL ISOLATE
+ * would end the isolate early, and an override would reorder what follows it.
  */
 export function isolate(text: string): string {
-  return `⁨${text}⁩`
+  return `\u2068${text.replace(BIDI_CONTROLS, '')}\u2069`
 }

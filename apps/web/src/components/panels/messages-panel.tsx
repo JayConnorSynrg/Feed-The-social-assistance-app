@@ -39,6 +39,7 @@ import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage, splitMessage } from '@/lib/format-message'
 import { formatClock, formatCount, formatDate } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
 import { feedChromeT } from '@/lib/i18n-feed-chrome'
 import { conversationError, conversationStatusLabel, messagesT } from '@/lib/i18n-feed-messages'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
@@ -374,7 +375,7 @@ export function MessagesPanel() {
                     <p className={`text-[10px] mt-1 ${
                       msg.sender_id === user?.id ? 'text-white/60' : 'text-stone-400'
                     }`}>
-                      {msg.created_at ? formatClock(msg.created_at, locale) : ''}
+                      {msg.created_at ? formatClock(msg.created_at, locale, browserTimeZone()) : ''}
                     </p>
                   </div>
                 </div>
@@ -593,7 +594,7 @@ function ConversationCard({ conversation, userId, isSelected, onClick, locale }:
       <div className="flex items-center justify-between">
         <p lang={otherName ? '' : undefined} dir="auto" className="text-sm font-medium text-stone-800 truncate">{otherName ?? messagesT(locale, 'unknownUser')}</p>
         <span className="text-[10px] text-stone-600">
-          {conversation.updated_at ? formatDate(conversation.updated_at, locale) : ''}
+          {conversation.updated_at ? formatDate(conversation.updated_at, locale, browserTimeZone()) : ''}
         </span>
       </div>
       {categoryLabel && (

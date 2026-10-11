@@ -34,13 +34,16 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     hideDefaultClose?: boolean
+    /** Screen-reader name of the default close button, in the dialog's language. Without it the
+     *  name is the English "Close", marked lang="en" so a translated dialog does not mislabel it. */
+    closeLabel?: string
     /** When set, an incidental outside click / pointer-down-outside does NOT
      *  dismiss the dialog (preserving in-progress form state). Escape, the X
      *  button, and any Cancel button remain intentional close paths. Opt-in
      *  per dialog — the global default dismiss behavior is unchanged. */
     disableOutsideClose?: boolean
   }
->(({ className, children, hideDefaultClose, disableOutsideClose, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
+>(({ className, children, hideDefaultClose, closeLabel, disableOutsideClose, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -55,9 +58,9 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!hideDefaultClose && (
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close className="absolute end-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only" lang={closeLabel ? undefined : 'en'}>{closeLabel ?? 'Close'}</span>
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>

@@ -1,9 +1,14 @@
 // apps/web/src/lib/i18n-native-review.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// docs/i18n-native-review.md is the one list of Haitian Creole, Somali, Amharic and Hmong strings
-// awaiting a native speaker. This test keeps its generated part equal to the dictionaries: a new
-// or changed ht / so / am / hmn string with no matching row fails here.
+// docs/i18n-native-review.md lists, string by string, the Haitian Creole, Somali, Amharic and
+// Hmong text awaiting a native speaker, starting with the Release 3.5 dictionaries. This test
+// keeps its generated part equal to the code:
+//   - every dictionary module lib/i18n-*.ts is read automatically: a new one joins the list with
+//     no line added here, and this test fails until the list is regenerated;
+//   - the older dictionaries, which still carry their note inline, are named in OLDER and in the
+//     document's own table (kept equal), and are not itemised;
+//   - a new or changed ht / so / am / hmn string with no matching row fails.
 //
 // To update the list after changing a string (keeps each unchanged row's date and status):
 //   UPDATE_I18N_REVIEW=1 npx vitest run src/lib/i18n-native-review.test.ts
@@ -14,17 +19,15 @@ import { fileURLToPath } from 'node:url'
 
 vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
-import type { Locale } from './i18n'
-import { TIME_WORDS, type PluralForms } from './i18n-intl'
-import { feedOrganizationsMessages } from './i18n-feed-organizations'
-import { SIGNATURES_OF_TARGET, VERIFIED_SIGNATURES, feedPetitionsMessages } from './i18n-feed-petitions'
-import { feedMessagesMessages } from './i18n-feed-messages'
-import { feedBusinessesMessages } from './i18n-feed-businesses'
+import { messages } from './i18n'
+import { TIME_WORDS } from './i18n-intl'
 
+const LOCALES = Object.keys(messages).sort()
 const REVIEW_LOCALES = ['ht', 'so', 'am', 'hmn'] as const
-type ReviewLocale = (typeof REVIEW_LOCALES)[number]
 const DRAFT = 'machine-drafted, needs native review'
+const WORDING = 'wording choice, review welcome'
 const TODAY = '2026-10-11'
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const DOC = fileURLToPath(new URL('../../../../docs/i18n-native-review.md', import.meta.url))
 const BEGIN = '<!-- BEGIN GENERATED: lib/i18n-native-review.test.ts -->'
 const END = '<!-- END GENERATED -->'
@@ -32,7 +35,7 @@ const END = '<!-- END GENERATED -->'
 interface Row {
   file: string
   key: string
-  locale: ReviewLocale
+  locale: string
   en: string
   text: string
   added: string
@@ -40,65 +43,104 @@ interface Row {
 }
 type Draft = Omit<Row, 'added' | 'status'> & { status?: string }
 
-/** Every string of a Record<Locale, M> dictionary, in the four review locales. */
-function dictionaryRows(file: string, dict: Record<Locale, object>): Draft[] {
-  const en = dict.en as Record<string, string>
-  return Object.keys(en).flatMap((key) =>
-    REVIEW_LOCALES.map((locale) => ({ file, key, locale, en: en[key], text: (dict[locale] as Record<string, string>)[key] })),
-  )
+// Every dictionary module in lib/, loaded as it is on disk.
+const MODULES = import.meta.glob<Record<string, unknown>>(['./i18n-*.ts', '!./*.test.ts'], { eager: true })
+const moduleFile = (path: string) => `lib/${path.replace('./', '')}`
+
+/**
+ * Dictionaries written before this list existed. Their strings are machine-drafted too; they are
+ * not itemised here yet. `marker` says whether the file carries the review note inline.
+ * Itemise one by deleting its row (and its row in the document).
+ */
+const OLDER: Record<string, { marker: boolean }> = {
+  'lib/i18n.ts': { marker: true },
+  'lib/i18n-feed-chrome.ts': { marker: true },
+  'lib/i18n-feed-card.ts': { marker: true },
+  'lib/i18n-feed-composer.ts': { marker: true },
+  'lib/i18n-feed-comments.ts': { marker: true },
+  'lib/i18n-feed-edit.ts': { marker: true },
+  'lib/i18n-resource-categories.ts': { marker: true },
+  'lib/i18n-event-forms.ts': { marker: true },
+  'lib/i18n-event-member.ts': { marker: true },
+  'lib/i18n-map-member.ts': { marker: true },
+  'lib/i18n-admin-nav.ts': { marker: false },
+  'lib/i18n-admin-focus.ts': { marker: true },
+  'lib/i18n-org-forms.ts': { marker: true },
+  'lib/event-recurrence-format.ts': { marker: true },
 }
 
-/** Every form of a plural table, in the four review locales. */
-function pluralRows(file: string, name: string, table: Record<Locale, PluralForms>): Draft[] {
-  return REVIEW_LOCALES.flatMap((locale) =>
-    Object.entries(table[locale]).map(([form, text]) => ({
-      file,
-      key: `${name}.${form}`,
-      locale,
-      en: (table.en as Record<string, string>)[form] ?? table.en.other,
-      text: text as string,
-    })),
-  )
+const PLURAL_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other']
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+/** An export shaped Record<Locale, Record<string, string>>: a dictionary or a plural table. */
+function localeTable(value: unknown): Record<string, Record<string, string>> | null {
+  if (!isRecord(value) || Object.keys(value).sort().join() !== LOCALES.join()) return null
+  const ok = Object.values(value).every((d) => isRecord(d) && Object.values(d).every((x) => typeof x === 'string'))
+  return ok ? (value as Record<string, Record<string, string>>) : null
+}
+
+/** Every locale table a module exports, as rows in the given locales. */
+function moduleRows(file: string, mod: Record<string, unknown>, locales: readonly string[], keep: (text: string) => boolean = () => true): Draft[] {
+  return Object.entries(mod).flatMap(([name, value]) => {
+    const table = localeTable(value)
+    if (!table) return []
+    const plural = Object.keys(table.en).every((k) => PLURAL_FORMS.includes(k))
+    return locales.flatMap((locale) =>
+      Object.entries(table[locale])
+        .filter(([, text]) => keep(text))
+        .map(([key, text]) => ({ file, key: plural ? `${name}.${key}` : key, locale, en: table.en[key] ?? table.en.other, text })),
+    )
+  })
 }
 
 const EN_TIME = {
   months: 'Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec',
-  date: '{month} {day}, {year}',
-  clock: '{hour}:{minute} {period}',
+  monthsLong: 'January, February, March, April, May, June, July, August, September, October, November, December',
+  weekdays: 'Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday',
+  weekdaysShort: 'Sun, Mon, Tue, Wed, Thu, Fri, Sat',
   am: 'AM',
   pm: 'PM',
   past: { minute: '{n} minutes ago', hour: '{n} hours ago', day: '{n} days ago' },
+  future: { minute: 'In {n} minutes', hour: 'In {n} hours', day: 'In {n} days' },
 }
 
 function timeWordRows(): Draft[] {
   const file = 'lib/i18n-intl.ts'
-  return (Object.keys(TIME_WORDS) as ReviewLocale[]).flatMap((locale) => {
-    const w = TIME_WORDS[locale]!
-    // Somali time words are CLDR 48's own data (i18n-intl.test.ts compares them with Intl).
-    const status = locale === 'so' ? 'CLDR 48 data; equals Intl where the runtime has Somali' : undefined
+  return Object.entries(TIME_WORDS).flatMap(([locale, w]) => {
+    // Somali names, day periods and past ages are CLDR 48's own data (i18n-intl.test.ts compares
+    // them with Intl); its future ages are FEED's.
+    const cldr = locale === 'so' ? 'CLDR 48 data; equals Intl where the runtime has Somali' : undefined
     return [
-      { file, key: 'TIME_WORDS.months', locale, en: EN_TIME.months, text: w.months.join(', '), status },
-      { file, key: 'TIME_WORDS.date', locale, en: EN_TIME.date, text: w.date, status },
-      { file, key: 'TIME_WORDS.clock', locale, en: EN_TIME.clock, text: w.clock, status },
-      { file, key: 'TIME_WORDS.am', locale, en: EN_TIME.am, text: w.am, status },
-      { file, key: 'TIME_WORDS.pm', locale, en: EN_TIME.pm, text: w.pm, status },
-      ...(['minute', 'hour', 'day'] as const).flatMap((unit) =>
-        Object.entries(w.past[unit]).map(([form, text]) => ({ file, key: `TIME_WORDS.past.${unit}.${form}`, locale, en: EN_TIME.past[unit], text: text as string, status })),
+      ...(['months', 'monthsLong', 'weekdays', 'weekdaysShort'] as const).map((k) => ({ file, key: `TIME_WORDS.${k}`, locale, en: EN_TIME[k], text: w[k].join(', '), status: cldr })),
+      { file, key: 'TIME_WORDS.am', locale, en: EN_TIME.am, text: w.am, status: cldr },
+      { file, key: 'TIME_WORDS.pm', locale, en: EN_TIME.pm, text: w.pm, status: cldr },
+      ...(['past', 'future'] as const).flatMap((direction) =>
+        (['minute', 'hour', 'day'] as const).flatMap((unit) =>
+          Object.entries(w[direction][unit]).map(([form, text]) => ({
+            file,
+            key: `TIME_WORDS.${direction}.${unit}.${form}`,
+            locale,
+            en: EN_TIME[direction][unit],
+            text: text as string,
+            status: direction === 'past' ? cldr : undefined,
+          })),
+        ),
       ),
     ]
   })
 }
 
-/** Every source this list tracks. A new dictionary adds one line here. */
+/** Arabic petition strings that carry the "confirmed signature" wording (a choice, not a draft). */
+const AR_WORDING = { file: 'lib/i18n-feed-petitions.ts', has: (text: string) => text.includes('مؤكَّد') }
+
+/** Every source this list tracks. */
 function expectedRows(): Draft[] {
+  const tracked = Object.entries(MODULES).filter(([path]) => !(moduleFile(path) in OLDER))
   return [
     ...timeWordRows(),
-    ...dictionaryRows('lib/i18n-feed-organizations.ts', feedOrganizationsMessages),
-    ...dictionaryRows('lib/i18n-feed-petitions.ts', feedPetitionsMessages),
-    ...pluralRows('lib/i18n-feed-petitions.ts', 'SIGNATURES_OF_TARGET', SIGNATURES_OF_TARGET),
-    ...pluralRows('lib/i18n-feed-petitions.ts', 'VERIFIED_SIGNATURES', VERIFIED_SIGNATURES),
-    ...dictionaryRows('lib/i18n-feed-messages.ts', feedMessagesMessages),
-    ...dictionaryRows('lib/i18n-feed-businesses.ts', feedBusinessesMessages),
+    ...tracked.flatMap(([path, mod]) => moduleRows(moduleFile(path), mod, REVIEW_LOCALES)),
+    ...tracked
+      .filter(([path]) => moduleFile(path) === AR_WORDING.file)
+      .flatMap(([path, mod]) => moduleRows(moduleFile(path), mod, ['ar'], AR_WORDING.has).map((r) => ({ ...r, status: WORDING }))),
   ]
 }
 
@@ -116,7 +158,7 @@ function parse(doc: string): Row[] {
     if (!line.startsWith('| `')) continue
     const cells = line.slice(2, -2).split(/ (?<!\\)\| /).map(uncell)
     const [key, locale, en, text, added, status] = cells
-    rows.push({ file, key: key.replace(/`/g, ''), locale: locale as ReviewLocale, en, text, added, status })
+    rows.push({ file, key: key.replace(/`/g, ''), locale, en, text, added, status })
   }
   return rows
 }
@@ -177,5 +219,51 @@ describe('docs/i18n-native-review.md', () => {
       expect(row.status.trim()).not.toBe('')
     }
     expect([...listed.values()].some((r) => r.status === DRAFT)).toBe(true)
+  })
+
+  it('the Arabic petition wording is listed as a wording choice', () => {
+    const ar = [...listed.values()].filter((r) => r.locale === 'ar')
+    expect(ar.length).toBeGreaterThanOrEqual(10)
+    for (const row of ar) {
+      expect(row.file).toBe('lib/i18n-feed-petitions.ts')
+      expect(row.status).toBe(WORDING)
+    }
+  })
+})
+
+describe('which dictionaries the list covers', () => {
+  const doc = readFileSync(DOC, 'utf8')
+
+  it('every lib/i18n-*.ts dictionary module is itemised, or named as an older one', () => {
+    const files = Object.keys(MODULES).map(moduleFile)
+    expect(files.length).toBeGreaterThanOrEqual(17)
+    const itemised = [...new Set(parse(doc).map((r) => r.file))]
+    for (const file of files) {
+      const exportsTable = Object.values(MODULES[`./${file.replace('lib/', '')}`]).some((v) => localeTable(v) !== null)
+      if (file in OLDER) continue
+      // lib/i18n-intl.ts holds TIME_WORDS (three locales), read by timeWordRows.
+      if (exportsTable || file === 'lib/i18n-intl.ts') expect(itemised, file).toContain(file)
+    }
+    // The four Release 3.5 dictionaries and the time words are where the list starts.
+    for (const file of ['lib/i18n-intl.ts', 'lib/i18n-feed-organizations.ts', 'lib/i18n-feed-petitions.ts', 'lib/i18n-feed-messages.ts', 'lib/i18n-feed-businesses.ts']) {
+      expect(itemised).toContain(file)
+    }
+  })
+
+  it('the document names exactly the older dictionaries, and says truthfully which carry the note inline', () => {
+    const section = doc.slice(doc.indexOf('## Older dictionaries'))
+    const rows = [...section.matchAll(/^\| `(lib\/[^`]+)` \| ([^|]+) \| (yes|no) \|/gm)].map((m) => ({ file: m[1], marker: m[3] === 'yes' }))
+    expect(rows.map((r) => r.file).sort()).toEqual(Object.keys(OLDER).sort())
+    for (const row of rows) {
+      expect(row.marker, row.file).toBe(OLDER[row.file].marker)
+      const hasNote = /native[- ]speaker review|needs? native review/i.test(read(`../${row.file}`))
+      expect(hasNote, row.file).toBe(row.marker)
+    }
+  })
+
+  it('every itemised dictionary points at this list from its header', () => {
+    for (const file of [...new Set(parse(doc).map((r) => r.file))]) {
+      expect(read(`../${file}`), file).toContain('docs/i18n-native-review.md')
+    }
   })
 })
