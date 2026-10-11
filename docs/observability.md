@@ -299,6 +299,29 @@ where created_at > now() - interval '7 days';
 
 ---
 
+## Share-preview images
+
+`/api/og/{post,resource,business,organization}/[id]` answer with one of ten pre-rendered cards (`apps/web/src/lib/og-card.ts`; rule and design in [`share-previews.md`](share-previews.md)). The handler still runs for every request the CDN does not answer from its cache — it reads FEED's database for the item's kind and for the 404 — so each run writes exactly one row. The image is cached for a year once served, so a row means a first fetch of that URL (or one after a deployment purged the CDN).
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `og.image.complete` | `surface`, `kind`, `outcome` | one preview-image request. `surface`: `post` · `resource` · `business` · `organization` (which route). `kind`: the card served — `feed` · `resource_post` · `petition` · `seeker_request` · `source_offer` · `event_post` · `poll` · `resource` · `business` · `organization` — or `null` when nothing was served. `outcome`: `ok` (200) · `not_found` (404: hidden, deleted, not approved or unknown). Duration is in `duration_ms`. |
+| `og.image.error` | `surface`, `kind`, `outcome` | the handler threw (the request answers 500); `error_code` names the failure |
+
+No item id and no text from the item is in either row. CDN cache status is not a label: the handler cannot see it, and a handler run is a CDN miss by definition.
+
+Preview-image requests per day and kind:
+
+```sql
+select date_trunc('day', created_at)::date as day, context->>'kind' as kind, context->>'outcome' as outcome,
+       count(*), round(avg(duration_ms)) as avg_ms
+from public.app_logs
+where event = 'og.image.complete' and created_at > now() - interval '14 days'
+group by 1, 2, 3 order by 1 desc, 4 desc;
+```
+
+---
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).
