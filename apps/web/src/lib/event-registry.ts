@@ -168,11 +168,16 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'alerts.history.open.error': ['surface', 'target_id'],
   'alerts.place.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
   'alerts.place.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
-  // Read volume of the alert reader per surface, aggregated in the browser: one row per 30 reads, per
-  // tab hide and per unmount (lib/safety-alerts-fetch.ts PollCounter). sum(reads) = reader calls.
-  'alerts.poll': ['changed', 'errors', 'reads', 'result_count', 'surface', 'window_s'],
+  // Read volume of the alert reader per surface, aggregated in the browser: one row per 30 reads, one
+  // when the surface unmounts and one when the page goes away — never per tab hide
+  // (lib/safety-alerts-fetch.ts PollCounter). sum(reads) = reader calls; errors / last_error = failed
+  // reads in the window and the class of the last one.
+  'alerts.poll': ['changed', 'errors', 'last_error', 'reads', 'result_count', 'surface', 'window_s'],
   'alerts.resolve.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
   'alerts.resolve.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
+  // A row came back without the server's shown_state (a pre-Release-3 answer shape): the client fell
+  // back to its own clock for that row. Once per page load. Expected count: zero.
+  'alerts.shown_state.missing': ['status'],
   'alerts.update.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
   'alerts.update.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
   'alerts.vote.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id', 'vote'],
@@ -331,9 +336,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'geocode.resolve': ['outcome', 'source'],
   'global-error.boundary': ['digest', 'locale', 'surface'],
   'gov_forms.download.error': [],
-  'hazard.geocode': ['accuracy', 'confidence', 'matched', 'ms', 'success'],
   'hazard.menu.open': ['type'],
-  'hazard.pin.placed': ['severity', 'type'],
   'i18n.locale_resolved': ['locale', 'source'],
   'i18n.translation_fallback': ['key', 'locale'],
   'map.businesses_in_bounds.complete': ['limit'],
@@ -434,9 +437,6 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'petition.sign.success': ['count', 'latencyMs', 'petitionId'],
   'petition.sign.unauthorized': ['latencyMs'],
   'petition.sign.unexpected': [],
-  'pin.clear': ['alertId'],
-  'pin.confirm': ['alertId'],
-  'pin.place': ['id', 'severity', 'type'],
   'pin.removed': ['alertId', 'request_id'],
   'pin.verified': ['alertId', 'request_id'],
   'poll.castVote.error': ['optionIndex', 'pollId'],
@@ -468,12 +468,15 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'request.error': ['digest', 'method', 'route', 'route_type'],
   'resource.set_location.complete': ['action', 'request_id', 'target_id'],
   'resource.set_location.error': ['action', 'request_id', 'target_id'],
+  // safety-alerts.fetch.error: the map's alert read failed (at most one row per alerts.poll window,
+  // hooks/use-safety-alerts.ts). The other four safety-alerts.*.error names are posted only by
+  // clients older than Release 3.1 (their writes now log as alerts.<action>.error). Remove those four
+  // once app_logs shows none of them for 30 days after the Release 3.1 deploy (the query is in
+  // docs/observability.md, "Safety alerts").
   'safety-alerts.delete.error': [],
-  'safety-alerts.delete.success': ['alertId'],
   'safety-alerts.fetch.error': [],
   'safety-alerts.place.error': [],
   'safety-alerts.update.error': [],
-  'safety-alerts.update.success': ['alertId'],
   'safety-alerts.vote.error': [],
   'search.resources.complete': ['limit', 'surface'],
   'search.resources.error': ['limit', 'surface'],
