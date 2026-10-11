@@ -10,7 +10,9 @@
 //     is, in nine scripts and edge cases — so none of it can be in the picture;
 //   - the one persisted log row names the kind and the outcome, never the id or any text.
 // The database read is FEED's own Supabase; it is replaced here by a row built from each input, so a
-// route that drew the title, body or name would have them to draw.
+// route that drew the title, body or name would have them to draw. The stand-in applies every filter
+// a route chains (lib/__tests__/filtering-db.ts): a row comes back only when all of them match, so a
+// route that stopped asking for "visible only" would serve a hidden item here and fail.
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import net from 'node:net'
@@ -19,30 +21,21 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { POST_TYPE_VALUES } from '@/components/feed/post-model'
 import { OG_CARD_KINDS, OG_CARD_CACHE_CONTROL, type OgCardKind } from '@/lib/og-card'
+import type { FakeRow, FilteringDb } from '@/lib/__tests__/filtering-db'
 
 const ID = '11111111-1111-4111-8111-111111111111'
+const OTHER_ID = '22222222-2222-4222-8222-222222222222'
 
-const { db, logRows } = vi.hoisted(() => ({
-  db: { row: null as Record<string, unknown> | null, selects: [] as string[] },
+const { logRows } = vi.hoisted(() => ({
   logRows: [] as Array<{ table: string; row: Record<string, unknown> }>,
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({
-    from: () => {
-      const q: Record<string, unknown> = {}
-      q.select = (columns: string) => {
-        db.selects.push(columns)
-        return q
-      }
-      q.eq = () => q
-      q.in = () => q
-      q.single = async () =>
-        db.row ? { data: db.row, error: null } : { data: null, error: { code: 'PGRST116', message: 'no rows' } }
-      return q
-    },
-  }),
-}))
+// The server client the routes create: a filter-applying stand-in, exposed as __db for the tests.
+vi.mock('@/lib/supabase/server', async () => {
+  const { filteringDb } = await import('@/lib/__tests__/filtering-db')
+  const fake = filteringDb()
+  return { createClient: async () => fake.client, __db: fake }
+})
 
 // The logger's server sink (service-role insert into FEED's own app_logs). Reached only when the two
 // env vars are set, which the logging tests below do; the egress tests leave them unset.
@@ -61,6 +54,9 @@ import { GET as postGET } from './post/[id]/route'
 import { GET as resourceGET } from './resource/[id]/route'
 import { GET as businessGET } from './business/[id]/route'
 import { GET as organizationGET } from './organization/[id]/route'
+import * as serverClient from '@/lib/supabase/server'
+
+const db = (serverClient as unknown as { __db: FilteringDb }).__db
 
 // ---------------------------------------------------------------------------
 // Egress recorders: fetch, TCP connect, DNS lookup
@@ -115,8 +111,7 @@ beforeEach(() => {
   attempts.length = 0
   localFetches.length = 0
   logRows.length = 0
-  db.row = null
-  db.selects.length = 0
+  db.reset()
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -140,17 +135,23 @@ const INPUTS: Array<{ label: string; text: string; name: string }> = [
 ]
 
 type Handler = (request: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>
+type Surface = 'post' | 'resource' | 'business' | 'organization'
 
-/** One row holding the input in every text column a route could read, shaped for that route's table. */
+/**
+ * Per route: the table it reads and one PUBLIC row holding the input in every text column the route
+ * could read. Every "not public" case below is this row with one thing changed.
+ */
 const SURFACES: Array<{
-  surface: string
+  surface: Surface
+  table: string
   handler: Handler
   kinds: readonly OgCardKind[]
   notFound: string
-  row: (kind: OgCardKind, input: { text: string; name: string }) => Record<string, unknown>
+  row: (kind: OgCardKind, input: { text: string; name: string }) => FakeRow
 }> = [
   {
     surface: 'post',
+    table: 'posts',
     handler: postGET,
     kinds: POST_TYPE_VALUES,
     notFound: 'Post not found',
@@ -160,11 +161,14 @@ const SURFACES: Array<{
       content: i.text,
       lang: 'en',
       is_hidden: false,
+      hidden_reason: null,
+      deleted_at: null,
       user: { id: 'u1', first_name: i.name, username: i.name, avatar_url: null },
     }),
   },
   {
     surface: 'resource',
+    table: 'resources',
     handler: resourceGET,
     kinds: ['resource'],
     notFound: 'Resource not found',
@@ -172,6 +176,7 @@ const SURFACES: Array<{
   },
   {
     surface: 'business',
+    table: 'organizations',
     handler: businessGET,
     kinds: ['business'],
     notFound: 'Business not found',
@@ -179,15 +184,22 @@ const SURFACES: Array<{
   },
   {
     surface: 'organization',
+    table: 'organizations',
     handler: organizationGET,
     kinds: ['organization'],
     notFound: 'Organization not found',
-    row: (_kind, i) => ({ id: ID, org_type: 'food_bank', is_active: true, name: i.name, description: i.text, city: i.name, state: 'VT' }),
+    row: (_kind, i) => ({ id: ID, org_type: 'food_bank', status: 'approved', is_active: true, name: i.name, description: i.text, city: i.name, state: 'VT' }),
   },
 ]
+const surface = (name: Surface) => SURFACES.find((s) => s.surface === name)!
 
-const call = (handler: Handler) =>
-  handler(new Request(`https://sourcetofeed.com/api/og/x/${ID}`), { params: Promise.resolve({ id: ID }) })
+/** Put exactly this row in the table (the only row the database holds for the test). */
+function seed(table: string, row: FakeRow): void {
+  db.tables = { [table]: [row] }
+}
+
+const call = (handler: Handler, id: string = ID) =>
+  handler(new Request(`https://sourcetofeed.com/api/og/x/${id}`), { params: Promise.resolve({ id }) })
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 function pngSize(bytes: Buffer): { width: number; height: number } {
@@ -217,9 +229,9 @@ describe('share-preview images: no outbound request', () => {
     expect(OG_CARD_KINDS).toHaveLength(10)
   })
 
-  describe.each(ALL_KINDS)('$surface route, kind $kind', ({ handler, kind, row }) => {
+  describe.each(ALL_KINDS)('$surface route, kind $kind', ({ handler, table, kind, row }) => {
     it.each(INPUTS)('$label: 200 PNG 1200×630 and zero fetch / socket / DNS attempts', async (input) => {
-      db.row = row(kind, input)
+      seed(table, row(kind, input))
       const res = await call(handler)
       const bytes = Buffer.from(await res.arrayBuffer())
       expect(res.status).toBe(200)
@@ -232,10 +244,10 @@ describe('share-preview images: no outbound request', () => {
 })
 
 describe('share-preview images: no user text in the picture', () => {
-  it.each(ALL_KINDS)('$surface route, kind $kind: the image bytes are identical for all nine inputs', async ({ handler, kind, row }) => {
+  it.each(ALL_KINDS)('$surface route, kind $kind: the image bytes are identical for all nine inputs', async ({ handler, table, kind, row }) => {
     const images: Buffer[] = []
     for (const input of INPUTS) {
-      db.row = row(kind, input)
+      seed(table, row(kind, input))
       const res = await call(handler)
       expect(res.status).toBe(200)
       images.push(Buffer.from(await res.arrayBuffer()))
@@ -247,38 +259,76 @@ describe('share-preview images: no user text in the picture', () => {
 
   it('control: the kind does select the picture — ten kinds, ten different images', async () => {
     const seen = new Set<string>()
-    for (const { handler, kind, row } of ALL_KINDS) {
-      db.row = row(kind, INPUTS[0])
+    for (const { handler, table, kind, row } of ALL_KINDS) {
+      seed(table, row(kind, INPUTS[0]))
       seen.add(Buffer.from(await (await call(handler)).arrayBuffer()).toString('base64'))
     }
     expect(seen.size).toBe(10)
   })
 
   it('a post type this build does not know gets the community-post card', async () => {
-    db.row = SURFACES[0].row('feed', INPUTS[0])
+    const post = surface('post')
+    seed('posts', post.row('feed', INPUTS[0]))
     const feed = Buffer.from(await (await call(postGET)).arrayBuffer())
-    db.row = { ...SURFACES[0].row('feed', INPUTS[0]), post_type: 'a_future_type' }
+    seed('posts', { ...post.row('feed', INPUTS[0]), post_type: 'a_future_type' })
     const res = await call(postGET)
     expect(res.status).toBe(200)
     expect(Buffer.from(await res.arrayBuffer()).equals(feed)).toBe(true)
   })
 
   it('the post route asks the database for the id and the type only — no text, no author', async () => {
-    db.row = SURFACES[0].row('poll', INPUTS[1])
+    seed('posts', surface('post').row('poll', INPUTS[1]))
     await call(postGET)
-    expect(db.selects).toEqual(['id, post_type'])
+    expect(db.reads.map((r) => `${r.table}: ${r.columns}`)).toEqual(['posts: id, post_type'])
   })
 
   it('the resource route asks the database for the id only', async () => {
-    db.row = SURFACES[1].row('resource', INPUTS[1])
+    seed('resources', surface('resource').row('resource', INPUTS[1]))
     await call(resourceGET)
-    expect(db.selects).toEqual(['id'])
+    expect(db.reads.map((r) => `${r.table}: ${r.columns}`)).toEqual(['resources: id'])
   })
 })
 
+// A cached 200 for an item that is not public would be served to everyone for a year, so every way
+// an item can be "not public" is a case here. Each row is the surface's public row with one change.
+const NOT_PUBLIC: Array<{ surface: Surface; state: string; change: FakeRow }> = [
+  { surface: 'post', state: 'a post held for review (hidden)', change: { is_hidden: true, hidden_reason: 'hold_for_review' } },
+  { surface: 'post', state: 'a post removed by a moderator (hidden)', change: { is_hidden: true, hidden_reason: 'admin_removal' } },
+  { surface: 'post', state: 'a post hidden by community reports', change: { is_hidden: true, hidden_reason: 'community_reports_threshold' } },
+  {
+    surface: 'post',
+    state: 'a post soft-deleted by its author',
+    change: { is_hidden: true, hidden_reason: 'author_deleted', deleted_at: '2026-10-10T12:00:00.000Z' },
+  },
+  { surface: 'resource', state: 'a pending resource', change: { status: 'pending' } },
+  { surface: 'resource', state: 'a rejected resource', change: { status: 'rejected' } },
+  { surface: 'business', state: 'a pending business', change: { status: 'pending' } },
+  { surface: 'business', state: 'a rejected business', change: { status: 'rejected' } },
+  { surface: 'business', state: 'an inactive business', change: { is_active: false } },
+  { surface: 'business', state: 'an organization id on the business route', change: { org_type: 'food_bank' } },
+  { surface: 'organization', state: 'an inactive organization', change: { is_active: false } },
+  { surface: 'organization', state: 'a business id on the organization route', change: { org_type: 'business' } },
+]
+
 describe('share-preview images: status codes and caching', () => {
-  it.each(SURFACES)('$surface route: a hidden, deleted or unknown item is 404 "$notFound", not cached, nothing sent out', async ({ handler, notFound }) => {
-    db.row = null
+  it.each(NOT_PUBLIC)('$surface route: $state is 404 with no cache header', async ({ surface: name, change }) => {
+    const s = surface(name)
+    const publicRow = s.row(s.kinds[0], INPUTS[1])
+
+    // control: the unchanged row is public, so the 404 below is caused by the one change
+    seed(s.table, publicRow)
+    expect((await call(s.handler)).status).toBe(200)
+
+    seed(s.table, { ...publicRow, ...change })
+    const res = await call(s.handler)
+    expect(res.status).toBe(404)
+    expect(await res.text()).toBe(s.notFound)
+    expect(res.headers.get('cache-control')).toBeNull()
+    expect(res.headers.get('content-type')).not.toBe('image/png')
+    expect(attempts).toEqual([])
+  })
+
+  it.each(SURFACES)('$surface route: an id that does not exist is 404 "$notFound", not cached, nothing sent out', async ({ handler, notFound }) => {
     const res = await call(handler)
     expect(res.status).toBe(404)
     expect(await res.text()).toBe(notFound)
@@ -286,8 +336,16 @@ describe('share-preview images: status codes and caching', () => {
     expect(attempts).toEqual([])
   })
 
-  it.each(SURFACES)('$surface route: a found item is cached for a year, publicly, as immutable', async ({ handler, kinds, row }) => {
-    db.row = row(kinds[0], INPUTS[0])
+  it.each(SURFACES)('$surface route: the card is served for the requested id only, not for another public item', async ({ handler, table, kinds, row, notFound }) => {
+    seed(table, row(kinds[0], INPUTS[0]))
+    expect((await call(handler, ID)).status).toBe(200)
+    const other = await call(handler, OTHER_ID)
+    expect(other.status).toBe(404)
+    expect(await other.text()).toBe(notFound)
+  })
+
+  it.each(SURFACES)('$surface route: a found item is cached for a year, publicly, as immutable', async ({ handler, table, kinds, row }) => {
+    seed(table, row(kinds[0], INPUTS[0]))
     const res = await call(handler)
     expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, s-maxage=31536000, immutable')
     expect(res.headers.get('cache-control')).toBe(OG_CARD_CACHE_CONTROL)
@@ -312,7 +370,7 @@ describe('share-preview images: the persisted log row', () => {
   }
 
   it('a served card writes exactly one og.image.complete row: surface, kind, outcome ok, a duration', async () => {
-    db.row = SURFACES[0].row('poll', INPUTS[1])
+    seed('posts', surface('post').row('poll', INPUTS[1]))
     expect((await call(postGET)).status).toBe(200)
     await settled()
     expect(ogRows()).toHaveLength(1)
@@ -327,7 +385,6 @@ describe('share-preview images: the persisted log row', () => {
   })
 
   it('a 404 writes exactly one row with outcome not_found and no kind', async () => {
-    db.row = null
     expect((await call(resourceGET)).status).toBe(404)
     await settled()
     expect(ogRows()).toHaveLength(1)
