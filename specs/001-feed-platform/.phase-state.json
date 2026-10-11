@@ -901,7 +901,7 @@
       "branch": "feature/feed-r3-5b-card-i18n",
       "base": "origin/develop 0ee7f6d",
       "docs": "docs/i18n-native-review.md (native-review list)",
-      "note": "Release 3.5 translation lane, slice 2 (no migration). Commit 1, source hygiene: the five raw invisible characters are \\u escapes; lib/source-characters.test.ts guards the source tree. Commit 2, list joiner: joinList hand-written for ht, hmn and so on every device, Tagalog asked as fil; pinned against a runtime that claims every locale. Commit 3, close buttons: sheet closeLabel (default English marked lang=en, end-4); four translated dialogs pass a translated close label; a tree-wide guard over every DialogContent / SheetContent tag. See checklist 1.6.29."
+      "note": "Release 3.5 translation lane, slice 2 (no migration). Commit 1, source hygiene: the five raw invisible characters are \\u escapes; lib/source-characters.test.ts guards the source tree. Commit 2, list joiner: joinList hand-written for ht, hmn and so on every device, Tagalog asked as fil; pinned against a runtime that claims every locale. Commit 3, close buttons: sheet closeLabel (default English marked lang=en, end-4); four translated dialogs pass a translated close label; a tree-wide guard over every DialogContent / SheetContent tag. Commit 4, small leftovers: feed-panel.tsx imports formatMessage from lib/format-message (seven excepted importers remain, both re-exports stay); businesses inputs use focus:outline-hidden. See checklist 1.6.29."
     }
   }
 }
