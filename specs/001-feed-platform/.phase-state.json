@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-09T00:00:00.000Z",
+  "lastUpdated": "2026-10-11T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -859,6 +859,23 @@
         "adversarial and a11y reviews",
         "release (apply 026 -> deploy -> apply 0265)",
         "logged-in browser verification"
+      ]
+    },
+    "feed-r3-0-share-privacy": {
+      "status": "BUILT",
+      "branch": "feature/feed-r3-0-share-privacy",
+      "migrations": [],
+      "docs": "docs/share-previews.md, docs/observability.md (Share-preview images)",
+      "note": "Release 3.0, client only. Preview images are ten pre-rendered cards chosen by kind (no user text, no renderer, no outbound request); og:locale from posts.lang on /s/post and /s/embed with one post read per request; oEmbed accepts apex and www; JSON-LD on /s/business and /s/organization escaped by lib/json-ld.ts; profiles.is_staff dropped from FEED_POST_SELECT; legacy /profile/[username] route and components/feed/post-card.tsx deleted; smoke 24 asserts the posts INSERT revoke; dead code removed. See checklist 1.6.26.",
+      "notShipped": [
+        "proxy two-factor guard match (item 5): the requested change would open /moderation and /federation/* to a session that has not completed the second factor; proxy.ts untouched, owner decision needed"
+      ],
+      "open": [
+        "adversarial and a11y reviews",
+        "release",
+        "post-deploy check of /api/og/* on production (200 image/png + cache header per kind)",
+        "one shared link per script to confirm platform rendering of og:title/description",
+        "owner decision on the proxy two-factor guard"
       ]
     }
   }
