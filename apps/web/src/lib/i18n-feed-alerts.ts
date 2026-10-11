@@ -201,6 +201,8 @@ export interface AlertMessages {
   histResolvedByModerator: string
   resolvedByReporter: string
   resolvedByModerator: string
+  /** The latest read failed: {time} is when the last one succeeded (a clock time; a date too when it was not today). */
+  staleNotice: string
 }
 
 export const alertMessages: Record<Locale, AlertMessages> = {
@@ -363,6 +365,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Marked resolved by a moderator',
     resolvedByReporter: 'Resolved by the reporter',
     resolvedByModerator: 'Resolved by a moderator',
+    staleNotice: 'Couldn’t refresh alerts — last updated {time}.',
   },
   es: {
     typeWeather: 'Peligro por el clima',
@@ -523,6 +526,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Marcada como resuelta por un moderador',
     resolvedByReporter: 'Resuelta por quien la reportó',
     resolvedByModerator: 'Resuelta por un moderador',
+    staleNotice: 'No se pudieron actualizar las alertas. Última actualización: {time}.',
   },
   ht: {
     typeWeather: 'Danje move tan',
@@ -683,6 +687,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Yon moderatè make li kòm rezoud',
     resolvedByReporter: 'Moun ki te rapòte li a rezoud li',
     resolvedByModerator: 'Yon moderatè rezoud li',
+    staleNotice: 'Nou pa t kapab mete alèt yo ajou. Dènye mizajou: {time}.',
   },
   vi: {
     typeWeather: 'Nguy hiểm do thời tiết',
@@ -843,6 +848,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Người điều hành đã đánh dấu đã giải quyết',
     resolvedByReporter: 'Người báo đã giải quyết',
     resolvedByModerator: 'Người điều hành đã giải quyết',
+    staleNotice: 'Không thể làm mới cảnh báo. Cập nhật lần cuối: {time}.',
   },
   ar: {
     typeWeather: 'خطر بسبب الطقس',
@@ -1003,6 +1009,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'وضع أحد المشرفين علامة «تم الحل»',
     resolvedByReporter: 'حلّه المبلِّغ',
     resolvedByModerator: 'حلّه أحد المشرفين',
+    staleNotice: 'تعذّر تحديث التنبيهات. آخر تحديث: {time}.',
   },
   zh: {
     typeWeather: '天气危险',
@@ -1163,6 +1170,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: '由管理员标记为已解除',
     resolvedByReporter: '由报告者解除',
     resolvedByModerator: '由管理员解除',
+    staleNotice: '无法刷新警报。上次更新：{time}。',
   },
   so: {
     typeWeather: 'Khatar cimilo',
@@ -1323,6 +1331,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Waxaa u calaamadeeyay inay xallisantay maamule',
     resolvedByReporter: 'Waxaa xalliyay qofkii soo sheegay',
     resolvedByModerator: 'Waxaa xalliyay maamule',
+    staleNotice: 'Digniinaha lama cusboonaysiin karin. Markii ugu dambaysay ee la cusboonaysiiyay: {time}.',
   },
   fr: {
     typeWeather: 'Danger météo',
@@ -1483,6 +1492,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Marquée comme résolue par un modérateur',
     resolvedByReporter: 'Résolue par la personne qui l’a signalée',
     resolvedByModerator: 'Résolue par un modérateur',
+    staleNotice: 'Impossible d’actualiser les alertes. Dernière mise à jour : {time}.',
   },
   pt: {
     typeWeather: 'Perigo causado pelo tempo',
@@ -1643,6 +1653,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Marcado como resolvido por um moderador',
     resolvedByReporter: 'Resolvido por quem relatou',
     resolvedByModerator: 'Resolvido por um moderador',
+    staleNotice: 'Não foi possível atualizar os alertas. Última atualização: {time}.',
   },
   ru: {
     typeWeather: 'Опасная погода',
@@ -1803,6 +1814,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Модератор отметил как снятое',
     resolvedByReporter: 'Снял автор сообщения',
     resolvedByModerator: 'Снял модератор',
+    staleNotice: 'Не удалось обновить предупреждения. Последнее обновление: {time}.',
   },
   ko: {
     typeWeather: '날씨 위험',
@@ -1963,6 +1975,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: '운영자가 해결됨으로 표시함',
     resolvedByReporter: '신고자가 해결함',
     resolvedByModerator: '운영자가 해결함',
+    staleNotice: '경보를 새로 고칠 수 없습니다. 마지막 업데이트: {time}.',
   },
   tl: {
     typeWeather: 'Panganib sa panahon',
@@ -2123,6 +2136,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Minarkahang nalutas ng moderator',
     resolvedByReporter: 'Nilutas ng nag-ulat',
     resolvedByModerator: 'Nilutas ng moderator',
+    staleNotice: 'Hindi ma-refresh ang mga alerto. Huling na-update: {time}.',
   },
   am: {
     typeWeather: 'የአየር ሁኔታ አደጋ',
@@ -2283,6 +2297,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'አወያይ ተፈትቷል ብሎ አመልክቷል',
     resolvedByReporter: 'ሪፖርት ያደረገው ሰው ፈትቶታል',
     resolvedByModerator: 'አወያይ ፈትቶታል',
+    staleNotice: 'ማስጠንቀቂያዎቹን ማደስ አልተቻለም። ለመጨረሻ ጊዜ የዘመነው፦ {time}።',
   },
   hmn: {
     typeWeather: 'Kev phom sij vim huab cua',
@@ -2443,6 +2458,7 @@ export const alertMessages: Record<Locale, AlertMessages> = {
     histResolvedByModerator: 'Ib tug neeg saib xyuas tau cim tias daws tau lawm',
     resolvedByReporter: 'Tus uas qhia tau daws lawm',
     resolvedByModerator: 'Ib tug neeg saib xyuas tau daws lawm',
+    staleNotice: 'Tsis tuaj yeem hloov tshiab cov lus ceeb toom. Hloov tshiab zaum kawg: {time}.',
   },
 }
 

@@ -253,6 +253,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `histResolvedByModerator` | ht | Marked resolved by a moderator | Yon moderatè make li kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByReporter` | ht | Resolved by the reporter | Moun ki te rapòte li a rezoud li | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByModerator` | ht | Resolved by a moderator | Yon moderatè rezoud li | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | ht | Couldn’t refresh alerts — last updated {time}. | Nou pa t kapab mete alèt yo ajou. Dènye mizajou: {time}. | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | so | Weather Hazard | Khatar cimilo | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | so | Road Closure | Waddo xiran | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | so | Speeding Area | Goob xawaare dheeraad ah | 2026-10-11 | machine-drafted, needs native review |
@@ -411,6 +412,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `histResolvedByModerator` | so | Marked resolved by a moderator | Waxaa u calaamadeeyay inay xallisantay maamule | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByReporter` | so | Resolved by the reporter | Waxaa xalliyay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByModerator` | so | Resolved by a moderator | Waxaa xalliyay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | so | Couldn’t refresh alerts — last updated {time}. | Digniinaha lama cusboonaysiin karin. Markii ugu dambaysay ee la cusboonaysiiyay: {time}. | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | am | Weather Hazard | የአየር ሁኔታ አደጋ | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | am | Road Closure | የተዘጋ መንገድ | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | am | Speeding Area | ከፍጥነት በላይ የሚነዳበት ቦታ | 2026-10-11 | machine-drafted, needs native review |
@@ -569,6 +571,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `histResolvedByModerator` | am | Marked resolved by a moderator | አወያይ ተፈትቷል ብሎ አመልክቷል | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByReporter` | am | Resolved by the reporter | ሪፖርት ያደረገው ሰው ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByModerator` | am | Resolved by a moderator | አወያይ ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | am | Couldn’t refresh alerts — last updated {time}. | ማስጠንቀቂያዎቹን ማደስ አልተቻለም። ለመጨረሻ ጊዜ የዘመነው፦ {time}። | 2026-10-11 | machine-drafted, needs native review |
 | `typeWeather` | hmn | Weather Hazard | Kev phom sij vim huab cua | 2026-10-11 | machine-drafted, needs native review |
 | `typeRoadClosure` | hmn | Road Closure | Kev raug kaw | 2026-10-11 | machine-drafted, needs native review |
 | `typeSpeeding` | hmn | Speeding Area | Thaj chaw tsav tsheb ceev dhau | 2026-10-11 | machine-drafted, needs native review |
@@ -727,6 +730,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `histResolvedByModerator` | hmn | Marked resolved by a moderator | Ib tug neeg saib xyuas tau cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByReporter` | hmn | Resolved by the reporter | Tus uas qhia tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
 | `resolvedByModerator` | hmn | Resolved by a moderator | Ib tug neeg saib xyuas tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | hmn | Couldn’t refresh alerts — last updated {time}. | Tsis tuaj yeem hloov tshiab cov lus ceeb toom. Hloov tshiab zaum kawg: {time}. | 2026-10-11 | machine-drafted, needs native review |
 
 ### `lib/i18n-feed-businesses.ts`
 
