@@ -211,7 +211,9 @@ describe('photo pickers and loading', () => {
       expect(input).toContain('class="sr-only"')
       expect(input).not.toMatch(/class="[^"]*\bhidden\b/)
     }
-    expect(html.match(/<label class="[^"]*focus-within:ring-2 focus-within:ring-lime-600[^"]*">/g)).toHaveLength(3)
+    // lime-700 on white is 4.96:1 (lime-600 is 3.06:1, below the 3:1 a focus indicator needs with margin).
+    expect(html.match(/<label class="[^"]*focus-within:ring-2 focus-within:ring-lime-700[^"]*">/g)).toHaveLength(3)
+    expect(html).not.toMatch(/ring-lime-[56]00/)
   })
 
   it('the list spinner is a status with the word "Loading" for a screen reader', () => {
@@ -335,7 +337,26 @@ describe('the day switches: label in name (WCAG 2.5.3) and a stable name', () =>
 
   it('the switch thumb mirrors in a right-to-left locale', async () => {
     const { html } = await panel('ar')
-    expect(html).toContain('translate-x-1 rtl:-translate-x-1')
+    expect(html).toContain('translate-x-0.5 rtl:-translate-x-0.5')
+  })
+
+  it('the switch shows a focus ring that can be seen: lime-700 (4.96:1 on white), kept in forced-colors mode, 24 x 44', async () => {
+    const { c, html } = await panel('en')
+    const switches = findAll(c.tree(), (e: El) => e.props.role === 'switch') as El[]
+    expect(switches).toHaveLength(7)
+    for (const s of switches) {
+      const cls = s.props.className as string
+      expect(cls).toContain('focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2')
+      // outline-hidden keeps a (transparent) outline that forced-colors mode paints; the
+      // transparent border draws the track there.
+      expect(cls).toContain('focus-visible:outline-hidden')
+      expect(cls).not.toContain('outline-none')
+      expect(cls).toContain('border-2 border-transparent')
+      expect(cls).toMatch(/\bh-6 w-11\b/)
+      expect(cls).not.toMatch(/ring-lime-[1-6]00/)
+    }
+    // The form's text inputs carry the same ring colour.
+    expect(html).toMatch(/<input id="biz-name"[^>]*class="[^"]*focus:ring-2 focus:ring-lime-700"/)
   })
 
   it('the cost model group is named by its visible label', async () => {

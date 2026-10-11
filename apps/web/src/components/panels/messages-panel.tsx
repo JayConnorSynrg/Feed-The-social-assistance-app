@@ -210,7 +210,9 @@ export function MessagesPanel() {
           </h2>
         </div>
 
-        {isLoading ? (
+        {/* The spinner and its status are for the first load only; a refetch keeps the list on
+            screen (and says nothing). */}
+        {isLoading && conversations.length === 0 ? (
           <div role="status" className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-stone-400" aria-hidden="true" />
             <span className="sr-only">{feedChromeT(locale, 'loadingMore')}</span>
@@ -529,7 +531,7 @@ export function MessagesPanel() {
             }
           }}
         >
-          <DialogHeader className="sm:text-start">
+          <DialogHeader>
             <DialogTitle>
               {confirmAction?.type === 'decline' && messagesT(locale, 'confirmDeclineTitle')}
               {confirmAction?.type === 'withdraw' && messagesT(locale, 'confirmWithdrawTitle')}
@@ -576,7 +578,9 @@ export function MessagesPanel() {
           open={reviewModalOpen}
           onOpenChange={setReviewModalOpen}
           conversationId={selectedConv.id}
-          revieweeName={otherUserName}
+          // The review modal is still English: with no name it gets the English word, not the
+          // member-language one.
+          revieweeName={otherUserName === unknownUser ? messagesT('en', 'unknownUser') : otherUserName}
           revieweeRole={isVolunteer ? 'requester' : 'volunteer'}
           onSubmitted={handleReviewSubmitted}
         />

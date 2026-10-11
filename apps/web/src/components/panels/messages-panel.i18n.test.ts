@@ -249,9 +249,17 @@ describe('a stored value FEED has no label for', () => {
 })
 
 describe('loading', () => {
-  it('the inbox spinner is a status with the word "Loading" for a screen reader', () => {
-    const out = html('fr', { isLoading: true })
+  it('the first load shows the inbox spinner: a status with the word "Loading" for a screen reader', () => {
+    const out = html('fr', { isLoading: true, conversations: [] })
     expect(out).toMatch(/<div role="status" class="flex items-center justify-center py-12"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span class="sr-only">Chargement…<\/span><\/div>/)
+  })
+
+  it('a refetch with conversations on screen keeps the list and says nothing', () => {
+    const out = html('fr', { isLoading: true })
+    expect(out).toContain('En cours (1)')
+    expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
+    expect(out).not.toContain('Chargement')
+    expect(out).not.toContain('role="status"')
   })
 
   it('the review check on a completed conversation says so too', () => {
@@ -438,6 +446,18 @@ describe('messages-panel.tsx source', () => {
     for (const literal of ['CATEGORY_LABELS', 'No messages yet', 'Pending Requests', '> Accept', 'Type a message', 'Keep chatting', 'Decline Request', 'How did it go', 'Leave a review for', 'Waiting for', "'User'", 'toLocaleTimeString', 'toLocaleDateString', '{selectedConv.status}\n']) {
       expect(code, literal).not.toContain(literal)
     }
+  })
+
+  it('the English review modal gets the English fallback word when the other person has no name, and the name as written otherwise', () => {
+    const reviewee = (language: string, over: Record<string, unknown>) => {
+      state.language = language
+      state.hook = hook({ conversations: [conv({ status: 'completed', ...over })] })
+      const c = mount(() => MessagesPanel())
+      return (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0].props.revieweeName
+    }
+    expect(reviewee('ru', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
+    expect(reviewee('ar', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
+    expect(reviewee('ru', {})).toBe('مريم')
   })
 
   it('the review modal it opens is still English and marks itself English (a portal has no translated parent)', () => {

@@ -80,7 +80,7 @@ import { fetchApprovedBusinesses, submitBusiness, withPhotoUploadMetric, photoIm
 import { uploadPostImage, deletePostImage } from '@/lib/post-image-upload'
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500'
+  'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-700'
 
 // ---- Hours editor model -------------------------------------------------------------------------
 // index 0..6 == Sunday..Saturday, matching BusinessHours.day_of_week. The seven slots of the
@@ -703,13 +703,15 @@ export function BusinessesPanel() {
                             onClick={() =>
                               setHours((days) => days.map((d, i) => (i === dow ? { ...d, closed: !d.closed } : d)))
                             }
-                            className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:ring-offset-2 ${
+                            // 24 x 44 with its transparent border: in forced-colors mode the border
+                            // draws the track and outline-hidden leaves a visible focus outline.
+                            className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2 ${
                               day.closed ? 'bg-stone-500' : 'bg-lime-700'
                             }`}
                           >
                             <span
                               className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                                day.closed ? 'translate-x-1 rtl:-translate-x-1' : 'translate-x-6 rtl:-translate-x-6'
+                                day.closed ? 'translate-x-0.5 rtl:-translate-x-0.5' : 'translate-x-5.5 rtl:-translate-x-5.5'
                               }`}
                               aria-hidden="true"
                             />
@@ -851,7 +853,7 @@ export function BusinessesPanel() {
                         </div>
                       ))}
                       <label
-                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-600 focus-within:ring-offset-2 ${
+                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-700 focus-within:ring-offset-2 ${
                           photoBusy.gallery ? 'opacity-60' : ''
                         }`}
                       >
@@ -1119,7 +1121,7 @@ function PhotoSingleSlot({
         </div>
       ) : (
         <label
-          className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-600 focus-within:ring-offset-2 ${
+          className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-lime-400 hover:text-lime-700 focus-within:ring-2 focus-within:ring-lime-700 focus-within:ring-offset-2 ${
             busy ? 'opacity-60' : ''
           }`}
         >

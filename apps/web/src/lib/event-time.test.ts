@@ -315,6 +315,29 @@ describe('an event reads in the viewer language, all 14 locales', () => {
     expect(plain(w.text)).toBe('dim 1 nov, 1:30 AM EDT – 1:30 AM EST')
   })
 
+  it('a range that runs into another year names the year on both ends — in the hand-written locales too', () => {
+    // Thu 2026-12-31 11:30 PM … Fri 2027-01-01 1:30 AM in New York.
+    const range = (locale: Locale) => plain(formatRaw('2027-01-01T04:30:00Z', '2027-01-01T06:30:00Z', NY, locale, { viewerTz: NY }).text)
+    expect(range('en')).toBe('Thu, Dec 31, 2026, 11:30 PM EST – Fri, Jan 1, 2027, 1:30 AM EST')
+    expect(range('ht')).toBe('jed 31 des 2026, 11:30 PM – van 1 jan 2027, 1:30 AM EST')
+    expect(range('hmn')).toBe('Hnub Plaub, Lub Kaum Ob Hlis 31, 2026, 11:30 PM – Hnub Tsib, Lub Ib Hlis 1, 2027, 1:30 AM EST')
+    expect(range('so')).toBe('Khms, Dis 31, 2026 ee 11:30 GD – Jmc, Jan 1, 2027 ee 1:30 GH EST')
+    for (const locale of ['ht', 'hmn', 'so'] as const) {
+      expect(range(locale), locale).toContain('2026')
+      expect(range(locale), locale).toContain('2027')
+    }
+  })
+
+  it('a range across two days of the same year prints no year (hand-written locale)', () => {
+    const w = plain(formatRaw('2026-10-11T03:30:00Z', '2026-10-11T05:30:00Z', NY, 'ht', { viewerTz: NY }).text)
+    expect(w).toBe('sam 10 okt, 11:30 PM – dim 11 okt, 1:30 AM EDT')
+  })
+
+  it('a times-only range (calendar chip) never prints a date or a year', () => {
+    const w = plain(formatRaw('2027-01-01T04:30:00Z', '2027-01-01T06:30:00Z', NY, 'ht', { viewerTz: NY, timeOnly: true }).text)
+    expect(w).toBe('11:30 PM – 1:30 AM EST')
+  })
+
   it("Intl is asked for the locale itself, Tagalog as 'fil' first, en-US last", () => {
     expect(intlLocale('en')).toEqual(['en-US'])
     expect(intlLocale('tl')).toEqual(['fil', 'tl', 'en-US'])

@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { isValidElement, type ReactElement } from 'react'
-import { DialogContent } from './dialog'
+import { DialogContent, DialogHeader } from './dialog'
 
 type El = { type: unknown; props: Record<string, unknown> }
 type Renderable = { render: (props: Record<string, unknown>, ref: null) => ReactElement }
@@ -58,6 +58,12 @@ describe('DialogContent default close button', () => {
     expect(button.props.className).not.toMatch(/\bright-4\b/)
   })
 
+  it('an empty label never leaves the button unnamed: it falls back to English "Close", marked lang="en"', () => {
+    const { label } = closeButton({ closeLabel: '' })
+    expect(label.props.children).toBe('Close')
+    expect(label.props.lang).toBe('en')
+  })
+
   it('closeLabel is not passed down to the DOM element', () => {
     const tree = (DialogContent as unknown as Renderable).render({ children: null, closeLabel: 'Cerrar' }, null)
     const seen: string[] = []
@@ -74,5 +80,18 @@ describe('DialogContent default close button', () => {
 
   it('hideDefaultClose still removes it', () => {
     expect(closeButton({ hideDefaultClose: true }).count).toBe(0)
+  })
+})
+
+describe('DialogHeader', () => {
+  it('aligns its title to the reading start, so in a right-to-left dialog it does not sit under the close button', () => {
+    const el = DialogHeader({}) as unknown as El
+    expect(el.props.className).toMatch(/\bsm:text-start\b/)
+    expect(el.props.className).not.toMatch(/\bsm:text-left\b/)
+  })
+
+  it('a caller class still wins', () => {
+    const el = DialogHeader({ className: 'flex-row' }) as unknown as El
+    expect(el.props.className).toContain('flex-row')
   })
 })

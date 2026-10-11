@@ -157,11 +157,16 @@ function rangeText(start: Date, end: Date, tz: string, locale: Locale, timeOnly:
   // is formatted on its own, so each carries its own abbreviation.
   const crossesOffsetChange = offsetMinutes(start.getTime(), tz) !== offsetMinutes(end.getTime(), tz)
   if (!crossesOffsetChange && typeof f.formatRange === 'function') return f.formatRange(start, end)
-  const sameDay = venueDateKey(start.toISOString(), tz) === venueDateKey(end.toISOString(), tz)
-  const fEnd = sameDay || timeOnly ? dateTimeFormat(locale, tz, time) : f
+  const [startDay, endDay] = [venueDateKey(start.toISOString(), tz), venueDateKey(end.toISOString(), tz)]
+  const sameDay = startDay === endDay
+  // A range that runs into another year names the year on both ends, as Intl's formatRange does
+  // ("Thu, Dec 31, 2026, 11:30 PM – Fri, Jan 1, 2027, 1:30 AM").
+  const dated: Intl.DateTimeFormatOptions = startDay.slice(0, 4) === endDay.slice(0, 4) ? day : { ...day, year: 'numeric' }
+  const full = dated === day ? f : dateTimeFormat(locale, tz, { ...dated, ...time })
+  const fEnd = sameDay || timeOnly ? dateTimeFormat(locale, tz, time) : full
   // A hand-written locale has no formatRange. With one offset for the whole range the zone
   // abbreviation is printed once, after the end ("3:05 PM – 4:05 PM EDT").
-  const fStart = crossesOffsetChange ? f : dateTimeFormat(locale, tz, { ...(timeOnly ? {} : day), ...clock })
+  const fStart = timeOnly ? dateTimeFormat(locale, tz, crossesOffsetChange ? time : clock) : crossesOffsetChange ? full : dateTimeFormat(locale, tz, { ...dated, ...clock })
   return `${fStart.format(start)} – ${fEnd.format(end)}`
 }
 
