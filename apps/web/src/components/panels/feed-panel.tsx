@@ -64,7 +64,9 @@ import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocale
 import { PostTypeWizard } from './post-type-wizard'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { usePetitions } from '@/hooks/use-petitions'
-import type { SafetyAlert } from '@/hooks/use-safety-alerts'
+import { useSafetyStrip } from '@/hooks/use-safety-strip'
+import type { SafetyAlert } from '@/lib/safety-alert-rpc'
+import { AlertDialogs, useAlertDialog } from '@/components/alerts/alert-dialogs'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
 
 // ============================================
@@ -103,21 +105,6 @@ async function readGeoIfGranted(): Promise<{ lat: number; lng: number } | null> 
 
 
 // MOCK_POSTS removed - now fetching from Supabase
-
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-function getRelativeTime(date: Date): string {
-  const now = new Date()
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-  if (diffInSeconds < 60) return 'just now'
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
-  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 604800)}w ago`
-  return date.toLocaleDateString()
-}
 
 // ============================================
 // CREATE POST CARD
@@ -519,8 +506,6 @@ export function FeedPanel() {
   const geoRef = useRef<{ lat: number; lng: number } | null | undefined>(undefined)
   // A failed feed read, by kind; the member sees a translated sentence, never the server's text.
   const [error, setError] = useState<FeedLoadError | null>(null)
-  // Active safety alerts for the feed strip — fetched independently of the map
-  const [safetyAlerts, setSafetyAlerts] = useState<SafetyAlert[]>([])
   const [shareCopiedPostId, setShareCopiedPostId] = useState<string | null>(null)
   const [embedCopiedPostId, setEmbedCopiedPostId] = useState<string | null>(null)
   // Set of post IDs whose comment threads are currently open
@@ -591,6 +576,26 @@ export function FeedPanel() {
   // from an event card re-reads only that card (hooks/use-feed-event-cards.ts).
   const feedTitleRef = useRef<HTMLHeadingElement>(null)
   const focusFeedTitle = useCallback(() => feedTitleRef.current?.focus(), [])
+  // The feed's safety-alert strip: the top five shown alerts through the one reader, read once per
+  // viewer, every 60 s while the tab is visible, and after the member's own update / resolve /
+  // withdraw (hooks/use-safety-strip.ts). Keyed on the viewer's id — a string, never an object.
+  const {
+    alerts: safetyAlerts,
+    live: stripLive,
+    now: stripNow,
+    host: stripHost,
+    setEngaged: setStripEngaged,
+  } = useSafetyStrip(authLoading ? null : user?.id ?? 'signed-out', focusFeedTitle)
+  // Update / Mark resolved / Withdraw / History, opened from a strip entry.
+  const alertDialog = useAlertDialog()
+  // A strip entry opens the map on that alert (the header link opens the map as it is).
+  const openMapOnAlert = useCallback(
+    (alert?: SafetyAlert) => {
+      setActivePanel('map')
+      if (alert) setPanelParams((prev) => ({ ...prev, focus: { kind: 'safety_alert', id: alert.id } }))
+    },
+    [setActivePanel, setPanelParams],
+  )
   const {
     eventItems,
     setEventItems,
@@ -1228,60 +1233,6 @@ export function FeedPanel() {
     enabled: !authLoading,
   })
 
-  // ── Safety alerts feed strip ────────────────────────────────────────────────
-  // Fetch active (expires_at > now) safety alerts directly via authenticated SELECT.
-  // RLS on safety_alerts allows authenticated SELECT (migration 20260608000400).
-  // We use a direct table query rather than the safety_alerts_in_view RPC because
-  // that RPC requires viewport bounds — not available in the feed context.
-  // Cap at 5, ordered by severity desc then created_at desc.
-  useEffect(() => {
-    if (!isAuthenticated) return
-    const ctrl = new AbortController()
-    void (async () => {
-      try {
-        const { data } = await supabase
-          .from('safety_alerts')
-          .select('id, alert_type, severity, description, created_at, expires_at, status, confirm_count, clear_count, verified')
-          .gt('expires_at', new Date().toISOString())
-          .order('severity', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(5)
-          .abortSignal(ctrl.signal)
-        if (ctrl.signal.aborted) return
-        // Safety alerts from the table do not have lng/lat pre-decomposed —
-        // the location column is PostGIS geography. For the feed strip we only
-        // need metadata (type, severity, description, times), not coordinates.
-        // Map each row explicitly so is_mine (not available without the RPC) defaults
-        // to false — the strip never uses ownership; map panel handles that.
-        type StripRow = NonNullable<typeof data>[number]
-        setSafetyAlerts(
-          (data ?? []).map((r: StripRow): SafetyAlert => ({
-            id: r.id,
-            alert_type: r.alert_type as SafetyAlert['alert_type'],
-            severity: r.severity,
-            description: r.description,
-            lng: 0,
-            lat: 0,
-            status: r.status,
-            confirm_count: r.confirm_count,
-            clear_count: r.clear_count,
-            created_at: r.created_at,
-            expires_at: r.expires_at,
-            verified: r.verified ?? false,
-            is_mine: false,
-          }))
-        )
-      } catch (err) {
-        // Non-critical; the strip hides gracefully on error. Still report it so
-        // a persistent safety-alert load failure is observable (INV5).
-        if (!(err instanceof DOMException && err.name === 'AbortError')) {
-          logger.warn('feed.safety_alerts.fetch_failed', { error: getErrorMessage(err) })
-        }
-      }
-    })()
-    return () => ctrl.abort()
-  }, [isAuthenticated, supabase])
-
   // ── Load more ────────────────────────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
     if (loadingMore) return
@@ -1822,6 +1773,14 @@ export function FeedPanel() {
         </DialogContent>
       </Dialog>
     )}
+    <AlertDialogs
+      request={alertDialog.request}
+      locale={locale}
+      surface="strip"
+      host={stripHost}
+      onClose={alertDialog.close}
+      returnFocusRef={alertDialog.triggerRef}
+    />
     <div lang={locale} dir={dir(locale)} className="h-full flex flex-col">
       {/* Top-level tablist: Feed | Messages
           Styled DISTINCT from FeedHeader's rounded-full filter pills:
@@ -2064,18 +2023,21 @@ export function FeedPanel() {
             </div>
           )}
 
-          {/* Safety alerts strip — active alerts (expires_at > now), max 5.
-              Tap any card to navigate to the map panel for full details + voting. */}
-          {safetyAlerts.length > 0 && (
-            /* Not translated yet (Release 3): its English copy is marked English. */
-            <div lang="en" dir="ltr" data-testid="feed-safety-region">
-              <SafetyStrip
-                alerts={safetyAlerts}
-                onViewMap={() => setActivePanel('map')}
-                formatAge={getRelativeTime}
-              />
-            </div>
-          )}
+          {/* Safety alerts strip — shown alerts (live first, then resolved for six hours), max 5, in
+              the viewer's language. Always mounted: its two live regions exist before the first
+              alert arrives. An entry opens the map on that alert. */}
+          <div data-testid="feed-safety-region">
+            <SafetyStrip
+              alerts={safetyAlerts}
+              locale={locale}
+              isGuest={isAnonymous}
+              live={stripLive}
+              now={stripNow}
+              onViewMap={openMapOnAlert}
+              onAction={alertDialog.open}
+              onEngage={setStripEngaged}
+            />
+          </div>
 
           {/* Scrollable Feed */}
           {/* W1.5 — LazyMotion(strict) loads only the domAnimation feature bundle

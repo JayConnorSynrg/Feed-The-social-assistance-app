@@ -1,11 +1,19 @@
 'use client'
 
+// apps/web/src/components/map/hazard-bubble-menu.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The map's "Report a hazard" menu: pick a hazard type, place its pin (drag it, or search for an
+// address), choose a severity, describe it, confirm — plus the "Suggest a resource" form and, for
+// providers, "Add yourself as a resource". Every string is in the viewer's language
+// (lib/i18n-feed-alerts.ts); the panel and the dialog carry their own lang / dir. A refused report
+// shows a translated sentence chosen by the refusal's kind, never the server's text.
+//
+// Address search: the typed address is sent to Mapbox's geocoding API (lib/mapbox-geocode-v6.ts) when
+// the member presses Find or Enter. It is never written to a log.
+
 import { useState, useEffect } from 'react'
 import {
-  AlertTriangle,
-  Cloud,
-  Construction,
-  Gauge,
   Lightbulb,
   MapPin,
   ShieldAlert,
@@ -32,71 +40,39 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
 import { CATEGORY_META } from '@/lib/resource-categories'
-import type { PlaceAlertInput } from '@/hooks/use-safety-alerts'
 import type { Database } from '@feed/database'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage } from '@/lib/i18n-event-forms'
+import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
+import { ALERT_SEVERITIES, alertFailureText, alertSeverityHint, alertsT, type AlertMessages } from '@/lib/i18n-feed-alerts'
+import type { AlertOutcome, AlertType, PlaceAlertInput, SafetyAlert } from '@/lib/safety-alert-rpc'
 import { resolveGeoPointV6 } from '@/lib/mapbox-geocode-v6'
+import { ALERT_ICONS } from '@/components/alerts/alert-parts'
 import { planHazardGeocode } from './hazard-geocode'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type AlertType = 'weather' | 'road_closure' | 'speeding' | 'general'
 type ResourceCategory = Database['public']['Enums']['resource_category']
 
 interface HazardEntry {
   type: AlertType
-  label: string
-  icon: React.FC<{ className?: string }>
+  label: keyof AlertMessages
+  body: keyof AlertMessages
   testId: string
-  description: string
 }
 
 const HAZARD_ENTRIES: HazardEntry[] = [
-  {
-    type: 'weather',
-    label: 'Report weather hazard',
-    icon: Cloud,
-    testId: 'hazard-weather',
-    description: 'Ice, flooding, high winds, downed branches, etc.',
-  },
-  {
-    type: 'road_closure',
-    label: 'Report road closure',
-    icon: Construction,
-    testId: 'hazard-road-closure',
-    description: 'Blocked road, bridge out, construction, accident.',
-  },
-  {
-    type: 'speeding',
-    label: 'Report speeding area',
-    icon: Gauge,
-    testId: 'hazard-speeding',
-    description: 'Vehicles exceeding safe speed near pedestrians.',
-  },
-  {
-    type: 'general',
-    label: 'Report general safety issue',
-    icon: AlertTriangle,
-    testId: 'hazard-general',
-    description: 'Other safety concern in this area.',
-  },
+  { type: 'weather', label: 'entryWeather', body: 'entryWeatherBody', testId: 'hazard-weather' },
+  { type: 'road_closure', label: 'entryRoad', body: 'entryRoadBody', testId: 'hazard-road-closure' },
+  { type: 'speeding', label: 'entrySpeeding', body: 'entrySpeedingBody', testId: 'hazard-speeding' },
+  { type: 'general', label: 'entryGeneral', body: 'entryGeneralBody', testId: 'hazard-general' },
 ]
 
-const SEVERITY_OPTIONS = [
-  { value: '1', label: 'Low — heads-up' },
-  { value: '2', label: 'Moderate — use caution' },
-  { value: '3', label: 'High — significant risk' },
-  { value: '4', label: 'Critical — avoid area' },
-]
-
-const SUGGEST_CATEGORIES: Array<{ value: ResourceCategory; label: string }> =
-  Object.entries(CATEGORY_META).map(([value, meta]) => ({
-    value: value as ResourceCategory,
-    label: meta.label,
-  }))
+const SUGGEST_CATEGORIES = Object.keys(CATEGORY_META) as ResourceCategory[]
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -104,7 +80,10 @@ const SUGGEST_CATEGORIES: Array<{ value: ResourceCategory; label: string }> =
 
 interface HazardBubbleMenuProps {
   viewCenter: { lng: number; lat: number }
-  onPlaceAlert: (input: PlaceAlertInput) => Promise<unknown>
+  /** The viewer's language (the panel sets its own lang / dir). */
+  locale?: Locale
+  /** Place the alert; a refusal comes back as a typed failure. */
+  onPlaceAlert: (input: PlaceAlertInput) => Promise<AlertOutcome<SafetyAlert>>
   onAddResource: () => void
   /** Called when user selects a hazard type — parent renders staging pin at coords */
   onWizardOpen: (type: AlertType, coords: { lng: number; lat: number }) => void
@@ -129,6 +108,7 @@ interface SuggestResourceDialogProps {
   onClose: () => void
   prefillCity?: string | null
   prefillState?: string | null
+  locale: Locale
 }
 
 function SuggestResourceDialog({
@@ -136,9 +116,12 @@ function SuggestResourceDialog({
   onClose,
   prefillCity,
   prefillState,
+  locale,
 }: SuggestResourceDialogProps) {
   const { user } = useAuth()
   const supabase = createClient()
+  const t = (key: keyof AlertMessages) => alertsT(locale, key)
+  const example = (value: string) => formatMessage(t('exampleValue'), { example: value })
 
   const [category, setCategory] = useState<ResourceCategory>('other')
   const [name, setName] = useState('')
@@ -182,8 +165,9 @@ function SuggestResourceDialog({
 
       if (insertError) throw insertError
       setSuccess(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit suggestion')
+    } catch {
+      // A translated sentence; the server's text is not shown.
+      setError(alertsT(locale, 'suggestFailed'))
     } finally {
       setIsSubmitting(false)
     }
@@ -204,40 +188,36 @@ function SuggestResourceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
-      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+      <DialogContent hideDefaultClose lang={locale} dir={dir(locale)} aria-describedby={undefined} className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-lime-600" />
-            Suggest a Resource
+          <DialogTitle className="flex items-center gap-2 text-start">
+            <Lightbulb className="w-4 h-4 text-lime-700" aria-hidden="true" />
+            {t('suggestEntry')}
           </DialogTitle>
         </DialogHeader>
 
         {success ? (
           <div className="py-6 text-center text-sm text-stone-700" data-testid="suggest-resource-success">
-            <Lightbulb className="w-8 h-8 mx-auto mb-2 text-lime-500" />
-            <p className="font-medium text-stone-900">Thanks — your suggestion is pending review.</p>
-            <p className="text-stone-500 text-xs mt-1">
-              Our team will verify and publish it if it meets community guidelines.
-            </p>
+            <Lightbulb className="w-8 h-8 mx-auto mb-2 text-lime-600" aria-hidden="true" />
+            <p className="font-medium text-stone-900">{t('suggestThanks')}</p>
+            <p className="text-stone-700 text-xs mt-1">{t('suggestThanksBody')}</p>
             <Button type="button" variant="outline" className="mt-4 w-full" onClick={handleClose}>
-              Close
+              {t('close')}
             </Button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3" data-testid="suggest-resource-form">
-            <p className="text-xs text-stone-500">
-              Know of a resource that&apos;s not on the map? Suggest it and our community team will review it.
-            </p>
+            <p className="text-xs text-stone-700">{t('suggestIntro')}</p>
 
             <div className="space-y-1.5">
-              <Label htmlFor="suggest-category" className="text-sm text-stone-800">Category</Label>
+              <Label htmlFor="suggest-category" className="text-sm text-stone-800">{t('suggestCategory')}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as ResourceCategory)}>
                 <SelectTrigger id="suggest-category" className="text-stone-900" data-testid="suggest-category-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {SUGGEST_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    <SelectItem key={c} value={c}>{resourceCategoryLabel(c, locale)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -245,13 +225,13 @@ function SuggestResourceDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="suggest-name" className="text-sm text-stone-800">
-                Resource name <span className="text-red-400">*</span>
+                {t('suggestName')} <span className="text-red-700" aria-hidden="true">*</span>
               </Label>
               <Input
                 id="suggest-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Rutland Community Pantry"
+                placeholder={example('Rutland Community Pantry')}
                 className="text-stone-900 placeholder:text-stone-400"
                 data-testid="suggest-name-input"
                 required
@@ -260,42 +240,43 @@ function SuggestResourceDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="suggest-description" className="text-sm text-stone-800">
-                Description <span className="text-red-400">*</span>
+                {t('suggestDescription')} <span className="text-red-700" aria-hidden="true">*</span>
               </Label>
               <Textarea
                 id="suggest-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Who does it serve? What do they offer? Hours?"
+                dir="auto"
+                placeholder={t('suggestDescriptionPlaceholder')}
                 className="text-stone-900 placeholder:text-stone-400 resize-none"
                 rows={3}
                 data-testid="suggest-description-input"
                 required
               />
-              <p className={`text-xs ${descriptionLength > 0 && !descriptionValid ? 'text-red-500' : 'text-stone-400'}`}>
-                {descriptionLength}/500 chars (min 10)
+              <p className={`text-xs ${descriptionLength > 0 && !descriptionValid ? 'text-red-700' : 'text-stone-600'}`}>
+                {formatMessage(t('suggestCount'), { n: descriptionLength })}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <Label htmlFor="suggest-city" className="text-sm text-stone-800">City</Label>
+                <Label htmlFor="suggest-city" className="text-sm text-stone-800">{t('suggestCity')}</Label>
                 <Input
                   id="suggest-city"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Rutland"
+                  placeholder={example('Rutland')}
                   className="text-stone-900 placeholder:text-stone-400"
                   data-testid="suggest-city-input"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="suggest-state" className="text-sm text-stone-800">State</Label>
+                <Label htmlFor="suggest-state" className="text-sm text-stone-800">{t('suggestState')}</Label>
                 <Input
                   id="suggest-state"
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  placeholder="e.g. VT"
+                  placeholder={example('VT')}
                   className="text-stone-900 placeholder:text-stone-400"
                   data-testid="suggest-state-input"
                 />
@@ -304,7 +285,7 @@ function SuggestResourceDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="suggest-phone" className="text-sm text-stone-800">
-                Phone <span className="text-stone-400">(optional)</span>
+                {t('suggestPhone')} <span className="text-stone-600">{t('optional')}</span>
               </Label>
               <Input
                 id="suggest-phone"
@@ -318,7 +299,7 @@ function SuggestResourceDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="suggest-website" className="text-sm text-stone-800">
-                Website <span className="text-stone-400">(optional)</span>
+                {t('suggestWebsite')} <span className="text-stone-600">{t('optional')}</span>
               </Label>
               <Input
                 id="suggest-website"
@@ -331,20 +312,20 @@ function SuggestResourceDialog({
             </div>
 
             {error && (
-              <p className="text-xs text-red-600" data-testid="suggest-resource-error">{error}</p>
+              <p role="alert" className="text-xs text-red-800" data-testid="suggest-resource-error">{error}</p>
             )}
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 type="submit"
-                className="flex-1 bg-lime-600 hover:bg-lime-700 text-white"
+                className="flex-1 bg-lime-700 hover:bg-lime-800 text-white"
                 disabled={!canSubmit}
                 data-testid="suggest-resource-submit"
               >
-                {isSubmitting ? 'Submitting…' : 'Submit suggestion'}
+                {isSubmitting ? t('suggestSubmitting') : t('suggestSubmit')}
               </Button>
             </div>
           </form>
@@ -360,6 +341,7 @@ function SuggestResourceDialog({
 
 export function HazardBubbleMenu({
   viewCenter,
+  locale = 'en',
   onPlaceAlert,
   onAddResource,
   onWizardOpen,
@@ -370,6 +352,7 @@ export function HazardBubbleMenu({
   onExternalOpenChange,
 }: HazardBubbleMenuProps) {
   const { profile, isAnonymous } = useAuth()
+  const t = (key: keyof AlertMessages) => alertsT(locale, key)
   const [panelOpenInternal, setPanelOpenInternal] = useState(false)
   const panelOpen = externalOpen ?? panelOpenInternal
   const setPanelOpen = (v: boolean) => {
@@ -424,20 +407,24 @@ export function HazardBubbleMenu({
     setPlacing(true)
     setPlaceError(null)
     try {
-      await onPlaceAlert({
+      const res = await onPlaceAlert({
         type: activeEntry.type,
         severity: parseInt(severity, 10),
         description,
         lng: stagingCoords.lng,
         lat: stagingCoords.lat,
       })
-      logger.info('hazard.pin.placed', { type: activeEntry.type, severity: parseInt(severity, 10) })
+      if (!res.ok) {
+        // A guest, a lost connection: say which. Anything else: the general sentence.
+        setPlaceError(res.failure.kind === 'guest' || res.failure.kind === 'network' ? alertFailureText(locale, res.failure) : alertsT(locale, 'placeFailed'))
+        return
+      }
       setView('menu')
       setActiveEntry(null)
       setPanelOpen(false)
       onWizardClose()
-    } catch (err) {
-      setPlaceError(err instanceof Error ? err.message : 'Failed to place alert')
+    } catch {
+      setPlaceError(alertsT(locale, 'placeFailed'))
     } finally {
       setPlacing(false)
     }
@@ -449,31 +436,22 @@ export function HazardBubbleMenu({
     setGeocoding(true)
     setGeocodeError(null)
     setGeocodeSuccess(false)
-    const t0 = Date.now()
     try {
       // Move-only-on-strong-match gate: the staging pin already holds a valid
       // coordinate (center-seeded or dragged). A weak/approximate address must
       // never overwrite it, so classify the v6 result and branch on the pure
       // decision. resolveGeoPointV6 returns null on any failure (never throws).
+      // The typed address goes to Mapbox for this lookup and nowhere else: it is not logged.
       const match = await resolveGeoPointV6(address, token)
       const decision = planHazardGeocode(match)
-      const ms = Date.now() - t0
       if (decision.move && decision.coords) {
         onAddressGeocoded(decision.coords)
         setGeocodeSuccess(true)
       } else {
-        setGeocodeError('Address not found — drag the pin to set location')
+        setGeocodeError(alertsT(locale, 'addressNotFound'))
       }
-      logger.info('hazard.geocode', {
-        address,
-        ms,
-        success: decision.move,
-        matched: match !== null,
-        accuracy: decision.accuracy ?? null,
-        confidence: decision.confidence ?? null,
-      })
     } catch {
-      setGeocodeError('Could not geocode — drag the pin to set location')
+      setGeocodeError(alertsT(locale, 'addressFailed'))
     } finally {
       setGeocoding(false)
     }
@@ -488,15 +466,18 @@ export function HazardBubbleMenu({
     <>
       {/* FAB — amber when panel closed, stone when open */}
       <button
+        type="button"
+        lang={locale}
         className={cn(
           'absolute bottom-4 right-4 w-12 h-12 rounded-full text-white shadow-lg flex items-center justify-center transition-colors z-10',
-          panelOpen ? 'bg-stone-600 hover:bg-stone-700' : 'bg-amber-500 hover:bg-amber-600'
+          panelOpen ? 'bg-stone-700 hover:bg-stone-800' : 'bg-amber-700 hover:bg-amber-800'
         )}
-        aria-label={panelOpen ? 'Close safety menu' : 'Report a hazard or add a resource'}
+        aria-label={panelOpen ? t('hazardClose') : t('hazardOpen')}
+        aria-expanded={panelOpen}
         data-testid="hazard-menu-trigger"
         onClick={() => (panelOpen ? handlePanelClose() : setPanelOpen(true))}
       >
-        {panelOpen ? <X className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
+        {panelOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <ShieldAlert className="w-5 h-5" aria-hidden="true" />}
       </button>
 
       {/* Non-modal side panel — no overlay, no portal, absolute within map container */}
@@ -507,72 +488,83 @@ export function HazardBubbleMenu({
           panelOpen ? 'translate-x-0' : 'translate-x-full'
         )}
         aria-hidden={!panelOpen}
+        inert={!panelOpen}
+        lang={locale}
+        dir={dir(locale)}
+        data-testid="hazard-panel"
       >
         {/* Panel header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 flex-shrink-0">
           <h2 className="font-semibold text-stone-900 text-sm">
-            {view === 'wizard' && activeEntry ? activeEntry.label : 'Safety & Resources'}
+            {view === 'wizard' && activeEntry ? t(activeEntry.label) : t('panelTitle')}
           </h2>
           <button
+            type="button"
             onClick={handlePanelClose}
-            className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
-            aria-label="Close"
+            className="w-6 h-6 flex items-center justify-center rounded text-stone-700 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+            aria-label={t('close')}
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         {/* Menu view */}
         {view === 'menu' && (
           <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
-            {HAZARD_ENTRIES.map((entry) => (
-              <button
-                key={entry.type}
-                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-amber-300 hover:bg-amber-50 text-left transition-colors"
-                onClick={() => handleHazardEntryClick(entry)}
-                data-testid={entry.testId}
-              >
-                <span className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <entry.icon className="w-4 h-4 text-amber-700" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-stone-900">{entry.label}</p>
-                  <p className="text-xs text-stone-500">{entry.description}</p>
-                </div>
-              </button>
-            ))}
+            {HAZARD_ENTRIES.map((entry) => {
+              const EntryIcon = ALERT_ICONS[entry.type]
+              return (
+                <button
+                  key={entry.type}
+                  type="button"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-amber-300 hover:bg-amber-50 text-start transition-colors"
+                  onClick={() => handleHazardEntryClick(entry)}
+                  data-testid={entry.testId}
+                >
+                  <span className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <EntryIcon className="w-4 h-4 text-amber-800" aria-hidden="true" />
+                  </span>
+                  <span className="block">
+                    <span className="block text-sm font-medium text-stone-900">{t(entry.label)}</span>
+                    <span className="block text-xs text-stone-700">{t(entry.body)}</span>
+                  </span>
+                </button>
+              )
+            })}
 
             <hr className="my-2 border-stone-200" />
 
             {!isAnonymous && (
               <button
-                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-lime-300 hover:bg-lime-50 text-left transition-colors"
+                type="button"
+                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-lime-300 hover:bg-lime-50 text-start transition-colors"
                 onClick={() => { setSuggestOpen(true); setPanelOpen(false) }}
                 data-testid="suggest-resource-entry"
               >
                 <span className="w-8 h-8 rounded-full bg-lime-100 flex items-center justify-center flex-shrink-0">
-                  <Lightbulb className="w-4 h-4 text-lime-700" />
+                  <Lightbulb className="w-4 h-4 text-lime-800" aria-hidden="true" />
                 </span>
-                <div>
-                  <p className="text-sm font-medium text-stone-900">Suggest a Resource</p>
-                  <p className="text-xs text-stone-500">Know a resource that&apos;s missing? Let us know.</p>
-                </div>
+                <span className="block">
+                  <span className="block text-sm font-medium text-stone-900">{t('suggestEntry')}</span>
+                  <span className="block text-xs text-stone-700">{t('suggestEntryBody')}</span>
+                </span>
               </button>
             )}
 
             {isProvider && (
               <button
-                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-lime-300 hover:bg-lime-50 text-left transition-colors"
+                type="button"
+                className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 hover:border-lime-300 hover:bg-lime-50 text-start transition-colors"
                 onClick={() => { setPanelOpen(false); onAddResource() }}
                 data-testid="add-resource-entry"
               >
                 <span className="w-8 h-8 rounded-full bg-lime-100 flex items-center justify-center flex-shrink-0">
-                  <UserPlus className="w-4 h-4 text-lime-700" />
+                  <UserPlus className="w-4 h-4 text-lime-800" aria-hidden="true" />
                 </span>
-                <div>
-                  <p className="text-sm font-medium text-stone-900">Add yourself as a resource</p>
-                  <p className="text-xs text-stone-500">Share what you can offer with neighbors.</p>
-                </div>
+                <span className="block">
+                  <span className="block text-sm font-medium text-stone-900">{t('addSelfEntry')}</span>
+                  <span className="block text-xs text-stone-700">{t('addSelfEntryBody')}</span>
+                </span>
               </button>
             )}
           </div>
@@ -581,33 +573,35 @@ export function HazardBubbleMenu({
         {/* Wizard view */}
         {view === 'wizard' && activeEntry && (
           <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-            <p className="text-xs text-stone-500">{activeEntry.description}</p>
+            <p className="text-xs text-stone-700">{t(activeEntry.body)}</p>
 
             {/* Staging pin location indicator */}
             <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <MapPin className="w-4 h-4 text-amber-800 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-amber-800">Pin location</p>
-                <p className="text-xs text-amber-700 font-mono">
+                <p className="text-xs font-medium text-amber-900">{t('pinLocation')}</p>
+                <p className="text-xs text-amber-900 font-mono" dir="ltr">
                   {stagingCoords
                     ? `${stagingCoords.lat.toFixed(5)}°, ${stagingCoords.lng.toFixed(5)}°`
-                    : 'Setting location…'}
+                    : t('pinSetting')}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Drag the orange pin on the map or search below</p>
+                <p className="text-xs text-amber-900 mt-0.5">{t('pinHint')}</p>
               </div>
             </div>
 
             {/* Address search */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-stone-700">Search for an address</label>
+              <label htmlFor="wizard-address" className="text-sm font-medium text-stone-800">{t('addressLabel')}</label>
               <div className="flex gap-2">
                 <input
+                  id="wizard-address"
                   type="text"
+                  dir="auto"
                   value={address}
                   onChange={(e) => { setAddress(e.target.value); setGeocodeSuccess(false) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGeocode() } }}
-                  placeholder="Enter address..."
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-stone-200 bg-white text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
+                  placeholder={t('addressPlaceholder')}
+                  className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-stone-300 bg-white text-stone-900 placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
                 />
                 <button
                   type="button"
@@ -615,23 +609,31 @@ export function HazardBubbleMenu({
                   disabled={geocoding || !address.trim()}
                   className="px-3 py-2 text-sm bg-[#4a5d23] text-white rounded-lg hover:bg-[#3d4d1e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {geocoding ? '…' : 'Find'}
+                  {geocoding ? t('addressFinding') : t('addressFind')}
                 </button>
               </div>
-              {geocodeSuccess && <p className="text-xs text-[#4a5d23]">✓ Pin moved to address</p>}
-              {geocodeError && <p className="text-xs text-amber-600">{geocodeError}</p>}
+              {/* The search's outcome is announced where it appears (the region exists beforehand). */}
+              <p role="status" className="text-xs text-stone-800" data-testid="hazard-geocode-status">
+                {geocodeSuccess && (
+                  <>
+                    <span aria-hidden="true">✓ </span>
+                    {t('addressMoved')}
+                  </>
+                )}
+                {geocodeError}
+              </p>
             </div>
 
             {/* Severity */}
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-severity" className="text-sm text-stone-800">Severity</Label>
+              <Label htmlFor="wizard-severity" className="text-sm text-stone-800">{t('fieldSeverity')}</Label>
               <Select value={severity} onValueChange={setSeverity}>
                 <SelectTrigger id="wizard-severity" className="text-stone-900">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SEVERITY_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  {ALERT_SEVERITIES.map((level) => (
+                    <SelectItem key={level} value={String(level)}>{alertSeverityHint(level, locale)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -640,19 +642,20 @@ export function HazardBubbleMenu({
             {/* Description */}
             <div className="space-y-1.5">
               <Label htmlFor="wizard-description" className="text-sm text-stone-800">
-                Description <span className="text-stone-400">(optional)</span>
+                {t('fieldDescription')}
               </Label>
               <Textarea
                 id="wizard-description"
+                dir="auto"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add details neighbors should know..."
-                className="text-stone-900 placeholder:text-stone-400 resize-none"
+                placeholder={t('descriptionPlaceholder')}
+                className="text-stone-900 placeholder:text-stone-500 resize-none"
                 rows={3}
               />
             </div>
 
-            {placeError && <p className="text-xs text-red-600">{placeError}</p>}
+            {placeError && <p role="alert" className="text-xs text-red-800" data-testid="hazard-place-error">{placeError}</p>}
 
             {/* Actions */}
             <div className="flex gap-2 mt-auto pt-2 border-t border-stone-100">
@@ -663,15 +666,15 @@ export function HazardBubbleMenu({
                 onClick={handleWizardCancel}
                 disabled={placing}
               >
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 type="button"
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                className="flex-1 bg-amber-700 hover:bg-amber-800 text-white"
                 disabled={placing || !stagingCoords}
                 onClick={handleWizardConfirm}
               >
-                {placing ? 'Placing…' : 'Confirm & Report'}
+                {placing ? t('placing') : t('placeConfirm')}
               </Button>
             </div>
           </div>
@@ -684,6 +687,7 @@ export function HazardBubbleMenu({
         onClose={() => setSuggestOpen(false)}
         prefillCity={profile?.location_city}
         prefillState={profile?.location_state}
+        locale={locale}
       />
     </>
   )

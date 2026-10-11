@@ -52,6 +52,7 @@ import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
+import { AlertDialogs, useAlertDialog } from '@/components/alerts/alert-dialogs'
 import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
@@ -439,7 +440,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { saveResource, isResourceSavedByName } = useSavedResources()
 
   // Auth profile for location-based centering
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, isAnonymous, loading: authLoading } = useAuth()
 
   // Real geolocation
   const { position, error: geoError, getCurrentPosition } = useGeolocation()
@@ -673,10 +674,19 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && showSnapLayer,
   })
 
-  // Safety alerts layer — live alerts in the current viewport. The bounds state itself: its identity
-  // changes only when the map reports new bounds (a fresh object every render re-ran the hook's
-  // debounce on every render — a refetch loop).
-  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(bounds)
+  // Safety alerts layer — shown alerts (live, and resolved for six hours) in the current viewport.
+  // The hook keys its reads on the four bound numbers, so a re-render never reads again.
+  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow } = useSafetyAlerts(bounds)
+  // Update / Mark resolved / Withdraw / History, opened from a popup.
+  const alertDialog = useAlertDialog()
+  // An alert left because of what the member did in its popup: focus the map first, then say why.
+  const handleAlertEnded = useCallback(
+    (notice: string) => {
+      alertHost.focusAfterLeave()
+      if (notice) requestAnimationFrame(() => alertHost.announce(notice))
+    },
+    [alertHost],
+  )
 
   // Current map center — used as default pin location for hazard reports
   const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
@@ -701,9 +711,6 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   const handleStagingPinDragEnd = (coords: { lng: number; lat: number }) =>
     setStagingPin((prev) => (prev ? { ...prev, ...coords } : null))
-
-  // currentUserId for owner-gated actions on safety alert markers
-  const currentUserId = profile?.id ?? null
 
   // Map real resources to MapResource interface
   const mapResources: MapResource[] = useMemo(() => {
@@ -1150,10 +1157,13 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             <SafetyAlertMarker
               key={alert.id}
               alert={alert}
+              locale={locale}
+              isGuest={isAnonymous}
+              now={alertsNow}
               onVote={voteAlert}
-              currentUserId={currentUserId}
-              onUpdate={updateAlert}
-              onDelete={deleteAlert}
+              onAction={alertDialog.open}
+              onEngage={setAlertEngaged}
+              onEnded={handleAlertEnded}
               focused={isFocusedPin(focusedPin, 'safety_alert', alert.id)}
             />
           ))}
@@ -1182,6 +1192,28 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         >
           {focusMiss ? mapMemberT(locale, 'focusNotOnMap') : ''}
         </p>
+        {/* What the member's own alert action did (always mounted, so it is announced politely). */}
+        <p
+          role="status"
+          lang={locale}
+          dir={dir(locale)}
+          data-testid="map-alert-notice"
+          className={
+            alertNotice.text
+              ? 'absolute bottom-16 left-1/2 z-10 max-w-[90%] -translate-x-1/2 rounded-lg border border-stone-200 bg-white/95 px-3 py-2 text-sm text-stone-800 shadow-md'
+              : 'sr-only'
+          }
+        >
+          {alertNotice.text && <span key={alertNotice.seq}>{alertNotice.text}</span>}
+        </p>
+        <AlertDialogs
+          request={alertDialog.request}
+          locale={locale}
+          surface="map"
+          host={alertHost}
+          onClose={alertDialog.close}
+          returnFocusRef={alertDialog.triggerRef}
+        />
         {/* SNAP food-access layer toggle — top-left, clear of the top-right map controls */}
         <button
           type="button"
@@ -1200,6 +1232,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         {/* Bubble menu — all roles report hazards; providers also add resources */}
         <HazardBubbleMenu
           viewCenter={currentMapCenter}
+          locale={locale}
           onPlaceAlert={placeAlert}
           onAddResource={() => {
             // Delegate to the existing VolunteerResourceFAB by mounting it in open state.

@@ -246,9 +246,12 @@ describe('feed-panel.tsx wiring', () => {
   })
 
   it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {
-    // Still English (Release 3): the safety strip and the follow-error banner.
-    expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">\s*<SafetyStrip\b/)
+    // Still English (Release 3): the follow-error banner.
     expect(panel).toMatch(/role="alert"[\s\S]{0,120}lang="en"\s+dir="ltr"[\s\S]{0,160}\{followError\}/)
+    // Translated (Release 3.1): the safety strip carries the viewer language — its English mark is
+    // gone, it gets the locale, and its ages come from relativeAge inside the strip.
+    expect(panel).toMatch(/<div data-testid="feed-safety-region">\s*<SafetyStrip\s+alerts=\{safetyAlerts\}\s+locale=\{locale\}/)
+    expect(panel).not.toMatch(/lang="en"[^>]*data-testid="feed-safety-region"/)
     expect(panel.match(/<SafetyStrip\b/g)).toHaveLength(1)
     // Translated (Release 2): the composer and each post card carry the viewer language — no mark.
     expect(panel).toMatch(/<div data-testid="feed-composer-region">\s*<CreatePostCard\b/)

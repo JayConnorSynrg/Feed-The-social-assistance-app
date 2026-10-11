@@ -56,6 +56,17 @@ vi.mock('@/hooks/use-follows', () => ({
 }))
 vi.mock('@/hooks/use-petitions', () => ({ usePetitions: () => once('petitions', () => ({ petitions: [], sign: vi.fn(), signingId: null })) }))
 vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))
+// The alert strip has its own tests (hooks/use-safety-strip.test.ts): here it holds no alerts.
+vi.mock('@/hooks/use-safety-strip', () => ({
+  useSafetyStrip: () =>
+    once('strip', () => ({
+      alerts: [],
+      live: { assertive: [], polite: [], notice: '', seq: 0 },
+      now: 0,
+      host: { applyAnswer: () => {}, leave: () => {}, refresh: () => {}, announce: () => {}, focusAfterLeave: () => {} },
+      setEngaged: () => {},
+    })),
+}))
 vi.mock('@/components/layout/feed-shell', async (orig) => ({
   ...(await orig<object>()),
   usePanelContext: () => once('panel', () => ({ panelParams: {}, setActivePanel: () => {}, setPanelParams: () => {} })),
