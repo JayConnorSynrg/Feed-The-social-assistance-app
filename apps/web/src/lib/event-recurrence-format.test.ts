@@ -29,7 +29,7 @@ import {
 } from './event-recurrence'
 
 const LOCALES = Object.keys(messages) as Locale[]
-const plain = (s: string) => s.replace(/[   ]/g, ' ')
+const plain = (s: string) => s.replace(/[\u202f\u2009\u00a0]/g, ' ')
 
 const weekly = (days: WeekdayCode[], interval?: number): RecurrenceRule => ({
   frequency: 'weekly',

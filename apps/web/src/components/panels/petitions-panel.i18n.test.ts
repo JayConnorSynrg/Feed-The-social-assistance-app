@@ -78,7 +78,7 @@ describe('Petitions sub-tab in the member language', () => {
     expect(html).toContain('Acerca de las firmas de peticiones')
     expect(html).toContain('>Derechos sobre la tierra</span>')
     expect(html).toContain('<span class="font-semibold text-stone-900">1234</span> de 2500 firmas')
-    expect(html.replace(/ /g, ' ')).toContain('>49 %</span>')
+    expect(html.replace(/\u00a0/g, ' ')).toContain('>49 %</span>')
     expect(html).toContain('Añade tu firma verificada de apoyo</button>')
     expect(html).toContain('Tu nombre, la fecha y un registro de esta versión de la petición')
     expect(html).not.toMatch(/Community Petitions|All petitions|>Signed<|About petition signatures|Land Rights|signatures<|Add your verified/)

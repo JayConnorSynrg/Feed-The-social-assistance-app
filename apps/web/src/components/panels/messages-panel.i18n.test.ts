@@ -152,7 +152,7 @@ describe('time in the member language', () => {
     ['hmn', '3:05 PM', 'Lub Kaum Hli 9, 2026'],
     ['so', '3:05 GD', 'Okt 9, 2026'],
   ])('%s: a message reads %s and its conversation %s', (locale, clock, date) => {
-    const out = html(locale).replace(/[  ]/g, ' ')
+    const out = html(locale).replace(/[\u00a0\u202f]/g, ' ')
     expect(out).toContain(`>${clock}</p>`)
     expect(out).toContain(`<span class="text-[10px] text-stone-600">${date}</span>`)
   })

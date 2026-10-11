@@ -43,7 +43,7 @@ const TZ = 'America/New_York'
 const AFTERNOON = '2026-10-09T19:05:00Z' // 3:05 PM in New York
 const MORNING = '2026-01-05T14:07:00Z' // 9:07 AM in New York
 /** No-break and thin spaces → a plain space; bidi marks dropped. */
-const norm = (s: string | null) => (s ?? '').replace(/[   ]/g, ' ').replace(/[‎‏؜]/g, '')
+const norm = (s: string | null) => (s ?? '').replace(/[\u00a0\u202f\u2009]/g, ' ').replace(/[\u200e\u200f\u061c]/g, '')
 
 // [date, afternoon clock, morning clock, 1 min, 5 min, 1 h, 5 h, 1 d, 5 d, a date 69 days old]
 const PINNED: Record<Locale, readonly string[]> = {

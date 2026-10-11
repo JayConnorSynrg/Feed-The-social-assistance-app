@@ -226,7 +226,7 @@ export function localizeParts(parts: Intl.DateTimeFormatPart[], instant: Date | 
     if (p.type === 'weekday') return { ...p, value: (longWeekday ? words.weekdays : words.weekdaysShort)[w.weekday] }
     if (p.type === 'dayPeriod') return { ...p, value: w.hour < 12 ? words.am : words.pm }
     // One plain space wherever a runtime's en-US data uses a no-break one ("3:05 PM").
-    if (p.type === 'literal') return { ...p, value: p.value.replace(/[  ]/g, ' ') }
+    if (p.type === 'literal') return { ...p, value: p.value.replace(/[\u00a0\u202f]/g, ' ') }
     return p
   })
   for (let i = 0; i < out.length; i++) {

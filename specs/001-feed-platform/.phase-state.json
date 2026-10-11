@@ -879,7 +879,10 @@
       ]
     },
     "feed-r3-5-subtab-i18n": {
-      "status": "MERGED_LAST_FIXES_BUILT",
+      "status": "SHIPPED",
+      "pr": 245,
+      "mergeCommit": "0ee7f6da19019cc511251fd376b2f401bdc7b344",
+      "shipped": "2026-10-11",
       "branch": "feature/feed-r3-5-subtab-i18n",
       "base": "origin/develop 9c559e6",
       "docs": "docs/i18n-native-review.md (native-review list)",
@@ -892,6 +895,13 @@
         "still English and marked: rating display, review modal, petition embed on a feed card, photo picker, safety strip, follow-error banner, server / data-layer failure text",
         "final re-review; signed-in browser pass by the owner"
       ]
+    },
+    "feed-r3-5b-card-i18n": {
+      "status": "IN_PROGRESS",
+      "branch": "feature/feed-r3-5b-card-i18n",
+      "base": "origin/develop 0ee7f6d",
+      "docs": "docs/i18n-native-review.md (native-review list)",
+      "note": "Release 3.5 translation lane, slice 2 (no migration). Commit 1, source hygiene: the five raw invisible characters are \\u escapes; lib/source-characters.test.ts guards the source tree. See checklist 1.6.29."
     }
   }
 }
