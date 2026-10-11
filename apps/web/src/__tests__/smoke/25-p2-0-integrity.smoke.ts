@@ -16,7 +16,7 @@
 // query is a single SELECT; every such word is a quoted string literal or column
 // argument, and the inline comments deliberately avoid a verb after a newline or ';'.
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
 
 const skip = !isTokenAvailable()
