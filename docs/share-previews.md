@@ -105,6 +105,15 @@ No id and no text, including in the error row: it stores a fixed message, not th
 (`https://sourcetofeed.com/…` and `https://www.sourcetofeed.com/…`) and refuses every other origin.
 Its `thumbnail_url` is the same preview-image URL, so it follows the same rule.
 
+- **Path:** exactly `/s/post/<uuid>` or `/s/embed/<uuid>` (one optional trailing slash). An id
+  written in uppercase is the same post and is looked up in lowercase.
+- **Response URLs:** built from the app's canonical origin and the id of the post row the database
+  returned; nothing from the submitted URL is copied into the response.
+- **`maxwidth` / `maxheight`:** a whole number of pixels, 1 or more; the response never exceeds it.
+  Zero, a negative number or a non-number is treated as not sent (480 × 270).
+- **Local development:** outside production, `http(s)://localhost` and `127.0.0.1` links are accepted
+  too. In production they are refused like any other foreign origin.
+
 ## Structured data
 
 `/s/business/<id>` and `/s/organization/<id>` include JSON-LD for search engines. Member-written
