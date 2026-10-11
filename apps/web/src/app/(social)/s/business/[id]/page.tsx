@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { normalizeUrl } from '@/lib/utils/url'
+import { serializeJsonLd } from '@/lib/json-ld'
 import {
   fetchApprovedBusinessById,
   fetchBusinessHours,
@@ -237,10 +238,11 @@ export default async function SharedBusinessPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* JSON-LD — server-rendered structured data for search engines. */}
+      {/* JSON-LD — server-rendered structured data for search engines. serializeJsonLd keeps
+          member-written text (name, description, contact) from closing the script element. */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* FEED wordmark */}
