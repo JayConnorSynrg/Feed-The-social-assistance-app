@@ -10,8 +10,9 @@
 //     and names where focus goes;
 //   - what each refresh announces (invariant 7), and that the member's own action is not announced
 //     a second time by the read that follows it;
-//   - the read volume is written as one alerts.poll row per 30 reads, unmount or page hide — never
-//     per tab hide, never per read, and one report per window when reads fail (invariant 8);
+//   - the read volume is written as one alerts.poll row per 30 reads or page hide — never per tab
+//     hide, never per panel visit, never per read — and one report per window when reads fail
+//     (invariant 8);
 //   - the server decides what is shown: a browser clock that is ahead or behind hides nothing the
 //     server returned and removes nothing by itself (invariant 1).
 
@@ -175,6 +176,8 @@ describe('when the strip reads', () => {
     expect(h.warns).toEqual([{ name: 'feed.safety_alerts.fetch_failed', code: 'PGRST202' }])
     expect(h.logs).toEqual([])
     s.c.unmount()
+    expect(h.logs).toEqual([]) // leaving the panel writes nothing: the page's counter keeps the window
+    flushPollCounters() // the page goes away
     expect(h.logs).toEqual([{ name: 'alerts.poll', surface: 'strip', reads: 11, changed: 0, errors: 11, last_error: 'PGRST202', result_count: 0, window_s: 600 }])
   })
 })
@@ -344,7 +347,7 @@ describe('read volume: alerts.poll rows', () => {
     expect(polls().map((p) => p.reads)).toEqual([30, 30, 30, 30])
   })
 
-  it('twenty tab hide / show cycles: twenty reads, no row — the counts carry over; unmount writes them as one', async () => {
+  it('twenty tab hide / show cycles: twenty reads, no row — the counts carry over to the page going away', async () => {
     const s = await strip()
     for (let i = 0; i < 20; i++) {
       setVisible(false)
@@ -353,8 +356,10 @@ describe('read volume: alerts.poll rows', () => {
     }
     expect([reads().length, polls().length]).toEqual([21, 0])
     s.c.unmount()
+    expect(polls()).toEqual([])
+    flushPollCounters()
     expect(h.logs).toEqual([{ name: 'alerts.poll', surface: 'strip', reads: 21, changed: 0, errors: 0, last_error: null, result_count: 1, window_s: 0 }])
-    // Nothing is left to write when the page then goes away.
+    // Written once.
     flushPollCounters()
     expect(polls()).toHaveLength(1)
   })
@@ -371,10 +376,17 @@ describe('read volume: alerts.poll rows', () => {
     expect(polls()).toEqual([{ name: 'alerts.poll', surface: 'strip', reads: 4, changed: 0, errors: 0, last_error: null, result_count: 1, window_s: 180 }])
   })
 
-  it('twenty visits to the panel (mount, one read, unmount): one row per visit, each with its read', async () => {
+  it('twenty visits to the panel (mount, one read, unmount): no row — the page’s counter carries the reads across visits', async () => {
     for (let i = 0; i < 20; i++) (await strip()).c.unmount()
-    expect(reads()).toHaveLength(20)
-    expect(polls().map((p) => p.reads)).toEqual(Array(20).fill(1))
+    expect([reads().length, polls().length]).toEqual([20, 0])
+    // Ten more visits reach thirty reads: one row for all thirty.
+    for (let i = 0; i < 10; i++) (await strip()).c.unmount()
+    expect(polls().map((p) => [p.surface, p.reads])).toEqual([['strip', 30]])
+    // A thirty-first visit, then the page goes away: the one read left over is written, nothing is lost.
+    ;(await strip()).c.unmount()
+    flushPollCounters()
+    expect(polls().map((p) => p.reads)).toEqual([30, 1])
+    expect(polls().reduce((n, p) => n + (p.reads as number), 0)).toBe(reads().length)
   })
 })
 

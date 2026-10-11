@@ -43,8 +43,9 @@ export interface AlertNotice {
   seq: number
 }
 
-// The page's read counter for the map: one alerts.poll row per 30 reads, when the map unmounts or
-// when the page goes away — never on a tab hide; the first failed read of a window is reported once.
+// The page's read counter for the map: one alerts.poll row per 30 reads, and one when the page goes
+// away. The counter lives in the page's memory, so a tab hide or leaving the map panel and coming
+// back writes nothing and loses nothing. The first failed read of a window is reported once.
 const pollCounter = () =>
   sharedPollCounter(
     'map',
@@ -55,6 +56,14 @@ const pollCounter = () =>
 /** The popup of an alert, when it is open: its dialog container. */
 const popupDialog = (alertId: string) =>
   document.querySelector<HTMLElement>(`[data-testid="safety-alert-popup-${alertId}"]`)?.closest<HTMLElement>('[role="dialog"]') ?? null
+
+/** Where focus goes when the map notice's Dismiss button (which had it) is taken away: the map
+ *  itself; in the list view (no map drawn), the selected view tab. */
+export function focusMapSurface(): void {
+  const target =
+    document.querySelector<HTMLElement>('.mapboxgl-canvas') ?? document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"][id^="map-tab-"]')
+  target?.focus({ preventScroll: true })
+}
 
 export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
   const supabase = createClient()
@@ -129,8 +138,6 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
     const dispose = () => {
       scheduler.dispose()
       store.dispose()
-      // The map is leaving: write what its window counted.
-      counter.flush()
     }
     return { store, scheduler, host, dispose }
   })
@@ -188,5 +195,5 @@ export function useSafetyAlerts(viewportBounds: ViewportBounds | null) {
 
   const setEngaged = useCallback((alertId: string, engaged: boolean) => core.store.setEngaged(alertId, engaged), [core])
 
-  return { alerts, loading, error, notice, now, placeAlert, voteAlert, host: core.host, setEngaged, clearNotice }
+  return { alerts, loading, error, notice, now, placeAlert, voteAlert, host: core.host, setEngaged, clearNotice, focusMap: focusMapSurface }
 }

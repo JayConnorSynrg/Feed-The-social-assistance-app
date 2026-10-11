@@ -5,8 +5,8 @@
 // (the map's four bound numbers after 400 ms; the strip's viewer id at once), every 60 s while
 // visible, once on return to the tab, once on refresh — never once per render (the loop that made
 // safety_alerts_in_view ~1,100x more frequent than resources_in_bounds). And how the read volume is
-// measured (invariant 8): one alerts.poll row per 30 reads or page hide, never one per read, and one
-// error report per window however many reads fail.
+// measured (invariant 8): one alerts.poll row per 30 reads or page hide, never one per read, per tab
+// hide or per panel visit, and one error report per window however many reads fail.
 // Fake timers + a counting fake fetch.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'

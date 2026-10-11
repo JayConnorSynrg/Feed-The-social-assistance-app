@@ -75,9 +75,11 @@ type Phase =
 
 const TITLE: Record<AlertActionKind, keyof AlertMessages> = { edit: 'editTitle', resolve: 'resolveTitle', withdraw: 'withdrawTitle' }
 
-// stone-500 on white is 4.8:1: the field's edge is visible without relying on its fill.
+// stone-500 on white is 4.8:1: the field's edge is visible without relying on its fill. Important
+// ("!"), because app/globals.css sets `* { border-color }` outside any cascade layer, which beats a
+// plain border-colour utility.
 const FIELD_CLASS =
-  'mt-1 block w-full min-h-9 rounded-md border border-stone-500 bg-white px-3 py-2 text-sm text-stone-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
+  'mt-1 block w-full min-h-9 rounded-md border border-stone-500! bg-white px-3 py-2 text-sm text-stone-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
 
 /** A heading that takes focus shows it. */
 const FOCUSED_HEADING = 'rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2'
@@ -224,6 +226,9 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
     async (base: SafetyAlert, mine: AlertDraft | null) => {
       await gate.current.run(async () => {
         setBusy(true)
+        // A new attempt starts clean: the last refusal goes, so the same sentence after a second
+        // failure is a new alert (an unchanged one would not be announced again).
+        setPhase((p) => (p.kind === 'ready' && p.error ? { ...p, error: null } : p))
         const sentFrom = opening.current
         // The dialog this answer belongs to was closed (or reopened) meanwhile: the surface still
         // gets the truth, and nothing is shown or announced for it.

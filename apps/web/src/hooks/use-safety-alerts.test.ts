@@ -15,7 +15,7 @@
 //     just-placed pin; "shown until" passing asks the server once and removes nothing by itself;
 //   - an alert whose popup is open and that left the viewport's answer is asked for by id before it
 //     is marked ended;
-//   - unmounting the map stops every read; alerts.poll rows are per 30 reads / unmount / page hide.
+//   - unmounting the map stops every read; alerts.poll rows are per 30 reads / page hide.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -168,7 +168,7 @@ describe('reader calls across re-renders and bounds changes', () => {
 })
 
 describe('read volume: alerts.poll rows', () => {
-  it('fifty settled pans: 51 reads, one row of thirty; unmount writes the other 21', async () => {
+  it('fifty settled pans: 51 reads, one row of thirty; leaving the map writes nothing, the page going away writes the other 21', async () => {
     const m = await map()
     let west = -73
     for (let i = 0; i < 50; i++) {
@@ -181,6 +181,8 @@ describe('read volume: alerts.poll rows', () => {
     expect(reads()).toHaveLength(51)
     expect(polls().map((p) => [p.surface, p.reads])).toEqual([['map', 30]])
     m.c.unmount()
+    expect(polls().map((p) => [p.surface, p.reads])).toEqual([['map', 30]])
+    flushPollCounters()
     expect(polls().map((p) => [p.surface, p.reads])).toEqual([['map', 30], ['map', 21]])
   })
 
@@ -201,6 +203,8 @@ describe('read volume: alerts.poll rows', () => {
     expect(h.errors).toEqual([{ name: 'safety-alerts.fetch.error', code: 'PGRST202', message: 'alert read failed' }])
     expect(m.hook().error).toBeInstanceOf(Error)
     m.c.unmount()
+    expect(polls()).toEqual([])
+    flushPollCounters()
     expect(polls()).toEqual([{ name: 'alerts.poll', surface: 'map', reads: 11, changed: 0, errors: 11, last_error: 'PGRST202', result_count: 0, window_s: 600 }])
   })
 })
@@ -382,6 +386,25 @@ describe('the map’s notice for the member’s own action', () => {
     // The same sentence twice is still a new message (seq moves).
     m.hook().host.announce('Alert updated.')
     expect(m.hook().notice.seq).toBeGreaterThan(2)
+  })
+})
+
+describe('where focus goes when the map’s notice is dismissed', () => {
+  it('the map itself; in the list view (no map drawn), the selected view tab', async () => {
+    const m = await map()
+    m.hook().focusMap()
+    expect(doc.canvasFocus).toBe(1)
+    // No canvas: the list view.
+    const got: unknown[] = []
+    const real = doc.querySelector
+    doc.querySelector = (selector: string) => (selector === '[role="tab"][aria-selected="true"][id^="map-tab-"]' ? { focus: (o: unknown) => void got.push(o) } : null) as never
+    try {
+      m.hook().focusMap()
+    } finally {
+      doc.querySelector = real
+    }
+    expect(got).toEqual([{ preventScroll: true }])
+    expect(doc.canvasFocus).toBe(1)
   })
 })
 

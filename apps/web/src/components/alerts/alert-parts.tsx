@@ -64,14 +64,15 @@ export function AlertSummary({
 
 /** What a map marker's face shows besides its colour, so severity and state never rest on hue:
  *   low       a circle
- *   moderate  a rounded square
+ *   moderate  a diamond (a square stood on its corner: four points where the circle has none, and
+ *             about 30% less face — a circle against a rounded square differed by a 4 px corner)
  *   high      a circle with a "!" badge
  *   critical  a rounded square with a "!!" badge
  *   resolved  a grey circle with a check mark
  *   ended     hollow (white, dashed outline)
  *  The badge and the check are decorative (aria-hidden): the marker's name says the same in words. */
 export interface MarkerFace {
-  shape: 'circle' | 'square'
+  shape: 'circle' | 'square' | 'diamond'
   badge: '' | '!' | '!!'
   check: boolean
   hollow: boolean
@@ -80,7 +81,7 @@ export interface MarkerFace {
 export function markerFace(state: 'live' | 'resolved' | 'gone', severity: number): MarkerFace {
   if (state === 'gone') return { shape: 'circle', badge: '', check: false, hollow: true }
   if (state === 'resolved') return { shape: 'circle', badge: '', check: true, hollow: false }
-  const shape = severity === 2 || severity >= 4 ? 'square' : 'circle'
+  const shape = severity >= 4 ? 'square' : severity === 2 ? 'diamond' : 'circle'
   return { shape, badge: severity >= 4 ? '!!' : severity === 3 ? '!' : '', check: false, hollow: false }
 }
 

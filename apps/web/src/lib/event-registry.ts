@@ -168,10 +168,10 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'alerts.history.open.error': ['surface', 'target_id'],
   'alerts.place.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
   'alerts.place.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface'],
-  // Read volume of the alert reader per surface, aggregated in the browser: one row per 30 reads, one
-  // when the surface unmounts and one when the page goes away — never per tab hide
-  // (lib/safety-alerts-fetch.ts PollCounter). sum(reads) = reader calls; errors / last_error = failed
-  // reads in the window and the class of the last one.
+  // Read volume of the alert reader per surface, aggregated in the browser: one row per 30 reads and
+  // one when the page goes away — never per tab hide or panel switch (lib/safety-alerts-fetch.ts
+  // PollCounter). sum(reads) = reader calls; errors / last_error = failed reads in the window and the
+  // class of the last one.
   'alerts.poll': ['changed', 'errors', 'last_error', 'reads', 'result_count', 'surface', 'window_s'],
   'alerts.resolve.complete': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],
   'alerts.resolve.error': ['alert_type', 'is_owner', 'request_id', 'severity_after', 'severity_before', 'surface', 'target_id'],

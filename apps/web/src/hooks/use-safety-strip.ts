@@ -69,8 +69,9 @@ export function neighbourOf(alerts: readonly SafetyAlert[], alertId: string): st
 
 const stripItem = (alertId: string) => document.querySelector<HTMLElement>(`[data-testid="safety-strip-item-${alertId}"]`)
 
-// The page's read counter for the strip: one alerts.poll row per 30 reads, when the strip unmounts
-// or when the page goes away — never on a tab hide; the first failed read of a window is reported once.
+// The page's read counter for the strip: one alerts.poll row per 30 reads, and one when the page
+// goes away. The counter lives in the page's memory, so a tab hide or leaving the feed panel and
+// coming back writes nothing and loses nothing. The first failed read of a window is reported once.
 const pollCounter = () =>
   sharedPollCounter(
     'strip',
@@ -174,8 +175,6 @@ export function useSafetyStrip(viewerKey: string | null, focusFallback: () => vo
       store.dispose()
       if (clearTimer) clearTimeout(clearTimer)
       clearTimer = null
-      // The strip is leaving: write what its window counted.
-      counter.flush()
     }
     return { store, scheduler, host, dispose }
   })

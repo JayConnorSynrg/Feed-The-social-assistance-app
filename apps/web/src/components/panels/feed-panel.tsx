@@ -2026,6 +2026,7 @@ export function FeedPanel() {
               onAction={alertDialog.open}
               onEngage={setStripEngaged}
               onDismissNotice={dismissStripNotice}
+              focusFallback={focusFeedTitle}
             />
           </div>
 

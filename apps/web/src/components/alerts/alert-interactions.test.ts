@@ -5,13 +5,14 @@
 // the test calls the handlers the components hand to their elements):
 //   - the strip: an entry opens the map on that alert; an action hands over the button it came from
 //     (focus returns there); focus OR the pointer entering / leaving an entry is reported, so an
-//     alert never leaves under the member (invariant 7); when the server drops the alert whose button
-//     held focus, focus moves to the entry itself; the visible notice has a Dismiss control;
+//     alert never leaves under the member (invariant 7); the strip never moves focus when the list
+//     changes — a focused button whose action is no longer offered stays, disabled, until focus
+//     leaves it; dismissing the visible notice gives focus to the strip's heading first;
 //   - the marker: an open popup is reported the same way; a counted vote is announced once, politely;
 //     a vote that clears the alert, or one the server answers "no longer live", moves focus first and
 //     then says why; any other refusal stays in the popup as a sentence; closing the popup of an
-//     ended alert sends focus to the map; an alert that ends under an open popup hands focus to the
-//     popup itself;
+//     ended alert sends focus to the map; an alert that ends under an open popup keeps the focused
+//     control (disabled) and moves no focus; closing the popup clears what it said about a vote;
 //   - the history dialog: one read per opening, newest first, "History loaded" announced with the
 //     number of entries, focus on its title and back;
 //   - the panels hand those callbacks to the store, the dialogs and the status regions.
@@ -178,77 +179,139 @@ describe('the strip', () => {
     expect(seen.engaged).toEqual([[ID, true], [ID, false], [ID, true], [ID, false]])
   })
 
-  describe('the server drops the alert whose action button held focus', () => {
-    const gone = () => alert({ is_mine: true, shown_state: 'gone', shown_until: null })
-    function focusable() {
-      const focused: string[] = []
-      page.elements.set(`[data-testid="safety-strip-item-${ID}"]`, { focus: () => void focused.push('entry') })
-      return focused
+  // The strip never moves focus when the list changes (a script moving focus also moves a screen
+  // reader's reading position). A focused button whose action is no longer offered stays, disabled.
+  describe('an action stops being offered while its button has focus', () => {
+    const gone = () => alert({ is_mine: true, version: 2, shown_state: 'gone', shown_until: null })
+    const button = (tree: unknown, action: string) => byTestId(tree, `safety-strip-${action}-${ID}`)
+    /** Every focus() the strip could call: its entry, its heading. */
+    function watchFocus(tree: unknown) {
+      const calls: string[] = []
+      page.elements.set(`[data-testid="safety-strip-item-${ID}"]`, { focus: () => void calls.push('entry') })
+      const heading = byTestId(tree, 'safety-strip-heading')[0]
+      if (heading) (heading.props.ref as { current: unknown }).current = { focus: () => void calls.push('heading') }
+      return calls
     }
 
-    it('its button is gone and focus fell to the page: focus moves to the entry itself (still there, marked "No longer listed")', () => {
-      const s = strip([alert({ is_mine: true })])
-      const focused = focusable()
-      ;(entryOf(s.c.tree()).props.onFocus as () => void)()
-      s.state.alerts = [gone()]
-      page.activeElement = page.body // the focused button was removed
+    it('the alert ends: the focused button stays where it is, disabled and inert, described by the new state; the other buttons go', () => {
+      const s = strip([alert({ is_mine: true, version: 2 })])
+      const calls = watchFocus(s.c.tree())
+      ;(button(s.c.tree(), 'resolve')[0].props.onFocus as () => void)()
       s.c.rerender()
-      expect(focused).toEqual(['entry'])
+      s.state.alerts = [gone()]
+      s.c.rerender()
+      const kept = button(s.c.tree(), 'resolve')
+      expect(kept).toHaveLength(1)
+      expect(kept[0].props['aria-disabled']).toBe(true)
+      expect(String(kept[0].props['aria-describedby'])).toContain(`safety-strip-state-${ID}`)
+      expect(byTestId(s.c.tree(), `safety-strip-ended-${ID}`)[0].props.id).toBe(`safety-strip-state-${ID}`)
+      for (const other of ['edit', 'withdraw', 'history']) expect(button(s.c.tree(), other), other).toHaveLength(0)
+      // Pressing it does nothing.
+      ;(kept[0].props.onClick as (e: unknown) => void)({ currentTarget: {} })
+      expect(s.seen.actions).toEqual([])
+      // Nothing was focused by script: focus is still on that button, and nobody's reading position moved.
+      expect(calls).toEqual([])
+    })
+
+    it('once focus leaves it, the kept button goes too', () => {
+      const s = strip([alert({ is_mine: true, version: 2 })])
+      ;(button(s.c.tree(), 'resolve')[0].props.onFocus as () => void)()
+      s.c.rerender()
+      s.state.alerts = [gone()]
+      s.c.rerender()
+      ;(button(s.c.tree(), 'resolve')[0].props.onBlur as () => void)()
+      s.c.rerender()
+      expect(button(s.c.tree(), 'resolve')).toHaveLength(0)
       expect(byTestId(s.c.tree(), `safety-strip-ended-${ID}`)).toHaveLength(1)
-      expect(byTestId(s.c.tree(), `safety-strip-resolve-${ID}`)).toHaveLength(0)
-      // No element at all has focus (some browsers report null): the same.
-      const again = strip([alert({ is_mine: true })])
-      ;(entryOf(again.c.tree()).props.onFocus as () => void)()
-      again.state.alerts = [gone()]
-      page.activeElement = null
-      again.c.rerender()
-      expect(focused).toEqual(['entry', 'entry'])
     })
 
-    it('focus that is somewhere real — still on the entry, or in the composer — is never taken', () => {
-      const s = strip([alert({ is_mine: true })])
-      const focused = focusable()
-      ;(entryOf(s.c.tree()).props.onFocus as () => void)()
-      s.state.alerts = [gone()]
-      page.activeElement = { name: 'the entry button itself' }
+    it('someone else resolved it: "Mark resolved" stays (disabled) under the member’s focus; Withdraw and History are still offered', () => {
+      const s = strip([alert({ is_mine: true, version: 2 })])
+      ;(button(s.c.tree(), 'resolve')[0].props.onFocus as () => void)()
       s.c.rerender()
-      expect(focused).toEqual([])
-
-      // The member tabbed on to the composer and left the pointer resting on the entry (it is held by
-      // hover): when the alert ends, their typing is not interrupted — even if focus later falls to
-      // the page for another reason.
-      const t = strip([alert({ is_mine: true })])
-      const item = entryOf(t.c.tree())
-      ;(item.props.onMouseEnter as () => void)()
-      ;(item.props.onFocus as () => void)()
-      ;(item.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: { name: 'composer' } })
-      page.activeElement = { name: 'composer' }
-      t.state.alerts = [gone()]
-      t.c.rerender()
-      page.activeElement = page.body
-      t.state.alerts = [gone()]
-      t.c.rerender()
-      expect(focused).toEqual([])
+      s.state.alerts = [alert({ is_mine: true, version: 3, status: 'resolved', resolved_at: iso(0), resolved_by_role: 'moderator' })]
+      s.c.rerender()
+      const drawn = ['edit', 'resolve', 'withdraw', 'history'].map((a) => [a, button(s.c.tree(), a).length, button(s.c.tree(), a)[0]?.props['aria-disabled']])
+      expect(drawn).toEqual([['edit', 0, undefined], ['resolve', 1, true], ['withdraw', 1, undefined], ['history', 1, undefined]])
     })
 
-    it('an entry the member was never on does not take focus; nor does one that is still shown', () => {
-      const s = strip([alert({ is_mine: true })])
-      const focused = focusable()
-      s.state.alerts = [gone()]
+    it('focus anywhere else (another entry’s button, the composer): the buttons of the ended alert simply go, and nothing is focused', () => {
+      const s = strip([alert({ is_mine: true, version: 2 }), alert({ id: 'other', is_mine: true, version: 2 })])
+      const calls = watchFocus(s.c.tree())
+      ;(byTestId(s.c.tree(), 'safety-strip-history-other')[0].props.onFocus as () => void)()
       s.c.rerender()
-      expect(focused).toEqual([])
-      const still = strip([alert({ is_mine: true })])
-      ;(entryOf(still.c.tree()).props.onFocus as () => void)()
-      still.state.alerts = [alert({ is_mine: true, version: 2, description: 'Detour' })]
-      still.c.rerender()
-      expect(focused).toEqual([])
+      s.state.alerts = [gone(), alert({ id: 'other', is_mine: true, version: 2 })]
+      s.c.rerender()
+      for (const action of ['edit', 'resolve', 'withdraw', 'history']) expect(button(s.c.tree(), action), action).toHaveLength(0)
+      expect(byTestId(s.c.tree(), 'safety-strip-history-other')[0].props['aria-disabled']).toBeUndefined()
+      expect(calls).toEqual([])
+    })
+
+    it('an action that is still offered keeps working under focus (an update changed the text, nothing else)', () => {
+      const s = strip([alert({ is_mine: true, version: 2 })])
+      ;(button(s.c.tree(), 'edit')[0].props.onFocus as () => void)()
+      s.c.rerender()
+      s.state.alerts = [alert({ is_mine: true, version: 3, description: 'Detour' })]
+      s.c.rerender()
+      expect(button(s.c.tree(), 'edit')[0].props['aria-disabled']).toBeUndefined()
+      const trigger = { id: 'edit-button' }
+      ;(button(s.c.tree(), 'edit')[0].props.onClick as (e: unknown) => void)({ currentTarget: trigger })
+      expect(s.seen.actions).toEqual([['edit', ID, trigger]])
     })
   })
 
-  it('the visible notice has a Dismiss control that tells the surface', () => {
-    const { c, seen } = strip([alert()], { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', seq: 1 })
-    ;(byTestId(c.tree(), 'safety-strip-notice-dismiss')[0].props.onClick as () => void)()
-    expect(seen.dismissed).toBe(1)
+  // Dismiss takes its own button out of the page. If that button has focus, focus is given a place first.
+  describe('dismissing the visible notice', () => {
+    const NOTICE = { assertive: [], polite: [], spoken: '', notice: 'Alert updated.', seq: 1 }
+    function dismissable(alerts: SafetyAlert[], fallback = true) {
+      const trail: string[] = []
+      const state = { alerts }
+      const c = mount(() =>
+        SafetyStrip({
+          alerts: state.alerts,
+          locale: 'en',
+          live: NOTICE,
+          now: NOW,
+          tz: 'UTC',
+          onViewMap: () => {},
+          onDismissNotice: () => void trail.push('dismissed'),
+          focusFallback: fallback ? () => void trail.push('focus:feed-heading') : undefined,
+        }),
+      )
+      const heading = byTestId(c.tree(), 'safety-strip-heading')[0]
+      if (heading) (heading.props.ref as { current: unknown }).current = { focus: () => void trail.push('focus:strip-heading') }
+      const button = { name: 'the Dismiss button' }
+      const press = () => (byTestId(c.tree(), 'safety-strip-notice-dismiss')[0].props.onClick as (e: unknown) => void)({ currentTarget: button })
+      return { trail, press, button }
+    }
+
+    it('the button has focus: focus goes to the strip’s heading FIRST, then the notice is dismissed', () => {
+      const d = dismissable([alert()])
+      page.activeElement = d.button
+      d.press()
+      expect(d.trail).toEqual(['focus:strip-heading', 'dismissed'])
+    })
+
+    it('no alert is listed (the strip has no heading): focus goes to the feed’s heading', () => {
+      const d = dismissable([])
+      page.activeElement = d.button
+      d.press()
+      expect(d.trail).toEqual(['focus:feed-heading', 'dismissed'])
+    })
+
+    it('a pointer press that left focus elsewhere (the composer): the notice is dismissed and focus is not touched', () => {
+      const d = dismissable([alert()])
+      page.activeElement = { name: 'composer' }
+      d.press()
+      expect(d.trail).toEqual(['dismissed'])
+    })
+
+    it('the heading can take focus and shows it', () => {
+      const { c } = strip([alert()], NOTICE)
+      const heading = byTestId(c.tree(), 'safety-strip-heading')[0]
+      expect(heading.props.tabIndex).toBe(-1)
+      expect(String(heading.props.className)).toContain('focus-visible:ring-2')
+    })
   })
 })
 
@@ -392,46 +455,97 @@ describe('the marker popup', () => {
     expect(byTestId(member.c.tree(), `edit-alert-${ID}`)).toHaveLength(1)
   })
 
+  // The popup never moves focus when its alert changes: the control that has focus stays, disabled.
   describe('the alert ends under its open popup (a poll, not the member’s own action)', () => {
-    const gone = () => alert({ is_mine: true, shown_state: 'gone', shown_until: null })
-    function withDialog(m: ReturnType<typeof marker>) {
-      const focused: unknown[] = []
-      const dialog = { focus: (o: unknown) => void focused.push(o) }
-      ;(byTestId(m.c.tree(), `safety-alert-popup-${ID}`)[0].props.ref as { current: unknown }).current = {
-        closest: (sel: string) => (sel === '[role="dialog"]' ? dialog : null),
-      }
-      return focused
-    }
+    const gone = () => alert({ is_mine: true, version: 2, shown_state: 'gone', shown_until: null })
+    const el = (tree: unknown, id: string) => byTestId(tree, `${id}-${ID}`)
 
-    it('its buttons are gone and focus fell to the page: focus moves to the popup itself — Escape and Close still work', () => {
-      const m = marker(alert({ is_mine: true }), async (a) => ok(a))
-      const focused = withDialog(m)
+    it('a focused vote button stays where it is, disabled and inert, described by the new state; the other vote button and the counts go', async () => {
+      const votes: string[] = []
+      const m = marker(alert({ is_mine: true, version: 2 }), async (a, v) => (votes.push(v), ok(a)))
+      ;(el(m.c.tree(), 'vote-confirm')[0].props.onFocus as () => void)()
+      m.c.rerender()
       ;(m.props as { alert: SafetyAlert }).alert = gone()
-      page.activeElement = page.body // the focused vote button was removed
       m.c.rerender()
-      expect(focused).toEqual([{ preventScroll: true }])
-      expect(byTestId(m.c.tree(), `alert-ended-${ID}`)).toHaveLength(1)
-      expect(byTestId(m.c.tree(), `vote-confirm-${ID}`)).toHaveLength(0)
-      // Once, not on every render.
+      const kept = el(m.c.tree(), 'vote-confirm')
+      expect(kept).toHaveLength(1)
+      expect(kept[0].props['aria-disabled']).toBe(true)
+      expect(kept[0].props['aria-describedby']).toBe(`alert-state-${ID}`)
+      expect(el(m.c.tree(), 'alert-ended')[0].props.id).toBe(`alert-state-${ID}`)
+      expect(el(m.c.tree(), 'vote-clear')).toHaveLength(0)
+      for (const action of ['edit', 'resolve', 'withdraw', 'history']) expect(byTestId(m.c.tree(), `${action}-alert-${ID}`), action).toHaveLength(0)
+      // Pressing it sends nothing.
+      ;(kept[0].props.onClick as () => void)()
+      await m.c.flush()
+      expect(votes).toEqual([])
+      // When focus leaves it, it goes.
+      ;(kept[0].props.onBlur as () => void)()
       m.c.rerender()
-      expect(focused).toHaveLength(1)
+      expect(el(m.c.tree(), 'vote-confirm')).toHaveLength(0)
     })
 
-    it('focus that is somewhere real (on Close, or in the search box) stays where it is; a live alert moves nothing', () => {
-      for (const where of ['the popup’s Close button', 'the map’s search box']) {
-        const m = marker(alert({ is_mine: true }), async (a) => ok(a))
-        const focused = withDialog(m)
-        ;(m.props as { alert: SafetyAlert }).alert = gone()
-        page.activeElement = { name: where }
-        m.c.rerender()
-        expect(focused, where).toEqual([])
-      }
-      const live = marker(alert({ is_mine: true }), async (a) => ok(a))
-      const none = withDialog(live)
-      ;(live.props as { alert: SafetyAlert }).alert = alert({ is_mine: true, version: 2 })
-      page.activeElement = page.body
-      live.c.rerender()
-      expect(none).toEqual([])
+    it('a focused owner action stays the same way; with focus elsewhere (on Close, in the search box) every control of the ended alert goes', () => {
+      const m = marker(alert({ is_mine: true, version: 2 }), async (a) => ok(a))
+      ;(byTestId(m.c.tree(), `resolve-alert-${ID}`)[0].props.onFocus as () => void)()
+      m.c.rerender()
+      ;(m.props as { alert: SafetyAlert }).alert = gone()
+      m.c.rerender()
+      const kept = byTestId(m.c.tree(), `resolve-alert-${ID}`)
+      expect([kept.length, kept[0].props['aria-disabled'], kept[0].props['aria-describedby']]).toEqual([1, true, `alert-state-${ID}`])
+      ;(kept[0].props.onClick as (e: unknown) => void)({ currentTarget: {} })
+      expect(m.seen.actions).toEqual([])
+      expect(el(m.c.tree(), 'vote-confirm')).toHaveLength(0)
+
+      const elsewhere = marker(alert({ is_mine: true, version: 2 }), async (a) => ok(a))
+      ;(elsewhere.props as { alert: SafetyAlert }).alert = gone()
+      elsewhere.c.rerender()
+      for (const id of ['vote-confirm', 'vote-clear']) expect(el(elsewhere.c.tree(), id), id).toHaveLength(0)
+      for (const action of ['edit', 'resolve', 'withdraw', 'history']) expect(byTestId(elsewhere.c.tree(), `${action}-alert-${ID}`), action).toHaveLength(0)
+      expect(el(elsewhere.c.tree(), 'alert-ended')).toHaveLength(1)
+    })
+
+    it('the popup holds no ref to its own DOM and calls no focus(): nothing in it can move focus when the alert changes', () => {
+      const m = marker(alert({ is_mine: true, version: 2 }), async (a) => ok(a))
+      expect(byTestId(m.c.tree(), `safety-alert-popup-${ID}`)[0].props.ref).toBeUndefined()
+    })
+  })
+
+  describe('what the popup said about a vote belongs to that opening', () => {
+    const status = (tree: unknown) => textOf(byTestId(tree, `alert-vote-status-${ID}`)[0])
+
+    it('"Vote recorded." is gone when the popup is closed and opened again; the next vote says it again', async () => {
+      const m = marker(alert(), async (a) => ok({ ...a, confirm_count: 2 }))
+      ;(byTestId(m.c.tree(), `vote-confirm-${ID}`)[0].props.onClick as () => void)()
+      await m.c.flush()
+      expect(status(m.c.tree())).toBe('Vote recorded.')
+      h.popup.open = false // Escape, Close, or the map closing it
+      m.c.rerender()
+      h.popup.open = true
+      m.c.rerender()
+      expect(status(m.c.tree())).toBe('')
+      ;(byTestId(m.c.tree(), `vote-confirm-${ID}`)[0].props.onClick as () => void)()
+      await m.c.flush()
+      expect(status(m.c.tree())).toBe('Vote recorded.')
+    })
+
+    it('a refusal shown in the popup is gone too (a reopened popup does not raise an old alert again)', async () => {
+      const m = marker(alert(), async () => ({ ok: false, failure: { kind: 'unknown', code: 'XX000' }, requestId: 'r' }))
+      ;(byTestId(m.c.tree(), `vote-confirm-${ID}`)[0].props.onClick as () => void)()
+      await m.c.flush()
+      expect(findAll(m.c.tree(), (e) => e.props.role === 'alert')).toHaveLength(1)
+      h.popup.open = false
+      m.c.rerender()
+      h.popup.open = true
+      m.c.rerender()
+      expect(findAll(m.c.tree(), (e) => e.props.role === 'alert')).toHaveLength(0)
+    })
+
+    it('while the popup stays open the sentence stays (it is cleared by closing, not by time)', async () => {
+      const m = marker(alert(), async (a) => ok(a))
+      ;(byTestId(m.c.tree(), `vote-confirm-${ID}`)[0].props.onClick as () => void)()
+      await m.c.flush()
+      for (let i = 0; i < 5; i++) m.c.rerender()
+      expect(status(m.c.tree())).toBe('Vote recorded.')
     })
   })
 })
@@ -588,7 +702,7 @@ describe('the panels hand the callbacks on', () => {
 
   it('the feed panel: strip → store, dialogs, the dismissed notice and the map focus on that alert', () => {
     const panel = read('components/panels/feed-panel.tsx')
-    expect(panel).toContain('<SafetyStrip alerts={safetyAlerts} locale={locale} live={stripLive} now={stripNow} onViewMap={openMapOnAlert} onAction={alertDialog.open} onEngage={setStripEngaged} onDismissNotice={dismissStripNotice} />')
+    expect(panel).toContain('<SafetyStrip alerts={safetyAlerts} locale={locale} live={stripLive} now={stripNow} onViewMap={openMapOnAlert} onAction={alertDialog.open} onEngage={setStripEngaged} onDismissNotice={dismissStripNotice} focusFallback={focusFeedTitle} />')
     expect(panel).toContain('<AlertDialogs request={alertDialog.request} locale={locale} surface="strip" host={stripHost} onClose={alertDialog.close} returnFocusRef={alertDialog.triggerRef} />')
     // Starting the next action clears the last outcome's visible line.
     expect(panel).toContain('const alertDialog = useAlertDialog(dismissStripNotice)')
@@ -600,24 +714,57 @@ describe('the panels hand the callbacks on', () => {
     expect(panel).toContain('<SafetyAlertMarker key={alert.id} alert={alert} locale={locale} now={alertsNow} onVote={voteAlert} onAction={alertDialog.open} onEngage={setAlertEngaged} onEnded={handleAlertEnded}')
     expect(panel).toContain('<AlertDialogs request={alertDialog.request} locale={locale} surface="map" host={alertHost} onClose={alertDialog.close} returnFocusRef={alertDialog.triggerRef} />')
     // The notice is a sibling BEFORE the map's panel (in the flow: it cannot cover a marker).
-    expect(panel).toContain('<MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} /> <div id="map-view-panel"')
+    expect(panel).toContain('<MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} focusAfterDismiss={focusMapAfterNotice} /> <div id="map-view-panel"')
+    expect(panel).toContain('focusMap: focusMapAfterNotice } = useSafetyAlerts(bounds)')
     expect(panel).toContain('const alertDialog = useAlertDialog(clearAlertNotice)')
     expect(panel).toContain('alertHost.focusAfterLeave() if (notice) requestAnimationFrame(() => alertHost.announce(notice))')
     expect(panel).toContain('<HazardBubbleMenu viewCenter={currentMapCenter} locale={locale} onPlaceAlert={placeAlert}')
   })
 
-  it('the map’s notice: its Dismiss control tells the surface; an empty notice has no control', () => {
-    let dismissed = 0
+  it('the map’s notice: Dismiss gives focus to the map FIRST when its button has it, then tells the surface; an empty notice has no control', () => {
+    const trail: string[] = []
     const state = { notice: { text: 'Alert updated.', seq: 1 } }
-    const c = mount(() => MapAlertNotice({ notice: state.notice, locale: 'en', onDismiss: () => void dismissed++ }))
+    const c = mount(() =>
+      MapAlertNotice({ notice: state.notice, locale: 'en', onDismiss: () => void trail.push('dismissed'), focusAfterDismiss: () => void trail.push('focus:map') }),
+    )
     const button = byTestId(c.tree(), 'map-alert-notice-dismiss')[0]
     expect(button.props['aria-label']).toBe(alertsT('en', 'dismiss'))
-    ;(button.props.onClick as () => void)()
-    expect(dismissed).toBe(1)
+    const self = { name: 'the Dismiss button' }
+    page.activeElement = self
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: self })
+    expect(trail).toEqual(['focus:map', 'dismissed'])
+    // A pointer press that left focus elsewhere: dismissed, focus untouched.
+    page.activeElement = { name: 'the search box' }
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: self })
+    expect(trail).toEqual(['focus:map', 'dismissed', 'dismissed'])
     state.notice = { text: '', seq: 1 }
     c.rerender()
     expect(byTestId(c.tree(), 'map-alert-notice-dismiss')).toHaveLength(0)
     expect(byTestId(c.tree(), 'map-alert-status')).toHaveLength(1) // the region stays mounted
+  })
+
+  it('the map’s notice: the same wrapper and the same region in both states — empty it is out of the layout, and the text arrives in a region that was already there', () => {
+    const state = { notice: { text: '', seq: 0 } }
+    const c = mount(() => MapAlertNotice({ notice: state.notice, locale: 'en', onDismiss: () => {} }))
+    const shape = (tree: unknown) => {
+      const root = tree as El
+      const children = (Array.isArray(root.props.children) ? root.props.children : [root.props.children]) as Array<El | false | null | undefined | string>
+      const region = children[0] as El & { key: unknown }
+      // The key is part of a node's identity: a key that changes with the text would remount the region.
+      return { root: [root.type, root.props['data-testid'], root.props.className], first: [region.type, region.props.role, region.props['data-testid'], region.key ?? null] }
+    }
+    const empty = shape(c.tree())
+    expect(empty.root).toEqual(['div', 'map-alert-notice', 'sr-only'])
+    expect(empty.first).toEqual(['p', 'status', 'map-alert-status', null])
+    state.notice = { text: 'Alert updated.', seq: 1 }
+    c.rerender()
+    const shown = shape(c.tree())
+    // The same element types at the same places (React keeps the nodes): only the classes and the text change.
+    expect([shown.root[0], shown.root[1]]).toEqual([empty.root[0], empty.root[1]])
+    expect(shown.first).toEqual(empty.first)
+    expect(String(shown.root[2])).toContain('flex')
+    expect(String(shown.root[2])).not.toContain('sr-only')
+    expect(textOf(byTestId(c.tree(), 'map-alert-status')[0])).toBe('Alert updated.')
   })
 
   it('starting an action from a surface clears its last notice, then opens the dialog on that alert', () => {

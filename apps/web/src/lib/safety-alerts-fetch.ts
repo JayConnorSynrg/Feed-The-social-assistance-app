@@ -20,11 +20,12 @@
 //
 // PollCounter — how often each surface reads, without a row per read: reads, changed answers and
 // failures are counted in memory and written as ONE alerts.poll row per surface when 30 reads have
-// accumulated (30 minutes of an idle, visible tab), when the surface unmounts (its hook flushes), or
-// when the page goes away (pagehide). The counters live in module memory (sharedPollCounter), so
-// hiding and showing the tab starts no new row. A failed read is counted in the same window (errors, and
-// the last error class); the first failure of a window is reported once, at once (onFirstError), so
-// a reader that fails on every poll writes one error row per window, not one per read.
+// accumulated (30 minutes of an idle, visible tab) or when the page goes away (pagehide). The
+// counters live in module memory (sharedPollCounter), so hiding and showing the tab, or leaving a
+// panel and coming back (its hook unmounts and mounts again), starts no new row and loses no count.
+// A failed read is counted in the same window (errors, and the last error class); the first failure
+// of a window is reported once, at once (onFirstError), so a reader that fails on every poll writes
+// one error row per window, not one per read.
 // sum(reads) over the rows is the exact read volume.
 
 export const ALERTS_DEBOUNCE_MS = 400

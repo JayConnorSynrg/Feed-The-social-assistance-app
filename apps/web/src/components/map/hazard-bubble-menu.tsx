@@ -211,7 +211,14 @@ export function SuggestResourceDialog({
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3" data-testid="suggest-resource-form">
+          <form
+            // noValidate: the button is disabled until the form can be sent, and the website field
+            // (type="url", for the URL keyboard) keeps taking an address typed without "https://".
+            noValidate
+            onSubmit={handleSubmit}
+            className="space-y-3"
+            data-testid="suggest-resource-form"
+          >
             <p className="text-xs text-stone-700">{t('suggestIntro')}</p>
 
             <div className="space-y-1.5">
@@ -318,6 +325,7 @@ export function SuggestResourceDialog({
               </Label>
               <Input
                 id="suggest-website"
+                type="url"
                 dir="ltr"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
@@ -625,7 +633,7 @@ export function HazardBubbleMenu({
                   onChange={(e) => { setAddress(e.target.value); setGeocodeSuccess(false) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGeocode() } }}
                   placeholder={t('addressPlaceholder')}
-                  className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-stone-500 bg-white text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-stone-500! bg-white text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-2 focus:ring-[#4a5d23] focus:border-transparent"
                 />
                 <button
                   type="button"

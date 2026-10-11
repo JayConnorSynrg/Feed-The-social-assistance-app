@@ -26,9 +26,14 @@
 //    after it was spoken. The member's own outcome is also a visible line with a Dismiss control.
 //  - An alert never leaves under the member: while focus or the pointer is inside an entry the store
 //    keeps it (marked "No longer listed" once the server drops it) until they move on (onEngage).
-//    When that happens to the entry whose button held focus, focus moves to the entry itself.
+//    The strip itself never moves focus when the list changes: an action button that has focus when
+//    its action stops being offered (the alert ended, or someone resolved it) stays where it is,
+//    marked disabled, until focus leaves it — so focus never falls to the page, and nobody reading
+//    elsewhere with a screen reader has their place pulled back.
+//  - Dismissing the visible outcome line takes its button away: focus goes to the strip's heading
+//    first (the feed's heading when no alert is listed).
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, ShieldAlert, X } from 'lucide-react'
 import type { Locale } from '@/lib/i18n'
 import { relativeAge } from '@/lib/relative-age'
@@ -74,9 +79,24 @@ const ACTION_LABEL: Record<StripAction, keyof AlertMessages> = {
   history: 'actionHistory',
 }
 
+// border-stone-500! — important, because app/globals.css sets `* { border-color }` outside any
+// cascade layer, which beats a plain border-colour utility (the edge would render pale grey).
 export const ALERT_ACTION_BUTTON_CLASS =
-  'inline-flex min-h-6 min-w-6 items-center justify-center rounded border border-stone-500 bg-white px-2 py-0.5 text-xs font-medium text-stone-800 ' +
-  'hover:bg-stone-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
+  'inline-flex min-h-6 min-w-6 items-center justify-center rounded border border-stone-500! bg-white px-2 py-0.5 text-xs font-medium text-stone-800 ' +
+  'hover:bg-stone-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 ' +
+  'aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white'
+
+const ACTION_ORDER: readonly StripAction[] = ['edit', 'resolve', 'withdraw', 'history']
+
+/**
+ * The action buttons to draw for one alert: the actions on offer, plus the one that has focus right
+ * now when it is no longer offered — drawn disabled until focus leaves it. Taking a focused button
+ * out of the page drops focus to the document; putting focus somewhere else by script would move a
+ * screen-reader user's reading position. Keeping the button does neither.
+ */
+export function actionsToDraw(offered: readonly StripAction[], focused: StripAction | null): Array<{ action: StripAction; disabled: boolean }> {
+  return ACTION_ORDER.filter((action) => offered.includes(action) || action === focused).map((action) => ({ action, disabled: !offered.includes(action) }))
+}
 
 const QUIET: StripLive = { assertive: [], polite: [], spoken: '', notice: '', seq: 0 }
 
@@ -96,12 +116,14 @@ export interface SafetyStripProps {
   onEngage?: (alertId: string, engaged: boolean) => void
   /** The member dismissed the visible notice. */
   onDismissNotice?: () => void
+  /** Where focus goes after a dismissal when the strip lists no alert (it has no heading then). */
+  focusFallback?: () => void
   /** The clock for ages: the instant of the last change to `alerts` (hooks/use-safety-strip.ts). */
   now?: number
   tz?: string
 }
 
-export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, onAction, onEngage, onDismissNotice, now, tz }: SafetyStripProps) {
+export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, onAction, onEngage, onDismissNotice, focusFallback, now, tz }: SafetyStripProps) {
   // A guest (anonymous session) gets no owner action.
   const { isAnonymous: isGuest } = useAuth()
   const [mountedAt] = useState(() => Date.now())
@@ -121,20 +143,9 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
     if (was !== set.size > 0) onEngage?.(alertId, set.size > 0)
   }
 
-  // The entry focus was last inside (forgotten once focus moves to something else). When the server
-  // drops that alert its action buttons go away; if one of them held focus, focus has fallen to the
-  // page: it then moves to the entry itself (still there, marked "No longer listed"). Focus that is
-  // anywhere else — still in the entry, or in the composer — is never taken.
-  const lastFocused = useRef<string | null>(null)
-  useEffect(() => {
-    const alertId = lastFocused.current
-    if (!alertId) return
-    const held = alerts.find((a) => a.id === alertId)
-    if (!held || alertShownState(held) !== 'gone') return
-    const active = document.activeElement
-    const lost = !active || active === document.body
-    if (lost) document.querySelector<HTMLElement>(`[data-testid="safety-strip-item-${alertId}"]`)?.focus()
-  }, [alerts])
+  // The action button that has focus right now (actionsToDraw keeps it while it does).
+  const [focusedAction, setFocusedAction] = useState<{ alertId: string; action: StripAction } | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   return (
     <div data-testid="safety-strip-region">
@@ -154,7 +165,16 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
             type="button"
             aria-label={t('dismiss')}
             data-testid="safety-strip-notice-dismiss"
-            onClick={() => onDismissNotice?.()}
+            onClick={(e) => {
+              // This button is about to go. If it has focus, give focus a place first: the strip's
+              // heading, or the feed's when no alert is listed. (A pointer press that left focus
+              // elsewhere — Safari does not focus a clicked button — moves nothing.)
+              if (document.activeElement === e.currentTarget) {
+                if (headingRef.current) headingRef.current.focus()
+                else focusFallback?.()
+              }
+              onDismissNotice?.()
+            }}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-stone-700 hover:bg-stone-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -165,6 +185,7 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
         <div data-testid="safety-strip" className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <h3
+              ref={headingRef}
               tabIndex={-1}
               data-testid="safety-strip-heading"
               className="flex items-center gap-1.5 rounded text-xs font-semibold uppercase tracking-wide text-amber-900 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
@@ -190,28 +211,22 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
               const titleId = `safety-strip-title-${alert.id}`
               const textId = `safety-strip-text-${alert.id}`
               const whenId = `safety-strip-when-${alert.id}`
-              const actions = stripActions(alert, { isGuest })
+              const stateId = `safety-strip-state-${alert.id}`
+              const drawn = actionsToDraw(stripActions(alert, { isGuest }), focusedAction?.alertId === alert.id ? focusedAction.action : null)
               const resolvedBy = state === 'resolved' ? resolvedByText(alert.resolved_by_role, locale) : null
               return (
                 <li
                   key={alert.id}
                   className="flex flex-col gap-1"
-                  onFocus={() => {
-                    lastFocused.current = alert.id
-                    hold(alert.id, 'focus', true)
-                  }}
+                  onFocus={() => hold(alert.id, 'focus', true)}
                   onBlur={(e) => {
                     const entry = e.currentTarget
                     if (e.relatedTarget) {
-                      if (!entry.contains(e.relatedTarget as Node)) {
-                        // The member moved on to something else.
-                        if (lastFocused.current === alert.id) lastFocused.current = null
-                        hold(alert.id, 'focus', false)
-                      }
+                      if (!entry.contains(e.relatedTarget as Node)) hold(alert.id, 'focus', false)
                       return
                     }
-                    // Focus went nowhere (the focused button may just have been taken away): decide
-                    // once the page has settled, so an entry that takes focus back stays held.
+                    // Focus went nowhere: decide once the page has settled, so an entry that takes
+                    // focus back stays held.
                     setTimeout(() => {
                       if (!entry.contains(document.activeElement)) hold(alert.id, 'focus', false)
                     }, 0)
@@ -246,13 +261,13 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
                             {alertSeverityLabel(alert.severity, locale)}
                           </span>
                           {state === 'resolved' && (
-                            <span data-testid={`safety-strip-resolved-${alert.id}`} className="inline-flex items-center gap-1 rounded border border-green-300 bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-900">
+                            <span id={`safety-strip-state-${alert.id}`} data-testid={`safety-strip-resolved-${alert.id}`} className="inline-flex items-center gap-1 rounded border border-green-300 bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-900">
                               <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                               {resolvedBy ?? t('stateResolved')}
                             </span>
                           )}
                           {state === 'gone' && (
-                            <span data-testid={`safety-strip-ended-${alert.id}`} className="rounded border border-stone-300 bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-800">
+                            <span id={`safety-strip-state-${alert.id}`} data-testid={`safety-strip-ended-${alert.id}`} className="rounded border border-stone-300 bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-800">
                               {t('stateEnded')}
                             </span>
                           )}
@@ -284,18 +299,24 @@ export function SafetyStrip({ alerts, locale = 'en', live = QUIET, onViewMap, on
                       data-testid={`admin-edit-alert-${alert.id}`}
                     />
                   </div>
-                  {actions.length > 0 && (
+                  {drawn.length > 0 && (
                     <span className="ms-7 flex flex-wrap gap-1.5">
-                      {actions.map((action) => (
+                      {drawn.map(({ action, disabled }) => (
                         <button
                           key={action}
                           type="button"
                           // Named by its visible text; the entry's title, text and age say which alert
-                          // (five entries may share a type and these words).
-                          aria-describedby={alert.description ? `${titleId} ${textId} ${whenId}` : `${titleId} ${whenId}`}
+                          // (five entries may share a type and these words). A button kept only because
+                          // it has focus is disabled, and described by the alert's new state as well.
+                          aria-describedby={[titleId, alert.description ? textId : '', whenId, disabled && state !== 'live' ? stateId : ''].filter(Boolean).join(' ')}
+                          aria-disabled={disabled || undefined}
                           className={ALERT_ACTION_BUTTON_CLASS}
                           data-testid={`safety-strip-${action}-${alert.id}`}
-                          onClick={(e) => onAction?.(action, alert, e.currentTarget)}
+                          onFocus={() => setFocusedAction({ alertId: alert.id, action })}
+                          onBlur={() => setFocusedAction((held) => (held && held.alertId === alert.id && held.action === action ? null : held))}
+                          onClick={(e) => {
+                            if (!disabled) onAction?.(action, alert, e.currentTarget)
+                          }}
                         >
                           {t(ACTION_LABEL[action])}
                         </button>

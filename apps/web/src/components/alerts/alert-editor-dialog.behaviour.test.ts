@@ -482,8 +482,9 @@ describe('a proper dialog', () => {
     const d = await open()
     for (const id of ['alert-edit-type', 'alert-edit-severity']) {
       const cls = String(one(d.c.tree(), id).props.className).split(' ')
-      expect(cls, id).toEqual(expect.arrayContaining(['border', 'border-stone-500', 'focus-visible:ring-2']))
-      expect(cls, id).not.toContain('border-stone-300')
+      // "!": important, so the app's unlayered `* { border-color }` rule does not turn the edge pale.
+      expect(cls, id).toEqual(expect.arrayContaining(['border', 'border-stone-500!', 'focus-visible:ring-2']))
+      expect(cls.filter((c) => /^border-stone-\d+$/.test(c)), id).toEqual([])
     }
     expect(String(one(d.c.tree(), 'alert-edit-description').props.className)).toContain('placeholder:text-stone-500')
   })
@@ -546,6 +547,40 @@ describe('a write that never answers', () => {
     await d.c.flush()
     expect(updates()).toHaveLength(2)
     expect(d.state.closed).toBe(1)
+  })
+
+  it('a second timeout says the same sentence again as a NEW alert: the first one is taken away when the retry starts', async () => {
+    const d = await open()
+    stall('update_safety_alert')
+    d.set('alert-edit-description', 'Detour on Elm')
+    d.submit()
+    await d.c.flush()
+    timeOut()
+    await d.c.flush()
+    expect(textOf(one(d.c.tree(), 'alert-editor-error'))).toBe(alertsT('en', 'failNetwork'))
+
+    d.submit() // the retry is in flight: the old refusal is gone (role="alert" leaves the page)
+    await d.c.flush()
+    expect(updates()).toHaveLength(2)
+    expect(byTestId(d.c.tree(), 'alert-editor-error')).toHaveLength(0)
+    expect(one(d.c.tree(), 'alert-edit-description').props.value).toBe('Detour on Elm')
+
+    timeOut() // the retry times out too: the sentence comes back as a newly inserted alert
+    await d.c.flush()
+    const again = one(d.c.tree(), 'alert-editor-error')
+    expect([again.props.role, textOf(again)]).toEqual(['alert', alertsT('en', 'failNetwork')])
+  })
+
+  it('a confirmation that failed starts its retry clean too', async () => {
+    const d = await open('resolve')
+    h.backend.answers.resolve_safety_alert = { error: { code: '42501', message: 'not_alert_owner' } }
+    d.click('alert-editor-confirm')
+    await d.c.flush()
+    expect(textOf(one(d.c.tree(), 'alert-editor-error'))).toBe(alertsT('en', 'failNotOwner'))
+    stall('resolve_safety_alert')
+    d.click('alert-editor-confirm')
+    await d.c.flush()
+    expect(byTestId(d.c.tree(), 'alert-editor-error')).toHaveLength(0)
   })
 
   it.each([

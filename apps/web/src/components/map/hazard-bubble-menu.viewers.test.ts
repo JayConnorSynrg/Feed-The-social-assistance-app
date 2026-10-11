@@ -116,8 +116,10 @@ describe('the report form’s fields can be seen', () => {
     c.rerender()
     const address = findAll(c.tree(), (e) => e.props.id === 'wizard-address')[0] as El
     const cls = String(address.props.className).split(' ')
-    expect(cls).toEqual(expect.arrayContaining(['border-stone-500', 'placeholder:text-stone-500', 'focus:outline-hidden', 'focus:ring-2']))
-    expect(cls.filter((x) => x.includes('outline-none') || x === 'border-stone-300' || x === 'placeholder:text-stone-400')).toEqual([])
+    // "!": the edge colour is important, or the app's unlayered `* { border-color }` rule wins and
+    // the edge renders pale grey (measured in Chromium: scratch lasttouch/run.mjs, claim 22a).
+    expect(cls).toEqual(expect.arrayContaining(['border', 'border-stone-500!', 'placeholder:text-stone-500', 'focus:outline-hidden', 'focus:ring-2']))
+    expect(cls.filter((x) => x.includes('outline-none') || /^border-stone-\d+$/.test(x) || x === 'placeholder:text-stone-400')).toEqual([])
     const description = findAll(c.tree(), (e) => e.props.id === 'wizard-description')[0] as El
     expect(String(description.props.className)).toContain('placeholder:text-stone-500')
   })
@@ -176,11 +178,16 @@ describe('the suggest-a-resource form', () => {
     expect(alertsT('es', 'suggestCountInvalid')).not.toBe(alertsT('en', 'suggestCountInvalid'))
   })
 
-  it('phone and website are typed left to right in a right-to-left locale too; the phone field is a telephone field', () => {
+  it('phone and website are typed left to right in a right-to-left locale too; they are a telephone field and a URL field', () => {
     const { c } = form('ar')
     const phone = byTestId(c.tree(), 'suggest-phone-input')[0]
     const website = byTestId(c.tree(), 'suggest-website-input')[0]
     expect([phone.props.dir, phone.props.type]).toEqual(['ltr', 'tel'])
-    expect(website.props.dir).toBe('ltr')
+    expect([website.props.dir, website.props.type]).toEqual(['ltr', 'url'])
+  })
+
+  it('the URL field does not start refusing an address typed without "https://": the browser’s own validation is off', () => {
+    const { c } = form()
+    expect(byTestId(c.tree(), 'suggest-resource-form')[0].props.noValidate).toBe(true)
   })
 })

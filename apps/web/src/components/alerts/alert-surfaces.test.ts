@@ -448,7 +448,9 @@ describe('accessibility', () => {
 
   it('the map’s notice: one polite status region, mounted empty, shown in the page’s flow with a Dismiss control', () => {
     const empty = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: '', seq: 0 }, locale: 'en', onDismiss: () => {} }))
-    expect(empty).toBe('<div lang="en" dir="ltr" data-testid="map-alert-notice"><p role="status" class="sr-only" data-testid="map-alert-status"></p></div>')
+    // Empty: the wrapper is out of the layout (sr-only is absolutely positioned, so it is no flex child
+    // and adds no gap above the map) and holds only the mounted, empty region.
+    expect(empty).toBe('<div lang="en" dir="ltr" data-testid="map-alert-notice" class="sr-only"><p role="status" class="sr-only" data-testid="map-alert-status"></p></div>')
     const shown = renderToStaticMarkup(h(MapAlertNotice, { notice: { text: 'Alert updated.', seq: 1 }, locale: 'ar', onDismiss: () => {} }))
     expect(shown).toMatch(/^<div lang="ar" dir="rtl" data-testid="map-alert-notice" class="[^"]*">/)
     expect(shown).toContain('<p role="status" class="min-w-0 flex-1" data-testid="map-alert-status"><span>Alert updated.</span></p>')
@@ -466,6 +468,9 @@ describe('accessibility', () => {
     for (const action of ['edit', 'resolve', 'withdraw', 'history']) {
       const cls = new RegExp(`<button[^>]*class="([^"]*)"[^>]*data-testid="safety-strip-${action}-${ID}"`).exec(s)?.[1] ?? ''
       expect(cls.split(' '), action).toEqual(expect.arrayContaining(['min-h-6', 'min-w-6']))
+      // The button's edge is stone-500 and important (a plain border colour loses to the app's
+      // unlayered `* { border-color }` rule: measured in Chromium, scratch lasttouch/run.mjs 22a).
+      expect(cls.split(' '), action).toEqual(expect.arrayContaining(['border', 'border-stone-500!']))
     }
     const p = popup(alert({ is_mine: true, version: 2 }), VIEWERS.owner)
     for (const action of ['edit', 'resolve', 'withdraw', 'history']) {
@@ -491,19 +496,40 @@ describe('accessibility', () => {
       return {
         cls: (/class="([^"]*)"/.exec(open)?.[1] ?? '').split(' '),
         face: /data-face="([^"]*)"/.exec(open)?.[1],
-        badge: /<span aria-hidden="true" class="[^"]*">([^<]*)<\/span>/.exec(button?.[1] ?? '')?.[1] ?? null,
+        badge: /<span aria-hidden="true" class="[^"]*">([^<]+)<\/span>/.exec(button?.[1] ?? '')?.[1] ?? null,
+        // The diamond is drawn inside the button: its own classes.
+        fill: (new RegExp(`<span aria-hidden="true" data-testid="safety-alert-face-${ID}" class="([^"]*)"`).exec(button?.[1] ?? '')?.[1] ?? '').split(' ').filter(Boolean),
         inner: button?.[1] ?? '',
       }
     }
+    const colours = (classes: string[]) => classes.filter((c) => /^(bg|border)-[a-z]+-\d+!?$/.test(c)).sort()
 
     it('the four severities are four different faces, and no two differ by colour alone', () => {
       const faces = [1, 2, 3, 4].map((severity) => face(alert({ severity })))
-      expect(faces.map((f) => f.face)).toEqual(['circle', 'square', 'circle:!', 'square:!!'])
+      expect(faces.map((f) => f.face)).toEqual(['circle', 'diamond', 'circle:!', 'square:!!'])
       expect(faces.map((f) => f.badge)).toEqual([null, null, '!', '!!'])
       expect(faces.map((f) => f.cls.includes('rounded-full'))).toEqual([true, false, true, false])
-      expect(faces.map((f) => f.cls.includes('rounded-md'))).toEqual([false, true, false, true])
-      // Low and moderate share a colour: the shape is what tells them apart.
-      expect(faces[0].cls.filter((c) => c.startsWith('bg-'))).toEqual(faces[1].cls.filter((c) => c.startsWith('bg-')))
+      // High, critical: as before (a circle with "!", a rounded square with "!!").
+      expect(faces[3].cls).toEqual(expect.arrayContaining(['rounded-md', 'border-2', 'bg-red-700']))
+    })
+
+    it('low against moderate: the same colours, a different shape — a circle, and a square stood on its corner', () => {
+      const [low, moderate] = [1, 2].map((severity) => face(alert({ severity })))
+      // Low: the button is the face, a full circle.
+      expect(low.cls).toEqual(expect.arrayContaining(['rounded-full', 'border-2', 'bg-amber-700', 'border-amber-900!']))
+      expect(low.fill).toEqual([])
+      // Moderate: the button is only the 32 px target (no fill, no edge of its own); the face is drawn
+      // inside it, rotated 45 degrees, with square corners.
+      expect(colours(moderate.cls)).toEqual([])
+      expect(moderate.cls).not.toContain('rounded-full')
+      expect(moderate.fill).toEqual(expect.arrayContaining(['absolute', 'inset-[5px]', 'rotate-45', 'border-2']))
+      expect(moderate.fill).not.toContain('rounded-full')
+      // Colour cannot be what tells them apart: it is the same.
+      expect(colours(moderate.fill)).toEqual(colours(low.cls))
+      expect(colours(low.cls)).toEqual(['bg-amber-700', 'border-amber-900!'])
+      // The drawn diamond is decorative; the icon sits above it; the name still says the level.
+      expect(moderate.inner).toMatch(/<svg[^>]*class="[^"]*\brelative\b[^"]*"/)
+      expect(popup(alert({ severity: 2 }))).toContain('aria-label="Road Closure, Moderate"')
     })
 
     it('the badge is decorative (the name says the severity) and dark-on-white', () => {
@@ -519,20 +545,26 @@ describe('accessibility', () => {
       expect(resolved.inner).toContain('lucide-circle-check')
       const gone = face(alert({ severity: 4, shown_state: 'gone', shown_until: null }))
       expect(gone.face).toBe('circle:hollow')
-      expect(gone.cls).toEqual(expect.arrayContaining(['bg-white', 'border-dashed', 'border-stone-700']))
+      expect(gone.cls).toEqual(expect.arrayContaining(['bg-white', 'border-dashed', 'border-stone-700!']))
     })
 
     it('the target is 32 px, and the face stands out from the map by a dark 2 px outline', () => {
-      for (const a of [alert({ severity: 1 }), alert({ severity: 4 }), alert({ status: 'resolved', resolved_at: iso(-HOUR) }), alert({ shown_state: 'gone', shown_until: null })]) {
+      for (const a of [alert({ severity: 1 }), alert({ severity: 2 }), alert({ severity: 4 }), alert({ status: 'resolved', resolved_at: iso(-HOUR) }), alert({ shown_state: 'gone', shown_until: null })]) {
         const f = face(a)
-        expect(f.cls).toEqual(expect.arrayContaining(['w-8', 'h-8', 'border-2']))
-        expect(f.cls.some((c) => /^border-(red-900|amber-900|stone-800|stone-700)$/.test(c)), f.cls.join(' ')).toBe(true)
+        expect(f.cls).toEqual(expect.arrayContaining(['w-8', 'h-8']))
+        // The outline is on the face: the button itself, or the diamond drawn inside it.
+        const edge = f.fill.length > 0 ? f.fill : f.cls
+        expect(edge).toContain('border-2')
+        // Important ("!"): a plain border-colour utility loses to the app's unlayered `* { border-color }`
+        // rule and renders pale grey (measured in Chromium: scratch lasttouch/run.mjs, claim 4e).
+        expect(edge.some((c) => /^border-(red-900|amber-900|stone-800|stone-700)!$/.test(c)), edge.join(' ')).toBe(true)
+        expect(edge.filter((c) => /^border-[a-z]+-\d+$/.test(c)), edge.join(' ')).toEqual([])
       }
     })
 
     it('markerFace: the rule itself', () => {
       expect(markerFace('live', 1)).toEqual({ shape: 'circle', badge: '', check: false, hollow: false })
-      expect(markerFace('live', 2)).toEqual({ shape: 'square', badge: '', check: false, hollow: false })
+      expect(markerFace('live', 2)).toEqual({ shape: 'diamond', badge: '', check: false, hollow: false })
       expect(markerFace('live', 3)).toEqual({ shape: 'circle', badge: '!', check: false, hollow: false })
       expect(markerFace('live', 4)).toEqual({ shape: 'square', badge: '!!', check: false, hollow: false })
       expect(markerFace('resolved', 4)).toEqual({ shape: 'circle', badge: '', check: true, hollow: false })

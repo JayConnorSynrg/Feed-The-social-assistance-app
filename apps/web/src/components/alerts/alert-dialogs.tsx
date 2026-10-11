@@ -77,17 +77,35 @@ export function AlertDialogs({
 }
 
 /**
- * What the member's own alert action did on the map: said once politely (the region is mounted from
- * the start), and shown as a line ABOVE the map — in the page's flow, so it can never cover a marker
- * or a popup — until the member dismisses it or starts the next action.
+ * What the member's own alert action did on the map: said once politely, and shown as a line ABOVE
+ * the map — in the page's flow, so it can never cover a marker or a popup — until the member
+ * dismisses it or starts the next action.
+ *
+ * The status region is mounted from the start and stays the same node: its text is put INTO a region
+ * that already exists (a region that arrives with its text already in it is often not spoken). While
+ * there is nothing to say, the wrapper is taken out of the layout (sr-only), so it is no flex child
+ * and the map sits exactly where it would without it.
+ *
+ * Dismiss takes its own button away: when that button has focus, `focusAfterDismiss` is called first
+ * (the map), so focus never falls to the page.
  */
-export function MapAlertNotice({ notice, locale, onDismiss }: { notice: { text: string; seq: number }; locale: Locale; onDismiss: () => void }) {
+export function MapAlertNotice({
+  notice,
+  locale,
+  onDismiss,
+  focusAfterDismiss,
+}: {
+  notice: { text: string; seq: number }
+  locale: Locale
+  onDismiss: () => void
+  focusAfterDismiss?: () => void
+}) {
   return (
     <div
       lang={locale}
       dir={dir(locale)}
       data-testid="map-alert-notice"
-      className={notice.text ? 'flex items-start gap-2 rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm text-stone-800' : undefined}
+      className={notice.text ? 'flex items-start gap-2 rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm text-stone-800' : 'sr-only'}
     >
       {/* The one copy of the text: the status region itself is the visible line. */}
       <p role="status" className={notice.text ? 'min-w-0 flex-1' : 'sr-only'} data-testid="map-alert-status">
@@ -98,7 +116,11 @@ export function MapAlertNotice({ notice, locale, onDismiss }: { notice: { text: 
             type="button"
             aria-label={alertsT(locale, 'dismiss')}
             data-testid="map-alert-notice-dismiss"
-            onClick={onDismiss}
+            onClick={(e) => {
+              // (A pointer press that left focus elsewhere moves nothing.)
+              if (document.activeElement === e.currentTarget) focusAfterDismiss?.()
+              onDismiss()
+            }}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-stone-700 hover:bg-stone-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
           >
             <X className="h-4 w-4" aria-hidden="true" />
