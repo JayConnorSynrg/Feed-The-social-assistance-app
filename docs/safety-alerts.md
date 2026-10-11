@@ -59,8 +59,10 @@ Updates (`update_safety_alert`, the reporter or a moderator, live alerts only):
 - **Expiry.** Raising the severity restarts the expiry for the new level from the update. Lowering it
   never extends the alert and caps what is left at the lower level's window. Any other update keeps
   the expiry. The client shows the `expires_at` the server answered.
-- **Verified.** The reporter's own change of type, text or place, or a raise of severity, returns a
-  verified alert to unverified; the dialog says so before saving.
+- **Verified.** Any change the reporter saves to their own verified alert returns it to unverified
+  until a moderator checks it again; the dialog says so before saving, and the notice after the save
+  repeats it when the answer comes back unverified. A moderator's edit of someone else's alert keeps
+  the mark.
 - **History.** One message per version (`safety_alert_history`): reported, updated (what changed),
   marked resolved — with the expiry that version carries. It never says who.
 - **Ended first.** Any write on an alert that is no longer live is refused `PT410`; the dialog

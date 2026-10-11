@@ -275,6 +275,13 @@ describe('readMapFocusPin — safety alert (the alert reader by id: shown = live
     // A reader that returned the row anyway: the client still refuses it.
     expect(await read({ safety_alerts: [alert(over)] }, 'safety_alert', A1, { readerReturnsAnything: true })).toBeNull()
   })
+  it('the rule is applied on the clock the link was followed with, not only the reader’s', async () => {
+    // The reader (browser clock = NOW) returns the alert: it expires in two hours. A session whose
+    // clock is three hours on must not land on it.
+    const { client } = fakeClient({ safety_alerts: [alert()] })
+    expect(await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, NOW)).not.toBeNull()
+    expect(await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, new Date(NOW.getTime() + 3 * 3600_000))).toBeNull()
+  })
   it('an alert without a place on the map does not resolve', async () => {
     expect(await read({ safety_alerts: [alert({ lng: null, lat: null })] }, 'safety_alert', A1)).toBeNull()
     expect(await read({ safety_alerts: [alert({ lng: 0, lat: 43.61 })] }, 'safety_alert', A1)).toBeNull()
