@@ -189,7 +189,11 @@ describe('the member surfaces hold no text of their own', () => {
   })
 
   it('the popup and the hazard menu set their own lang and dir; the strip’s English island is gone', () => {
-    expect(read('components/map/safety-alert-marker.tsx')).toMatch(/<div lang=\{locale\} dir=\{dir\(locale\)\}/)
+    // The popup's dialog root (Close included) and the marker button each get the viewer's language
+    // (rendered output: components/alerts/alert-surfaces.test.ts).
+    const marker = read('components/map/safety-alert-marker.tsx')
+    expect(marker).toMatch(/<MarkerPopupDialog [^>]*closeLabel=\{t\('close'\)\} lang=\{locale\} dir=\{dir\(locale\)\}/)
+    expect(marker).toMatch(/ref=\{triggerRef\}\s+lang=\{locale\}\s+dir=\{dir\(locale\)\}/)
     const menu = read('components/map/hazard-bubble-menu.tsx')
     expect(menu.match(/lang=\{locale\}/g)?.length).toBeGreaterThanOrEqual(3) // the button, the panel, the dialog
     expect(menu.match(/dir=\{dir\(locale\)\}/g)?.length).toBeGreaterThanOrEqual(2)

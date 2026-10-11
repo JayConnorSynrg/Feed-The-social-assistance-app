@@ -52,7 +52,7 @@ import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
-import { AlertDialogs, useAlertDialog } from '@/components/alerts/alert-dialogs'
+import { AlertDialogs, MapAlertNotice, useAlertDialog } from '@/components/alerts/alert-dialogs'
 import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
@@ -440,7 +440,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const { saveResource, isResourceSavedByName } = useSavedResources()
 
   // Auth profile for location-based centering
-  const { profile, isAnonymous, loading: authLoading } = useAuth()
+  const { profile, loading: authLoading } = useAuth()
 
   // Real geolocation
   const { position, error: geoError, getCurrentPosition } = useGeolocation()
@@ -676,9 +676,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   // Safety alerts layer — shown alerts (live, and resolved for six hours) in the current viewport.
   // The hook keys its reads on the four bound numbers, so a re-render never reads again.
-  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow } = useSafetyAlerts(bounds)
-  // Update / Mark resolved / Withdraw / History, opened from a popup.
-  const alertDialog = useAlertDialog()
+  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow, clearNotice: clearAlertNotice } = useSafetyAlerts(bounds)
+  // Update / Mark resolved / Withdraw / History, opened from a popup (the last outcome's visible line
+  // goes away when the member starts the next action).
+  const alertDialog = useAlertDialog(clearAlertNotice)
   // An alert left because of what the member did in its popup: focus the map first, then say why.
   const handleAlertEnded = useCallback(
     (notice: string) => {
@@ -780,7 +781,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const [focusSession] = useState(
     () =>
       new MapFocusSession({
-        read: (target, signal) => readMapFocusPin(createClient(), target, new Date(), signal),
+        read: (target, signal) => readMapFocusPin(createClient(), target, signal),
         camera: { setUserHasMovedMap, setHasGeocentered },
         onArrive: (target) => {
           // A link arriving from the URL replaces the last miss line and popup target.
@@ -1077,8 +1078,10 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         </div>
       </div>
 
-      {/* Center: Interactive Map */}
-      <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
+      {/* Center: Interactive Map, under the line that says what the member's own alert action did. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <MapAlertNotice notice={alertNotice} locale={locale} onDismiss={clearAlertNotice} />
+      <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative min-h-0 flex-1 rounded-xl overflow-hidden">
         <MapView
           ref={mapViewRef}
           initialViewState={viewState}
@@ -1158,7 +1161,6 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
               key={alert.id}
               alert={alert}
               locale={locale}
-              isGuest={isAnonymous}
               now={alertsNow}
               onVote={voteAlert}
               onAction={alertDialog.open}
@@ -1191,20 +1193,6 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
           }
         >
           {focusMiss ? mapMemberT(locale, 'focusNotOnMap') : ''}
-        </p>
-        {/* What the member's own alert action did (always mounted, so it is announced politely). */}
-        <p
-          role="status"
-          lang={locale}
-          dir={dir(locale)}
-          data-testid="map-alert-notice"
-          className={
-            alertNotice.text
-              ? 'absolute bottom-16 left-1/2 z-10 max-w-[90%] -translate-x-1/2 rounded-lg border border-stone-200 bg-white/95 px-3 py-2 text-sm text-stone-800 shadow-md'
-              : 'sr-only'
-          }
-        >
-          {alertNotice.text && <span key={alertNotice.seq}>{alertNotice.text}</span>}
         </p>
         <AlertDialogs
           request={alertDialog.request}
@@ -1250,6 +1238,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         />
         {/* VolunteerResourceFAB kept for providers — controlled via volunteerFabOpen */}
         <VolunteerResourceFAB externalOpen={volunteerFabOpen} onExternalOpenChange={setVolunteerFabOpen} />
+      </div>
       </div>
 
       {/* Right Panel: Resource Details (conditional) */}

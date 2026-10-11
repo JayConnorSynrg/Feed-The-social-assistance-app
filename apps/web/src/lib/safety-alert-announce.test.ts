@@ -3,36 +3,20 @@
 //
 // Release 3.1 invariant 7 — the announcement rule of the feed strip: role="alert" only for a NEW or
 // ESCALATED alert; a polite status for an update, a resolution and an alert no longer listed;
-// nothing for the first read and for a refresh that changes none of those.
+// nothing for the first read and for a refresh that changes none of those. "New" means newly
+// REPORTED, judged on the server's timestamps: an older alert that only moved into a full strip
+// because another one left is not announced as new.
 
 import { describe, it, expect } from 'vitest'
 import type { SafetyAlert } from './safety-alert-rpc'
 import { stripAnnouncement } from './safety-alert-announce'
 
-const NOW = Date.parse('2026-10-11T12:00:00.000Z')
-const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString()
-const alert = (over: Partial<SafetyAlert> = {}): SafetyAlert => ({
-  id: 'a1',
-  alert_type: 'road_closure',
-  severity: 2,
-  description: null,
-  lng: -72.97,
-  lat: 43.61,
-  status: 'live',
-  confirm_count: 0,
-  clear_count: 0,
-  created_at: iso(-3600_000),
-  expires_at: iso(3600_000),
-  verified: false,
-  is_mine: false,
-  version: 1,
-  updated_at: null,
-  update_count: 0,
-  resolved_at: null,
-  ...over,
-})
+import { HOUR, alert as fixture, iso } from '@/test/alert-fixtures'
+
+const LIMIT = 5
+const alert = (over: Partial<SafetyAlert> = {}): SafetyAlert => fixture({ id: 'a1', description: null, confirm_count: 0, ...over })
 const say = (before: SafetyAlert[] | null, after: SafetyAlert[]) => {
-  const said = stripAnnouncement(before, after, NOW)
+  const said = stripAnnouncement(before, after, LIMIT)
   return { assertive: said.assertive.map((e) => e.kind), polite: said.polite.map((e) => e.kind) }
 }
 
@@ -47,7 +31,7 @@ describe('stripAnnouncement', () => {
   })
 
   it('a new live alert is an alert', () => {
-    const said = stripAnnouncement([alert()], [alert(), alert({ id: 'a2', alert_type: 'weather', severity: 4 })], NOW)
+    const said = stripAnnouncement([alert()], [alert(), alert({ id: 'a2', alert_type: 'weather', severity: 4 })], LIMIT)
     expect(said.assertive).toEqual([{ kind: 'new', alert_type: 'weather', severity: 4 }])
     expect(said.polite).toEqual([])
   })
@@ -74,6 +58,43 @@ describe('stripAnnouncement', () => {
 
   it('an alert no longer listed is polite', () => {
     expect(say([alert(), alert({ id: 'a2' })], [alert()])).toEqual({ assertive: [], polite: ['ended'] })
+  })
+
+  describe('a full strip (five entries): only a newly reported alert is "new"', () => {
+    // Five alerts, reported 5 to 1 hours ago.
+    const five = () => [5, 4, 3, 2, 1].map((h) => alert({ id: `old-${h}`, created_at: iso(-h * HOUR) }))
+
+    it('an older alert that moves into the top five because one left is not announced as new', () => {
+      const before = five()
+      const sixth = alert({ id: 'sixth', created_at: iso(-6 * HOUR) }) // existed all along, just below the cut
+      expect(say(before, [...before.slice(1), sixth])).toEqual({ assertive: [], polite: ['ended'] })
+    })
+
+    it('an alert reported after everything the read before returned is announced as new', () => {
+      const before = five()
+      const fresh = alert({ id: 'fresh', severity: 4, created_at: iso(-60_000) })
+      expect(say(before, [fresh, ...before.slice(0, 4)])).toEqual({ assertive: ['new'], polite: ['ended'] })
+    })
+
+    it('the judgement uses the server’s timestamps, so a wrong browser clock cannot change it', () => {
+      // No clock is passed at all: same answer whatever Date.now() says.
+      const before = five()
+      const fresh = alert({ id: 'fresh', created_at: iso(-60_000) })
+      const real = Date.now
+      try {
+        for (const skew of [-24 * HOUR, 3 * HOUR]) {
+          Date.now = () => real() + skew
+          expect(say(before, [fresh, ...before.slice(0, 4)]).assertive).toEqual(['new'])
+        }
+      } finally {
+        Date.now = real
+      }
+    })
+  })
+
+  it('a strip that was not full: every entrant is newly shown, so a live one is new', () => {
+    expect(say([alert()], [alert(), alert({ id: 'a2', created_at: iso(-3 * HOUR) })])).toEqual({ assertive: ['new'], polite: [] })
+    expect(say([], [alert()])).toEqual({ assertive: ['new'], polite: [] })
   })
 
   it('several changes in one refresh are all said, each in its region', () => {

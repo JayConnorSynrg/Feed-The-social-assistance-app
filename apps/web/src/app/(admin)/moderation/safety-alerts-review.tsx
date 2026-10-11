@@ -2,7 +2,8 @@
 
 /**
  * SafetyAlertsReview — admin post-hoc review of the safety alerts members can see: live ones, and
- * resolved ones for six hours (the shown rule, lib/safety-alert-live.ts).
+ * resolved ones for six hours. What is live and what is resolved is the server's verdict on each
+ * row (lib/safety-alert-live.ts); the browser clock decides nothing here.
  *
  * Pins go live immediately (publish-then-review). A moderator verifies an alert (admin_verify_safety_alert)
  * or removes it (admin_remove_safety_alert); both are SECURITY DEFINER RPCs gated to moderators at the
@@ -14,7 +15,8 @@
  *   - no self-moderation: a moderator gets no Approve on an alert they reported (the server refuses
  *     it with self_moderation_refused; the button is not offered).
  * A stale version (someone changed the alert first), an alert that ended, and a refused action each
- * say what happened and re-read the list; nothing is sent again on its own.
+ * say what happened and re-read the list; nothing is sent again on its own. A write that never
+ * answers gives up after 12 s and says the action failed.
  *
  * Copy is English. The type and severity names come from the alert dictionary
  * (lib/i18n-feed-alerts.ts, read with 'en'), the same source the member surfaces use.
@@ -38,6 +40,7 @@ import type { Database } from '@feed/database'
 import { createClient } from '@/lib/supabase/client'
 import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
+import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { alertName, alertSeverityLabel, alertTypeLabel } from '@/lib/i18n-feed-alerts'
@@ -87,9 +90,9 @@ export function pinFocusedAlert(alerts: ReviewAlert[], focused: ReviewAlert | nu
 }
 
 /** Review order: live alerts first, then resolved ones; newest first within each. */
-export function sortForReview(alerts: readonly ReviewAlert[], now: number): ReviewAlert[] {
+export function sortForReview(alerts: readonly ReviewAlert[]): ReviewAlert[] {
   return [...alerts].sort((a, b) => {
-    const live = Number(isAlertLive(b, now)) - Number(isAlertLive(a, now))
+    const live = Number(isAlertLive(b)) - Number(isAlertLive(a))
     return live !== 0 ? live : Date.parse(b.created_at) - Date.parse(a.created_at)
   })
 }
@@ -109,8 +112,8 @@ export function focusedAlertNotice(focused: { status: string }): string | null {
 }
 
 /** Whether Approve is offered: a live, unverified alert that this moderator did not report. */
-export function canVerifyAlert(alert: ReviewAlert, now: number): boolean {
-  return isAlertLive(alert, now) && !alert.verified && !alert.is_mine
+export function canVerifyAlert(alert: ReviewAlert): boolean {
+  return isAlertLive(alert) && !alert.verified && !alert.is_mine
 }
 
 /** What a refused verify / remove says (never the server's text). `reread`: read the list again. */
@@ -147,11 +150,13 @@ export function SafetyAlertsReview() {
   const session = useAdminFocusSession('safety_alert', 'moderation')
   const [focused, setFocused] = useState<FocusedAlert>({ status: 'none' })
 
+  // Keyed on the linked alert's id (a string), not on the session object.
+  const focusId = session?.focus.id ?? null
   useEffect(() => {
-    if (!session) return
+    if (!session || !focusId) return
     let active = true
     setFocused({ status: 'loading' })
-    void loadFocusedAlert(supabase, session.focus.id).then((res) => {
+    void loadFocusedAlert(supabase, focusId).then((res) => {
       if (!active) return
       session.resolve(res.status === 'found' ? 'found' : 'not_found')
       setFocused(res)
@@ -160,25 +165,33 @@ export function SafetyAlertsReview() {
       active = false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session])
+  }, [focusId])
 
-  /** Read the shown alerts (live and resolved) through the one reader. */
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const now = new Date()
-      setLoadedAt(now)
-      setAlerts(sortForReview(await readSafetyAlertList(supabase), now.getTime()))
-    } catch {
-      setError('Failed to load alerts')
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase])
-
+  // The list is read once on mount and once more each time `reads` moves (a refused action found the
+  // list stale). The effect is keyed on that number, never on a function's identity, so a re-render
+  // cannot read again.
+  const [reads, setReads] = useState(0)
   useEffect(() => {
-    void load()
-  }, [load])
+    let active = true
+    setLoading(true)
+    setLoadedAt(new Date())
+    readSafetyAlertList(supabase).then(
+      (rows) => {
+        if (!active) return
+        setAlerts(sortForReview(rows))
+        setLoading(false)
+      },
+      () => {
+        if (!active) return
+        setError('Failed to load alerts')
+        setLoading(false)
+      },
+    )
+    return () => {
+      active = false
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reads])
 
   /** A refused action: say what happened; re-read when the list is stale. Nothing is sent again. */
   const refused = useCallback(
@@ -188,10 +201,10 @@ export function SafetyAlertsReview() {
       setError(message)
       if (reread) {
         setFocused((f) => (f.status === 'found' ? { status: 'none' } : f))
-        void load()
+        setReads((n) => n + 1)
       }
     },
-    [load]
+    []
   )
 
   const handleApprove = useCallback(
@@ -205,6 +218,7 @@ export function SafetyAlertsReview() {
           'admin_verify_safety_alert',
           { p_alert_id: alert.id, p_expected_version: alert.version },
           { action: 'safety_alert.verify', target_id: alert.id },
+          AbortSignal.timeout(QUERY_TIMEOUT_MS),
         )
         if (rpcErr) return refused('verify', rpcErr as AlertRpcError, requestId)
         // The answer is the alert as members see it; the row keeps its place and its is_mine.
@@ -231,6 +245,7 @@ export function SafetyAlertsReview() {
           'admin_remove_safety_alert',
           { p_alert_id: alert.id, p_expected_version: alert.version },
           { action: 'safety_alert.remove', target_id: alert.id },
+          AbortSignal.timeout(QUERY_TIMEOUT_MS),
         )
         if (rpcErr) return refused('remove', rpcErr as AlertRpcError, requestId)
         setAlerts((prev) => prev.filter((a) => a.id !== alert.id))
@@ -308,9 +323,8 @@ export function SafetyAlertsReviewView({
     </p>
   )
 
-  const clock = now.getTime()
-  const liveCount = alerts.filter((a) => isAlertLive(a, clock)).length
-  const resolvedCount = alerts.filter((a) => alertShownState(a, clock) === 'resolved').length
+  const liveCount = alerts.filter((a) => isAlertLive(a)).length
+  const resolvedCount = alerts.filter((a) => alertShownState(a) === 'resolved').length
 
   if (loading) {
     return (
@@ -355,7 +369,7 @@ export function SafetyAlertsReviewView({
       ) : (
         alerts.map((alert) => {
           const isPinned = alert.id === pinnedId
-          const resolved = alertShownState(alert, clock) === 'resolved'
+          const resolved = alertShownState(alert) === 'resolved'
           return (
             <Card
               key={alert.id}
@@ -407,7 +421,7 @@ export function SafetyAlertsReviewView({
                       You reported this alert: another moderator verifies it.
                     </span>
                   )}
-                  {canVerifyAlert(alert, clock) && (
+                  {canVerifyAlert(alert) && (
                     <Button
                       size="sm"
                       variant="outline"

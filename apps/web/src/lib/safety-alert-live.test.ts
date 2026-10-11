@@ -1,12 +1,14 @@
 // apps/web/src/lib/safety-alert-live.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// Release 3.1 invariant 1 — one rule, every surface:
-//   - the rule itself: live while status = 'live' AND expires_at > now; resolved (shown, never live)
-//     for exactly six hours after resolved_at; everything else gone — at the instants that matter;
-//   - the query form of its live half (the admin overview count);
-//   - the tree: no file reads alerts except through lib/safety-alert-rpc.ts (the reader) or, for the
-//     one head count, whereSafetyAlertLive; no file writes its own "is it live" comparison.
+// Release 3.1 invariant 1 — one rule, every surface, and the SERVER decides:
+//   - the predicate returns the verdict the server put on the row (shown_state), whatever the
+//     browser clock says: a live row stays live on a clock that is hours ahead, a row the server
+//     calls gone is gone on a clock that is hours behind;
+//   - the rule on a clock (live while status = 'live' AND expires_at > now; resolved for exactly six
+//     hours) exists only as the fallback for a row with no verdict, at the instants that matter;
+//   - the tree: no file reads alerts except through lib/safety-alert-rpc.ts (the reader); no file
+//     writes its own "is it live" comparison; no surface hands the predicate a clock.
 
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -15,88 +17,80 @@ import {
   RESOLVED_SHOWN_MS,
   alertShownState,
   alertShownUntil,
+  hasServerShownState,
   isAlertLive,
   isAlertShown,
-  whereSafetyAlertLive,
+  isResolvedStatus,
+  localShownState,
 } from './safety-alert-live'
 
 const NOW = Date.parse('2026-10-11T12:00:00.000Z')
 const at = (offsetMs: number) => new Date(NOW + offsetMs).toISOString()
 const HOUR = 3600_000
 
-describe('alertShownState — live / resolved / gone', () => {
-  it('live: status live and not past its expiry (gone at the expiry instant itself)', () => {
+describe('alertShownState — the server’s verdict, on any browser clock', () => {
+  const CLOCKS = [NOW - 24 * HOUR, NOW - 10 * 60_000, NOW, NOW + 10 * 60_000, NOW + 2 * HOUR, NOW + 3 * HOUR]
+
+  it.each(CLOCKS)('browser clock %d: a row the server calls live is live, though its expiry is behind or ahead of that clock', (clock) => {
+    const row = { status: 'live', expires_at: at(HOUR), resolved_at: null, shown_state: 'live', shown_until: at(HOUR) }
+    expect(alertShownState(row, clock)).toBe('live')
+    expect(isAlertLive(row, clock)).toBe(true)
+    expect(isAlertShown(row, clock)).toBe(true)
+  })
+
+  it.each(CLOCKS)('browser clock %d: a row the server calls resolved is resolved and never live', (clock) => {
+    const row = { status: 'resolved', expires_at: at(24 * HOUR), resolved_at: at(-5 * HOUR - 55 * 60_000), shown_state: 'resolved', shown_until: at(5 * 60_000) }
+    expect(alertShownState(row, clock)).toBe('resolved')
+    expect(isAlertLive(row, clock)).toBe(false)
+    expect(isAlertShown(row, clock)).toBe(true)
+  })
+
+  it.each(CLOCKS)('browser clock %d: a row the server calls gone is gone, though its dates look live on that clock', (clock) => {
+    const row = { status: 'live', expires_at: at(-30_000), resolved_at: null, shown_state: 'gone', shown_until: at(-30_000) }
+    expect(alertShownState(row, clock)).toBe('gone')
+    expect(isAlertShown(row, clock)).toBe(false)
+  })
+
+  it('alertShownUntil is the server’s instant for a shown row, and nothing for a gone one', () => {
+    expect(alertShownUntil({ status: 'live', expires_at: at(2 * HOUR), shown_state: 'live', shown_until: at(2 * HOUR) })).toBe(NOW + 2 * HOUR)
+    expect(alertShownUntil({ status: 'resolved', expires_at: at(24 * HOUR), resolved_at: at(-HOUR), shown_state: 'resolved', shown_until: at(5 * HOUR) })).toBe(NOW + 5 * HOUR)
+    expect(alertShownUntil({ status: 'cleared', expires_at: at(HOUR), shown_state: 'gone', shown_until: at(HOUR) })).toBeNull()
+    expect(alertShownUntil({ status: 'live', expires_at: at(HOUR), shown_state: 'live', shown_until: null })).toBeNull()
+  })
+
+  it('a refusal’s status: resolved (still shown) or not', () => {
+    expect(isResolvedStatus('resolved')).toBe(true)
+    for (const status of ['live', 'expired', 'cleared', 'removed', 'withdrawn', null, undefined]) expect(isResolvedStatus(status)).toBe(false)
+  })
+})
+
+describe('the fallback rule — only for a row that carries no verdict', () => {
+  it('a row without shown_state (or with a value the client does not know) has no server verdict', () => {
+    expect(hasServerShownState({ shown_state: 'live' })).toBe(true)
+    expect(hasServerShownState({ shown_state: 'gone' })).toBe(true)
+    for (const v of [undefined, null, '', 'pending']) expect(hasServerShownState({ shown_state: v })).toBe(false)
+    // …and falls back to the clock it is given.
     expect(alertShownState({ status: 'live', expires_at: at(1) }, NOW)).toBe('live')
-    expect(alertShownState({ status: 'live', expires_at: at(0) }, NOW)).toBe('gone')
-    expect(alertShownState({ status: 'live', expires_at: at(-1) }, NOW)).toBe('gone')
+    expect(alertShownState({ status: 'live', expires_at: at(1), shown_state: 'pending' }, NOW + 2)).toBe('gone')
+  })
+
+  it('live: status live and not past its expiry (gone at the expiry instant itself)', () => {
+    expect(localShownState({ status: 'live', expires_at: at(1) }, NOW)).toBe('live')
+    expect(localShownState({ status: 'live', expires_at: at(0) }, NOW)).toBe('gone')
+    expect(localShownState({ status: 'live', expires_at: at(-1) }, NOW)).toBe('gone')
   })
 
   it('resolved: shown for exactly six hours after resolved_at, and never live', () => {
     const resolved = (agoMs: number) => ({ status: 'resolved', expires_at: at(24 * HOUR), resolved_at: at(-agoMs) })
     expect(RESOLVED_SHOWN_MS).toBe(6 * HOUR)
-    expect(alertShownState(resolved(0), NOW)).toBe('resolved')
-    expect(alertShownState(resolved(6 * HOUR - 1), NOW)).toBe('resolved')
-    expect(alertShownState(resolved(6 * HOUR), NOW)).toBe('gone')
-    // Its expiry may still be in the future: it is not live all the same.
-    expect(isAlertLive(resolved(0), NOW)).toBe(false)
-    expect(isAlertShown(resolved(0), NOW)).toBe(true)
-    // A resolved row without its resolved_at cannot be placed in the window: gone.
-    expect(alertShownState({ status: 'resolved', expires_at: at(HOUR), resolved_at: null }, NOW)).toBe('gone')
+    expect(localShownState(resolved(0), NOW)).toBe('resolved')
+    expect(localShownState(resolved(6 * HOUR - 1), NOW)).toBe('resolved')
+    expect(localShownState(resolved(6 * HOUR), NOW)).toBe('gone')
+    expect(localShownState({ status: 'resolved', expires_at: at(HOUR), resolved_at: null }, NOW)).toBe('gone')
   })
 
   it.each(['expired', 'cleared', 'removed', 'withdrawn', 'ended', ''])('status %j is gone whatever its dates say', (status) => {
-    expect(alertShownState({ status, expires_at: at(24 * HOUR), resolved_at: at(-1) }, NOW)).toBe('gone')
-    expect(isAlertShown({ status, expires_at: at(24 * HOUR) }, NOW)).toBe(false)
-  })
-
-  it('alertShownUntil: the expiry while live, resolved_at + 6 h once resolved, nothing when gone', () => {
-    expect(alertShownUntil({ status: 'live', expires_at: at(2 * HOUR) }, NOW)).toBe(NOW + 2 * HOUR)
-    expect(alertShownUntil({ status: 'resolved', expires_at: at(24 * HOUR), resolved_at: at(-HOUR) }, NOW)).toBe(NOW + 5 * HOUR)
-    expect(alertShownUntil({ status: 'cleared', expires_at: at(HOUR) }, NOW)).toBeNull()
-  })
-})
-
-// Records the filter calls a PostgREST builder receives and applies them to rows,
-// so the rule is checked by its outcome (which alerts are counted), not its shape.
-interface Row { id: string; status: string; expires_at: string }
-function fakeQuery(rows: Row[]) {
-  let kept = rows
-  const calls: string[] = []
-  const q = {
-    eq(column: 'status', value: 'live') {
-      calls.push(`eq:${column}:${value}`)
-      kept = kept.filter((r) => r[column] === value)
-      return q
-    },
-    gt(column: 'expires_at', value: string) {
-      calls.push(`gt:${column}`)
-      kept = kept.filter((r) => Date.parse(r[column]) > Date.parse(value))
-      return q
-    },
-    ids: () => kept.map((r) => r.id),
-    calls,
-  }
-  return q
-}
-
-describe('whereSafetyAlertLive — the live half as a query (the admin overview count)', () => {
-  const ROWS: Row[] = [
-    { id: 'live-future', status: 'live', expires_at: at(2 * HOUR) },
-    { id: 'live-past', status: 'live', expires_at: at(-5 * 60_000) }, // expired, job not yet run
-    { id: 'live-boundary', status: 'live', expires_at: at(0) },
-    { id: 'resolved', status: 'resolved', expires_at: at(2 * HOUR) },
-    { id: 'removed-future', status: 'removed', expires_at: at(24 * HOUR) },
-  ]
-
-  it('counts only live, unexpired alerts: a resolved alert is never counted as live', () => {
-    const q = whereSafetyAlertLive(fakeQuery(ROWS), new Date(NOW))
-    expect(q.ids()).toEqual(['live-future'])
-    expect(q.calls).toEqual(['eq:status:live', 'gt:expires_at'])
-  })
-
-  it('agrees with alertShownState on every row', () => {
-    const live = whereSafetyAlertLive(fakeQuery(ROWS), new Date(NOW)).ids()
-    expect(ROWS.filter((r) => isAlertLive(r, NOW)).map((r) => r.id)).toEqual(live)
+    expect(localShownState({ status, expires_at: at(24 * HOUR), resolved_at: at(-1) }, NOW)).toBe('gone')
   })
 })
 
@@ -129,11 +123,24 @@ describe('every alert read goes through the one rule (source scan of apps/web/sr
     expect(naming(/['"`]safety_alert_history['"`]/)).toEqual(['lib/safety-alert-rpc.ts'])
   })
 
-  it('the safety_alerts table is read in exactly one place: the admin overview count, through whereSafetyAlertLive', () => {
-    expect(naming(/from\(\s*['"`]safety_alerts['"`]/)).toEqual(['app/(admin)/moderation/overview-tab.tsx'])
+  it('the safety_alerts table is read by no client file (the admin overview counts through the reader too)', () => {
+    expect(naming(/from\(\s*['"`]safety_alerts['"`]/)).toEqual([])
     const overview = FILES.find((f) => f.rel === 'app/(admin)/moderation/overview-tab.tsx')!.text
-    expect(overview).toMatch(/whereSafetyAlertLive\(\s*supabase\s*\.from\('safety_alerts'\)\.select\('id', \{ count: 'exact', head: true \}\)/)
-    expect(overview.match(/from\('safety_alerts'\)/g)).toHaveLength(1)
+    expect(overview).toMatch(/countLiveSafetyAlerts\(supabase\)/)
+  })
+
+  it('no surface hands the predicate a clock, and none compares an alert’s dates with the browser’s', () => {
+    // alertShownState(alert, now) / isAlertShown(x, Date.now()) … outside the rule module and the two
+    // files that format a row with no server verdict (the wrapper's logged fallback; the admin
+    // visibility helper, whose rows carry the verdict).
+    const withClock = /\b(alertShownState|isAlertShown|isAlertLive)\(\s*[^(),]+,/
+    const ownClock = /Date\.parse\([^)]*\b(expires_at|resolved_at|shown_until)\)\s*[<>]=?\s*(now|Date\.now\(\)|clock)/
+    const allowed = new Set(['lib/safety-alert-live.ts', 'lib/member-visibility.ts'])
+    const offenders = FILES.filter((f) => !allowed.has(f.rel) && (withClock.test(f.text) || ownClock.test(f.text))).map((f) => f.rel)
+    expect(offenders).toEqual([])
+    // Control: the patterns do match such code.
+    expect(withClock.test('if (isAlertShown(alert, Date.now())) keep(alert)')).toBe(true)
+    expect(ownClock.test('Date.parse(a.expires_at) > now')).toBe(true)
   })
 
   it('no alert file writes its own "is it live / resolved" test: a status is compared to them only in the rule module', () => {
@@ -151,7 +158,6 @@ describe('every alert read goes through the one rule (source scan of apps/web/sr
       'components/feed/safety-strip.tsx',
       'components/map/safety-alert-marker.tsx',
       'app/(admin)/moderation/safety-alerts-review.tsx',
-      'lib/map-focus.ts',
       'lib/member-visibility.ts',
       'lib/safety-alert-store.ts',
       'lib/safety-alert-rpc.ts',
@@ -167,5 +173,10 @@ describe('every alert read goes through the one rule (source scan of apps/web/sr
     expect(panel).not.toMatch(/safety_alerts/)
     expect(panel).not.toMatch(/is_mine/)
     expect(panel).toMatch(/useSafetyStrip\(authLoading \? null : user\?\.id \?\? 'signed-out', focusFeedTitle\)/)
+  })
+
+  it('the map-focus link reads the alert through the reader by id (the reader returns only what the server shows)', () => {
+    const focus = FILES.find((f) => f.rel === 'lib/map-focus.ts')!.text
+    expect(focus).toMatch(/const alert = await readSafetyAlertById\(supabase, id, signal\)/)
   })
 })

@@ -5,7 +5,8 @@
 // (the map's four bound numbers after 400 ms; the strip's viewer id at once), every 60 s while
 // visible, once on return to the tab, once on refresh — never once per render (the loop that made
 // safety_alerts_in_view ~1,100x more frequent than resources_in_bounds). And how the read volume is
-// measured (invariant 8): one alerts.poll row per 30 reads / tab hide / unmount, never one per read.
+// measured (invariant 8): one alerts.poll row per 30 reads or page hide, never one per read, and one
+// error report per window however many reads fail.
 // Fake timers + a counting fake fetch.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -19,6 +20,9 @@ import {
   SafetyAlertsFetchScheduler,
   boundsKey,
   createLatestOnlyLoader,
+  flushPollCounters,
+  resetPollCounters,
+  sharedPollCounter,
   type AlertBounds,
   type PollRow,
 } from './safety-alerts-fetch'
@@ -171,14 +175,17 @@ describe('KeyedPollScheduler with no debounce (the feed strip: keyed on the view
 describe('PollCounter — read volume without a row per read', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: Date.parse('2026-10-11T12:00:00.000Z') })
+    resetPollCounters()
   })
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   function counting() {
     const rows: PollRow[] = []
-    return { rows, counter: new PollCounter('strip', (row) => rows.push(row)) }
+    const firstErrors: string[] = []
+    return { rows, firstErrors, counter: new PollCounter('strip', (row) => rows.push(row), (code) => firstErrors.push(code)) }
   }
 
   it('30 reads write one row; 29 write none', () => {
@@ -189,25 +196,25 @@ describe('PollCounter — read volume without a row per read', () => {
     }
     expect(rows).toEqual([])
     counter.record({ signature: 'a', count: 2 })
-    expect(rows).toEqual([{ surface: 'strip', reads: 30, changed: 0, errors: 0, result_count: 2, window_s: 29 * 60 }])
+    expect(rows).toEqual([{ surface: 'strip', reads: 30, changed: 0, errors: 0, last_error: null, result_count: 2, window_s: 29 * 60 }])
   })
 
-  it('a flush (tab hidden, unmount) writes what has accumulated, then starts over; no reads, no row', () => {
+  it('a flush (the page goes away) writes what has accumulated, then starts over; no reads, no row', () => {
     const { rows, counter } = counting()
     counter.flush()
     expect(rows).toEqual([])
     counter.record({ signature: 'a', count: 1 })
     counter.record({ signature: 'b', count: 2 })
-    counter.record({ signature: null, count: 0 })
+    counter.record({ error: '57014' })
     counter.record({ signature: 'b', count: 2 })
     counter.flush()
-    expect(rows).toEqual([{ surface: 'strip', reads: 4, changed: 1, errors: 1, result_count: 2, window_s: 0 }])
+    expect(rows).toEqual([{ surface: 'strip', reads: 4, changed: 1, errors: 1, last_error: '57014', result_count: 2, window_s: 0 }])
     counter.flush()
     expect(rows).toHaveLength(1)
     counter.record({ signature: 'c', count: 0 })
     counter.flush()
-    // Changed is counted against the last answer seen, across windows.
-    expect(rows[1]).toMatchObject({ reads: 1, changed: 1, result_count: 0 })
+    // Changed is counted against the last answer seen, across windows; the error does not carry over.
+    expect(rows[1]).toMatchObject({ reads: 1, changed: 1, errors: 0, last_error: null, result_count: 0 })
   })
 
   it('an hour of an idle visible strip is two rows, not sixty', () => {
@@ -215,6 +222,41 @@ describe('PollCounter — read volume without a row per read', () => {
     for (let minute = 0; minute < 60; minute++) counter.record({ signature: 'same', count: 3 })
     expect(rows).toHaveLength(2)
     expect(rows.reduce((n, r) => n + r.reads, 0)).toBe(60)
+  })
+
+  it('a reader that fails on every read: one report per window, and the window row counts the failures', () => {
+    const { rows, firstErrors, counter } = counting()
+    for (let i = 0; i < POLL_FLUSH_EVERY + 5; i++) counter.record({ error: i < POLL_FLUSH_EVERY ? 'PGRST202' : 'exception' })
+    // 35 failed reads: the first of each window was reported (2), not 35.
+    expect(firstErrors).toEqual(['PGRST202', 'exception'])
+    expect(rows).toEqual([{ surface: 'strip', reads: 30, changed: 0, errors: 30, last_error: 'PGRST202', result_count: 0, window_s: 0 }])
+  })
+
+  it('the page’s counter for a surface is one object: it counts on across whoever holds it, until thirty reads or a flush', () => {
+    const rows: PollRow[] = []
+    const write = (row: PollRow) => rows.push(row)
+    // Twenty holders, one read each.
+    for (let visit = 0; visit < 20; visit++) sharedPollCounter('strip', write, () => {}).record({ signature: 'a', count: 1 })
+    expect(rows).toEqual([])
+    expect(sharedPollCounter('strip', write, () => {})).toBe(sharedPollCounter('strip', write, () => {}))
+    expect(sharedPollCounter('map', write, () => {})).not.toBe(sharedPollCounter('strip', write, () => {}))
+    // Ten more reads reach thirty: one row for the lot.
+    for (let read = 0; read < 10; read++) sharedPollCounter('strip', write, () => {}).record({ signature: 'a', count: 1 })
+    expect(rows.map((r) => [r.surface, r.reads])).toEqual([['strip', 30]])
+  })
+
+  it('pagehide writes every surface’s open window, once', () => {
+    const listeners = new Map<string, () => void>()
+    vi.stubGlobal('window', { addEventListener: (type: string, fn: () => void) => listeners.set(type, fn) })
+    const rows: PollRow[] = []
+    sharedPollCounter('strip', (row) => rows.push(row), () => {}).record({ signature: 'a', count: 1 })
+    sharedPollCounter('map', (row) => rows.push(row), () => {}).record({ signature: 'b', count: 4 })
+    expect([...listeners.keys()]).toEqual(['pagehide'])
+    listeners.get('pagehide')!()
+    listeners.get('pagehide')!()
+    expect(rows.map((r) => [r.surface, r.reads, r.result_count])).toEqual([['strip', 1, 1], ['map', 1, 4]])
+    flushPollCounters()
+    expect(rows).toHaveLength(2)
   })
 })
 

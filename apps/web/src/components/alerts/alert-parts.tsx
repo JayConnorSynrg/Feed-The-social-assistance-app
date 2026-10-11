@@ -61,3 +61,32 @@ export function AlertSummary({
     </div>
   )
 }
+
+/** What a map marker's face shows besides its colour, so severity and state never rest on hue:
+ *   low       a circle
+ *   moderate  a rounded square
+ *   high      a circle with a "!" badge
+ *   critical  a rounded square with a "!!" badge
+ *   resolved  a grey circle with a check mark
+ *   ended     hollow (white, dashed outline)
+ *  The badge and the check are decorative (aria-hidden): the marker's name says the same in words. */
+export interface MarkerFace {
+  shape: 'circle' | 'square'
+  badge: '' | '!' | '!!'
+  check: boolean
+  hollow: boolean
+}
+
+export function markerFace(state: 'live' | 'resolved' | 'gone', severity: number): MarkerFace {
+  if (state === 'gone') return { shape: 'circle', badge: '', check: false, hollow: true }
+  if (state === 'resolved') return { shape: 'circle', badge: '', check: true, hollow: false }
+  const shape = severity === 2 || severity >= 4 ? 'square' : 'circle'
+  return { shape, badge: severity >= 4 ? '!!' : severity === 3 ? '!' : '', check: false, hollow: false }
+}
+
+/** "Resolved by the reporter" / "Resolved by a moderator" — a role, never a name. */
+export function resolvedByText(role: 'owner' | 'moderator' | null, locale: Locale): string | null {
+  if (role === 'owner') return alertsT(locale, 'resolvedByReporter')
+  if (role === 'moderator') return alertsT(locale, 'resolvedByModerator')
+  return null
+}

@@ -585,9 +585,11 @@ export function FeedPanel() {
     now: stripNow,
     host: stripHost,
     setEngaged: setStripEngaged,
+    dismissNotice: dismissStripNotice,
   } = useSafetyStrip(authLoading ? null : user?.id ?? 'signed-out', focusFeedTitle)
-  // Update / Mark resolved / Withdraw / History, opened from a strip entry.
-  const alertDialog = useAlertDialog()
+  // Update / Mark resolved / Withdraw / History, opened from a strip entry (the last outcome's
+  // visible line goes away when the member starts the next action).
+  const alertDialog = useAlertDialog(dismissStripNotice)
   // A strip entry opens the map on that alert (the header link opens the map as it is).
   const openMapOnAlert = useCallback(
     (alert?: SafetyAlert) => {
@@ -2018,12 +2020,12 @@ export function FeedPanel() {
             <SafetyStrip
               alerts={safetyAlerts}
               locale={locale}
-              isGuest={isAnonymous}
               live={stripLive}
               now={stripNow}
               onViewMap={openMapOnAlert}
               onAction={alertDialog.open}
               onEngage={setStripEngaged}
+              onDismissNotice={dismissStripNotice}
             />
           </div>
 

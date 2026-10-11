@@ -3,8 +3,10 @@
 //
 // The one client path to safety alerts, against a recording Supabase client and the REAL logger
 // (rows captured at /api/client-log, then passed through the registry as the route does):
-//   - each surface's reader call (invariant 1), with gone rows dropped and rows copied field by field
-//     (no reporter or verifier id can ride along — invariant 10);
+//   - each surface's reader call (invariant 1); a row is kept or dropped by the SERVER's verdict on it,
+//     whatever the browser clock says; rows are copied field by field (no reporter or verifier id can
+//     ride along — invariant 10; who acted is a role);
+//   - every write is bounded by a timeout and a write that never answers comes back as a failure;
 //   - every write sends the version the member saw; a cleared description is sent as the contract's
 //     clear value and an untouched field is not sent at all (invariant 3);
 //   - each refusal becomes its typed failure (PT409 conflict, PT410 resolved / gone, PT404, guest …);
@@ -19,6 +21,7 @@ import {
   ADMIN_ALERT_LIMIT,
   STRIP_ALERT_LIMIT,
   alertUpdateArgs,
+  countLiveSafetyAlerts,
   parseAlertRpcError,
   placeSafetyAlert,
   readSafetyAlertById,
@@ -67,10 +70,10 @@ const alert = (over: Partial<SafetyAlert> = {}): SafetyAlert => ({ ...(toSafetyA
 
 type Answer = { data?: unknown; error?: unknown }
 function fakeSupabase(answers: Record<string, Answer | (() => Answer)> = {}) {
-  const calls: Array<{ name: string; args: Record<string, unknown>; headers: Record<string, string> }> = []
+  const calls: Array<{ name: string; args: Record<string, unknown>; headers: Record<string, string>; signal?: AbortSignal }> = []
   const client = {
     rpc: (name: string, args: Record<string, unknown>) => {
-      const call = { name, args, headers: {} as Record<string, string> }
+      const call: { name: string; args: Record<string, unknown>; headers: Record<string, string>; signal?: AbortSignal } = { name, args, headers: {} }
       calls.push(call)
       const answer = answers[name]
       const result = Promise.resolve({ data: null, error: null, ...(typeof answer === 'function' ? answer() : answer) })
@@ -79,7 +82,10 @@ function fakeSupabase(answers: Record<string, Answer | (() => Answer)> = {}) {
           call.headers[k] = v
           return builder
         },
-        abortSignal: () => builder,
+        abortSignal: (signal?: AbortSignal) => {
+          if (signal) call.signal = signal
+          return builder
+        },
         then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => result.then(res, rej),
       }
       return builder
@@ -116,7 +122,7 @@ describe('readers — one call shape per surface', () => {
     const { client, calls } = fakeSupabase({ safety_alerts_in_view: { data: [row()] } })
     expect(await readSafetyAlertStrip(client)).toHaveLength(1)
     expect(STRIP_ALERT_LIMIT).toBe(5)
-    expect(calls).toEqual([{ name: 'safety_alerts_in_view', args: { p_limit: 5, p_include_resolved: true }, headers: {} }])
+    expect(calls.map((c) => [c.name, c.args])).toEqual([['safety_alerts_in_view', { p_limit: 5, p_include_resolved: true }]])
   })
 
   it('the map: the four bounds, resolved included', async () => {
@@ -139,16 +145,78 @@ describe('readers — one call shape per surface', () => {
     expect(ADMIN_ALERT_LIMIT).toBe(200)
   })
 
-  it('a row the shown rule calls gone never leaves the reader; live and resolved (< 6 h) do', async () => {
+  it('a row is kept or dropped by the verdict the server put on it', async () => {
     const rows = [
       row({ id: 'live' }),
-      row({ id: 'past-expiry', expires_at: iso(-1) }),
-      row({ id: 'resolved', status: 'resolved', resolved_at: iso(-HOUR) }),
-      row({ id: 'resolved-old', status: 'resolved', resolved_at: iso(-6 * HOUR) }),
-      row({ id: 'cleared', status: 'cleared' }),
+      row({ id: 'resolved', status: 'resolved', resolved_at: iso(-HOUR), shown_state: 'resolved', shown_until: iso(5 * HOUR) }),
+      row({ id: 'gone', status: 'cleared', shown_state: 'gone' }),
     ]
     const { client } = fakeSupabase({ safety_alerts_in_view: { data: rows } })
-    expect((await readSafetyAlertStrip(client)).map((a) => a.id)).toEqual(['live', 'resolved'])
+    const kept = await readSafetyAlertStrip(client)
+    expect(kept.map((a) => [a.id, a.shown_state])).toEqual([['live', 'live'], ['resolved', 'resolved']])
+    expect(kept[1].shown_until).toBe(iso(5 * HOUR))
+  })
+
+  // The server's clock reads NOW; the browser's is off by this much.
+  it.each([
+    ['+10 min', 10 * 60_000],
+    ['+2 h', 2 * HOUR],
+    ['+3 h', 3 * HOUR],
+    ['-10 min', -10 * 60_000],
+    ['-1 day', -24 * HOUR],
+  ])('browser clock %s: the reader returns exactly the rows the server returned, with the server’s verdicts', async (_label, skew) => {
+    vi.setSystemTime(NOW + skew)
+    const rows = [
+      row({ id: 'live-9-min', expires_at: iso(9 * 60_000), shown_until: iso(9 * 60_000) }),
+      row({ id: 'live-1-h', expires_at: iso(HOUR), shown_until: iso(HOUR) }),
+      row({ id: 'resolved-5h55', status: 'resolved', resolved_at: iso(-(5 * HOUR + 55 * 60_000)), shown_state: 'resolved', shown_until: iso(5 * 60_000) }),
+    ]
+    const { client } = fakeSupabase({ safety_alerts_in_view: { data: rows } })
+    for (const read of [readSafetyAlertStrip, readSafetyAlertList]) {
+      expect((await read(client)).map((a) => [a.id, a.shown_state])).toEqual([
+        ['live-9-min', 'live'],
+        ['live-1-h', 'live'],
+        ['resolved-5h55', 'resolved'],
+      ])
+    }
+    expect((await readSafetyAlertById(client, 'live-9-min'))?.shown_state).toBe('live')
+  })
+
+  it('a row with no verdict (a pre-Release-3 answer) falls back to the rule on the browser clock, and says so once', async () => {
+    const raw = { ...row({ id: 'old-shape' }), shown_state: undefined, shown_until: undefined }
+    expect(toSafetyAlert(raw)?.shown_state).toBe('live')
+    expect(toSafetyAlert({ ...raw, expires_at: iso(-1) })?.shown_state).toBe('gone')
+    expect(toSafetyAlert(raw)?.shown_until).toBeNull()
+    expect(sanitizeClientEvent('alerts.shown_state.missing', 'warn', { status: 'live' })).toEqual({ ok: true, context: { status: 'live' } })
+  })
+
+  it('the fallback is logged once per page load (a fresh module), with the status only; rows with a verdict log nothing', async () => {
+    vi.resetModules()
+    const fresh = await import('./safety-alert-rpc')
+    fresh.toSafetyAlert(row())
+    await Promise.resolve()
+    expect(posted.filter((p) => p.event === 'alerts.shown_state.missing')).toEqual([])
+    const raw = { ...row({ id: 'old-shape' }), shown_state: undefined, shown_until: undefined }
+    for (let i = 0; i < 5; i++) fresh.toSafetyAlert(raw)
+    await new Promise((r) => setTimeout(r, 0))
+    const warned = posted.filter((p) => p.event === 'alerts.shown_state.missing')
+    expect(warned.map((p) => [p.level, p.context])).toEqual([['warn', { status: 'live' }]])
+  })
+
+  it('the admin overview’s count: the rows the server calls live — a resolved alert never counts, on any browser clock; unknown when the read fails', async () => {
+    const rows = [
+      row({ id: 'live-9-min', expires_at: iso(9 * 60_000), shown_until: iso(9 * 60_000) }),
+      row({ id: 'live-1-h' }),
+      row({ id: 'resolved', status: 'resolved', resolved_at: iso(-HOUR), shown_state: 'resolved', shown_until: iso(5 * HOUR) }),
+    ]
+    for (const skew of [0, 3 * HOUR, -24 * HOUR]) {
+      vi.setSystemTime(NOW + skew)
+      const { client, calls } = fakeSupabase({ safety_alerts_in_view: { data: rows } })
+      expect(await countLiveSafetyAlerts(client)).toBe(2)
+      expect(calls.map((c) => c.name)).toEqual(['safety_alerts_in_view'])
+    }
+    const failing = fakeSupabase({ safety_alerts_in_view: { error: { code: '57014', message: 'canceling statement' } } })
+    expect(await countLiveSafetyAlerts(failing.client)).toBeNull()
   })
 
   it('a failed read throws (the caller keeps what it had)', async () => {
@@ -161,7 +229,7 @@ describe('rows are copied field by field — no identity can ride along', () => 
   it('an answer carrying created_by / verified_by / anything else yields exactly the named fields', () => {
     const mapped = toSafetyAlert(row({ created_by: 'user-1', verified_by: 'mod-1', verified_at: iso(0), location: '0101…', actor_id: 'x' }))
     expect(Object.keys(mapped as object).sort()).toEqual(
-      ['alert_type', 'clear_count', 'confirm_count', 'created_at', 'description', 'expires_at', 'id', 'is_mine', 'lat', 'lng', 'resolved_at', 'severity', 'status', 'update_count', 'updated_at', 'verified', 'version'].sort(),
+      ['alert_type', 'clear_count', 'confirm_count', 'created_at', 'description', 'expires_at', 'id', 'is_mine', 'lat', 'lng', 'resolved_at', 'resolved_by_role', 'severity', 'shown_state', 'shown_until', 'status', 'update_count', 'updated_at', 'verified', 'version'].sort(),
     )
     expect(JSON.stringify(mapped)).not.toMatch(/user-1|mod-1|created_by|verified_by|actor/)
   })
@@ -176,7 +244,14 @@ describe('rows are copied field by field — no identity can ride along', () => 
     expect(toSafetyAlert({ alert_type: 'general' })).toBeNull()
   })
 
-  it('history: what changed and when, newest first — no role, no note, no id of anyone', async () => {
+  it('who resolved an alert is a role (the reporter or a moderator), or nothing', () => {
+    expect(toSafetyAlert(row({ resolved_by_role: 'moderator' }))?.resolved_by_role).toBe('moderator')
+    expect(toSafetyAlert(row({ resolved_by_role: 'owner' }))?.resolved_by_role).toBe('owner')
+    expect(toSafetyAlert(row({ resolved_by_role: '7b0c…-a-user-id' }))?.resolved_by_role).toBeNull()
+    expect(toSafetyAlert(row())?.resolved_by_role).toBeNull()
+  })
+
+  it('history: what changed, when and by which role, newest first — no note, no id of anyone', async () => {
     const message = (version: number, over: Record<string, unknown> = {}) => ({
       version,
       msg_type: 'update',
@@ -199,8 +274,11 @@ describe('rows are copied field by field — no identity can ride along', () => 
     const entries = await readSafetyAlertHistory(client, ID, 'strip')
     expect(calls[0]).toMatchObject({ name: 'safety_alert_history', args: { p_alert_id: ID } })
     expect(entries.map((e) => e.version)).toEqual([3, 2, 1])
-    expect(Object.keys(entries[0]).sort()).toEqual(['alert_type', 'changed', 'description', 'expires_at', 'msg_type', 'sent_at', 'severity', 'severity_change', 'version'])
-    expect(JSON.stringify(entries)).not.toMatch(/moderator|mod-1|private note|actor/)
+    expect(Object.keys(entries[0]).sort()).toEqual(['actor_role', 'alert_type', 'changed', 'description', 'expires_at', 'msg_type', 'sent_at', 'severity', 'severity_change', 'version'])
+    expect(entries.map((e) => e.actor_role)).toEqual(['moderator', 'moderator', 'moderator'])
+    // A role the client does not know (or an id in its place) is dropped, never shown.
+    expect((await readSafetyAlertHistory(fakeSupabase({ safety_alert_history: { data: [message(1, { actor_role: 'system' }), message(2, { actor_role: 'mod-1' })] } }).client, ID, 'strip')).map((e) => e.actor_role)).toEqual([null, null])
+    expect(JSON.stringify(entries)).not.toMatch(/mod-1|private note|actor_id|"note"/)
   })
 })
 
@@ -240,6 +318,28 @@ describe('writes — what is sent', () => {
       ['vote_safety_alert', { p_alert_id: ID, p_vote: 'clear' }],
       ['place_safety_alert', { p_type: 'weather', p_severity: 2, p_description: 'Ice', p_lng: -72.9, p_lat: 43.6 }],
     ])
+  })
+})
+
+describe('writes are bounded', () => {
+  it('every alert write carries a timeout signal', async () => {
+    const { client, calls } = fakeSupabase({ place_safety_alert: { data: row() }, update_safety_alert: { data: row() }, resolve_safety_alert: { data: row() }, vote_safety_alert: { data: row() } })
+    await placeSafetyAlert(client, { type: 'weather', severity: 2, description: '', lng: -72.9, lat: 43.6 }, 'map')
+    await updateSafetyAlert(client, alert(), { description: 'x' }, 'strip')
+    await updateSafetyAlert(client, alert({ severity: 1 }), { severity: 4 }, 'strip')
+    await updateSafetyAlert(client, alert({ severity: 4 }), { severity: 1 }, 'strip')
+    await resolveSafetyAlert(client, alert(), 'strip')
+    await withdrawSafetyAlert(client, alert(), 'strip')
+    await voteSafetyAlert(client, alert(), 'confirm', 'map')
+    expect(calls).toHaveLength(7)
+    for (const call of calls) expect(call.signal, call.name).toBeInstanceOf(AbortSignal)
+  })
+
+  it('a write that timed out is a network failure (the dialog offers a retry), recorded as one error row', async () => {
+    // What supabase-js answers when the signal aborts: an error with no SQLSTATE.
+    const { client } = fakeSupabase({ update_safety_alert: { error: { message: 'TimeoutError: The operation timed out.', code: '' } } })
+    expect(await updateSafetyAlert(client, alert(), { description: 'x' }, 'strip')).toMatchObject({ ok: false, failure: { kind: 'network' } })
+    expect(posted.map((p) => [p.event, p.level])).toEqual([['alerts.update.error', 'error']])
   })
 })
 
@@ -327,6 +427,25 @@ describe('one persisted wide row per action (name, labels, duration, request id)
     expect(posted[0]).toMatchObject({ event: 'alerts.resolve.error', level: 'error' })
     expect(stored(posted[0]).context).toMatchObject({ error_code: 'PT410', target_id: ID, surface: 'strip' })
     expect(typeof posted[0].duration_ms).toBe('number')
+  })
+})
+
+describe('the alert event vocabulary', () => {
+  it('the seven names nothing emits any more are no longer accepted', () => {
+    for (const name of ['pin.place', 'pin.confirm', 'pin.clear', 'safety-alerts.update.success', 'safety-alerts.delete.success', 'hazard.geocode', 'hazard.pin.placed']) {
+      expect(sanitizeClientEvent(name, 'info', {}), name).toMatchObject({ ok: false })
+    }
+  })
+
+  it('the four error names a pre-Release-3.1 tab still posts are accepted (until none arrive), and so is the map’s read failure', () => {
+    for (const name of ['safety-alerts.place.error', 'safety-alerts.vote.error', 'safety-alerts.update.error', 'safety-alerts.delete.error', 'safety-alerts.fetch.error']) {
+      expect(sanitizeClientEvent(name, 'error', {}), name).toMatchObject({ ok: true })
+    }
+  })
+
+  it('alerts.poll carries the window’s failure count and the last failure’s class', () => {
+    const row = { surface: 'strip', reads: 30, changed: 2, errors: 3, last_error: 'PGRST202', result_count: 4, window_s: 1740 }
+    expect(sanitizeClientEvent('alerts.poll', 'info', row)).toEqual({ ok: true, context: row })
   })
 })
 

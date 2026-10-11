@@ -71,10 +71,15 @@ interface FakeOptions {
   fail?: boolean
 }
 
-/** The reader's own rule (specs/r3-contract.md), on the fake's clock: live, or resolved < 6 h ago. */
+/** The reader's own rule (specs/r3-contract.md), on the SERVER's clock: live, or resolved < 6 h ago. */
 function readerShows(row: Row, nowMs: number): boolean {
   if (row.status === 'live') return Date.parse(String(row.expires_at)) > nowMs
   return row.status === 'resolved' && row.resolved_at != null && Date.parse(String(row.resolved_at)) > nowMs - 6 * 3600_000
+}
+/** The verdict the server stamps on every row it answers (shown_state). */
+function withVerdict(row: Row, serverNowMs: number): Row {
+  const shown = readerShows(row, serverNowMs)
+  return { ...row, shown_state: !shown ? 'gone' : row.status === 'live' ? 'live' : 'resolved', shown_until: shown ? (row.status === 'live' ? row.expires_at : new Date(Date.parse(String(row.resolved_at)) + 6 * 3600_000).toISOString()) : null }
 }
 
 function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
@@ -129,6 +134,8 @@ function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
       const rows = all
         .filter((r) => args.p_alert_id === undefined || r.id === args.p_alert_id)
         .filter((r) => opts.readerReturnsAnything || (readerShows(r, NOW.getTime()) && (args.p_include_resolved === true || r.status === 'live')))
+        // The server's clock is NOW, whatever the browser's is.
+        .map((r) => withVerdict(r, NOW.getTime()))
       const builder = {
         abortSignal(signal: AbortSignal) {
           calls.push(`${name}.abortSignal`)
@@ -165,7 +172,7 @@ const alert = (over: Row = {}): Row => ({
 })
 
 const read = (tables: Record<string, Row[]>, kind: 'resource' | 'organization' | 'business' | 'safety_alert', id: string, opts?: FakeOptions) =>
-  readMapFocusPin(fakeClient(tables, opts).client, { kind, id }, NOW)
+  readMapFocusPin(fakeClient(tables, opts).client, { kind, id })
 
 // ---- 1 + 2. Readers ------------------------------------------------------------------------------
 
@@ -242,7 +249,7 @@ describe('readMapFocusPin — business (businesses_in_bounds: business, approved
 })
 
 describe('readMapFocusPin — safety alert (the alert reader by id: shown = live, or resolved < 6 h ago)', () => {
-  // The reader drops gone rows on the browser clock; the tests' NOW is that clock.
+  // The fake reader is the server (its clock is NOW); each test sets the browser's clock.
   beforeEach(() => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   })
@@ -271,16 +278,23 @@ describe('readMapFocusPin — safety alert (the alert reader by id: shown = live
     ['live but past expires_at', { expires_at: '2026-10-08T18:59:00.000Z' }],
     ['resolved six hours ago', { status: 'resolved', resolved_at: '2026-10-08T13:00:00.000Z' }],
     ['removed', { status: 'removed' }],
-  ])('the shown rule is checked again on the returned row: %s', async (_label, over) => {
-    // A reader that returned the row anyway: the client still refuses it.
+  ])('a row the server answers with the verdict "gone" is refused: %s', async (_label, over) => {
+    // A reader that returned the row anyway (marked gone): the client does not land on it.
     expect(await read({ safety_alerts: [alert(over)] }, 'safety_alert', A1, { readerReturnsAnything: true })).toBeNull()
   })
-  it('the rule is applied on the clock the link was followed with, not only the reader’s', async () => {
-    // The reader (browser clock = NOW) returns the alert: it expires in two hours. A session whose
-    // clock is three hours on must not land on it.
-    const { client } = fakeClient({ safety_alerts: [alert()] })
-    expect(await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, NOW)).not.toBeNull()
-    expect(await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, new Date(NOW.getTime() + 3 * 3600_000))).toBeNull()
+  it.each([
+    ['ten minutes ahead', 10 * 60_000],
+    ['three hours ahead (past the alert’s expiry on this clock)', 3 * 3600_000],
+    ['ten minutes behind', -10 * 60_000],
+    ['a day behind', -24 * 3600_000],
+  ])('the browser clock decides nothing — %s: a pin the server shows is landed on, one it dropped is not', async (_label, skew) => {
+    vi.setSystemTime(NOW.getTime() + skew)
+    // Expires in two hours on the server's clock.
+    expect(await read({ safety_alerts: [alert()] }, 'safety_alert', A1)).toEqual({ layer: 'safety_alert', id: A1, lng: -72.97, lat: 43.61 })
+    const resolved = alert({ status: 'resolved', resolved_at: '2026-10-08T13:05:00.000Z' }) // five minutes of its six hours left
+    expect(await read({ safety_alerts: [resolved] }, 'safety_alert', A1)).toMatchObject({ layer: 'safety_alert', id: A1 })
+    // Expired a minute ago on the server: not returned, so not landed on — even when this clock is a day behind.
+    expect(await read({ safety_alerts: [alert({ expires_at: '2026-10-08T18:59:00.000Z' })] }, 'safety_alert', A1)).toBeNull()
   })
   it('an alert without a place on the map does not resolve', async () => {
     expect(await read({ safety_alerts: [alert({ lng: null, lat: null })] }, 'safety_alert', A1)).toBeNull()
@@ -288,7 +302,7 @@ describe('readMapFocusPin — safety alert (the alert reader by id: shown = live
   })
   it('it asks the one reader for that id with resolved alerts included — and never the table', async () => {
     const { client, calls } = fakeClient({ safety_alerts: [alert()] })
-    await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, NOW)
+    await readMapFocusPin(client, { kind: 'safety_alert', id: A1 })
     expect(calls).toContain(`safety_alerts_in_view.rpc(${JSON.stringify({ p_alert_id: A1, p_include_resolved: true })})`)
     expect(calls.filter((c) => c.startsWith('safety_alerts.'))).toEqual([])
   })
@@ -305,7 +319,7 @@ describe('readMapFocusPin — the read can be aborted', () => {
     const signal = new AbortController().signal
     for (const [kind, table] of [['resource', 'resources'], ['safety_alert', 'safety_alerts_in_view']] as const) {
       const fake = fakeClient({ resources: [resource()], safety_alerts: [alert()] })
-      await readMapFocusPin(fake.client, { kind, id: kind === 'resource' ? R1 : A1 }, NOW, signal)
+      await readMapFocusPin(fake.client, { kind, id: kind === 'resource' ? R1 : A1 }, signal)
       expect(fake.calls, kind).toContain(`${table}.abortSignal`)
       expect(fake.signals[0], kind).toBe(signal)
     }

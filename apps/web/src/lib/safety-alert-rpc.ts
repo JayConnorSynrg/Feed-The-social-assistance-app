@@ -6,11 +6,13 @@
 // Reads: the single reader (bounding box for the map, top five for the feed strip, one id for the
 // editor / map focus / admin link, top 200 for the admin list) and the history reader. Every reader row
 // is copied field by field into a SafetyAlert, so nothing the server might add (and no reporter or
-// verifier id, which no reader returns) reaches client state, and rows the shown rule calls gone
-// (lib/safety-alert-live.ts) are dropped here, once, for every surface.
+// verifier id, which no reader returns) reaches client state. Each row keeps the SERVER's verdict
+// (shown_state, shown_until): a row is kept or dropped by that verdict, never by the browser clock
+// (lib/safety-alert-live.ts). Who acted is carried as a ROLE only (the reporter / a moderator).
 //
 // Writes: place, update / escalate / de-escalate (one RPC, named by the severity move), resolve,
-// withdraw and vote. Each is one privilegedRpc call (lib/privileged-action.ts): one request id sent
+// withdraw and vote. Each gives up after QUERY_TIMEOUT_MS (a write that never answers comes back as a
+// `network` failure, so the dialog can offer a retry). Each is one privilegedRpc call (lib/privileged-action.ts): one request id sent
 // as x-request-id and shared with withMetric, so every action persists exactly one `<op>.complete` or
 // `<op>.error` row in app_logs with its duration. Labels are ids and enums only: the alert id, its
 // type, the severity before and after, whether the caller owns it, and the surface. Descriptions,
@@ -29,9 +31,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { privilegedRpc } from '@/lib/privileged-action'
-import { withMetric } from '@/lib/logger'
+import { logger, withMetric } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
-import { isAlertShown, isResolvedStatus } from '@/lib/safety-alert-live'
+import { hasServerShownState, isAlertLive, isAlertShown, isResolvedStatus, localShownState, type AlertShownState } from '@/lib/safety-alert-live'
 
 type Client = SupabaseClient<Database>
 
@@ -52,6 +54,10 @@ export interface SafetyAlert {
   /** live | resolved from a reader; an RPC answer may also say cleared, removed, withdrawn, expired.
    *  'ended' is set only by the client (SafetyAlertStore) on an alert a read no longer returns. */
   status: string
+  /** The server's verdict for this row: what every surface draws (lib/safety-alert-live.ts). */
+  shown_state: AlertShownState
+  /** The instant (server time) the server stops showing it; null when it did not say. */
+  shown_until: string | null
   confirm_count: number
   clear_count: number
   created_at: string
@@ -65,10 +71,17 @@ export interface SafetyAlert {
   updated_at: string | null
   update_count: number
   resolved_at: string | null
+  /** Who marked it resolved, as a role (never a name or an id). */
+  resolved_by_role: AlertActorRole | null
 }
 
-/** One message of an alert's history: what the alert said from this version on, and what changed.
- *  It never says who wrote it. */
+/** Who acted on an alert, as a role: its reporter, or a moderator. Never a name, never an id. */
+export type AlertActorRole = 'owner' | 'moderator'
+
+const actorRole = (v: unknown): AlertActorRole | null => (v === 'owner' || v === 'moderator' ? v : null)
+
+/** One message of an alert's history: what the alert said from this version on, what changed, and
+ *  the role that wrote it (never who). */
 export interface AlertHistoryEntry {
   version: number
   msg_type: 'alert' | 'update' | 'all_clear' | 'cancel'
@@ -80,12 +93,28 @@ export interface AlertHistoryEntry {
   /** Of: alert_type, severity, description, location, expires_at, status. */
   changed: string[]
   severity_change: 'escalated' | 'de_escalated' | 'same'
+  /** The reporter or a moderator; null for a message nobody wrote by hand. */
+  actor_role: AlertActorRole | null
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '')
 const textOrNull = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const int = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
 const coord = (v: unknown): number => (typeof v === 'number' ? v : Number.NaN)
+
+// A row with no server verdict is reported once per page load (it should not happen).
+let reportedMissingVerdict = false
+
+/** The server's verdict for a row. A row that carries none (a pre-Release-3 answer shape) falls back
+ *  to the rule on the browser clock, and says so in the log. */
+function serverShownState(r: Record<string, unknown>): AlertShownState {
+  if (hasServerShownState(r as { shown_state?: string | null })) return r.shown_state as AlertShownState
+  if (!reportedMissingVerdict) {
+    reportedMissingVerdict = true
+    logger.warn('alerts.shown_state.missing', { status: text(r.status).slice(0, 20) })
+  }
+  return localShownState({ status: text(r.status), expires_at: text(r.expires_at), resolved_at: textOrNull(r.resolved_at) }, Date.now())
+}
 
 /** Copy the named fields of a reader row or an RPC answer; null when it is not an alert. */
 export function toSafetyAlert(row: unknown): SafetyAlert | null {
@@ -100,6 +129,8 @@ export function toSafetyAlert(row: unknown): SafetyAlert | null {
     lng: coord(r.lng),
     lat: coord(r.lat),
     status: text(r.status),
+    shown_state: serverShownState(r),
+    shown_until: textOrNull(r.shown_until),
     confirm_count: int(r.confirm_count),
     clear_count: int(r.clear_count),
     created_at: text(r.created_at),
@@ -110,6 +141,7 @@ export function toSafetyAlert(row: unknown): SafetyAlert | null {
     updated_at: textOrNull(r.updated_at),
     update_count: int(r.update_count),
     resolved_at: textOrNull(r.resolved_at),
+    resolved_by_role: actorRole(r.resolved_by_role),
   }
 }
 
@@ -129,6 +161,7 @@ function toHistoryEntry(row: unknown): AlertHistoryEntry | null {
     expires_at: text(r.expires_at),
     changed: Array.isArray(r.changed) ? r.changed.filter((c): c is string => typeof c === 'string') : [],
     severity_change: change === 'escalated' || change === 'de_escalated' ? change : 'same',
+    actor_role: actorRole(r.actor_role),
   }
 }
 
@@ -236,17 +269,17 @@ export class AlertReadError extends Error {
   }
 }
 
-/** The one reader call. Resolved alerts are always asked for; gone rows never leave this function. */
+/** The one reader call. Resolved alerts are always asked for. A row is kept by the server's own
+ *  verdict (the reader returns live and resolved rows only); the browser clock is not consulted. */
 async function readAlerts(supabase: Client, args: ReaderArgs, signal?: AbortSignal): Promise<SafetyAlert[]> {
   const { data, error } = await supabase
     .rpc('safety_alerts_in_view', { ...args, p_include_resolved: true })
     .abortSignal(signal ?? AbortSignal.timeout(QUERY_TIMEOUT_MS))
   if (error) throw new AlertReadError(error)
-  const now = Date.now()
   const alerts: SafetyAlert[] = []
   for (const row of (data ?? []) as unknown[]) {
     const alert = toSafetyAlert(row)
-    if (alert && isAlertShown(alert, now)) alerts.push(alert)
+    if (alert && isAlertShown(alert)) alerts.push(alert)
   }
   return alerts
 }
@@ -264,6 +297,17 @@ export function readSafetyAlertStrip(supabase: Client): Promise<SafetyAlert[]> {
 /** The admin review list: live and resolved alerts, newest 200 by the reader's order. */
 export function readSafetyAlertList(supabase: Client): Promise<SafetyAlert[]> {
   return readAlerts(supabase, { p_limit: ADMIN_ALERT_LIMIT })
+}
+
+/** How many alerts are live right now by the server's verdict (the admin overview's count): the
+ *  live rows of the admin list read, exact up to ADMIN_ALERT_LIMIT (the reader lists live alerts
+ *  first). A resolved alert is never counted. null when the read failed. */
+export async function countLiveSafetyAlerts(supabase: Client): Promise<number | null> {
+  try {
+    return (await readSafetyAlertList(supabase)).filter((alert) => isAlertLive(alert)).length
+  } catch {
+    return null
+  }
 }
 
 /** One alert while it is shown (the editor's fresh read, a conflict's re-read, the map-focus link,
@@ -332,6 +376,9 @@ export function alertUpdateArgs(alert: Pick<SafetyAlert, 'id' | 'version'>, chan
   return args
 }
 
+/** Every alert write gives up after this long (the reads have the same bound). */
+const writeTimeout = () => AbortSignal.timeout(QUERY_TIMEOUT_MS)
+
 export async function placeSafetyAlert(supabase: Client, input: PlaceAlertInput, surface: AlertSurface): Promise<AlertOutcome<SafetyAlert>> {
   const res = await privilegedRpc(
     supabase,
@@ -339,6 +386,7 @@ export async function placeSafetyAlert(supabase: Client, input: PlaceAlertInput,
     'place_safety_alert',
     { p_type: input.type, p_severity: input.severity, p_description: input.description, p_lng: input.lng, p_lat: input.lat },
     { alert_type: input.type, severity_before: null, severity_after: input.severity, is_owner: true, surface },
+    writeTimeout(),
   )
   return alertOutcome(res)
 }
@@ -357,9 +405,9 @@ export async function updateSafetyAlert(supabase: Client, alert: ActedAlert, cha
     is_owner: alert.is_mine,
     surface,
   }
-  if (after > alert.severity) return alertOutcome(await privilegedRpc(supabase, 'alerts.escalate', 'update_safety_alert', args, labels))
-  if (after < alert.severity) return alertOutcome(await privilegedRpc(supabase, 'alerts.deescalate', 'update_safety_alert', args, labels))
-  return alertOutcome(await privilegedRpc(supabase, 'alerts.update', 'update_safety_alert', args, labels))
+  if (after > alert.severity) return alertOutcome(await privilegedRpc(supabase, 'alerts.escalate', 'update_safety_alert', args, labels, writeTimeout()))
+  if (after < alert.severity) return alertOutcome(await privilegedRpc(supabase, 'alerts.deescalate', 'update_safety_alert', args, labels, writeTimeout()))
+  return alertOutcome(await privilegedRpc(supabase, 'alerts.update', 'update_safety_alert', args, labels, writeTimeout()))
 }
 
 /** Mark an alert resolved (an all-clear shown for six hours). There is no reopen. */
@@ -370,6 +418,7 @@ export async function resolveSafetyAlert(supabase: Client, alert: ActedAlert, su
     'resolve_safety_alert',
     { p_alert_id: alert.id, p_expected_version: alert.version },
     { target_id: alert.id, alert_type: alert.alert_type, severity_before: alert.severity, severity_after: alert.severity, is_owner: alert.is_mine, surface },
+    writeTimeout(),
   )
   return alertOutcome(res)
 }
@@ -382,6 +431,7 @@ export async function withdrawSafetyAlert(supabase: Client, alert: ActedAlert, s
     'delete_safety_alert',
     { p_alert_id: alert.id },
     { target_id: alert.id, alert_type: alert.alert_type, severity_before: alert.severity, severity_after: null, is_owner: alert.is_mine, surface },
+    writeTimeout(),
   )
   if (res.error) return { ok: false, failure: parseAlertRpcError(res.error as AlertRpcError), requestId: res.requestId }
   return { ok: true, value: null, requestId: res.requestId }
@@ -398,6 +448,7 @@ export async function voteSafetyAlert(supabase: Client, alert: ActedAlert, vote:
     'vote_safety_alert',
     { p_alert_id: alert.id, p_vote: vote },
     { target_id: alert.id, alert_type: alert.alert_type, severity_before: alert.severity, severity_after: alert.severity, is_owner: alert.is_mine, vote, surface },
+    writeTimeout(),
   )
   return alertOutcome(res)
 }

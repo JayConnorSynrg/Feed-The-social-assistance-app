@@ -5,7 +5,8 @@
 //   - loading is announced (role="status" + a name; the spinner icon is hidden from assistive tech);
 //   - an error is an alert (role="alert"), so a failed approve/remove is announced;
 //   - each shown row links to its pin on the members' map (/#map?focus=safety_alert:<id>), and a row
-//     the map would not show (past expiry) gets the reason instead of a link (M1);
+//     the server no longer shows gets the reason instead of a link (M1) — by the server's verdict on
+//     the row, never by this browser's clock;
 //   - Release 3.1: a resolved alert is labelled, never counted as live and cannot be verified; no
 //     self-moderation — a moderator gets no Approve on an alert they reported; the type and severity
 //     names are the alert dictionary's (one source with the member surfaces).
@@ -52,9 +53,24 @@ const live: ReviewAlert = {
   updated_at: null,
   update_count: 0,
   resolved_at: null,
+  resolved_by_role: null,
+  // The server's verdict on the row.
+  shown_state: 'live',
+  shown_until: '2026-10-08T21:00:00.000Z',
 }
 const RESOLVED_ID = '66666666-6666-4666-8666-666666666666'
-const resolved: ReviewAlert = { ...live, id: RESOLVED_ID, status: 'resolved', resolved_at: '2026-10-08T18:30:00.000Z', version: 2 }
+const resolved: ReviewAlert = {
+  ...live,
+  id: RESOLVED_ID,
+  status: 'resolved',
+  resolved_at: '2026-10-08T18:30:00.000Z',
+  resolved_by_role: 'owner',
+  version: 2,
+  shown_state: 'resolved',
+  shown_until: '2026-10-09T00:30:00.000Z',
+}
+/** A row the server stopped showing while the list was on screen. */
+const gone = (row: ReviewAlert): ReviewAlert => ({ ...row, shown_state: 'gone', shown_until: null })
 const base: SafetyAlertsReviewViewProps = {
   alerts: [live],
   loading: false,
@@ -92,10 +108,23 @@ describe('SafetyAlertsReviewView — View on map', () => {
     expect(anchor).toContain('aria-label="View on map: Road Closure, High (opens in the feed preview tab)"')
   })
 
-  it('an alert past expires_at gets the reason and no map link', () => {
-    const html = render({ alerts: [{ ...live, expires_at: '2026-10-08T18:59:00.000Z' }] })
+  it('an alert the server no longer shows gets the reason and no map link', () => {
+    const html = render({ alerts: [gone(live)] })
     expect(html).not.toContain('#map?focus')
     expect(html).toContain('Expired — not on the map')
+  })
+
+  it('the server’s verdict decides, not this clock: a "live" row whose date looks past here keeps its link and its Approve', () => {
+    // The moderator's clock is two hours ahead of the server's.
+    const html = render({ alerts: [live], now: new Date('2026-10-08T23:00:00.000Z') })
+    expect(html).toContain(`href="/#map?focus=safety_alert:${ID}"`)
+    expect(html).toContain(`admin-approve-alert-${ID}`)
+    expect(html).toMatch(/data-testid="alert-review-count"[^>]*>1 live alert</)
+    // …and a clock that is behind keeps nothing the server dropped.
+    const behind = render({ alerts: [gone(live)], now: new Date('2026-10-07T19:00:00.000Z') })
+    expect(behind).not.toContain('#map?focus')
+    expect(behind).not.toContain('admin-approve-alert')
+    expect(behind).toMatch(/data-testid="alert-review-count"[^>]*>0 live alerts</)
   })
 })
 
@@ -111,26 +140,26 @@ describe('SafetyAlertsReviewView — live and resolved (the shown rule)', () => 
   })
 
   it('a resolved alert past its six hours gets no map link (members no longer see it)', () => {
-    const html = render({ alerts: [{ ...resolved, resolved_at: '2026-10-08T13:00:00.000Z' }] })
+    const html = render({ alerts: [gone({ ...resolved, resolved_at: '2026-10-08T13:00:00.000Z' })] })
     expect(html).not.toContain('#map?focus')
     expect(html).toMatch(/data-testid="alert-review-count"[^>]*>0 live alerts</)
   })
 
   it('review order: live first, then resolved; newest first within each', () => {
     const older = { ...live, id: 'older', created_at: '2026-10-08T17:00:00.000Z' }
-    expect(sortForReview([resolved, older, live], NOW.getTime()).map((a) => a.id)).toEqual([ID, 'older', RESOLVED_ID])
+    expect(sortForReview([resolved, older, live]).map((a) => a.id)).toEqual([ID, 'older', RESOLVED_ID])
   })
 })
 
 describe('SafetyAlertsReviewView — no self-moderation', () => {
   it('a moderator gets Approve on someone else’s unverified live alert', () => {
-    expect(canVerifyAlert(live, NOW.getTime())).toBe(true)
+    expect(canVerifyAlert(live)).toBe(true)
     expect(render()).toContain(`admin-approve-alert-${ID}`)
   })
 
   it('a moderator who reported the alert gets no Approve (and is told why); Remove stays', () => {
     const own = { ...live, is_mine: true }
-    expect(canVerifyAlert(own, NOW.getTime())).toBe(false)
+    expect(canVerifyAlert(own)).toBe(false)
     const html = render({ alerts: [own] })
     expect(html).not.toContain(`admin-approve-alert-${ID}`)
     expect(html).toMatch(new RegExp(`data-testid="admin-own-alert-${ID}"[^>]*>You reported this alert: another moderator verifies it\\.<`))
@@ -139,8 +168,8 @@ describe('SafetyAlertsReviewView — no self-moderation', () => {
 
   it('a verified alert has no Approve; an expired or resolved one cannot be verified', () => {
     expect(render({ alerts: [{ ...live, verified: true }] })).not.toContain('admin-approve-alert')
-    expect(canVerifyAlert({ ...live, expires_at: '2026-10-08T18:59:00.000Z' }, NOW.getTime())).toBe(false)
-    expect(canVerifyAlert(resolved, NOW.getTime())).toBe(false)
+    expect(canVerifyAlert(gone(live))).toBe(false)
+    expect(canVerifyAlert(resolved)).toBe(false)
   })
 
   it('a refused action says what happened, and re-reads only when the list is stale', () => {

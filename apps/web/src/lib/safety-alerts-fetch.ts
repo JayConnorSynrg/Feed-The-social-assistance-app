@@ -20,8 +20,12 @@
 //
 // PollCounter — how often each surface reads, without a row per read: reads, changed answers and
 // failures are counted in memory and written as ONE alerts.poll row per surface when 30 reads have
-// accumulated (30 minutes of an idle, visible tab), when the tab is hidden, or when the surface
-// unmounts. sum(reads) over the rows is the exact read volume.
+// accumulated (30 minutes of an idle, visible tab), when the surface unmounts (its hook flushes), or
+// when the page goes away (pagehide). The counters live in module memory (sharedPollCounter), so
+// hiding and showing the tab starts no new row. A failed read is counted in the same window (errors, and
+// the last error class); the first failure of a window is reported once, at once (onFirstError), so
+// a reader that fails on every poll writes one error row per window, not one per read.
+// sum(reads) over the rows is the exact read volume.
 
 export const ALERTS_DEBOUNCE_MS = 400
 export const ALERTS_POLL_MS = 60_000
@@ -112,7 +116,7 @@ export class SafetyAlertsFetchScheduler extends KeyedPollScheduler<AlertBounds> 
   }
 }
 
-/** One alerts.poll row is written after this many reads on a surface that stays visible. */
+/** One alerts.poll row is written after this many reads on a surface. */
 export const POLL_FLUSH_EVERY = 30
 
 export type PollSurface = 'strip' | 'map'
@@ -123,7 +127,9 @@ export interface PollRow {
   reads: number
   /** How many of them returned something different from the read before. */
   changed: number
+  /** How many of them failed, and the class of the last failure (a server code, or 'exception'). */
   errors: number
+  last_error: string | null
   /** Alerts in the latest answer. */
   result_count: number
   /** Seconds the window covered. */
@@ -134,6 +140,7 @@ export class PollCounter {
   private reads = 0
   private changed = 0
   private errors = 0
+  private lastError: string | null = null
   private resultCount = 0
   private signature: string | null = null
   private since: number | null = null
@@ -141,15 +148,19 @@ export class PollCounter {
   constructor(
     private readonly surface: PollSurface,
     private readonly write: (row: PollRow) => void,
+    /** Called for the first failed read of a window only. */
+    private readonly onFirstError: (errorClass: string) => void = () => {},
     private readonly now: () => number = () => Date.now(),
   ) {}
 
-  /** One read finished. `signature` identifies its answer (null = the read failed). */
-  record(result: { signature: string | null; count: number }): void {
+  /** One read finished: its answer's signature and size, or the class of its failure. */
+  record(result: { signature: string; count: number } | { error: string }): void {
     if (this.since === null) this.since = this.now()
     this.reads += 1
-    if (result.signature === null) {
+    if ('error' in result) {
       this.errors += 1
+      this.lastError = result.error
+      if (this.errors === 1) this.onFirstError(result.error)
     } else {
       if (this.signature !== null && this.signature !== result.signature) this.changed += 1
       this.signature = result.signature
@@ -166,14 +177,46 @@ export class PollCounter {
       reads: this.reads,
       changed: this.changed,
       errors: this.errors,
+      last_error: this.lastError,
       result_count: this.resultCount,
       window_s: Math.max(0, Math.round((this.now() - this.since) / 1000)),
     })
     this.reads = 0
     this.changed = 0
     this.errors = 0
+    this.lastError = null
     this.since = null
   }
+}
+
+// One counter per surface for the life of the page: a hidden tab, a panel switch or a remount
+// carries on in the same window.
+const shared = new Map<PollSurface, PollCounter>()
+let pagehideBound = false
+
+/** Write every surface's open window now (the page is going away). */
+export function flushPollCounters(): void {
+  for (const counter of shared.values()) counter.flush()
+}
+
+/** The page's counter for a surface (created on first use; `write` and `onFirstError` are taken then). */
+export function sharedPollCounter(surface: PollSurface, write: (row: PollRow) => void, onFirstError: (errorClass: string) => void): PollCounter {
+  let counter = shared.get(surface)
+  if (!counter) {
+    counter = new PollCounter(surface, write, onFirstError)
+    shared.set(surface, counter)
+  }
+  if (!pagehideBound && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    pagehideBound = true
+    window.addEventListener('pagehide', flushPollCounters)
+  }
+  return counter
+}
+
+/** Test-only: forget every counter (a new page). */
+export function resetPollCounters(): void {
+  shared.clear()
+  pagehideBound = false
 }
 
 /**

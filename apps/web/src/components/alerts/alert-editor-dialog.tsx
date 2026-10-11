@@ -13,14 +13,21 @@
 //    Continue; only the fields the member changed, so the other save's remaining changes stand) or
 //    use the current version (nothing is sent). Nothing is retried on its own.
 //  - "No longer live" (PT410) or "gone" (PT404) closes the dialog, says so, and the surface re-reads.
-//  - One send per click: a single-flight gate held in a ref, taken before the first await.
+//  - One send per click: a single-flight gate held in a ref, taken before the first await. A write
+//    that never answers gives up after 12 s (lib/safety-alert-rpc.ts): the gate is released and the
+//    dialog says the connection failed, so the member can try again. Each opening has its own gate,
+//    so a write still waiting from an earlier opening never swallows a Save in this one. An answer
+//    that arrives after the dialog was closed is still applied to the surface, and announces nothing.
 //  - On the reporter's own verified alert the form says, before saving, that changing it returns it to
 //    unverified.
 //  - After a save the notice names the new expiry when the save moved it (a severity change does).
-//  - A proper dialog: a title that takes focus, Escape, and focus back to the control that opened it.
-//    When the alert left (withdrawn, or found ended) the opener is gone: the surface puts focus on the
-//    next sensible place, and only then is the outcome announced (host.announce, a polite region —
-//    the page behind an open modal is hidden from assistive technology).
+//  - A proper dialog: a title that takes focus (with a visible ring), Cancel in every state, the
+//    confirmation's text as its description, Escape, and focus back to the control that opened it.
+//    When that control is gone but the alert is still there (it was just marked resolved), focus goes
+//    to the alert's own entry or open popup. When the alert left (withdrawn, or found ended), the
+//    surface puts focus on the next sensible place. Only then is the outcome announced
+//    (host.announce, a polite region — the page behind an open modal is hidden from assistive
+//    technology).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -68,8 +75,12 @@ type Phase =
 
 const TITLE: Record<AlertActionKind, keyof AlertMessages> = { edit: 'editTitle', resolve: 'resolveTitle', withdraw: 'withdrawTitle' }
 
+// stone-500 on white is 4.8:1: the field's edge is visible without relying on its fill.
 const FIELD_CLASS =
-  'mt-1 block w-full min-h-9 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
+  'mt-1 block w-full min-h-9 rounded-md border border-stone-500 bg-white px-3 py-2 text-sm text-stone-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700'
+
+/** A heading that takes focus shows it. */
+const FOCUSED_HEADING = 'rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2'
 
 export interface AlertEditorDialogProps {
   /** The action and the alert; null = closed. */
@@ -96,8 +107,15 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
   const afterClose = useRef<{ notice: string; left: boolean } | null>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const conflictHeadingRef = useRef<HTMLHeadingElement>(null)
+  // Which opening the dialog is on: an answer that arrives for an earlier one changes no screen.
+  const opening = useRef(0)
   const kind: AlertActionKind = request?.kind ?? 'edit'
   const alertId = request?.alertId ?? null
+  // The alert the dialog was last open on (the request is gone by the time focus is handed back).
+  const closedAlert = useRef<string | null>(null)
+  useEffect(() => {
+    if (alertId) closedAlert.current = alertId
+  }, [alertId])
   const t = useCallback((key: keyof AlertMessages) => alertsT(locale, key), [locale])
 
   const finish = useCallback(
@@ -157,6 +175,9 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
     loadRef.current = load
   }, [load])
   useEffect(() => {
+    opening.current += 1
+    // A new opening, a new gate: a write still in flight from the last one holds only its own.
+    gate.current = createSingleFlight()
     if (!alertId) return
     let active = true
     void loadRef.current(alertId, kind, () => active)
@@ -203,9 +224,14 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
     async (base: SafetyAlert, mine: AlertDraft | null) => {
       await gate.current.run(async () => {
         setBusy(true)
+        const sentFrom = opening.current
+        // The dialog this answer belongs to was closed (or reopened) meanwhile: the surface still
+        // gets the truth, and nothing is shown or announced for it.
+        const stale = () => opening.current !== sentFrom
         try {
           if (kind === 'withdraw') {
             const res = await withdrawSafetyAlert(supabase, base, surface)
+            if (stale()) return void (res.ok ? (host.leave(base.id), host.refresh()) : host.refresh())
             if (!res.ok) return await refuse(res.failure, base, null)
             host.leave(base.id)
             host.refresh()
@@ -213,6 +239,7 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
           }
           if (kind === 'resolve') {
             const res = await resolveSafetyAlert(supabase, base, surface)
+            if (stale()) return void (res.ok ? (host.applyAnswer(res.value), host.refresh()) : host.refresh())
             if (!res.ok) return await refuse(res.failure, base, null)
             host.applyAnswer(res.value)
             host.refresh()
@@ -221,12 +248,14 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
           const changes = mine ? alertDraftChanges(base, mine) : {}
           if (Object.keys(changes).length === 0) return finish(alertsT(locale, 'nothingChanged'))
           const res = await updateSafetyAlert(supabase, base, changes, surface)
+          if (stale()) return void (res.ok ? (host.applyAnswer(res.value), host.refresh()) : host.refresh())
           if (!res.ok) return await refuse(res.failure, base, mine)
           host.applyAnswer(res.value)
           host.refresh()
           return finish(savedNoticeText(base, res.value, locale, tz))
         } finally {
-          setBusy(false)
+          // A newer opening owns the Save button now (its own read reset it).
+          if (!stale()) setBusy(false)
         }
       })
     },
@@ -258,7 +287,8 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
         disableOutsideClose
         lang={locale}
         dir={dir(locale)}
-        aria-describedby={undefined}
+        // The confirmations describe themselves with their body text; the form has its own labels.
+        aria-describedby={base && kind !== 'edit' ? `${idPrefix}-body` : undefined}
         className="max-h-[90vh] max-w-lg overflow-y-auto"
         data-testid="alert-editor-dialog"
         onOpenAutoFocus={(e) => {
@@ -270,24 +300,34 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
           const done = afterClose.current
           afterClose.current = null
           const opener = returnFocusRef?.current
-          // Focus first: back to the opener, or — when the alert left — the next sensible place.
+          // Focus first: back to the opener; when it is gone but the alert is still there (it was
+          // just marked resolved), the alert's own entry or popup; when the alert left, the next
+          // sensible place.
           if (!done?.left && opener && opener.isConnected) opener.focus()
-          else host.focusAfterLeave()
+          else if (done?.left || !closedAlert.current || !host.focusAlert(closedAlert.current)) host.focusAfterLeave()
           // Then the outcome, once (the notice region is behind the modal until it has closed).
           if (done?.notice) requestAnimationFrame(() => host.announce(done.notice))
         }}
       >
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1} className="text-start focus:outline-hidden">
+          <DialogTitle ref={titleRef} tabIndex={-1} className={`text-start ${FOCUSED_HEADING}`}>
             {t(TITLE[kind])}
           </DialogTitle>
         </DialogHeader>
 
         {phase.kind === 'loading' && (
-          <p role="status" className="flex items-center gap-2 text-sm text-stone-700">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            {t('loadingAlert')}
-          </p>
+          <>
+            <p role="status" className="flex items-center gap-2 text-sm text-stone-700">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              {t('loadingAlert')}
+            </p>
+            {/* A way out that needs no Escape key, also while the alert is being read. */}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose} data-testid="alert-editor-cancel-loading">
+                {t('cancel')}
+              </Button>
+            </DialogFooter>
+          </>
         )}
 
         {phase.kind === 'load_failed' && (
@@ -404,7 +444,7 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
         {base && kind !== 'edit' && (
           <div className="flex flex-col gap-4" data-testid={`alert-${kind}-confirm`}>
             <AlertSummary alert={base} locale={locale} />
-            <p className="text-sm text-stone-800">{t(kind === 'resolve' ? 'resolveBody' : 'withdrawBody')}</p>
+            <p id={`${idPrefix}-body`} className="text-sm text-stone-800">{t(kind === 'resolve' ? 'resolveBody' : 'withdrawBody')}</p>
             {phase.kind === 'ready' && phase.error && (
               <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-900" data-testid="alert-editor-error">
                 {phase.error}
@@ -437,7 +477,7 @@ export function AlertEditorDialog({ request, locale, surface, host, onClose, ret
         {phase.kind === 'conflict' && (
           <div className="flex flex-col gap-4" data-testid="alert-conflict">
             <div>
-              <h3 ref={conflictHeadingRef} tabIndex={-1} className="text-base font-semibold text-stone-900 focus:outline-hidden">
+              <h3 ref={conflictHeadingRef} tabIndex={-1} className={`text-base font-semibold text-stone-900 ${FOCUSED_HEADING}`}>
                 {t('conflictTitle')}
               </h3>
               <p className="mt-1 text-sm text-stone-700">{t('conflictBody')}</p>

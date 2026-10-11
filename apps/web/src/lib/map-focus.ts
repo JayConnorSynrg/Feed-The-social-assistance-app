@@ -27,7 +27,6 @@ import { parseGeographyPoint } from './business'
 import { fetchApprovedBusinessById } from './business-data'
 import { fetchOrganizationById } from './org-data'
 import { isMapPoint } from './member-visibility'
-import { isAlertShown } from './safety-alert-live'
 import { readSafetyAlertById } from './safety-alert-rpc'
 
 /** The focus kinds the map brings into view (feed-shell FOCUS_CONSUMERS registers the same four). */
@@ -123,10 +122,10 @@ async function readBusinessPin(supabase: SupabaseClient<Database>, id: string): 
 
 /** The alert reader by id (lib/safety-alert-rpc.ts), resolved alerts included: the map draws every
  *  shown alert (live, or resolved less than 6 hours ago), so a link to either lands on its pin. The
- *  shown rule (lib/safety-alert-live.ts) is checked again on the returned row with this clock. */
-async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, now: Date, signal: AbortSignal): Promise<MapFocusPin | null> {
+ *  reader returns a row only while the server shows it; no clock of this browser is consulted. */
+async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, signal: AbortSignal): Promise<MapFocusPin | null> {
   const alert = await readSafetyAlertById(supabase, id, signal)
-  if (!alert || !isAlertShown(alert, now.getTime())) return null
+  if (!alert) return null
   const point = { lng: alert.lng, lat: alert.lat }
   return isMapPoint(point) ? { layer: 'safety_alert', id, lng: point.lng, lat: point.lat } : null
 }
@@ -137,7 +136,6 @@ async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string
 export async function readMapFocusPin(
   supabase: SupabaseClient<Database>,
   target: { kind: MapFocusKind; id: string },
-  now: Date = new Date(),
   signal: AbortSignal = new AbortController().signal,
 ): Promise<MapFocusPin | null> {
   try {
@@ -149,7 +147,7 @@ export async function readMapFocusPin(
       case 'business':
         return await readBusinessPin(supabase, target.id)
       case 'safety_alert':
-        return await readSafetyAlertPin(supabase, target.id, now, signal)
+        return await readSafetyAlertPin(supabase, target.id, signal)
       default:
         return assertNever(target.kind)
     }

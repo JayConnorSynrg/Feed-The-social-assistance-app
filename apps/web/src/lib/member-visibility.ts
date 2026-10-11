@@ -86,10 +86,14 @@ export function businessMapVisibility(business: { status: string; is_active: boo
 }
 
 /** Safety alert pin: the shown rule (lib/safety-alert-live.ts) — live, or resolved less than 6 hours
- *  ago; the map draws both. A live alert past expires_at (the 5-minute expiry job has not reached
- *  it), an expired one and a resolved one past its 6 hours are expired; a removed, cleared or
- *  withdrawn alert is hidden. */
-export function safetyAlertMapVisibility(alert: { status: string; expires_at: string; resolved_at?: string | null }, now: Date): MemberVisibility {
+ *  ago; the map draws both. A reader row carries the server's verdict (shown_state) and that decides;
+ *  `now` is used only for a row without one. A live alert past expires_at (the 5-minute expiry job
+ *  has not reached it), an expired one and a resolved one past its 6 hours are expired; a removed,
+ *  cleared or withdrawn alert is hidden. */
+export function safetyAlertMapVisibility(
+  alert: { status: string; expires_at: string; resolved_at?: string | null; shown_state?: string | null },
+  now: Date,
+): MemberVisibility {
   if (isAlertShown(alert, now.getTime())) return VISIBLE
   return alert.status === 'live' || alert.status === 'expired' || alert.status === 'resolved' ? hiddenBecause('expired') : hiddenBecause('hidden')
 }

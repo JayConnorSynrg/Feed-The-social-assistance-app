@@ -91,6 +91,10 @@ const alert = (id: string, extra: Partial<ReviewAlert> = {}): ReviewAlert => ({
   updated_at: null,
   update_count: 0,
   resolved_at: null,
+  resolved_by_role: null,
+  // The server's verdict on the row (a resolved fixture says so itself).
+  shown_state: extra.status === 'resolved' ? 'resolved' : 'live',
+  shown_until: extra.status === 'resolved' ? '2026-10-09T00:30:00.000Z' : '2026-10-08T21:00:00.000Z',
   ...extra,
 })
 const A = '55555555-5555-4555-8555-555555555555'
@@ -113,7 +117,7 @@ const view = (over: Partial<SafetyAlertsReviewViewProps>) =>
   )
 
 beforeEach(() => {
-  // The reader drops gone rows on the browser clock: the fixtures' NOW is that clock.
+  // The list's dates are formatted on this clock; what is shown is the server's verdict on each row.
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   harness = false
   h.resolved.length = 0

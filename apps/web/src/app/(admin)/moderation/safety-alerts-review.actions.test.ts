@@ -6,7 +6,10 @@
 //   - Approve and Remove send the version the row was showing, through privilegedRpc;
 //   - the answer (the alert as members see it) updates the row, which keeps its place and is_mine;
 //   - a stale version, an ended alert and a self-moderation refusal each say what happened; the list
-//     is re-read when it is stale, and nothing is sent a second time.
+//     is re-read when it is stale, and nothing is sent a second time;
+//   - fix round: the answer's own fields reach the row (version, text, expiry, the server's verdict);
+//     the list is read once per mount and once per stale refusal whatever the render rate; a write
+//     that never answers gives up after 12 s.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -40,6 +43,7 @@ async function review() {
   return { c, props }
 }
 const lists = () => h.backend.named('safety_alerts_in_view')
+const HOUR = 3600_000
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
@@ -69,6 +73,49 @@ describe('SafetyAlertsReview — verify and remove', () => {
     const after = r.props()
     expect(after.alerts.map((a) => [a.id, a.verified])).toEqual([['a', true], ['b', false]])
     expect(after.error).toBeNull()
+  })
+
+  it('the answer differs from the row on screen: every field the server answered reaches the row; its place and is_mine stay', async () => {
+    const r = await review()
+    // Verifying also moved the version; meanwhile the reporter had raised the severity and changed the
+    // text (the answer is the alert as it is NOW). The moderator's answer says is_mine false for B's
+    // reporter view and carries no coordinates worth trusting over the held pin.
+    h.backend.answers.admin_verify_safety_alert = {
+      data: { ...A, verified: true, version: 4, severity: 4, description: 'Bridge out — both lanes', updated_at: iso(0), update_count: 1, expires_at: iso(72 * HOUR), shown_until: iso(72 * HOUR), confirm_count: 5, lng: Number.NaN, lat: Number.NaN, is_mine: true },
+    }
+    r.props().onApprove(A)
+    await r.c.flush()
+    const row = r.props().alerts.find((a) => a.id === 'a')!
+    expect(row).toMatchObject({
+      verified: true,
+      version: 4,
+      severity: 4,
+      description: 'Bridge out — both lanes',
+      updated_at: iso(0),
+      update_count: 1,
+      expires_at: iso(72 * HOUR),
+      shown_state: 'live',
+      shown_until: iso(72 * HOUR),
+      confirm_count: 5,
+      // Kept from the row held: where it is, and whose it is.
+      lng: A.lng,
+      lat: A.lat,
+      is_mine: false,
+    })
+    expect(r.props().alerts.map((a) => a.id)).toEqual(['a', 'b'])
+    // The next action on that row sends the version the answer carried.
+    h.backend.answers.admin_remove_safety_alert = { data: null }
+    r.props().onRemove(row)
+    await r.c.flush()
+    expect(h.backend.named('admin_remove_safety_alert')[0].args).toEqual({ p_alert_id: 'a', p_expected_version: 4 })
+  })
+
+  it('an answer that carries no alert (an older server) still marks the row verified, and changes nothing else', async () => {
+    const r = await review()
+    h.backend.answers.admin_verify_safety_alert = { data: null }
+    r.props().onApprove(A)
+    await r.c.flush()
+    expect(r.props().alerts.find((a) => a.id === 'a')).toEqual({ ...A, verified: true })
   })
 
   it('Remove sends the version on screen; the row leaves', async () => {
@@ -101,6 +148,56 @@ describe('SafetyAlertsReview — verify and remove', () => {
     await r.c.flush()
     expect(r.props().error).toMatch(/no longer live/)
     expect(r.props().alerts.map((a) => a.id)).toEqual(['b'])
+  })
+
+  it('the list is read once, however often the page re-renders; each stale refusal reads once more', async () => {
+    const r = await review()
+    for (let i = 0; i < 50; i++) r.c.rerender()
+    await r.c.flush()
+    expect(lists()).toHaveLength(1)
+    h.backend.answers.admin_verify_safety_alert = { error: { code: 'PT409', message: 'edit_conflict', details: '{"current_version": 4}' } }
+    r.props().onApprove(A)
+    await r.c.flush()
+    for (let i = 0; i < 50; i++) r.c.rerender()
+    await r.c.flush()
+    expect(lists()).toHaveLength(2)
+    r.props().onApprove(A)
+    await r.c.flush()
+    expect(lists()).toHaveLength(3)
+  })
+
+  it('a write that never answers gives up after 12 s: the action is said to have failed and the button is free again', async () => {
+    const timeouts: Array<{ ms: number; controller: AbortController }> = []
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      const controller = new AbortController()
+      timeouts.push({ ms, controller })
+      return controller.signal
+    })
+    try {
+      const r = await review()
+      h.backend.answers.admin_verify_safety_alert = () => new Promise(() => {})
+      r.props().onApprove(A)
+      await r.c.flush()
+      expect(r.props().approvingId).toBe('a')
+      const write = timeouts.at(-1)!
+      expect(write.ms).toBe(12_000)
+      expect(h.backend.named('admin_verify_safety_alert')[0].signal).toBe(write.controller.signal)
+      write.controller.abort()
+      await r.c.flush()
+      expect(r.props().approvingId).toBeNull()
+      expect(r.props().error).toBe('Approve failed')
+      expect(lists()).toHaveLength(1)
+
+      h.backend.answers.admin_remove_safety_alert = () => new Promise(() => {})
+      r.props().onRemove(A)
+      await r.c.flush()
+      timeouts.at(-1)!.controller.abort()
+      await r.c.flush()
+      expect(r.props().removingId).toBeNull()
+      expect(r.props().error).toBe('Remove failed')
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 
   it('self-moderation refused by the server: said in plain words, the list left as it is', async () => {

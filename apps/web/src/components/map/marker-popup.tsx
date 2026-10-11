@@ -24,7 +24,7 @@ import { useFocusedPopup } from './use-focused-popup'
 
 /** Visible focus for a marker button (lime-700 ring, as the rest of FEED). */
 export const MARKER_BUTTON_FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2'
+  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-2'
 
 /** A Marker ref callback: drop the role="img" and aria-label="Map marker" Mapbox adds to the
  *  marker's wrapper element, so the button inside is exposed as a button with its own name. */
@@ -95,6 +95,8 @@ export function MarkerPopupDialog({
   onClose,
   closeLabel = 'Close',
   className,
+  lang,
+  dir,
   children,
 }: {
   titleId: string
@@ -102,6 +104,10 @@ export function MarkerPopupDialog({
   /** The Close button's name (the markers' copy is English today). */
   closeLabel?: string
   className?: string
+  /** The language and direction of the popup's own text (Close included). A Mapbox popup sits
+   *  outside the panel, so without these it inherits the document's. Omitted = unchanged. */
+  lang?: string
+  dir?: 'ltr' | 'rtl'
   children: ReactNode
 }) {
   return (
@@ -109,7 +115,9 @@ export function MarkerPopupDialog({
       role="dialog"
       aria-labelledby={titleId}
       tabIndex={0}
-      className={`relative rounded-md pr-7 outline-none focus-visible:ring-2 focus-visible:ring-lime-700 ${className ?? ''}`}
+      lang={lang}
+      dir={dir}
+      className={`relative rounded-md pe-7 outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 ${className ?? ''}`}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
         if (popupKeyAction(e.key) !== 'close') return
         e.stopPropagation()
@@ -120,7 +128,7 @@ export function MarkerPopupDialog({
         type="button"
         aria-label={closeLabel}
         onClick={onClose}
-        className="absolute right-0 top-0 inline-flex h-6 w-6 items-center justify-center rounded text-stone-600 hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700"
+        className="absolute end-0 top-0 inline-flex h-6 w-6 items-center justify-center rounded text-stone-600 hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>
