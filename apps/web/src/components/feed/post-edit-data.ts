@@ -80,15 +80,26 @@ export async function loadEditSource(client: Reader, postId: string): Promise<Ed
   }
 }
 
-/** Re-read one post with the feed's own column list, to settle a card from server truth. */
-export async function loadFeedRow(client: Reader, postId: string): Promise<FeedPostRow | null> {
+/** One post read again with the feed's own column list: found, gone (no row is readable any
+ *  more — deleted, or hidden from this viewer), or the read itself failed. */
+export type FeedRowResult = { status: 'found'; row: FeedPostRow } | { status: 'gone' } | { status: 'error'; error: unknown }
+
+/** Re-read one post with the feed's own column list, telling "gone" from "the read failed". */
+export async function readFeedRow(client: Reader, postId: string): Promise<FeedRowResult> {
   try {
     const { data, error } = await client.from('posts').select(FEED_POST_SELECT).eq('id', postId).abortSignal(signal()).maybeSingle()
-    if (error || !data) return null
-    return data as unknown as FeedPostRow
-  } catch {
-    return null
+    if (error) return { status: 'error', error }
+    if (!data) return { status: 'gone' }
+    return { status: 'found', row: data as unknown as FeedPostRow }
+  } catch (error) {
+    return { status: 'error', error }
   }
+}
+
+/** Re-read one post with the feed's own column list, to settle a card from server truth. */
+export async function loadFeedRow(client: Reader, postId: string): Promise<FeedPostRow | null> {
+  const result = await readFeedRow(client, postId)
+  return result.status === 'found' ? result.row : null
 }
 
 export const POST_REVISION_SELECT = 'id, version, edited_at, reason, fields_changed, snapshot, redacted_at, redactor_role'
