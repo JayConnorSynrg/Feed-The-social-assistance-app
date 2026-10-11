@@ -83,7 +83,10 @@ To change a label or the design, or add a kind:
 | a visible post, an approved resource, an approved and active business, an active organization | 200 | the card for its kind, `image/png` |
 | a hidden or deleted post; a pending or rejected resource; a business or organization that is not public | 404 | `Post not found` / `Resource not found` / `Business not found` / `Organization not found` |
 | an id that does not exist | 404 | the same text |
-| any of the above when the read or the card file fails | 500 | `Preview image unavailable`, sent with `Cache-Control: no-store` |
+| any request that fails with an exception (the card file cannot be read, the database client throws) | 500 | `Preview image unavailable`, sent with `Cache-Control: no-store` |
+
+A database error that the API returns as an answer rather than an exception (a malformed id, a
+refused read) is treated like "no such item": 404, as before this release, and logged `not_found`.
 
 Each handler makes one read of FEED's own database, and asks for the `id` column only — plus
 `post_type` for a post, which picks the card. Nothing else about the item (its text, name, place or
