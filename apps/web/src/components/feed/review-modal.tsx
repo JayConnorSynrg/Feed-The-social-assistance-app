@@ -14,9 +14,14 @@
  * reviewed member's name is their own text; their role is a code the description is chosen by.
  * A failure is kept as a code or as the hook's fixed sentence and read through reviewErrorText;
  * text FEED did not write is shown as received and marked English.
+ *
+ * Focus: closing the dialog (Escape, the close button, Cancel) returns focus to the control that
+ * opened it. After a review is sent that control is about to leave the page (a review can be
+ * given once), so focus goes to the caller's stable control instead; so it does when the opener
+ * is already gone.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -59,6 +64,10 @@ interface ReviewModalProps {
   /** The reviewed member's role, as a code: sourcer, seeker, requester or volunteer. */
   revieweeRole: string
   onSubmitted: () => void
+  /** The control that opened the dialog: focus returns to it when the dialog closes unsent. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+  /** Where focus goes when that control is gone, or is about to go because the review was sent. */
+  fallbackFocus?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -74,9 +83,13 @@ export function ReviewModal({
   revieweeNameLang = '',
   revieweeRole,
   onSubmitted,
+  returnFocusRef,
+  fallbackFocus,
 }: ReviewModalProps) {
   const { submitReview, loading, error } = useReviews()
   const locale = useProfileLocale()
+  // True from a sent review until the dialog has handed focus back.
+  const sentRef = useRef(false)
 
   const [rating, setRating] = useState<number>(0)
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null)
@@ -114,6 +127,7 @@ export function ReviewModal({
       setRating(0)
       setWouldRecommend(null)
       setComment('')
+      sentRef.current = true
       onOpenChange(false)
       onSubmitted()
     } catch {
@@ -130,7 +144,25 @@ export function ReviewModal({
     <Dialog open={open} onOpenChange={handleClose}>
       {/* A portal: it does not inherit the language of the surface it opens from, so it carries
           its own. */}
-      <DialogContent lang={locale} dir={dir(locale)} closeLabel={cardT(locale, 'close')} className="sm:max-w-[440px]" data-testid="review-dialog">
+      <DialogContent
+        lang={locale}
+        dir={dir(locale)}
+        closeLabel={cardT(locale, 'close')}
+        className="sm:max-w-[440px]"
+        data-testid="review-dialog"
+        onCloseAutoFocus={(e) => {
+          const sent = sentRef.current
+          sentRef.current = false
+          const opener = returnFocusRef?.current
+          if (!sent && opener?.isConnected) {
+            e.preventDefault()
+            opener.focus()
+          } else if (fallbackFocus) {
+            e.preventDefault()
+            fallbackFocus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {beforeName}
@@ -153,12 +185,15 @@ export function ReviewModal({
 
             {/* Wheat-stalk rating */}
             <div>
-              <p className="text-sm font-medium mb-2">{badgesT(locale, 'ratingLabel')}</p>
+              <p id="review-rating-label" className="text-sm font-medium mb-2">{badgesT(locale, 'ratingLabel')}</p>
+              {/* Named by the caption above; a rating is needed to send the review. */}
               <WheatStalkRatingInteractive
                 value={rating}
                 onChange={setRating}
                 testIdPrefix="review"
                 locale={locale}
+                labelledBy="review-rating-label"
+                required
               />
             </div>
 
@@ -173,7 +208,7 @@ export function ReviewModal({
                   onClick={() => setWouldRecommend(wouldRecommend === true ? null : true)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     wouldRecommend === true
-                      ? 'bg-lime-600 text-white border-lime-600'
+                      ? 'bg-lime-700 text-white border-lime-700'
                       : 'bg-white text-stone-700 border-stone-300 hover:border-lime-400'
                   }`}
                 >
@@ -185,7 +220,7 @@ export function ReviewModal({
                   onClick={() => setWouldRecommend(wouldRecommend === false ? null : false)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     wouldRecommend === false
-                      ? 'bg-red-500 text-white border-red-500'
+                      ? 'bg-red-700 text-white border-red-700'
                       : 'bg-white text-stone-700 border-stone-300 hover:border-red-300'
                   }`}
                 >
@@ -209,7 +244,7 @@ export function ReviewModal({
                 rows={3}
                 dir={comment ? 'auto' : dir(locale)}
                 placeholder={badgesT(locale, 'commentPlaceholder')}
-                className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:ring-1 focus:ring-[#4a5d23] resize-none"
+                className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-1 focus:ring-[#4a5d23] resize-none"
               />
               {comment.length > 800 && (
                 <p className="text-xs text-stone-500 mt-1">

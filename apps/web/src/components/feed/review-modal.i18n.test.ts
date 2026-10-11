@@ -6,8 +6,10 @@
 //   - the dialog (a portal) carries the profile's language and direction and a translated close
 //     label, whichever surface opened it;
 //   - the title reads around the reviewed member's own name; the description is chosen by role;
-//   - the rating group and each rating button are named in the member's language, and the arrow
-//     keys follow reading direction (Arabic: ArrowLeft raises);
+//   - the rating is a radio group as the ARIA Authoring Practices describe it: named by the
+//     visible caption, one tab stop, arrows move focus and check (ArrowLeft is "next" in Arabic),
+//     wrapping, Space checks, and the filled stalks always show the checked value;
+//   - closing the dialog returns focus to its opener, or to a stable control once a review is sent;
 //   - the Yes / No pair is a group named by its question; the comment box takes the direction of
 //     what is typed;
 //   - a failure is the member's sentence, or received text marked English;
@@ -44,7 +46,7 @@ import { editT } from '@/lib/i18n-feed-edit'
 import { REVIEW_ROLES, badgesT, reviewDescription, stalksText } from '@/lib/i18n-feed-badges'
 import { DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AlertDescription } from '@/components/ui/alert'
-import { MAX_STALKS, WheatStalkRatingDisplay, WheatStalkRatingInteractive, ratingKeyStep } from '@/components/ui/wheat-stalk-rating'
+import { MAX_STALKS, WheatStalkRatingDisplay, WheatStalkRatingInteractive, ratingKeyStep, ratingNeighbour, ratingTabStop } from '@/components/ui/wheat-stalk-rating'
 import { ReviewModal } from './review-modal'
 
 const LOCALES = Object.keys(messages) as Locale[]
@@ -214,54 +216,210 @@ describe('submitting still sends what it sent', () => {
   })
 })
 
-describe('the wheat-stalk rating', () => {
-  const interactive = (locale: Locale, value = 2) => renderToStaticMarkup(h(WheatStalkRatingInteractive, { value, onChange: () => {}, testIdPrefix: 'review', locale }))
+describe('the wheat-stalk rating: a radio group as the ARIA Authoring Practices describe it', () => {
+  const interactive = (locale: Locale, value = 2) => renderToStaticMarkup(h(WheatStalkRatingInteractive, { value, onChange: () => {}, testIdPrefix: 'review', locale, labelledBy: 'cap', required: true }))
+  /** The group on the mini runtime, each stalk given an element that records focus. */
+  function group(locale: Locale, value: number) {
+    const onChange = vi.fn((n: number) => {
+      current = n
+    })
+    let current = value
+    const focused: number[] = []
+    const c = mount(() => WheatStalkRatingInteractive({ value: current, onChange, locale, labelledBy: 'cap' }))
+    const radios = () => findAll(c.tree(), (e) => e.props.role === 'radio') as El[]
+    radios().forEach((r, i) => (r.props.ref as (el: unknown) => void)({ focus: () => void focused.push(i + 1) }))
+    const press = (on: number, key: string) => {
+      const prevented = vi.fn()
+      ;(radios()[on - 1].props.onKeyDown as (e: unknown) => void)({ key, preventDefault: prevented })
+      c.rerender()
+      return prevented.mock.calls.length
+    }
+    const filled = () => radios().filter((r) => (r.props.children as El).props.filled === true).length
+    return { c, onChange, focused, radios, press, filled, value: () => current }
+  }
 
-  it('vi: the group and each button are named in Vietnamese; the chosen one is checked', () => {
+  it('vi: the group is named by the caption it is given; each stalk is named in Vietnamese; the chosen one is checked', () => {
     const out = interactive('vi')
-    expect(out).toMatch(/^<div data-testid="review-stalks" role="radiogroup" aria-label="Đánh giá bằng bông lúa mì"/)
-    expect(out).toContain('role="radio" aria-checked="true" aria-label="2 bông lúa" data-testid="review-stalk-2"')
-    expect(out).toContain('role="radio" aria-checked="false" aria-label="5 bông lúa" data-testid="review-stalk-5"')
+    expect(out).toMatch(/^<div data-testid="review-stalks" role="radiogroup" aria-labelledby="cap" aria-required="true"/)
+    expect(out).not.toMatch(/<div[^>]*role="radiogroup"[^>]*aria-label=/)
+    expect(out).toContain('role="radio" aria-checked="true" aria-label="2 bông lúa" tabindex="0" data-testid="review-stalk-2"')
+    expect(out).toContain('role="radio" aria-checked="false" aria-label="5 bông lúa" tabindex="-1" data-testid="review-stalk-5"')
     expect(out).not.toMatch(/Wheat stalk rating|aria-label="\d stalks?"/)
   })
 
-  it.each(LOCALES)('%s: five buttons, five different names from the dictionary', (locale) => {
+  it('the dialog names the group from its visible caption (so the name contains the word on screen in every locale) and marks it required', () => {
+    for (const locale of LOCALES) {
+      const tree = dialog(locale).tree()
+      const rating = (findAll(tree, (e) => e.type === WheatStalkRatingInteractive) as El[])[0]
+      const caption = (findAll(tree, (e) => e.props.id === rating.props.labelledBy) as El[])[0]
+      expect(textOf(caption), locale).toBe(badgesT(locale, 'ratingLabel'))
+      expect(rating.props.required, locale).toBe(true)
+    }
+  })
+
+  it.each(LOCALES)('%s: five stalks, five different names from the dictionary', (locale) => {
     const out = interactive(locale)
     const names = [1, 2, 3, 4, 5].map((n) => stalksText(n, locale))
     expect(new Set(names).size).toBe(5)
-    for (const [i, name] of names.entries()) expect(out).toContain(`aria-label="${html(name)}" data-testid="review-stalk-${i + 1}"`)
-    expect(out).toContain(`aria-label="${html(badgesT(locale, 'ratingGroupLabel'))}"`)
+    for (const [i, name] of names.entries()) expect(out).toMatch(new RegExp(`aria-label="${html(name)}" tabindex="-?\\d" data-testid="review-stalk-${i + 1}"`))
     expect(MAX_STALKS).toBe(5)
   })
 
-  it('the arrow keys follow reading direction: in Arabic ArrowLeft raises and ArrowRight lowers', () => {
-    expect([ratingKeyStep('ArrowRight', 'en'), ratingKeyStep('ArrowLeft', 'en')]).toEqual([1, -1])
-    expect([ratingKeyStep('ArrowRight', 'ar'), ratingKeyStep('ArrowLeft', 'ar')]).toEqual([-1, 1])
-    for (const locale of LOCALES) {
-      expect([ratingKeyStep('ArrowUp', locale), ratingKeyStep('ArrowDown', locale), ratingKeyStep('Enter', locale), ratingKeyStep('a', locale)]).toEqual([1, -1, 0, 0])
-      if (locale !== 'ar') expect(ratingKeyStep('ArrowRight', locale)).toBe(1)
-    }
+  it('one tab stop: the checked stalk, or the first when none is checked', () => {
+    const stops = (value: number) => [...interactive('en', value).matchAll(/tabindex="(-?\d)" data-testid="review-stalk-(\d)"/g)].filter((m) => m[1] === '0').map((m) => Number(m[2]))
+    expect(stops(0)).toEqual([1])
+    for (const value of [1, 2, 3, 4, 5]) expect(stops(value)).toEqual([value])
+    expect([0, 1, 3, 5, 9].map(ratingTabStop)).toEqual([1, 1, 3, 5, 1])
   })
 
-  it('a key press moves the rating by one within 1..5 and nothing else is swallowed', () => {
-    const press = (locale: Locale, value: number, key: string) => {
-      const onChange = vi.fn()
-      const prevented = vi.fn()
-      const c = mount(() => WheatStalkRatingInteractive({ value, onChange, locale }))
-      ;((findAll(c.tree(), (e) => e.props.role === 'radio') as El[])[0].props.onKeyDown as (e: unknown) => void)({ key, preventDefault: prevented })
-      return { changed: onChange.mock.calls.map((x) => x[0]), prevented: prevented.mock.calls.length }
+  it('which neighbour an arrow means: Down next and Up previous everywhere; Right next in LTR, Left next in RTL', () => {
+    for (const locale of LOCALES) {
+      expect([ratingKeyStep('ArrowDown', locale), ratingKeyStep('ArrowUp', locale), ratingKeyStep('Enter', locale), ratingKeyStep(' ', locale), ratingKeyStep('a', locale)]).toEqual([1, -1, 0, 0, 0])
+      if (locale !== 'ar') expect([ratingKeyStep('ArrowRight', locale), ratingKeyStep('ArrowLeft', locale)]).toEqual([1, -1])
     }
-    expect(press('en', 2, 'ArrowRight')).toEqual({ changed: [3], prevented: 1 })
-    expect(press('ar', 2, 'ArrowLeft')).toEqual({ changed: [3], prevented: 1 })
-    expect(press('ar', 2, 'ArrowRight')).toEqual({ changed: [1], prevented: 1 })
-    expect(press('en', 5, 'ArrowRight')).toEqual({ changed: [5], prevented: 1 })
-    expect(press('en', 1, 'ArrowLeft')).toEqual({ changed: [1], prevented: 1 })
-    expect(press('en', 2, 'Tab')).toEqual({ changed: [], prevented: 0 })
+    expect([ratingKeyStep('ArrowRight', 'ar'), ratingKeyStep('ArrowLeft', 'ar')]).toEqual([-1, 1])
+    // Wrapping at both ends.
+    expect([1, 2, 5].map((n) => ratingNeighbour(n, 1))).toEqual([2, 3, 1])
+    expect([1, 2, 5].map((n) => ratingNeighbour(n, -1))).toEqual([5, 1, 4])
+  })
+
+  it('an arrow key moves focus to the neighbouring stalk and checks it: focused, checked and filled are one stalk', () => {
+    const g = group('en', 0)
+    // From the focused first stalk (none checked yet), two presses end on the third.
+    expect(g.press(1, 'ArrowRight')).toBe(1)
+    expect([g.value(), g.focused.at(-1), g.filled()]).toEqual([2, 2, 2])
+    g.press(2, 'ArrowRight')
+    expect([g.value(), g.focused.at(-1), g.filled()]).toEqual([3, 3, 3])
+    g.press(3, 'ArrowLeft')
+    expect([g.value(), g.focused.at(-1), g.filled()]).toEqual([2, 2, 2])
+    g.press(2, 'ArrowDown')
+    expect([g.value(), g.focused.at(-1)]).toEqual([3, 3])
+    g.press(3, 'ArrowUp')
+    expect([g.value(), g.focused.at(-1)]).toEqual([2, 2])
+    expect(g.onChange).toHaveBeenCalledTimes(5)
+    expect(g.focused).toEqual([2, 3, 2, 3, 2])
+  })
+
+  it('it wraps at the ends', () => {
+    const g = group('en', 5)
+    g.press(5, 'ArrowRight')
+    expect([g.value(), g.focused.at(-1)]).toEqual([1, 1])
+    g.press(1, 'ArrowLeft')
+    expect([g.value(), g.focused.at(-1)]).toEqual([5, 5])
+  })
+
+  it('Arabic: ArrowLeft is the next stalk and ArrowRight the previous', () => {
+    const g = group('ar', 0)
+    g.press(1, 'ArrowLeft')
+    g.press(2, 'ArrowLeft')
+    expect([g.value(), g.focused.at(-1), g.filled()]).toEqual([3, 3, 3])
+    g.press(3, 'ArrowRight')
+    expect([g.value(), g.focused.at(-1)]).toEqual([2, 2])
+  })
+
+  it('any other key is left alone: nothing changes, nothing is swallowed', () => {
+    const g = group('en', 2)
+    for (const key of ['Tab', 'Enter', ' ', 'Home', 'a']) expect(g.press(2, key), key).toBe(0)
+    expect(g.onChange).not.toHaveBeenCalled()
+    expect(g.focused).toEqual([])
+  })
+
+  it('Space or a click checks the focused stalk (a button fires click on Space)', () => {
+    const g = group('en', 0)
+    ;(g.radios()[3].props.onClick as () => void)()
+    g.c.rerender()
+    expect(g.value()).toBe(4)
+    expect(g.radios().map((r) => r.props['aria-checked'])).toEqual([false, false, false, true, false])
+    expect(g.radios().map((r) => r.props.tabIndex)).toEqual([-1, -1, -1, 0, -1])
+    // A real <button>, so the browser turns Space into that click.
+    expect(g.radios().every((r) => r.type === 'button' && r.props.type === 'button')).toBe(true)
+  })
+
+  it('focus sets no preview; only a pointer does, and a key press clears it', () => {
+    const g = group('en', 3)
+    for (const r of g.radios()) expect('onFocus' in r.props || 'onBlur' in r.props).toBe(false)
+    ;(g.radios()[0].props.onMouseEnter as () => void)()
+    g.c.rerender()
+    expect(g.filled()).toBe(1)
+    // The pointer still rests on the first stalk; the keyboard changes the value: the value shows.
+    g.press(3, 'ArrowRight')
+    expect([g.value(), g.filled()]).toEqual([4, 4])
+    ;(g.radios()[1].props.onMouseEnter as () => void)()
+    g.c.rerender()
+    ;(g.radios()[1].props.onMouseLeave as () => void)()
+    g.c.rerender()
+    expect(g.filled()).toBe(4)
   })
 
   it('the display is an image named by the rating, in the member language', () => {
     expect(renderToStaticMarkup(h(WheatStalkRatingDisplay, { value: 3, locale: 'so' }))).toMatch(/^<span data-testid="stalk-display-row" class="inline-flex items-center gap-0\.5" role="img" aria-label="3 ka mid ah 5 sabuul">/)
     expect(renderToStaticMarkup(h(WheatStalkRatingDisplay, { value: 3, locale: 'en' }))).toContain('aria-label="3 out of 5 stalks"')
+  })
+})
+
+describe('focus returns when the dialog closes', () => {
+  const closeWith = (o: Record<string, unknown>, before: (d: ReturnType<typeof dialog>) => Promise<void> | void = () => {}) => {
+    const opener = { isConnected: true, focus: vi.fn() }
+    const fallbackFocus = vi.fn()
+    const d = dialog('es', { returnFocusRef: { current: opener }, fallbackFocus, ...o })
+    return { d, opener, fallbackFocus, before, close: () => {
+      const prevented = vi.fn()
+      ;(one(d.tree(), DialogContent).props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+      return prevented.mock.calls.length
+    } }
+  }
+
+  it('closed unsent (Escape, the close button, Cancel): focus goes back to the button that opened it', () => {
+    const t = closeWith({})
+    expect(t.close()).toBe(1)
+    expect(t.opener.focus).toHaveBeenCalledTimes(1)
+    expect(t.fallbackFocus).not.toHaveBeenCalled()
+  })
+
+  it('the opener has left the page: focus goes to the caller\'s stable control', () => {
+    const t = closeWith({})
+    t.opener.isConnected = false
+    expect(t.close()).toBe(1)
+    expect(t.opener.focus).not.toHaveBeenCalled()
+    expect(t.fallbackFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('after a review is sent the opener is about to go: focus goes to the stable control, never to the opener', async () => {
+    const t = closeWith({})
+    ;((findAll(t.d.tree(), (e) => e.type === WheatStalkRatingInteractive) as El[])[0].props.onChange as (n: number) => void)(4)
+    t.d.c.rerender()
+    await (one(t.d.tree(), 'form').props.onSubmit as (e: unknown) => Promise<void>)({ preventDefault: () => {} })
+    expect(state.submitted).toHaveLength(1)
+    expect(t.close()).toBe(1)
+    expect(t.opener.focus).not.toHaveBeenCalled()
+    expect(t.fallbackFocus).toHaveBeenCalledTimes(1)
+    // The next close of the same dialog, unsent, goes back to the opener again.
+    expect(t.close()).toBe(1)
+    expect(t.opener.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('a caller that hands in nothing leaves the close to the dialog (nothing is prevented)', () => {
+    const d = dialog('es')
+    const prevented = vi.fn()
+    ;(one(d.tree(), DialogContent).props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: prevented })
+    expect(prevented).not.toHaveBeenCalled()
+  })
+})
+
+describe('contrast of what this dialog colours itself', () => {
+  it('a chosen Yes or No is white on lime-700 / red-700, and the comment placeholder is stone-500', () => {
+    const d = dialog('en')
+    const buttons = () => findAll((findAll(d.tree(), (e) => e.props.role === 'group') as El[])[0], (e) => e.type === 'button') as El[]
+    ;(buttons()[0].props.onClick as () => void)()
+    d.c.rerender()
+    expect(buttons()[0].props.className).toContain('bg-lime-700 text-white border-lime-700')
+    ;(buttons()[1].props.onClick as () => void)()
+    d.c.rerender()
+    expect(buttons()[1].props.className).toContain('bg-red-700 text-white border-red-700')
+    for (const b of buttons()) expect(b.props.className).not.toMatch(/bg-lime-600|bg-red-500/)
+    const box = byTestId(d.tree(), 'review-comment')[0]
+    expect(box.props.className).toContain('placeholder:text-stone-500')
+    expect(box.props.className).not.toContain('placeholder:text-stone-400')
   })
 })
 

@@ -8,26 +8,45 @@
  * unfilled stalks are stone-300.
  *
  * Two modes:
- *  - interactive: role="radiogroup", keyboard accessible, hover preview
+ *  - interactive: a radio group as the ARIA Authoring Practices describe it, with a pointer
+ *    hover preview
  *  - display: read-only, optional size sm
  *
- * Names are in the viewer's language (lib/i18n-feed-badges.ts). The stalks run in reading order,
- * so in a right-to-left locale ArrowLeft raises the rating and ArrowRight lowers it.
+ * The interactive group:
+ *  - one tab stop: the checked stalk, or the first when none is checked (roving tabindex);
+ *  - an arrow key moves focus to the neighbouring stalk and checks it, wrapping at the ends.
+ *    ArrowDown is the next stalk and ArrowUp the previous in every direction; ArrowRight is the
+ *    next in a left-to-right locale and ArrowLeft the next in a right-to-left one (the stalks run
+ *    in reading order);
+ *  - Space (or a click) checks the focused stalk;
+ *  - the filled stalks always show the checked value after a key press. Only a pointer previews.
+ * Names are in the viewer's language (lib/i18n-feed-badges.ts); the group is named by the
+ * caller's visible caption.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { dir, type Locale } from '@/lib/i18n'
-import { badgesT, ratingText, stalksText } from '@/lib/i18n-feed-badges'
+import { ratingText, stalksText } from '@/lib/i18n-feed-badges'
 
 /** The highest rating. */
 export const MAX_STALKS = 5
 
-/** What an arrow key does to a rating in a locale: +1, -1, or 0 for any other key. */
+/** Which neighbour an arrow key moves to: +1 the next stalk, -1 the previous, 0 any other key. */
 export function ratingKeyStep(key: string, locale: Locale): -1 | 0 | 1 {
   const rtl = dir(locale) === 'rtl'
-  if (key === 'ArrowUp' || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) return 1
-  if (key === 'ArrowDown' || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) return -1
+  if (key === 'ArrowDown' || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) return 1
+  if (key === 'ArrowUp' || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) return -1
   return 0
+}
+
+/** The stalk one step from `from`, wrapping at both ends (5 → 1, 1 → 5). */
+export function ratingNeighbour(from: number, step: -1 | 1): number {
+  return ((from - 1 + step + MAX_STALKS) % MAX_STALKS) + 1
+}
+
+/** The group's one tab stop: the checked stalk, or the first when none is checked. */
+export function ratingTabStop(value: number): number {
+  return value >= 1 && value <= MAX_STALKS ? value : 1
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +102,10 @@ interface WheatStalkRatingInteractiveProps {
   testIdPrefix?: string
   /** The viewer's language. */
   locale: Locale
+  /** The id of the visible caption that names the group. */
+  labelledBy: string
+  /** True when a rating must be chosen before the form can be sent. */
+  required?: boolean
 }
 
 export function WheatStalkRatingInteractive({
@@ -90,35 +113,47 @@ export function WheatStalkRatingInteractive({
   onChange,
   testIdPrefix = 'stalk',
   locale,
+  labelledBy,
+  required = false,
 }: WheatStalkRatingInteractiveProps) {
+  // A pointer preview only: focus never sets it, and a key press clears it.
   const [hovered, setHovered] = useState(0)
   const display = hovered || value
+  const stalks = useRef<Array<HTMLButtonElement | null>>([])
+  const tabStop = ratingTabStop(value)
 
   return (
     <div
       data-testid={`${testIdPrefix}-stalks`}
       role="radiogroup"
-      aria-label={badgesT(locale, 'ratingGroupLabel')}
+      aria-labelledby={labelledBy}
+      aria-required={required || undefined}
       className="flex gap-1"
     >
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
+          ref={(el) => {
+            stalks.current[n - 1] = el
+          }}
           type="button"
           role="radio"
           aria-checked={value === n}
           aria-label={stalksText(n, locale)}
+          tabIndex={n === tabStop ? 0 : -1}
           data-testid={`${testIdPrefix}-stalk-${n}`}
           onClick={() => onChange(n)}
           onMouseEnter={() => setHovered(n)}
           onMouseLeave={() => setHovered(0)}
-          onFocus={() => setHovered(n)}
-          onBlur={() => setHovered(0)}
           onKeyDown={(e) => {
             const step = ratingKeyStep(e.key, locale)
             if (step === 0) return
             e.preventDefault()
-            onChange(step > 0 ? Math.min(MAX_STALKS, value + 1) : Math.max(1, value - 1))
+            // Focus moves with the check, so what is focused, checked and filled are one stalk.
+            const next = ratingNeighbour(n, step)
+            setHovered(0)
+            onChange(next)
+            stalks.current[next - 1]?.focus()
           }}
           className="focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700 rounded"
         >
