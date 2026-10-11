@@ -144,8 +144,32 @@ function expectedRows(): Draft[] {
   ]
 }
 
-const cell = (s: string) => s.replace(/\|/g, '\\|')
-const uncell = (s: string) => s.replace(/\\\|/g, '|')
+/**
+ * A value as a Markdown table cell. The backslash is the escape character, so it is escaped
+ * first and the pipe second: every backslash in a cell then begins a two-character pair
+ * (`\\` or `\|`) and a cell has exactly one reading.
+ */
+const cell = (s: string) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
+/** The exact inverse of cell: one pass over escape pairs, left to right. */
+const uncell = (s: string) => s.replace(/\\([\\|])/g, '$1')
+/** The cells of a table row `| a | b |`: cut at each pipe that is not the second half of an
+ *  escape pair (one pass), then decoded. The one space of padding on each side is not content. */
+function rowCells(line: string): string[] {
+  const raw: string[] = []
+  let current = ''
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\' && i + 1 < line.length) {
+      current += line[i] + line[++i]
+    } else if (line[i] === '|') {
+      raw.push(current)
+      current = ''
+    } else {
+      current += line[i]
+    }
+  }
+  // Before the first pipe and after the last there is nothing.
+  return raw.slice(1).map((c) => uncell(c.replace(/^ /, '').replace(/ $/, '')))
+}
 const id = (r: { file: string; key: string; locale: string }) => `${r.file}\u0000${r.key}\u0000${r.locale}`
 
 function parse(doc: string): Row[] {
@@ -156,9 +180,9 @@ function parse(doc: string): Row[] {
     const heading = /^### `([^`]+)`/.exec(line)
     if (heading) file = heading[1]
     if (!line.startsWith('| `')) continue
-    const cells = line.slice(2, -2).split(/ (?<!\\)\| /).map(uncell)
-    const [key, locale, en, text, added, status] = cells
-    rows.push({ file, key: key.replace(/`/g, ''), locale, en, text, added, status })
+    const [key, locale, en, text, added, status] = rowCells(line)
+    // The key is shown as code: one backtick on each side.
+    rows.push({ file, key: key.slice(1, -1), locale, en, text, added, status })
   }
   return rows
 }
@@ -168,13 +192,47 @@ function render(rows: Row[]): string {
   for (const file of [...new Set(rows.map((r) => r.file))]) {
     out.push(`### \`${file}\``, '', '| Key | Locale | English | Text | Added | Status |', '|---|---|---|---|---|---|')
     for (const r of rows.filter((x) => x.file === file)) {
-      out.push(`| \`${r.key}\` | ${r.locale} | ${cell(r.en)} | ${cell(r.text)} | ${r.added} | ${cell(r.status)} |`)
+      out.push(`| ${cell(`\`${r.key}\``)} | ${cell(r.locale)} | ${cell(r.en)} | ${cell(r.text)} | ${cell(r.added)} | ${cell(r.status)} |`)
     }
     out.push('')
   }
   out.push(END)
   return out.join('\n')
 }
+
+describe('table cells: encode and decode', () => {
+  // CodeQL js/incomplete-sanitization (2026-10-11): escaping the pipe alone left "\\|" and "|"
+  // with the same encoding once a backslash stood before a pipe.
+  const TRICKY = ['|', '\\', '\\|', '\\\\|', 'ends with a backslash\\', 'a | b', '\\\\', '|\\|\\\\||', 'x \\| y \\\\ z', '', ' padded ', 'plain {n} text']
+
+  it.each(TRICKY)('uncell(cell(%j)) is the string itself', (s) => {
+    expect(uncell(cell(s))).toBe(s)
+  })
+
+  it('every backslash in a cell begins an escape pair, and no pipe stands unescaped', () => {
+    for (const s of TRICKY) {
+      const rest = cell(s).replace(/\\[\\|]/g, '')
+      expect(rest, JSON.stringify(s)).not.toMatch(/[\\|]/)
+    }
+    expect(cell('\\')).toBe('\\\\')
+    expect(cell('|')).toBe('\\|')
+    expect(cell('\\|')).toBe('\\\\\\|')
+  })
+
+  it('different strings never share an encoding', () => {
+    expect(new Set(TRICKY.map(cell)).size).toBe(TRICKY.length)
+  })
+
+  it('a whole row comes back cell for cell: render, then parse', () => {
+    const rows: Row[] = TRICKY.map((text, i) => ({ file: 'lib/i18n-x.ts', key: `key${i}`, locale: 'ht', en: `en ${text}`, text, added: TODAY, status: `status | ${text}` }))
+    expect(parse(render(rows))).toEqual(rows)
+  })
+
+  it('rowCells cuts only at a pipe that is not escaped', () => {
+    expect(rowCells('| a | b |')).toEqual(['a', 'b'])
+    expect(rowCells('| a \\| b | c\\\\ | d |')).toEqual(['a | b', 'c\\', 'd'])
+  })
+})
 
 describe('docs/i18n-native-review.md', () => {
   const doc = readFileSync(DOC, 'utf8')
