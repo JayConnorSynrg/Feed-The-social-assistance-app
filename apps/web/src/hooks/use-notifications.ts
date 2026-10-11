@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 
+/** Every value of the notification_type enum (packages/database/types.ts). The last three arrive
+ *  with Release 4 (nothing writes them yet); they are listed so a row of that type type-checks. */
 export type NotificationType =
   | 'status_update'
   | 'deadline_reminder'
@@ -13,6 +15,9 @@ export type NotificationType =
   | 'approval'
   | 'denial'
   | 'general'
+  | 'moderation'
+  | 'content_update'
+  | 'event_update'
 
 export interface Notification {
   id: string
@@ -61,6 +66,10 @@ const NOTIFICATION_TYPE_INFO: Record<NotificationType, { icon: string; color: st
   approval: { icon: '✅', color: 'green' },
   denial: { icon: '❌', color: 'red' },
   general: { icon: '📣', color: 'gray' },
+  // Release 4 types: neutral until the notification UI gives them their own treatment.
+  moderation: { icon: '📣', color: 'gray' },
+  content_update: { icon: '📣', color: 'gray' },
+  event_update: { icon: '📣', color: 'gray' },
 }
 
 export function getNotificationTypeInfo(type: NotificationType) {
