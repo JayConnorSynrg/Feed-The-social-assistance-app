@@ -18,7 +18,8 @@
 // tables; the ar dual and plural forms.
 
 import type { Locale } from './i18n'
-import { eventFormT, formatMessage } from './i18n-event-forms'
+import { eventFormT } from './i18n-event-forms'
+import { formatMessage } from './format-message'
 import { browserTimeZone, formatCalendarDate, formatShortDate, intlLocale, isKnownTimeZone } from './event-time'
 import {
   isMonthlyDayRule,

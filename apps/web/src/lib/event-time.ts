@@ -9,7 +9,8 @@
 // add_event_dates); checkLocalTime gives the same DST answer in the form before submit.
 
 import type { Locale } from './i18n'
-import { eventFormT, formatMessage } from './i18n-event-forms'
+import { eventFormT } from './i18n-event-forms'
+import { formatMessage } from './format-message'
 
 /** Area/Location shape the server accepts (assistance_events_time_zone_shape). */
 export const IANA_ZONE_SHAPE = /^[A-Za-z]+(\/[A-Za-z0-9_+-]+)+$/

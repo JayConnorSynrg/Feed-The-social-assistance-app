@@ -9,7 +9,8 @@ import { HOUSEHOLD_MIN, HOUSEHOLD_MAX } from '@/lib/event-checkin'
 import { formatEventWhen } from '@/lib/event-time'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
-import { eventFormT, formatMessage } from '@/lib/i18n-event-forms'
+import { eventFormT } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { checkinErrorKey, eventMemberT, type EventMemberMessages } from '@/lib/i18n-event-member'
 import {
   Sheet,

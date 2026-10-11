@@ -28,7 +28,8 @@ import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canCreateOrganizations } from '@/lib/admin-tier'
-import { dir, resolveUserLocale, type Locale } from '@/lib/i18n'
+import { dir } from '@/lib/i18n'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { ADMIN_EDIT_LINK_CLASS } from '@/components/admin/admin-edit-link'
@@ -43,9 +44,7 @@ export function OrganizationsPanel() {
   const { profile } = useAuth()
   const { tier } = useAdminTier()
   // The admin link speaks the admin's profile language (the rest of this panel is English).
-  const adminLocale: Locale = profile
-    ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null)
-    : 'en'
+  const adminLocale = useProfileLocale()
   const supabase = createClient()
 
   // Device GPS only with the explicit Share Location opt-in, requested once on mount.
