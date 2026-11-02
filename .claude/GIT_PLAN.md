@@ -2469,3 +2469,30 @@ pr: null
 created_at: "2026-09-27T00:00:00.000Z"
 completed_at: null
 ```
+
+<!-- ACTIVE: feed-agents-sync — repo copy of 8 FEED agent definitions + the migration-protocol reference doc. Docs/config only; no app code, no DB, no post-deploy step. Opening the PR ends this entry's scope; merge is a user gate. -->
+
+```yaml
+id: feed-agents-sync
+status: in_progress
+type: branch+commit+push+pr
+description: "feat(agents): add review, verify and domain-expert feed agents. Copies 8 agent definitions that lived only at ~/.claude/agents/ into .claude/agents/ (feed-a11y-reviewer, feed-adversarial-reviewer, feed-browser-verify, feed-events-expert, feed-i18n-expert, feed-notifications-expert, feed-posts-expert, feed-safety-alerts-expert) and the reference doc feed-migration-protocol.md into docs/ (FEED's topic-doc home: docs/observability.md, docs/safety-alerts.md, docs/i18n-native-review.md; the doc has no frontmatter by design, so it stays out of .claude/agents/). Each file byte-identical to its source except model: opus -> model: claude-opus-5-5 in feed-posts-expert and feed-events-expert. Pre-checks: none of the 9 paths exist on origin/develop or in any branch history; no open PR or branch touches .claude/agents/. User-authorized 2026-11-02: branch, commit, push, open ready PR to develop. No merge."
+branch: chore/feed-agents-sync
+base: develop
+base_sha: 0ee7f6d
+remote: origin
+files:
+  - .claude/agents/feed-a11y-reviewer.md
+  - .claude/agents/feed-adversarial-reviewer.md
+  - .claude/agents/feed-browser-verify.md
+  - .claude/agents/feed-events-expert.md
+  - .claude/agents/feed-i18n-expert.md
+  - .claude/agents/feed-notifications-expert.md
+  - .claude/agents/feed-posts-expert.md
+  - .claude/agents/feed-safety-alerts-expert.md
+  - docs/feed-migration-protocol.md
+  - .claude/GIT_PLAN.md
+pr: null
+created_at: "2026-11-02T00:00:00.000Z"
+completed_at: null
+```
