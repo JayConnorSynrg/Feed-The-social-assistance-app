@@ -31,26 +31,43 @@ import { useEventCardRefresh } from './use-event-card-refresh'
  *   - when focus moves (a card left, a dialog closed), in ONE frame: `moveFocus` first, then the
  *     notice — a screen reader cancels a polite message queued before a focus move;
  *   - a newer announcement (or a newer event-card change) supersedes an older one still waiting
- *     for its frame; quiet paths simply do not call it.
+ *     for its frame; quiet paths simply do not call it;
+ *   - `join`: a newer announcement keeps the one still waiting: its sentence goes in front, and its
+ *     `moveFocus` runs first (focus ends where the newer one puts it), so two outcomes close
+ *     together are both said and neither's focus step is lost. The sign-up outcomes and a card
+ *     that leaves after a member's action use it; supersede() still drops all.
  * Pure (the region setter and the frame scheduler are passed in) so the rules are unit-tested.
  */
 export function createCardNoticeAnnouncer(
   setNotice: (text: string) => void,
   schedule: (fn: () => void) => void,
-): { announce: (text: string, moveFocus?: () => void) => void; supersede: () => void } {
+): { announce: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => void; supersede: () => void } {
   let seq = 0
+  // The announcement still waiting for its frame, if any.
+  let waiting: { text: string; moveFocus?: () => void } | null = null
   return {
-    announce(text, moveFocus) {
+    announce(text, moveFocus, options) {
       const mine = ++seq
+      const earlier = options?.join ? waiting : null
+      const full = earlier ? `${earlier.text} ${text}` : text
+      const move = earlier?.moveFocus
+        ? () => {
+            earlier.moveFocus?.()
+            moveFocus?.()
+          }
+        : moveFocus
+      waiting = { text: full, moveFocus: move }
       setNotice('')
       schedule(() => {
         if (seq !== mine) return
-        moveFocus?.()
-        setNotice(text)
+        waiting = null
+        move?.()
+        setNotice(full)
       })
     },
     supersede() {
       seq++
+      waiting = null
     },
   }
 }

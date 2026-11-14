@@ -235,6 +235,23 @@ describe('createCardNoticeAnnouncer — post card notices share the card-notice 
     expect(h2.log).toEqual(['notice:'])
   })
 
+  it('join: a newer announcement keeps the one still waiting — its sentence in front, its focus step first — and focus ends where the newer one puts it', () => {
+    const { a, log, runFrames } = harness()
+    a.announce('You accepted Bo.', () => log.push('focus:old'), { join: true })
+    a.announce('This post was deleted by its author.', () => log.push('focus:next card'), { join: true })
+    runFrames()
+    expect(log).toEqual(['notice:', 'notice:', 'focus:old', 'focus:next card', 'notice:You accepted Bo. This post was deleted by its author.'])
+    // Once said, nothing is carried into the next one; supersede still drops what waits.
+    a.announce('Link copied.', undefined, { join: true })
+    runFrames()
+    expect(log.at(-1)).toBe('notice:Link copied.')
+    a.announce('Post restored.', undefined, { join: true })
+    a.supersede()
+    a.announce('Post held for review.', undefined, { join: true })
+    runFrames()
+    expect(log.at(-1)).toBe('notice:Post held for review.')
+  })
+
   it('one region: no feed post surface renders its own polite status region', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
