@@ -1,8 +1,8 @@
 # Release 3 — client contract (migrations `20261026600000_r3_foundation` + `20261026700000_r3_contract`)
 
 Owner: Jelal Connor / SYNRG SCALING, LLC. Model and invariants: [r3-model.md](r3-model.md).
-Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (237 checks, passing after the foundation and
-after the contract step) and `supabase/tests/r3_foundation.race.sh` (31 races). The request shapes below
+Behavioural proof: `supabase/tests/r3_foundation.smoke.sql` (238 checks, passing after the foundation and
+after the contract step) and `supabase/tests/r3_foundation.race.sh` (33 races). The request shapes below
 were sent through PostgREST 14.5 on a prod-identical catalog; every one answers as written here.
 
 > **Changed on 2026-10-11 (security review round). Read these first if you coded against the earlier text.**
@@ -360,7 +360,10 @@ Callers: the post's author only (not staff). Only `seeker_request` and `source_o
 reopens. Not an edit: `version` does not move. Refusals, in order: `42501 guest_refused` →
 `not_authenticated` → `22023 post_field_required:closed` → `PT404 post_not_found` → `42501 not_author` →
 `0A000 post_type_not_closable:<type>` → `42501 post_removed` → `PT409 edit_conflict` →
-`22023 post_field_invalid:reason`.
+`22023 post_field_invalid:reason`. Each call that changes the status is logged by the server, in the same
+transaction: one `app_logs` row `post.closed` / `post.reopened` with the author (`user_id`), the time and the
+call's `x-request-id` (send the header so the client's own telemetry row for the call joins it). A refusal, or
+a call that changes nothing, logs nothing.
 
 ### `decide_opt_in(p_opt_in_id uuid, p_decision text, p_expected_status text = NULL) → { opt_in_id, post_id, status, completed_at: string | null }`
 
@@ -383,11 +386,14 @@ the contract step (`403 42501`; note that a direct update that matches no row an
 
 **A direct `DELETE` on `resource_opt_ins` is not a client path.** After the contract step every client role
 is refused (`403 42501 permission denied for table resource_opt_ins`): the seeker, the author and a platform
-admin alike (a platform admin's removal of a member's opt-in becomes a service-side operation). Before the
+admin alike. A platform admin has no direct write on opt-ins from the foundation on: the policies' admin branch
+is gone, so before the contract step an admin's direct `UPDATE` or `DELETE` matches no row (`204`, nothing
+changes); removing a member's opt-in is a service-side operation. Before the
 contract step the old policy still lets a seeker delete their own pending row, and it must not be used: it
 takes the opt-in row and the post row in the opposite order to `decide_opt_in`, and when the two coincide
 one of them is aborted with `40P01 deadlock detected` (measured on simultaneous pairs: 21 and 25 of 40 by
-the reviewer, 39 and 40 of 40 in the builder's runs; the slots never drifted). `withdraw_opt_in` against
+the reviewer, 39 and 40 of 40 in the builder's runs, 17 of 40 in the third review round's run; the slots never
+drifted). `withdraw_opt_in` against
 `decide_opt_in` never deadlocks (0 in 40 forced interleaves and 40 simultaneous pairs, in both release
 states): exactly one of the two takes effect. If the decision lands first, `withdraw_opt_in` answers `false`;
 if the withdrawal lands first, `decide_opt_in` answers `PT404 opt_in_not_found`. Treat both as "re-read the
@@ -409,7 +415,9 @@ service-side cleanups use it); the slot comes back and the trail records the rem
 `resource_opt_in_events` (authenticated; the seeker reads their rows, the author all rows of their post, a
 platform admin all): `id, opt_in_id, post_id, seeker_id, event, from_status, to_status, actor_role,
 created_at`. `event`: `opted_in`, `accepted`, `declined`, `completed`, `withdrawn`, `unblocked`, `removed`.
-`actor_role`: `seeker`, `author`, `platform_admin`, `system`.
+`actor_role`: `seeker`, `author`, `platform_admin`, `system`. Every row names its seeker (`seeker_id`) and, on the
+server, its actor, whatever else those members are doing at that moment (a username change included);
+`seeker_id` is `null` only once that account is deleted. A deleted post takes its trail rows with it.
 
 ## Announcements (3.3)
 
