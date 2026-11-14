@@ -52,6 +52,65 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
+-- Preflight, before any statement that changes anything: the objects this file drops, alters or revokes by name,
+-- and the two prod objects no migration in git creates (update_posts_updated_at, the trigger that keeps
+-- posts.updated_at moving once the duplicate below goes; petitions_select_own_drafts, prod's name for the draft-read
+-- policy). Anything missing or shaped otherwise: one refusal naming every item (SQLSTATE 55000), nothing applied.
+DO $preflight$
+DECLARE v_missing text[] := '{}'; v_rel text; v_fn text; v_con text[];
+BEGIN
+  FOREACH v_rel IN ARRAY ARRAY[
+    'admin_user_notes', 'assistance_events', 'audit_log', 'business_hours', 'business_photos', 'business_services',
+    'community_stats', 'content_reports', 'conversations', 'device_tokens', 'event_checkins', 'event_occurrences',
+    'favorites', 'federated_instances', 'federated_resources', 'federation_health_checks', 'federation_peers',
+    'federation_sync_log', 'federation_trust_events', 'federation_trust_overview', 'federation_webhook_log', 'follows',
+    'form_submissions', 'form_templates', 'impact_metrics', 'messages', 'mfa_backup_codes', 'notification_preferences',
+    'notifications', 'org_resources', 'organization_members', 'organizations', 'petition_signatures', 'petitions',
+    'poll_votes', 'polls', 'post_comments', 'post_likes', 'profiles', 'public_profiles', 'ranking_config', 'reminders',
+    'resource_bookmarks', 'resource_opt_ins', 'resources', 'reviews', 'safety_alert_votes', 'safety_alerts',
+    'saved_resource_documents', 'saved_resource_events', 'saved_resource_tasks', 'saved_resources', 'snap_retailers',
+    'user_documents', 'user_secure_profiles', 'user_sessions', 'zip_centroids', 'posts', 'admin_actions', 'app_logs'] LOOP
+    IF to_regclass('public.' || v_rel) IS NULL THEN v_missing := v_missing || ('relation public.' || v_rel); END IF;
+  END LOOP;
+  FOREACH v_fn IN ARRAY ARRAY[
+    'notify_post_comment_author()', 'notify_application_status_change()',
+    'place_safety_alert(text,integer,text,double precision,double precision)',
+    'update_safety_alert(uuid,text,integer,text,double precision,double precision)', 'vote_safety_alert(uuid,text)',
+    'admin_verify_safety_alert(uuid)', 'admin_remove_safety_alert(uuid)',
+    'safety_alerts_in_view(double precision,double precision,double precision,double precision)',
+    'ranked_feed_v2(double precision,double precision,integer,real,uuid)', 'request_id()'] LOOP
+    IF to_regprocedure('public.' || v_fn) IS NULL THEN v_missing := v_missing || ('function public.' || v_fn); END IF;
+  END LOOP;
+  IF to_regtype('public.notification_type') IS NULL THEN v_missing := v_missing || 'type public.notification_type'::text; END IF;
+  FOREACH v_con SLICE 1 IN ARRAY ARRAY[['safety_alerts', 'safety_alerts_status_check'], ['content_reports', 'content_reports_content_type_check'],
+                                       ['content_reports', 'content_reports_unique_reporter'], ['petitions', 'petitions_status_check']] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.' || v_con[1]) AND conname = v_con[2]) THEN
+      v_missing := v_missing || format('constraint %s on public.%s', v_con[2], v_con[1]); END IF;
+  END LOOP;
+  -- posts.updated_at: the trigger that stays must fire BEFORE every UPDATE of every row and set NEW.updated_at
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc f ON f.oid = t.tgfoid
+                  WHERE t.tgrelid = to_regclass('public.posts') AND t.tgname = 'update_posts_updated_at' AND NOT t.tgisinternal
+                    AND t.tgenabled IN ('O', 'A') AND t.tgtype & 19 = 19             -- ROW (1) + BEFORE (2) + UPDATE (16)
+                    AND t.tgattr = ''::int2vector AND t.tgqual IS NULL               -- no column list, no WHEN
+                    AND f.prosrc ~* 'NEW\s*\.\s*updated_at\s*:?=') THEN
+    v_missing := v_missing || 'trigger update_posts_updated_at on public.posts (enabled, BEFORE UPDATE FOR EACH ROW, sets NEW.updated_at)'::text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = to_regclass('public.petitions') AND polname = 'petitions_select_own_drafts') THEN
+    v_missing := v_missing || 'policy petitions_select_own_drafts on public.petitions'::text; END IF;
+  IF EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = to_regclass('public.petitions') AND polname = 'petitions_select_own') THEN
+    v_missing := v_missing || 'policy petitions_select_own on public.petitions must not exist yet (this file creates it)'::text; END IF;
+  IF (SELECT count(*) FROM pg_policy WHERE polrelid = to_regclass('public.resource_opt_ins') AND polname IN ('opt_ins_update', 'opt_ins_delete')) <> 2 THEN
+    v_missing := v_missing || 'policies opt_ins_update and opt_ins_delete on public.resource_opt_ins'::text; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'posts') THEN
+    v_missing := v_missing || 'public.posts in publication supabase_realtime'::text; END IF;
+  IF cardinality(v_missing) > 0 THEN
+    RAISE EXCEPTION '20261026600000_r3_foundation refused: this database does not have the shape it was written for'
+      USING ERRCODE = '55000', DETAIL = array_to_string(v_missing, '; '),
+            HINT = 'Nothing was applied. Compare the live catalog with the objects named in DETAIL before applying.';
+  END IF;
+END
+$preflight$;
+
 -- Stable inputs for the two data fixes below (petition re-hash reads "no signature yet"; the slot repair counts
 -- opt-in rows): a signature or opt-in in flight finishes first, none starts until this commits.
 LOCK TABLE public.petition_signatures, public.resource_opt_ins IN SHARE MODE;
@@ -77,8 +136,8 @@ REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN ON
   public.user_secure_profiles, public.user_sessions, public.zip_centroids
 FROM anon, authenticated;
 
--- One updated_at trigger on posts: update_posts_updated_at (the original) stays, the duplicate added by
--- 20260220200000 goes (20261009000000 made the same choice for comments).
+-- One updated_at trigger on posts: update_posts_updated_at (the original, checked by the preflight) stays, the
+-- duplicate added by 20260220200000 goes (20261009000000 made the same choice for comments).
 DROP TRIGGER IF EXISTS set_posts_updated_at ON public.posts;
 
 -- Trigger functions nobody needs to call
