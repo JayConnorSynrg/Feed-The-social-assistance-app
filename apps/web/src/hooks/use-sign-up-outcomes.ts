@@ -334,11 +334,15 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
     if (ready.some((e) => e.settled === 'stale')) said.push(optInsT(locale, 'announceListStale'))
     const last = ready[ready.length - 1].attempt
     const lastDone = done[done.length - 1]
-    announce(said.join(' '), () => {
+    const moveFocus = () => {
       // A control still on the page, or a member who has moved on, keeps the focus.
       if (last.pressed?.isConnected || !focusWasLost(last.pressed)) return
       ;(lastDone ? signUpFocusTarget(last, byTestId, rowAction) : signUpStableTarget(last, byTestId))?.focus()
-    })
+    }
+    // Nothing to say: move focus at once. An empty announcement would clear the notice region
+    // and cancel another row's sentence still waiting for its frame.
+    if (said.length === 0) moveFocus()
+    else announce(said.join(' '), moveFocus)
   }, [memberStatuses, authorRows, locale, announce, settledTick])
 
   return { begin, succeeded, unchanged, failed, settled, disarm, sentence, busy }

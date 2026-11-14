@@ -66,6 +66,9 @@ const h = vi.hoisted(() => ({
   headers: [] as Array<{ to: string; name: string; value: string }>,
   // Called as each notice is said (to read the card at that moment).
   onNotice: null as null | ((text: string) => void),
+  // Every call to the card-notice announcer, empty ones included (an empty one clears the region
+  // and cancels a sentence still waiting for its frame).
+  announced: [] as string[],
 }))
 const once = <T,>(k: string, make: () => T): T => (h.stable[k] ??= make()) as T
 
@@ -147,6 +150,7 @@ vi.mock('@/hooks/use-feed-event-cards', async (orig) => ({
     // The real announcer moves focus first, then sets the notice: the same order here.
     // (An empty sentence is the announcer being asked to move focus and say nothing.)
     announceCardNotice: (text: string, moveFocus?: () => void) => {
+      h.announced.push(text)
       moveFocus?.()
       if (text !== '') h.notices.push(text)
       if (text !== '') h.onNotice?.(text)
@@ -367,6 +371,7 @@ beforeEach(() => {
   h.metrics.length = 0
   h.headers.length = 0
   h.onNotice = null
+  h.announced.length = 0
   signIn('member')
 })
 
@@ -1104,6 +1109,20 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
       expect(h.notices).toEqual([optInsT('en', 'announceListStale')])
       expect(busy(c)).toEqual([])
+    })
+
+    it('L1 · a write that changed nothing on a post that is gone at the re-read: the card leaves without an empty announcement (which would cancel another card\'s waiting sentence), focus to the next card', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo')])
+      h.optIns = []
+      h.rows = h.rows.filter((r) => r.id !== 'p1')
+      el('accept-optin-o1').isConnected = false
+      el('post-card-p3')
+      await update(c, 'o1', 'accepted')
+      await c.flush()
+      expect(cardIds(c.tree())).toEqual(['p3'])
+      expect(h.focused).toEqual(['post-card-p3'])
+      expect(h.announced).toEqual([])
+      expect(h.notices).toEqual([])
     })
 
     it('second check: the update answered with a row, yet the fresh read does not show the outcome — not said as done; the card shows the failure', async () => {

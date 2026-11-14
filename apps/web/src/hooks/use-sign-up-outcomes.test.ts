@@ -25,6 +25,7 @@ vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(a
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import { mount } from '@/test/mini-react'
+import { createCardNoticeAnnouncer } from '@/hooks/use-feed-event-cards'
 import { messages, type Locale } from '@/lib/i18n'
 import { isolate } from '@/lib/format-message'
 import { optInsT, signUpNotice, type SignUpKind } from '@/lib/i18n-feed-optins'
@@ -142,8 +143,16 @@ describe('the hook', () => {
   const g = globalThis as Record<string, unknown>
   let focused: string[] = []
   let page: Map<string, { isConnected: boolean; focus: () => void }>
+  // The harness's ordered log: every focus move (inside an announcement or not) and every sentence.
+  let sink: string[] | null = null
   const el = (key: string) => {
-    const e = { isConnected: true, focus: () => void focused.push(key) }
+    const e = {
+      isConnected: true,
+      focus: () => {
+        focused.push(key)
+        sink?.push(`focus:${key}`)
+      },
+    }
     page.set(key, e)
     return e
   }
@@ -164,13 +173,15 @@ describe('the hook', () => {
   })
 
   /** The hook on the mini runtime, with an announcer that records the order of what it is asked. */
-  function harness(locale: Locale = 'en') {
+  function harness(locale: Locale = 'en', announcer?: (text: string, moveFocus?: () => void) => void) {
     const log: string[] = []
-    const announce = (text: string, moveFocus?: () => void) => {
-      const before = focused.length
-      moveFocus?.()
-      log.push(...focused.slice(before).map((f) => `focus:${f}`), `say:${text}`)
-    }
+    sink = log
+    const announce =
+      announcer ??
+      ((text: string, moveFocus?: () => void) => {
+        moveFocus?.()
+        log.push(`say:${text}`)
+      })
     const state = { memberStatuses: new Map<string, string>(), authorRows: {} as Record<string, SignUpRow[]>, context: 'feed|me' }
     // What the hook hands back to its caller to show on the card (the action was not done).
     const notDone: string[] = []
@@ -389,13 +400,14 @@ describe('the hook', () => {
       h.state.authorRows = { p1: [] }
       h.api().settled(a)
       h.c.rerender()
-      // Nothing is said (an empty sentence: the announcer only moves focus); never Mark Completed.
-      expect(h.log).toEqual(['focus:opt-in-manage-p1', 'say:'])
+      // Nothing is said, and the announcer is not asked (an empty announcement would cancel another
+      // row's sentence): focus is moved directly; never to Mark Completed.
+      expect(h.log).toEqual(['focus:opt-in-manage-p1'])
       expect(h.notDone).toEqual(['o1'])
       // A row with that id shows up accepted much later (another read): nothing is said then.
       h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo')] }
       h.c.rerender()
-      expect(h.log).toHaveLength(2)
+      expect(h.log).toHaveLength(1)
       expect(h.notDone).toHaveLength(1)
     })
 
@@ -413,7 +425,7 @@ describe('the hook', () => {
       h.state.authorRows = rowsAfter
       h.api().settled(a, 'fresh')
       h.c.rerender()
-      expect(h.log.filter((l) => l.startsWith('say:'))).toEqual(['say:'])
+      expect(h.log.filter((l) => l.startsWith('say:'))).toEqual([])
       expect(h.notDone).toEqual(['o1'])
     })
 
@@ -428,7 +440,7 @@ describe('the hook', () => {
       h.state.memberStatuses = new Map([['p1', 'accepted']])
       h.api().settled(a, 'fresh')
       h.c.rerender()
-      expect(h.log).toEqual(['focus:post-card-p1', 'say:'])
+      expect(h.log).toEqual(['focus:post-card-p1'])
       expect(h.notDone).toEqual(['post:p1'])
     })
 
@@ -457,6 +469,34 @@ describe('the hook', () => {
       expect(h.notDone).toEqual([])
     })
 
+    it('L1 · a success on one row and a no-change on another, almost at once: with the real card-notice announcer, the success sentence is still spoken', () => {
+      // The feed's real announcer: it clears the region, then writes the sentence in the next frame;
+      // a newer call cancels one still waiting. Frames run when the test says so.
+      const frames: Array<() => void> = []
+      const region: string[] = []
+      const real = createCardNoticeAnnouncer((text) => void region.push(text), (fn) => void frames.push(fn))
+      const h = harness('en', real.announce)
+      h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+      h.c.rerender()
+      el('accept-optin-o1')
+      el('complete-optin-o1')
+      el('accept-optin-o2').isConnected = false
+      el('opt-in-manage-p1')
+      const a = h.begin('accept', { optInId: 'o1' })
+      const b = h.begin('accept', { optInId: 'o2' })
+      // o1 went through and shows: its sentence waits for its frame.
+      h.api().succeeded(a)
+      h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo')] }
+      h.c.rerender()
+      // o2 changed nothing (Cy had withdrawn) and its read lands before that frame.
+      h.api().unchanged(b)
+      h.api().settled(b, 'fresh')
+      h.c.rerender()
+      for (const f of frames.splice(0)) f()
+      expect(region.filter((x) => x !== '')).toEqual([`You accepted ${isolate('Bo')}.`])
+      expect(focused).toContain('opt-in-manage-p1')
+    })
+
     describe('a request that came back and changed nothing (unchanged)', () => {
       it('nothing is said for it, shown or not; when the read that follows has corrected the card and its control is gone, focus goes to a stable control', () => {
         const h = harness()
@@ -477,7 +517,7 @@ describe('the hook', () => {
         h.state.authorRows = { p1: [rowOf('o2', 'pending', 'Cy')] }
         h.api().settled(a, 'fresh')
         h.c.rerender()
-        expect(h.log).toEqual(['focus:opt-in-manage-p1', 'say:'])
+        expect(h.log).toEqual(['focus:opt-in-manage-p1'])
         // The caller already showed it (it reported it): it is not told again.
         expect(h.notDone).toEqual([])
         expect(h.busy()).toEqual([])

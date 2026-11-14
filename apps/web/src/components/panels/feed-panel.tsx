@@ -2035,7 +2035,7 @@ export function FeedPanel() {
   // focus moves to the next post card (or the feed's heading when none is left), the card is
   // removed, then the notice is set — the same order as an event card that leaves.
   const cardLeaves = (postId: string, text: string) => {
-    announceCardNotice(text, () => {
+    const leave = () => {
       const list = postsRef.current
       const idx = list.findIndex((p) => p.id === postId)
       const nextId = idx >= 0 ? (list[idx + 1] ?? list[idx - 1])?.id : undefined
@@ -2044,7 +2044,11 @@ export function FeedPanel() {
       else focusFeedTitle()
       setPosts((prev) => prev.filter((p) => p.id !== postId))
       dropSideData(postId)
-    })
+    }
+    // Nothing to say: leave at once. An empty announcement would clear the region and cancel
+    // another card's sentence still waiting for its frame.
+    if (text === '') leave()
+    else announceCardNotice(text, leave)
   }
 
   // The card's ⋯ button (or, when it is gone, nothing): where focus returns after a dialog.
