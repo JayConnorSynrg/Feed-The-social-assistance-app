@@ -298,7 +298,8 @@ export function logEvent(name: string, attrs: EventAttrs = {}): void {
  * timing logs are suppressed). Re-throws on error — never swallows.
  *
  * Signature and argument order are a stable contract: (operation, attrs, fn,
- * explicitRequestId?). `attrs` are flat primitive labels.
+ * explicitRequestId?). `attrs` are flat primitive labels, read when the row is
+ * written, so an operation may set one from its own answer (e.g. an outcome).
  */
 export async function withMetric<T>(
   operation: string,

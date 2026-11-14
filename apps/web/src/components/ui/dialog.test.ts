@@ -31,7 +31,7 @@ function closeButton(props: Record<string, unknown>) {
     if (Array.isArray(node)) return node.forEach(find)
     if (!isValidElement(node)) return
     const el = node as unknown as El
-    if (typeof el.props.className === 'string' && el.props.className.includes('top-4')) buttons.push(el)
+    if (typeof el.props.className === 'string' && el.props.className.includes('top-3')) buttons.push(el)
     find(el.props.children)
   }
   find(tree)
@@ -54,8 +54,16 @@ describe('DialogContent default close button', () => {
 
   it('sits at the inline end, not a fixed right edge', () => {
     const { button } = closeButton({})
-    expect(button.props.className).toMatch(/\bend-4\b/)
-    expect(button.props.className).not.toMatch(/\bright-4\b/)
+    expect(button.props.className).toMatch(/\bend-3\b/)
+    expect(button.props.className).not.toMatch(/\bright-\d/)
+  })
+
+  it('is a 24px target (a 16px icon with 4px of padding, the icon where it was) and keeps a focus outline in forced-colors mode', () => {
+    for (const props of [{}, { closeLabel: 'Cerrar' }]) {
+      const classes = String(closeButton(props).button.props.className).split(/\s+/)
+      expect(classes).toEqual(expect.arrayContaining(['end-3', 'top-3', 'p-1', 'focus:outline-hidden', 'focus:ring-2']))
+      expect(classes).not.toContain('focus:outline-none')
+    }
   })
 
   it('an empty label never leaves the button unnamed: it falls back to English "Close", marked lang="en"', () => {

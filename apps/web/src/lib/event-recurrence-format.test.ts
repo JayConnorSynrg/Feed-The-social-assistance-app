@@ -29,7 +29,7 @@ import {
 } from './event-recurrence'
 
 const LOCALES = Object.keys(messages) as Locale[]
-const plain = (s: string) => s.replace(/[   ]/g, ' ')
+const plain = (s: string) => s.replace(/[\u202f\u2009\u00a0]/g, ' ')
 
 const weekly = (days: WeekdayCode[], interval?: number): RecurrenceRule => ({
   frequency: 'weekly',
@@ -109,6 +109,112 @@ describe('ht and hmn: own weekday names and list word (no CLDR data)', () => {
   })
   it('a locale with ListFormat data uses it (Arabic joins "و" to the next word)', () => {
     expect(joinList(['الثلاثاء', 'الخميس'], 'ar')).toBe('الثلاثاء والخميس')
+  })
+})
+
+describe('joinList: the joining word is the same on every device', () => {
+  type LF = typeof Intl.ListFormat
+  const intl = Intl as unknown as { ListFormat: LF }
+  /** A runtime whose Intl.ListFormat claims every locale and joins with commas only: what WebKit
+   *  26.4 does for ht and hmn (r3-5b list probe, 2026-10-11). */
+  function withStubListFormat<T>(run: () => T): T {
+    const real = intl.ListFormat
+    class Stub {
+      static supportedLocalesOf(tags: string | string[]) {
+        return [tags].flat()
+      }
+      format(items: string[]) {
+        return items.join(', ')
+      }
+    }
+    intl.ListFormat = Stub as unknown as LF
+    try {
+      return run()
+    } finally {
+      intl.ListFormat = real
+    }
+  }
+
+  it.each([
+    ['ht', 'a ak b', 'a, b ak c'],
+    ['hmn', 'a thiab b', 'a, b thiab c'],
+    ['so', 'a iyo b', 'a, b iyo c'],
+  ] as const)('%s is hand-written: "%s", "%s"', (locale, two, three) => {
+    expect(joinList(['a', 'b'], locale)).toBe(two)
+    expect(joinList(['a', 'b', 'c'], locale)).toBe(three)
+  })
+
+  it('ht, hmn and so never ask Intl.ListFormat, even when the runtime says it supports them', async () => {
+    // A fresh module, so no formatter cached by an earlier test is reused.
+    vi.resetModules()
+    const fresh = await import('./event-recurrence-format')
+    withStubListFormat(() => {
+      expect(fresh.joinList(['a', 'b', 'c'], 'ht')).toBe('a, b ak c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'hmn')).toBe('a, b thiab c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'so')).toBe('a, b iyo c')
+      // A locale FEED does not write by hand does go through Intl (here: the stub).
+      expect(fresh.joinList(['a', 'b', 'c'], 'es')).toBe('a, b, c')
+    })
+  })
+
+  it('a locale the runtime has no list data for reads from the grammar, not from the English list', async () => {
+    vi.resetModules()
+    const fresh = await import('./event-recurrence-format')
+    const real = intl.ListFormat
+    class OnlyEnglish {
+      static supportedLocalesOf(tags: string | string[]) {
+        return [tags].flat().filter((t) => t === 'en-US')
+      }
+      format(items: string[]) {
+        return items.join(' and ')
+      }
+    }
+    intl.ListFormat = OnlyEnglish as unknown as LF
+    try {
+      expect(fresh.joinList(['a', 'b', 'c'], 'am')).toBe('a፣ b እና c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'es')).toBe('a, b y c')
+      expect(fresh.joinList(['a', 'b', 'c'], 'tl')).toBe('a, b at c')
+    } finally {
+      intl.ListFormat = real
+    }
+  })
+
+  it('the hand-written Somali joiner equals Intl where the runtime has Somali', () => {
+    if (Intl.ListFormat.supportedLocalesOf('so').length === 0) return
+    const so = new Intl.ListFormat('so', { type: 'conjunction', style: 'long' })
+    expect(joinList(['a', 'b'], 'so')).toBe(so.format(['a', 'b']))
+    expect(joinList(['a', 'b', 'c'], 'so')).toBe(so.format(['a', 'b', 'c']))
+  })
+
+  it('Tagalog is asked for as fil (the only name WebKit knows it by)', async () => {
+    vi.resetModules()
+    const asked: string[][] = []
+    const real = intl.ListFormat
+    class Spy {
+      static supportedLocalesOf(tags: string | string[]) {
+        return [tags].flat().filter((t) => t !== 'tl')
+      }
+      constructor(tags: string[]) {
+        asked.push(tags)
+      }
+      format(items: string[]) {
+        return items.join(' + ')
+      }
+    }
+    intl.ListFormat = Spy as unknown as LF
+    try {
+      const fresh = await import('./event-recurrence-format')
+      expect(fresh.joinList(['a', 'b'], 'tl')).toBe('a + b')
+      expect(asked).toEqual([['fil', 'tl', 'en-US']])
+    } finally {
+      intl.ListFormat = real
+    }
+    expect(joinList(['a', 'b', 'c'], 'tl')).toBe('a, b, at c')
+  })
+
+  it('one item is itself; none is empty', () => {
+    expect(joinList(['a'], 'ht')).toBe('a')
+    expect(joinList([], 'so')).toBe('')
   })
 })
 

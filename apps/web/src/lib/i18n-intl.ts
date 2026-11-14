@@ -175,6 +175,14 @@ export function formatCount(n: number, locale: Locale): string {
   return cached(`count|${locale}`, () => new Intl.NumberFormat(intlTags(locale))).format(n)
 }
 
+/** "4.50" — a number with a fixed count of decimals, in the locale's digits and decimal mark. */
+export function formatFixed(n: number, digits: number, locale: Locale): string {
+  return cached(
+    `fixed|${locale}|${digits}`,
+    () => new Intl.NumberFormat(intlTags(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits }),
+  ).format(n)
+}
+
 /** "45%" for a whole percentage (0–100). */
 export function formatPercent(percent: number, locale: Locale): string {
   return cached(
@@ -226,7 +234,7 @@ export function localizeParts(parts: Intl.DateTimeFormatPart[], instant: Date | 
     if (p.type === 'weekday') return { ...p, value: (longWeekday ? words.weekdays : words.weekdaysShort)[w.weekday] }
     if (p.type === 'dayPeriod') return { ...p, value: w.hour < 12 ? words.am : words.pm }
     // One plain space wherever a runtime's en-US data uses a no-break one ("3:05 PM").
-    if (p.type === 'literal') return { ...p, value: p.value.replace(/[  ]/g, ' ') }
+    if (p.type === 'literal') return { ...p, value: p.value.replace(/[\u00a0\u202f]/g, ' ') }
     return p
   })
   for (let i = 0; i < out.length; i++) {

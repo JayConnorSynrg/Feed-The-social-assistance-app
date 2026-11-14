@@ -6,6 +6,7 @@
 //   formatMessage  fills {name} placeholders in a dictionary value.
 //   splitMessage   cuts a value around one placeholder, so the component can put its own element
 //                  (a bold count, a member's name with its own direction) in the gap.
+//   splitPlaceholders  cuts a value at every placeholder, for a sentence with several such gaps.
 //   isolate        wraps member-written text for a plain-text channel (aria-label, title), where
 //                  markup such as <bdi> is impossible.
 
@@ -25,6 +26,24 @@ export function splitMessage(template: string, name: string): [before: string, a
   const token = `{${name}}`
   const at = template.indexOf(token)
   return at < 0 ? [template, ''] : [template.slice(0, at), template.slice(at + token.length)]
+}
+
+/**
+ * A dictionary value cut at every placeholder, in order: 'from {a} & {b}' gives
+ * ['from ', { name: 'a' }, ' & ', { name: 'b' }]. The component renders each text as it is and
+ * puts its own element into each named slot (several members' names, each with its own
+ * direction), so no markup ever sits inside a dictionary value.
+ */
+export function splitPlaceholders(template: string): Array<string | { name: string }> {
+  const parts: Array<string | { name: string }> = []
+  let last = 0
+  for (const match of template.matchAll(/\{(\w+)\}/g)) {
+    if (match.index > last) parts.push(template.slice(last, match.index))
+    parts.push({ name: match[1] })
+    last = match.index + match[0].length
+  }
+  if (last < template.length) parts.push(template.slice(last))
+  return parts
 }
 
 /** Directional isolates (U+2066–U+2069) and embeddings / overrides (U+202A–U+202E). */

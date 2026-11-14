@@ -52,6 +52,9 @@ export interface FeedMessagesMessages {
   /** Name of the send button (an icon). */
   send: string
   reviewSubmitted: string
+  /** The same sentence as an announcement: with its closing punctuation, so a sentence said after
+   *  it does not run on. */
+  announceReviewSubmitted: string
   reviewPromptTitle: string
   /** Around the other person's name. */
   reviewPromptBody: string
@@ -85,6 +88,11 @@ export interface FeedMessagesMessages {
   errNoConversation: string
   errSendMessage: string
   errMarkRead: string
+  // Said to a screen reader once a confirmed action has gone through (the button that opened
+  // the dialog has left the page by then).
+  announceDeclined: string
+  announceWithdrawn: string
+  announceEnded: string
 }
 
 export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
@@ -112,6 +120,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Type a message...',
     send: 'Send message',
     reviewSubmitted: 'Your review was submitted',
+    announceReviewSubmitted: 'Your review was submitted.',
     reviewPromptTitle: 'How did it go?',
     reviewPromptBody: 'Leave a review for {name}',
     rateExperience: 'Rate your experience',
@@ -143,6 +152,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'No conversation selected',
     errSendMessage: 'Failed to send message',
     errMarkRead: 'Failed to mark messages as read',
+    announceDeclined: 'Request declined.',
+    announceWithdrawn: 'Request withdrawn.',
+    announceEnded: 'Conversation ended.',
   },
   es: {
     guestPrompt: 'Crea una cuenta gratuita para enviar mensajes a voluntarios y conectar con tu comunidad',
@@ -168,6 +180,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Escribe un mensaje...',
     send: 'Enviar mensaje',
     reviewSubmitted: 'Tu valoración se envió',
+    announceReviewSubmitted: 'Tu valoración se envió.',
     reviewPromptTitle: '¿Cómo te fue?',
     reviewPromptBody: 'Deja una valoración para {name}',
     rateExperience: 'Valora tu experiencia',
@@ -199,6 +212,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'No hay ninguna conversación seleccionada',
     errSendMessage: 'No se pudo enviar el mensaje',
     errMarkRead: 'No se pudieron marcar los mensajes como leídos',
+    announceDeclined: 'Solicitud rechazada.',
+    announceWithdrawn: 'Solicitud retirada.',
+    announceEnded: 'Conversación finalizada.',
   },
   // machine-drafted, needs native review
   ht: {
@@ -225,6 +241,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Ekri yon mesaj...',
     send: 'Voye mesaj',
     reviewSubmitted: 'Evalyasyon ou an voye',
+    announceReviewSubmitted: 'Evalyasyon ou an voye.',
     reviewPromptTitle: 'Kijan sa te pase?',
     reviewPromptBody: 'Kite yon evalyasyon pou {name}',
     rateExperience: 'Evalye eksperyans ou',
@@ -256,6 +273,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Pa gen konvèsasyon ki chwazi',
     errSendMessage: 'Nou pa t kapab voye mesaj la',
     errMarkRead: 'Nou pa t kapab make mesaj yo kòm li',
+    announceDeclined: 'Demann lan refize.',
+    announceWithdrawn: 'Demann lan retire.',
+    announceEnded: 'Konvèsasyon an fini.',
   },
   vi: {
     guestPrompt: 'Tạo tài khoản miễn phí để nhắn tin cho tình nguyện viên và kết nối với cộng đồng của bạn',
@@ -281,6 +301,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Nhập tin nhắn...',
     send: 'Gửi tin nhắn',
     reviewSubmitted: 'Đánh giá của bạn đã được gửi',
+    announceReviewSubmitted: 'Đánh giá của bạn đã được gửi.',
     reviewPromptTitle: 'Mọi việc thế nào?',
     reviewPromptBody: 'Để lại đánh giá cho {name}',
     rateExperience: 'Đánh giá trải nghiệm của bạn',
@@ -312,6 +333,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Chưa chọn cuộc trò chuyện nào',
     errSendMessage: 'Không thể gửi tin nhắn',
     errMarkRead: 'Không thể đánh dấu tin nhắn là đã đọc',
+    announceDeclined: 'Đã từ chối yêu cầu.',
+    announceWithdrawn: 'Đã rút lại yêu cầu.',
+    announceEnded: 'Đã kết thúc cuộc trò chuyện.',
   },
   ar: {
     guestPrompt: 'أنشئ حسابًا مجانيًا لتراسل المتطوعين وتتواصل مع مجتمعك',
@@ -337,6 +361,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'اكتب رسالة...',
     send: 'إرسال الرسالة',
     reviewSubmitted: 'تم إرسال تقييمك',
+    announceReviewSubmitted: 'تم إرسال تقييمك.',
     reviewPromptTitle: 'كيف كانت التجربة؟',
     reviewPromptBody: 'اترك تقييمًا لـ {name}',
     rateExperience: 'قيّم تجربتك',
@@ -368,6 +393,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'لم تُحدَّد أي محادثة',
     errSendMessage: 'تعذّر إرسال الرسالة',
     errMarkRead: 'تعذّر تحديد الرسائل كمقروءة',
+    announceDeclined: 'تم رفض الطلب.',
+    announceWithdrawn: 'تم سحب الطلب.',
+    announceEnded: 'تم إنهاء المحادثة.',
   },
   zh: {
     guestPrompt: '创建免费账户，即可给志愿者发消息并与社区建立联系',
@@ -393,6 +421,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: '输入消息…',
     send: '发送消息',
     reviewSubmitted: '您的评价已提交',
+    announceReviewSubmitted: '您的评价已提交。',
     reviewPromptTitle: '进展如何？',
     reviewPromptBody: '为 {name} 留下评价',
     rateExperience: '为您的体验评分',
@@ -424,6 +453,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: '未选择对话',
     errSendMessage: '无法发送消息',
     errMarkRead: '无法将消息标记为已读',
+    announceDeclined: '已拒绝请求。',
+    announceWithdrawn: '已撤回请求。',
+    announceEnded: '对话已结束。',
   },
   // machine-drafted, needs native review
   so: {
@@ -450,6 +482,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Qor fariin...',
     send: 'Dir fariinta',
     reviewSubmitted: 'Qiimayntaada waa la diray',
+    announceReviewSubmitted: 'Qiimayntaada waa la diray.',
     reviewPromptTitle: 'Sidee bay u dhacday?',
     reviewPromptBody: 'U reeb qiimayn {name}',
     rateExperience: 'Qiimee waayo-aragnimadaada',
@@ -481,6 +514,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Wada hadal lama dooran',
     errSendMessage: 'Lama diri karin fariinta',
     errMarkRead: 'Fariimaha laguma calaamadin karin in la akhriyay',
+    announceDeclined: 'Codsiga waa la diiday.',
+    announceWithdrawn: 'Codsiga waa laga noqday.',
+    announceEnded: 'Wada hadalka waa la dhammeeyay.',
   },
   fr: {
     guestPrompt: 'Créez un compte gratuit pour écrire aux bénévoles et échanger avec votre communauté',
@@ -506,6 +542,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Écrivez un message…',
     send: 'Envoyer le message',
     reviewSubmitted: 'Votre avis a été envoyé',
+    announceReviewSubmitted: 'Votre avis a été envoyé.',
     reviewPromptTitle: 'Comment cela s’est-il passé ?',
     reviewPromptBody: 'Laissez un avis pour {name}',
     rateExperience: 'Évaluez votre expérience',
@@ -537,6 +574,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Aucune conversation sélectionnée',
     errSendMessage: 'Impossible d’envoyer le message',
     errMarkRead: 'Impossible de marquer les messages comme lus',
+    announceDeclined: 'Demande refusée.',
+    announceWithdrawn: 'Demande retirée.',
+    announceEnded: 'Conversation terminée.',
   },
   pt: {
     guestPrompt: 'Crie uma conta gratuita para enviar mensagens a voluntários e se conectar com a sua comunidade',
@@ -562,6 +602,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Digite uma mensagem...',
     send: 'Enviar mensagem',
     reviewSubmitted: 'Sua avaliação foi enviada',
+    announceReviewSubmitted: 'Sua avaliação foi enviada.',
     reviewPromptTitle: 'Como foi?',
     reviewPromptBody: 'Deixe uma avaliação para {name}',
     rateExperience: 'Avalie sua experiência',
@@ -593,6 +634,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Nenhuma conversa selecionada',
     errSendMessage: 'Não foi possível enviar a mensagem',
     errMarkRead: 'Não foi possível marcar as mensagens como lidas',
+    announceDeclined: 'Pedido recusado.',
+    announceWithdrawn: 'Pedido retirado.',
+    announceEnded: 'Conversa encerrada.',
   },
   ru: {
     guestPrompt: 'Создайте бесплатную учётную запись, чтобы писать волонтёрам и общаться с сообществом',
@@ -618,6 +662,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Введите сообщение...',
     send: 'Отправить сообщение',
     reviewSubmitted: 'Ваш отзыв отправлен',
+    announceReviewSubmitted: 'Ваш отзыв отправлен.',
     reviewPromptTitle: 'Как всё прошло?',
     reviewPromptBody: 'Оставьте отзыв для {name}',
     rateExperience: 'Оцените свой опыт',
@@ -649,6 +694,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Разговор не выбран',
     errSendMessage: 'Не удалось отправить сообщение',
     errMarkRead: 'Не удалось отметить сообщения как прочитанные',
+    announceDeclined: 'Запрос отклонён.',
+    announceWithdrawn: 'Запрос отозван.',
+    announceEnded: 'Разговор завершён.',
   },
   ko: {
     guestPrompt: '무료 계정을 만들어 자원봉사자에게 메시지를 보내고 커뮤니티와 소통하세요',
@@ -674,6 +722,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: '메시지를 입력하세요...',
     send: '메시지 보내기',
     reviewSubmitted: '리뷰가 제출되었습니다',
+    announceReviewSubmitted: '리뷰가 제출되었습니다.',
     reviewPromptTitle: '어떠셨나요?',
     reviewPromptBody: '{name} 님에 대한 리뷰를 남겨 주세요',
     rateExperience: '경험 평가하기',
@@ -705,6 +754,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: '선택된 대화가 없습니다',
     errSendMessage: '메시지를 보내지 못했습니다',
     errMarkRead: '메시지를 읽음으로 표시하지 못했습니다',
+    announceDeclined: '요청을 거절했습니다.',
+    announceWithdrawn: '요청을 철회했습니다.',
+    announceEnded: '대화를 종료했습니다.',
   },
   tl: {
     guestPrompt: 'Gumawa ng libreng account para makapagmensahe sa mga boluntaryo at makaugnay sa iyong komunidad',
@@ -730,6 +782,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Mag-type ng mensahe...',
     send: 'Ipadala ang mensahe',
     reviewSubmitted: 'Naipasa na ang iyong review',
+    announceReviewSubmitted: 'Naipasa na ang iyong review.',
     reviewPromptTitle: 'Kumusta ang nangyari?',
     reviewPromptBody: 'Mag-iwan ng review para kay {name}',
     rateExperience: 'I-rate ang iyong karanasan',
@@ -761,6 +814,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Walang napiling usapan',
     errSendMessage: 'Hindi naipadala ang mensahe',
     errMarkRead: 'Hindi namarkahang nabasa ang mga mensahe',
+    announceDeclined: 'Tinanggihan ang kahilingan.',
+    announceWithdrawn: 'Binawi ang kahilingan.',
+    announceEnded: 'Tinapos ang usapan.',
   },
   // machine-drafted, needs native review
   am: {
@@ -787,6 +843,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'መልዕክት ይጻፉ...',
     send: 'መልዕክት ላክ',
     reviewSubmitted: 'ግምገማዎ ተልኳል',
+    announceReviewSubmitted: 'ግምገማዎ ተልኳል።',
     reviewPromptTitle: 'እንዴት ነበር?',
     reviewPromptBody: 'ለ{name} ግምገማ ይተዉ',
     rateExperience: 'ተሞክሮዎን ይገምግሙ',
@@ -818,6 +875,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'ምንም ውይይት አልተመረጠም',
     errSendMessage: 'መልዕክቱን መላክ አልተቻለም',
     errMarkRead: 'መልዕክቶቹን እንደተነበቡ ምልክት ማድረግ አልተቻለም',
+    announceDeclined: 'ጥያቄው ተቀባይነት አላገኘም።',
+    announceWithdrawn: 'ጥያቄው ተነስቷል።',
+    announceEnded: 'ውይይቱ ተጠናቋል።',
   },
   // machine-drafted, needs native review
   hmn: {
@@ -844,6 +904,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Ntaus ib cov lus...',
     send: 'Xa cov lus',
     reviewSubmitted: 'Koj qhov kev ntsuam xyuas raug xa lawm',
+    announceReviewSubmitted: 'Koj qhov kev ntsuam xyuas raug xa lawm.',
     reviewPromptTitle: 'Nws mus li cas?',
     reviewPromptBody: 'Tso ib qho kev ntsuam xyuas rau {name}',
     rateExperience: 'Ntsuam xyuas koj qhov kev paub dhau los',
@@ -875,6 +936,9 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     errNoConversation: 'Tsis tau xaiv kev sib tham',
     errSendMessage: 'Xa tsis tau cov lus',
     errMarkRead: 'Cim tsis tau tias cov lus raug nyeem lawm',
+    announceDeclined: 'Tsis txais qhov kev thov lawm.',
+    announceWithdrawn: 'Thim qhov kev thov lawm.',
+    announceEnded: 'Kev sib tham xaus lawm.',
   },
 }
 

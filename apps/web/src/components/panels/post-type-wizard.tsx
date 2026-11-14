@@ -247,7 +247,6 @@ export function StructuredForm({
         errors={errors}
         photoSlot={
           kind === 'general' ? (
-            <div lang="en" dir="ltr" data-english-only="photo-picker">
             <PostImagePickerField
               previewUrl={picker.previewUrl}
               imageUploading={picker.imageUploading}
@@ -255,8 +254,8 @@ export function StructuredForm({
               fileInputRef={picker.fileInputRef}
               onFileSelect={picker.handleFileSelect}
               onClear={picker.clearImage}
+              locale={locale}
             />
-            </div>
           ) : undefined
         }
       />

@@ -80,7 +80,7 @@ import { fetchApprovedBusinesses, submitBusiness, withPhotoUploadMetric, photoIm
 import { uploadPostImage, deletePostImage } from '@/lib/post-image-upload'
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-700'
+  'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-2 focus:ring-lime-700'
 
 // ---- Hours editor model -------------------------------------------------------------------------
 // index 0..6 == Sunday..Saturday, matching BusinessHours.day_of_week. The seven slots of the

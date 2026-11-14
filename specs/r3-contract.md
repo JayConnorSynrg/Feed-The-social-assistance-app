@@ -69,17 +69,19 @@ first and reaches the opt-in rows through the cascade.
   (`withdraw_opt_in`, `unblock_opt_in`), and a direct update that finds no row answers `204`. Measured on 40
   simultaneous pairs and 2 forced interleaves per shape: 0 collisions (before the third review round's fix,
   the author's direct update against that author's own deletion collided in 21, 12 and 2 of 40 pairs).
-- **What can still collide, measured on 20 simultaneous pairs each:**
+- **What can still collide** (20 simultaneous pairs per run, two independent runs; the count moves with
+  timing, so the figures are ranges):
   - **Opting in at the moment the post's author deletes their account**, in every release state and on
-    today's database alike: 20 of 20 through the admin route, 17 to 20 of 20 when the profile is deleted
-    with the posts still there. `opt_in_to_post` holds the post, then its engagement step asks for the
+    today's database alike: 13 to 20 of 20 (19 to 20 through the admin route, 13 to 20 when the profile is
+    deleted with the posts still there). `opt_in_to_post` holds the post, then its engagement step asks for the
     author's account row; the deletion holds that row and asks for the post. **What the member sees:** the
     opt-in fails once (`40P01`) or, when the engagement step absorbs it, succeeds without its engagement
     credit, and the account deletion goes through or reports a failure and succeeds on retry. Nothing is
     half-written and no slot drifts. Not changed by this release; a follow-up reorders `opt_in_to_post`.
   - **Before the contract step only:** a seeker's direct `DELETE` of their pending opt-in (not a client
-    path, see below) at the moment the author's posts are deleted: 13 of 20 against the deletion function's
-    removal of the author's posts, 18 of 20 against a delete of the post (today's database: 0 and 0; the
+    path, see below) at the moment the author's posts are deleted: 13 to 20 of 20 (13 to 16 against the
+    deletion function's removal of the author's posts, 18 to 19 against a delete of the post; today's
+    database: 0 and 0; the
     slot that comes back on every delete takes the post row after the opt-in row). One side fails with
     `40P01` and succeeds on retry. No deployed client sends that DELETE, and the contract step removes it.
 

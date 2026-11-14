@@ -1,12 +1,15 @@
 // apps/web/src/lib/i18n-feed-subtabs.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// The Community sub-tab dictionaries (one per sub-tab). For each:
+// The Release 3.5 dictionaries: one per Community sub-tab, and one per part of the feed card
+// translated after them (photo picker, follow errors, general errors, sign-up controls, badges and
+// sheets). For each:
 //   - parity: exactly the 14 locales, the English key set, no empty value, the English
 //     {placeholders}, and translated (a locale is not a copy of English);
 //   - its reader falls back to English for a missing or empty value and writes one
 //     i18n.translation_fallback row naming the key and the locale.
-// What a member reads on screen is asserted in components/panels/*.i18n.test.ts.
+// What a member reads on screen is asserted in components/panels/*.i18n.test.ts and
+// components/feed/*.i18n.test.ts.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -18,6 +21,11 @@ import { feedOrganizationsMessages, orgsT } from './i18n-feed-organizations'
 import { feedPetitionsMessages, petitionsT } from './i18n-feed-petitions'
 import { feedMessagesMessages, messagesT } from './i18n-feed-messages'
 import { businessesT, feedBusinessesMessages } from './i18n-feed-businesses'
+import { feedPhotoMessages, photoT } from './i18n-feed-photo'
+import { feedFollowsMessages, followsT } from './i18n-feed-follows'
+import { friendlyErrorMessages, friendlyErrorT } from './i18n-friendly-error'
+import { feedOptInsMessages, optInsT } from './i18n-feed-optins'
+import { badgesT, feedBadgesMessages } from './i18n-feed-badges'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort()
@@ -28,10 +36,15 @@ const DICTS: Array<[name: string, dict: Record<Locale, object>, reader: Reader]>
   ['petitions', feedPetitionsMessages, petitionsT as Reader],
   ['messages', feedMessagesMessages, messagesT as Reader],
   ['businesses', feedBusinessesMessages, businessesT as Reader],
+  ['photo picker', feedPhotoMessages, photoT as Reader],
+  ['follow errors', feedFollowsMessages, followsT as Reader],
+  ['general errors', friendlyErrorMessages, friendlyErrorT as Reader],
+  ['sign-up controls', feedOptInsMessages, optInsT as Reader],
+  ['badges and sheets', feedBadgesMessages, badgesT as Reader],
 ]
 
 // The same word in a language (a brand, a loanword, a format) may equal English.
-const SAME_AS_EN_OK = new Set<string>(['{action}: {title}', 'Messages', '{state} — {day}', 'Logo', 'Email', 'Website', 'Legal', 'ZIP code'])
+const SAME_AS_EN_OK = new Set<string>(['{action}: {title}', '{action}: {name}', 'Messages', '{state} — {day}', 'Logo', 'Email', 'Website', 'Legal', 'ZIP code'])
 
 describe.each(DICTS)('%s dictionary', (_name, dict, reader) => {
   const en = dict.en as Record<string, string>

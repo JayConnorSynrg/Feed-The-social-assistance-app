@@ -75,6 +75,7 @@ export function ReportDialog({
       <DialogContent
         lang={locale}
         dir={dir(locale)}
+        closeLabel={cardT(locale, 'close')}
         className="max-w-sm"
         aria-describedby={undefined}
         onCloseAutoFocus={(e) => {

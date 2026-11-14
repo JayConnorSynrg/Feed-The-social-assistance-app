@@ -274,23 +274,31 @@ describe('the public edit history', () => {
   })
 })
 
-// Release 1 marks every still-English piece of the (translated) feed with lang="en" dir="ltr" so
-// assistive tech switches voice; a piece translated through a 14-locale dictionary must not carry it.
+// Release 1 marked every still-English piece of the (translated) feed with lang="en" dir="ltr" so
+// assistive tech switches voice; a piece translated through a 14-locale dictionary must not carry
+// it. Since Release 3.5 a feed post card has no such piece left.
 describe('language marking: English-only pieces say so; translated pieces do not', () => {
   const es = (post: Post, o: Partial<FeedPostCardProps> = {}) => card(post, { locale: 'es', ...o })
 
-  it('the translated card itself carries no lang="en"; its English-only opt-in row and petition embed do', () => {
+  it('no English island is left on a translated card: the author badges, the opt-in row and the petition embed are all translated', () => {
     const plain = es(rowToPost(row({ edited_at: '2026-10-09T21:53:18Z' }), { isLiked: false }))
-    // The only English piece of a plain card: the author badges (not translated yet).
-    expect(plain.match(/lang="en"/g)).toHaveLength(1)
-    expect(plain).toMatch(/<span lang="en" dir="ltr" data-testid="harmony-badge-author"/)
+    expect(plain).not.toMatch(/lang="en"/)
+    // The author badge inherits the card's language (Release 3.5, appreciation.i18n.test.ts).
+    expect(plain).toMatch(/<span data-testid="harmony-badge-author" class="[^"]*"><span>Nuevo<\/span><\/span>/)
     expect(plain).not.toContain('class="contents"')
+    // Translated (feed-post-card.optins.i18n.test.ts): no mark of their own.
     const capped = es(rowToPost(row({ max_seekers: 5, slots_remaining: 2 }), { isLiked: false }))
-    expect(capped).toMatch(/<div lang="en" dir="ltr" data-testid="capacity-row-p1"/)
+    expect(capped).toMatch(/<div data-testid="capacity-row-p1" class=/)
+    expect(capped).not.toMatch(/lang="en"/)
     const petition = es(rowToPost(row({ post_type: 'petition', petition_id: 'pt' }), { isLiked: false }), {
       petitionEmbed: { title: 'T', summary: 'S', signatureCount: 1, targetSignatures: 10, hasSigned: false, isSigning: false },
     })
-    expect(petition).toMatch(/data-testid="petition-embed-p1" lang="en" dir="ltr"/)
+    expect(petition).toMatch(/<div data-testid="petition-embed-p1" class=/)
+    expect(petition).not.toMatch(/lang="en"/)
+    // A badge strip and a rated author, in Arabic: still nothing marked English.
+    const rated = card(rowToPost(row({ user: { id: 'author', first_name: 'Ada', avatar_url: null, admin_tier: null, harmony_score: 4.5, harmony_reviews_count: 3, badge_summary: { families: { food: { level: 2 } }, badges: { helper: { level: 1 } } } } }), { isLiked: false }), { locale: 'ar' })
+    expect(rated).toContain('data-testid="author-badge-strip-author"')
+    expect(rated).not.toMatch(/lang="en"/)
   })
 
   it('the shared fields, the conflict comparison and the history list are translated: no lang="en"', () => {
@@ -304,13 +312,12 @@ describe('language marking: English-only pieces say so; translated pieces do not
     expect(history).toContain('Versión actual (nunca editada)')
   })
 
-  it('the English-only photo picker is wrapped with lang="en" wherever a translated form uses it', () => {
+  it('the photo picker is translated: no form that uses it wraps it in an English mark (post-image-picker.i18n.test.ts)', () => {
     const read = (rel: string) => fs.readFileSync(path.resolve(__dirname, rel), 'utf8')
     for (const rel of ['../panels/feed-panel.tsx', '../panels/post-type-wizard.tsx', './post-edit-dialog.tsx']) {
       const src = read(rel)
-      const uses = src.match(/<PostImagePickerField/g)?.length ?? 0
-      const wrapped = src.match(/<div lang="en" dir="ltr" data-english-only="photo-picker">\s*<PostImagePickerField/g)?.length ?? 0
-      expect([rel, wrapped]).toEqual([rel, uses])
+      expect([rel, src.match(/<PostImagePickerField/g)?.length ?? 0]).toEqual([rel, 1])
+      expect([rel, src.match(/data-english-only="photo-picker"/g)?.length ?? 0]).toEqual([rel, 0])
     }
   })
 })

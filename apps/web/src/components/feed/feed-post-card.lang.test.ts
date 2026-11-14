@@ -1,9 +1,9 @@
 // apps/web/src/components/feed/feed-post-card.lang.test.ts
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
-// Language marks on the post card: the still-English author badges are marked English; a member's own
-// words (petition title and summary, a seeker's name) inside an English-marked block do not inherit
-// "English" (lang="") and take their direction from the text (dir="auto").
+// Language marks on the post card: the author badges are translated and carry no mark of their own
+// (they inherit the card's); a member's own words (petition title and summary, a seeker's name) do
+// not inherit the card's language (lang="") and take their direction from the text (dir="auto").
 
 import { describe, it, expect, vi } from 'vitest'
 
@@ -50,15 +50,22 @@ function render() {
 }
 
 describe('language marks on the card', () => {
-  it('each author badge marks its own root English (no display:contents wrapper)', () => {
+  it('each author badge gets the card language and carries no mark of its own (no wrapper either)', () => {
     const tree = render()
     expect(findAll(tree, (e) => e.props['data-testid'] === 'author-badges-en')).toHaveLength(0)
-    expect(findAll(tree, (e) => e.type === HarmonyBadge && e.props.userId === 'me')).toHaveLength(1)
-    expect(findAll(tree, (e) => e.type === AuthorBadgeStrip)).toHaveLength(1)
-    const harmony = renderToStaticMarkup(createElement(HarmonyBadge, { score: 4.5, count: 3, userId: 'u' }))
-    const strip = renderToStaticMarkup(createElement(AuthorBadgeStrip, { summary: { families: { food: { level: 2 } } }, userId: 'u' }))
-    expect(harmony).toMatch(/^<span lang="en" dir="ltr"/)
-    expect(strip).toMatch(/^<span lang="en" dir="ltr"/)
+    const badge = findAll(tree, (e) => e.type === HarmonyBadge && e.props.userId === 'me')
+    expect(badge).toHaveLength(1)
+    expect(badge[0].props.locale).toBe('ar')
+    const strips = findAll(tree, (e) => e.type === AuthorBadgeStrip)
+    expect(strips).toHaveLength(1)
+    expect(strips[0].props.locale).toBe('ar')
+    // The seeker's badge in the author's list too.
+    expect(findAll(tree, (e) => e.type === HarmonyBadge && e.props.userId === 's1')[0].props.locale).toBe('ar')
+    const harmony = renderToStaticMarkup(createElement(HarmonyBadge, { score: 4.5, count: 3, userId: 'u', locale: 'ar' }))
+    const strip = renderToStaticMarkup(createElement(AuthorBadgeStrip, { summary: { families: { food: { level: 2 } } }, userId: 'u', locale: 'ar' }))
+    expect(harmony).toMatch(/^<span data-testid="harmony-badge-u" class=/)
+    expect(strip).toMatch(/^<span class="inline-flex items-center gap-1" data-testid="author-badge-strip-u">/)
+    for (const out of [harmony, strip]) expect(out).not.toMatch(/\blang=|\bdir=/)
   })
 
   it.each(['petition-title', 'petition-summary', 'seeker-name'])("a member's text (%s) has lang=\"\" and dir=\"auto\"", (kind) => {

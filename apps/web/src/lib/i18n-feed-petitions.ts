@@ -20,6 +20,7 @@
 
 import { translate, type Locale } from './i18n'
 import { pluralMessage, type PluralForms } from './i18n-intl'
+import { formatMessage, isolate } from './format-message'
 
 export interface FeedPetitionsMessages {
   // petitions.cause_category labels
@@ -72,6 +73,8 @@ export interface FeedPetitionsMessages {
   errAffirmationRequired: string
   errWithdrawLocked: string
   errWithdrawFailed: string
+  /** The small label on a petition post in the feed (the embed on the card). */
+  embedLabel: string
 }
 
 export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
@@ -115,6 +118,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'You must affirm to add your verified signature of support.',
     errWithdrawLocked: 'Signatures are final — the organizer has exported this list.',
     errWithdrawFailed: 'Unable to withdraw your signature. Please try again.',
+    embedLabel: 'Petition',
   },
   es: {
     catLandRights: 'Derechos sobre la tierra',
@@ -156,6 +160,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Debes confirmar para añadir tu firma verificada de apoyo.',
     errWithdrawLocked: 'Las firmas son definitivas: la persona organizadora ya exportó esta lista.',
     errWithdrawFailed: 'No se pudo retirar tu firma. Inténtalo de nuevo.',
+    embedLabel: 'Petición',
   },
   // machine-drafted, needs native review
   ht: {
@@ -198,6 +203,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Ou dwe konfime pou w ajoute siyati verifye pou sipò ou.',
     errWithdrawLocked: 'Siyati yo definitif: òganizatè a deja ekspòte lis sa a.',
     errWithdrawFailed: 'Nou pa kapab retire siyati ou. Tanpri eseye ankò.',
+    embedLabel: 'Petisyon',
   },
   vi: {
     catLandRights: 'Quyền đất đai',
@@ -239,6 +245,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Bạn cần xác nhận để thêm chữ ký ủng hộ đã xác minh của mình.',
     errWithdrawLocked: 'Chữ ký không thể thay đổi nữa: người tổ chức đã xuất danh sách này.',
     errWithdrawFailed: 'Không thể rút chữ ký của bạn. Vui lòng thử lại.',
+    embedLabel: 'Kiến nghị',
   },
   ar: {
     catLandRights: 'حقوق الأراضي',
@@ -280,6 +287,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'عليك التأكيد لتضيف توقيع الدعم المؤكَّد الخاص بك.',
     errWithdrawLocked: 'التوقيعات نهائية: صدَّر المنظِّم هذه القائمة.',
     errWithdrawFailed: 'تعذّر سحب توقيعك. حاول مرة أخرى.',
+    embedLabel: 'عريضة',
   },
   zh: {
     catLandRights: '土地权利',
@@ -321,6 +329,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: '您需要确认后才能添加您的经验证的支持签名。',
     errWithdrawLocked: '签名已不可更改：组织者已导出此名单。',
     errWithdrawFailed: '无法撤回您的签名。请重试。',
+    embedLabel: '请愿',
   },
   // machine-drafted, needs native review
   so: {
@@ -363,6 +372,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Waa inaad xaqiijisaa si aad ugu darto saxiixaaga taageerada ee la xaqiijiyay.',
     errWithdrawLocked: 'Saxiixyadu waa kama dambays: qabanqaabiyuhu wuu soo dejiyay liiskan.',
     errWithdrawFailed: 'Lagama noqon karo saxiixaaga. Fadlan isku day mar kale.',
+    embedLabel: 'Codsi',
   },
   fr: {
     catLandRights: 'Droits fonciers',
@@ -404,6 +414,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Vous devez confirmer pour ajouter votre signature de soutien vérifiée.',
     errWithdrawLocked: 'Les signatures sont définitives : l’organisateur a exporté cette liste.',
     errWithdrawFailed: 'Impossible de retirer votre signature. Veuillez réessayer.',
+    embedLabel: 'Pétition',
   },
   pt: {
     catLandRights: 'Direitos à terra',
@@ -445,6 +456,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Você precisa confirmar para adicionar sua assinatura de apoio verificada.',
     errWithdrawLocked: 'As assinaturas são definitivas: a pessoa organizadora exportou esta lista.',
     errWithdrawFailed: 'Não foi possível retirar sua assinatura. Tente novamente.',
+    embedLabel: 'Petição',
   },
   ru: {
     catLandRights: 'Права на землю',
@@ -486,6 +498,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Чтобы добавить свою подтверждённую подпись в поддержку, нужно подтвердить согласие.',
     errWithdrawLocked: 'Подписи окончательны: организатор уже выгрузил этот список.',
     errWithdrawFailed: 'Не удалось отозвать вашу подпись. Повторите попытку.',
+    embedLabel: 'Петиция',
   },
   ko: {
     catLandRights: '토지 권리',
@@ -527,6 +540,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: '확인된 지지 서명을 추가하려면 동의 확인이 필요합니다.',
     errWithdrawLocked: '서명이 확정되었습니다. 주최자가 이 명단을 내보냈습니다.',
     errWithdrawFailed: '서명을 철회할 수 없습니다. 다시 시도해 주세요.',
+    embedLabel: '청원',
   },
   tl: {
     catLandRights: 'Karapatan sa lupa',
@@ -568,6 +582,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Kailangan mong kumpirmahin para maidagdag ang iyong beripikadong lagda ng suporta.',
     errWithdrawLocked: 'Pinal na ang mga lagda: na-export na ng organizer ang listahang ito.',
     errWithdrawFailed: 'Hindi mabawi ang iyong lagda. Pakisubukang muli.',
+    embedLabel: 'Petisyon',
   },
   // machine-drafted, needs native review
   am: {
@@ -610,6 +625,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'የተረጋገጠ የድጋፍ ፊርማዎን ለማከል ማረጋገጥ አለብዎት።',
     errWithdrawLocked: 'ፊርማዎቹ የመጨረሻ ናቸው፦ አዘጋጁ ይህን ዝርዝር አውጥቷል።',
     errWithdrawFailed: 'ፊርማዎን ማንሳት አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
+    embedLabel: 'አቤቱታ',
   },
   // machine-drafted, needs native review
   hmn: {
@@ -652,6 +668,7 @@ export const feedPetitionsMessages: Record<Locale, FeedPetitionsMessages> = {
     errAffirmationRequired: 'Koj yuav tsum lees paub thiaj ntxiv tau koj qhov kos npe txhawb nqa uas tau txheeb xyuas.',
     errWithdrawLocked: 'Cov kos npe hloov tsis tau lawm: tus neeg npaj twb rho daim npe no tawm lawm.',
     errWithdrawFailed: 'Thim tsis tau koj qhov kos npe. Thov sim dua.',
+    embedLabel: 'Ntawv thov',
   },
 }
 
@@ -731,6 +748,19 @@ export function signatureCountMessage(count: number, target: number, locale: Loc
   return target > 0
     ? pluralMessage(SIGNATURES_OF_TARGET[locale] ?? SIGNATURES_OF_TARGET.en, target, locale)
     : pluralMessage(VERIFIED_SIGNATURES[locale] ?? VERIFIED_SIGNATURES.en, count, locale)
+}
+
+// ---------------------------------------------------------------------------
+// Accessible names
+// ---------------------------------------------------------------------------
+
+/**
+ * A petition button's accessible name: its visible text first (WCAG 2.5.3), then the petition it
+ * acts on. Used by the sub-tab's cards and by the petition embed on a feed post card. The title
+ * is the organiser's own text: isolated, never translated.
+ */
+export function petitionActionName(locale: Locale, action: 'sign' | 'withdraw', title: string): string {
+  return formatMessage(petitionsT(locale, 'actionForPetitionAria'), { action: petitionsT(locale, action), title: isolate(title) })
 }
 
 // ---------------------------------------------------------------------------

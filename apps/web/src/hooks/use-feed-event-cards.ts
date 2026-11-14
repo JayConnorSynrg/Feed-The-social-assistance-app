@@ -30,27 +30,54 @@ import { useEventCardRefresh } from './use-event-card-refresh'
  *   - empty first, then the sentence set once (so the same sentence twice is announced twice);
  *   - when focus moves (a card left, a dialog closed), in ONE frame: `moveFocus` first, then the
  *     notice — a screen reader cancels a polite message queued before a focus move;
- *   - a newer announcement (or a newer event-card change) supersedes an older one still waiting
- *     for its frame; quiet paths simply do not call it.
+ *   - a newer announcement (or a newer event-card change) supersedes the WORDS of an older one
+ *     still waiting for its frame; quiet paths simply do not call it;
+ *   - `join`: a newer announcement keeps the words still waiting in front of its own, so two
+ *     outcomes close together are both said. The sign-up outcomes and a card that leaves after a
+ *     member's action use it; supersede() still drops the words;
+ *   - a focus step is never dropped. Some carry state (the sign-up step writes the card's alert
+ *     lines after focus moves; a leaving card's step removes the card), so replacing or
+ *     superseding an announcement may only drop words. Steps wait in a queue; the frame of the
+ *     latest announcement — or the frame supersede() schedules — runs every queued step once, in
+ *     the order they were queued, before its sentence is set. Focus ends where the latest step
+ *     puts it.
  * Pure (the region setter and the frame scheduler are passed in) so the rules are unit-tested.
  */
 export function createCardNoticeAnnouncer(
   setNotice: (text: string) => void,
   schedule: (fn: () => void) => void,
-): { announce: (text: string, moveFocus?: () => void) => void; supersede: () => void } {
+): { announce: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => void; supersede: () => void } {
   let seq = 0
+  // The words still waiting for their frame, if any.
+  let waiting: { text: string } | null = null
+  // Focus steps not run yet, in the order they were handed over: each runs exactly once.
+  let steps: Array<() => void> = []
+  const runSteps = () => {
+    const due = steps
+    steps = []
+    for (const step of due) step()
+  }
   return {
-    announce(text, moveFocus) {
+    announce(text, moveFocus, options) {
       const mine = ++seq
+      const earlier = options?.join ? waiting : null
+      const full = earlier ? `${earlier.text} ${text}` : text
+      waiting = { text: full }
+      if (moveFocus) steps.push(moveFocus)
       setNotice('')
       schedule(() => {
+        // A newer announcement's frame (or supersede's) runs the queued steps.
         if (seq !== mine) return
-        moveFocus?.()
-        setNotice(text)
+        waiting = null
+        runSteps()
+        setNotice(full)
       })
     },
     supersede() {
       seq++
+      waiting = null
+      // The words are dropped; the steps still run, in a frame of their own.
+      if (steps.length > 0) schedule(runSteps)
     },
   }
 }
