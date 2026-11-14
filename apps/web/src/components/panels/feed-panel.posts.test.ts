@@ -76,16 +76,20 @@ vi.mock('motion/react', () => {
   const pass = (p: { children?: unknown }) => p.children
   return { LazyMotion: pass, AnimatePresence: pass, domAnimation: {}, useReducedMotion: () => false, m: new Proxy({}, { get: () => 'div' }) }
 })
-vi.mock('@/lib/logger', () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: (event: string, _err: unknown, labels: unknown) => void h.logged.push({ event, labels }) },
-  logEvent: vi.fn(),
-  // The REAL wide-event core, with its sink capturing the rows it would persist.
-  withMetric: async (op: string, attrs: Record<string, string | number | boolean | null>, fn: () => Promise<unknown>, requestId?: string) => {
-    const { runWithMetric } = await import('@/lib/with-metric-core.mjs')
-    const sink = (level: string, event: string, ctx: Record<string, unknown> = {}, rid?: string, duration_ms?: number) => void h.metrics.push({ level, event, ctx: { ...ctx }, requestId: rid, duration_ms })
-    return runWithMetric({ emit: () => {}, sink }, op, attrs, fn, requestId)
-  },
-}))
+// The REAL wide-event core, loaded once with the mock (a dynamic import on the first call made the
+// first feed load slower than the test's flush rounds), with its sink capturing the rows it would
+// persist.
+vi.mock('@/lib/logger', async () => {
+  const { runWithMetric } = await import('@/lib/with-metric-core.mjs')
+  return {
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: (event: string, _err: unknown, labels: unknown) => void h.logged.push({ event, labels }) },
+    logEvent: vi.fn(),
+    withMetric: (op: string, attrs: Record<string, string | number | boolean | null>, fn: () => Promise<unknown>, requestId?: string) => {
+      const sink = (level: string, event: string, ctx: Record<string, unknown> = {}, rid?: string, duration_ms?: number) => void h.metrics.push({ level, event, ctx: { ...ctx }, requestId: rid, duration_ms })
+      return runWithMetric({ emit: () => {}, sink }, op, attrs, fn, requestId)
+    },
+  }
+})
 vi.mock('@/lib/privacy-prefs', async (orig) => ({ ...(await orig<object>()), readShareLocationPref: () => false }))
 vi.mock('@/hooks/use-auth', async (orig) => ({
   ...(await orig<object>()), useAuth: () => h.auth }))
