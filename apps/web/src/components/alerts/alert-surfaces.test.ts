@@ -281,7 +281,7 @@ describe('what changed is visible', () => {
     // Member text keeps its own direction and declares no language.
     expect(html).toContain('<p lang="" dir="auto" class="mt-2 whitespace-pre-wrap break-words text-sm text-stone-800">مغلق الجسر</p>')
     // A role, never a person: the entry type carries no name or id field, and none is printed.
-    expect(Object.keys(entries[0]).filter((k) => /name|user|actor_id|created_by|_by$/.test(k))).toEqual([])
+    expect(Object.keys(entries[0]).filter((k) => /name|user|actor_id|created_by/.test(k) || k.endsWith('_by'))).toEqual([])
     expect(html).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/)
   })
 
