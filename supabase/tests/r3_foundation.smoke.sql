@@ -1111,6 +1111,22 @@ SELECT pg_temp.ck('E1g', 'a request closes and reopens too; only requests and of
 SELECT pg_temp.ck('E1h', 'no client role writes the closed columns directly', '^A=>ERR 42501 permission denied for table posts;PA=>ERR 42501 permission denied for table posts;$',
   pg_temp.who(ARRAY['A', 'PA'], $q$UPDATE public.posts SET closed_at = now(), closed_reason = 'closed' WHERE id = '00000000-0000-4000-a000-000000000003' RETURNING 'x'$q$));
 
+-- E1i: who closed or reopened, and when: one app_logs row per change (E1c, E1f on P3; E1g on P2), none for a refusal
+-- (E1a, E1b) or a call that changes nothing; the request id of the call is on the row.
+SELECT pg_temp.ck('E1i', 'set_post_closed logs who and when: P3 closed (fulfilled), closed again (reason closed), reopened; P2 closed and reopened; refusals and a no-op write nothing; the x-request-id of the call is on its row; the row is the author''s, at the call''s time',
+  '^post\.closed:closed:t:t,post\.closed:fulfilled:t:t,post\.reopened:-:t:t\|post\.closed:fulfilled:t:t,post\.reopened:-:t:t\|OK false\|0\|OK true\|r3-close-1:post\.closed:t\|OK false$',
+  (SELECT string_agg(x, ',' ORDER BY x) FROM (SELECT event || ':' || COALESCE(context ->> 'closed_reason', '-') || ':' || (user_id = pg_temp.u('A'))::char || ':' || (created_at = now())::char AS x
+     FROM public.app_logs WHERE event LIKE 'post.%' AND context ->> 'post_id' = '00000000-0000-4000-a000-000000000003') l) || '|' ||
+  (SELECT string_agg(x, ',' ORDER BY x) FROM (SELECT event || ':' || COALESCE(context ->> 'closed_reason', '-') || ':' || (user_id = pg_temp.u('A'))::char || ':' || (created_at = now())::char AS x
+     FROM public.app_logs WHERE event LIKE 'post.%' AND context ->> 'post_id' = '00000000-0000-4000-a000-000000000002') l) || '|' ||
+  pg_temp.run('A', $q$SELECT public.set_post_closed('00000000-0000-4000-a000-000000000002', false) ->> 'closed'$q$) || '|' ||
+  pg_temp.fresh($q$SELECT (count(*) - 2)::text FROM public.app_logs WHERE event LIKE 'post.%' AND context ->> 'post_id' = '00000000-0000-4000-a000-000000000002'$q$) || '|' ||
+  left(set_config('request.headers', '{"x-request-id":"r3-close-1"}', true), 0) ||
+  pg_temp.run('A', $q$SELECT public.set_post_closed('00000000-0000-4000-a000-000000000002', true) ->> 'closed'$q$) || '|' ||
+  left(set_config('request.headers', '', true), 0) ||
+  pg_temp.fresh($q$SELECT string_agg(request_id || ':' || event || ':' || (user_id = pg_temp.u('A'))::char, ',') FROM public.app_logs WHERE event LIKE 'post.%' AND request_id = 'r3-close-1'$q$) || '|' ||
+  pg_temp.run('A', $q$SELECT public.set_post_closed('00000000-0000-4000-a000-000000000002', false) ->> 'closed'$q$));
+
 -- E2: decide_opt_in. P3 holds B (pending), B2 (pending), C (pending).
 INSERT INTO ids SELECT 'oi_' || lower(w), (SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000003' AND seeker_id = pg_temp.u(w)) FROM unnest(ARRAY['B', 'B2', 'C']) w;
 SELECT pg_temp.ck('E2a', 'decide: anon no EXECUTE; guests refused; the seeker, a stranger and every staff tier are not the author',

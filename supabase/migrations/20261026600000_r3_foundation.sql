@@ -29,12 +29,15 @@
 --       from the locked post row); moderators may still comment; existing comments stay editable and deletable.
 --   (D) Reports: comments and org events become reportable; one OPEN report per member per item, and a new
 --       report is taken after the item changed; three reports hide a post or a comment, never an org event.
---   (E) Requests and offers can be closed and reopened by their author. Opt-in decisions get an audited RPC and
---       every opt-in change writes an event row. Any DELETE of an opt-in row returns its slot (the direct seeker
---       DELETE drained offers). EXPAND/CONTRACT: the direct UPDATE (status) grant and the direct DELETE (policy
---       opt_ins_delete) stay until the contract step; withdraw_opt_in is the seeker's path from then on.
---       An opt-in write and the seeker's account deletion never meet in a deadlock: the three RPCs take the
---       seeker's profile row (KEY SHARE) before the post, and the trail trigger's account lookups never wait.
+--   (E) Requests and offers can be closed and reopened by their author; each open / close is logged with who and
+--       when (app_logs post.closed / post.reopened). Opt-in decisions get an audited RPC and every opt-in change
+--       writes an event row naming its seeker and its actor. Any DELETE of an opt-in row returns its slot (the
+--       direct seeker DELETE drained offers). EXPAND/CONTRACT: the author's direct UPDATE (status) and the
+--       seeker's direct DELETE of a pending opt-in stay until the contract step; withdraw_opt_in is the seeker's
+--       path from then on. The platform-admin branch of both policies goes now (no deployed caller; its writes
+--       left no admin_actions row). An opt-in write and an account deletion never meet in a deadlock: the three
+--       RPCs take the seeker's profile row (KEY SHARE) before the post, and the trail takes no lock at all (no
+--       foreign keys; two statement triggers clear a deleted account and drop a deleted post's rows).
 --   (F) Announcements: moderators pin / unpin with an expiry (7 days by default); ranked_feed_v2 gains an
 --       optional p_filter ('announcements' = live pins + org events). DROP + CREATE with a DEFAULT, no overload.
 --   (G) Petitions: drafts are column-limited on insert; the hash is sha256 of the body, computed by the server;
@@ -1175,7 +1178,7 @@ END $$;
 CREATE FUNCTION public.set_post_closed(p_post_id uuid, p_closed boolean, p_expected_version integer DEFAULT NULL,
                                        p_reason text DEFAULT 'fulfilled')
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_uid uuid := auth.uid(); p public.posts%ROWTYPE;
+DECLARE v_uid uuid := auth.uid(); p public.posts%ROWTYPE; v_was_at timestamptz; v_was_reason text;
 BEGIN
   IF COALESCE((auth.jwt() ->> 'is_anonymous')::boolean, false) THEN RAISE EXCEPTION 'guest_refused' USING ERRCODE = '42501'; END IF;
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501'; END IF;
@@ -1191,10 +1194,17 @@ BEGIN
       DETAIL = jsonb_build_object('current_version', p.version, 'edited_at', p.edited_at)::text; END IF;
   IF p_closed AND (p_reason IS NULL OR p_reason NOT IN ('fulfilled', 'closed')) THEN
     RAISE EXCEPTION 'post_field_invalid:reason' USING ERRCODE = '22023'; END IF;
+  v_was_at := p.closed_at; v_was_reason := p.closed_reason;
   UPDATE public.posts
      SET closed_at = CASE WHEN p_closed THEN COALESCE(closed_at, now()) END,
          closed_reason = CASE WHEN p_closed THEN p_reason END
    WHERE id = p.id RETURNING * INTO p;
+  -- who and when, first-party: one app_logs row per change (none when nothing changed), in this transaction
+  IF (p.closed_at IS NULL) <> (v_was_at IS NULL) OR p.closed_reason IS DISTINCT FROM v_was_reason THEN
+    INSERT INTO public.app_logs (level, event, user_id, request_id, context)
+    VALUES ('info', CASE WHEN p.closed_at IS NULL THEN 'post.reopened' ELSE 'post.closed' END, v_uid, public.request_id(),
+            jsonb_build_object('post_id', p.id, 'post_type', p.post_type, 'closed_reason', p.closed_reason));
+  END IF;
   RETURN jsonb_build_object('post_id', p.id, 'closed', p.closed_at IS NOT NULL, 'closed_at', p.closed_at,
                             'closed_reason', p.closed_reason, 'version', p.version);
 END $$;
