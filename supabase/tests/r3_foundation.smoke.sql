@@ -116,6 +116,16 @@ BEGIN
 END $f$;
 -- fresh(q): read state AFTER calls made earlier in the same check (an inline subquery sees the check's start snapshot)
 CREATE FUNCTION pg_temp.fresh(q text) RETURNS text LANGUAGE plpgsql AS $f$ DECLARE r text; BEGIN EXECUTE q INTO r; RETURN r; END $f$;
+-- svc(q): run q as service_role (the account deletion function's role), capturing errors
+CREATE FUNCTION pg_temp.svc(q text) RETURNS text LANGUAGE plpgsql AS $f$
+DECLARE r text;
+BEGIN
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true); PERFORM set_config('role', 'service_role', true);
+  BEGIN EXECUTE q INTO r; r := 'OK ' || COALESCE(r, '<null>');
+  EXCEPTION WHEN others THEN r := 'ERR ' || SQLSTATE || ' ' || SQLERRM; END;
+  PERFORM set_config('role', 'postgres', true); PERFORM set_config('request.jwt.claims', '', true);
+  RETURN r;
+END $f$;
 CREATE TEMP TABLE st AS SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20261026700000') AS contract;
 GRANT SELECT ON st TO PUBLIC;
 CREATE FUNCTION pg_temp.contract() RETURNS boolean LANGUAGE sql AS $f$ SELECT contract FROM st $f$;
@@ -262,8 +272,9 @@ INSERT INTO r3_fns VALUES
  ('safety_alert_updates_append_only()', 'internal'), ('post_labels_append_only()', 'internal'), ('post_labels_sync()', 'internal'),
  ('posts_label_review_on_edit()', 'internal'), ('lock_post_for_engagement()', 'internal'), ('resource_opt_ins_return_slot()', 'internal'),
  ('resource_opt_ins_audit()', 'internal'), ('resource_opt_in_events_append_only()', 'internal'), ('petition_text_hash(text)', 'internal'),
+ ('resource_opt_in_events_forget_posts()', 'internal'), ('resource_opt_in_events_forget_profiles()', 'internal'),
  ('petitions_guard()', 'internal'), ('petition_signatures_bind()', 'internal'), ('petition_updates_append_only()', 'internal');
-SELECT pg_temp.ck('HY4', 'all 41 functions of the release exist, each name has exactly one signature (no PostgREST overload)', '^41\|0$',
+SELECT pg_temp.ck('HY4', 'all 43 functions of the release exist, each name has exactly one signature (no PostgREST overload)', '^43\|0$',
   (SELECT count(*) FILTER (WHERE to_regprocedure('public.' || sig) IS NOT NULL) || '|' ||
           (SELECT count(*) FROM (SELECT proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace
                                     AND proname IN (SELECT split_part(sig, '(', 1) FROM r3_fns) GROUP BY 1 HAVING count(*) > 1) d)
@@ -1147,21 +1158,37 @@ SELECT pg_temp.ck('E3d', 'the acting account is selectable by nobody; nobody wri
   pg_temp.pg($q$UPDATE public.resource_opt_in_events SET actor_id = NULL, event = 'declined' WHERE post_id = '00000000-0000-4000-a000-000000000003' AND event = 'accepted' RETURNING 'x'$q$) || ';' ||
   pg_temp.pg($q$DELETE FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000003' RETURNING 'x'$q$));
 
--- E3e: the trail trigger looks the two accounts up with KEY SHARE SKIP LOCKED, so that an opt-in write never waits
--- for an account deletion. That records NULL only for an account being deleted as long as nothing else takes a
--- lock on a profile row that conflicts with KEY SHARE: no function locks a profile row FOR UPDATE (FOR NO KEY
--- UPDATE and FOR KEY SHARE do not conflict) and none deletes one. The three opt-in RPCs take the seeker's
--- profile KEY SHARE before the post.
-SELECT pg_temp.ck('E3e', 'no function in public locks a profiles row FOR UPDATE or deletes one (statement-level scan; the matcher finds one when it is there); the trail trigger''s two lookups are KEY SHARE SKIP LOCKED; decide / withdraw / unblock take the profile lock before the post lock',
-  '^0\|t\|2\|ttt$',
-  (SELECT count(*)::text FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
-      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
-      AND (p.prosrc ~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M' OR p.prosrc ~* 'DELETE\s+FROM\s+(ONLY\s+)?(public\.)?profiles\M'))
-  || '|' || ($ctl$ PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR UPDATE; $ctl$ ~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M'
-             AND $ctl$ PERFORM 1 FROM public.profiles WHERE id = v_seeker FOR KEY SHARE; SELECT * INTO p FROM public.posts WHERE id = v_post_id FOR UPDATE; $ctl$ !~* '\mprofiles\M[^;]*\mFOR\s+UPDATE\M')::char
-  || '|' || (SELECT count(*) FROM regexp_matches((SELECT prosrc FROM pg_proc WHERE oid = 'public.resource_opt_ins_audit()'::regprocedure), '\mprofiles\M[^;]*FOR KEY SHARE SKIP LOCKED;', 'g'))
-  || '|' || (SELECT string_agg((p.prosrc ~ 'FROM public\.profiles WHERE id = \w+ FOR KEY SHARE;.*FROM public\.posts WHERE id = \w+ FOR UPDATE;')::char, '' ORDER BY p.proname)
-               FROM pg_proc p WHERE p.oid IN ('public.decide_opt_in(uuid,text,text)'::regprocedure, 'public.withdraw_opt_in(uuid)'::regprocedure, 'public.unblock_opt_in(uuid)'::regprocedure)));
+-- E3e: the trail names both people and takes no lock to do it (no foreign key on it; the race script's R3l proves a
+-- username change held at the same moment never blanks either one). The foreign-key actions it gave up are kept by
+-- its two statement triggers: a deleted account is cleared from seeker_id and actor_id, a deleted post takes its rows.
+INSERT INTO auth.users (id, email, is_anonymous, raw_user_meta_data) VALUES
+  ('92000000-0000-4000-8000-0000000000a1', 'trail-author@r3smoke.test', false, '{}'::jsonb),
+  ('92000000-0000-4000-8000-0000000000b1', 'trail-seeker@r3smoke.test', false, '{}'::jsonb);
+INSERT INTO public.profiles (id) VALUES ('92000000-0000-4000-8000-0000000000a1'), ('92000000-0000-4000-8000-0000000000b1') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.posts (id, user_id, content, post_type, metadata, max_seekers, created_at) VALUES
+ ('00000000-0000-4000-a000-0000000000e2', '92000000-0000-4000-8000-0000000000a1', 'an offer whose trail is read', 'source_offer', '{"categories":["food"]}', 2, now() - interval '1 hour');
+CREATE FUNCTION pg_temp.trail_e2() RETURNS text LANGUAGE sql AS $f$
+  SELECT COALESCE(string_agg(event || ':' || COALESCE((seeker_id = '92000000-0000-4000-8000-0000000000b1')::char, 'n') || ':' ||
+                             CASE WHEN actor_id IS NULL THEN 'n' WHEN actor_id = '92000000-0000-4000-8000-0000000000b1' THEN 's'
+                                  WHEN actor_id = '92000000-0000-4000-8000-0000000000a1' THEN 'a' ELSE 'x' END,
+                             ',' ORDER BY id), 'none')
+    FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-0000000000e2'
+$f$;
+SELECT pg_temp.ck('E3e', 'the trail names the seeker and the actor on every row (opted in by the seeker, accepted by the author); it has no foreign key; the seeker''s account deletion clears them from every row and records the removal by the system; the deletion function''s DELETE of the author''s posts takes the post''s trail rows; no trail row names a deleted account',
+  '^OK pending\|OK accepted\|opted_in:t:s,accepted:t:a\|0\|OK 1\|opted_in:n:n,accepted:n:a,removed:n:n\|OK 1\|none\|OK 1\|0$',
+  pg_temp.as_('92000000-0000-4000-8000-0000000000b1', false, $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-0000000000e2')).status$q$) || '|' ||
+  pg_temp.as_('92000000-0000-4000-8000-0000000000a1', false, $q$SELECT public.decide_opt_in((SELECT id FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-0000000000e2'), 'accept') ->> 'status'$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.trail_e2()$q$) || '|' ||
+  (SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.resource_opt_in_events'::regclass AND contype = 'f') || '|' ||
+  pg_temp.svc($q$WITH d AS (DELETE FROM public.profiles WHERE id = '92000000-0000-4000-8000-0000000000b1' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.trail_e2()$q$) || '|' ||
+  pg_temp.svc($q$WITH d AS (DELETE FROM public.posts WHERE user_id = '92000000-0000-4000-8000-0000000000a1' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
+  pg_temp.fresh($q$SELECT pg_temp.trail_e2()$q$) || '|' ||
+  pg_temp.svc($q$WITH d AS (DELETE FROM public.profiles WHERE id = '92000000-0000-4000-8000-0000000000a1' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
+  pg_temp.fresh($q$SELECT count(*)::text FROM public.resource_opt_in_events e
+                    WHERE (e.seeker_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = e.seeker_id))
+                       OR (e.actor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = e.actor_id))
+                       OR NOT EXISTS (SELECT 1 FROM public.posts p WHERE p.id = e.post_id)$q$));
 
 -- E4: the slot. Every opt-in row holds one slot until it is deleted; the slot comes back on any delete. P8 = 2 slots.
 SELECT pg_temp.ck('E4a', 'the drain is closed, three times over. Expand: a seeker opts in and direct-DELETEs their own opt-in, the slot comes back (withdraw_opt_in then finds nothing). Contract: the direct DELETE is refused and holds the slot; withdraw_opt_in is the way out and returns it. Each withdrawal is on the trail',
@@ -1483,15 +1510,6 @@ INSERT INTO auth.users (id, email, is_anonymous, raw_user_meta_data) VALUES ('91
 INSERT INTO public.profiles (id) VALUES ('91000000-0000-4000-8000-000000000019') ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.posts (id, user_id, content, post_type, metadata, max_seekers, created_at) VALUES
  ('00000000-0000-4000-a000-0000000000e1', pg_temp.u('A'), 'an offer the leaver opts in to', 'source_offer', '{"categories":["food"]}', 2, now() - interval '1 hour');
-CREATE FUNCTION pg_temp.svc(q text) RETURNS text LANGUAGE plpgsql AS $f$
-DECLARE r text;
-BEGIN
-  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true); PERFORM set_config('role', 'service_role', true);
-  BEGIN EXECUTE q INTO r; r := 'OK ' || COALESCE(r, '<null>');
-  EXCEPTION WHEN others THEN r := 'ERR ' || SQLSTATE || ' ' || SQLERRM; END;
-  PERFORM set_config('role', 'postgres', true); PERFORM set_config('request.jwt.claims', '', true);
-  RETURN r;
-END $f$;
 SELECT pg_temp.ck('X6', 'the deletion function''s path in both release states: the member holds a slot (2/1/1); service_role deletes the profile; the opt-in goes by cascade, the slot is back (2/2/0) and the trail records the removal by the system with the seeker cleared',
   '^OK pending\|2/1/1\|OK 1\|2/2/0\|removed:pending:system:t$',
   pg_temp.as_('91000000-0000-4000-8000-000000000019', false, $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-0000000000e1')).status$q$) || '|' ||

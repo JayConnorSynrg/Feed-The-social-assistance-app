@@ -2904,43 +2904,7 @@ export type Database = {
           seeker_id?: string | null
           to_status?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "resource_opt_in_events_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_in_events_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_in_events_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_in_events_seeker_id_fkey"
-            columns: ["seeker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "resource_opt_in_events_seeker_id_fkey"
-            columns: ["seeker_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       resource_opt_ins: {
         Row: {

@@ -274,20 +274,26 @@ ALTER TABLE public.post_labels ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE public.post_labels IS 'Append-only label records for posts (outdated / misleading / sensitive). A label is lifted by retraction, never deleted. posts.labels is the current set.';
 
 -- (E) Opt-in trail: one row per opt-in change, however it is made.
+-- No foreign keys: a foreign key check locks the post row and the profile rows (KEY SHARE) AFTER the writer already
+-- holds the opt-in row, while an account deletion holds the profile and the post and asks for the opt-in row last;
+-- the two met in a deadlock. The two actions the foreign keys gave are kept by trigger (section 5): a deleted post
+-- takes its trail rows with it, a deleted account is cleared from seeker_id and actor_id.
 CREATE TABLE public.resource_opt_in_events (
   id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  opt_in_id   uuid NOT NULL,                                  -- no FK: a withdrawal deletes the opt-in row, the event stays
-  post_id     uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  seeker_id   uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  opt_in_id   uuid NOT NULL,                                  -- a withdrawal deletes the opt-in row, the event stays
+  post_id     uuid NOT NULL,                                  -- rows go with the post (trg_posts_forget_opt_in_trail)
+  seeker_id   uuid,                                           -- NULL once the account is deleted (trg_profiles_forget_opt_in_trail)
   event       text NOT NULL CHECK (event IN ('opted_in', 'accepted', 'declined', 'completed', 'withdrawn', 'unblocked', 'removed')),
   from_status text,
   to_status   text,
-  actor_id    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,   -- never granted to a client role
+  actor_id    uuid,                                           -- never granted to a client role; NULL once the account is deleted
   actor_role  text NOT NULL CHECK (actor_role IN ('seeker', 'author', 'platform_admin', 'system')),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX resource_opt_in_events_post_idx ON public.resource_opt_in_events (post_id, created_at);
 CREATE INDEX resource_opt_in_events_opt_in_idx ON public.resource_opt_in_events (opt_in_id);
+CREATE INDEX resource_opt_in_events_seeker_idx ON public.resource_opt_in_events (seeker_id) WHERE seeker_id IS NOT NULL;
+CREATE INDEX resource_opt_in_events_actor_idx ON public.resource_opt_in_events (actor_id) WHERE actor_id IS NOT NULL;
 ALTER TABLE public.resource_opt_in_events ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE public.resource_opt_in_events IS 'Append-only trail of opt-in changes (opted in, accepted, declined, completed, withdrawn, unblocked, removed), written by trigger on resource_opt_ins.';
 -- every opt-in row holds one slot until it is deleted: repair any offer the direct-DELETE defect already drained
@@ -422,16 +428,16 @@ CREATE TRIGGER trg_resource_opt_ins_return_slot AFTER DELETE ON public.resource_
 
 -- one event row per opt-in change, however it is made (the RPCs, the direct status UPDATE the deployed client
 -- still sends, a direct DELETE, an account deletion).
--- The trigger runs with the opt-in row already locked, and an account deletion locks the profile row first and
--- reaches the opt-in through the cascade. So the two account columns are looked up with a KEY SHARE lock that
--- never waits (SKIP LOCKED): a profile whose row is free is locked here (the foreign key below then has its lock
--- already, and a deletion that arrives later waits for this transaction); a profile that is being deleted at this
--- moment is recorded as NULL, the value ON DELETE SET NULL would give the row anyway. Nothing but its deletion
--- takes a lock on a profile row that conflicts with KEY SHARE (smoke E3e keeps it so), so no other write is skipped.
+-- The trigger runs with the opt-in row already locked, and takes no other lock: the seeker and the actor are the
+-- opt-in's seeker_id and auth.uid(), read without a lock (a plain read never waits, and a member changing their
+-- username or anything else on their profile is still named). The only account a plain read does not see is one
+-- already deleted, by this transaction (the cascade of an account deletion reaching the opt-in) or by a committed
+-- one: it is recorded as NULL. An account deleted after this row is written is cleared from it by
+-- trg_profiles_forget_opt_in_trail: a deletion of the seeker or of the post's author reaches this opt-in row
+-- through its cascade, so it waits for this transaction before its clearing statement runs.
 CREATE FUNCTION public.resource_opt_ins_audit() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE v_uid uuid := auth.uid(); r public.resource_opt_ins; v_author uuid; v_event text; v_role text;
-        v_seeker uuid; v_actor uuid;
 BEGIN
   r := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   IF TG_OP = 'UPDATE' AND NEW.status IS NOT DISTINCT FROM OLD.status THEN RETURN NULL; END IF;
@@ -443,17 +449,39 @@ BEGIN
                         WHEN 'UPDATE' THEN NEW.status
                         ELSE CASE WHEN OLD.status = 'declined' AND v_role = 'author' THEN 'unblocked'
                                   WHEN v_role = 'seeker' THEN 'withdrawn' ELSE 'removed' END END;
-  -- a profile that is being deleted, in this statement (the cascade) or by another transaction, is recorded as NULL
-  SELECT id INTO v_seeker FROM public.profiles WHERE id = r.seeker_id FOR KEY SHARE SKIP LOCKED;
-  SELECT id INTO v_actor  FROM public.profiles WHERE id = v_uid       FOR KEY SHARE SKIP LOCKED;
+  -- plain reads, no lock: NULL only for an account this transaction or a committed one has deleted
   INSERT INTO public.resource_opt_in_events (opt_in_id, post_id, seeker_id, event, from_status, to_status, actor_id, actor_role)
-  VALUES (r.id, r.post_id, v_seeker, v_event,
+  VALUES (r.id, r.post_id, (SELECT s.id FROM public.profiles s WHERE s.id = r.seeker_id), v_event,
           CASE WHEN TG_OP <> 'INSERT' THEN OLD.status END, CASE WHEN TG_OP <> 'DELETE' THEN NEW.status END,
-          v_actor, v_role);
+          (SELECT a.id FROM public.profiles a WHERE a.id = v_uid), v_role);
   RETURN NULL;
 END $$;
 CREATE TRIGGER trg_resource_opt_ins_audit AFTER INSERT OR UPDATE OF status OR DELETE ON public.resource_opt_ins
   FOR EACH ROW EXECUTE FUNCTION public.resource_opt_ins_audit();
+
+-- the two foreign-key actions of the trail, as statement triggers. A statement trigger fires after every row trigger
+-- of its statement, the cascades included, so each runs after the deletion has waited for any writer that held one
+-- of the cascaded opt-in rows, and its own statement then sees that writer's trail row.
+CREATE FUNCTION public.resource_opt_in_events_forget_posts() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  DELETE FROM public.resource_opt_in_events e USING gone g WHERE e.post_id = g.id;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER trg_posts_forget_opt_in_trail AFTER DELETE ON public.posts
+  REFERENCING OLD TABLE AS gone FOR EACH STATEMENT EXECUTE FUNCTION public.resource_opt_in_events_forget_posts();
+
+CREATE FUNCTION public.resource_opt_in_events_forget_profiles() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  UPDATE public.resource_opt_in_events e
+     SET seeker_id = CASE WHEN e.seeker_id IN (SELECT id FROM gone) THEN NULL ELSE e.seeker_id END,
+         actor_id  = CASE WHEN e.actor_id  IN (SELECT id FROM gone) THEN NULL ELSE e.actor_id END
+   WHERE e.seeker_id IN (SELECT id FROM gone) OR e.actor_id IN (SELECT id FROM gone);
+  RETURN NULL;
+END $$;
+CREATE TRIGGER trg_profiles_forget_opt_in_trail AFTER DELETE ON public.profiles
+  REFERENCING OLD TABLE AS gone FOR EACH STATEMENT EXECUTE FUNCTION public.resource_opt_in_events_forget_profiles();
 
 CREATE FUNCTION public.resource_opt_in_events_append_only() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
@@ -1213,8 +1241,8 @@ BEGIN
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   -- The lock order of every opt-in RPC: the seeker's profile (KEY SHARE), then the post, then the opt-in. An account
-  -- deletion takes the profile row first and reaches the opt-in through the cascade, so the two queue at the profile
-  -- row; without this lock the trail row's foreign key asks for it last and the two meet in a deadlock.
+  -- deletion takes the profile row first, reaches the opt-in through the cascade and then the post (the slot
+  -- trigger), so the two queue at the profile row instead of meeting at the post and the opt-in in a deadlock.
   PERFORM 1 FROM public.profiles WHERE id = v_caller_id FOR KEY SHARE;
   PERFORM 1 FROM public.posts WHERE id = p_post_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Post not found'; END IF;
@@ -1625,7 +1653,7 @@ BEGIN
     'safety_alert_append(public.safety_alerts,text,integer,text[],text,uuid,text,text,timestamptz)',
     'safety_alert_updates_append_only()', 'post_labels_append_only()', 'post_labels_sync()', 'posts_label_review_on_edit()',
     'lock_post_for_engagement()', 'resource_opt_ins_return_slot()', 'resource_opt_ins_audit()',
-    'resource_opt_in_events_append_only()', 'petition_text_hash(text)', 'petitions_guard()', 'petition_signatures_bind()',
+    'resource_opt_in_events_append_only()', 'resource_opt_in_events_forget_posts()', 'resource_opt_in_events_forget_profiles()', 'petition_text_hash(text)', 'petitions_guard()', 'petition_signatures_bind()',
     'petition_updates_append_only()'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon, authenticated', f);
   END LOOP;
