@@ -27,6 +27,13 @@ export type OptInRow = Database['public']['Tables']['resource_opt_ins']['Row']
 export type OptInMap = Map<string, OptInRow['status']>
 
 /**
+ * What a read of the current user's opt-ins answers. "The read failed" is not "no opt-ins": a
+ * caller that wrote an empty map for a failed read would show Opt In on posts the member is
+ * signed up to.
+ */
+export type OptInsRead = { ok: true; statuses: OptInMap } | { ok: false }
+
+/**
  * What opt_in_to_post answers when it refuses for a reason the member can act on. Each is handed
  * to the card as it is — a code the card turns into the member's sentence
  * (lib/i18n-feed-optins.ts) — so "This offer is full" is no longer replaced by the plain
@@ -46,19 +53,20 @@ export function useOptIns() {
 
   /**
    * Fetch the current user's opt-in rows for a list of post IDs.
-   * Returns a Map<post_id, status> for fast lookup in the UI.
+   * Answers { ok: true, statuses: Map<post_id, status> } — a post with no entry has no opt-in —
+   * or { ok: false } when the read failed (the caller keeps what it has).
    * Applies the project timeout pattern.
    */
   const fetchOptInsForPosts = useCallback(
-    async (postIds: string[]): Promise<OptInMap> => {
-      if (postIds.length === 0) return new Map()
+    async (postIds: string[]): Promise<OptInsRead> => {
+      if (postIds.length === 0) return { ok: true, statuses: new Map() }
       setLoading(true)
       setError(null)
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser()
-        if (!user) return new Map()
+        if (!user) return { ok: true, statuses: new Map() }
 
         const { data, error: fetchError } = await supabase
           .from('resource_opt_ins')
@@ -73,13 +81,13 @@ export function useOptIns() {
         for (const row of data ?? []) {
           map.set(row.post_id, row.status)
         }
-        return map
+        return { ok: true, statuses: map }
       } catch (err: unknown) {
         const msg = isQueryTimeout(err)
           ? 'Opt-in data timed out — please check your connection and retry.'
           : getFriendlyErrorMessage(err, "Couldn't load opt-in status. Please try again.")
         setError(msg)
-        return new Map()
+        return { ok: false }
       } finally {
         setLoading(false)
       }
@@ -111,7 +119,9 @@ export function useOptIns() {
 
   /**
    * Withdraw a pending opt-in via the server-side RPC.
-   * Returns true if a row was deleted.
+   * Returns true if a row was deleted. FALSE IS NOT A FAILURE OF THE CALL: withdraw_opt_in deletes
+   * only a pending row and answers false, with no error, when there was none (the request was
+   * accepted, declined or already withdrawn meanwhile). The caller must not report it as done.
    */
   const withdrawOptIn = useCallback(
     async (postId: string): Promise<boolean> => {
@@ -124,7 +134,7 @@ export function useOptIns() {
         setError(msg)
         throw new Error(msg)
       }
-      return data as boolean
+      return data === true
     },
     [supabase]
   )

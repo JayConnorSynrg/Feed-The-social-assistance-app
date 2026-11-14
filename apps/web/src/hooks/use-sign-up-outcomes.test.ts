@@ -7,7 +7,11 @@
 //     (the hook never focuses anything outside that callback);
 //   - focus moves only when the pressed control is gone and focus was actually lost;
 //   - each action has its target, with the sign-up list toggle and then the card as fallbacks;
-//   - a failed request is said, and moves nothing;
+//   - an outcome is said only when the server confirmed it: a request that changed nothing, and a
+//     fresh read that does not show the outcome of an accept, decline, mark-completed or withdraw,
+//     are never said as done (the card shows the failure on its own alert line; nothing is said
+//     here, so it is heard once);
+//   - a failed request says nothing here and moves nothing;
 //   - one attempt per row: two quick actions on different rows are both said, and a second press
 //     on a row whose action is under way starts nothing (the row is busy until its outcome is
 //     said or its action fails);
@@ -22,11 +26,10 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: 
 
 import { mount } from '@/test/mini-react'
 import { messages, type Locale } from '@/lib/i18n'
-import { cardT } from '@/lib/i18n-feed-card'
 import { isolate } from '@/lib/format-message'
 import { optInsT, signUpNotice, type SignUpKind } from '@/lib/i18n-feed-optins'
 import { focusWasLost } from '@/lib/focus-lost'
-import { signUpAttemptKey, signUpControlTestId, signUpFocusTarget, signUpOutcomeShown, signUpRowsAfter, useSignUpOutcomes, type SignUpAttempt, type SignUpRow } from './use-sign-up-outcomes'
+import { signUpAttemptKey, signUpControlTestId, signUpDone, signUpFocusTarget, signUpOutcomeShown, signUpRowsAfter, signUpStableTarget, useSignUpOutcomes, type SignUpAttempt, type SignUpRow } from './use-sign-up-outcomes'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const KINDS: SignUpKind[] = ['optIn', 'withdraw', 'accept', 'decline', 'complete', 'unblock']
@@ -169,13 +172,16 @@ describe('the hook', () => {
       log.push(...focused.slice(before).map((f) => `focus:${f}`), `say:${text}`)
     }
     const state = { memberStatuses: new Map<string, string>(), authorRows: {} as Record<string, SignUpRow[]>, context: 'feed|me' }
-    const c = mount(() => useSignUpOutcomes({ locale, announce, memberStatuses: state.memberStatuses, authorRows: state.authorRows, context: state.context }))
+    // What the hook hands back to its caller to show on the card (the action was not done).
+    const notDone: string[] = []
+    const onNotDone = (a: SignUpAttempt) => void notDone.push(signUpAttemptKey(a))
+    const c = mount(() => useSignUpOutcomes({ locale, announce, memberStatuses: state.memberStatuses, authorRows: state.authorRows, context: state.context, onNotDone }))
     const begin = (kind: SignUpKind, ids: { postId?: string; optInId?: string }) => {
       const a = c.tree().begin(kind, ids)
       if (!a) throw new Error(`begin(${kind}) was refused`)
       return a
     }
-    return { c, log, state, api: () => c.tree(), begin, busy: () => [...c.rerender().busy] }
+    return { c, log, state, notDone, api: () => c.tree(), begin, busy: () => [...c.rerender().busy] }
   }
 
   it('says nothing until the request came back AND the card shows the outcome; then once, focus before the sentence', () => {
@@ -241,21 +247,22 @@ describe('the hook', () => {
     }
   })
 
-  it('a failed request is said in the same region and moves nothing; a later state change says nothing more', () => {
+  it('a failed request says nothing here (the card shows it) and moves nothing; a later state change says nothing either', () => {
     const h = harness('es')
     h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo')] }
     h.c.rerender()
     const pressed = el('accept-optin-o1')
     el('complete-optin-o1')
     const a = h.begin('accept', { optInId: 'o1' })
-    h.api().succeeded(a)
     h.api().failed(a)
-    expect(h.log).toEqual([`say:${cardT('es', 'statusModerationFailed')}`])
+    h.c.rerender()
+    expect(h.log).toEqual([])
     pressed.isConnected = false
     h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo')] }
     h.c.rerender()
-    expect(h.log).toHaveLength(1)
+    expect(h.log).toEqual([])
     expect(focused).toEqual([])
+    expect(h.busy()).toEqual([])
   })
 
   describe('one attempt per row', () => {
@@ -308,11 +315,11 @@ describe('the hook', () => {
       const b = h.begin('decline', { optInId: 'o2' })
       h.api().succeeded(a)
       h.api().failed(b)
-      expect(h.log).toEqual([`say:${cardT('en', 'statusModerationFailed')}`])
+      expect(h.log).toEqual([])
       acceptBo.isConnected = false
       h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
       h.c.rerender()
-      expect(h.log.slice(1)).toEqual(['focus:complete-optin-o1', `say:You accepted ${isolate('Bo')}.`])
+      expect(h.log).toEqual(['focus:complete-optin-o1', `say:You accepted ${isolate('Bo')}.`])
     })
 
     it('a row is busy from the press until its outcome is settled or its action fails: a second press starts nothing', () => {
@@ -366,24 +373,170 @@ describe('the hook', () => {
       expect(h.log).toHaveLength(2)
     })
 
-    it('settled and NOT shown (the row never came back): said then, with focus on what is left — and never later', () => {
+    it('settled and NOT shown (the row never came back): an accept is NOT said as done — the caller is told, focus goes to a stable control, and nothing is said later', () => {
       const h = harness()
       h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo')] }
       h.c.rerender()
       const pressed = el('accept-optin-o1')
+      el('complete-optin-o1')
       el('opt-in-manage-p1')
       const a = h.begin('accept', { optInId: 'o1' })
       h.api().succeeded(a)
       h.c.rerender()
       expect(h.log).toEqual([])
+      // The row is gone when it is read again (the seeker had withdrawn).
       pressed.isConnected = false
+      h.state.authorRows = { p1: [] }
       h.api().settled(a)
       h.c.rerender()
-      expect(h.log).toEqual(['focus:opt-in-manage-p1', `say:You accepted ${isolate('Bo')}.`])
-      // The row shows up accepted much later (another read): nothing is said then.
+      // Nothing is said (an empty sentence: the announcer only moves focus); never Mark Completed.
+      expect(h.log).toEqual(['focus:opt-in-manage-p1', 'say:'])
+      expect(h.notDone).toEqual(['o1'])
+      // A row with that id shows up accepted much later (another read): nothing is said then.
       h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo')] }
       h.c.rerender()
       expect(h.log).toHaveLength(2)
+      expect(h.notDone).toHaveLength(1)
+    })
+
+    it.each([
+      ['accept', { p1: [rowOf('o1', 'pending', 'Bo')] }],
+      ['decline', { p1: [rowOf('o1', 'accepted', 'Bo')] }],
+      ['complete', { p1: [] as SignUpRow[] }],
+    ] as const)('a fresh read that does not show a confirmed %s: not said as done', (kind, rowsAfter) => {
+      const h = harness()
+      h.state.authorRows = { p1: [rowOf('o1', kind === 'complete' ? 'accepted' : 'pending', 'Bo')] }
+      h.c.rerender()
+      el('opt-in-manage-p1')
+      const a = h.begin(kind, { optInId: 'o1' })
+      h.api().succeeded(a)
+      h.state.authorRows = rowsAfter
+      h.api().settled(a, 'fresh')
+      h.c.rerender()
+      expect(h.log.filter((l) => l.startsWith('say:'))).toEqual(['say:'])
+      expect(h.notDone).toEqual(['o1'])
+    })
+
+    it('a fresh read that still shows the member\'s status after a confirmed withdraw: not said as withdrawn', () => {
+      const h = harness()
+      h.state.memberStatuses = new Map([['p1', 'pending']])
+      h.c.rerender()
+      el('withdraw-btn-p1').isConnected = false
+      el('post-card-p1')
+      const a = h.begin('withdraw', { postId: 'p1' })
+      h.api().succeeded(a)
+      h.state.memberStatuses = new Map([['p1', 'accepted']])
+      h.api().settled(a, 'fresh')
+      h.c.rerender()
+      expect(h.log).toEqual(['focus:post-card-p1', 'say:'])
+      expect(h.notDone).toEqual(['post:p1'])
+    })
+
+    it('an opt-in and an unblock answer with an error when they change nothing, so they need no second check: settled and not shown, they are still said', () => {
+      const h = harness()
+      el('post-card-p1')
+      const a = h.begin('optIn', { postId: 'p1' })
+      h.api().succeeded(a)
+      h.api().settled(a, 'fresh')
+      h.c.rerender()
+      expect(h.log.filter((l) => l.startsWith('say:'))).toEqual([`say:${optInsT('en', 'announceOptedIn')}`])
+      expect(h.notDone).toEqual([])
+    })
+
+    describe('a request that came back and changed nothing (unchanged)', () => {
+      it('nothing is said for it, shown or not; when the read that follows has corrected the card and its control is gone, focus goes to a stable control', () => {
+        const h = harness()
+        h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+        h.c.rerender()
+        const pressed = el('accept-optin-o1')
+        el('complete-optin-o1')
+        el('opt-in-manage-p1')
+        const a = h.begin('accept', { optInId: 'o1' })
+        h.api().unchanged(a)
+        expect(a.changed).toBe(false)
+        // Even a row that reads "accepted" is not this action's doing: nothing is said for it.
+        h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+        h.c.rerender()
+        expect(h.log).toEqual([])
+        expect(h.busy()).toEqual(['o1'])
+        pressed.isConnected = false
+        h.state.authorRows = { p1: [rowOf('o2', 'pending', 'Cy')] }
+        h.api().settled(a, 'fresh')
+        h.c.rerender()
+        expect(h.log).toEqual(['focus:opt-in-manage-p1', 'say:'])
+        // The caller already showed it (it reported it): it is not told again.
+        expect(h.notDone).toEqual([])
+        expect(h.busy()).toEqual([])
+      })
+
+      it('with the read that follows it failing: only the stale-list sentence is said', () => {
+        const h = harness('es')
+        h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo')] }
+        h.c.rerender()
+        el('accept-optin-o1')
+        const a = h.begin('accept', { optInId: 'o1' })
+        h.api().unchanged(a)
+        h.api().settled(a, 'stale')
+        h.c.rerender()
+        expect(h.log).toEqual([`say:${optInsT('es', 'announceListStale')}`])
+      })
+
+      it('alongside a confirmed action on another row: only the confirmed one is said', () => {
+        const h = harness()
+        h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+        h.c.rerender()
+        el('accept-optin-o1')
+        el('decline-optin-o2')
+        const a = h.begin('accept', { optInId: 'o1' })
+        const b = h.begin('decline', { optInId: 'o2' })
+        h.api().unchanged(a)
+        h.api().succeeded(b)
+        h.state.authorRows = { p1: [rowOf('o2', 'declined', 'Cy')] }
+        h.api().settled(a, 'fresh')
+        h.api().settled(b, 'fresh')
+        h.c.rerender()
+        expect(h.log.filter((l) => l.startsWith('say:'))).toEqual([`say:You declined ${isolate('Cy')}.`])
+      })
+    })
+
+    it('settled with nothing read for it (its card is not on screen any more): the write\'s own answer stands — a confirmed change is said, one that changed nothing is not', () => {
+      const h = harness()
+      h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+      h.c.rerender()
+      const a = h.begin('accept', { optInId: 'o1' })
+      const b = h.begin('decline', { optInId: 'o2' })
+      h.api().succeeded(a)
+      h.api().unchanged(b)
+      h.api().settled(a, 'unread')
+      h.api().settled(b, 'unread')
+      h.c.rerender()
+      expect(h.log.filter((l) => l.startsWith('say:'))).toEqual([`say:You accepted ${isolate('Bo')}.`])
+      expect(h.notDone).toEqual([])
+    })
+
+    it('what may be said, case by case', () => {
+      const a = (kind: SignUpKind, changed?: boolean) => attempt({ kind, changed })
+      // Never without a confirmed change.
+      for (const settle of [null, 'fresh', 'stale', 'unread'] as const) for (const shown of [true, false]) {
+        expect(signUpDone(a('accept', false), settle, shown)).toBe(false)
+        expect(signUpDone(a('accept', undefined), settle, shown)).toBe(false)
+      }
+      // A confirmed change: said, unless a FRESH read of an accept / decline / complete / withdraw does not show it.
+      for (const kind of ['accept', 'decline', 'complete', 'withdraw'] as const) {
+        expect(signUpDone(a(kind, true), 'fresh', true), kind).toBe(true)
+        expect(signUpDone(a(kind, true), 'fresh', false), kind).toBe(false)
+        expect(signUpDone(a(kind, true), 'stale', false), kind).toBe(true)
+        expect(signUpDone(a(kind, true), 'unread', false), kind).toBe(true)
+        expect(signUpDone(a(kind, true), null, true), kind).toBe(true)
+      }
+      for (const kind of ['optIn', 'unblock'] as const) expect(signUpDone(a(kind, true), 'fresh', false), kind).toBe(true)
+    })
+
+    it('the stable control: the sign-up list toggle of that post, else its card, else nothing', () => {
+      const page = (...ids: string[]) => (id: string) => (ids.includes(id) ? ({ id } as unknown as HTMLElement) : null)
+      expect((signUpStableTarget(attempt({}), page('opt-in-manage-p1', 'post-card-p1', 'complete-optin-o1')) as unknown as { id: string }).id).toBe('opt-in-manage-p1')
+      expect((signUpStableTarget(attempt({}), page('post-card-p1')) as unknown as { id: string }).id).toBe('post-card-p1')
+      expect(signUpStableTarget(attempt({}), page())).toBeNull()
     })
 
     it('settled after a read that failed: the sentence also says the list could not be refreshed', () => {
@@ -395,7 +548,7 @@ describe('the hook', () => {
       const a = h.begin('accept', { optInId: 'o1' })
       h.api().succeeded(a)
       h.state.authorRows = signUpRowsAfter(h.state.authorRows, a)
-      h.api().settled(a, true)
+      h.api().settled(a, 'stale')
       h.c.rerender()
       expect(h.log).toEqual(['focus:complete-optin-o1', `say:Aceptaste a ${isolate('Bo')}. ${optInsT('es', 'announceListStale')}`])
     })
@@ -467,6 +620,11 @@ describe('the hook', () => {
     it('the member\'s own actions, and an attempt with no row, change nothing', () => {
       expect(signUpRowsAfter(rows, attempt({ kind: 'optIn', optInId: null }))).toBe(rows)
       expect(signUpRowsAfter(rows, attempt({ kind: 'accept', optInId: null }))).toBe(rows)
+    })
+    it('an action that changed nothing settles nothing: its request is gone or in another state, and only a read can say which', () => {
+      expect(signUpRowsAfter(rows, attempt({ kind: 'decline', optInId: 'o1', changed: false }))).toBe(rows)
+      expect(signUpRowsAfter(rows, attempt({ kind: 'unblock', optInId: 'o2', changed: false }))).toBe(rows)
+      expect(signUpRowsAfter(rows, attempt({ kind: 'decline', optInId: 'o1', changed: true })).p1[0].status).toBe('declined')
     })
   })
 

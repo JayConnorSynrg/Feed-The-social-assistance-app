@@ -301,7 +301,7 @@ where created_at > now() - interval '7 days';
 
 ## Sign-up follow-up reads (feed post card)
 
-After a sign-up action on a post card (accept, decline, mark completed, unblock) or a sent review, the feed reads the acted post again on its own and then reads sign-up side data for the posts on screen. The action itself is logged as before (`feed.optin.update`, `feed.optin.unblock` on failure). A follow-up read that fails writes one error row; the card stays, and the outcome of the confirmed action is still announced to the member.
+After a sign-up action on a post card (accept, decline, mark completed, unblock) or a sent review, the feed reads the acted post again on its own and then reads sign-up side data for that post (side data is kept per post; a page that is added merges its own posts' data). The action itself is logged as before (`feed.optin.update`, `feed.optin.unblock` on failure). An accept, decline or mark-completed asks for the row it changed (`.select('id')`): a request that answers without an error and changes no row is not a failure of the request and writes no row here; the member is told on the card that it did not go through. A follow-up read that fails writes one error row; the card stays, and the outcome of a confirmed action is still announced to the member.
 
 | Event | Labels | Meaning |
 |---|---|---|

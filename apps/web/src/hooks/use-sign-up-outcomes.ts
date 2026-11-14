@@ -18,11 +18,18 @@
 // One attempt per row (per post for the member's own two actions), so two quick actions on
 // different rows are both said. A row is busy from the press until its outcome is said or its
 // action fails: a second press on it starts nothing. An attempt never outlives the read that
-// follows its action (it is said then, shown or not), nor the account or sub-tab it began in.
+// follows its action, nor the account or sub-tab it began in.
+//
+// An outcome is said only when the server confirmed it. A request that came back without an error
+// may still have changed nothing: an update that matched no row (the seeker had withdrawn), a
+// withdraw that deleted none (the request had been accepted). The caller tells the hook which it
+// was — succeeded() or unchanged() — and, as a second check, a fresh read that does not show the
+// outcome of an accept, decline, mark-completed or withdraw is not said as done either. A failure
+// is never said here: the card shows it on its own alert line (which is what speaks), so it is
+// heard once. The hook only puts focus somewhere stable when the pressed control goes.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Locale } from '@/lib/i18n'
-import { cardT } from '@/lib/i18n-feed-card'
 import { optInsT, signUpNotice, type SignUpKind } from '@/lib/i18n-feed-optins'
 import { focusWasLost } from '@/lib/focus-lost'
 
@@ -47,7 +54,18 @@ export interface SignUpAttempt {
   rowsAfter: string[]
   /** The sub-tab visit and account it began in (SignUpOutcomesOptions.context). */
   context: string
+  /** Set when its request came back: true when the server changed something, false when the
+   *  request answered without an error and changed nothing. Unset until then. */
+  changed?: boolean
 }
+
+/**
+ * How the read that follows an action ended:
+ *   fresh  — it was read again and written to the state the card renders from;
+ *   stale  — that read failed (the list on screen may be behind);
+ *   unread — nothing was read for it (its card is not on screen any more).
+ */
+export type SignUpSettle = 'fresh' | 'stale' | 'unread'
 
 /** What an attempt is kept under: its row, or its post for the member's own two actions. */
 export const signUpAttemptKey = (attempt: Pick<SignUpAttempt, 'optInId' | 'postId'>): string => attempt.optInId ?? `post:${attempt.postId}`
@@ -74,6 +92,9 @@ export function signUpControlTestId(kind: SignUpKind, postId: string, optInId: s
 }
 
 const STATUS_AFTER: Partial<Record<SignUpKind, string>> = { accept: 'accepted', decline: 'declined', complete: 'completed' }
+/** Writes that answer without an error even when they changed no row (an update that matches
+ *  none, a withdraw that deletes none). */
+const NEEDS_PROOF: ReadonlySet<SignUpKind> = new Set<SignUpKind>(['accept', 'decline', 'complete', 'withdraw'])
 
 /** True once the state the card renders from shows what the action did. */
 export function signUpOutcomeShown(attempt: SignUpAttempt, memberStatuses: MemberStatuses, authorRows: AuthorRows): boolean {
@@ -118,14 +139,32 @@ export function signUpFocusTarget(
   }
 }
 
+/** Where focus goes when an action turned out not to be done and its control is gone: the
+ *  sign-up list toggle of that post, else the card. */
+export function signUpStableTarget(attempt: Pick<SignUpAttempt, 'postId'>, byTestId: (testId: string) => HTMLElement | null): HTMLElement | null {
+  return byTestId(`opt-in-manage-${attempt.postId}`) ?? byTestId(`post-card-${attempt.postId}`)
+}
+
 /**
- * The author's rows as the action itself left them — used when the read that follows a confirmed
+ * True when the outcome of an attempt may be said: the server changed something, and — for the
+ * actions whose request answers without an error even when it changed nothing — a fresh read does
+ * not contradict it. A stale or missing read cannot contradict: the write's own answer stands.
+ */
+export function signUpDone(attempt: Pick<SignUpAttempt, 'kind' | 'changed'>, settle: SignUpSettle | null, shown: boolean): boolean {
+  if (attempt.changed !== true) return false
+  return !(settle === 'fresh' && NEEDS_PROOF.has(attempt.kind) && !shown)
+}
+
+/**
+ * The author's rows as the action itself left them — used when the read that follows a CONFIRMED
  * action fails, so its row is not shown with the status it had before: accept, decline and mark
  * completed set that row's status; unblock removes the row. Other rows are returned as they are.
+ * An action that changed nothing (attempt.changed === false) settles nothing: its request no
+ * longer exists, or is in another state, and only a read can say which.
  */
-export function signUpRowsAfter<R extends { id: string; status: string }>(rows: Record<string, R[]>, attempt: Pick<SignUpAttempt, 'kind' | 'optInId'>): Record<string, R[]> {
+export function signUpRowsAfter<R extends { id: string; status: string }>(rows: Record<string, R[]>, attempt: Pick<SignUpAttempt, 'kind' | 'optInId' | 'changed'>): Record<string, R[]> {
   const status = STATUS_AFTER[attempt.kind]
-  if (!attempt.optInId || (attempt.kind !== 'unblock' && !status)) return rows
+  if (attempt.changed === false || !attempt.optInId || (attempt.kind !== 'unblock' && !status)) return rows
   const next: Record<string, R[]> = {}
   for (const [postId, list] of Object.entries(rows)) {
     next[postId] = attempt.kind === 'unblock' ? list.filter((r) => r.id !== attempt.optInId) : list.map((r) => (r.id === attempt.optInId ? { ...r, status: status as string } : r))
@@ -148,20 +187,21 @@ export interface SignUpOutcomesOptions {
   /** What attempts belong to (the feed sub-tab and the signed-in account). When it changes, every
    *  attempt is dropped unsaid and every row is released. */
   context: string
+  /** An action the caller reported as done turned out not to be (a fresh read does not show it):
+   *  the caller shows the failure on the card, as it does for one it reported itself. */
+  onNotDone: (attempt: SignUpAttempt) => void
 }
 
 interface Armed {
   attempt: SignUpAttempt
-  /** The read that follows the action has settled: say the outcome now, shown or not. */
-  settled: boolean
-  /** True when that read failed: the stale-list sentence is added. */
-  stale: boolean
+  /** How the read that follows the action ended; null while it is on its way. */
+  settled: SignUpSettle | null
 }
 
 const AUTHOR_KINDS: ReadonlySet<SignUpKind> = new Set<SignUpKind>(['accept', 'decline', 'complete', 'unblock'])
 const NO_ROWS: ReadonlySet<string> = new Set()
 
-export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows, context }: SignUpOutcomesOptions) {
+export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows, context, onNotDone }: SignUpOutcomesOptions) {
   // Attempts whose request came back and whose outcome has not been said yet, in press order.
   const armed = useRef(new Map<string, Armed>())
   // Rows with an author action under way: set synchronously at the press (state alone would let
@@ -172,9 +212,11 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
   // Bumped by `settled`, so the effect below runs after the render that applied the follow-up read.
   const [settledTick, setSettledTick] = useState(0)
   const rows = useRef(authorRows)
+  const notDone = useRef(onNotDone)
   useEffect(() => {
     rows.current = authorRows
-  }, [authorRows])
+    notDone.current = onNotDone
+  }, [authorRows, onNotDone])
 
   // Another account, or another sub-tab visit: nothing begun before is said or kept busy. An
   // attempt carries the context it began in, and is ignored once that is no longer the context.
@@ -219,34 +261,43 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
     }
   }, [])
 
-  /** The request came back without an error: speak and move focus once the outcome is on screen. */
-  const succeeded = useCallback((attempt: SignUpAttempt) => {
-    if (attempt.context === contextRef.current) armed.current.set(signUpAttemptKey(attempt), { attempt, settled: false, stale: false })
+  const arm = useCallback((attempt: SignUpAttempt, changed: boolean) => {
+    if (attempt.context !== contextRef.current) return
+    attempt.changed = changed
+    armed.current.set(signUpAttemptKey(attempt), { attempt, settled: null })
   }, [])
 
-  /** The request failed: say so in the same region. Focus stays on the pressed control; its row
-   *  is free again. Other attempts are left as they are. */
+  /** The request came back and the server changed something: speak and move focus once the
+   *  outcome is on screen. */
+  const succeeded = useCallback((attempt: SignUpAttempt) => arm(attempt, true), [arm])
+
+  /**
+   * The request came back without an error and changed nothing (the caller shows the failure on
+   * the card). Nothing is said for it; when the read that follows it has corrected the card and
+   * the pressed control is gone, focus is put on a stable control.
+   */
+  const unchanged = useCallback((attempt: SignUpAttempt) => arm(attempt, false), [arm])
+
+  /** The request failed (the caller shows the failure on the card). Focus stays on the pressed
+   *  control; its row is free again. Other attempts are left as they are. */
   const failed = useCallback((attempt: SignUpAttempt) => {
     if (attempt.context !== contextRef.current) return
     const key = signUpAttemptKey(attempt)
     if (armed.current.get(key)?.attempt === attempt) armed.current.delete(key)
     release(attempt)
-    announce(cardT(locale, 'statusModerationFailed'))
-  }, [announce, locale, release])
+  }, [release])
 
   /**
    * The read that follows the action has settled: call it right after that read's state is set,
-   * so the render that shows the outcome also frees the row. An outcome that render does not show
-   * is said anyway, so no attempt is left to speak late. `stale`: that read failed — the list on
-   * screen may be behind, and the sentence says so.
+   * so the render that shows the outcome also frees the row. No attempt is left to speak late:
+   * it is settled then, and said or not by signUpDone.
    */
-  const settled = useCallback((attempt: SignUpAttempt, stale = false) => {
+  const settled = useCallback((attempt: SignUpAttempt, how: SignUpSettle = 'fresh') => {
     if (attempt.context !== contextRef.current) return
     release(attempt)
     const entry = armed.current.get(signUpAttemptKey(attempt))
     if (entry?.attempt !== attempt) return
-    entry.settled = true
-    entry.stale = stale
+    entry.settled = how
     setSettledTick((t) => t + 1)
   }, [release])
 
@@ -267,20 +318,27 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
   const sentence = useCallback((attempt: SignUpAttempt) => signUpNotice(attempt.kind, attempt.name, locale), [locale])
 
   useEffect(() => {
-    const ready = [...armed.current.values()].filter((e) => e.settled || signUpOutcomeShown(e.attempt, memberStatuses, authorRows))
+    // Ready: the read that follows it has settled, or (for a confirmed change) the card shows it.
+    const ready = [...armed.current.values()].filter((e) => e.settled !== null || (e.attempt.changed === true && signUpOutcomeShown(e.attempt, memberStatuses, authorRows)))
     if (ready.length === 0) return
     for (const e of ready) armed.current.delete(signUpAttemptKey(e.attempt))
+    const done = ready.map((e) => signUpDone(e.attempt, e.settled, signUpOutcomeShown(e.attempt, memberStatuses, authorRows)))
+    // Reported as done, and a fresh read does not show it: the caller shows the failure.
+    ready.forEach((e, i) => {
+      if (!done[i] && e.attempt.changed === true) notDone.current(e.attempt)
+    })
     // Outcomes that show in the same render are one announcement (a second one in the same frame
-    // would replace the first); focus follows the latest press.
-    const said = ready.map((e) => signUpNotice(e.attempt.kind, e.attempt.name, locale))
-    if (ready.some((e) => e.stale)) said.push(optInsT(locale, 'announceListStale'))
+    // would replace the first); focus follows the latest press. Only outcomes are said here.
+    const said = ready.filter((_, i) => done[i]).map((e) => signUpNotice(e.attempt.kind, e.attempt.name, locale))
+    if (ready.some((e) => e.settled === 'stale')) said.push(optInsT(locale, 'announceListStale'))
     const last = ready[ready.length - 1].attempt
+    const lastDone = done[done.length - 1]
     announce(said.join(' '), () => {
       // A control still on the page, or a member who has moved on, keeps the focus.
       if (last.pressed?.isConnected || !focusWasLost(last.pressed)) return
-      signUpFocusTarget(last, byTestId, rowAction)?.focus()
+      ;(lastDone ? signUpFocusTarget(last, byTestId, rowAction) : signUpStableTarget(last, byTestId))?.focus()
     })
   }, [memberStatuses, authorRows, locale, announce, settledTick])
 
-  return { begin, succeeded, failed, settled, disarm, sentence, busy }
+  return { begin, succeeded, unchanged, failed, settled, disarm, sentence, busy }
 }

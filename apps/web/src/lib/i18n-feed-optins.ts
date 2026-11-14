@@ -18,6 +18,7 @@ import { translate, type Locale } from './i18n'
 import { formatMessage, isolate } from './format-message'
 import { formatCount, pluralMessage, type PluralForms } from './i18n-intl'
 import { readErrorSentence, type ErrorText } from './i18n-friendly-error'
+import { cardT } from './i18n-feed-card'
 
 export interface FeedOptInsMessages {
   /** Button: ask for one of the spots. */
@@ -685,6 +686,14 @@ export function signUpNotice(kind: SignUpKind, name: string | null, locale: Loca
 // ---------------------------------------------------------------------------
 
 /**
+ * The fixed sentence the feed hands the card when a sign-up action — accept, decline, mark
+ * completed, unblock, or a withdraw — did not go through: its request failed, or answered without
+ * an error and changed nothing. Read as a code. The member's sentence is the card's own generic
+ * failure (lib/i18n-feed-card.ts statusModerationFailed): one source for those words.
+ */
+export const SIGN_UP_NOT_DONE = "That didn't work. Please try again."
+
+/**
  * Each fixed sentence the card can be handed as an opt-in failure, and the key of the member's
  * sentence: the guest refusal and the two thrown-value fallbacks of the feed panel's handlers
  * (components/panels/feed-panel.tsx, unchanged), the two failures of hooks/use-opt-ins.ts, and the
@@ -709,6 +718,10 @@ export const OPT_IN_ERROR_SENTENCES: Record<string, keyof FeedOptInsMessages> = 
  */
 export function optInErrorText(error: string, locale: Locale): ErrorText {
   return readErrorSentence(error, locale, (sentence) =>
-    Object.prototype.hasOwnProperty.call(OPT_IN_ERROR_SENTENCES, sentence) ? optInsT(locale, OPT_IN_ERROR_SENTENCES[sentence]) : null,
+    sentence === SIGN_UP_NOT_DONE
+      ? cardT(locale, 'statusModerationFailed')
+      : Object.prototype.hasOwnProperty.call(OPT_IN_ERROR_SENTENCES, sentence)
+        ? optInsT(locale, OPT_IN_ERROR_SENTENCES[sentence])
+        : null,
   )
 }
