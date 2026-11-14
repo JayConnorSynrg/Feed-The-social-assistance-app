@@ -411,6 +411,14 @@ describe('businesses-panel.tsx source', () => {
     expect(code).not.toMatch(new RegExp(`\\b(${READERS})\\([^()]*\\b(${MEMBER_TEXT})\\b`))
   })
 
+  it('the form inputs keep an outline that forced-colors mode can paint (outline-hidden, never outline-none)', () => {
+    expect(code).toMatch(/const INPUT_CLASS =\s*'[^']*\bfocus:outline-hidden focus:ring-2 focus:ring-lime-700'/)
+    expect(code).not.toContain('outline-none')
+    // ...and a placeholder that can be read: stone-500 on white is 4.8:1 (stone-400 was 2.6:1).
+    expect(code).toMatch(/const INPUT_CLASS =\s*'[^']*\bplaceholder:text-stone-500\b/)
+    expect(code).not.toContain('placeholder:text-stone-400')
+  })
+
   it('example data placeholders (US formats) stay as written', () => {
     for (const example of ['123 Main St', 'Burlington', '(802) 555-0100', 'https://example.com', 'hello@example.com', '05401']) expect(code).toContain(`placeholder="${example}"`)
   })

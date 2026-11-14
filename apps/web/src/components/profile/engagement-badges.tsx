@@ -6,6 +6,11 @@
 // Renders a user's earned engagement badges (from profiles.badge_summary) on the
 // public profile page. Pure display: all mapping/sorting lives in
 // lib/engagement-badges.ts. Earth-tone styling; WCAG-labelled.
+//
+// In the viewer's language (lib/i18n-feed-badges.ts). The list carries its own language mark: it
+// mounts in the author sheet and in the Settings panel, which is still English. The language is
+// the `locale` prop when the caller has one, the profile's otherwise. The member's own name is
+// shown as written.
 
 import {
   Apple,
@@ -33,6 +38,10 @@ import {
   type BadgeSummary,
   type DisplayBadge,
 } from '@/lib/engagement-badges'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { badgeAriaText, badgeLabel, badgesT } from '@/lib/i18n-feed-badges'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 
 const ICONS: Record<string, LucideIcon> = {
   Apple,
@@ -60,9 +69,8 @@ export function BadgeGlyph({ iconName, className }: { iconName: string; classNam
   return <Icon className={className} strokeWidth={2.5} aria-hidden="true" />
 }
 
-function BadgePill({ badge }: { badge: DisplayBadge }) {
+function BadgePill({ badge, locale }: { badge: DisplayBadge; locale: Locale }) {
   const Icon = ICONS[badge.iconName] ?? Sprout
-  const groupWord = badge.group === 'family' ? 'category' : 'community'
   return (
     <li
       className="flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5"
@@ -76,17 +84,15 @@ function BadgePill({ badge }: { badge: DisplayBadge }) {
       >
         <Icon className="h-3.5 w-3.5" strokeWidth={2.5} />
       </span>
-      <span className="text-sm font-medium text-stone-800">{badge.label}</span>
+      {/* The visible name and level are for sighted readers; the sentence below says both. */}
+      <span className="text-sm font-medium text-stone-800" aria-hidden="true">{badgeLabel(badge, locale)}</span>
       <span
         className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-stone-600"
         aria-hidden="true"
       >
-        Lv {levelLabel(badge.level)}
+        {formatMessage(badgesT(locale, 'levelShort'), { level: levelLabel(badge.level) })}
       </span>
-      <span className="sr-only">
-        {badge.label} {groupWord} badge, level {badge.level}
-        {typeof badge.count === 'number' ? `, ${badge.count} points earned` : ''}
-      </span>
+      <span className="sr-only">{badgeAriaText(badge, locale)}</span>
     </li>
   )
 }
@@ -96,31 +102,41 @@ export function EngagementBadges({
   displayName,
   privateSummary,
   isOwnProfile = false,
+  locale,
 }: {
   summary: BadgeSummary | null | undefined
   displayName: string
   /** Owner-only private badges (from user_private_badge_summary); rendered only on own profile. */
   privateSummary?: BadgeSummary | null | undefined
   isOwnProfile?: boolean
+  /** The viewer's language, when the caller has it (the profile's otherwise). */
+  locale?: Locale
 }) {
+  const profileLocale = useProfileLocale()
+  const l = locale ?? profileLocale
   const { publicBadges: badges, privateBadges, showEmptyState, showPrivateSection } =
     deriveBadgeView(summary, privateSummary, isOwnProfile)
+  const [beforeName, afterName] = splitMessage(badgesT(l, 'badgesEmpty'), 'name')
 
   return (
-    <div className="space-y-4">
+    <div lang={l} dir={dir(l)} className="space-y-4" data-testid="engagement-badges">
       <section aria-labelledby="engagement-badges-heading">
         <h2 id="engagement-badges-heading" className="mb-3 text-sm font-semibold text-stone-500">
-          Community Badges
+          {badgesT(l, 'badgesHeading')}
         </h2>
         {showEmptyState ? (
           <p className="flex items-center gap-2 text-sm text-stone-500">
             <Sprout className="h-4 w-4 text-lime-600" aria-hidden="true" />
-            <span>No badges yet — {displayName} earns badges by helping, connecting, and taking part.</span>
+            <span>
+              {beforeName}
+              <bdi lang="">{displayName}</bdi>
+              {afterName}
+            </span>
           </p>
         ) : (
           <ul className="flex flex-wrap gap-2" data-testid="engagement-badges-list">
             {badges.map((b) => (
-              <BadgePill key={`${b.group}:${b.key}`} badge={b} />
+              <BadgePill key={`${b.group}:${b.key}`} badge={b} locale={l} />
             ))}
           </ul>
         )}
@@ -129,14 +145,14 @@ export function EngagementBadges({
       {showPrivateSection && (
         <section aria-labelledby="private-badges-heading" data-testid="engagement-private-section">
           <h2 id="private-badges-heading" className="mb-1 text-sm font-semibold text-stone-500">
-            Private — only you can see this
+            {badgesT(l, 'privateHeading')}
           </h2>
-          <p className="mb-3 text-xs text-stone-400">
-            Credit for the help you receive, and for what you save and bookmark. Not shown to anyone else.
+          <p className="mb-3 text-xs text-stone-600">
+            {badgesT(l, 'privateBody')}
           </p>
           <ul className="flex flex-wrap gap-2" data-testid="engagement-private-list">
             {privateBadges.map((b) => (
-              <BadgePill key={`priv:${b.group}:${b.key}`} badge={b} />
+              <BadgePill key={`priv:${b.group}:${b.key}`} badge={b} locale={l} />
             ))}
           </ul>
         </section>

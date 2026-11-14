@@ -9,12 +9,14 @@
 //   - a message time and a conversation date format for the locale, hand-written for ht / hmn;
 //   - names and message bodies keep their own direction and take no page language;
 //   - the hook's fixed sentences become the member's sentence; server text is marked English;
-//   - what is still English (the rating's name) is marked English;
+//   - the rating shown after a review is named in the member's language (no English mark);
 //   - every icon button has a name, and the message box's name is the text shown in it;
 //   - a member's own words are never handed to a translation function;
 //   - loading says so to a screen reader, a failure is an alert, the confirm dialog has a
 //     description, a translated close label, and returns focus to the button that opened it;
-//   - Accept accepts and Decline asks first (the handlers are wired to the right buttons).
+//   - Accept accepts and Decline asks first (the handlers are wired to the right buttons);
+//   - after a confirmed decline, withdraw or end, focus moves to the thread heading (the inbox
+//     heading when no thread is open) and a status region says what happened, in 14 locales.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createElement as h, isValidElement } from 'react'
@@ -25,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const { state } = vi.hoisted(() => ({
-  state: { language: 'en', guest: false, hook: {} as Record<string, unknown>, review: null as null | { rating: number } },
+  state: { language: 'en', guest: false, hook: {} as Record<string, unknown>, review: null as null | { rating: number }, reviewReads: [] as string[] },
 }))
 vi.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'me' }, isAnonymous: state.guest, profile: { preferred_language: state.language } }),
@@ -33,7 +35,11 @@ vi.mock('@/hooks/use-auth', () => ({
 vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: {} }) }))
 vi.mock('@/hooks/use-conversations', () => ({ useConversations: () => state.hook }))
 vi.mock('@/hooks/use-reviews', () => {
-  const fetchMyReviewForConversation = async () => state.review
+  // Every read of "my review" is recorded, so a test can say how many a flow sent.
+  const fetchMyReviewForConversation = async (conversationId: string) => {
+    state.reviewReads.push(conversationId)
+    return state.review
+  }
   return { useReviews: () => ({ fetchMyReviewForConversation }) }
 })
 vi.mock('@/components/feed/review-modal', () => ({ ReviewModal: () => null }))
@@ -46,6 +52,7 @@ import { messages, type Locale } from '@/lib/i18n'
 import { CONVERSATION_ERROR_SENTENCES, CONVERSATION_STATUSES, conversationError, conversationStatusLabel, messagesT } from '@/lib/i18n-feed-messages'
 import { cardT } from '@/lib/i18n-feed-card'
 import { DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { WheatStalkRatingDisplay } from '@/components/ui/wheat-stalk-rating'
 import { MessagesPanel } from './messages-panel'
 
 const LOCALES = Object.keys(messages) as Locale[]
@@ -152,7 +159,7 @@ describe('time in the member language', () => {
     ['hmn', '3:05 PM', 'Lub Kaum Hli 9, 2026'],
     ['so', '3:05 GD', 'Okt 9, 2026'],
   ])('%s: a message reads %s and its conversation %s', (locale, clock, date) => {
-    const out = html(locale).replace(/[  ]/g, ' ')
+    const out = html(locale).replace(/[\u00a0\u202f]/g, ' ')
     expect(out).toContain(`>${clock}</p>`)
     expect(out).toContain(`<span class="text-[10px] text-stone-600">${date}</span>`)
   })
@@ -162,7 +169,7 @@ describe('member-written text', () => {
   it('a message body and a name keep their direction and take no page language', () => {
     const out = html('en')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">مرحبا، كيف أساعد؟</p>')
-    expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">مريم</p>')
+    expect(out).toContain('<p tabindex="-1" lang="" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">مريم</p>')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
   })
 
@@ -171,7 +178,7 @@ describe('member-written text', () => {
     const out = html('es', { messages: [msg({ content: 'Failed to send message' })], conversations: [conv({ counterpartyDisplayName: 'pending' })] })
     expect(out).toContain('<p lang="" dir="auto" class="text-sm leading-relaxed">Failed to send message</p>')
     expect(out).not.toContain('No se pudo enviar el mensaje')
-    expect(out).toContain('<p lang="" dir="auto" class="font-medium text-stone-800 text-sm">pending</p>')
+    expect(out).toContain('<p tabindex="-1" lang="" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">pending</p>')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">pending</p>')
     expect(out).not.toMatch(/>pendiente<\/p>/)
   })
@@ -191,7 +198,7 @@ describe('member-written text', () => {
 
   it('with no name, the fallback word is FEED’s own text in the member language (no lang="")', () => {
     const out = html('ru', { conversations: [conv({ counterpartyDisplayName: null, volunteer: null })] })
-    expect(out).toContain('<p dir="auto" class="font-medium text-stone-800 text-sm">Пользователь</p>')
+    expect(out).toContain('<p tabindex="-1" dir="auto" class="font-medium text-stone-800 text-sm rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">Пользователь</p>')
     expect(out).toContain('<p dir="auto" class="text-sm font-medium text-stone-800 truncate">Пользователь</p>')
   })
 })
@@ -259,7 +266,9 @@ describe('loading', () => {
     expect(out).toContain('En cours (1)')
     expect(out).toContain('<p lang="" dir="auto" class="text-sm font-medium text-stone-800 truncate">مريم</p>')
     expect(out).not.toContain('Chargement')
-    expect(out).not.toContain('role="status"')
+    // No loading status; the one status region left is the (empty) action result line.
+    expect(out.match(/role="status"/g)).toHaveLength(1)
+    expect(out).toContain('<p role="status" aria-live="polite" data-testid="messages-action-status" class="sr-only"></p>')
   })
 
   it('the review check on a completed conversation says so too', () => {
@@ -298,7 +307,7 @@ describe('accessible names', () => {
   })
 })
 
-describe('review prompt and the still-English rating', () => {
+describe('review prompt and the rating', () => {
   async function completed(language: string) {
     state.language = language
     state.hook = hook({ conversations: [conv({ status: 'completed' })] })
@@ -317,15 +326,107 @@ describe('review prompt and the still-English rating', () => {
     expect(name.map((e) => e.props.children)).toContain('مريم')
   })
 
-  it('reviewed: the sentence is translated and the rating display sits inside an English mark', async () => {
+  it('reviewed: the sentence is translated and the rating display gets the member language, with no English mark around it', async () => {
     state.review = { rating: 4 }
     const tree = await completed('tl')
     expect(textOf(tree)).toContain('Naipasa na ang iyong review')
-    const island = findAll(tree, (e: El) => e.props['data-english-only'] === 'rating') as El[]
-    expect(island).toHaveLength(1)
-    expect(island[0].props.lang).toBe('en')
-    expect(island[0].props.dir).toBe('ltr')
-    expect((island[0].props.children as El).props.value).toBe(4)
+    expect(findAll(tree, (e: El) => e.props['data-english-only'] === 'rating')).toHaveLength(0)
+    const rating = (findAll(tree, (e: El) => e.type === WheatStalkRatingDisplay) as El[])[0]
+    expect(rating.props).toMatchObject({ value: 4, locale: 'tl' })
+    const card = (findAll(tree, (e: El) => e.props['data-testid'] === 'review-submitted-card') as El[])[0]
+    expect(findAll(card, (e: El) => e.props.lang === 'en')).toHaveLength(0)
+    // The rating's name, as the display renders it; the "4/5" beside it is for sighted readers only.
+    expect(renderToStaticMarkup(h(WheatStalkRatingDisplay, { value: 4, locale: 'tl' }))).toContain('role="img" aria-label="4 sa 5 uhay"')
+    const figures = (findAll(card, (e: El) => e.props['aria-hidden'] === 'true' && e.type === 'span') as El[])[0]
+    expect(textOf(figures)).toBe('4/5')
+  })
+})
+
+describe('the review dialog: focus returns, and a sent review is said after the focus move', () => {
+  async function prompt(language: string) {
+    state.language = language
+    state.review = null
+    state.hook = hook({ conversations: [conv({ status: 'completed' })] })
+    const c = mount(() => MessagesPanel())
+    await c.flush()
+    const tree = c.rerender()
+    const opener = { isConnected: true, focus: vi.fn() }
+    const thread = vi.fn()
+    ;((findAll(tree, (e: El) => e.type === 'p' && e.props.tabIndex === -1) as El[])[0].props.ref as { current: unknown }).current = { focus: thread }
+    ;((findAll(tree, (e: El) => e.props['data-testid'] === 'open-review-modal-btn') as El[])[0].props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    c.rerender()
+    const modal = () => (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0]
+    const said = () => textOf((findAll(c.tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0])
+    return { c, opener, thread, modal, said }
+  }
+
+  it('the dialog gets the button that opened it, and the thread heading as the stable control', async () => {
+    const p = await prompt('pt')
+    expect(p.modal().props.open).toBe(true)
+    expect((p.modal().props.returnFocusRef as { current: unknown }).current).toBe(p.opener)
+    ;(p.modal().props.fallbackFocus as () => void)()
+    expect(p.thread).toHaveBeenCalledTimes(1)
+    // Nothing was sent: nothing is said.
+    expect(p.said()).toBe('')
+  })
+
+  it.each([
+    ['the dialog hands focus over first, then the re-read shows the submitted card', 'focus-first'],
+    ['the re-read lands first, then the dialog hands focus over', 'read-first'],
+  ])('a sent review: %s — the sentence is written only when both are done', async (_name, order) => {
+    const p = await prompt('pt')
+    state.review = { rating: 5 }
+    state.reviewReads.length = 0
+    const sent = (p.modal().props.onSubmitted as () => Promise<void>)()
+    if (order === 'focus-first') {
+      ;(p.modal().props.fallbackFocus as () => void)()
+      p.c.rerender()
+      expect(p.said()).toBe('')
+      await sent
+      await p.c.flush()
+    } else {
+      await sent
+      await p.c.flush()
+      expect(p.said()).toBe('')
+      ;(p.modal().props.fallbackFocus as () => void)()
+      p.c.rerender()
+    }
+    expect(p.thread).toHaveBeenCalledTimes(1)
+    expect(p.said()).toBe('Sua avaliação foi enviada.')
+    // Said once: handing focus over again adds nothing new.
+    ;(p.modal().props.fallbackFocus as () => void)()
+    p.c.rerender()
+    expect(p.said()).toBe('Sua avaliação foi enviada.')
+    // One re-read of the review in all: the focus and announcement code sends nothing.
+    await p.c.flush()
+    expect(state.reviewReads).toEqual(['c1'])
+  })
+
+  it('a review that was sent but does not show after the re-read is not announced as shown', async () => {
+    const p = await prompt('pt')
+    state.review = null
+    await (p.modal().props.onSubmitted as () => Promise<void>)()
+    ;(p.modal().props.fallbackFocus as () => void)()
+    await p.c.flush()
+    expect(p.said()).toBe('')
+  })
+
+  it.each(LOCALES)('%s: the sentence is the one the submitted card shows, with its closing punctuation as an announcement (the card keeps it without)', (locale) => {
+    const shown = messagesT(locale, 'reviewSubmitted')
+    const said = messagesT(locale, 'announceReviewSubmitted')
+    expect(shown.trim()).not.toBe('')
+    if (locale !== 'en') expect(shown).not.toBe(messagesT('en', 'reviewSubmitted'))
+    expect(shown).not.toMatch(/[.\u3002\u1362!]$/)
+    expect(said.startsWith(shown)).toBe(true)
+    expect(said.slice(shown.length)).toMatch(/^[.\u3002\u1362]$/)
+  })
+})
+
+describe('contrast', () => {
+  it('the message box placeholder is stone-500 on white (4.8:1), not stone-400', () => {
+    const input = html('en').match(/<input[^>]*>/)?.[0] ?? ''
+    expect(input).toContain('placeholder:text-stone-500')
+    expect(input).not.toContain('placeholder:text-stone-400')
   })
 })
 
@@ -434,7 +535,163 @@ describe('the buttons do what they say', () => {
     expect(textOf(confirm).trim()).toBe(confirmLabel)
     ;(confirm.props.onClick as () => void)()
     expect(h0[method]).toHaveBeenCalledWith('c1')
+    expect(h0[method]).toHaveBeenCalledTimes(1)
     for (const m of methods.filter((x) => x !== method)) expect(h0[m], m).not.toHaveBeenCalled()
+  })
+})
+
+describe('after a confirmed action the opener is gone: focus moves to something that stays, then the result is said', () => {
+  const pendingAsVolunteer = { status: 'pending', volunteer_id: 'me', requester_id: 'r' }
+  const CASES = [
+    ['decline', 'decline', 'confirmDecline', pendingAsVolunteer, 'declined', 'announceDeclined'],
+    ['withdraw', 'withdraw', 'confirmWithdraw', { status: 'pending' }, 'cancelled', 'announceWithdrawn'],
+    ['end', 'endAndReview', 'endAndReview', { status: 'active', volunteer_id: 'me', requester_id: 'r' }, 'completed', 'announceEnded'],
+  ] as const
+  type Case = (typeof CASES)[number]
+
+  /** Open the confirm dialog from a button, confirm, and hand back what the test steers. */
+  function confirmed(language: Locale, [, openKey, , over]: Case, hookOver: Record<string, unknown> = {}) {
+    state.language = language
+    // One set of spies for every render, so a request sent after the confirm click is counted too.
+    const writes = { acceptRequest: vi.fn(), declineRequest: vi.fn(), withdrawRequest: vi.fn(), completeConversation: vi.fn(), cancelConversation: vi.fn() }
+    state.hook = hook({ conversations: [conv(over)], ...writes, ...hookOver })
+    const opener = { isConnected: true, focus: vi.fn() }
+    const c = mount(() => MessagesPanel())
+    const label = messagesT(language, openKey)
+    const button = (findAll(c.tree(), (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === label) as El[])[0]
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: opener })
+    const content = (findAll(c.rerender(), (e: El) => e.type === DialogContent) as El[])[0]
+    ;((findAll(content, (e: El) => e.props['data-testid'] === 'confirm-end-btn') as El[])[0].props.onClick as () => void)()
+    // The two elements focus can go to: the thread heading and the inbox heading.
+    const refs: Array<{ current: unknown }> = []
+    const target = (el: El) => {
+      const focus = vi.fn()
+      const ref = el.props.ref as { current: unknown }
+      ref.current = { focus }
+      refs.push(ref)
+      return focus
+    }
+    const tree = c.rerender()
+    const threadName = target((findAll(tree, (e: El) => e.type === 'p' && e.props.tabIndex === -1) as El[])[0])
+    const inboxHeading = target((findAll(tree, (e: El) => e.type === 'h2' && e.props.tabIndex === -1) as El[])[0])
+    /** What React does when the thread leaves the page: its ref is emptied. */
+    const threadUnmounts = () => void (refs[0].current = null)
+    const said = () => textOf((findAll(c.tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0])
+    /** What the hook shows next. */
+    const hookShows = (status: string, more: Record<string, unknown> = {}) => {
+      state.hook = hook({ conversations: [conv({ ...over, status })], ...writes, ...hookOver, ...more })
+      c.rerender()
+    }
+    /** How many write requests the panel has sent in all. */
+    const requestsSent = () => Object.values(writes).reduce((n, f) => n + f.mock.calls.length, 0)
+    return { c, opener, threadName, inboxHeading, said, hookShows, threadUnmounts, requestsSent }
+  }
+
+  it('the status region is on the page from the start, polite and empty', () => {
+    const region = (findAll(mount(() => { state.language = 'en'; state.hook = hook(); return MessagesPanel() }).tree(), (e: El) => e.props['data-testid'] === 'messages-action-status') as El[])[0]
+    expect(region.props.role).toBe('status')
+    expect(region.props['aria-live']).toBe('polite')
+    expect(region.props.className).toBe('sr-only')
+    expect(textOf(region)).toBe('')
+  })
+
+  describe.each(CASES)('%s', (...testCase) => {
+    const [, , , over, newStatus, saysKey] = testCase
+
+    it.each(LOCALES)('%s: once the conversation shows its new status, focus is on the thread heading and the result is said', (locale) => {
+      const a = confirmed(locale, testCase)
+      // Still loading, old status: nothing yet.
+      a.hookShows(over.status, { isLoading: true })
+      expect(a.said()).toBe('')
+      expect(a.threadName).not.toHaveBeenCalled()
+      // The new status arrives and the opener has left the page.
+      a.opener.isConnected = false
+      a.hookShows(newStatus)
+      expect(a.threadName).toHaveBeenCalledTimes(1)
+      expect(a.inboxHeading).not.toHaveBeenCalled()
+      expect(a.opener.focus).not.toHaveBeenCalled()
+      expect(a.said()).toBe(messagesT(locale, saysKey))
+      if (locale !== 'en') expect(a.said()).not.toBe(messagesT('en', saysKey))
+      // Said once: a later render does not move focus again.
+      a.hookShows(newStatus)
+      expect(a.threadName).toHaveBeenCalledTimes(1)
+      // One request in all: the confirmed action, and nothing after it.
+      expect(a.requestsSent()).toBe(1)
+    })
+  })
+
+  it('the three results are three different sentences in every locale', () => {
+    for (const locale of LOCALES) expect(new Set(CASES.map((c) => messagesT(locale, c[5]))).size, locale).toBe(3)
+  })
+
+  it('a button that is still on the page keeps the focus; the result is still said', () => {
+    const a = confirmed('es', CASES[0])
+    a.hookShows('declined')
+    expect(a.threadName).not.toHaveBeenCalled()
+    expect(a.said()).toBe('Solicitud rechazada.')
+  })
+
+  it('a member who moved on while the request ran keeps their place; focus that was lost (on the page body) is moved', () => {
+    const g = globalThis as Record<string, unknown>
+    try {
+      // The opener is gone, but focus sits on another live control: nothing is taken.
+      const elsewhere = confirmed('es', CASES[0])
+      elsewhere.opener.isConnected = false
+      g.document = { body: {}, activeElement: { isConnected: true } }
+      elsewhere.hookShows('declined')
+      expect(elsewhere.threadName).not.toHaveBeenCalled()
+      expect(elsewhere.said()).toBe('Solicitud rechazada.')
+      // The opener is gone and the browser put focus on the body: it goes to the thread heading.
+      const lost = confirmed('es', CASES[0])
+      lost.opener.isConnected = false
+      const body = {}
+      g.document = { body, activeElement: body }
+      lost.hookShows('declined')
+      expect(lost.threadName).toHaveBeenCalledTimes(1)
+    } finally {
+      delete g.document
+    }
+  })
+
+  it('with no thread open, focus goes to the inbox heading', () => {
+    const a = confirmed('en', CASES[1])
+    a.opener.isConnected = false
+    a.threadUnmounts()
+    state.hook = hook({ conversations: [conv({ status: 'cancelled' })], selectedConversationId: null })
+    a.c.rerender()
+    expect(a.inboxHeading).toHaveBeenCalledTimes(1)
+    expect(a.threadName).not.toHaveBeenCalled()
+    expect(a.said()).toBe('Request withdrawn.')
+  })
+
+  it('a failure says nothing here (the alert banner speaks) and moves no focus, even if the status changes later', () => {
+    const a = confirmed('en', CASES[0])
+    a.opener.isConnected = false
+    a.hookShows('pending', { isLoading: true })
+    a.hookShows('pending', { error: 'Failed to decline request' })
+    expect(a.said()).toBe('')
+    expect(a.threadName).not.toHaveBeenCalled()
+    a.hookShows('declined')
+    expect(a.said()).toBe('')
+    expect(a.threadName).not.toHaveBeenCalled()
+  })
+
+  it('opening the next confirmation empties the region, so the same sentence is spoken again', () => {
+    const a = confirmed('en', CASES[1])
+    a.hookShows('cancelled')
+    expect(a.said()).toBe('Request withdrawn.')
+    state.hook = hook({ conversations: [conv({ status: 'pending' })] })
+    const tree = a.c.rerender()
+    const button = (findAll(tree, (e: El) => typeof e.props.onClick === 'function' && textOf(e).trim() === 'Withdraw') as El[])[0]
+    ;(button.props.onClick as (e: unknown) => void)({ currentTarget: a.opener })
+    a.c.rerender()
+    expect(a.said()).toBe('')
+  })
+
+  it('both focus targets take focus by script only and show a ring', () => {
+    const out = html('en')
+    expect(out).toMatch(/<h2 tabindex="-1" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
+    expect(out).toMatch(/<p tabindex="-1" lang="" dir="auto" class="[^"]*focus:outline-hidden focus-visible:ring-2 focus-visible:ring-lime-700">/)
   })
 })
 
@@ -448,21 +705,23 @@ describe('messages-panel.tsx source', () => {
     }
   })
 
-  it('the English review modal gets the English fallback word when the other person has no name, and the name as written otherwise', () => {
+  it('the review dialog gets the name as written (no page language), or the member-language fallback word marked as FEED text; the role is a code', () => {
     const reviewee = (language: string, over: Record<string, unknown>) => {
       state.language = language
       state.hook = hook({ conversations: [conv({ status: 'completed', ...over })] })
       const c = mount(() => MessagesPanel())
-      return (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0].props.revieweeName
+      return (findAll(c.tree(), (e: El) => 'revieweeName' in e.props) as El[])[0].props
     }
-    expect(reviewee('ru', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
-    expect(reviewee('ar', { counterpartyDisplayName: null, volunteer: null })).toBe('User')
-    expect(reviewee('ru', {})).toBe('مريم')
+    expect(reviewee('ru', { counterpartyDisplayName: null, volunteer: null })).toMatchObject({ revieweeName: 'Пользователь', revieweeNameLang: undefined, revieweeRole: 'volunteer' })
+    expect(reviewee('ar', { counterpartyDisplayName: null, volunteer: null }).revieweeName).toBe('مستخدم')
+    expect(reviewee('ru', {})).toMatchObject({ revieweeName: 'مريم', revieweeNameLang: '' })
+    expect(reviewee('ru', { volunteer_id: 'me', requester_id: 'r' }).revieweeRole).toBe('requester')
   })
 
-  it('the review modal it opens is still English and marks itself English (a portal has no translated parent)', () => {
+  it('the review dialog it opens is translated: it carries the member language itself (a portal has no translated parent)', () => {
     const modal = readFileSync(fileURLToPath(new URL('../feed/review-modal.tsx', import.meta.url)), 'utf8')
-    expect(modal).toMatch(/<DialogContent lang="en" dir="ltr"/)
+    expect(modal).toMatch(/<DialogContent\s+lang=\{locale\}\s+dir=\{dir\(locale\)\}\s+closeLabel=\{cardT\(locale, 'close'\)\}/)
+    expect(modal).not.toMatch(/lang="en"/)
     expect(modal.match(/<DialogContent\b/g)).toHaveLength(1)
   })
 

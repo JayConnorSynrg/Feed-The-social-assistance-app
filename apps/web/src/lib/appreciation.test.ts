@@ -107,10 +107,13 @@ describe('aggregateShelf', () => {
     expect(shelf.map((e) => e.slug)).toEqual(['heart'])
   })
 
-  it('falls back to "Someone" when a giver name is missing', () => {
-    const rows = [{ item: 'heart', created_at: '2026-01-01T00:00:00Z', giver: null }]
+  it('a giver with no name is null (the shelf writes "Someone" in the viewer\'s language)', () => {
+    const rows = [
+      { item: 'heart', created_at: '2026-01-02T00:00:00Z', giver: null },
+      { item: 'heart', created_at: '2026-01-01T00:00:00Z', giver: { id: 'x', first_name: '', avatar_url: null } },
+    ]
     const shelf = aggregateShelf(rows)
-    expect(shelf[0].givers[0].name).toBe('Someone')
+    expect(shelf[0].givers.map((x) => x.name)).toEqual([null, null])
   })
 
   it('returns [] for no rows (genuine empty shelf)', () => {

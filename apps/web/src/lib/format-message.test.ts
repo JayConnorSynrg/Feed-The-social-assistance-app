@@ -69,17 +69,17 @@ describe('one definition in the source tree', () => {
     expect(definers).toEqual(['lib/format-message.ts'])
   })
 
-  // The files this change was told to leave alone. Remove a row when its import is repointed; drop
-  // the two re-exports when the list is empty.
+  // The files the translation work was told to leave alone: the admin console and post-model.ts.
+  // Remove a row when its import is repointed; drop a dictionary's re-export when no row reads it
+  // (lib/i18n-org-forms.ts serves the first three below, lib/i18n-event-forms.ts the other four).
   const STILL_THROUGH_A_DICTIONARY = [
     'app/(admin)/moderation/admin-shell.tsx',
+    'app/(admin)/moderation/org/[id]/org-admin-shell.tsx',
+    'app/(admin)/moderation/orgs-section.tsx',
     'app/(admin)/moderation/event-scheduler.tsx',
     'app/(admin)/moderation/extend-series-button.tsx',
-    'app/(admin)/moderation/org/[id]/org-admin-shell.tsx',
     'app/(admin)/moderation/org/org-overview.tsx',
-    'app/(admin)/moderation/orgs-section.tsx',
     'components/feed/post-model.ts',
-    'components/panels/feed-panel.tsx',
   ]
 
   it('every other file imports it from lib/format-message', () => {
@@ -88,6 +88,10 @@ describe('one definition in the source tree', () => {
       .map(rel)
       .sort()
     expect(viaDictionary).toEqual([...STILL_THROUGH_A_DICTIONARY].sort())
+  })
+
+  it('outside the admin console, only post-model.ts still reads it through a dictionary', () => {
+    expect(STILL_THROUGH_A_DICTIONARY.filter((f) => !f.startsWith('app/(admin)/'))).toEqual(['components/feed/post-model.ts'])
   })
 })
 

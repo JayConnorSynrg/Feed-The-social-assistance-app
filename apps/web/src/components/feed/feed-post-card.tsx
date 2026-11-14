@@ -9,13 +9,20 @@
 // post-type registry (post-type-body.tsx). Edit state: an "Edited" button (accessible name "Edited
 // <time>. View edit history") opens the public history. Actions: the ⋯ menu (post-card-actions.tsx —
 // edit, history, copy link, report or the create-account prompt, delete, and for moderators hold /
-// remove / restore / Edit in admin). Chrome is translated (lib/i18n-feed-card.ts).
+// remove / restore / Edit in admin). Chrome is translated (lib/i18n-feed-card.ts), and so are the
+// petition embed (lib/i18n-feed-petitions.ts, the sub-tab's own words) and the sign-up ("opt-in")
+// controls (lib/i18n-feed-optins.ts), the author badges and the author sheet
+// (lib/i18n-feed-badges.ts): the card carries no English mark except around an opt-in failure or a
+// stored status FEED has no sentence for. The opt-in handlers are the panel's, unchanged.
 
-import React, { useId, useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
 import { m, useReducedMotion } from 'motion/react'
 import { Heart, MessageCircle, Share2, Code, User, Loader2, Check, Link as LinkIcon, ChevronDown, ChevronUp, Star, ScrollText, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { Locale } from '@/lib/i18n'
-import { formatMessage } from '@/lib/format-message'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { petitionActionName, petitionsT, signatureCountMessage } from '@/lib/i18n-feed-petitions'
+import { isOptInStatus, optedInCountText, optInActionName, optInErrorText, optInStatusLabel, optInsT, spotsLeftText } from '@/lib/i18n-feed-optins'
 import { browserTimeZone, dateTimeFormat } from '@/lib/event-time'
 import { cardT, roleLabel, categoryChipLabel } from '@/lib/i18n-feed-card'
 import { getCategoryTailwind } from '@/lib/resource-categories'
@@ -173,6 +180,9 @@ export interface FeedPostCardProps {
   onAuthorUpdateOptIn?: (optInId: string, status: 'accepted' | 'declined' | 'completed') => void
   onAuthorReviewSeeker?: (optInId: string, seekerName: string) => void
   onAuthorUnblockOptIn?: (optInId: string) => void
+  /** Rows whose action is under way (from the press until its outcome shows or it fails): their
+   *  action buttons stay focusable, are marked unavailable, and do nothing when pressed. */
+  busyOptInIds?: ReadonlySet<string>
   authorReviewedOptInIds?: Set<string>
   authorDeclinedSeekerIds?: Set<string>
   currentUserIsGuest?: boolean
@@ -217,6 +227,7 @@ export function FeedPostCard({
   onAuthorUpdateOptIn,
   onAuthorReviewSeeker,
   onAuthorUnblockOptIn,
+  busyOptInIds,
   authorReviewedOptInIds,
   authorDeclinedSeekerIds,
   currentUserIsGuest,
@@ -243,6 +254,14 @@ export function FeedPostCard({
 
   const [optInListOpen, setOptInListOpen] = useState(false)
   const [profileSheetOpen, setProfileSheetOpen] = useState(false)
+  // The control that opened the author sheet (focus returns to it when the sheet closes), and
+  // the card itself (where focus goes if that control has left the page).
+  const sheetOpenerRef = useRef<HTMLElement | null>(null)
+  const articleRef = useRef<HTMLElement | null>(null)
+  const openProfileSheet = (opener: HTMLElement) => {
+    sheetOpenerRef.current = opener
+    setProfileSheetOpen(true)
+  }
 
   const showReviewSourcerBtn = !isAuthor && optInStatus === 'completed' && !seekerHasReviewed && currentUserOptInId != null
 
@@ -250,6 +269,13 @@ export function FeedPostCard({
   if (post.isHidden && !isAuthor) return null
 
   const authorName = post.author.name
+  // The petition count line, cut around its count (which stays a bold element of its own).
+  const [beforeSignatureCount, afterSignatureCount] =
+    petitionEmbed && petitionEmbed.targetSignatures > 0
+      ? splitMessage(formatMessage(signatureCountMessage(petitionEmbed.signatureCount, petitionEmbed.targetSignatures, locale), { target: formatCount(petitionEmbed.targetSignatures, locale) }), 'count')
+      : ['', '']
+  // The handlers report an opt-in failure as a fixed sentence: read as a code.
+  const optInFailure = optInError ? optInErrorText(optInError, locale) : null
   const items = postMenuItems(viewer, {
     id: post.id,
     authorId: post.author.id,
@@ -260,7 +286,7 @@ export function FeedPostCard({
   })
 
   return (
-    <article aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
+    <article ref={articleRef} aria-labelledby={headingId} tabIndex={-1} className={`${postCardFrameClass(post.isHidden)} focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#4a5d23]`} data-testid={`post-card-${post.id}`}>
       <h3 id={headingId} className="sr-only">
         {formatMessage(cardT(locale, 'postHeading'), { name: authorName })}
       </h3>
@@ -276,7 +302,7 @@ export function FeedPostCard({
       <div data-card-actions="" className="mb-3 flex items-start gap-3">
         <button
           type="button"
-          onClick={() => setProfileSheetOpen(true)}
+          onClick={(e) => openProfileSheet(e.currentTarget)}
           aria-label={formatMessage(cardT(locale, 'viewProfile'), { name: authorName })}
           data-testid={`author-open-${post.author.id}`}
           className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4a5d23] focus:outline-hidden focus:ring-2 focus:ring-lime-700"
@@ -293,16 +319,16 @@ export function FeedPostCard({
           <div className="mb-0.5 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setProfileSheetOpen(true)}
+              onClick={(e) => openProfileSheet(e.currentTarget)}
               className="truncate text-sm font-medium hover:underline focus:underline focus:outline-hidden"
               data-testid={`author-name-${post.author.id}`}
               dir="auto"
             >
               {authorName}
             </button>
-            {/* Each badge marks its own (English-only) root lang="en" dir="ltr". */}
-            <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} />
-            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} />
+            {/* The badges are in the viewer's language and inherit the card's mark. */}
+            <HarmonyBadge score={post.author.harmonyScore} count={post.author.harmonyReviewsCount} userId={post.author.id} locale={locale} />
+            <AuthorBadgeStrip summary={post.author.badgeSummary} userId={post.author.id} locale={locale} />
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${categoryColor}`}>{categoryChipLabel(post.category, locale)}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
@@ -344,14 +370,17 @@ export function FeedPostCard({
           onFollow={onFollow}
           onUnfollow={onUnfollow}
           postId={post.id}
+          locale={locale}
+          returnFocusRef={sheetOpenerRef}
+          fallbackFocus={() => articleRef.current?.focus()}
         />
 
         {followGate !== 'hidden' && (
           <button
             type="button"
             data-testid={`follow-btn-${post.author.id}`}
-            onClick={() => {
-              if (followGate === 'guest-prompt') setProfileSheetOpen(true)
+            onClick={(e) => {
+              if (followGate === 'guest-prompt') openProfileSheet(e.currentTarget)
               else if (isFollowingAuthor) onUnfollow!(post.author.id)
               else onFollow!(post.author.id)
             }}
@@ -419,11 +448,12 @@ export function FeedPostCard({
 
       {/* Petition embed card — shown on petition-type posts */}
       {post.postType === 'petition' && petitionEmbed && (
-        // English until the petition embed is translated (Release 3): marked so assistive tech reads it as English.
-        <div data-testid={`petition-embed-${post.id}`} lang="en" dir="ltr" className="mb-3 flex flex-col gap-2 rounded-xl border border-lime-200 bg-lime-50/60 p-3">
+        // In the member's language, with the Petitions sub-tab's own words; the title and the
+        // summary are the organiser's text.
+        <div data-testid={`petition-embed-${post.id}`} className="mb-3 flex flex-col gap-2 rounded-xl border border-lime-200 bg-lime-50/60 p-3">
           <div className="flex items-center gap-1.5">
             <ScrollText className="h-3.5 w-3.5 flex-shrink-0 text-lime-700" aria-hidden="true" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-lime-800">Petition</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-lime-800 rtl:tracking-normal">{petitionsT(locale, 'embedLabel')}</span>
           </div>
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-stone-900" lang="" dir="auto" data-member-text="petition-title">
             {petitionEmbed.title}
@@ -431,14 +461,15 @@ export function FeedPostCard({
           <p className="line-clamp-2 text-xs leading-relaxed text-stone-600" lang="" dir="auto" data-member-text="petition-summary">
             {petitionEmbed.summary}
           </p>
-          <div className="text-xs text-stone-600">
-            <span className="font-semibold text-stone-800">{petitionEmbed.signatureCount.toLocaleString()}</span>
-            {petitionEmbed.targetSignatures > 0 && <> of {petitionEmbed.targetSignatures.toLocaleString()} signatures</>}
+          <div className="text-xs text-stone-600" data-testid={`petition-count-${post.id}`}>
+            {beforeSignatureCount}
+            <span className="font-semibold text-stone-800">{formatCount(petitionEmbed.signatureCount, locale)}</span>
+            {afterSignatureCount}
           </div>
           {petitionEmbed.hasSigned ? (
             <div className="flex items-center gap-1.5 text-xs font-medium text-lime-800">
               <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-              Signed
+              {petitionsT(locale, 'signed')}
             </div>
           ) : (
             <button
@@ -446,10 +477,11 @@ export function FeedPostCard({
               data-testid={`petition-sign-btn-${post.id}`}
               onClick={() => post.petitionId && onSignPetition?.(post.petitionId)}
               disabled={petitionEmbed.isSigning}
+              aria-label={petitionActionName(locale, 'sign', petitionEmbed.title)}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-lime-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-lime-800 disabled:opacity-60"
             >
               {petitionEmbed.isSigning ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
-              Add your verified signature of support
+              {petitionsT(locale, 'sign')}
             </button>
           )}
         </div>
@@ -457,10 +489,9 @@ export function FeedPostCard({
 
       {/* Capacity + Opt-In section — only shown on posts with a capacity set */}
       {post.maxSeekers != null && (
-        // English until opt-in copy is translated (Release 3).
-        <div lang="en" dir="ltr" data-testid={`capacity-row-${post.id}`} className="mb-3 flex flex-wrap items-center gap-3">
+        <div data-testid={`capacity-row-${post.id}`} className="mb-3 flex flex-wrap items-center gap-3">
           <span data-testid={`capacity-${post.id}`} className="text-xs text-stone-600">
-            {post.slotsRemaining ?? 0} of {post.maxSeekers} spot{post.maxSeekers !== 1 ? 's' : ''} left
+            {spotsLeftText(post.slotsRemaining ?? 0, post.maxSeekers, locale)}
           </span>
           {isAuthor ? (
             <button
@@ -470,23 +501,23 @@ export function FeedPostCard({
               aria-expanded={optInListOpen}
               className="flex items-center gap-1 text-xs font-medium text-lime-800 transition-colors hover:text-lime-900"
             >
-              {optInCount ?? 0} opted in
+              {optedInCountText(optInCount ?? 0, locale)}
               {optInListOpen ? <ChevronUp className="h-3 w-3" aria-hidden="true" /> : <ChevronDown className="h-3 w-3" aria-hidden="true" />}
             </button>
           ) : optInStatus != null ? (
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1 text-xs font-medium text-lime-800">
-                <Check className="h-3 w-3" aria-hidden="true" /> Opted In
+                <Check className="h-3 w-3" aria-hidden="true" /> {optInsT(locale, 'optedIn')}
               </span>
               {optInStatus === 'pending' && (
                 <button type="button" data-testid={`withdraw-btn-${post.id}`} onClick={() => onWithdraw(post.id)} className="text-xs text-stone-600 underline hover:text-stone-800">
-                  Withdraw
+                  {optInsT(locale, 'withdraw')}
                 </button>
               )}
             </div>
           ) : isFull ? (
             <button type="button" disabled className="cursor-not-allowed rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600">
-              Full
+              {optInsT(locale, 'full')}
             </button>
           ) : (
             <button
@@ -495,7 +526,7 @@ export function FeedPostCard({
               onClick={() => onOptIn(post.id)}
               className="rounded-full bg-lime-700 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-lime-800"
             >
-              Opt In
+              {optInsT(locale, 'optIn')}
             </button>
           )}
         </div>
@@ -503,16 +534,24 @@ export function FeedPostCard({
 
       {/* Author's expandable opt-in management list */}
       {isAuthor && optInListOpen && authorOptIns && authorOptIns.length > 0 && (
-        <div lang="en" dir="ltr" className="mb-3 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
-          {authorOptIns.map((oi) => (
-            <div key={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+        <div data-testid={`opt-in-list-${post.id}`} className="mb-3 divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
+          {authorOptIns.map((oi) => {
+            // An action on this row is under way: its buttons keep focus and say they are
+            // unavailable (aria-disabled, never disabled), and a press on them does nothing.
+            // (The row itself has no role, so it carries no aria-busy: the buttons say it.)
+            const rowBusy = busyOptInIds?.has(oi.id) === true
+            return (
+            <div key={oi.id} data-opt-in-row={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <User className="h-3 w-3 flex-shrink-0 text-stone-500" aria-hidden="true" />
                 <span className="truncate text-xs font-medium text-stone-700" lang="" dir="auto" data-member-text="seeker-name">
                   {oi.seekerName}
                 </span>
-                <HarmonyBadge score={oi.seekerHarmonyScore} count={oi.seekerHarmonyCount} userId={oi.seekerId} />
+                <HarmonyBadge score={oi.seekerHarmonyScore} count={oi.seekerHarmonyCount} userId={oi.seekerId} locale={locale} />
+                {/* A status FEED has no label for is shown as stored, which is English. */}
                 <span
+                  lang={isOptInStatus(oi.status) ? undefined : 'en'}
+                  data-testid={`opt-in-status-${oi.id}`}
                   className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                     oi.status === 'completed'
                       ? 'bg-lime-100 text-lime-800'
@@ -523,16 +562,16 @@ export function FeedPostCard({
                           : 'bg-stone-100 text-stone-700'
                   }`}
                 >
-                  {oi.status}
+                  {optInStatusLabel(oi.status, locale)}
                 </span>
                 {authorDeclinedSeekerIds?.has(oi.seekerId) && (
                   <span
                     data-testid={`declined-before-marker-${oi.seekerId}`}
-                    title="You have declined this person before"
+                    title={optInsT(locale, 'declinedBeforeTitle')}
                     className="flex items-center gap-0.5 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
                   >
                     <ShieldAlert className="h-2.5 w-2.5" aria-hidden="true" />
-                    Declined before
+                    {optInsT(locale, 'declinedBefore')}
                   </span>
                 )}
               </div>
@@ -541,10 +580,14 @@ export function FeedPostCard({
                   <button
                     type="button"
                     data-testid={`unblock-optin-${oi.id}`}
-                    onClick={() => onAuthorUnblockOptIn?.(oi.id)}
-                    className="rounded bg-lime-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                    aria-disabled={rowBusy || undefined}
+                    onClick={() => {
+                      if (!rowBusy) onAuthorUnblockOptIn?.(oi.id)
+                    }}
+                    aria-label={optInActionName(locale, 'unblock', oi.seekerName)}
+                    className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                   >
-                    Unblock — they can request again
+                    {optInsT(locale, 'unblock')}
                   </button>
                 )}
                 {oi.status === 'pending' && (
@@ -552,18 +595,26 @@ export function FeedPostCard({
                     <button
                       type="button"
                       data-testid={`accept-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'accepted')}
-                      className="rounded bg-lime-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800"
+                      aria-disabled={rowBusy || undefined}
+                      onClick={() => {
+                        if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'accepted')
+                      }}
+                      aria-label={optInActionName(locale, 'accept', oi.seekerName)}
+                      className="rounded bg-lime-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-lime-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                     >
-                      Accept
+                      {optInsT(locale, 'accept')}
                     </button>
                     <button
                       type="button"
                       data-testid={`decline-optin-${oi.id}`}
-                      onClick={() => onAuthorUpdateOptIn?.(oi.id, 'declined')}
-                      className="rounded bg-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300"
+                      aria-disabled={rowBusy || undefined}
+                      onClick={() => {
+                        if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'declined')
+                      }}
+                      aria-label={optInActionName(locale, 'decline', oi.seekerName)}
+                      className="rounded bg-stone-200 px-2 py-1.5 text-[10px] font-medium text-stone-800 transition-colors hover:bg-stone-300 aria-disabled:cursor-default aria-disabled:opacity-60"
                     >
-                      Decline
+                      {optInsT(locale, 'decline')}
                     </button>
                   </>
                 )}
@@ -571,30 +622,37 @@ export function FeedPostCard({
                   <button
                     type="button"
                     data-testid={`complete-optin-${oi.id}`}
-                    onClick={() => onAuthorUpdateOptIn?.(oi.id, 'completed')}
-                    className="rounded bg-blue-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800"
+                    aria-disabled={rowBusy || undefined}
+                    onClick={() => {
+                      if (!rowBusy) onAuthorUpdateOptIn?.(oi.id, 'completed')
+                    }}
+                    aria-label={optInActionName(locale, 'markCompleted', oi.seekerName)}
+                    className="rounded bg-blue-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-blue-800 aria-disabled:cursor-default aria-disabled:opacity-60"
                   >
-                    Mark Completed
+                    {optInsT(locale, 'markCompleted')}
                   </button>
                 )}
                 {oi.status === 'completed' && !authorReviewedOptInIds?.has(oi.id) && (
                   <button
                     type="button"
                     onClick={() => onAuthorReviewSeeker?.(oi.id, oi.seekerName)}
-                    className="flex items-center gap-0.5 rounded bg-amber-700 px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-amber-800"
+                    data-testid={`review-seeker-${oi.id}`}
+                    aria-label={optInActionName(locale, 'reviewSeeker', oi.seekerName)}
+                    className="flex items-center gap-0.5 rounded bg-amber-700 px-2 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-amber-800"
                   >
                     <Star className="h-2.5 w-2.5" aria-hidden="true" />
-                    Review seeker
+                    {optInsT(locale, 'reviewSeeker')}
                   </button>
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
       {showReviewSourcerBtn && (
-        <div lang="en" dir="ltr" className="mb-3">
+        <div className="mb-3">
           <button
             type="button"
             data-testid={`review-sourcer-${post.id}`}
@@ -602,12 +660,24 @@ export function FeedPostCard({
             className="flex items-center gap-1 rounded-full bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-800"
           >
             <Star className="h-3 w-3" aria-hidden="true" />
-            Review sourcer
+            {optInsT(locale, 'reviewSourcer')}
           </button>
         </div>
       )}
 
-      {optInError && <div lang="en" dir="ltr" className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">{optInError}</div>}
+      {/* A sentence FEED wrote reads in the member's language; anything else is English. An alert:
+          nothing else tells a screen-reader user the opt-in did not go through. Focus stays put. */}
+      {optInFailure && (
+        <div
+          role="alert"
+          lang={optInFailure.translated ? undefined : 'en'}
+          dir={optInFailure.translated ? undefined : 'ltr'}
+          data-testid={`opt-in-error-${post.id}`}
+          className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800"
+        >
+          {optInFailure.text}
+        </div>
+      )}
 
       <PostReactions
         postId={post.id}

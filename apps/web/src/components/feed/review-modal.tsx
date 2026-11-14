@@ -8,9 +8,20 @@
  * Also supports the conversation path (p_conversation_id) introduced in Phase 9.
  *
  * PII: comment content is never logged.
+ *
+ * In the viewer's language (lib/i18n-feed-badges.ts; the locale is the profile's, so every caller
+ * gets it). The dialog renders in a portal and carries its own lang, dir and close label. The
+ * reviewed member's name is their own text; their role is a code the description is chosen by.
+ * A failure is kept as a code or as the hook's fixed sentence and read through reviewErrorText;
+ * text FEED did not write is shown as received and marked English.
+ *
+ * Focus: closing the dialog (Escape, the close button, Cancel) returns focus to the control that
+ * opened it. After a review is sent that control is about to leave the page (a review can be
+ * given once), so focus goes to the caller's stable control instead; so it does when the opener
+ * is already gone.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -24,6 +35,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2 } from 'lucide-react'
 import { useReviews } from '@/hooks/use-reviews'
 import { WheatStalkRatingInteractive } from '@/components/ui/wheat-stalk-rating'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { cardT } from '@/lib/i18n-feed-card'
+import { editT } from '@/lib/i18n-feed-edit'
+import { badgesT, reviewDescription, reviewErrorText, REVIEW_RATING_REQUIRED, REVIEW_SUBMIT_FAILED } from '@/lib/i18n-feed-badges'
+
+/** The longest comment, in characters. */
+const MAX_COMMENT = 1000
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,11 +56,18 @@ interface ReviewModalProps {
   /** Provide exactly one of optInId or conversationId. */
   optInId?: string
   conversationId?: string
-  /** Human-readable name of the person being reviewed. */
+  /** Name of the person being reviewed, as they wrote it. */
   revieweeName: string
-  /** Role label shown in the description (e.g. "sourcer" or "seeker"). */
+  /** `lang` of that name: '' (the default) for a member's own text; undefined when the caller
+   *  passes FEED's own fallback word in the viewer's language. */
+  revieweeNameLang?: string
+  /** The reviewed member's role, as a code: sourcer, seeker, requester or volunteer. */
   revieweeRole: string
   onSubmitted: () => void
+  /** The control that opened the dialog: focus returns to it when the dialog closes unsent. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
+  /** Where focus goes when that control is gone, or is about to go because the review was sent. */
+  fallbackFocus?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -52,10 +80,16 @@ export function ReviewModal({
   optInId,
   conversationId,
   revieweeName,
+  revieweeNameLang = '',
   revieweeRole,
   onSubmitted,
+  returnFocusRef,
+  fallbackFocus,
 }: ReviewModalProps) {
   const { submitReview, loading, error } = useReviews()
+  const locale = useProfileLocale()
+  // True from a sent review until the dialog has handed focus back.
+  const sentRef = useRef(false)
 
   const [rating, setRating] = useState<number>(0)
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null)
@@ -77,7 +111,7 @@ export function ReviewModal({
     setLocalError(null)
 
     if (rating === 0) {
-      setLocalError('Please select a stalk rating before submitting.')
+      setLocalError(REVIEW_RATING_REQUIRED)
       return
     }
 
@@ -93,49 +127,80 @@ export function ReviewModal({
       setRating(0)
       setWouldRecommend(null)
       setComment('')
+      sentRef.current = true
       onOpenChange(false)
       onSubmitted()
     } catch {
       // error is set by useReviews; also reflect in localError for visibility
-      setLocalError(error ?? 'Submission failed. Please try again.')
+      setLocalError(error ?? REVIEW_SUBMIT_FAILED)
     }
   }
 
   const displayError = localError ?? error
+  const failure = displayError ? reviewErrorText(displayError, locale) : null
+  const [beforeName, afterName] = splitMessage(badgesT(locale, 'reviewTitle'), 'name')
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      {/* Not translated yet: its English copy is marked English wherever it opens from. */}
-      <DialogContent lang="en" dir="ltr" className="sm:max-w-[440px]">
+      {/* A portal: it does not inherit the language of the surface it opens from, so it carries
+          its own. */}
+      <DialogContent
+        lang={locale}
+        dir={dir(locale)}
+        closeLabel={cardT(locale, 'close')}
+        className="sm:max-w-[440px]"
+        data-testid="review-dialog"
+        onCloseAutoFocus={(e) => {
+          const sent = sentRef.current
+          sentRef.current = false
+          const opener = returnFocusRef?.current
+          if (!sent && opener?.isConnected) {
+            e.preventDefault()
+            opener.focus()
+          } else if (fallbackFocus) {
+            e.preventDefault()
+            fallbackFocus()
+          }
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Review {revieweeName}</DialogTitle>
-          <DialogDescription>
-            Share your experience with this {revieweeRole}. Your rating contributes to their Harmony Score.
-          </DialogDescription>
+          <DialogTitle>
+            {beforeName}
+            <bdi lang={revieweeNameLang}>{revieweeName}</bdi>
+            {afterName}
+          </DialogTitle>
+          <DialogDescription>{reviewDescription(revieweeRole, locale)}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
-            {displayError && (
+            {failure && (
               <Alert variant="destructive">
-                <AlertDescription>{displayError}</AlertDescription>
+                {/* A sentence FEED wrote reads in the member's language; anything else is English. */}
+                <AlertDescription lang={failure.translated ? undefined : 'en'} dir={failure.translated ? undefined : 'ltr'} data-testid="review-error">
+                  {failure.text}
+                </AlertDescription>
               </Alert>
             )}
 
             {/* Wheat-stalk rating */}
             <div>
-              <p className="text-sm font-medium mb-2">Rating</p>
+              <p id="review-rating-label" className="text-sm font-medium mb-2">{badgesT(locale, 'ratingLabel')}</p>
+              {/* Named by the caption above; a rating is needed to send the review. */}
               <WheatStalkRatingInteractive
                 value={rating}
                 onChange={setRating}
                 testIdPrefix="review"
+                locale={locale}
+                labelledBy="review-rating-label"
+                required
               />
             </div>
 
-            {/* Would recommend toggle */}
+            {/* Would recommend toggle: a group named by its question */}
             <div>
-              <p className="text-sm font-medium mb-2">Would you recommend this person?</p>
-              <div className="flex gap-2">
+              <p id="review-recommend-question" className="text-sm font-medium mb-2">{badgesT(locale, 'recommendQuestion')}</p>
+              <div role="group" aria-labelledby="review-recommend-question" className="flex gap-2">
                 <button
                   type="button"
                   data-testid="review-recommend"
@@ -143,11 +208,11 @@ export function ReviewModal({
                   onClick={() => setWouldRecommend(wouldRecommend === true ? null : true)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     wouldRecommend === true
-                      ? 'bg-lime-600 text-white border-lime-600'
+                      ? 'bg-lime-700 text-white border-lime-700'
                       : 'bg-white text-stone-700 border-stone-300 hover:border-lime-400'
                   }`}
                 >
-                  Yes
+                  {editT(locale, 'yes')}
                 </button>
                 <button
                   type="button"
@@ -155,11 +220,11 @@ export function ReviewModal({
                   onClick={() => setWouldRecommend(wouldRecommend === false ? null : false)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     wouldRecommend === false
-                      ? 'bg-red-500 text-white border-red-500'
+                      ? 'bg-red-700 text-white border-red-700'
                       : 'bg-white text-stone-700 border-stone-300 hover:border-red-300'
                   }`}
                 >
-                  No
+                  {editT(locale, 'no')}
                 </button>
               </div>
             </div>
@@ -167,35 +232,39 @@ export function ReviewModal({
             {/* Optional comment */}
             <div>
               <label htmlFor="review-comment-input" className="text-sm font-medium">
-                Comment{' '}
-                <span className="text-stone-400 font-normal">(optional, max 1000 chars)</span>
+                {badgesT(locale, 'commentLabel')}{' '}
+                <span className="text-stone-600 font-normal">{formatMessage(badgesT(locale, 'commentHint'), { max: formatCount(MAX_COMMENT, locale) })}</span>
               </label>
+              {/* The member's own words: their direction once typed, the page's while empty. */}
               <textarea
                 id="review-comment-input"
                 data-testid="review-comment"
                 value={comment}
-                onChange={(e) => setComment(e.target.value.slice(0, 1000))}
+                onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}
                 rows={3}
-                placeholder="Describe your experience..."
-                className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-[#4a5d23] resize-none"
+                dir={comment ? 'auto' : dir(locale)}
+                placeholder={badgesT(locale, 'commentPlaceholder')}
+                className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-500 focus:outline-hidden focus:ring-1 focus:ring-[#4a5d23] resize-none"
               />
               {comment.length > 800 && (
-                <p className="text-xs text-stone-500 mt-1">{comment.length}/1000</p>
+                <p className="text-xs text-stone-500 mt-1">
+                  {formatCount(comment.length, locale)}/{formatCount(MAX_COMMENT, locale)}
+                </p>
               )}
             </div>
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
-              Cancel
+              {cardT(locale, 'cancel')}
             </Button>
             <Button
               data-testid="review-submit"
               type="submit"
               disabled={loading || rating === 0}
             >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Submit Review
+              {loading && <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              {badgesT(locale, 'submitReview')}
             </Button>
           </DialogFooter>
         </form>

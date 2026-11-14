@@ -20,6 +20,7 @@
 import type { Locale } from './i18n'
 import { eventFormT } from './i18n-event-forms'
 import { formatMessage } from './format-message'
+import { TIME_WORDS, localeTags } from './i18n-intl'
 import { browserTimeZone, formatCalendarDate, formatShortDate, intlLocale, isKnownTimeZone } from './event-time'
 import {
   isMonthlyDayRule,
@@ -376,15 +377,21 @@ function pluralForm(forms: PluralForms, n: number, locale: Locale): string {
 
 const listFormats = new Map<Locale, { format(items: string[]): string } | null>()
 
-/** "a, b and c" in the locale: Intl.ListFormat where the runtime has the locale, otherwise the
- *  grammar's separators (ht "a, b ak c", hmn "a, b thiab c"). */
+/**
+ * "a, b and c" in the locale. ht, hmn and so always read from the grammar's own separators
+ * ("a, b ak c", "a, b thiab c", "a, b iyo c"), the same set lib/i18n-intl.ts writes time words
+ * for: asking Intl.ListFormat.supportedLocalesOf is no guard (probed 2026-10-11: WebKit 26.4 says
+ * it supports ht and hmn and prints "a, b, c" with no joining word; Chromium 148 has no Somali and
+ * prints the English "and"). Every other locale uses Intl.ListFormat where the runtime has it —
+ * Tagalog asked for as 'fil', the only name WebKit knows it by — and the separators otherwise.
+ */
 export function joinList(items: readonly string[], locale: Locale): string {
   if (items.length <= 1) return items[0] ?? ''
   let lf = listFormats.get(locale)
   if (lf === undefined) {
     const LF = (Intl as unknown as { ListFormat?: typeof Intl.ListFormat }).ListFormat
-    const tag = intlLocale(locale)[0]
-    lf = LF && LF.supportedLocalesOf(tag).length > 0 ? new LF(tag, { type: 'conjunction', style: 'long' }) : null
+    const tags = localeTags(locale)
+    lf = !TIME_WORDS[locale] && LF && LF.supportedLocalesOf(tags[0]).length > 0 ? new LF(tags, { type: 'conjunction', style: 'long' }) : null
     listFormats.set(locale, lf)
   }
   if (lf) return lf.format([...items])
