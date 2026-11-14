@@ -2060,10 +2060,9 @@ export function FeedPanel() {
       setPosts((prev) => prev.filter((p) => p.id !== postId))
       dropSideData(postId)
     }
-    // Nothing to say: leave at once. An empty announcement would clear the region and cancel
-    // another card's sentence still waiting for its frame.
-    if (text === '') leave()
-    else announceCardNotice(text, leave, { join })
+    // Every caller has a sentence (an acted card that changed nothing says why it left), so the
+    // region is never cleared by an empty announcement.
+    announceCardNotice(text, leave, { join })
   }
 
   // The card's ⋯ button (or, when it is gone, nothing): where focus returns after a dialog.
