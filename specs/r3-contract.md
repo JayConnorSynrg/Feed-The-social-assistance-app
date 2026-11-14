@@ -24,8 +24,9 @@ were sent through PostgREST 14.5 on a prod-identical catalog; every one answers 
 >    reporter to show, by design.
 > 4. Nothing else in a request or answer shape changed: no signature, no return type, no error token.
 >
-> **Added on 2026-10-11 (second review round), no shape change:** an opt-in write and the seeker's account
-> deletion no longer collide. When the deletion gets there first, `decide_opt_in` answers
+> **Added on 2026-10-11 (second review round), no shape change:** a decision, a withdrawal or an unblock and
+> the seeker's account deletion no longer collide (an opt-in against the post author's own deletion still
+> can; see the section linked below). When the deletion gets there first, `decide_opt_in` answers
 > `PT404 opt_in_not_found` and `withdraw_opt_in` / `unblock_opt_in` answer `false`: the three "re-read the
 > list" outcomes the client already handles. See
 > [Account deletion and opt-ins](#account-deletion-and-opt-ins-what-can-collide-and-until-when).
@@ -54,28 +55,33 @@ green once applied.
 ### Account deletion and opt-ins: what can collide, and until when
 
 An account deletion removes the member's opt-ins (and, for an author, their posts with every opt-in on
-them). It locks the member's profile row first and reaches the opt-in rows through the cascade.
+them). It locks the member's profile row (or, in the deletion function's first step, the member's posts)
+first and reaches the opt-in rows through the cascade.
 
-- **A decision, a withdrawal or an unblock against the seeker's account deletion: no collision, in either
-  release state, on any path.** The three RPCs take the seeker's profile row before the post, so the two
-  queue; the trail row of an opt-in change never waits for a profile. Whoever is first wins and the other
-  sees a normal answer: the decision is recorded and the opt-in then goes with the account, or the RPC
-  answers `PT404 opt_in_not_found` (`decide_opt_in`) / `false` (`withdraw_opt_in`, `unblock_opt_in`). The
-  status update the deployed client still sends directly (`feed-panel.tsx`) is covered too: it answers as
-  it does today. Measured on 40 simultaneous pairs per pairing: 0 collisions after the fix, against 35 to
-  40 of 40 before it (the collision came in with the opt-in trail of this release; today's database has
-  none).
-- **What can still collide, until release 3.3:** an author who accepts, declines or completes an opt-in
-  through the deployed client's direct status update at the very moment that same author's own account
-  deletion is removing their posts. The update holds the opt-in and asks for the post; the deletion holds
-  the post and asks for the opt-in; the database ends one of the two. **What the member sees:** one failed
-  save (the status change answers an error, code `40P01`, or the account deletion reports a failure) that
-  succeeds on retry. Nothing is half-written and no slot drifts. It takes one person doing both things in
-  the same instant, in the expand state only. Measured on 40 simultaneous pairs: 6 with the deletion
-  function's own removal of the author's posts, 0 through the admin route (today's database: 0 and 0).
-- **Which release removes it:** 3.3, when the client moves decisions to `decide_opt_in` (post first, then
-  the opt-in: 0 collisions measured against the author's own deletion as well). The contract step then
-  closes the direct update for every client.
+- **A decision, a withdrawal, an unblock or the direct status update against an account deletion: no
+  collision, in either release state, in any deletion shape** (the admin route's `auth.users` delete, the
+  deletion function's delete of the profile row or of the member's posts), whether it is the seeker's or
+  the post author's account. `decide_opt_in`, `withdraw_opt_in` and `unblock_opt_in` take the seeker's
+  profile row before the post, so the two queue; the trail row of an opt-in change takes no lock at all, so
+  the status update the deployed client still sends directly (`feed-panel.tsx`) has nothing to wait for.
+  Whoever is first wins and the other sees a normal answer: the change is recorded and the opt-in then goes
+  with the account, or the RPC answers `PT404 opt_in_not_found` (`decide_opt_in`) / `false`
+  (`withdraw_opt_in`, `unblock_opt_in`), and a direct update that finds no row answers `204`. Measured on 40
+  simultaneous pairs and 2 forced interleaves per shape: 0 collisions (before the third review round's fix,
+  the author's direct update against that author's own deletion collided in 21, 12 and 2 of 40 pairs).
+- **What can still collide, measured on 20 simultaneous pairs each:**
+  - **Opting in at the moment the post's author deletes their account**, in every release state and on
+    today's database alike: 20 of 20 through the admin route, 17 to 20 of 20 when the profile is deleted
+    with the posts still there. `opt_in_to_post` holds the post, then its engagement step asks for the
+    author's account row; the deletion holds that row and asks for the post. **What the member sees:** the
+    opt-in fails once (`40P01`) or, when the engagement step absorbs it, succeeds without its engagement
+    credit, and the account deletion goes through or reports a failure and succeeds on retry. Nothing is
+    half-written and no slot drifts. Not changed by this release; a follow-up reorders `opt_in_to_post`.
+  - **Before the contract step only:** a seeker's direct `DELETE` of their pending opt-in (not a client
+    path, see below) at the moment the author's posts are deleted: 13 of 20 against the deletion function's
+    removal of the author's posts, 18 of 20 against a delete of the post (today's database: 0 and 0; the
+    slot that comes back on every delete takes the post row after the opt-in row). One side fails with
+    `40P01` and succeeds on retry. No deployed client sends that DELETE, and the contract step removes it.
 
 Types: `packages/database/types.ts` carries hand-edited hunks for these shapes until the release regen.
 RPCs that return `jsonb` are typed `Json`; cast to the types written here.
