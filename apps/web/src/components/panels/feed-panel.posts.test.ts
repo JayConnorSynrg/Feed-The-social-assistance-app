@@ -149,8 +149,8 @@ vi.mock('@/hooks/use-feed-event-cards', async (orig) => ({
     handleEventManaged: () => {},
     // The real announcer moves focus first, then sets the notice: the same order here.
     // (An empty sentence is the announcer being asked to move focus and say nothing.)
-    announceCardNotice: (text: string, moveFocus?: () => void) => {
-      h.announced.push(text)
+    announceCardNotice: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => {
+      h.announced.push(options?.join ? `${text} [join]` : text)
       moveFocus?.()
       if (text !== '') h.notices.push(text)
       if (text !== '') h.onNotice?.(text)
@@ -1113,7 +1113,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(busy(c)).toEqual([])
     })
 
-    it('L1 · a write that changed nothing on a post that is gone at the re-read: the card leaves without an empty announcement (which would cancel another card\'s waiting sentence), focus to the next card', async () => {
+    it('L3 · a write that changed nothing on a post that is gone at the re-read: the card leaves and the member is told why, joined to any waiting sentence (never an empty announcement); focus to the next card', async () => {
       const c = await asAuthor([optIn('o1', 'Bo')])
       h.optIns = []
       h.rows = h.rows.filter((r) => r.id !== 'p1')
@@ -1123,8 +1123,10 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       await c.flush()
       expect(cardIds(c.tree())).toEqual(['p3'])
       expect(h.focused).toEqual(['post-card-p3'])
-      expect(h.announced).toEqual([])
-      expect(h.notices).toEqual([])
+      expect(h.announced).toEqual([`${cardT('en', 'statusPostGone')} [join]`])
+      expect(h.notices).toEqual([cardT('en', 'statusPostGone')])
+      // No line is left for the post that went: it is not shown again if the post comes back.
+      expect(card(c, 'p3').props.optInError).toBeFalsy()
     })
 
     it('L2 · a write that changed nothing: focus lands first, and only then does the card say why — once', async () => {

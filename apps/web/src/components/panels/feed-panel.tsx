@@ -1651,11 +1651,12 @@ export function FeedPanel() {
 
   // The acted card leaves the feed (its post is gone, or hidden from this viewer). On the
   // sub-tab the action began in it leaves as a deleted card does — focus to the next card, the
-  // card goes, then the sentence. When the member has moved to another sub-tab meanwhile, the
-  // card just goes: nothing is said and no focus is moved there.
+  // card goes, then the sentence, joined to any sentence still waiting (so it cancels none).
+  // When the member has moved to another sub-tab meanwhile, the card just goes: nothing is said
+  // and no focus is moved there.
   const actedCardLeaves = (postId: string, context: string, text: string) => {
     if (signUpContextRef.current === context) {
-      cardLeaves(postId, text)
+      cardLeaves(postId, text, true)
       return
     }
     setPosts((prev) => prev.filter((p) => p.id !== postId))
@@ -1692,11 +1693,13 @@ export function FeedPanel() {
         return
       }
       const left = (await rereadActedPost(attempt.postId, attempt.kind, uid, () => {
-        // What is said as the card goes is this action's outcome; one that changed nothing leaves
-        // in silence for now.
+        // What is said as the card goes is this action's outcome; for one that changed nothing,
+        // why the card went (it has no alert line any more: the attempt is dropped here). An
+        // author action is on the author's own post, which is never hidden from its author
+        // (classifyPostUpdate), so here the card leaves only because the post is gone.
         forget()
         signUps.disarm(attempt)
-        actedCardLeaves(attempt.postId, attempt.context, attempt.changed === true ? signUps.sentence(attempt) : '')
+        actedCardLeaves(attempt.postId, attempt.context, attempt.changed === true ? signUps.sentence(attempt) : cardT(locale, 'statusPostGone'))
       })) === 'left'
       if (left || viewerIdRef.current !== uid) return
       await loadPostSideData([attempt.postId], false, attempt.kind)
@@ -2046,7 +2049,7 @@ export function FeedPanel() {
   // A card leaves the feed (the author deleted it, a moderator held or removed it): in ONE frame,
   // focus moves to the next post card (or the feed's heading when none is left), the card is
   // removed, then the notice is set — the same order as an event card that leaves.
-  const cardLeaves = (postId: string, text: string) => {
+  const cardLeaves = (postId: string, text: string, join = false) => {
     const leave = () => {
       const list = postsRef.current
       const idx = list.findIndex((p) => p.id === postId)
@@ -2060,7 +2063,7 @@ export function FeedPanel() {
     // Nothing to say: leave at once. An empty announcement would clear the region and cancel
     // another card's sentence still waiting for its frame.
     if (text === '') leave()
-    else announceCardNotice(text, leave)
+    else announceCardNotice(text, leave, { join })
   }
 
   // The card's ⋯ button (or, when it is gone, nothing): where focus returns after a dialog.
