@@ -185,7 +185,11 @@ describe('the hook', () => {
     const state = { memberStatuses: new Map<string, string>(), authorRows: {} as Record<string, SignUpRow[]>, context: 'feed|me' }
     // What the hook hands back to its caller to show on the card (the action was not done).
     const notDone: string[] = []
-    const onNotDone = (a: SignUpAttempt) => void notDone.push(signUpAttemptKey(a))
+    // Recorded in the ordered log too, so a test sees it comes after the focus move.
+    const onNotDone = (a: SignUpAttempt, settle: string) => {
+      notDone.push(signUpAttemptKey(a))
+      log.push(`line:${signUpAttemptKey(a)}:${settle}`)
+    }
     const c = mount(() => useSignUpOutcomes({ locale, announce, memberStatuses: state.memberStatuses, authorRows: state.authorRows, context: state.context, onNotDone }))
     const begin = (kind: SignUpKind, ids: { postId?: string; optInId?: string }) => {
       const a = c.tree().begin(kind, ids)
@@ -402,12 +406,13 @@ describe('the hook', () => {
       h.c.rerender()
       // Nothing is said, and the announcer is not asked (an empty announcement would cancel another
       // row's sentence): focus is moved directly; never to Mark Completed.
-      expect(h.log).toEqual(['focus:opt-in-manage-p1'])
+      // L2: focus first, then the card's line, once.
+      expect(h.log).toEqual(['focus:opt-in-manage-p1', 'line:o1:fresh'])
       expect(h.notDone).toEqual(['o1'])
       // A row with that id shows up accepted much later (another read): nothing is said then.
       h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo')] }
       h.c.rerender()
-      expect(h.log).toHaveLength(1)
+      expect(h.log).toHaveLength(2)
       expect(h.notDone).toHaveLength(1)
     })
 
@@ -440,7 +445,7 @@ describe('the hook', () => {
       h.state.memberStatuses = new Map([['p1', 'accepted']])
       h.api().settled(a, 'fresh')
       h.c.rerender()
-      expect(h.log).toEqual(['focus:post-card-p1'])
+      expect(h.log).toEqual(['focus:post-card-p1', 'line:post:p1:fresh'])
       expect(h.notDone).toEqual(['post:p1'])
     })
 
@@ -497,8 +502,29 @@ describe('the hook', () => {
       expect(focused).toContain('opt-in-manage-p1')
     })
 
+    it('two successes in two renders before the announcer\'s frame: with the real announcer, both sentences are spoken (the second joins the first)', () => {
+      const frames: Array<() => void> = []
+      const region: string[] = []
+      const real = createCardNoticeAnnouncer((text) => void region.push(text), (fn) => void frames.push(fn))
+      const h = harness('en', real.announce)
+      h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+      h.c.rerender()
+      el('accept-optin-o1')
+      el('decline-optin-o2')
+      const a = h.begin('accept', { optInId: 'o1' })
+      const b = h.begin('decline', { optInId: 'o2' })
+      h.api().succeeded(a)
+      h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
+      h.c.rerender()
+      h.api().succeeded(b)
+      h.state.authorRows = { p1: [rowOf('o1', 'accepted', 'Bo'), rowOf('o2', 'declined', 'Cy')] }
+      h.c.rerender()
+      for (const f of frames.splice(0)) f()
+      expect(region.filter((x) => x !== '')).toEqual([`You accepted ${isolate('Bo')}. You declined ${isolate('Cy')}.`])
+    })
+
     describe('a request that came back and changed nothing (unchanged)', () => {
-      it('nothing is said for it, shown or not; when the read that follows has corrected the card and its control is gone, focus goes to a stable control', () => {
+      it('L2 · nothing is said for it, shown or not; when the read that follows has corrected the card and its control is gone, focus goes to a stable control, and only then is the caller told (once)', () => {
         const h = harness()
         h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo'), rowOf('o2', 'pending', 'Cy')] }
         h.c.rerender()
@@ -517,9 +543,9 @@ describe('the hook', () => {
         h.state.authorRows = { p1: [rowOf('o2', 'pending', 'Cy')] }
         h.api().settled(a, 'fresh')
         h.c.rerender()
-        expect(h.log).toEqual(['focus:opt-in-manage-p1'])
-        // The caller already showed it (it reported it): it is not told again.
-        expect(h.notDone).toEqual([])
+        // L2: the caller is told once, after focus has landed, with how the read ended.
+        expect(h.log).toEqual(['focus:opt-in-manage-p1', 'line:o1:fresh'])
+        expect(h.notDone).toEqual(['o1'])
         expect(h.busy()).toEqual([])
       })
 
@@ -532,7 +558,8 @@ describe('the hook', () => {
         h.api().unchanged(a)
         h.api().settled(a, 'stale')
         h.c.rerender()
-        expect(h.log).toEqual([`say:${optInsT('es', 'announceListStale')}`])
+        // In the announcement's frame: its line, then the stale-list sentence.
+        expect(h.log).toEqual(['line:o1:stale', `say:${optInsT('es', 'announceListStale')}`])
       })
 
       it('alongside a confirmed action on another row: only the confirmed one is said', () => {
@@ -565,7 +592,9 @@ describe('the hook', () => {
       h.api().settled(b, 'unread')
       h.c.rerender()
       expect(h.log.filter((l) => l.startsWith('say:'))).toEqual([`say:You accepted ${isolate('Bo')}.`])
-      expect(h.notDone).toEqual([])
+      // The one that changed nothing is handed over as unread: the caller writes no line for a
+      // card that is not on screen.
+      expect(h.log.filter((l) => l.startsWith('line:'))).toEqual(['line:o2:unread'])
     })
 
     it('what may be said, case by case', () => {

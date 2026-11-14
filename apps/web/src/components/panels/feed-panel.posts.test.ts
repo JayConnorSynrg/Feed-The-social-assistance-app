@@ -1127,6 +1127,89 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([])
     })
 
+    it('L2 · a write that changed nothing: focus lands first, and only then does the card say why — once', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      const pressed = el('accept-optin-o1')
+      el('complete-optin-o1')
+      const toggle = el('opt-in-manage-p1')
+      const lineAtFocus: unknown[] = []
+      toggle.focus = () => {
+        lineAtFocus.push(cardError(c) || null)
+        h.focused.push('opt-in-manage-p1')
+      }
+      h.optIns = [optIn('o2', 'Cy')]
+      const sent = update(c, 'o1', 'accepted')
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(lineAtFocus).toEqual([null])
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      expect(h.announced).toEqual([])
+    })
+
+    it('L4a · the line goes only on a card that is on screen, and never comes back with a post that returns later', async () => {
+      h.rows = [...h.rows, row('p5', { max_seekers: 1, slots_remaining: 1 })]
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      el('accept-optin-o1').isConnected = false
+      el('opt-in-manage-p1')
+      // (a) The follow-up read of a no-change is held; meanwhile a refresh lists the feed without p1.
+      const held = deferred()
+      h.rowGates.push(held.promise)
+      h.optIns = [optIn('o2', 'Cy')]
+      const sent = update(c, 'o1', 'accepted')
+      await c.flush()
+      const all = h.rows
+      h.rows = all.filter((r) => r.id !== 'p1')
+      ;(one(c.tree(), FeedHeader).props.onRankModeChange as (m: string) => void)('recent')
+      await c.flush(12)
+      expect(cardIds(c.tree())).not.toContain('p1')
+      held.open()
+      await sent
+      await c.flush()
+      // p1 comes back: no line from before.
+      h.rows = all
+      ;(one(c.tree(), FeedHeader).props.onRankModeChange as (m: string) => void)('ranked')
+      await c.flush(12)
+      expect(cardIds(c.tree())).toContain('p1')
+      expect(cardError(c)).toBeFalsy()
+      // (b) A line that was shown on screen goes with its card when a refresh drops the post.
+      el('accept-optin-o2').isConnected = false
+      h.optIns = []
+      await update(c, 'o2', 'accepted')
+      await c.flush()
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
+      h.rows = all.filter((r) => r.id !== 'p1')
+      ;(one(c.tree(), FeedHeader).props.onRankModeChange as (m: string) => void)('recent')
+      await c.flush(12)
+      h.rows = all
+      ;(one(c.tree(), FeedHeader).props.onRankModeChange as (m: string) => void)('ranked')
+      await c.flush(12)
+      expect(cardIds(c.tree())).toContain('p1')
+      expect(cardError(c)).toBeFalsy()
+      expect(h.notices).toEqual([])
+    })
+
+    it('L4a · a card taken out by realtime while the follow-up read of a no-change is on its way: no line is kept for it, so the post comes back without one', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
+      el('accept-optin-o1').isConnected = false
+      const held = deferred()
+      h.rowGates.push(held.promise)
+      h.optIns = [optIn('o2', 'Cy')]
+      const sent = update(c, 'o1', 'accepted')
+      await c.flush()
+      h.realtime!.onUpdate({ id: 'p1', user_id: AUTHOR, version: 3, is_hidden: false, deleted_at: '2026-10-02T00:00:00.000Z' })
+      await c.flush()
+      expect(cardIds(c.tree())).not.toContain('p1')
+      held.open()
+      await sent
+      await c.flush()
+      h.realtime!.onInsert({ id: 'p1' })
+      await c.flush()
+      expect(cardIds(c.tree())).toContain('p1')
+      expect(cardError(c)).toBeFalsy()
+    })
+
     it('second check: the update answered with a row, yet the fresh read does not show the outcome — not said as done; the card shows the failure', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       el('accept-optin-o1').isConnected = false

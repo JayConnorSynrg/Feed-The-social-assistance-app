@@ -179,8 +179,9 @@ const rowAction = (optInId: string) => inPage(`[data-opt-in-row="${CSS.escape(op
 
 export interface SignUpOutcomesOptions {
   locale: Locale
-  /** The feed's card-notice announcer: in one frame, `moveFocus` first, then the sentence. Stable. */
-  announce: (text: string, moveFocus?: () => void) => void
+  /** The feed's card-notice announcer: in one frame, `moveFocus` first, then the sentence; with
+   *  `join`, a sentence still waiting is kept in front (hooks/use-feed-event-cards.ts). Stable. */
+  announce: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => void
   /** post id → the viewer's own sign-up status (absent: not signed up). */
   memberStatuses: MemberStatuses
   /** post id → the rows of the author's sign-up list. */
@@ -188,9 +189,13 @@ export interface SignUpOutcomesOptions {
   /** What attempts belong to (the feed sub-tab and the signed-in account). When it changes, every
    *  attempt is dropped unsaid and every row is released. */
   context: string
-  /** An action the caller reported as done turned out not to be (a fresh read does not show it):
-   *  the caller shows the failure on the card, as it does for one it reported itself. */
-  onNotDone: (attempt: SignUpAttempt) => void
+  /**
+   * An action that is not done, once its read has settled: one that changed nothing
+   * (attempt.changed === false), or one the caller reported as done that a fresh read does not
+   * show. The caller writes the card's alert line here — called AFTER focus has moved (the feed's
+   * rule: focus first, then the sentence), exactly once, with how that read ended.
+   */
+  onNotDone: (attempt: SignUpAttempt, settle: SignUpSettle) => void
 }
 
 interface Armed {
@@ -324,10 +329,10 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
     if (ready.length === 0) return
     for (const e of ready) armed.current.delete(signUpAttemptKey(e.attempt))
     const done = ready.map((e) => signUpDone(e.attempt, e.settled, signUpOutcomeShown(e.attempt, memberStatuses, authorRows)))
-    // Reported as done, and a fresh read does not show it: the caller shows the failure.
-    ready.forEach((e, i) => {
-      if (!done[i] && e.attempt.changed === true) notDone.current(e.attempt)
-    })
+    // Not done (it changed nothing, or a fresh read does not show a reported change): the caller
+    // writes the card's line once focus has moved, below. An entry not settled by a read is one
+    // still waiting for it (not ready unless shown, and a shown confirmed change is done).
+    const notDoneNow = ready.filter((_, i) => !done[i]).map((e) => [e.attempt, e.settled ?? 'fresh'] as const)
     // Outcomes that show in the same render are one announcement (a second one in the same frame
     // would replace the first); focus follows the latest press. Only outcomes are said here.
     const said = ready.filter((_, i) => done[i]).map((e) => signUpNotice(e.attempt.kind, e.attempt.name, locale))
@@ -336,13 +341,16 @@ export function useSignUpOutcomes({ locale, announce, memberStatuses, authorRows
     const lastDone = done[done.length - 1]
     const moveFocus = () => {
       // A control still on the page, or a member who has moved on, keeps the focus.
-      if (last.pressed?.isConnected || !focusWasLost(last.pressed)) return
-      ;(lastDone ? signUpFocusTarget(last, byTestId, rowAction) : signUpStableTarget(last, byTestId))?.focus()
+      if (!(last.pressed?.isConnected || !focusWasLost(last.pressed))) {
+        ;(lastDone ? signUpFocusTarget(last, byTestId, rowAction) : signUpStableTarget(last, byTestId))?.focus()
+      }
+      // Focus has landed: now the card's alert line of each action that is not done.
+      for (const [attempt, settle] of notDoneNow) notDone.current(attempt, settle)
     }
     // Nothing to say: move focus at once. An empty announcement would clear the notice region
     // and cancel another row's sentence still waiting for its frame.
     if (said.length === 0) moveFocus()
-    else announce(said.join(' '), moveFocus)
+    else announce(said.join(' '), moveFocus, { join: true })
   }, [memberStatuses, authorRows, locale, announce, settledTick])
 
   return { begin, succeeded, unchanged, failed, settled, disarm, sentence, busy }

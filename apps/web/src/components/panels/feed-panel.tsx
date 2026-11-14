@@ -664,18 +664,21 @@ export function FeedPanel() {
   const showNotDone = useCallback((postId: string, sentence: string = SIGN_UP_NOT_DONE) => {
     if (postId) setOptInErrors((prev) => ({ ...prev, [postId]: sentence }))
   }, [])
-  const onSignUpNotDone = useCallback((attempt: SignUpAttempt) => showNotDone(attempt.postId), [showNotDone])
-  const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap, context: signUpContext, onNotDone: onSignUpNotDone })
-  // The read that follows an action has settled. For an action that changed nothing (its request
-  // had been accepted, declined or withdrawn meanwhile) the card's alert line now says so: once
-  // the card was read again it shows where the request stands, so the line does not ask for a
-  // retry that cannot succeed; when that read failed, the card keeps the plain failure.
-  // Stable: the loaders below must not change with every render.
-  const settledSignUp = signUps.settled
-  const settleSignUp = useCallback((attempt: SignUpAttempt, how: SignUpSettle = 'fresh') => {
+  // A sign-up action that is not done, once its read has settled. Called by the hook AFTER focus
+  // has moved (focus first, then the sentence), once. The line goes only on a card that is on
+  // screen and was read again: none for a card that is no longer listed (`unread`), so it never
+  // waits on a post that comes back later. An action that changed nothing (its request had been
+  // accepted, declined or withdrawn meanwhile) says so — the card, read again, shows where the
+  // request stands, so no retry is asked for; when that read failed it keeps the plain failure,
+  // as does a reported change that a fresh read does not show.
+  const onSignUpNotDone = useCallback((attempt: SignUpAttempt, how: SignUpSettle) => {
+    if (how === 'unread' || !postsRef.current.some((p) => p.id === attempt.postId)) return
     if (attempt.changed === false && attempt.context === signUpContextRef.current) showNotDone(attempt.postId, how === 'stale' ? SIGN_UP_NOT_DONE : SIGN_UP_CHANGED_MEANWHILE)
-    settledSignUp(attempt, how)
-  }, [settledSignUp, showNotDone])
+    else showNotDone(attempt.postId)
+  }, [showNotDone])
+  const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap, context: signUpContext, onNotDone: onSignUpNotDone })
+  // Stable (the hook's own callback): the loaders below must not change with every render.
+  const settleSignUp = signUps.settled
   // The button that opened the review dialog and the post it sits on (where focus returns).
   const reviewOpenerRef = useRef<HTMLElement | null>(null)
   const reviewPostIdRef = useRef<string | null>(null)
@@ -813,6 +816,9 @@ export function FeedPanel() {
     const stamp = order.start(postIds, replace)
     const claim = (id: string) => order.claim(stamp, id)
     const owns = (id: string) => claim(id) === 'owns'
+    // The list was replaced (a first page, a refresh): a card's alert line goes with its card, so
+    // it is never shown again when the post comes back in a later page.
+    if (replace) setOptInErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => postIds.includes(id))))
     if (postIds.length === 0) {
       if (replace) {
         setSeekerOptInIds({})
@@ -1686,8 +1692,8 @@ export function FeedPanel() {
         return
       }
       const left = (await rereadActedPost(attempt.postId, attempt.kind, uid, () => {
-        // What is said as the card goes is this action's outcome; one that changed nothing has
-        // been said by the card's own alert line already.
+        // What is said as the card goes is this action's outcome; one that changed nothing leaves
+        // in silence for now.
         forget()
         signUps.disarm(attempt)
         actedCardLeaves(attempt.postId, attempt.context, attempt.changed === true ? signUps.sentence(attempt) : '')
