@@ -1168,6 +1168,89 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.focused).toEqual(['post-card-p3'])
     })
 
+    describe('L7 · a leaving card moves focus only when focus was inside it or lost (WCAG 2.4.3)', () => {
+      /** Author on p1, whose post is gone at the re-read after an accept that changed nothing. */
+      const leaveP1 = async (rows?: Row[]) => {
+        const c = await asAuthor([optIn('o1', 'Bo')])
+        h.optIns = []
+        h.rows = (rows ?? h.rows).filter((r) => r.id !== 'p1')
+        return c
+      }
+      const card1 = (inside: unknown[]) => Object.assign(el('post-card-p1'), { contains: (x: unknown) => inside.includes(x) })
+
+      it('focus inside the leaving card moves to the next card', async () => {
+        const c = await leaveP1()
+        const pressed = el('accept-optin-o1')
+        card1([pressed])
+        el('post-card-p3')
+        doc().activeElement = pressed
+        await update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(cardIds(c.tree())).toEqual(['p3'])
+        expect(h.focused).toEqual(['post-card-p3'])
+      })
+
+      it('focus lost moves to the next card; with no card left, to the feed title', async () => {
+        const c = await leaveP1()
+        el('accept-optin-o1').isConnected = false
+        card1([])
+        el('post-card-p3')
+        await update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(h.focused).toEqual(['post-card-p3'])
+
+        h.focused.length = 0
+        h.rows = [row('p1')]
+        const only = await leaveP1([row('p1')])
+        ;(one(only.tree(), FeedHeader).props.titleRef as { current: unknown }).current = { focus: () => void h.focused.push('feed-title') }
+        el('accept-optin-o1').isConnected = false
+        doc().activeElement = doc().body
+        await update(only, 'o1', 'accepted')
+        await only.flush()
+        expect(cardIds(only.tree())).toEqual([])
+        expect(h.focused).toEqual(['feed-title'])
+      })
+
+      it('focus on another card stays where it is, and the card is still removed (once) with its sentence', async () => {
+        const c = await leaveP1()
+        el('accept-optin-o1').isConnected = false
+        card1([])
+        el('post-card-p3')
+        const elsewhere = { isConnected: true }
+        doc().activeElement = elsewhere
+        await update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(cardIds(c.tree())).toEqual(['p3'])
+        expect(h.focused).toEqual([])
+        expect(doc().activeElement).toBe(elsewhere)
+        expect(h.notices).toEqual([cardT('en', 'statusPostGone')])
+      })
+
+      it('the queued step of a leaving card, run by an event-card supersede(), leaves focus where the member is', async () => {
+        const { createCardNoticeAnnouncer } = await vi.importActual<typeof import('@/hooks/use-feed-event-cards')>('@/hooks/use-feed-event-cards')
+        const frames: Array<() => void> = []
+        h.frames = frames
+        h.realAnnouncer = createCardNoticeAnnouncer((text) => void (text !== '' && h.notices.push(text)), (fn) => void frames.push(fn))
+        const c = await leaveP1()
+        el('accept-optin-o1').isConnected = false
+        card1([])
+        el('post-card-p3')
+        await update(c, 'o1', 'accepted')
+        await c.flush()
+        expect(cardIds(c.tree())).toContain('p1')
+        // The member opens an event card's menu; the event card's change supersedes the notice.
+        const menu = { isConnected: true }
+        doc().activeElement = menu
+        h.realAnnouncer.supersede()
+        for (let i = 0; i < 3 && frames.length > 0; i++) for (const f of frames.splice(0)) f()
+        await c.flush()
+        expect(cardIds(c.tree())).toEqual(['p3'])
+        expect(h.focused).toEqual([])
+        expect(doc().activeElement).toBe(menu)
+        expect(h.notices).toEqual([])
+      })
+    })
+
     it('L2 · a write that changed nothing: focus lands first, and only then does the card say why — once', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       const pressed = el('accept-optin-o1')

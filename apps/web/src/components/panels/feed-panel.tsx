@@ -2048,15 +2048,22 @@ export function FeedPanel() {
 
   // A card leaves the feed (the author deleted it, a moderator held or removed it): in ONE frame,
   // focus moves to the next post card (or the feed's heading when none is left), the card is
-  // removed, then the notice is set — the same order as an event card that leaves.
+  // removed, then the notice is set — the same order as an event card that leaves. Focus is moved
+  // only when it was inside the leaving card or has been lost (WCAG 2.4.3): a member who has moved
+  // to another card, an event card's menu or the composer keeps their place. The card is removed
+  // either way, once.
   const cardLeaves = (postId: string, text: string, join = false) => {
     const leave = () => {
-      const list = postsRef.current
-      const idx = list.findIndex((p) => p.id === postId)
-      const nextId = idx >= 0 ? (list[idx + 1] ?? list[idx - 1])?.id : undefined
-      const next = nextId ? document.querySelector<HTMLElement>(`[data-testid="post-card-${CSS.escape(nextId)}"]`) : null
-      if (next) next.focus()
-      else focusFeedTitle()
+      const leaving = document.querySelector<HTMLElement>(`[data-testid="post-card-${CSS.escape(postId)}"]`)
+      const active = document.activeElement
+      if (focusWasLost(null) || (leaving !== null && active !== null && leaving.contains(active))) {
+        const list = postsRef.current
+        const idx = list.findIndex((p) => p.id === postId)
+        const nextId = idx >= 0 ? (list[idx + 1] ?? list[idx - 1])?.id : undefined
+        const next = nextId ? document.querySelector<HTMLElement>(`[data-testid="post-card-${CSS.escape(nextId)}"]`) : null
+        if (next) next.focus()
+        else focusFeedTitle()
+      }
       setPosts((prev) => prev.filter((p) => p.id !== postId))
       dropSideData(postId)
     }
