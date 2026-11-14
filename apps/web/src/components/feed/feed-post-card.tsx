@@ -538,9 +538,10 @@ export function FeedPostCard({
           {authorOptIns.map((oi) => {
             // An action on this row is under way: its buttons keep focus and say they are
             // unavailable (aria-disabled, never disabled), and a press on them does nothing.
+            // (The row itself has no role, so it carries no aria-busy: the buttons say it.)
             const rowBusy = busyOptInIds?.has(oi.id) === true
             return (
-            <div key={oi.id} data-opt-in-row={oi.id} aria-busy={rowBusy || undefined} className="flex flex-wrap items-center gap-2 px-3 py-2">
+            <div key={oi.id} data-opt-in-row={oi.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <User className="h-3 w-3 flex-shrink-0 text-stone-500" aria-hidden="true" />
                 <span className="truncate text-xs font-medium text-stone-700" lang="" dir="auto" data-member-text="seeker-name">

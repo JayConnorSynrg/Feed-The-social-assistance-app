@@ -52,6 +52,9 @@ export interface FeedMessagesMessages {
   /** Name of the send button (an icon). */
   send: string
   reviewSubmitted: string
+  /** The same sentence as an announcement: with its closing punctuation, so a sentence said after
+   *  it does not run on. */
+  announceReviewSubmitted: string
   reviewPromptTitle: string
   /** Around the other person's name. */
   reviewPromptBody: string
@@ -117,6 +120,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Type a message...',
     send: 'Send message',
     reviewSubmitted: 'Your review was submitted',
+    announceReviewSubmitted: 'Your review was submitted.',
     reviewPromptTitle: 'How did it go?',
     reviewPromptBody: 'Leave a review for {name}',
     rateExperience: 'Rate your experience',
@@ -176,6 +180,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Escribe un mensaje...',
     send: 'Enviar mensaje',
     reviewSubmitted: 'Tu valoración se envió',
+    announceReviewSubmitted: 'Tu valoración se envió.',
     reviewPromptTitle: '¿Cómo te fue?',
     reviewPromptBody: 'Deja una valoración para {name}',
     rateExperience: 'Valora tu experiencia',
@@ -236,6 +241,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Ekri yon mesaj...',
     send: 'Voye mesaj',
     reviewSubmitted: 'Evalyasyon ou an voye',
+    announceReviewSubmitted: 'Evalyasyon ou an voye.',
     reviewPromptTitle: 'Kijan sa te pase?',
     reviewPromptBody: 'Kite yon evalyasyon pou {name}',
     rateExperience: 'Evalye eksperyans ou',
@@ -295,6 +301,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Nhập tin nhắn...',
     send: 'Gửi tin nhắn',
     reviewSubmitted: 'Đánh giá của bạn đã được gửi',
+    announceReviewSubmitted: 'Đánh giá của bạn đã được gửi.',
     reviewPromptTitle: 'Mọi việc thế nào?',
     reviewPromptBody: 'Để lại đánh giá cho {name}',
     rateExperience: 'Đánh giá trải nghiệm của bạn',
@@ -354,6 +361,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'اكتب رسالة...',
     send: 'إرسال الرسالة',
     reviewSubmitted: 'تم إرسال تقييمك',
+    announceReviewSubmitted: 'تم إرسال تقييمك.',
     reviewPromptTitle: 'كيف كانت التجربة؟',
     reviewPromptBody: 'اترك تقييمًا لـ {name}',
     rateExperience: 'قيّم تجربتك',
@@ -413,6 +421,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: '输入消息…',
     send: '发送消息',
     reviewSubmitted: '您的评价已提交',
+    announceReviewSubmitted: '您的评价已提交。',
     reviewPromptTitle: '进展如何？',
     reviewPromptBody: '为 {name} 留下评价',
     rateExperience: '为您的体验评分',
@@ -473,6 +482,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Qor fariin...',
     send: 'Dir fariinta',
     reviewSubmitted: 'Qiimayntaada waa la diray',
+    announceReviewSubmitted: 'Qiimayntaada waa la diray.',
     reviewPromptTitle: 'Sidee bay u dhacday?',
     reviewPromptBody: 'U reeb qiimayn {name}',
     rateExperience: 'Qiimee waayo-aragnimadaada',
@@ -532,6 +542,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Écrivez un message…',
     send: 'Envoyer le message',
     reviewSubmitted: 'Votre avis a été envoyé',
+    announceReviewSubmitted: 'Votre avis a été envoyé.',
     reviewPromptTitle: 'Comment cela s’est-il passé ?',
     reviewPromptBody: 'Laissez un avis pour {name}',
     rateExperience: 'Évaluez votre expérience',
@@ -591,6 +602,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Digite uma mensagem...',
     send: 'Enviar mensagem',
     reviewSubmitted: 'Sua avaliação foi enviada',
+    announceReviewSubmitted: 'Sua avaliação foi enviada.',
     reviewPromptTitle: 'Como foi?',
     reviewPromptBody: 'Deixe uma avaliação para {name}',
     rateExperience: 'Avalie sua experiência',
@@ -650,6 +662,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Введите сообщение...',
     send: 'Отправить сообщение',
     reviewSubmitted: 'Ваш отзыв отправлен',
+    announceReviewSubmitted: 'Ваш отзыв отправлен.',
     reviewPromptTitle: 'Как всё прошло?',
     reviewPromptBody: 'Оставьте отзыв для {name}',
     rateExperience: 'Оцените свой опыт',
@@ -709,6 +722,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: '메시지를 입력하세요...',
     send: '메시지 보내기',
     reviewSubmitted: '리뷰가 제출되었습니다',
+    announceReviewSubmitted: '리뷰가 제출되었습니다.',
     reviewPromptTitle: '어떠셨나요?',
     reviewPromptBody: '{name} 님에 대한 리뷰를 남겨 주세요',
     rateExperience: '경험 평가하기',
@@ -768,6 +782,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Mag-type ng mensahe...',
     send: 'Ipadala ang mensahe',
     reviewSubmitted: 'Naipasa na ang iyong review',
+    announceReviewSubmitted: 'Naipasa na ang iyong review.',
     reviewPromptTitle: 'Kumusta ang nangyari?',
     reviewPromptBody: 'Mag-iwan ng review para kay {name}',
     rateExperience: 'I-rate ang iyong karanasan',
@@ -828,6 +843,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'መልዕክት ይጻፉ...',
     send: 'መልዕክት ላክ',
     reviewSubmitted: 'ግምገማዎ ተልኳል',
+    announceReviewSubmitted: 'ግምገማዎ ተልኳል።',
     reviewPromptTitle: 'እንዴት ነበር?',
     reviewPromptBody: 'ለ{name} ግምገማ ይተዉ',
     rateExperience: 'ተሞክሮዎን ይገምግሙ',
@@ -888,6 +904,7 @@ export const feedMessagesMessages: Record<Locale, FeedMessagesMessages> = {
     inputPlaceholder: 'Ntaus ib cov lus...',
     send: 'Xa cov lus',
     reviewSubmitted: 'Koj qhov kev ntsuam xyuas raug xa lawm',
+    announceReviewSubmitted: 'Koj qhov kev ntsuam xyuas raug xa lawm.',
     reviewPromptTitle: 'Nws mus li cas?',
     reviewPromptBody: 'Tso ib qho kev ntsuam xyuas rau {name}',
     rateExperience: 'Ntsuam xyuas koj qhov kev paub dhau los',

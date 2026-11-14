@@ -213,7 +213,7 @@ export function MessagesPanel() {
     const sent = sentReviewRef.current
     if (!sent?.focused || !sent.shown) return
     sentReviewRef.current = null
-    setAnnouncement(messagesT(locale, 'reviewSubmitted'))
+    setAnnouncement(messagesT(locale, 'announceReviewSubmitted'))
   }
   const focusAfterReview = () => {
     ;(threadNameRef.current ?? inboxHeadingRef.current)?.focus()

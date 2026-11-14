@@ -242,11 +242,10 @@ describe('the rows of the author\'s list', () => {
     const rows = [optIn(), optIn({ id: 'o2', seekerId: 's2', status: 'accepted' }), optIn({ id: 'o3', seekerId: 's3', status: 'declined' })]
     const WRITES = ['accept-optin-o1', 'decline-optin-o1', 'complete-optin-o2', 'unblock-optin-o3']
 
-    it('is marked busy; its action buttons say they are unavailable but stay focusable (aria-disabled, never disabled); other rows are untouched', () => {
+    it('its action buttons say they are unavailable but stay focusable (aria-disabled, never disabled); other rows are untouched', () => {
       const tree = authorTree('es', rows, { busyOptInIds: new Set(['o1']) })
-      const row = (id: string) => (findAll(tree, (e) => e.props['data-opt-in-row'] === id) as El[])[0]
-      expect(row('o1').props['aria-busy']).toBe(true)
-      expect(row('o2').props['aria-busy']).toBeUndefined()
+      // The row has no role, so it carries no aria-busy: its buttons say it.
+      for (const r of findAll(tree, (e) => typeof e.props['data-opt-in-row'] === 'string') as El[]) expect('aria-busy' in r.props).toBe(false)
       for (const id of ['accept-optin-o1', 'decline-optin-o1']) {
         const b = byTestId(tree, id)[0]
         expect(b.props['aria-disabled'], id).toBe(true)

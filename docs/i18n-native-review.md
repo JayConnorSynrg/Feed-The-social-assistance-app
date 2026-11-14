@@ -839,6 +839,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `inputPlaceholder` | ht | Type a message... | Ekri yon mesaj... | 2026-10-11 | machine-drafted, needs native review |
 | `send` | ht | Send message | Voye mesaj | 2026-10-11 | machine-drafted, needs native review |
 | `reviewSubmitted` | ht | Your review was submitted | Evalyasyon ou an voye | 2026-10-11 | machine-drafted, needs native review |
+| `announceReviewSubmitted` | ht | Your review was submitted. | Evalyasyon ou an voye. | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptTitle` | ht | How did it go? | Kijan sa te pase? | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptBody` | ht | Leave a review for {name} | Kite yon evalyasyon pou {name} | 2026-10-11 | machine-drafted, needs native review |
 | `rateExperience` | ht | Rate your experience | Evalye eksperyans ou | 2026-10-11 | machine-drafted, needs native review |
@@ -896,6 +897,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `inputPlaceholder` | so | Type a message... | Qor fariin... | 2026-10-11 | machine-drafted, needs native review |
 | `send` | so | Send message | Dir fariinta | 2026-10-11 | machine-drafted, needs native review |
 | `reviewSubmitted` | so | Your review was submitted | Qiimayntaada waa la diray | 2026-10-11 | machine-drafted, needs native review |
+| `announceReviewSubmitted` | so | Your review was submitted. | Qiimayntaada waa la diray. | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptTitle` | so | How did it go? | Sidee bay u dhacday? | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptBody` | so | Leave a review for {name} | U reeb qiimayn {name} | 2026-10-11 | machine-drafted, needs native review |
 | `rateExperience` | so | Rate your experience | Qiimee waayo-aragnimadaada | 2026-10-11 | machine-drafted, needs native review |
@@ -953,6 +955,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `inputPlaceholder` | am | Type a message... | መልዕክት ይጻፉ... | 2026-10-11 | machine-drafted, needs native review |
 | `send` | am | Send message | መልዕክት ላክ | 2026-10-11 | machine-drafted, needs native review |
 | `reviewSubmitted` | am | Your review was submitted | ግምገማዎ ተልኳል | 2026-10-11 | machine-drafted, needs native review |
+| `announceReviewSubmitted` | am | Your review was submitted. | ግምገማዎ ተልኳል። | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptTitle` | am | How did it go? | እንዴት ነበር? | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptBody` | am | Leave a review for {name} | ለ{name} ግምገማ ይተዉ | 2026-10-11 | machine-drafted, needs native review |
 | `rateExperience` | am | Rate your experience | ተሞክሮዎን ይገምግሙ | 2026-10-11 | machine-drafted, needs native review |
@@ -1010,6 +1013,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `inputPlaceholder` | hmn | Type a message... | Ntaus ib cov lus... | 2026-10-11 | machine-drafted, needs native review |
 | `send` | hmn | Send message | Xa cov lus | 2026-10-11 | machine-drafted, needs native review |
 | `reviewSubmitted` | hmn | Your review was submitted | Koj qhov kev ntsuam xyuas raug xa lawm | 2026-10-11 | machine-drafted, needs native review |
+| `announceReviewSubmitted` | hmn | Your review was submitted. | Koj qhov kev ntsuam xyuas raug xa lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptTitle` | hmn | How did it go? | Nws mus li cas? | 2026-10-11 | machine-drafted, needs native review |
 | `reviewPromptBody` | hmn | Leave a review for {name} | Tso ib qho kev ntsuam xyuas rau {name} | 2026-10-11 | machine-drafted, needs native review |
 | `rateExperience` | hmn | Rate your experience | Ntsuam xyuas koj qhov kev paub dhau los | 2026-10-11 | machine-drafted, needs native review |

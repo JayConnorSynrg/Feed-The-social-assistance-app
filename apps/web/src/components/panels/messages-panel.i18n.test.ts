@@ -392,11 +392,11 @@ describe('the review dialog: focus returns, and a sent review is said after the 
       p.c.rerender()
     }
     expect(p.thread).toHaveBeenCalledTimes(1)
-    expect(p.said()).toBe('Sua avaliação foi enviada')
+    expect(p.said()).toBe('Sua avaliação foi enviada.')
     // Said once: handing focus over again adds nothing new.
     ;(p.modal().props.fallbackFocus as () => void)()
     p.c.rerender()
-    expect(p.said()).toBe('Sua avaliação foi enviada')
+    expect(p.said()).toBe('Sua avaliação foi enviada.')
     // One re-read of the review in all: the focus and announcement code sends nothing.
     await p.c.flush()
     expect(state.reviewReads).toEqual(['c1'])
@@ -411,9 +411,14 @@ describe('the review dialog: focus returns, and a sent review is said after the 
     expect(p.said()).toBe('')
   })
 
-  it.each(LOCALES)('%s: the sentence is the one the submitted card shows', (locale) => {
-    expect(messagesT(locale, 'reviewSubmitted').trim()).not.toBe('')
-    if (locale !== 'en') expect(messagesT(locale, 'reviewSubmitted')).not.toBe(messagesT('en', 'reviewSubmitted'))
+  it.each(LOCALES)('%s: the sentence is the one the submitted card shows, with its closing punctuation as an announcement (the card keeps it without)', (locale) => {
+    const shown = messagesT(locale, 'reviewSubmitted')
+    const said = messagesT(locale, 'announceReviewSubmitted')
+    expect(shown.trim()).not.toBe('')
+    if (locale !== 'en') expect(shown).not.toBe(messagesT('en', 'reviewSubmitted'))
+    expect(shown).not.toMatch(/[.\u3002\u1362!]$/)
+    expect(said.startsWith(shown)).toBe(true)
+    expect(said.slice(shown.length)).toMatch(/^[.\u3002\u1362]$/)
   })
 })
 
