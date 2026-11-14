@@ -132,3 +132,24 @@ test('I5: a supplied correlation id is threaded to the persisted row (success an
   assert.equal(bad.sinks.length, 1)
   assert.equal(bad.sinks[0].request_id, 'op-def456')
 })
+
+test('labels are read when the row is written: a label the operation sets from its answer is the one persisted (success and failure)', async () => {
+  // feed-panel.tsx recordSignUpWrite sets outcome = success | no_change from the server's answer.
+  const ok = makeStubDeps()
+  const okLabels = { outcome: 'failed' }
+  await runWithMetric(ok.deps, 'op.write', okLabels, async () => {
+    okLabels.outcome = 'no_change'
+    return false
+  })
+  assert.equal(ok.sinks.length, 1)
+  assert.equal(ok.sinks[0].context.outcome, 'no_change')
+
+  const bad = makeStubDeps()
+  const badLabels = { outcome: 'failed' }
+  await assert.rejects(() => runWithMetric(bad.deps, 'op.write', badLabels, async () => {
+    throw new Error('boom')
+  }))
+  assert.equal(bad.sinks.length, 1)
+  assert.equal(bad.sinks[0].event, 'op.write.error')
+  assert.equal(bad.sinks[0].context.outcome, 'failed')
+})

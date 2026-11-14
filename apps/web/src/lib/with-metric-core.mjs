@@ -55,7 +55,8 @@ export function serializeError(error) {
  *   sink: (level: 'info' | 'warn' | 'error', event: string, context?: Record<string, unknown>, request_id?: string, duration_ms?: number) => void,
  * }} deps
  * @param {string} operation
- * @param {Record<string, string | number | boolean | null>} attrs
+ * @param {Record<string, string | number | boolean | null>} attrs Read when the
+ *   row is written (after `fn` settles), so `fn` may set a label from its answer.
  * @param {() => Promise<T>} fn
  * @param {string} [requestId] Correlation id forwarded to the sink. Undefined on
  *   the server so the sink reads the proxy-stamped x-request-id (I4); a per-op id
