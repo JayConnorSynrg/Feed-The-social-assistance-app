@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-10-11T00:00:00.000Z",
+  "lastUpdated": "2026-11-14T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -897,7 +897,7 @@
       ]
     },
     "feed-r3-5b-card-i18n": {
-      "status": "REVIEW_FIX_ROUND_2_BUILT",
+      "status": "REVIEW_FIX_ROUND_3_BUILT",
       "branch": "feature/feed-r3-5b-card-i18n",
       "base": "origin/develop 0ee7f6d",
       "docs": "docs/i18n-native-review.md (native-review list)",
@@ -921,12 +921,13 @@
         "the app's stylesheet has no exit animation for dialogs and sheets (the animate-out / fade-out / slide-out classes they carry compile to nothing): they close at once",
         "native-speaker review of ht / so / am / hmn (docs/i18n-native-review.md, 1,362 rows)",
         "the accessibility reviewer's N5 (the appreciation picker group repeats the name of the region it sits in) and its remaining info items, left for the follow-up list as told",
-        "load more replaces the sign-up side data and the N opted in counts with the new page's alone (loadPostSideData and setOptInCounts write whole maps), so cards of earlier pages lose their status, rows and count until the next action; older than this slice, for the feed's own owner",
         "a sent review whose side-data read fails is said with the stale-list sentence; its Review button stays until the next read",
-        "re-review of fix round 2; merge with develop and the alert-lifecycle branch and the checklist renumbering at release time; signed-in browser pass by the owner"
+        "re-review of fix rounds 2 and 3; merge with develop and the alert-lifecycle branch and the checklist renumbering at release time; signed-in browser pass by the owner (incl. ES-P4, ES-S10, AR-P4, AR-S10)"
       ],
       "a11yReview": "aced827: A11Y-BLOCKED (2 blockers, 3 highs); fb5daf2: B1, B2, H1, H3, L1-L10 closed, one high left (N1); fix round 2 closes N1 and N2, N3, N4, N6, N7; re-review pending",
-      "adversarialReview": "aced827: MERGE-READY with lows (closed in fix round 1); fb5daf2: passed, with nine rules for the single-post re-read and five small items (all in fix round 2)"
+      "adversarialReview": "aced827: MERGE-READY with lows (closed in fix round 1); fb5daf2: passed, with nine rules for the single-post re-read and five small items (all in fix round 2)",
+      "round3": "2026-11-14, no migration (every RPC and table called is on develop 0ee7f6d == prod). Truthful outcomes: accept / decline / mark completed ask for the changed row; zero rows, withdraw_opt_in false and unblock_opt_in false are no_change, never said as done; the card shows the failure, the acted post is read again, focus goes to a stable control; a contradicting fresh read is a second check (now incl. unblock). Load more keeps truth: sign-up side data kept per post (merge on an added page, replace on first page / refresh, acted post alone after an action, latest-started read wins per post); a failed status read keeps the map. A11y F1-F6 closed. Logging: one app_logs wide event per sign-up write, feed.optin.write.complete (success | no_change) / feed.optin.write.error (failed + error_code), duration_ms, request id sent as x-request-id; feed.optin.update / feed.optin.unblock retired. Review labels K4-01, K4-02, K4-06, K4-07, K4-09, K6-03, K9-02, KG-07, KG-12 carried on test titles (original meaning not recoverable; attached to the outcomes asked for). Browser pack items ES-P4, ES-S10 (after S8), AR-P4, AR-S10 (after S8) kept in the builder's scratch (pack file was gone). Checklist row stays 1.6.29; it becomes 1.6.33 if this merges after R3.1.",
+      "round3Gates": "type-check 0; eslint 0 errors / 114 warnings; vitest 223 files / 4,777 passed / 14 todo on Node 20.20.2 and on 24.21.0 (30s timeout); node --test 63/63; next build ok; 22 unit mutants: 21 red, restored byte-identical (cmp), green; 1 equivalent at the test runtime's render granularity (M13b, recorded)"
     }
   }
 }
