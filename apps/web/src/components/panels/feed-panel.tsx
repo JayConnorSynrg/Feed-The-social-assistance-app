@@ -30,6 +30,7 @@ import { OrganizationsPanel } from './organizations-panel'
 import { PetitionsPanel } from './petitions-panel'
 import { usePanelContext } from '@/components/layout/feed-shell'
 import { logEvent, logger, withMetric } from '@/lib/logger'
+import { newRequestId } from '@/lib/privileged-action'
 import { generateShareUrl } from '@/lib/utils/url'
 import { readShareLocationPref } from '@/lib/privacy-prefs'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
@@ -157,6 +158,33 @@ type GeoRadius = typeof GEO_RADIUS_OPTIONS[number]
 /** What became of one read of the sign-up rows (FeedPanel's loadPostSideData): written, failed
  *  (nothing written), or dropped (a later read, or another account, has the say). */
 type SideDataOutcome = 'applied' | 'failed' | 'dropped'
+
+/** What one sign-up write did, as its log row says it: the server changed the row, the request
+ *  answered without an error and changed nothing, or the request failed. */
+type SignUpWriteOutcome = 'success' | 'no_change' | 'failed'
+
+/**
+ * One sign-up write (opt in, withdraw, accept, decline, mark completed, unblock), recorded as
+ * exactly one first-party wide event in app_logs: `feed.optin.write.complete` with outcome
+ * `success` or `no_change`, or `feed.optin.write.error` with outcome `failed` and the error's
+ * code. Each carries duration_ms and one request id, which `write` sends as x-request-id.
+ * Resolves with whether the server changed the row; rethrows a failure.
+ */
+async function recordSignUpWrite(action: string, write: (requestId: string) => Promise<boolean>): Promise<boolean> {
+  const requestId = newRequestId()
+  // Read when the row is written (lib/with-metric-core.mjs), so the outcome follows the answer.
+  const labels: { action: string; outcome: SignUpWriteOutcome; request_id: string } = { action, outcome: 'failed', request_id: requestId }
+  return withMetric(
+    'feed.optin.write',
+    labels,
+    async () => {
+      const changed = await write(requestId)
+      labels.outcome = changed ? 'success' : 'no_change'
+      return changed
+    },
+    requestId,
+  )
+}
 
 /** The feed composer card (exported for its behaviour tests). */
 export function CreatePostCard({ onPost, onCreated, resourceOptions, onSafetyAlertClick, locale, onAnnounce }: CreatePostCardProps) {
@@ -1496,7 +1524,10 @@ export function FeedPanel() {
     if (!attempt) return
     const uid = viewerIdRef.current
     try {
-      await doOptIn(postId)
+      await recordSignUpWrite('opt_in', async (requestId) => {
+        await doOptIn(postId, requestId)
+        return true
+      })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not opt in.'
       setOptInErrors((prev) => ({ ...prev, [postId]: msg }))
@@ -1523,7 +1554,7 @@ export function FeedPanel() {
     const uid = viewerIdRef.current
     let deleted: boolean
     try {
-      deleted = await doWithdraw(postId)
+      deleted = await recordSignUpWrite('withdraw', (requestId) => doWithdraw(postId, requestId))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not withdraw.'
       setOptInErrors((prev) => ({ ...prev, [postId]: msg }))
@@ -1680,16 +1711,18 @@ export function FeedPanel() {
     if (attempt.postId) setOptInErrors((prev) => ({ ...prev, [attempt.postId]: '' }))
     let changed: boolean
     try {
-      const { data: changedRows, error: updErr } = await supabase
-        .from('resource_opt_ins')
-        .update({ status })
-        .eq('id', optInId)
-        .select('id')
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      if (updErr) throw updErr
-      changed = (changedRows ?? []).length > 0
-    } catch (err: unknown) {
-      logger.error('feed.optin.update', err, { optInId, status })
+      changed = await recordSignUpWrite(attempt.kind, async (requestId) => {
+        const { data: changedRows, error: updErr } = await supabase
+          .from('resource_opt_ins')
+          .update({ status })
+          .eq('id', optInId)
+          .select('id')
+          .setHeader('x-request-id', requestId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (updErr) throw updErr
+        return (changedRows ?? []).length > 0
+      })
+    } catch {
       // The card says that it did not go through; focus stays on the button they pressed.
       signUps.failed(attempt)
       showNotDone(attempt.postId)
@@ -1708,25 +1741,35 @@ export function FeedPanel() {
   // restores the slot exactly once; the seeker may then opt in again. The private
   // "declined before" marker survives (opt_in_declines is untouched here). The row is busy
   // from the press (signUps.begin), so a rapid double-click fires the RPC once; an Unblock on
-  // another row goes through (the server is also idempotent: a second concurrent call deletes
-  // 0 rows and restores no slot).
+  // another row goes through. unblock_opt_in answers false, with no error, when it deleted
+  // nothing (a second concurrent call, or one from another tab, got there first): that is not
+  // said as unblocked; the card says it did not go through and the read below shows the row.
   const handleAuthorUnblockOptIn = async (optInId: string) => {
     const attempt = signUps.begin('unblock', { optInId })
     if (!attempt) return
     const uid = viewerIdRef.current
     if (attempt.postId) setOptInErrors((prev) => ({ ...prev, [attempt.postId]: '' }))
+    let changed: boolean
     try {
-      const { error: rpcErr } = await supabase
-        .rpc('unblock_opt_in', { p_opt_in_id: optInId })
-        .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
-      if (rpcErr) throw rpcErr
-    } catch (err: unknown) {
-      logger.error('feed.optin.unblock', err, { optInId })
+      changed = await recordSignUpWrite('unblock', async (requestId) => {
+        const { data, error: rpcErr } = await supabase
+          .rpc('unblock_opt_in', { p_opt_in_id: optInId })
+          .setHeader('x-request-id', requestId)
+          .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+        if (rpcErr) throw rpcErr
+        return data === true
+      })
+    } catch {
       signUps.failed(attempt)
       showNotDone(attempt.postId)
       return
     }
-    signUps.succeeded(attempt)
+    if (changed) {
+      signUps.succeeded(attempt)
+    } else {
+      signUps.unchanged(attempt)
+      showNotDone(attempt.postId)
+    }
     await followSignUp(attempt, uid)
   }
 

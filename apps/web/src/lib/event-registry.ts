@@ -255,8 +255,10 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'feed.load.error': ['has_geo', 'mode', 'page', 'page_size'],
   // A read that follows a confirmed sign-up or review action failed (components/panels/feed-panel.tsx).
   'feed.optin.reread_failed': ['action', 'postId', 'step'],
-  'feed.optin.unblock': ['optInId'],
-  'feed.optin.update': ['optInId', 'status'],
+  // One row per sign-up write. action: opt_in | withdraw | accept | decline | complete | unblock.
+  // outcome: success | no_change (.complete) · failed (.error). See docs/observability.md.
+  'feed.optin.write.complete': ['action', 'outcome', 'request_id'],
+  'feed.optin.write.error': ['action', 'outcome', 'request_id'],
   // Post editing (PR-2, lib/post-rpc.ts): one privilegedRpc row per member write — ids and enums only.
   'feed.comment.delete.complete': ['request_id', 'target_id'],
   'feed.comment.delete.error': ['request_id', 'target_id'],

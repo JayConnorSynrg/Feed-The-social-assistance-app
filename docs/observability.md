@@ -299,13 +299,40 @@ where created_at > now() - interval '7 days';
 
 ---
 
-## Sign-up follow-up reads (feed post card)
+## Sign-up writes and follow-up reads (feed post card)
 
-After a sign-up action on a post card (accept, decline, mark completed, unblock) or a sent review, the feed reads the acted post again on its own and then reads sign-up side data for that post (side data is kept per post; a page that is added merges its own posts' data). The action itself is logged as before (`feed.optin.update`, `feed.optin.unblock` on failure). An accept, decline or mark-completed asks for the row it changed (`.select('id')`): a request that answers without an error and changes no row is not a failure of the request and writes no row here; the member is told on the card that it did not go through. A follow-up read that fails writes one error row; the card stays, and the outcome of a confirmed action is still announced to the member.
+Every sign-up write a member makes on a post card — opt in, withdraw, and the author's accept, decline, mark completed and unblock — writes exactly one wide-event row through `withMetric` (`recordSignUpWrite` in `apps/web/src/components/panels/feed-panel.tsx`). The row carries `duration_ms` and one `request_id`, which the write also sends to PostgREST as `x-request-id`. Its `outcome` is decided from the server's answer:
+
+- `success`: the server changed the row (the RPC or the update answered with it);
+- `no_change`: the request answered without an error and changed nothing — an accept, decline or mark completed whose update matched no row (`.select('id')` came back empty: the seeker had withdrawn), a `withdraw_opt_in` that answered `false` (the request was no longer pending), an `unblock_opt_in` that answered `false` (another tab got there first). The member is not told it was done: the card shows "That didn't work" on its alert line and the acted post is read again;
+- `failed`: the request failed. `error_code` is the server's code (SQLSTATE or PostgREST code) when it sent one, else the error's class; `error_message` is capped at 120 characters.
+
+After an author action or a sent review the feed reads the acted post again on its own and then reads sign-up side data for that post (side data is kept per post; a page that is added merges its own posts' data). After a member's own opt in or withdraw it reads that member's status for that post. A follow-up read that fails writes one `feed.optin.reread_failed` row; the card stays, and the outcome of a confirmed action is still announced to the member.
 
 | Event | Labels | Meaning |
 |---|---|---|
-| `feed.optin.reread_failed` | `step` (`post` · `side_data` · `follow_up`), `action` (`accept` · `decline` · `complete` · `unblock` · `review`), `postId` (step `post` only) | `post`: the single-post re-read failed (the card is kept; a post that is gone is not an error and writes nothing). `side_data`: the sign-up rows could not be read again; each acted row is set from its own action's result and the member is told the list could not be refreshed. `follow_up`: anything else thrown while following up |
+| `feed.optin.write.complete` | `action` (`opt_in` · `withdraw` · `accept` · `decline` · `complete` · `unblock`), `outcome` (`success` · `no_change`), `request_id` | one sign-up write that answered without an error; `duration_ms` in its column |
+| `feed.optin.write.error` | `action`, `outcome` (`failed`), `request_id`, plus `error_code` / `error_message` | one sign-up write that failed (a refusal such as "This offer is full" is a failure of the opt in) |
+| `feed.optin.reread_failed` | `step` (`post` · `side_data` · `follow_up`), `action` (`accept` · `decline` · `complete` · `unblock` · `review`, or `optIn` / `withdraw` at step `follow_up`), `postId` (step `post` only) | `post`: the single-post re-read failed (the card is kept; a post that is gone is not an error and writes nothing). `side_data`: the sign-up rows could not be read again; each acted row is set from its own action's result and the member is told the list could not be refreshed. `follow_up`: anything else thrown while following up |
+
+`feed.optin.update` and `feed.optin.unblock` (failure-only rows, no duration) are retired: `feed.optin.write.error` replaces them, so a failed write is one row, not two.
+
+How often a write changes nothing, per action:
+
+```sql
+select context->>'action' as action,
+       count(*) filter (where context->>'outcome' = 'success')   as success,
+       count(*) filter (where context->>'outcome' = 'no_change') as no_change,
+       count(*) filter (where context->>'outcome' = 'failed')    as failed,
+       round(100.0 * count(*) filter (where context->>'outcome' = 'no_change') / nullif(count(*), 0), 1) as no_change_pct,
+       percentile_cont(0.95) within group (order by duration_ms) as p95_ms
+from public.app_logs
+where event in ('feed.optin.write.complete', 'feed.optin.write.error')
+  and created_at > now() - interval '7 days'
+group by 1 order by 1;
+```
+
+Follow-up reads that failed:
 
 ```sql
 select context->>'step' as step, context->>'action' as action, count(*)

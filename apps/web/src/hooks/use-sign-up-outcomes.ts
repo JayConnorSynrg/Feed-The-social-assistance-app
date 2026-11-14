@@ -22,9 +22,10 @@
 //
 // An outcome is said only when the server confirmed it. A request that came back without an error
 // may still have changed nothing: an update that matched no row (the seeker had withdrawn), a
-// withdraw that deleted none (the request had been accepted). The caller tells the hook which it
-// was — succeeded() or unchanged() — and, as a second check, a fresh read that does not show the
-// outcome of an accept, decline, mark-completed or withdraw is not said as done either. A failure
+// withdraw that deleted none (the request had been accepted), an unblock that deleted none
+// (another tab got there first). The caller tells the hook which it was — succeeded() or
+// unchanged() — and, as a second check, a fresh read that does not show the outcome of an
+// accept, decline, mark-completed, withdraw or unblock is not said as done either. A failure
 // is never said here: the card shows it on its own alert line (which is what speaks), so it is
 // heard once. The hook only puts focus somewhere stable when the pressed control goes.
 
@@ -93,8 +94,8 @@ export function signUpControlTestId(kind: SignUpKind, postId: string, optInId: s
 
 const STATUS_AFTER: Partial<Record<SignUpKind, string>> = { accept: 'accepted', decline: 'declined', complete: 'completed' }
 /** Writes that answer without an error even when they changed no row (an update that matches
- *  none, a withdraw that deletes none). */
-const NEEDS_PROOF: ReadonlySet<SignUpKind> = new Set<SignUpKind>(['accept', 'decline', 'complete', 'withdraw'])
+ *  none, a withdraw or an unblock that deletes none). Only opt_in_to_post refuses with an error. */
+const NEEDS_PROOF: ReadonlySet<SignUpKind> = new Set<SignUpKind>(['accept', 'decline', 'complete', 'withdraw', 'unblock'])
 
 /** True once the state the card renders from shows what the action did. */
 export function signUpOutcomeShown(attempt: SignUpAttempt, memberStatuses: MemberStatuses, authorRows: AuthorRows): boolean {

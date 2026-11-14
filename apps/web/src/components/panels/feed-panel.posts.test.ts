@@ -60,6 +60,12 @@ const h = vi.hoisted(() => ({
   logged: [] as Array<{ event: string; labels: unknown }>,
   eventCardWrites: 0,
   statusReadFails: false,
+  // Persisted wide-event rows, as the real withMetric core writes them (level, event, labels,
+  // request id, duration), and every x-request-id header a request carried.
+  metrics: [] as Array<{ level: string; event: string; ctx: Record<string, unknown>; requestId?: string; duration_ms?: number }>,
+  headers: [] as Array<{ to: string; name: string; value: string }>,
+  // Called as each notice is said (to read the card at that moment).
+  onNotice: null as null | ((text: string) => void),
 }))
 const once = <T,>(k: string, make: () => T): T => (h.stable[k] ??= make()) as T
 
@@ -70,7 +76,12 @@ vi.mock('motion/react', () => {
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: (event: string, _err: unknown, labels: unknown) => void h.logged.push({ event, labels }) },
   logEvent: vi.fn(),
-  withMetric: async (_op: string, _a: unknown, fn: () => Promise<unknown>) => fn(),
+  // The REAL wide-event core, with its sink capturing the rows it would persist.
+  withMetric: async (op: string, attrs: Record<string, string | number | boolean | null>, fn: () => Promise<unknown>, requestId?: string) => {
+    const { runWithMetric } = await import('@/lib/with-metric-core.mjs')
+    const sink = (level: string, event: string, ctx: Record<string, unknown> = {}, rid?: string, duration_ms?: number) => void h.metrics.push({ level, event, ctx: { ...ctx }, requestId: rid, duration_ms })
+    return runWithMetric({ emit: () => {}, sink }, op, attrs, fn, requestId)
+  },
 }))
 vi.mock('@/lib/privacy-prefs', async (orig) => ({ ...(await orig<object>()), readShareLocationPref: () => false }))
 vi.mock('@/hooks/use-auth', async (orig) => ({
@@ -138,6 +149,7 @@ vi.mock('@/hooks/use-feed-event-cards', async (orig) => ({
     announceCardNotice: (text: string, moveFocus?: () => void) => {
       moveFocus?.()
       if (text !== '') h.notices.push(text)
+      if (text !== '') h.onNotice?.(text)
     },
     syncFeedEventCard: () => {},
   })),
@@ -213,6 +225,7 @@ vi.mock('@/lib/supabase/client', () => {
                 return (gate ?? Promise.resolve()).then(() => ({ data: (r.data as Row[])[0] ?? null, error: null }))
               }
             return (...a: unknown[]) => {
+              if (prop === 'setHeader') h.headers.push({ to: table, name: a[0] as string, value: a[1] as string })
               if (h.rowsReadThrows && table === 'resource_opt_ins' && prop === 'in' && fullRows()) throw new Error('the request could not be built')
               calls.push({ m: prop, a })
               return chain
@@ -234,7 +247,7 @@ vi.mock('@/lib/supabase/client', () => {
       const reply = fn === 'ranked_feed_v2' ? { data: ranked(), error: null } : h.rpcReply(fn)
       const chain: Record<string, unknown> = {
         abortSignal: () => chain,
-        setHeader: () => chain,
+        setHeader: (name: string, value: string) => (h.headers.push({ to: fn, name, value }), chain),
         then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(reply).then(res, rej),
       }
       return chain
@@ -351,6 +364,9 @@ beforeEach(() => {
   h.logged.length = 0
   h.eventCardWrites = 0
   h.statusReadFails = false
+  h.metrics.length = 0
+  h.headers.length = 0
+  h.onNotice = null
   signIn('member')
 })
 
@@ -613,6 +629,8 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
     h.rows = [row('p1', { max_seekers: 2, slots_remaining: 2 }), row('p3', { user_id: OTHER, user: { ...(row('x').user as Row), id: OTHER, first_name: 'Bo' } })]
     optInSpies()?.optIn.mockReset().mockResolvedValue({ id: 'o9', post_id: 'p1', status: 'pending' })
     optInSpies()?.withdrawOptIn.mockReset().mockResolvedValue(true)
+    // unblock_opt_in answers whether it deleted the row.
+    h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: true, error: null } : { data: { success: true }, error: null })
     doc().body = {}
     doc().activeElement = doc().body
   })
@@ -621,6 +639,9 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
     it('Opt In: one request; then "You are opted in." and focus on Withdraw, which took the button\'s place', async () => {
       const c = await feed()
       optInSpies().optIn.mockClear()
+      // F4: what the card shows at the moment the sentence is said (the new state, not the old).
+      const atNotice: unknown[] = []
+      h.onNotice = () => void atNotice.push(card(c, 'p1').props.optInStatus)
       const pressed = el('opt-in-btn-p1')
       el('withdraw-btn-p1')
       const sent = (card(c, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
@@ -631,11 +652,12 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       await sent
       await c.flush()
       expect(optInSpies().optIn).toHaveBeenCalledTimes(1)
-      expect(optInSpies().optIn).toHaveBeenCalledWith('p1')
+      expect(optInSpies().optIn).toHaveBeenCalledWith('p1', expect.any(String))
       expect(optInSpies().withdrawOptIn).not.toHaveBeenCalled()
       expect(card(c, 'p1').props.optInStatus).toBe('pending')
       expect(h.focused).toEqual(['withdraw-btn-p1'])
       expect(h.notices).toEqual([optInsT('en', 'announceOptedIn')])
+      expect(atNotice).toEqual(['pending'])
       // Said once: later renders and re-reads add nothing.
       c.rerender()
       await c.flush()
@@ -663,13 +685,17 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(card(c, 'p1').props.optInStatus).toBe('pending')
       const pressed = el('withdraw-btn-p1')
       el('opt-in-btn-p1')
+      // F4: at the moment the sentence is said the card shows Opt In again (no status).
+      const atNotice: unknown[] = []
+      h.onNotice = () => void atNotice.push(card(c, 'p1').props.optInStatus ?? 'none')
       const sent = (card(c, 'p1').props.onWithdraw as (id: string) => Promise<void>)('p1')
       h.memberStatuses.delete('p1')
       gone(pressed)
       await sent
       await c.flush()
+      expect(atNotice).toEqual(['none'])
       expect(optInSpies().withdrawOptIn).toHaveBeenCalledTimes(1)
-      expect(optInSpies().withdrawOptIn).toHaveBeenCalledWith('p1')
+      expect(optInSpies().withdrawOptIn).toHaveBeenCalledWith('p1', expect.any(String))
       expect(optInSpies().optIn).not.toHaveBeenCalled()
       expect(h.focused).toEqual(['opt-in-btn-p1'])
       expect(h.notices).toEqual([optInsT('en', 'announceWithdrawn')])
@@ -955,7 +981,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
   })
 
   describe('a write that changed nothing is not said as done', () => {
-    it('Accept on a request the seeker has withdrawn: the update answers with no row; nothing is said as accepted; the card shows the failure; the stale row goes; focus is on the toggle', async () => {
+    it('K4-01 · Accept on a request the seeker has withdrawn: the update answers with no row; nothing is said as accepted; the card shows the failure; the stale row goes; focus is on the toggle', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       const pressed = el('accept-optin-o1')
       el('complete-optin-o1')
@@ -981,11 +1007,16 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([])
     })
 
-    it('Withdraw when the request was accepted meanwhile (withdraw_opt_in answers false): nothing is said as withdrawn; the card shows the failure and its real status; no slot is given back', async () => {
+    it('K4-02 · Withdraw when the request was accepted meanwhile (withdraw_opt_in answers false): nothing is said as withdrawn; the card shows the failure and its real status; no slot is given back', async () => {
       h.memberStatuses.set('p1', 'pending')
+      // One spot of two is taken (by this member): a slot given back would show as 2.
+      h.rows = [row('p1', { max_seekers: 2, slots_remaining: 1 }), ...h.rows.slice(1)]
+      h.optIns = [optIn('o1', 'Me', 'pending')]
       const c = await feed()
       const slots = () => (card(c, 'p1').props.post as { slotsRemaining: number }).slotsRemaining
       const before = slots()
+      expect(before).toBe(1)
+      const count = card(c, 'p1').props.optInCount
       el('withdraw-btn-p1').isConnected = false
       el('post-card-p1')
       h.memberStatuses.set('p1', 'accepted')
@@ -999,6 +1030,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([])
       expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
       expect(slots()).toBe(before)
+      expect(card(c, 'p1').props.optInCount).toBe(count)
       expect(h.focused).toEqual(['post-card-p1'])
     })
 
@@ -1018,6 +1050,46 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(busy(c)).toEqual([])
     })
 
+    it.each([
+      ['K4-06', 'declined', 'decline-optin-o1'],
+      ['K4-07', 'completed', 'complete-optin-o1'],
+    ] as const)('%s · %s on a request that is gone (the update answers with no row): nothing is said as done; the card shows the failure; the list is read again', async (_label, status, testId) => {
+      const c = await asAuthor([optIn('o1', 'Bo', status === 'completed' ? 'accepted' : 'pending'), optIn('o2', 'Cy')])
+      const pressed = el(testId)
+      el('unblock-optin-o1')
+      el('opt-in-manage-p1')
+      h.optIns = [optIn('o2', 'Cy')]
+      const sent = update(c, 'o1', status)
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(h.log).toEqual([WRITE('o1', status), ...followUp('p1', ['o2'])])
+      expect(rowsOf(c)).toEqual([['o2', 'pending']])
+      expect(h.notices).toEqual([])
+      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+      expect(busy(c)).toEqual([])
+    })
+
+    it('K4-09 · Unblock that deleted nothing (unblock_opt_in answers false, another tab got there first): not said as unblocked; the card shows the failure and the row as it is now; the count is not lowered', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+      h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: false, error: null } : { data: null, error: null })
+      const pressed = el('unblock-optin-o1')
+      el('opt-in-manage-p1')
+      // The other tab's unblock went through and the seeker asked again: a new pending row.
+      h.optIns = [optIn('o3', 'Bo'), optIn('o2', 'Cy')]
+      const sent = unblock(c, 'o1')
+      gone(pressed)
+      await sent
+      await c.flush()
+      expect(h.log).toEqual(['rpc:unblock_opt_in', ...followUp('p1', ['o3', 'o2'])])
+      expect(rowsOf(c)).toEqual([['o3', 'pending'], ['o2', 'pending']])
+      expect(card(c, 'p1').props.optInCount).toBe(2)
+      expect(h.notices).toEqual([])
+      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(h.focused).toEqual(['opt-in-manage-p1'])
+    })
+
     it('second check: the update answered with a row, yet the fresh read does not show the outcome — not said as done; the card shows the failure', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       el('accept-optin-o1').isConnected = false
@@ -1029,6 +1101,111 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([])
       expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
       expect(busy(c)).toEqual([])
+    })
+  })
+
+  describe('every sign-up write is one wide event in app_logs', () => {
+    /** The persisted rows of the sign-up write event. */
+    const writes = () => h.metrics.filter((m) => m.event.startsWith('feed.optin.write'))
+    /** The x-request-id each request carried (by table or rpc name). */
+    const headerTo = (to: string) => h.headers.filter((x) => x.to === to && x.name === 'x-request-id').map((x) => x.value)
+    const expectOne = (event: string, action: string, outcome: string) => {
+      const rows = writes()
+      expect(rows.map((r) => [r.event, r.ctx.action, r.ctx.outcome])).toEqual([[event, action, outcome]])
+      const [r] = rows
+      expect(typeof r.duration_ms).toBe('number')
+      expect(r.requestId).toMatch(/\S/)
+      expect(r.ctx.request_id).toBe(r.requestId)
+      return r
+    }
+
+    it('KG-07 · each of the six actions that goes through writes exactly one row: outcome success, its action, duration_ms and the request id it sent as x-request-id; no other error row', async () => {
+      // Member: opt in, then withdraw.
+      const m = await feed()
+      el('opt-in-btn-p1')
+      h.memberStatuses.set('p1', 'pending')
+      await (card(m, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      await m.flush()
+      let r = expectOne('feed.optin.write.complete', 'opt_in', 'success')
+      expect(optInSpies().optIn).toHaveBeenLastCalledWith('p1', r.requestId)
+      h.metrics.length = 0
+      h.memberStatuses.delete('p1')
+      await (card(m, 'p1').props.onWithdraw as (id: string) => Promise<void>)('p1')
+      await m.flush()
+      r = expectOne('feed.optin.write.complete', 'withdraw', 'success')
+      expect(optInSpies().withdrawOptIn).toHaveBeenLastCalledWith('p1', r.requestId)
+      // Author: accept, decline, mark completed, unblock.
+      for (const [status, action, start] of [['accepted', 'accept', 'pending'], ['declined', 'decline', 'pending'], ['completed', 'complete', 'accepted']] as const) {
+        const c = await asAuthor([optIn('o1', 'Bo', start)])
+        h.metrics.length = 0
+        h.headers.length = 0
+        const sent = update(c, 'o1', status)
+        setStatus('o1', status)
+        await sent
+        await c.flush()
+        r = expectOne('feed.optin.write.complete', action, 'success')
+        expect(headerTo('resource_opt_ins')).toEqual([r.requestId])
+      }
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined')])
+      h.metrics.length = 0
+      h.headers.length = 0
+      const sent = unblock(c, 'o1')
+      h.optIns = []
+      await sent
+      await c.flush()
+      r = expectOne('feed.optin.write.complete', 'unblock', 'success')
+      expect(headerTo('unblock_opt_in')).toEqual([r.requestId])
+      expect(h.logged).toEqual([])
+    })
+
+    it('KG-12 · a write that changed nothing is its own outcome: no_change (accept, decline, complete with no row back; withdraw and unblock answering false)', async () => {
+      for (const status of ['accepted', 'declined', 'completed'] as const) {
+        const c = await asAuthor([optIn('o1', 'Bo', status === 'completed' ? 'accepted' : 'pending')])
+        h.optIns = []
+        h.metrics.length = 0
+        await update(c, 'o1', status)
+        await c.flush()
+        expectOne('feed.optin.write.complete', status === 'accepted' ? 'accept' : status === 'declined' ? 'decline' : 'complete', 'no_change')
+      }
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined')])
+      h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: false, error: null } : { data: null, error: null })
+      h.metrics.length = 0
+      await unblock(c, 'o1')
+      await c.flush()
+      expectOne('feed.optin.write.complete', 'unblock', 'no_change')
+      signIn('member')
+      h.memberStatuses.set('p1', 'accepted')
+      const m = await feed()
+      optInSpies().withdrawOptIn.mockReset().mockResolvedValue(false)
+      h.metrics.length = 0
+      await (card(m, 'p1').props.onWithdraw as (id: string) => Promise<void>)('p1')
+      await m.flush()
+      expectOne('feed.optin.write.complete', 'withdraw', 'no_change')
+    })
+
+    it('a failed write is one error row: outcome failed and the server\'s code as error_code (an author update, an unblock, a refused opt in)', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo')])
+      h.writeError = { code: '42501', message: 'permission denied' }
+      h.metrics.length = 0
+      await update(c, 'o1', 'accepted')
+      await c.flush()
+      expect(expectOne('feed.optin.write.error', 'accept', 'failed').ctx.error_code).toBe('42501')
+      h.writeError = null
+      const u = await asAuthor([optIn('o1', 'Bo', 'declined')])
+      h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: null, error: { code: '22023', message: 'Only a declined opt-in can be unblocked' } } : { data: null, error: null })
+      h.metrics.length = 0
+      await unblock(u, 'o1')
+      await u.flush()
+      expect(expectOne('feed.optin.write.error', 'unblock', 'failed').ctx.error_code).toBe('22023')
+      signIn('member')
+      const m = await feed()
+      optInSpies().optIn.mockReset().mockRejectedValue(Object.assign(new Error('This offer is full'), { code: 'P0001' }))
+      h.metrics.length = 0
+      await (card(m, 'p1').props.onOptIn as (id: string) => Promise<void>)('p1')
+      await m.flush()
+      expect(expectOne('feed.optin.write.error', 'opt_in', 'failed').ctx.error_code).toBe('P0001')
+      // The old failure-only rows are gone: one row per action, never two.
+      expect(h.logged.filter((l) => l.event === 'feed.optin.update' || l.event === 'feed.optin.unblock')).toEqual([])
     })
   })
 
@@ -1573,7 +1750,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       return c
     }
 
-    it('an author\'s first-page card still shows its count and its rows after the second page has loaded; the page read asks about its own posts only', async () => {
+    it('K6-03 · an author\'s first-page card still shows its count and its rows after the second page has loaded; the page read asks about its own posts only', async () => {
       const c = await asAuthorOfTwoPages()
       expect([card(c, 'p1').props.optInCount, rowsOf(c)]).toEqual([2, [['o1', 'pending'], ['o2', 'pending']]])
       await loadMore(c)
@@ -1654,7 +1831,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
     })
 
     describe('a failed read of my statuses keeps what is on screen', () => {
-      it('on a page that is added: the first page\'s status stays', async () => {
+      it('K9-02 · on a page that is added: the first page\'s status stays', async () => {
         h.rows = twoPages()
         h.memberStatuses = new Map([['p1', 'pending']])
         const c = await feed()

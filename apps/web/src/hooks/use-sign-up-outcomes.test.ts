@@ -432,7 +432,21 @@ describe('the hook', () => {
       expect(h.notDone).toEqual(['post:p1'])
     })
 
-    it('an opt-in and an unblock answer with an error when they change nothing, so they need no second check: settled and not shown, they are still said', () => {
+    it('an unblock the fresh read contradicts (its row is still listed): not said as unblocked; the caller is told', () => {
+      const h = harness()
+      h.state.authorRows = { p1: [rowOf('o1', 'declined', 'Bo')] }
+      h.c.rerender()
+      el('unblock-optin-o1')
+      el('opt-in-manage-p1')
+      const a = h.begin('unblock', { optInId: 'o1' })
+      h.api().succeeded(a)
+      h.api().settled(a, 'fresh')
+      h.c.rerender()
+      expect(h.log.filter((l) => l.startsWith('say:') && l !== 'say:')).toEqual([])
+      expect(h.notDone).toEqual(['o1'])
+    })
+
+    it('an opt-in answers with an error when it changes nothing, so it needs no second check: settled and not shown, it is still said', () => {
       const h = harness()
       el('post-card-p1')
       const a = h.begin('optIn', { postId: 'p1' })
@@ -521,15 +535,15 @@ describe('the hook', () => {
         expect(signUpDone(a('accept', false), settle, shown)).toBe(false)
         expect(signUpDone(a('accept', undefined), settle, shown)).toBe(false)
       }
-      // A confirmed change: said, unless a FRESH read of an accept / decline / complete / withdraw does not show it.
-      for (const kind of ['accept', 'decline', 'complete', 'withdraw'] as const) {
+      // A confirmed change: said, unless a FRESH read of an accept / decline / complete / withdraw / unblock does not show it.
+      for (const kind of ['accept', 'decline', 'complete', 'withdraw', 'unblock'] as const) {
         expect(signUpDone(a(kind, true), 'fresh', true), kind).toBe(true)
         expect(signUpDone(a(kind, true), 'fresh', false), kind).toBe(false)
         expect(signUpDone(a(kind, true), 'stale', false), kind).toBe(true)
         expect(signUpDone(a(kind, true), 'unread', false), kind).toBe(true)
         expect(signUpDone(a(kind, true), null, true), kind).toBe(true)
       }
-      for (const kind of ['optIn', 'unblock'] as const) expect(signUpDone(a(kind, true), 'fresh', false), kind).toBe(true)
+      expect(signUpDone(a('optIn', true), 'fresh', false), 'optIn').toBe(true)
     })
 
     it('the stable control: the sign-up list toggle of that post, else its card, else nothing', () => {
