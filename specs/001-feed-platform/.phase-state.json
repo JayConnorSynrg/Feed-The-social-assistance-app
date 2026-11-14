@@ -897,7 +897,7 @@
       ]
     },
     "feed-r3-5b-card-i18n": {
-      "status": "REVIEW_FIX_ROUND_5_BUILT",
+      "status": "REVIEW_FIX_ROUND_6_BUILT",
       "branch": "feature/feed-r3-5b-card-i18n",
       "base": "origin/develop 0ee7f6d",
       "docs": "docs/i18n-native-review.md (native-review list)",
@@ -922,7 +922,7 @@
         "native-speaker review of ht / so / am / hmn (docs/i18n-native-review.md, 1,362 rows)",
         "the accessibility reviewer's N5 (the appreciation picker group repeats the name of the region it sits in) and its remaining info items, left for the follow-up list as told",
         "a sent review whose side-data read fails is said with the stale-list sentence; its Review button stays until the next read",
-        "re-review of fix rounds 2 to 5; merge with develop and the alert-lifecycle branch and the checklist renumbering at release time; signed-in browser pass by the owner (incl. ES-P4, ES-S10, AR-P4, AR-S10)"
+        "re-review of fix rounds 2 to 6; merge with develop and the alert-lifecycle branch and the checklist renumbering at release time; signed-in browser pass by the owner (incl. ES-P4, ES-S10, AR-P4, AR-S10)"
       ],
       "a11yReview": "aced827: A11Y-BLOCKED (2 blockers, 3 highs); fb5daf2: B1, B2, H1, H3, L1-L10 closed, one high left (N1); fix round 2 closes N1 and N2, N3, N4, N6, N7; re-review pending",
       "adversarialReview": "aced827: MERGE-READY with lows (closed in fix round 1); fb5daf2: passed, with nine rules for the single-post re-read and five small items (all in fix round 2)",
@@ -931,7 +931,9 @@
       "round4": "2026-11-14 on e4be65e. H1 status read ok exactly when the server answered (auth error or no user -> ok:false, map kept). H2 stale-path count moves only for an unblock that deleted the row (sweep of every attempt-derived value). L1 empty outcome moves focus without announcing (real-announcer test); a card leaving with nothing to say leaves directly. L4 no-change with a fresh re-read shows changedMeanwhile (14 locales), plain failure kept for failures and stale re-reads. prefer-const fixed. Evidence: ~/.claude/session-env/evidence/feed-r3-2026-11-14/r35b-round4/.",
       "round4Gates": "type-check 0; eslint 0 errors / 113 warnings; vitest 223 files / 4,796 passed / 14 todo on Node 20.20.2 and 24.21.0 (30s timeout); node --test 63/63; next build ok; 11 own mutants red (N09 closed by a parity test), restored byte-identical; reviewer's 11 mutants (r35b-review-4) red on 0382c4a",
       "round5": "2026-11-14 on 9cb65ae. L2 not-done line written from the hook's focus step (focus first, once). L3 no-change card that leaves says statusPostGone. Announcer join keeps a waiting announcement (sentence and focus step). L4a line only on a listed, re-read card; replacing reads drop lines of unlisted posts. Harness flake fixed; dead empty-text branch removed. Evidence: ~/.claude/session-env/evidence/feed-r3-2026-11-14/r35b-round5/.",
-      "round5Gates": "type-check 0; eslint 0 errors / 113 warnings; vitest 223 files / 4,801 passed / 14 todo on Node 20.20.2 and 24.21.0 (30s timeout); node --test 63/63; next build ok; own mutants 11/12 red (P11 equivalent in the test runtime); reviewer's 20: 19 red, N5 retired with the deleted branch"
+      "round5Gates": "type-check 0; eslint 0 errors / 113 warnings; vitest 223 files / 4,801 passed / 14 todo on Node 20.20.2 and 24.21.0 (30s timeout); node --test 63/63; next build ok; own mutants 11/12 red (P11 equivalent in the test runtime); reviewer's 20: 19 red, N5 retired with the deleted branch",
+      "round6": "2026-11-14 on 8adccf3. L6: card-notice focus steps are a queue never dropped by a non-joining announce or supersede(); words alone are replaced. Evidence: ~/.claude/session-env/evidence/feed-r3-2026-11-14/r35b-round6/.",
+      "round6Gates": "type-check 0; eslint 0 errors / 113 warnings; vitest 223 files / 4,805 passed / 14 todo on Node 20.20.2 and 24.21.0 (30s timeout); node --test 63/63; next build ok; own mutants 7/7 red; reviewer's 31: 28 red, J3/J4 retired, J8 equivalent (unread guard)"
     }
   }
 }
