@@ -37,10 +37,10 @@ import { useEventCardRefresh } from './use-event-card-refresh'
  *     member's action use it; supersede() still drops the words;
  *   - a focus step is never dropped. Some carry state (the sign-up step writes the card's alert
  *     lines after focus moves; a leaving card's step removes the card), so replacing or
- *     superseding an announcement may only drop words. Steps wait in a queue; the first frame to
- *     run — its words still current or not, or the frame supersede() schedules — runs every
- *     queued step once, in the order they were queued, before any sentence is set. Focus ends
- *     where the latest step puts it.
+ *     superseding an announcement may only drop words. Steps wait in a queue; the frame of the
+ *     latest announcement — or the frame supersede() schedules — runs every queued step once, in
+ *     the order they were queued, before its sentence is set. Focus ends where the latest step
+ *     puts it.
  * Pure (the region setter and the frame scheduler are passed in) so the rules are unit-tested.
  */
 export function createCardNoticeAnnouncer(
@@ -66,9 +66,10 @@ export function createCardNoticeAnnouncer(
       if (moveFocus) steps.push(moveFocus)
       setNotice('')
       schedule(() => {
-        runSteps()
+        // A newer announcement's frame (or supersede's) runs the queued steps.
         if (seq !== mine) return
         waiting = null
+        runSteps()
         setNotice(full)
       })
     },
