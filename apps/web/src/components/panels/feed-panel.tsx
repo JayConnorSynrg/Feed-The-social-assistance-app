@@ -840,7 +840,8 @@ export function FeedPanel() {
       const confirmed = mine.filter(([, c]) => c === 'owns').map(([a]) => a)
       if (confirmed.length > 0) {
         setAuthorOptInsMap((prev) => confirmed.reduce((rows, a) => signUpRowsAfter(rows, a), prev))
-        const unblocked = confirmed.filter((a) => a.kind === 'unblock')
+        // The count moves only for an unblock that deleted the row (as on the fresh path).
+        const unblocked = confirmed.filter((a) => a.kind === 'unblock' && a.changed === true)
         if (unblocked.length > 0) {
           setOptInCounts((prev) => {
             const next = { ...prev }
@@ -1006,7 +1007,7 @@ export function FeedPanel() {
       // columns returned by the main query (INV3) — NO secondary aggregation
       // fetch. The only per-post lookup that remains is "my likes", which
       // decides isLiked and cannot be derived from a denormalized column.
-      let userLikes: Set<string> = new Set()
+      const userLikes: Set<string> = new Set()
 
       if (postIds.length > 0) {
         type PostIdRow = { post_id: string }

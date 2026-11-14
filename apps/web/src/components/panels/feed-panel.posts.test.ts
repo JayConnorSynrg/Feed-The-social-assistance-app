@@ -1090,6 +1090,22 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.focused).toEqual(['opt-in-manage-p1'])
     })
 
+    it('K4-09 · stale path: an Unblock that deleted nothing, with the rows read failing on top: both rows stay, the count stays, the card keeps the plain failure, only the stale-list sentence is said', async () => {
+      const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
+      expect(card(c, 'p1').props.optInCount).toBe(2)
+      h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: false, error: null } : { data: null, error: null })
+      h.rowsReadError = { code: '57014', message: 'timeout' }
+      el('unblock-optin-o1')
+      el('opt-in-manage-p1')
+      await unblock(c, 'o1')
+      await c.flush()
+      expect(rowsOf(c)).toEqual([['o1', 'declined'], ['o2', 'pending']])
+      expect(card(c, 'p1').props.optInCount).toBe(2)
+      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(h.notices).toEqual([optInsT('en', 'announceListStale')])
+      expect(busy(c)).toEqual([])
+    })
+
     it('second check: the update answered with a row, yet the fresh read does not show the outcome — not said as done; the card shows the failure', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       el('accept-optin-o1').isConnected = false
