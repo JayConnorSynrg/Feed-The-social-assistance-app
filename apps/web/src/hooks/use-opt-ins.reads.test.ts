@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const { state, rpc } = vi.hoisted(() => ({
-  state: { user: { id: 'me' } as { id: string } | null, rows: [] as Array<{ post_id: string; status: string }>, error: null as unknown, throws: false, seen: [] as unknown[] },
+  state: { user: { id: 'me' } as { id: string } | null, authError: null as unknown, rows: [] as Array<{ post_id: string; status: string }>, error: null as unknown, throws: false, seen: [] as unknown[] },
   rpc: vi.fn(),
 }))
 vi.mock('@/lib/supabase/client', () => {
@@ -24,7 +24,7 @@ vi.mock('@/lib/supabase/client', () => {
     abortSignal: () => chain,
     then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => (state.throws ? Promise.reject(new Error('network')) : Promise.resolve({ data: state.error ? null : state.rows, error: state.error })).then(res, rej),
   }
-  const client = { rpc, auth: { getUser: async () => ({ data: { user: state.user } }) }, from: (t: string) => (state.seen.push(['from', t]), chain) }
+  const client = { rpc, auth: { getUser: async () => ({ data: { user: state.user }, error: state.authError }) }, from: (t: string) => (state.seen.push(['from', t]), chain) }
   return { createClient: () => client }
 })
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
@@ -36,6 +36,7 @@ const hook = () => mount(() => useOptIns())
 
 beforeEach(() => {
   state.user = { id: 'me' }
+  state.authError = null
   state.rows = []
   state.error = null
   state.throws = false
@@ -62,10 +63,27 @@ describe('my statuses: "the read failed" is not "no opt-ins"', () => {
     expect('statuses' in read).toBe(false)
   })
 
-  it('nothing asked, or nobody signed in: ok and empty, with no request', async () => {
+  it('nothing asked: ok and empty, with no request', async () => {
     expect(await hook().tree().fetchOptInsForPosts([])).toEqual({ ok: true, statuses: new Map() })
+    expect(state.seen).toEqual([])
+  })
+
+  it('H1 · the account could not be read (auth-js answers { user: null, error: AuthRetryableFetchError } on a network or 5xx failure; it does not throw): not ok, no request — never "no opt-ins"', async () => {
     state.user = null
-    expect(await hook().tree().fetchOptInsForPosts(['p1'])).toEqual({ ok: true, statuses: new Map() })
+    state.authError = Object.assign(new Error('Failed to fetch'), { name: 'AuthRetryableFetchError', status: 0 })
+    const h = hook()
+    const read = await h.tree().fetchOptInsForPosts(['p1'])
+    expect(read).toEqual({ ok: false })
+    expect('statuses' in read).toBe(false)
+    expect(state.seen).toEqual([])
+    // The member is told the status could not be loaded.
+    h.rerender()
+    expect(h.tree().error).toBeTruthy()
+  })
+
+  it('H1 · no user and no error: not ok either (the server did not answer the read), and no request', async () => {
+    state.user = null
+    expect(await hook().tree().fetchOptInsForPosts(['p1'])).toEqual({ ok: false })
     expect(state.seen).toEqual([])
   })
 })

@@ -69,10 +69,15 @@ export function useOptIns() {
       setLoading(true)
       setError(null)
       try {
+        // The read is ok only when the server answered it. getUser() does not throw on a network
+        // or 5xx failure: it answers { user: null, error } (AuthRetryableFetchError). That, and no
+        // user at all, is "the read failed" — never "no opt-ins" — so the caller keeps its map.
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser()
-        if (!user) return { ok: true, statuses: new Map() }
+        if (authError) throw authError
+        if (!user) return { ok: false }
 
         const { data, error: fetchError } = await supabase
           .from('resource_opt_ins')
