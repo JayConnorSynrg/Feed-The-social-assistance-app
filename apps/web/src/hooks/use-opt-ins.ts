@@ -41,6 +41,12 @@ export type OptInsRead = { ok: true; statuses: OptInMap } | { ok: false }
  */
 export const OPT_IN_REFUSALS: readonly string[] = ['This offer is full', 'This post is closed', 'You cannot opt in to your own post', 'Already opted in']
 
+/** The member's sentence as the thrown error, with the server's code kept for the log row
+ *  (lib/with-metric-core.mjs serializeError reads `code`). */
+function withCode(error: Error, code: string | undefined): Error {
+  return code ? Object.assign(error, { code }) : error
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -97,20 +103,22 @@ export function useOptIns() {
 
   /**
    * Opt in to a post via the server-side RPC.
-   * Returns the inserted row on success, or throws a friendly error string.
+   * Returns the inserted row on success, or throws a friendly error string (carrying the
+   * server's code, for the caller's log row). `requestId`, when given, is sent as x-request-id.
    */
   const optIn = useCallback(
-    async (postId: string): Promise<OptInRow> => {
+    async (postId: string, requestId?: string): Promise<OptInRow> => {
       setError(null)
-      const { data, error: rpcError } = await supabase.rpc('opt_in_to_post', {
+      const call = supabase.rpc('opt_in_to_post', {
         p_post_id: postId,
       })
+      const { data, error: rpcError } = await (requestId ? call.setHeader('x-request-id', requestId) : call)
       if (rpcError) {
         const msg = OPT_IN_REFUSALS.includes(rpcError.message)
           ? rpcError.message
           : getFriendlyErrorMessage(rpcError, "Couldn't opt in. Please try again.")
         setError(msg)
-        throw new Error(msg)
+        throw withCode(new Error(msg), rpcError.code)
       }
       return data as OptInRow
     },
@@ -119,20 +127,21 @@ export function useOptIns() {
 
   /**
    * Withdraw a pending opt-in via the server-side RPC.
-   * Returns true if a row was deleted. FALSE IS NOT A FAILURE OF THE CALL: withdraw_opt_in deletes
+   * Returns true if a row was deleted (`requestId`, when given, is sent as x-request-id). FALSE IS NOT A FAILURE OF THE CALL: withdraw_opt_in deletes
    * only a pending row and answers false, with no error, when there was none (the request was
    * accepted, declined or already withdrawn meanwhile). The caller must not report it as done.
    */
   const withdrawOptIn = useCallback(
-    async (postId: string): Promise<boolean> => {
+    async (postId: string, requestId?: string): Promise<boolean> => {
       setError(null)
-      const { data, error: rpcError } = await supabase.rpc('withdraw_opt_in', {
+      const call = supabase.rpc('withdraw_opt_in', {
         p_post_id: postId,
       })
+      const { data, error: rpcError } = await (requestId ? call.setHeader('x-request-id', requestId) : call)
       if (rpcError) {
         const msg = getFriendlyErrorMessage(rpcError, "Couldn't withdraw opt-in. Please try again.")
         setError(msg)
-        throw new Error(msg)
+        throw withCode(new Error(msg), rpcError.code)
       }
       return data === true
     },

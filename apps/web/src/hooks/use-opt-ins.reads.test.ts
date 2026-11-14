@@ -77,3 +77,27 @@ describe('withdraw: true only when a row was deleted', () => {
     expect(rpc.mock.calls).toEqual([['withdraw_opt_in', { p_post_id: 'p1' }]])
   })
 })
+
+describe('the two writes carry the caller\'s request id, and a failure keeps the server\'s code', () => {
+  /** What supabase.rpc returns: a request that can carry a header, then answers. */
+  const request = (answer: { data: unknown; error: unknown }, headers: Array<[string, string]>) => {
+    const done = Promise.resolve(answer)
+    return Object.assign(done, { setHeader: (k: string, v: string) => (headers.push([k, v]), done) })
+  }
+
+  it.each([['optIn', 'opt_in_to_post'], ['withdrawOptIn', 'withdraw_opt_in']] as const)('%s sends x-request-id when given one', async (method, fn) => {
+    const headers: Array<[string, string]> = []
+    rpc.mockReturnValue(request({ data: method === 'optIn' ? { id: 'o1' } : true, error: null }, headers))
+    await hook().tree()[method]('p1', 'rid-1')
+    expect(rpc.mock.calls).toEqual([[fn, { p_post_id: 'p1' }]])
+    expect(headers).toEqual([['x-request-id', 'rid-1']])
+  })
+
+  it.each([['optIn'], ['withdrawOptIn']] as const)('%s throws the member\'s sentence with the server\'s code on it', async (method) => {
+    rpc.mockReturnValue(request({ data: null, error: { code: '42501', message: 'Account required for this action' } }, []))
+    const thrown = await hook().tree()[method]('p1', 'rid-1').then(() => null, (e: unknown) => e)
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as { code?: string }).code).toBe('42501')
+    expect((thrown as Error).message).not.toBe('Account required for this action')
+  })
+})
