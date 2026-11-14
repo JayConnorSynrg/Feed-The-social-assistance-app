@@ -22,6 +22,8 @@ import {
   OPTED_IN_COUNT,
   OPT_IN_ERROR_SENTENCES,
   OPT_IN_STATUSES,
+  SIGN_UP_CHANGED_MEANWHILE,
+  SIGN_UP_NOT_DONE,
   SPOTS_LEFT,
   feedOptInsMessages,
   isOptInStatus,
@@ -171,6 +173,17 @@ describe('failures', () => {
     }
     // Seven different member sentences (the two thrown-value fallbacks read as the plain failures).
     expect(new Set(KNOWN.map((s) => optInErrorText(s, locale).text)).size).toBe(7)
+  })
+
+  it.each(LOCALES)('%s: the two sign-up codes the feed hands the card are translated, and say different things (a no-change whose card was read again asks for no retry)', (locale) => {
+    for (const code of [SIGN_UP_NOT_DONE, SIGN_UP_CHANGED_MEANWHILE]) {
+      const got = optInErrorText(code, locale)
+      expect(got.translated, code).toBe(true)
+      expect(got.text.trim(), code).not.toBe('')
+      if (locale !== 'en') expect(got.text, code).not.toBe(optInErrorText(code, 'en').text)
+    }
+    expect(optInErrorText(SIGN_UP_CHANGED_MEANWHILE, locale).text).not.toBe(optInErrorText(SIGN_UP_NOT_DONE, locale).text)
+    expect(optInErrorText(SIGN_UP_CHANGED_MEANWHILE, 'en').text).toBe(SIGN_UP_CHANGED_MEANWHILE)
   })
 
   it('English members read each sentence as written (the two fallbacks as the hook\'s own words)', () => {

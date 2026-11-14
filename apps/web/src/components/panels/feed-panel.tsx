@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useAdminViewer } from '@/hooks/use-admin-viewer'
 import { useSavedResources } from '@/hooks/use-saved-resources'
 import { useOptIns, type OptInMap } from '@/hooks/use-opt-ins'
-import { useSignUpOutcomes, signUpRowsAfter, type SignUpAttempt } from '@/hooks/use-sign-up-outcomes'
+import { useSignUpOutcomes, signUpRowsAfter, type SignUpAttempt, type SignUpSettle } from '@/hooks/use-sign-up-outcomes'
 import { createReadOrder, mergeByPost, mergeMapByPost, withoutPost, type ReadClaim } from '@/components/feed/sign-up-side-data'
 import { focusWasLost } from '@/lib/focus-lost'
 import { useReviews, type ReviewMap } from '@/hooks/use-reviews'
@@ -69,7 +69,7 @@ import { FeedHeader, FeedListStatus, FeedLoadMore, FeedStatusRegions, feedLocale
 import { PostTypeWizard } from './post-type-wizard'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { messagesT } from '@/lib/i18n-feed-messages'
-import { optInsT, SIGN_UP_NOT_DONE } from '@/lib/i18n-feed-optins'
+import { optInsT, SIGN_UP_CHANGED_MEANWHILE, SIGN_UP_NOT_DONE } from '@/lib/i18n-feed-optins'
 import { usePetitions } from '@/hooks/use-petitions'
 import type { SafetyAlert } from '@/hooks/use-safety-alerts'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
@@ -661,13 +661,21 @@ export function FeedPanel() {
   const signUpContext = `${activeSubtab}|${user?.id ?? ''}`
   // A sign-up action that did not go through is shown on its card's alert line (which is what
   // speaks, so it is heard once) until the next action on that card.
-  const showNotDone = useCallback((postId: string) => {
-    if (postId) setOptInErrors((prev) => ({ ...prev, [postId]: SIGN_UP_NOT_DONE }))
+  const showNotDone = useCallback((postId: string, sentence: string = SIGN_UP_NOT_DONE) => {
+    if (postId) setOptInErrors((prev) => ({ ...prev, [postId]: sentence }))
   }, [])
   const onSignUpNotDone = useCallback((attempt: SignUpAttempt) => showNotDone(attempt.postId), [showNotDone])
   const signUps = useSignUpOutcomes({ locale, announce: announceCardNotice, memberStatuses: optInMap, authorRows: authorOptInsMap, context: signUpContext, onNotDone: onSignUpNotDone })
-  // Stable (the hook's own callback): the loaders below must not change with every render.
-  const settleSignUp = signUps.settled
+  // The read that follows an action has settled. For an action that changed nothing (its request
+  // had been accepted, declined or withdrawn meanwhile) the card's alert line now says so: once
+  // the card was read again it shows where the request stands, so the line does not ask for a
+  // retry that cannot succeed; when that read failed, the card keeps the plain failure.
+  // Stable: the loaders below must not change with every render.
+  const settledSignUp = signUps.settled
+  const settleSignUp = useCallback((attempt: SignUpAttempt, how: SignUpSettle = 'fresh') => {
+    if (attempt.changed === false && attempt.context === signUpContextRef.current) showNotDone(attempt.postId, how === 'stale' ? SIGN_UP_NOT_DONE : SIGN_UP_CHANGED_MEANWHILE)
+    settledSignUp(attempt, how)
+  }, [settledSignUp, showNotDone])
   // The button that opened the review dialog and the post it sits on (where focus returns).
   const reviewOpenerRef = useRef<HTMLElement | null>(null)
   const reviewPostIdRef = useRef<string | null>(null)
@@ -1582,10 +1590,9 @@ export function FeedPanel() {
     } else {
       // withdraw_opt_in deletes only a pending request and answers false, with no error, when
       // there was none (it was accepted, declined or already withdrawn): nothing was withdrawn,
-      // so nothing is said as withdrawn. The card says it did not go through, and the read
-      // below shows what the request is now.
+      // so nothing is said as withdrawn. The read below shows what the request is now, and the
+      // card's alert line says so once it has (settleSignUp).
       signUps.unchanged(attempt)
-      showNotDone(postId)
     }
     await followMyStatus(attempt, uid)
   }
@@ -1659,7 +1666,7 @@ export function FeedPanel() {
     } catch (err: unknown) {
       logger.error('feed.optin.reread_failed', err, { step: 'follow_up', action: attempt.kind })
       confirmedSignUpsRef.current = confirmedSignUpsRef.current.filter((a) => a !== attempt)
-      signUps.settled(attempt, 'stale')
+      settleSignUp(attempt, 'stale')
     }
   }
 
@@ -1690,7 +1697,7 @@ export function FeedPanel() {
     } catch (err: unknown) {
       logger.error('feed.optin.reread_failed', err, { step: 'follow_up', action: attempt.kind })
       forget()
-      signUps.settled(attempt, 'stale')
+      settleSignUp(attempt, 'stale')
     }
   }
 
@@ -1732,8 +1739,8 @@ export function FeedPanel() {
     if (changed) {
       signUps.succeeded(attempt)
     } else {
+      // Its alert line is set once the read below has settled (settleSignUp).
       signUps.unchanged(attempt)
-      showNotDone(attempt.postId)
     }
     await followSignUp(attempt, uid)
   }
@@ -1744,7 +1751,7 @@ export function FeedPanel() {
   // from the press (signUps.begin), so a rapid double-click fires the RPC once; an Unblock on
   // another row goes through. unblock_opt_in answers false, with no error, when it deleted
   // nothing (a second concurrent call, or one from another tab, got there first): that is not
-  // said as unblocked; the card says it did not go through and the read below shows the row.
+  // said as unblocked; the read below shows the row, and the card's alert line says so.
   const handleAuthorUnblockOptIn = async (optInId: string) => {
     const attempt = signUps.begin('unblock', { optInId })
     if (!attempt) return
@@ -1769,7 +1776,6 @@ export function FeedPanel() {
       signUps.succeeded(attempt)
     } else {
       signUps.unchanged(attempt)
-      showNotDone(attempt.postId)
     }
     await followSignUp(attempt, uid)
   }

@@ -292,7 +292,7 @@ import { cardT } from '@/lib/i18n-feed-card'
 import { FeedHeader, FeedLoadMore, FeedStatusRegions } from '@/components/feed/feed-chrome'
 import { ReviewModal } from '@/components/feed/review-modal'
 import { isolate } from '@/lib/format-message'
-import { optInErrorText, optInsT, SIGN_UP_NOT_DONE } from '@/lib/i18n-feed-optins'
+import { optInErrorText, optInsT, SIGN_UP_CHANGED_MEANWHILE, SIGN_UP_NOT_DONE } from '@/lib/i18n-feed-optins'
 
 const AUTHOR = 'aaaaaaaa-0000-4000-8000-000000000001'
 const OTHER = 'bbbbbbbb-0000-4000-8000-000000000002'
@@ -986,7 +986,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
   })
 
   describe('a write that changed nothing is not said as done', () => {
-    it('K4-01 · Accept on a request the seeker has withdrawn: the update answers with no row; nothing is said as accepted; the card shows the failure; the stale row goes; focus is on the toggle', async () => {
+    it('K4-01 · Accept on a request the seeker has withdrawn: the update answers with no row; nothing is said as accepted; the card says the request had already changed (no retry); the stale row goes; focus is on the toggle', async () => {
       const c = await asAuthor([optIn('o1', 'Bo'), optIn('o2', 'Cy')])
       const pressed = el('accept-optin-o1')
       el('complete-optin-o1')
@@ -1002,7 +1002,8 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(rowsOf(c)).toEqual([['o2', 'pending']])
       expect(card(c, 'p1').props.optInCount).toBe(1)
       expect(h.notices).toEqual([])
-      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
+      expect(optInErrorText(SIGN_UP_CHANGED_MEANWHILE, 'es')).toEqual({ text: optInsT('es', 'changedMeanwhile'), translated: true })
       // The pressed button went with its row: focus is on a stable control, never on Mark Completed.
       expect(h.focused).toEqual(['opt-in-manage-p1'])
       expect(busy(c)).toEqual([])
@@ -1012,7 +1013,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([])
     })
 
-    it('K4-02 · Withdraw when the request was accepted meanwhile (withdraw_opt_in answers false): nothing is said as withdrawn; the card shows the failure and its real status; no slot is given back', async () => {
+    it('K4-02 · Withdraw when the request was accepted meanwhile (withdraw_opt_in answers false): nothing is said as withdrawn; the card shows its real status and says it had already changed, without asking for a retry; no slot is given back', async () => {
       h.memberStatuses.set('p1', 'pending')
       // One spot of two is taken (by this member): a slot given back would show as 2.
       h.rows = [row('p1', { max_seekers: 2, slots_remaining: 1 }), ...h.rows.slice(1)]
@@ -1033,7 +1034,8 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.log).toEqual(['optins.mine(p1)'])
       expect(card(c, 'p1').props.optInStatus).toBe('accepted')
       expect(h.notices).toEqual([])
-      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
+      expect(optInErrorText(SIGN_UP_CHANGED_MEANWHILE, 'ar').text).toBe(optInsT('ar', 'changedMeanwhile'))
       expect(slots()).toBe(before)
       expect(card(c, 'p1').props.optInCount).toBe(count)
       expect(h.focused).toEqual(['post-card-p1'])
@@ -1058,7 +1060,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
     it.each([
       ['K4-06', 'declined', 'decline-optin-o1'],
       ['K4-07', 'completed', 'complete-optin-o1'],
-    ] as const)('%s · %s on a request that is gone (the update answers with no row): nothing is said as done; the card shows the failure; the list is read again', async (_label, status, testId) => {
+    ] as const)('%s · %s on a request that is gone (the update answers with no row): nothing is said as done; the list is read again and the card says the request had already changed', async (_label, status, testId) => {
       const c = await asAuthor([optIn('o1', 'Bo', status === 'completed' ? 'accepted' : 'pending'), optIn('o2', 'Cy')])
       const pressed = el(testId)
       el('unblock-optin-o1')
@@ -1071,12 +1073,12 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.log).toEqual([WRITE('o1', status), ...followUp('p1', ['o2'])])
       expect(rowsOf(c)).toEqual([['o2', 'pending']])
       expect(h.notices).toEqual([])
-      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
       expect(h.focused).toEqual(['opt-in-manage-p1'])
       expect(busy(c)).toEqual([])
     })
 
-    it('K4-09 · Unblock that deleted nothing (unblock_opt_in answers false, another tab got there first): not said as unblocked; the card shows the failure and the row as it is now; the count is not lowered', async () => {
+    it('K4-09 · Unblock that deleted nothing (unblock_opt_in answers false, another tab got there first): not said as unblocked; the card shows the row as it is now and says it had already changed; the count is not lowered', async () => {
       const c = await asAuthor([optIn('o1', 'Bo', 'declined'), optIn('o2', 'Cy')])
       h.rpcReply = (fn) => (fn === 'unblock_opt_in' ? { data: false, error: null } : { data: null, error: null })
       const pressed = el('unblock-optin-o1')
@@ -1091,7 +1093,7 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(rowsOf(c)).toEqual([['o3', 'pending'], ['o2', 'pending']])
       expect(card(c, 'p1').props.optInCount).toBe(2)
       expect(h.notices).toEqual([])
-      expect(cardError(c)).toBe(SIGN_UP_NOT_DONE)
+      expect(cardError(c)).toBe(SIGN_UP_CHANGED_MEANWHILE)
       expect(h.focused).toEqual(['opt-in-manage-p1'])
     })
 

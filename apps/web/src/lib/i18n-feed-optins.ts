@@ -57,6 +57,9 @@ export interface FeedOptInsMessages {
   errPostClosed: string
   errOwnPost: string
   errAlreadyOptedIn: string
+  /** On the card's alert line: a sign-up action changed nothing because the request had already
+   *  changed (accepted, declined, withdrawn), and the card, read again, now shows it. No retry. */
+  changedMeanwhile: string
   // Said in the feed's card-notice region once a sign-up action has gone through
   /** To the member who opted in / withdrew. */
   announceOptedIn: string
@@ -96,6 +99,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'This post is closed',
     errOwnPost: 'You cannot opt in to your own post',
     errAlreadyOptedIn: 'Already opted in',
+    changedMeanwhile: 'This request had already changed. It now shows where it stands.',
     announceOptedIn: 'You are opted in.',
     announceWithdrawn: 'Your opt-in was withdrawn.',
     announceAccepted: 'You accepted {name}.',
@@ -129,6 +133,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Esta publicación está cerrada',
     errOwnPost: 'No puedes apuntarte a tu propia publicación',
     errAlreadyOptedIn: 'Ya te apuntaste',
+    changedMeanwhile: 'Esta solicitud ya había cambiado. Ahora muestra su estado actual.',
     announceOptedIn: 'Te apuntaste.',
     announceWithdrawn: 'Retiraste tu solicitud.',
     announceAccepted: 'Aceptaste a {name}.',
@@ -163,6 +168,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Piblikasyon sa a fèmen',
     errOwnPost: 'Ou pa ka enskri nan pwòp piblikasyon ou',
     errAlreadyOptedIn: 'Ou deja enskri',
+    changedMeanwhile: 'Demann sa a te deja chanje. Kounye a li montre kote li ye.',
     announceOptedIn: 'Ou enskri.',
     announceWithdrawn: 'Ou retire enskripsyon ou.',
     announceAccepted: 'Ou aksepte {name}.',
@@ -196,6 +202,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Bài đăng này đã đóng',
     errOwnPost: 'Bạn không thể đăng ký vào bài đăng của chính mình',
     errAlreadyOptedIn: 'Bạn đã đăng ký rồi',
+    changedMeanwhile: 'Yêu cầu này đã thay đổi trước đó. Giờ đây nó hiển thị trạng thái hiện tại.',
     announceOptedIn: 'Bạn đã đăng ký.',
     announceWithdrawn: 'Bạn đã rút lại đăng ký.',
     announceAccepted: 'Đã chấp nhận {name}.',
@@ -229,6 +236,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'هذا المنشور مغلق',
     errOwnPost: 'لا يمكنك التسجيل في منشورك',
     errAlreadyOptedIn: 'سبق أن سجّلت',
+    changedMeanwhile: 'كان هذا الطلب قد تغيّر بالفعل. وهو يعرض الآن حالته الحالية.',
     announceOptedIn: 'تم تسجيلك.',
     announceWithdrawn: 'تم سحب تسجيلك.',
     announceAccepted: 'تم قبول {name}.',
@@ -262,6 +270,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: '此帖子已关闭',
     errOwnPost: '您不能报名自己的帖子',
     errAlreadyOptedIn: '您已报名',
+    changedMeanwhile: '此请求已经发生了变化。现在显示的是它的当前状态。',
     announceOptedIn: '您已报名。',
     announceWithdrawn: '您已撤回报名。',
     announceAccepted: '已接受 {name}。',
@@ -296,6 +305,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Qoraalkani wuu xiran yahay',
     errOwnPost: 'Iskuma qori kartid qoraalkaaga',
     errAlreadyOptedIn: 'Hore ayaad isu qortay',
+    changedMeanwhile: 'Codsigan horey wuu isbeddelay. Hadda wuxuu muujinayaa xaaladdiisa.',
     announceOptedIn: 'Waad is qortay.',
     announceWithdrawn: 'Is-qoristaadii waad ka noqotay.',
     announceAccepted: '{name} waa la aqbalay.',
@@ -329,6 +339,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Cette publication est fermée',
     errOwnPost: 'Vous ne pouvez pas vous inscrire à votre propre publication',
     errAlreadyOptedIn: 'Inscription déjà enregistrée',
+    changedMeanwhile: 'Cette demande avait déjà changé. Elle affiche maintenant son état actuel.',
     announceOptedIn: 'Votre inscription est enregistrée.',
     announceWithdrawn: 'Votre inscription est retirée.',
     announceAccepted: '{name} : demande acceptée.',
@@ -362,6 +373,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Esta publicação está fechada',
     errOwnPost: 'Você não pode se inscrever na sua própria publicação',
     errAlreadyOptedIn: 'Você já se inscreveu',
+    changedMeanwhile: 'Este pedido já tinha mudado. Agora ele mostra a situação atual.',
     announceOptedIn: 'Sua inscrição foi feita.',
     announceWithdrawn: 'Sua inscrição foi retirada.',
     announceAccepted: 'Você aceitou {name}.',
@@ -395,6 +407,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Эта публикация закрыта',
     errOwnPost: 'Нельзя записаться на собственную публикацию',
     errAlreadyOptedIn: 'Вы уже записаны на это',
+    changedMeanwhile: 'Этот запрос уже изменился. Сейчас показано его текущее состояние.',
     announceOptedIn: 'Вы записаны.',
     announceWithdrawn: 'Ваша запись отозвана.',
     announceAccepted: 'Заявка принята: {name}.',
@@ -428,6 +441,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: '이 게시물은 닫혔습니다',
     errOwnPost: '자신의 게시물에는 신청할 수 없습니다',
     errAlreadyOptedIn: '이미 신청했습니다',
+    changedMeanwhile: '이 요청은 이미 변경되었습니다. 지금 현재 상태가 표시됩니다.',
     announceOptedIn: '신청되었습니다.',
     announceWithdrawn: '신청이 취소되었습니다.',
     announceAccepted: '{name} 님을 수락했습니다.',
@@ -461,6 +475,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Sarado na ang post na ito',
     errOwnPost: 'Hindi ka maaaring mag-opt in sa sarili mong post',
     errAlreadyOptedIn: 'Naka-opt in ka na',
+    changedMeanwhile: 'Nagbago na ang kahilingang ito. Ipinapakita na nito ngayon ang kasalukuyang kalagayan.',
     announceOptedIn: 'Naka-opt in ka na ngayon.',
     announceWithdrawn: 'Binawi ang opt-in mo.',
     announceAccepted: 'Tinanggap si {name}.',
@@ -495,6 +510,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'ይህ ልጥፍ ተዘግቷል',
     errOwnPost: 'በራስዎ ልጥፍ ላይ መመዝገብ አይችሉም',
     errAlreadyOptedIn: 'አስቀድመው ተመዝግበዋል',
+    changedMeanwhile: 'ይህ ጥያቄ አስቀድሞ ተቀይሯል። አሁን ያለበትን ሁኔታ ያሳያል።',
     announceOptedIn: 'ተመዝግበዋል።',
     announceWithdrawn: 'ምዝገባዎ ተነስቷል።',
     announceAccepted: '{name} ተቀባይነት አግኝቷል።',
@@ -529,6 +545,7 @@ export const feedOptInsMessages: Record<Locale, FeedOptInsMessages> = {
     errPostClosed: 'Qhov tshaj tawm no kaw lawm',
     errOwnPost: 'Koj sau npe rau koj tus kheej qhov tshaj tawm tsis tau',
     errAlreadyOptedIn: 'Koj twb sau npe lawm',
+    changedMeanwhile: 'Daim ntawv thov no twb hloov lawm. Tam sim no nws qhia tias nws nyob li cas.',
     announceOptedIn: 'Koj sau npe lawm.',
     announceWithdrawn: 'Koj thim kev sau npe lawm.',
     announceAccepted: 'Txais {name} lawm.',
@@ -694,6 +711,15 @@ export function signUpNotice(kind: SignUpKind, name: string | null, locale: Loca
 export const SIGN_UP_NOT_DONE = "That didn't work. Please try again."
 
 /**
+ * The fixed sentence for a sign-up action that answered without an error and changed nothing,
+ * once the read that follows it has shown the card as it is now (the request had been accepted,
+ * declined or withdrawn meanwhile). Read as a code: the member's sentence is `changedMeanwhile`.
+ * It does not ask for a retry that cannot succeed. When that read failed, the card keeps
+ * SIGN_UP_NOT_DONE (what it shows may be behind).
+ */
+export const SIGN_UP_CHANGED_MEANWHILE = 'This request had already changed. It now shows where it stands.'
+
+/**
  * Each fixed sentence the card can be handed as an opt-in failure, and the key of the member's
  * sentence: the guest refusal and the two thrown-value fallbacks of the feed panel's handlers
  * (components/panels/feed-panel.tsx, unchanged), the two failures of hooks/use-opt-ins.ts, and the
@@ -720,8 +746,10 @@ export function optInErrorText(error: string, locale: Locale): ErrorText {
   return readErrorSentence(error, locale, (sentence) =>
     sentence === SIGN_UP_NOT_DONE
       ? cardT(locale, 'statusModerationFailed')
-      : Object.prototype.hasOwnProperty.call(OPT_IN_ERROR_SENTENCES, sentence)
-        ? optInsT(locale, OPT_IN_ERROR_SENTENCES[sentence])
-        : null,
+      : sentence === SIGN_UP_CHANGED_MEANWHILE
+        ? optInsT(locale, 'changedMeanwhile')
+        : Object.prototype.hasOwnProperty.call(OPT_IN_ERROR_SENTENCES, sentence)
+          ? optInsT(locale, OPT_IN_ERROR_SENTENCES[sentence])
+          : null,
   )
 }

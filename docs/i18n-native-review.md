@@ -1077,6 +1077,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | ht | This post is closed | Piblikasyon sa a fèmen | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | ht | You cannot opt in to your own post | Ou pa ka enskri nan pwòp piblikasyon ou | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | ht | Already opted in | Ou deja enskri | 2026-10-11 | machine-drafted, needs native review |
+| `changedMeanwhile` | ht | This request had already changed. It now shows where it stands. | Demann sa a te deja chanje. Kounye a li montre kote li ye. | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | ht | You are opted in. | Ou enskri. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | ht | Your opt-in was withdrawn. | Ou retire enskripsyon ou. | 2026-10-11 | machine-drafted, needs native review |
 | `announceAccepted` | ht | You accepted {name}. | Ou aksepte {name}. | 2026-10-11 | machine-drafted, needs native review |
@@ -1108,6 +1109,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | so | This post is closed | Qoraalkani wuu xiran yahay | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | so | You cannot opt in to your own post | Iskuma qori kartid qoraalkaaga | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | so | Already opted in | Hore ayaad isu qortay | 2026-10-11 | machine-drafted, needs native review |
+| `changedMeanwhile` | so | This request had already changed. It now shows where it stands. | Codsigan horey wuu isbeddelay. Hadda wuxuu muujinayaa xaaladdiisa. | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | so | You are opted in. | Waad is qortay. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | so | Your opt-in was withdrawn. | Is-qoristaadii waad ka noqotay. | 2026-10-11 | machine-drafted, needs native review |
 | `announceAccepted` | so | You accepted {name}. | {name} waa la aqbalay. | 2026-10-11 | machine-drafted, needs native review |
@@ -1139,6 +1141,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | am | This post is closed | ይህ ልጥፍ ተዘግቷል | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | am | You cannot opt in to your own post | በራስዎ ልጥፍ ላይ መመዝገብ አይችሉም | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | am | Already opted in | አስቀድመው ተመዝግበዋል | 2026-10-11 | machine-drafted, needs native review |
+| `changedMeanwhile` | am | This request had already changed. It now shows where it stands. | ይህ ጥያቄ አስቀድሞ ተቀይሯል። አሁን ያለበትን ሁኔታ ያሳያል። | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | am | You are opted in. | ተመዝግበዋል። | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | am | Your opt-in was withdrawn. | ምዝገባዎ ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
 | `announceAccepted` | am | You accepted {name}. | {name} ተቀባይነት አግኝቷል። | 2026-10-11 | machine-drafted, needs native review |
@@ -1170,6 +1173,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errPostClosed` | hmn | This post is closed | Qhov tshaj tawm no kaw lawm | 2026-10-11 | machine-drafted, needs native review |
 | `errOwnPost` | hmn | You cannot opt in to your own post | Koj sau npe rau koj tus kheej qhov tshaj tawm tsis tau | 2026-10-11 | machine-drafted, needs native review |
 | `errAlreadyOptedIn` | hmn | Already opted in | Koj twb sau npe lawm | 2026-10-11 | machine-drafted, needs native review |
+| `changedMeanwhile` | hmn | This request had already changed. It now shows where it stands. | Daim ntawv thov no twb hloov lawm. Tam sim no nws qhia tias nws nyob li cas. | 2026-10-11 | machine-drafted, needs native review |
 | `announceOptedIn` | hmn | You are opted in. | Koj sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `announceWithdrawn` | hmn | Your opt-in was withdrawn. | Koj thim kev sau npe lawm. | 2026-10-11 | machine-drafted, needs native review |
 | `announceAccepted` | hmn | You accepted {name}. | Txais {name} lawm. | 2026-10-11 | machine-drafted, needs native review |
