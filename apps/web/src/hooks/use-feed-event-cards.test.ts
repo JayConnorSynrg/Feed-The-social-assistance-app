@@ -222,12 +222,12 @@ describe('createCardNoticeAnnouncer — post card notices share the card-notice 
     expect(log).toEqual(['notice:', 'focus:next card', 'notice:Post deleted.'])
   })
 
-  it('a newer announcement (or an event-card change) supersedes one still waiting for its frame', () => {
+  it('a newer announcement (or an event-card change) supersedes the WORDS of one still waiting for its frame; its focus step still runs, once', () => {
     const { a, log, runFrames } = harness()
     a.announce('Link copied.', () => log.push('focus:old'))
     a.announce('Post held for review.')
     runFrames()
-    expect(log).toEqual(['notice:', 'notice:', 'notice:Post held for review.'])
+    expect(log).toEqual(['notice:', 'notice:', 'focus:old', 'notice:Post held for review.'])
     const h2 = harness()
     h2.a.announce('Post restored.')
     h2.a.supersede()
@@ -250,6 +250,38 @@ describe('createCardNoticeAnnouncer — post card notices share the card-notice 
     a.announce('Post held for review.', undefined, { join: true })
     runFrames()
     expect(log.at(-1)).toBe('notice:Post held for review.')
+  })
+
+  it('L6 · replacing or superseding a waiting announcement drops only words: every focus step runs exactly once, in order, before any sentence', () => {
+    // Steps that carry state: a line written after focus, a card removed.
+    const { a, log, runFrames } = harness()
+    a.announce('Couldn\'t refresh the list.', () => log.push('focus:toggle', 'line:o1'), { join: true })
+    a.announce('Link copied.')
+    runFrames()
+    expect(log).toEqual(['notice:', 'notice:', 'focus:toggle', 'line:o1', 'notice:Link copied.'])
+    runFrames()
+    expect(log.filter((l) => l === 'line:o1')).toHaveLength(1)
+
+    const s = harness()
+    s.a.announce('This post was deleted by its author.', () => s.log.push('focus:next card', 'removed:p1'), { join: true })
+    s.a.supersede()
+    s.runFrames()
+    expect(s.log).toEqual(['notice:', 'focus:next card', 'removed:p1'])
+    // A later announcement does not run it again.
+    s.a.announce('Post restored.')
+    s.runFrames()
+    expect(s.log.filter((l) => l === 'removed:p1')).toHaveLength(1)
+    expect(s.log.at(-1)).toBe('notice:Post restored.')
+
+    // Several steps keep their order; focus ends where the last one puts it.
+    const o = harness()
+    o.a.announce('A.', () => o.log.push('step:1'))
+    o.a.supersede()
+    o.a.announce('B.', () => o.log.push('step:2'), { join: true })
+    o.a.announce('C.', () => o.log.push('step:3'))
+    o.runFrames()
+    expect(o.log.filter((l) => l.startsWith('step:'))).toEqual(['step:1', 'step:2', 'step:3'])
+    expect(o.log.at(-1)).toBe('notice:C.')
   })
 
   it('one region: no feed post surface renders its own polite status region', async () => {

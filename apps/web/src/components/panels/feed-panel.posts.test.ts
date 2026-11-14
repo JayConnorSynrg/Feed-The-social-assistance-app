@@ -69,6 +69,10 @@ const h = vi.hoisted(() => ({
   // Every call to the card-notice announcer, empty ones included (an empty one clears the region
   // and cancels a sentence still waiting for its frame).
   announced: [] as string[],
+  // When set, the card notices go through the REAL announcer and its frames wait here until a
+  // test runs them (the default announcer runs at once).
+  frames: null as null | Array<() => void>,
+  realAnnouncer: null as null | { announce: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => void; supersede: () => void },
 }))
 const once = <T,>(k: string, make: () => T): T => (h.stable[k] ??= make()) as T
 
@@ -155,6 +159,7 @@ vi.mock('@/hooks/use-feed-event-cards', async (orig) => ({
     // (An empty sentence is the announcer being asked to move focus and say nothing.)
     announceCardNotice: (text: string, moveFocus?: () => void, options?: { join?: boolean }) => {
       h.announced.push(options?.join ? `${text} [join]` : text)
+      if (h.realAnnouncer) return h.realAnnouncer.announce(text, moveFocus, options)
       moveFocus?.()
       if (text !== '') h.notices.push(text)
       if (text !== '') h.onNotice?.(text)
@@ -376,6 +381,8 @@ beforeEach(() => {
   h.headers.length = 0
   h.onNotice = null
   h.announced.length = 0
+  h.frames = null
+  h.realAnnouncer = null
   signIn('member')
 })
 
@@ -1131,6 +1138,34 @@ describe('sign-up actions: what is sent, what is said, where focus goes', () => 
       expect(h.notices).toEqual([cardT('en', 'statusPostGone')])
       // No line is left for the post that went: it is not shown again if the post comes back.
       expect(card(c, 'p3').props.optInError).toBeFalsy()
+    })
+
+    it('L6 · a leaving acted card, then a non-joining announcement in the same frame: the card is still removed, exactly once, after focus moves; only the newer words are said', async () => {
+      const { createCardNoticeAnnouncer } = await vi.importActual<typeof import('@/hooks/use-feed-event-cards')>('@/hooks/use-feed-event-cards')
+      const frames: Array<() => void> = []
+      h.frames = frames
+      h.realAnnouncer = createCardNoticeAnnouncer((text) => void (text !== '' && h.notices.push(text)), (fn) => void frames.push(fn))
+      const c = await asAuthor([optIn('o1', 'Bo')])
+      h.optIns = []
+      h.rows = h.rows.filter((r) => r.id !== 'p1')
+      el('accept-optin-o1').isConnected = false
+      el('post-card-p3')
+      await update(c, 'o1', 'accepted')
+      await c.flush()
+      // The leaving card waits for its frame; an unrelated notice lands first.
+      expect(cardIds(c.tree())).toContain('p1')
+      const events = h.stable.events as { announceCardNotice: (text: string) => void }
+      events.announceCardNotice(cardT('en', 'statusLinkCopied'))
+      for (let i = 0; i < 3 && frames.length > 0; i++) for (const f of frames.splice(0)) f()
+      await c.flush()
+      expect(cardIds(c.tree())).toEqual(['p3'])
+      expect(h.focused).toEqual(['post-card-p3'])
+      expect(h.notices).toEqual([cardT('en', 'statusLinkCopied')])
+      // Nothing runs it again.
+      events.announceCardNotice(cardT('en', 'statusLinkCopied'))
+      for (const f of frames.splice(0)) f()
+      await c.flush()
+      expect(h.focused).toEqual(['post-card-p3'])
     })
 
     it('L2 · a write that changed nothing: focus lands first, and only then does the card say why — once', async () => {

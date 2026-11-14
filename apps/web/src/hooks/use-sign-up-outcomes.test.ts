@@ -523,6 +523,29 @@ describe('the hook', () => {
       expect(region.filter((x) => x !== '')).toEqual([`You accepted ${isolate('Bo')}. You declined ${isolate('Cy')}.`])
     })
 
+    it.each([
+      ['a non-joining announcement', (real: ReturnType<typeof createCardNoticeAnnouncer>) => real.announce('Link copied.')],
+      ['an event-card change (supersede)', (real: ReturnType<typeof createCardNoticeAnnouncer>) => real.supersede()],
+    ] as const)('L6 · a no-change whose line waits in an announcement, then %s in the same frame: the line is still written after focus, exactly once', (_name, interrupt) => {
+      const frames: Array<() => void> = []
+      const region: string[] = []
+      const real = createCardNoticeAnnouncer((text) => void region.push(text), (fn) => void frames.push(fn))
+      const h = harness('en', real.announce)
+      h.state.authorRows = { p1: [rowOf('o1', 'pending', 'Bo')] }
+      h.c.rerender()
+      el('accept-optin-o1').isConnected = false
+      el('opt-in-manage-p1')
+      const a = h.begin('accept', { optInId: 'o1' })
+      h.api().unchanged(a)
+      // Its read failed: the stale-list sentence is said, and the line waits in that announcement.
+      h.api().settled(a, 'stale')
+      h.c.rerender()
+      expect(h.log).toEqual([])
+      interrupt(real)
+      for (let i = 0; i < 3 && frames.length > 0; i++) for (const f of frames.splice(0)) f()
+      expect(h.log).toEqual(['focus:opt-in-manage-p1', 'line:o1:stale'])
+    })
+
     describe('a request that came back and changed nothing (unchanged)', () => {
       it('L2 · nothing is said for it, shown or not; when the read that follows has corrected the card and its control is gone, focus goes to a stable control, and only then is the caller told (once)', () => {
         const h = harness()
