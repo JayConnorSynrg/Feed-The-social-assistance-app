@@ -58,7 +58,8 @@ SET LOCAL lock_timeout = '5s';
 -- Preflight, before any statement that changes anything: the objects this file drops, alters or revokes by name,
 -- and the two prod objects no migration in git creates (update_posts_updated_at, the trigger that keeps
 -- posts.updated_at moving once the duplicate below goes; petitions_select_own_drafts, prod's name for the draft-read
--- policy). Anything missing or shaped otherwise: one refusal naming every item (SQLSTATE 55000), nothing applied.
+-- policy), and the comment-insert trigger whose function this file replaces (trg_post_comments_lock_post). Anything
+-- missing or shaped otherwise: one refusal naming every item (SQLSTATE 55000), nothing applied.
 DO $preflight$
 DECLARE v_missing text[] := '{}'; v_rel text; v_fn text; v_con text[];
 BEGIN
@@ -97,6 +98,14 @@ BEGIN
                     AND t.tgattr = ''::int2vector AND t.tgqual IS NULL               -- no column list, no WHEN
                     AND f.prosrc ~* 'NEW\s*\.\s*updated_at\s*:?=') THEN
     v_missing := v_missing || 'trigger update_posts_updated_at on public.posts (enabled, BEFORE UPDATE FOR EACH ROW, sets NEW.updated_at)'::text;
+  END IF;
+  -- the comment lock: this file replaces lock_post_for_engagement() and the lock is enforced only where that function
+  -- runs, BEFORE every comment INSERT; without the trigger a member could comment on a locked post with no error
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger t
+                  WHERE t.tgrelid = to_regclass('public.post_comments') AND t.tgname = 'trg_post_comments_lock_post' AND NOT t.tgisinternal
+                    AND t.tgenabled IN ('O', 'A') AND t.tgtype & 7 = 7                -- ROW (1) + BEFORE (2) + INSERT (4)
+                    AND t.tgqual IS NULL AND t.tgfoid = to_regprocedure('public.lock_post_for_engagement()')) THEN
+    v_missing := v_missing || 'trigger trg_post_comments_lock_post on public.post_comments (enabled, BEFORE INSERT FOR EACH ROW, lock_post_for_engagement())'::text;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = to_regclass('public.petitions') AND polname = 'petitions_select_own_drafts') THEN
     v_missing := v_missing || 'policy petitions_select_own_drafts on public.petitions'::text; END IF;
