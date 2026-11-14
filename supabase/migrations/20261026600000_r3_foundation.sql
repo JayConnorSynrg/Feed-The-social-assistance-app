@@ -1599,7 +1599,7 @@ GRANT SELECT (id, post_id, label, post_version, source_role, applied_at, retract
 -- (E) opt-ins: no INSERT policy ever existed (opt_in_to_post is the only writer). The seeker's own DELETE stays
 -- (policy opt_ins_delete, authenticated) and now returns the slot; anon never had a policy and loses the bit.
 -- UPDATE (status) + policy opt_ins_update stay until 20261026700000 (the deployed client decides opt-ins with a
--- direct UPDATE).
+-- direct UPDATE). Both policies lose their platform-admin branch (section 8).
 REVOKE INSERT ON public.resource_opt_ins FROM PUBLIC, anon, authenticated;
 REVOKE DELETE ON public.resource_opt_ins FROM PUBLIC, anon;
 REVOKE ALL ON public.resource_opt_in_events FROM PUBLIC, anon, authenticated, service_role;
@@ -1682,6 +1682,21 @@ CREATE POLICY post_labels_select_public ON public.post_labels FOR SELECT TO anon
   USING (retracted_at IS NULL AND public.post_is_readable(post_id));
 CREATE POLICY post_labels_select_staff ON public.post_labels FOR SELECT TO authenticated
   USING ((SELECT public.current_user_tier_at_least('community_moderator')));
+
+-- opt-ins: the two direct write policies the deployed client still needs until 20261026700000, without their
+-- platform-admin branch. The deployed client (origin/develop apps/web, supabase/functions) never writes an opt-in
+-- as an admin: its only direct write is the post author's status UPDATE (feed-panel.tsx), and nothing sends the
+-- direct DELETE. An admin's write through that branch left only an anonymous-looking trail row and no
+-- admin_actions row. Otherwise the predicates of 20260914120000 / 20261004000000.
+DROP POLICY opt_ins_update ON public.resource_opt_ins;
+CREATE POLICY opt_ins_update ON public.resource_opt_ins
+  FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.posts p WHERE p.id = resource_opt_ins.post_id AND p.user_id = (SELECT auth.uid())))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.posts p WHERE p.id = resource_opt_ins.post_id AND p.user_id = (SELECT auth.uid())));
+DROP POLICY opt_ins_delete ON public.resource_opt_ins;
+CREATE POLICY opt_ins_delete ON public.resource_opt_ins
+  FOR DELETE TO authenticated
+  USING (seeker_id = (SELECT auth.uid()) AND status = 'pending');
 
 -- the opt-in trail: its two parties and platform admins; nobody writes it
 CREATE POLICY resource_opt_in_events_select_parties ON public.resource_opt_in_events FOR SELECT TO authenticated

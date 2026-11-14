@@ -11,7 +11,8 @@
 --       alert_field_required:expected_version). Same signature and return type: CREATE OR REPLACE. The body is the
 --       foundation body plus that one guard; nothing else changes.
 --   (b) Opt-in decisions go through decide_opt_in only: the direct UPDATE (status) grant and policy opt_ins_update
---       go (with them the path that accepted an opt-in on a removed post, and a platform admin's direct write).
+--       go (with them the path that accepted an opt-in on a removed post). The policy's platform-admin branch
+--       already went in the foundation.
 --   (b2) No client DELETE on opt-ins: policy opt_ins_delete and the DELETE grant go. A seeker leaves through
 --       withdraw_opt_in, an author lifts a decline through unblock_opt_in; both lock the post before the opt-in,
 --       so they cannot deadlock with decide_opt_in the way the direct DELETE did. The slot-return trigger stays.
@@ -115,8 +116,8 @@ REVOKE UPDATE ON public.resource_opt_ins FROM PUBLIC, anon, authenticated;   -- 
 -- unblock_opt_in (both take the post row first, then the opt-in row, as decide_opt_in does). A direct DELETE took
 -- the two locks in the opposite order (opt-in row, then the post row in the slot trigger) and deadlocked with a
 -- decide_opt_in made at the same moment (measured: 21 and 25 of 40 simultaneous pairs). No deployed client sends
--- it. The slot-return and trail triggers stay: they serve the two RPCs, cascades and account deletion. With the
--- policy goes the platform admin's direct removal of an opt-in (service-side only from here on).
+-- it. The slot-return and trail triggers stay: they serve the two RPCs, cascades and account deletion. (The
+-- policy's platform-admin branch already went in the foundation: removing a member's opt-in is service-side only.)
 REVOKE DELETE ON public.resource_opt_ins FROM PUBLIC, anon, authenticated;
 
 -- (c) petitions: the server's trigger is the only writer of the hash

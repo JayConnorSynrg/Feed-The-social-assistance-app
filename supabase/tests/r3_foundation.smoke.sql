@@ -1226,13 +1226,17 @@ SELECT pg_temp.ck('E4e', '... and not an opt-in the author already accepted (exp
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
   pg_temp.who(ARRAY['B', 'A'], $q$INSERT INTO public.resource_opt_ins (post_id, seeker_id, status) VALUES ('00000000-0000-4000-a000-000000000008', auth.uid(), 'accepted') RETURNING 'forged'$q$));
 SELECT pg_temp.run('C3', $q$SELECT (public.opt_in_to_post('00000000-0000-4000-a000-000000000008')).status$q$);
-SELECT pg_temp.ck('E4h', 'the one other direct delete the policy allowed: a platform admin removes a member''s opt-in. Expand: the slot comes back and the trail says who (removed, by platform admin). Contract: refused like every client DELETE; the row and its slot stay',
-  CASE WHEN pg_temp.contract() THEN '^ERR 42501 permission denied for table resource_opt_ins\|2/0/2\|opted_in:-:seeker$' ELSE '^OK 1\|2/1/1\|removed:pending:platform_admin$' END,
+SELECT pg_temp.ck('E4h', 'a platform admin cannot change or remove a member''s opt-in directly in either state (the policies have no admin branch; it left no admin_actions row). Expand: the UPDATE and the DELETE match no row; contract: both refused. The row, its status, its slot and the trail are untouched',
+  CASE WHEN pg_temp.contract()
+       THEN '^ERR 42501 permission denied for table resource_opt_ins;ERR 42501 permission denied for table resource_opt_ins\|pending\|2/0/2\|opted_in:-:seeker$'
+       ELSE '^OK 0;OK 0\|pending\|2/0/2\|opted_in:-:seeker$' END,
+  pg_temp.run('PA', format($q$WITH u AS (UPDATE public.resource_opt_ins SET status = 'declined' WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = %L RETURNING 1) SELECT count(*)::text FROM u$q$, pg_temp.u('C3'))) || ';' ||
   pg_temp.run('PA', format($q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = %L RETURNING 1) SELECT count(*)::text FROM d$q$, pg_temp.u('C3'))) || '|' ||
+  pg_temp.fresh(format($q$SELECT status FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' AND seeker_id = %L$q$, pg_temp.u('C3'))) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
   pg_temp.fresh($q$SELECT event || ':' || COALESCE(from_status, '-') || ':' || actor_role FROM public.resource_opt_in_events WHERE post_id = '00000000-0000-4000-a000-000000000008' ORDER BY id DESC LIMIT 1$q$));
--- contract state: C3's row is still there (the admin's DELETE was refused); C3 leaves through the RPC so both states continue alike
-SELECT CASE WHEN pg_temp.contract() THEN pg_temp.run('C3', $q$SELECT public.withdraw_opt_in('00000000-0000-4000-a000-000000000008')::text$q$) END;
+-- C3's row is still there in both states; C3 leaves through the RPC
+SELECT pg_temp.run('C3', $q$SELECT public.withdraw_opt_in('00000000-0000-4000-a000-000000000008')::text$q$);
 SELECT pg_temp.ck('E4f', 'a delete by the table owner (a service-side cleanup) returns the slot too and is on the trail as removed / system; the slot never exceeds the capacity', '^OK 1\|2/2/0\|removed:accepted:system\|2/2/0$',
   pg_temp.pg($q$WITH d AS (DELETE FROM public.resource_opt_ins WHERE post_id = '00000000-0000-4000-a000-000000000008' RETURNING 1) SELECT count(*)::text FROM d$q$) || '|' ||
   pg_temp.fresh($q$SELECT pg_temp.slots('00000000-0000-4000-a000-000000000008')$q$) || '|' ||
