@@ -193,10 +193,10 @@ export function SafetyAlertsReview() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reads])
 
-  /** A refused action: say what happened; re-read when the list is stale. Nothing is sent again. */
+  /** A refused action: say what happened; re-read when the list is stale. Nothing is sent again. The refusal's one
+   *  app_logs row is privilegedRpc's error row (error_code, action, target_id, request_id); nothing is logged here. */
   const refused = useCallback(
-    (action: 'verify' | 'remove', rpcErr: AlertRpcError, requestId: string) => {
-      logger.warn('admin.denied', { action: `safety_alert.${action}`, code: rpcErr.code ?? 'unknown', request_id: requestId })
+    (action: 'verify' | 'remove', rpcErr: AlertRpcError) => {
       const { message, reread } = moderationFailure(action, parseAlertRpcError(rpcErr))
       setError(message)
       if (reread) {
@@ -220,7 +220,7 @@ export function SafetyAlertsReview() {
           { action: 'safety_alert.verify', target_id: alert.id },
           AbortSignal.timeout(QUERY_TIMEOUT_MS),
         )
-        if (rpcErr) return refused('verify', rpcErr as AlertRpcError, requestId)
+        if (rpcErr) return refused('verify', rpcErr as AlertRpcError)
         // The answer is the alert as members see it; the row keeps its place and its is_mine.
         const answer = toSafetyAlert(data)
         const apply = (held: ReviewAlert): ReviewAlert => (answer ? mergeAlertAnswer(held, answer) : { ...held, verified: true })
@@ -247,7 +247,7 @@ export function SafetyAlertsReview() {
           { action: 'safety_alert.remove', target_id: alert.id },
           AbortSignal.timeout(QUERY_TIMEOUT_MS),
         )
-        if (rpcErr) return refused('remove', rpcErr as AlertRpcError, requestId)
+        if (rpcErr) return refused('remove', rpcErr as AlertRpcError)
         setAlerts((prev) => prev.filter((a) => a.id !== alert.id))
         setFocused((f) => (f.status === 'found' && f.alert.id === alert.id ? { status: 'none' } : f))
         logger.info('pin.removed', { alertId: alert.id, request_id: requestId })

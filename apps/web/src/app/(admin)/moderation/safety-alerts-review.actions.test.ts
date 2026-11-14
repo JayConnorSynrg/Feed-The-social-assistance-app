@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
-const h = vi.hoisted(() => ({ backend: null as unknown as import('@/test/alert-fixtures').RpcBackend }))
+const h = vi.hoisted(() => ({ backend: null as unknown as import('@/test/alert-fixtures').RpcBackend, failures: [] as string[] }))
 vi.mock('@/lib/supabase/client', async () => {
   const { createRpcBackend, rpcClient } = await import('@/test/alert-fixtures')
   h.backend = createRpcBackend()
@@ -25,11 +25,20 @@ vi.mock('@/lib/supabase/client', async () => {
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   logEvent: vi.fn(),
-  withMetric: async (_op: string, _a: unknown, fn: () => Promise<unknown>) => fn(),
+  // withMetric writes one error-level app_logs row when the wrapped call fails: recorded here as `<op>.error`
+  withMetric: async (op: string, _a: unknown, fn: () => Promise<unknown>) => {
+    try {
+      return await fn()
+    } catch (e) {
+      h.failures.push(`${op}.error`)
+      throw e
+    }
+  },
 }))
 vi.mock('./use-admin-focus', () => ({ useAdminFocusSession: () => null }))
 
 import { mount } from '@/test/mini-react'
+import { logger } from '@/lib/logger'
 import { NOW, alert, iso } from '@/test/alert-fixtures'
 import { SafetyAlertsReview, type SafetyAlertsReviewViewProps } from './safety-alerts-review'
 
@@ -47,6 +56,8 @@ const HOUR = 3600_000
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  h.failures.length = 0
+  vi.mocked(logger.warn).mockClear(); vi.mocked(logger.error).mockClear(); vi.mocked(logger.info).mockClear()
   h.backend.reset()
   h.backend.answers.safety_alerts_in_view = { data: [A, B] }
 })
@@ -207,5 +218,23 @@ describe('SafetyAlertsReview — verify and remove', () => {
     await r.c.flush()
     expect(r.props().error).toBe('You reported this alert, so another moderator has to verify it.')
     expect(lists()).toHaveLength(1)
+  })
+
+  it('a refused verify and a refused remove each leave exactly one app_logs row: the privileged call\'s error row', async () => {
+    const rows = () => [
+      ...h.failures,
+      ...[logger.warn, logger.error, logger.info].flatMap((f) => vi.mocked(f).mock.calls.map(([name]) => String(name))),
+    ]
+    const r = await review()
+    h.backend.answers.admin_verify_safety_alert = { error: { code: '42501', message: 'self_moderation_refused' } }
+    r.props().onApprove(B)
+    await r.c.flush()
+    expect(rows()).toEqual(['admin.safety_alert.verify.error'])
+    h.failures.length = 0
+    vi.mocked(logger.warn).mockClear(); vi.mocked(logger.error).mockClear(); vi.mocked(logger.info).mockClear()
+    h.backend.answers.admin_remove_safety_alert = { error: { code: '42501', message: 'self_moderation_refused' } }
+    r.props().onRemove(B)
+    await r.c.flush()
+    expect(rows()).toEqual(['admin.safety_alert.remove.error'])
   })
 })
