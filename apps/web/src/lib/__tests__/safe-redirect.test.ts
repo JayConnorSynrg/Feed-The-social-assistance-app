@@ -64,3 +64,14 @@ describe('safeRelativePath', () => {
     })
   })
 })
+
+describe('safeRelativePath — dot segments that collapse to a protocol-relative path', () => {
+  it.each(['/.//evil.com', '/..//evil.com', '/a/..//evil.com', '/%2e//evil.com'])('rejects %j', (raw) => {
+    expect(safeRelativePath(raw)).toBe('/')
+  })
+
+  it('control: keeps a normal path with a query and an inner double slash', () => {
+    expect(safeRelativePath('/moderation?tab=people')).toBe('/moderation?tab=people')
+    expect(safeRelativePath('/moderation//org')).toBe('/moderation//org')
+  })
+})

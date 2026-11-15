@@ -2478,12 +2478,13 @@ export function FeedPanel() {
             </div>
           )}
 
-          {/* Scrollable Feed */}
+          {/* Feed list. It does not scroll itself: the shell card is the single scroller for the
+              Feed sub-tab (regionScrollsWithCard in feed-shell.tsx), so there is never a nested scrollbar. */}
           {/* W1.5 — LazyMotion(strict) loads only the domAnimation feature bundle
               and FAILS the build if a full `motion.*` component is used, keeping
               the motion surface to the `m.*` primitives below. */}
           <LazyMotion features={domAnimation} strict>
-          <div className="flex-1 overflow-y-auto space-y-3">
+          <div className="flex-1 space-y-3">
             {error || loading || feedItems.length === 0 ? (
               <FeedListStatus
                 state={error ? { kind: 'error', error } : loading ? { kind: 'loading' } : { kind: 'empty' }}
