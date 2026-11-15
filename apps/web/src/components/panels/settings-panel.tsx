@@ -40,9 +40,9 @@ import { useIsOrgAdmin } from '@/hooks/use-is-org-admin'
 import { adminEntryHref } from '@/lib/org-admin-paths'
 import { createClient } from '@/lib/supabase/client'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
+import { LanguageSection } from '@/components/settings/language-section'
 import { normalizeState } from '@/lib/us-states'
 import { formatRatePct } from '@/lib/event-checkin'
-import { LANGUAGES, languageLabel, GUEST_LANGUAGE_KEY, detectBrowserLanguage } from '@/lib/languages'
 import { logger } from '@/lib/logger'
 import { PRIVACY_PREFS_KEY } from '@/lib/privacy-prefs'
 import { applyA11yAttributes, toUserPrefs } from '@/lib/accessibility-prefs'
@@ -637,128 +637,6 @@ function PrivacySection({ privacy, onUpdate }: PrivacySectionProps) {
         value={privacy.allowMessages}
         onChange={() => handleToggle('allowMessages')}
       />
-    </SettingsSection>
-  )
-}
-
-// ============================================
-// LANGUAGE SECTION
-// ============================================
-interface LanguageSectionProps {
-  /** Current BCP-47 code from profile (null for guests). */
-  currentCode: string | null
-  /** True when this user has no profiles row (guest / anonymous). */
-  isGuest: boolean
-  /** Authenticated user id — null for guests. */
-  userId?: string | null
-  /** Supabase client from parent (avoids creating a second client in this component). */
-  supabase?: ReturnType<typeof createClient>
-  /** Called after a successful DB update (authenticated users). */
-  onSaved?: (code: string) => void
-}
-
-function LanguageSection({ currentCode, isGuest, userId, supabase: supabaseProp, onSaved }: LanguageSectionProps) {
-  // Effective language: DB value > localStorage > browser detection > 'en'
-  const effectiveDefault = (): string => {
-    if (currentCode) return currentCode
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(GUEST_LANGUAGE_KEY)
-      if (stored) return stored
-    }
-    return detectBrowserLanguage()
-  }
-
-  const [selected, setSelected] = useState<string>(effectiveDefault)
-  const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState<string | null>(null)
-
-  // Sync when the profile loads (currentCode changes from null → value after auth resolves)
-  useEffect(() => {
-    if (currentCode && currentCode !== selected) {
-      setSelected(currentCode)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCode])
-
-  const handleChange = async (code: string) => {
-    setSelected(code)
-
-    if (isGuest || !userId || !supabaseProp) {
-      // Guest path: persist to localStorage only
-      try { localStorage.setItem(GUEST_LANGUAGE_KEY, code) } catch { /* ignore */ }
-      setSaveMsg('Language saved for this session')
-      setTimeout(() => setSaveMsg(null), 2500)
-      return
-    }
-
-    // Authenticated path: write to DB with timeout + finally reset
-    setSaving(true)
-    setSaveMsg(null)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12_000)
-    try {
-      const { error } = await supabaseProp
-        .from('profiles')
-        .update({ preferred_language: code })
-        .eq('id', userId)
-        .abortSignal(controller.signal)
-      clearTimeout(timeoutId)
-      if (error) throw error
-      setSaveMsg('Language saved')
-      onSaved?.(code)
-    } catch (err) {
-      clearTimeout(timeoutId)
-      const msg = err instanceof Error ? err.message : 'Save failed'
-      const isAbort = err instanceof DOMException && err.name === 'AbortError'
-      setSaveMsg(isAbort ? 'Language saved' : `Error: ${msg}`)
-    } finally {
-      setSaving(false)
-      setTimeout(() => setSaveMsg(null), 2500)
-    }
-  }
-
-  return (
-    <SettingsSection
-      title="Preferred Language"
-      description="The AI assistant will respond in this language"
-    >
-      <div className="p-4 bg-[#faf9f6] rounded-xl border border-stone-200 space-y-3">
-        <div className="relative">
-          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-          <select
-            data-testid="settings-language-select"
-            value={selected}
-            onChange={(e) => void handleChange(e.target.value)}
-            disabled={saving}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-stone-200 bg-white text-stone-900 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-[#4a5d23] disabled:opacity-60"
-          >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName} — {lang.englishName}
-              </option>
-            ))}
-          </select>
-        </div>
-        {isGuest && (
-          <p className="text-xs text-stone-500">
-            Saved to this device only. Create an account to sync your preference.
-          </p>
-        )}
-        {saveMsg && (
-          <p className={`text-xs font-medium ${saveMsg.startsWith('Error') ? 'text-red-600' : 'text-green-700'}`}>
-            {saveMsg}
-          </p>
-        )}
-        {saving && (
-          <Loader2 className="w-4 h-4 animate-spin text-stone-400" />
-        )}
-      </div>
-      {/* Display-only label for current selection */}
-      {!isGuest && (
-        <p className="text-xs text-stone-400 px-1">
-          Currently: {languageLabel(selected)}
-        </p>
-      )}
     </SettingsSection>
   )
 }
@@ -1414,18 +1292,11 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
     saveLocalPrefs(updated)
   }
 
-  // Read preferred_language from profile (get_my_profile returns it as of migration 20260613120000)
-  const profileLanguageCode = (profile as Record<string, unknown> | null)?.['preferred_language'] as string | null ?? null
-
   if (isAnonymous) {
     // Guests still get the language picker (localStorage-backed)
     return (
       <div className="h-full flex flex-col p-6 gap-6">
-        <LanguageSection
-          currentCode={null}
-          isGuest={true}
-          userId={null}
-        />
+        <LanguageSection />
         <CreateAccountPrompt message="Create a free account to manage your full profile and preferences" />
       </div>
     )
@@ -1475,12 +1346,7 @@ export function SettingsPanel({ userRole }: SettingsPanelProps) {
             <PrivacySection privacy={localPrefs.privacy} onUpdate={updatePrivacy} />
           )}
           {activeSection === 'language' && (
-            <LanguageSection
-              currentCode={profileLanguageCode}
-              isGuest={false}
-              userId={user?.id}
-              supabase={supabase}
-            />
+            <LanguageSection />
           )}
           {activeSection === 'account' && (
             <AccountSection identities={user?.identities} />

@@ -137,7 +137,11 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-stone-900/90" />
+        {/* Portalled to <body>: English (its copy is), not the member's <html lang>; the date
+            line below carries the viewer's locale itself. */}
         <DialogPrimitive.Content
+          lang="en"
+          dir="ltr"
           className="fixed inset-0 z-50 flex flex-col bg-stone-50 overflow-hidden"
           aria-describedby={undefined}
           onCloseAutoFocus={onCloseAutoFocus}

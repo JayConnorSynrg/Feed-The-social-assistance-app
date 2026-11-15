@@ -36,6 +36,9 @@ vi.mock('react', async (importOriginal) => {
     useRef: (v: unknown) => ({ current: v }),
     useCallback: (fn: unknown) => fn,
     useId: () => 'id',
+    // No providers here: a context reads its default; an external store its current value.
+    useContext: (ctx: { _currentValue?: unknown }) => ctx._currentValue,
+    useSyncExternalStore: (_subscribe: unknown, get: () => unknown) => get(),
   }
 })
 

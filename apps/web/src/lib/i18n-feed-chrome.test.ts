@@ -316,7 +316,12 @@ describe('English marks across the member app', () => {
 
   // Still English, and marked. Remove a row with the translation, in the same change.
   const STILL_ENGLISH: Record<string, { marks: number; what: string }> = {
-    'app/layout.tsx': { marks: 1, what: 'the document language (<html lang="en">): each translated surface sets its own' },
+    'app/layout.tsx': { marks: 1, what: '#app-content: <html> carries the member\'s language (feed_locale cookie); the app\'s content is English unless its own root says otherwise' },
+    'components/ui/dialog.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
+    'components/ui/sheet.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
+    'components/ui/alert-dialog.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
+    'components/ui/select.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
+    'components/panels/chat-panel.tsx': { marks: 1, what: '"Retrying…" inside the translated chat error banner' },
     'components/panels/businesses-panel.tsx': { marks: 2, what: "the data layer's own English text beside a translated sentence (submit failure, photo warning)" },
   }
   // Translated in Release 3.5: each held an island before.

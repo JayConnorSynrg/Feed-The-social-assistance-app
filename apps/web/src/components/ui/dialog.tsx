@@ -55,6 +55,8 @@ const DialogContent = React.forwardRef<
       )}
       onPointerDownOutside={guardOutsideClose(disableOutsideClose, onPointerDownOutside)}
       onInteractOutside={guardOutsideClose(disableOutsideClose, onInteractOutside)}
+      lang="en"
+      dir="ltr"
       {...props}
     >
       {children}
