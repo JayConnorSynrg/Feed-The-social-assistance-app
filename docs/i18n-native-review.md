@@ -97,6 +97,647 @@ step in that test, and the test fails until the list below is regenerated.
 | `TIME_WORDS.future.day.one` | so | In {n} days | {n} maalin kadib | 2026-10-11 | machine-drafted, needs native review |
 | `TIME_WORDS.future.day.other` | so | In {n} days | {n} maalmood kadib | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-feed-alerts.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `typeWeather` | ht | Weather Hazard | Danje move tan | 2026-10-11 | machine-drafted, needs native review |
+| `typeRoadClosure` | ht | Road Closure | Wout fèmen | 2026-10-11 | machine-drafted, needs native review |
+| `typeSpeeding` | ht | Speeding Area | Zòn kote machin kouri twòp | 2026-10-11 | machine-drafted, needs native review |
+| `typeGeneral` | ht | Safety Alert | Alèt sekirite | 2026-10-11 | machine-drafted, needs native review |
+| `sevLow` | ht | Low | Ba | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerate` | ht | Moderate | Mwayen | 2026-10-11 | machine-drafted, needs native review |
+| `sevHigh` | ht | High | Wo | 2026-10-11 | machine-drafted, needs native review |
+| `sevCritical` | ht | Critical | Kritik | 2026-10-11 | machine-drafted, needs native review |
+| `sevLowHint` | ht | Low — heads-up | Ba — yon ti avètisman | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerateHint` | ht | Moderate — use caution | Mwayen — fè atansyon | 2026-10-11 | machine-drafted, needs native review |
+| `sevHighHint` | ht | High — significant risk | Wo — gwo risk | 2026-10-11 | machine-drafted, needs native review |
+| `sevCriticalHint` | ht | Critical — avoid area | Kritik — evite zòn nan | 2026-10-11 | machine-drafted, needs native review |
+| `typeAndSeverity` | ht | {type}, {severity} | {type}, {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `stateVerified` | ht | Verified | Verifye | 2026-10-11 | machine-drafted, needs native review |
+| `stateUnverified` | ht | Unverified — neighbor report | Poko verifye — rapò yon vwazen | 2026-10-11 | machine-drafted, needs native review |
+| `stateResolved` | ht | Resolved | Rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `stateEnded` | ht | No longer listed | Li pa nan lis la ankò | 2026-10-11 | machine-drafted, needs native review |
+| `endedBody` | ht | This alert is no longer listed. It may have ended or been withdrawn. | Alèt sa a pa nan lis la ankò. Petèt li fini oswa yo retire li. | 2026-10-11 | machine-drafted, needs native review |
+| `reportedAt` | ht | Reported {when} | Rapòte {when} | 2026-10-11 | machine-drafted, needs native review |
+| `updatedAgo` | ht | Updated {age} | Mete ajou {age} | 2026-10-11 | machine-drafted, needs native review |
+| `expiresAt` | ht | Expires {when} | Ap fini {when} | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedAt` | ht | Marked resolved {when} | Make kòm rezoud {when} | 2026-10-11 | machine-drafted, needs native review |
+| `shownUntil` | ht | Shown as resolved until {when} | Ap parèt kòm rezoud jiska {when} | 2026-10-11 | machine-drafted, needs native review |
+| `stripTitle` | ht | Safety alerts | Alèt sekirite | 2026-10-11 | machine-drafted, needs native review |
+| `viewOnMap` | ht | View on map | Gade sou kat la | 2026-10-11 | machine-drafted, needs native review |
+| `actionUpdate` | ht | Update | Mete ajou | 2026-10-11 | machine-drafted, needs native review |
+| `actionResolve` | ht | Mark resolved | Make kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `actionWithdraw` | ht | Withdraw | Retire | 2026-10-11 | machine-drafted, needs native review |
+| `actionHistory` | ht | History | Istwa | 2026-10-11 | machine-drafted, needs native review |
+| `close` | ht | Close | Fèmen | 2026-10-11 | machine-drafted, needs native review |
+| `countConfirmed` | ht | {n} confirmed still here | {n} konfime li toujou la | 2026-10-11 | machine-drafted, needs native review |
+| `countGone` | ht | {n} reported gone | {n} di li pa la ankò | 2026-10-11 | machine-drafted, needs native review |
+| `voteStillHere` | ht | Still here | Li toujou la | 2026-10-11 | machine-drafted, needs native review |
+| `voteGone` | ht | Gone now | Li pa la ankò | 2026-10-11 | machine-drafted, needs native review |
+| `voteSending` | ht | Sending… | Ap voye… | 2026-10-11 | machine-drafted, needs native review |
+| `voteFailed` | ht | Your vote was not counted. Try again. | Vòt ou a pa konte. Eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `voteCleared` | ht | Neighbors reported this hazard gone, so the alert was cleared. | Vwazen yo di danje a pa la ankò, kidonk yo efase alèt la. | 2026-10-11 | machine-drafted, needs native review |
+| `guestHint` | ht | Create a free account to confirm or clear alerts. | Kreye yon kont gratis pou konfime oswa efase alèt. | 2026-10-11 | machine-drafted, needs native review |
+| `annNew` | ht | New safety alert: {type}, {severity}. | Nouvo alèt sekirite: {type}, {severity}. | 2026-10-11 | machine-drafted, needs native review |
+| `annRaised` | ht | Safety alert raised to {severity}: {type}. | Alèt sekirite a monte nan nivo {severity}: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annUpdated` | ht | Safety alert updated: {type}. | Alèt sekirite mete ajou: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annResolved` | ht | Safety alert resolved: {type}. | Alèt sekirite rezoud: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annEnded` | ht | Safety alert no longer listed: {type}. | Alèt sekirite a pa nan lis la ankò: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `editTitle` | ht | Update alert | Mete alèt la ajou | 2026-10-11 | machine-drafted, needs native review |
+| `resolveTitle` | ht | Mark alert resolved | Make alèt la kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawTitle` | ht | Withdraw alert | Retire alèt la | 2026-10-11 | machine-drafted, needs native review |
+| `loadingAlert` | ht | Loading the alert… | Ap chaje alèt la… | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | ht | Couldn’t load the alert. | Nou pa t kapab chaje alèt la. | 2026-10-11 | machine-drafted, needs native review |
+| `retry` | ht | Try again | Eseye ankò | 2026-10-11 | machine-drafted, needs native review |
+| `fieldType` | ht | Type of hazard | Kalite danje | 2026-10-11 | machine-drafted, needs native review |
+| `fieldSeverity` | ht | Severity | Gravite | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | ht | Description (optional) | Deskripsyon (si ou vle) | 2026-10-11 | machine-drafted, needs native review |
+| `descriptionPlaceholder` | ht | Add details neighbors should know… | Ajoute detay vwazen yo dwe konnen… | 2026-10-11 | machine-drafted, needs native review |
+| `verifiedNotice` | ht | This alert is verified. Any change you save returns it to unverified until a moderator checks it again. | Alèt sa a verifye. Nenpòt chanjman ou anrejistre ap fè li tounen "poko verifye" jiskaske yon moderatè tcheke li ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `expiryHint` | ht | Raising the severity restarts the alert’s clock. Lowering it can shorten the time left. | Lè ou monte gravite a, revèy alèt la rekòmanse. Lè ou bese li, tan ki rete a ka vin pi kout. | 2026-10-11 | machine-drafted, needs native review |
+| `save` | ht | Save changes | Anrejistre chanjman yo | 2026-10-11 | machine-drafted, needs native review |
+| `saving` | ht | Saving… | Ap anrejistre… | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | ht | Cancel | Anile | 2026-10-11 | machine-drafted, needs native review |
+| `savedNotice` | ht | Alert updated. | Alèt la mete ajou. | 2026-10-11 | machine-drafted, needs native review |
+| `savedExpiryNotice` | ht | Alert updated. It now expires {when}. | Alèt la mete ajou. Kounye a li ap fini {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `unverifiedNotice` | ht | It is unverified until a moderator checks it again. | Li poko verifye jiskaske yon moderatè tcheke li ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `nothingChanged` | ht | Nothing was changed. | Anyen pa chanje. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveBody` | ht | Neighbors will see this alert as resolved for 6 hours. After that it leaves the map and the feed. A resolved alert cannot be reopened: if the hazard returns, report a new alert. | Vwazen yo ap wè alèt sa a kòm rezoud pandan 6 èdtan. Apre sa, li soti sou kat la ak nan paj piblikasyon yo. Ou pa ka relouvri yon alèt ki rezoud: si danje a tounen, rapòte yon nouvo alèt. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveConfirm` | ht | Mark resolved | Make kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedNotice` | ht | Alert marked resolved. It stays visible as resolved until {when}. | Alèt la make kòm rezoud. L ap rete vizib kòm rezoud jiska {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawBody` | ht | This takes the alert off the map and the feed for everyone right away. The withdrawal is recorded. | Sa retire alèt la sou kat la ak nan paj piblikasyon yo pou tout moun touswit. Yo anrejistre retrè a. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawConfirm` | ht | Withdraw alert | Retire alèt la | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawnNotice` | ht | Alert withdrawn. | Alèt la retire. | 2026-10-11 | machine-drafted, needs native review |
+| `conflictTitle` | ht | This alert changed while you had it open | Alèt sa a chanje pandan ou te gen li ouvè | 2026-10-11 | machine-drafted, needs native review |
+| `conflictBody` | ht | A newer version was saved since you opened it. Check it below, then choose what to do. | Yo anrejistre yon vèsyon ki pi nouvo depi ou te ouvri li. Gade li anba a, epi chwazi sa pou fè. | 2026-10-11 | machine-drafted, needs native review |
+| `yourVersion` | ht | Your changes | Chanjman ou yo | 2026-10-11 | machine-drafted, needs native review |
+| `currentVersion` | ht | Current version | Vèsyon aktyèl la | 2026-10-11 | machine-drafted, needs native review |
+| `noDescription` | ht | No description | Pa gen deskripsyon | 2026-10-11 | machine-drafted, needs native review |
+| `conflictChoose` | ht | Choose what to do | Chwazi sa pou fè | 2026-10-11 | machine-drafted, needs native review |
+| `keepMine` | ht | Keep my changes | Kenbe chanjman mwen yo | 2026-10-11 | machine-drafted, needs native review |
+| `keepMineHint` | ht | Save my changes over the current version. | Anrejistre chanjman mwen yo sou vèsyon aktyèl la. | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrent` | ht | Use the current version | Sèvi ak vèsyon aktyèl la | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrentHint` | ht | Discard my changes. | Jete chanjman mwen yo. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveAnyway` | ht | Mark it resolved anyway | Make li kòm rezoud kanmenm | 2026-10-11 | machine-drafted, needs native review |
+| `leaveAsIs` | ht | Leave it as it is | Kite li jan li ye a | 2026-10-11 | machine-drafted, needs native review |
+| `continueLabel` | ht | Continue | Kontinye | 2026-10-11 | machine-drafted, needs native review |
+| `notSavedNotice` | ht | Your changes were not saved. The alert shows its current version. | Chanjman ou yo pa anrejistre. Alèt la montre vèsyon aktyèl li. | 2026-10-11 | machine-drafted, needs native review |
+| `notResolvedNotice` | ht | The alert was left as it is. | Yo kite alèt la jan li ye a. | 2026-10-11 | machine-drafted, needs native review |
+| `notLiveNotice` | ht | This alert is no longer active, so nothing was changed. | Alèt sa a pa aktif ankò, kidonk anyen pa chanje. | 2026-10-11 | machine-drafted, needs native review |
+| `nowResolvedNotice` | ht | This alert was already marked resolved, so nothing was changed. | Alèt sa a te deja make kòm rezoud, kidonk anyen pa chanje. | 2026-10-11 | machine-drafted, needs native review |
+| `failGuest` | ht | Create a free account to report or change safety alerts. | Kreye yon kont gratis pou rapòte oswa chanje alèt sekirite. | 2026-10-11 | machine-drafted, needs native review |
+| `failNotOwner` | ht | Only the member who reported this alert can change it. | Se sèlman manm ki te rapòte alèt sa a ki ka chanje li. | 2026-10-11 | machine-drafted, needs native review |
+| `failInvalid` | ht | Check the alert details and try again. | Tcheke detay alèt la epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `failNetwork` | ht | Couldn’t reach FEED. Check your connection and try again. | Nou pa t kapab konekte ak FEED. Tcheke koneksyon ou epi eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `failUnknown` | ht | Something went wrong. Try again. | Gen yon bagay ki pa mache. Eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `historyTitle` | ht | Alert history | Istwa alèt la | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoading` | ht | Loading the history… | Ap chaje istwa a… | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoadFailed` | ht | Couldn’t load the history. | Nou pa t kapab chaje istwa a. | 2026-10-11 | machine-drafted, needs native review |
+| `historyEmpty` | ht | There is no history to show. The alert may have ended. | Pa gen istwa pou montre. Petèt alèt la fini. | 2026-10-11 | machine-drafted, needs native review |
+| `histReported` | ht | Reported | Rapòte | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdated` | ht | Updated | Mete ajou | 2026-10-11 | machine-drafted, needs native review |
+| `histResolved` | ht | Marked resolved | Make kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityRaised` | ht | Severity raised to {severity} | Gravite a monte nan {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityLowered` | ht | Severity lowered to {severity} | Gravite a desann nan {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histTextChanged` | ht | Description changed | Deskripsyon an chanje | 2026-10-11 | machine-drafted, needs native review |
+| `histTextRemoved` | ht | Description removed | Yo retire deskripsyon an | 2026-10-11 | machine-drafted, needs native review |
+| `histTypeChanged` | ht | Type changed to {type} | Kalite a chanje an {type} | 2026-10-11 | machine-drafted, needs native review |
+| `histLocationMoved` | ht | Location moved | Kote a deplase | 2026-10-11 | machine-drafted, needs native review |
+| `hazardOpen` | ht | Report a hazard or add a resource | Rapòte yon danje oswa ajoute yon resous | 2026-10-11 | machine-drafted, needs native review |
+| `hazardClose` | ht | Close safety menu | Fèmen meni sekirite a | 2026-10-11 | machine-drafted, needs native review |
+| `panelTitle` | ht | Safety & Resources | Sekirite ak resous | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeather` | ht | Report weather hazard | Rapòte yon danje move tan | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeatherBody` | ht | Ice, flooding, high winds, downed branches, etc. | Glas, inondasyon, gwo van, branch ki tonbe, elatriye. | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoad` | ht | Report road closure | Rapòte yon wout ki fèmen | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoadBody` | ht | Blocked road, bridge out, construction, accident. | Wout bloke, pon kraze, travay sou wout, aksidan. | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeeding` | ht | Report speeding area | Rapòte yon zòn kote machin kouri twòp | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeedingBody` | ht | Vehicles exceeding safe speed near pedestrians. | Machin k ap kouri twò vit toupre moun k ap mache. | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneral` | ht | Report general safety issue | Rapòte yon pwoblèm sekirite jeneral | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneralBody` | ht | Other safety concern in this area. | Yon lòt pwoblèm sekirite nan zòn sa a. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntry` | ht | Suggest a Resource | Pwopoze yon resous | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntryBody` | ht | Know a resource that’s missing? Let us know. | Ou konnen yon resous ki manke? Fè nou konnen. | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntry` | ht | Add yourself as a resource | Ajoute tèt ou kòm resous | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntryBody` | ht | Share what you can offer with neighbors. | Pataje sa ou ka ofri ak vwazen ou yo. | 2026-10-11 | machine-drafted, needs native review |
+| `pinLocation` | ht | Pin location | Kote makè a ye | 2026-10-11 | machine-drafted, needs native review |
+| `pinSetting` | ht | Setting location… | Ap fikse kote a… | 2026-10-11 | machine-drafted, needs native review |
+| `pinHint` | ht | Drag the orange pin on the map or search below | Trennen makè zoranj lan sou kat la oswa chèche anba a | 2026-10-11 | machine-drafted, needs native review |
+| `addressLabel` | ht | Search for an address | Chèche yon adrès | 2026-10-11 | machine-drafted, needs native review |
+| `addressPlaceholder` | ht | Enter address… | Antre adrès la… | 2026-10-11 | machine-drafted, needs native review |
+| `addressFind` | ht | Find | Chèche | 2026-10-11 | machine-drafted, needs native review |
+| `addressFinding` | ht | Searching… | Ap chèche… | 2026-10-11 | machine-drafted, needs native review |
+| `addressMoved` | ht | Pin moved to address | Makè a deplase sou adrès la | 2026-10-11 | machine-drafted, needs native review |
+| `addressNotFound` | ht | Address not found — drag the pin to set location | Nou pa jwenn adrès la. Trennen makè a pou fikse kote a. | 2026-10-11 | machine-drafted, needs native review |
+| `addressFailed` | ht | Could not search — drag the pin to set location | Rechèch la pa mache. Trennen makè a pou fikse kote a. | 2026-10-11 | machine-drafted, needs native review |
+| `placeConfirm` | ht | Confirm & Report | Konfime epi rapòte | 2026-10-11 | machine-drafted, needs native review |
+| `placing` | ht | Placing… | Ap mete… | 2026-10-11 | machine-drafted, needs native review |
+| `placeFailed` | ht | Couldn’t place the alert. Try again. | Nou pa t kapab mete alèt la. Eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanks` | ht | Thanks — your suggestion is pending review. | Mèsi. Pwopozisyon ou an ap tann revizyon. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanksBody` | ht | Our team will verify and publish it if it meets community guidelines. | Ekip nou an ap verifye li epi pibliye li si li respekte règ kominote a. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestIntro` | ht | Know of a resource that’s not on the map? Suggest it and our community team will review it. | Ou konnen yon resous ki pa sou kat la? Pwopoze li epi ekip kominote nou an ap revize li. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCategory` | ht | Category | Kategori | 2026-10-11 | machine-drafted, needs native review |
+| `suggestName` | ht | Resource name | Non resous la | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescription` | ht | Description | Deskripsyon | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescriptionPlaceholder` | ht | Who does it serve? What do they offer? Hours? | Ki moun li sèvi? Kisa li ofri? Ki lè li louvri? | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCount` | ht | {n}/500 characters (minimum 10) | {n}/500 karaktè (omwen 10) | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCity` | ht | City | Vil | 2026-10-11 | machine-drafted, needs native review |
+| `suggestState` | ht | State | Eta | 2026-10-11 | machine-drafted, needs native review |
+| `suggestPhone` | ht | Phone | Telefòn | 2026-10-11 | machine-drafted, needs native review |
+| `suggestWebsite` | ht | Website | Sit entènèt | 2026-10-11 | machine-drafted, needs native review |
+| `optional` | ht | (optional) | (si ou vle) | 2026-10-11 | machine-drafted, needs native review |
+| `exampleValue` | ht | e.g. {example} | pa egzanp {example} | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmit` | ht | Submit suggestion | Voye pwopozisyon an | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmitting` | ht | Submitting… | Ap voye… | 2026-10-11 | machine-drafted, needs native review |
+| `suggestFailed` | ht | Couldn’t send the suggestion. Try again. | Nou pa t kapab voye pwopozisyon an. Eseye ankò. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | ht | Vote recorded. | Vòt la anrejistre. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | ht | Dismiss | Fèmen avi a | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | ht | History loaded. Entries: {n}. | Istwa a chaje. Antre: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | ht | Write between 10 and 500 characters. | Ekri ant 10 ak 500 karaktè. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | ht | Updated by the reporter | Moun ki te rapòte li a mete li ajou | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | ht | Updated by a moderator | Yon moderatè mete li ajou | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | ht | Marked resolved by the reporter | Moun ki te rapòte li a make li kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | ht | Marked resolved by a moderator | Yon moderatè make li kòm rezoud | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | ht | Resolved by the reporter | Moun ki te rapòte li a rezoud li | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | ht | Resolved by a moderator | Yon moderatè rezoud li | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | ht | Couldn’t refresh alerts — last updated {time}. | Nou pa t kapab mete alèt yo ajou. Dènye mizajou: {time}. | 2026-10-11 | machine-drafted, needs native review |
+| `typeWeather` | so | Weather Hazard | Khatar cimilo | 2026-10-11 | machine-drafted, needs native review |
+| `typeRoadClosure` | so | Road Closure | Waddo xiran | 2026-10-11 | machine-drafted, needs native review |
+| `typeSpeeding` | so | Speeding Area | Goob xawaare dheeraad ah | 2026-10-11 | machine-drafted, needs native review |
+| `typeGeneral` | so | Safety Alert | Digniin badbaado | 2026-10-11 | machine-drafted, needs native review |
+| `sevLow` | so | Low | Hoose | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerate` | so | Moderate | Dhexdhexaad | 2026-10-11 | machine-drafted, needs native review |
+| `sevHigh` | so | High | Sare | 2026-10-11 | machine-drafted, needs native review |
+| `sevCritical` | so | Critical | Aad u daran | 2026-10-11 | machine-drafted, needs native review |
+| `sevLowHint` | so | Low — heads-up | Hoose — ogeysiis | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerateHint` | so | Moderate — use caution | Dhexdhexaad — taxaddar | 2026-10-11 | machine-drafted, needs native review |
+| `sevHighHint` | so | High — significant risk | Sare — khatar weyn | 2026-10-11 | machine-drafted, needs native review |
+| `sevCriticalHint` | so | Critical — avoid area | Aad u daran — ka fogow goobta | 2026-10-11 | machine-drafted, needs native review |
+| `typeAndSeverity` | so | {type}, {severity} | {type}, {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `stateVerified` | so | Verified | La xaqiijiyay | 2026-10-11 | machine-drafted, needs native review |
+| `stateUnverified` | so | Unverified — neighbor report | Aan la xaqiijin — warbixin deris | 2026-10-11 | machine-drafted, needs native review |
+| `stateResolved` | so | Resolved | La xalliyay | 2026-10-11 | machine-drafted, needs native review |
+| `stateEnded` | so | No longer listed | Kuma jirto liiska hadda | 2026-10-11 | machine-drafted, needs native review |
+| `endedBody` | so | This alert is no longer listed. It may have ended or been withdrawn. | Digniintani kuma jirto liiska hadda. Waxaa laga yaabaa inay dhammaatay ama dib loola noqday. | 2026-10-11 | machine-drafted, needs native review |
+| `reportedAt` | so | Reported {when} | La soo sheegay {when} | 2026-10-11 | machine-drafted, needs native review |
+| `updatedAgo` | so | Updated {age} | La cusboonaysiiyay {age} | 2026-10-11 | machine-drafted, needs native review |
+| `expiresAt` | so | Expires {when} | Waxay dhacaysaa {when} | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedAt` | so | Marked resolved {when} | Loo calaamadeeyay inay xallisantay {when} | 2026-10-11 | machine-drafted, needs native review |
+| `shownUntil` | so | Shown as resolved until {when} | Waxaa loo muujinayaa inay xallisantay ilaa {when} | 2026-10-11 | machine-drafted, needs native review |
+| `stripTitle` | so | Safety alerts | Digniinaha badbaadada | 2026-10-11 | machine-drafted, needs native review |
+| `viewOnMap` | so | View on map | Ka eeg khariidadda | 2026-10-11 | machine-drafted, needs native review |
+| `actionUpdate` | so | Update | Cusboonaysii | 2026-10-11 | machine-drafted, needs native review |
+| `actionResolve` | so | Mark resolved | U calaamadee inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
+| `actionWithdraw` | so | Withdraw | Dib ula noqo | 2026-10-11 | machine-drafted, needs native review |
+| `actionHistory` | so | History | Taariikhda | 2026-10-11 | machine-drafted, needs native review |
+| `close` | so | Close | Xir | 2026-10-11 | machine-drafted, needs native review |
+| `countConfirmed` | so | {n} confirmed still here | {n} ayaa xaqiijiyay inay weli jirto | 2026-10-11 | machine-drafted, needs native review |
+| `countGone` | so | {n} reported gone | {n} ayaa sheegay inay tagtay | 2026-10-11 | machine-drafted, needs native review |
+| `voteStillHere` | so | Still here | Weli way jirtaa | 2026-10-11 | machine-drafted, needs native review |
+| `voteGone` | so | Gone now | Way tagtay | 2026-10-11 | machine-drafted, needs native review |
+| `voteSending` | so | Sending… | Waa la dirayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `voteFailed` | so | Your vote was not counted. Try again. | Codkaaga lama tirin. Mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `voteCleared` | so | Neighbors reported this hazard gone, so the alert was cleared. | Deriska ayaa sheegay in khatartani tagtay, sidaas darteed digniinta waa la saaray. | 2026-10-11 | machine-drafted, needs native review |
+| `guestHint` | so | Create a free account to confirm or clear alerts. | Samee akoon bilaash ah si aad u xaqiijiso ama u saarto digniinaha. | 2026-10-11 | machine-drafted, needs native review |
+| `annNew` | so | New safety alert: {type}, {severity}. | Digniin badbaado oo cusub: {type}, {severity}. | 2026-10-11 | machine-drafted, needs native review |
+| `annRaised` | so | Safety alert raised to {severity}: {type}. | Digniinta badbaadada waxaa kor loogu qaaday {severity}: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annUpdated` | so | Safety alert updated: {type}. | Digniinta badbaadada waa la cusboonaysiiyay: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annResolved` | so | Safety alert resolved: {type}. | Digniinta badbaadada waa la xalliyay: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annEnded` | so | Safety alert no longer listed: {type}. | Digniinta badbaadadu kuma jirto liiska hadda: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `editTitle` | so | Update alert | Cusboonaysii digniinta | 2026-10-11 | machine-drafted, needs native review |
+| `resolveTitle` | so | Mark alert resolved | U calaamadee digniinta inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawTitle` | so | Withdraw alert | Dib ula noqo digniinta | 2026-10-11 | machine-drafted, needs native review |
+| `loadingAlert` | so | Loading the alert… | Digniinta waa la soo rarayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | so | Couldn’t load the alert. | Digniinta lama soo rari karin. | 2026-10-11 | machine-drafted, needs native review |
+| `retry` | so | Try again | Mar kale isku day | 2026-10-11 | machine-drafted, needs native review |
+| `fieldType` | so | Type of hazard | Nooca khatarta | 2026-10-11 | machine-drafted, needs native review |
+| `fieldSeverity` | so | Severity | Heerka khatarta | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | so | Description (optional) | Sharraxaad (ikhtiyaari) | 2026-10-11 | machine-drafted, needs native review |
+| `descriptionPlaceholder` | so | Add details neighbors should know… | Ku dar faahfaahin ay deriska u baahan yihiin inay ogaadaan… | 2026-10-11 | machine-drafted, needs native review |
+| `verifiedNotice` | so | This alert is verified. Any change you save returns it to unverified until a moderator checks it again. | Digniintan waa la xaqiijiyay. Isbeddel kasta oo aad kaydiso wuxuu ku celinayaa "aan la xaqiijin" ilaa uu maamule mar kale hubiyo. | 2026-10-11 | machine-drafted, needs native review |
+| `expiryHint` | so | Raising the severity restarts the alert’s clock. Lowering it can shorten the time left. | Kor u qaadista heerka waxay dib u bilaabaysaa wakhtiga digniinta. Hoos u dhigiddu waxay gaabin kartaa wakhtiga haray. | 2026-10-11 | machine-drafted, needs native review |
+| `save` | so | Save changes | Kaydi isbeddellada | 2026-10-11 | machine-drafted, needs native review |
+| `saving` | so | Saving… | Waa la kaydinayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | so | Cancel | Jooji | 2026-10-11 | machine-drafted, needs native review |
+| `savedNotice` | so | Alert updated. | Digniinta waa la cusboonaysiiyay. | 2026-10-11 | machine-drafted, needs native review |
+| `savedExpiryNotice` | so | Alert updated. It now expires {when}. | Digniinta waa la cusboonaysiiyay. Hadda waxay dhacaysaa {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `unverifiedNotice` | so | It is unverified until a moderator checks it again. | Waxay ahaanaysaa aan la xaqiijin ilaa uu maamule mar kale hubiyo. | 2026-10-11 | machine-drafted, needs native review |
+| `nothingChanged` | so | Nothing was changed. | Waxba lama beddelin. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveBody` | so | Neighbors will see this alert as resolved for 6 hours. After that it leaves the map and the feed. A resolved alert cannot be reopened: if the hazard returns, report a new alert. | Derisku waxay digniintan u arki doonaan mid xallisantay muddo 6 saacadood ah. Intaas ka dib waxay ka baxaysaa khariidadda iyo qoraallada. Digniin xallisantay dib looma furi karo: haddii khatartu soo noqoto, soo sheeg digniin cusub. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveConfirm` | so | Mark resolved | U calaamadee inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedNotice` | so | Alert marked resolved. It stays visible as resolved until {when}. | Digniinta waxaa loo calaamadeeyay inay xallisantay. Waxay sidaas u muuqan doontaa ilaa {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawBody` | so | This takes the alert off the map and the feed for everyone right away. The withdrawal is recorded. | Tani waxay digniinta isla markiiba ka saaraysaa khariidadda iyo qoraallada qof walba. Dib-u-la-noqoshada waa la diiwaangelinayaa. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawConfirm` | so | Withdraw alert | Dib ula noqo digniinta | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawnNotice` | so | Alert withdrawn. | Digniinta dib baa loola noqday. | 2026-10-11 | machine-drafted, needs native review |
+| `conflictTitle` | so | This alert changed while you had it open | Digniintani way isbeddeshay intii ay kuu furnayd | 2026-10-11 | machine-drafted, needs native review |
+| `conflictBody` | so | A newer version was saved since you opened it. Check it below, then choose what to do. | Nooc ka cusub ayaa la kaydiyay ka dib markii aad furtay. Hoos ka eeg, ka dibna dooro waxa la sameeyo. | 2026-10-11 | machine-drafted, needs native review |
+| `yourVersion` | so | Your changes | Isbeddelladaada | 2026-10-11 | machine-drafted, needs native review |
+| `currentVersion` | so | Current version | Nooca hadda | 2026-10-11 | machine-drafted, needs native review |
+| `noDescription` | so | No description | Sharraxaad ma jirto | 2026-10-11 | machine-drafted, needs native review |
+| `conflictChoose` | so | Choose what to do | Dooro waxa la sameeyo | 2026-10-11 | machine-drafted, needs native review |
+| `keepMine` | so | Keep my changes | Hay isbeddelladayda | 2026-10-11 | machine-drafted, needs native review |
+| `keepMineHint` | so | Save my changes over the current version. | Ku kaydi isbeddelladayda nooca hadda dushiisa. | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrent` | so | Use the current version | Isticmaal nooca hadda | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrentHint` | so | Discard my changes. | Tuur isbeddelladayda. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveAnyway` | so | Mark it resolved anyway | Si kastaba u calaamadee inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
+| `leaveAsIs` | so | Leave it as it is | Sida ay tahay u daa | 2026-10-11 | machine-drafted, needs native review |
+| `continueLabel` | so | Continue | Sii wad | 2026-10-11 | machine-drafted, needs native review |
+| `notSavedNotice` | so | Your changes were not saved. The alert shows its current version. | Isbeddelladaada lama kaydin. Digniintu waxay muujinaysaa nooceeda hadda. | 2026-10-11 | machine-drafted, needs native review |
+| `notResolvedNotice` | so | The alert was left as it is. | Digniinta sideedii baa loo daayay. | 2026-10-11 | machine-drafted, needs native review |
+| `notLiveNotice` | so | This alert is no longer active, so nothing was changed. | Digniintani hadda ma shaqaynayso, sidaas darteed waxba lama beddelin. | 2026-10-11 | machine-drafted, needs native review |
+| `nowResolvedNotice` | so | This alert was already marked resolved, so nothing was changed. | Digniintan hore ayaa loogu calaamadeeyay inay xallisantay, sidaas darteed waxba lama beddelin. | 2026-10-11 | machine-drafted, needs native review |
+| `failGuest` | so | Create a free account to report or change safety alerts. | Samee akoon bilaash ah si aad u soo sheegto ama u beddesho digniinaha badbaadada. | 2026-10-11 | machine-drafted, needs native review |
+| `failNotOwner` | so | Only the member who reported this alert can change it. | Kaliya xubinta soo sheegtay digniintan ayaa beddeli karta. | 2026-10-11 | machine-drafted, needs native review |
+| `failInvalid` | so | Check the alert details and try again. | Hubi faahfaahinta digniinta oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `failNetwork` | so | Couldn’t reach FEED. Check your connection and try again. | Lama xiriiri karin FEED. Hubi xiriirkaaga oo mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `failUnknown` | so | Something went wrong. Try again. | Wax baa khaldamay. Mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `historyTitle` | so | Alert history | Taariikhda digniinta | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoading` | so | Loading the history… | Taariikhda waa la soo rarayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoadFailed` | so | Couldn’t load the history. | Taariikhda lama soo rari karin. | 2026-10-11 | machine-drafted, needs native review |
+| `historyEmpty` | so | There is no history to show. The alert may have ended. | Ma jirto taariikh la muujiyo. Waxaa laga yaabaa in digniintu dhammaatay. | 2026-10-11 | machine-drafted, needs native review |
+| `histReported` | so | Reported | La soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdated` | so | Updated | La cusboonaysiiyay | 2026-10-11 | machine-drafted, needs native review |
+| `histResolved` | so | Marked resolved | Loo calaamadeeyay inay xallisantay | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityRaised` | so | Severity raised to {severity} | Heerka khatarta waxaa kor loogu qaaday {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityLowered` | so | Severity lowered to {severity} | Heerka khatarta waxaa hoos loogu dhigay {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histTextChanged` | so | Description changed | Sharraxaadda waa la beddelay | 2026-10-11 | machine-drafted, needs native review |
+| `histTextRemoved` | so | Description removed | Sharraxaadda waa la saaray | 2026-10-11 | machine-drafted, needs native review |
+| `histTypeChanged` | so | Type changed to {type} | Nooca waxaa loo beddelay {type} | 2026-10-11 | machine-drafted, needs native review |
+| `histLocationMoved` | so | Location moved | Goobta waa la raray | 2026-10-11 | machine-drafted, needs native review |
+| `hazardOpen` | so | Report a hazard or add a resource | Soo sheeg khatar ama ku dar adeeg | 2026-10-11 | machine-drafted, needs native review |
+| `hazardClose` | so | Close safety menu | Xir liiska badbaadada | 2026-10-11 | machine-drafted, needs native review |
+| `panelTitle` | so | Safety & Resources | Badbaado iyo adeegyo | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeather` | so | Report weather hazard | Soo sheeg khatar cimilo | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeatherBody` | so | Ice, flooding, high winds, downed branches, etc. | Baraf, daad, dabayl xooggan, laamo dhacay, iwm. | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoad` | so | Report road closure | Soo sheeg waddo xiran | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoadBody` | so | Blocked road, bridge out, construction, accident. | Waddo xannibantay, buundo go’day, dhisme, shil. | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeeding` | so | Report speeding area | Soo sheeg goob xawaare dheeraad ah | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeedingBody` | so | Vehicles exceeding safe speed near pedestrians. | Gaadiid aad u dheereeya oo u dhow dadka lugaynaya. | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneral` | so | Report general safety issue | Soo sheeg arrin badbaado oo guud | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneralBody` | so | Other safety concern in this area. | Walaac kale oo badbaado oo ka jira goobtan. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntry` | so | Suggest a Resource | Soo jeedi adeeg | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntryBody` | so | Know a resource that’s missing? Let us know. | Ma taqaan adeeg maqan? Noo sheeg. | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntry` | so | Add yourself as a resource | Isku dar adeeg ahaan | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntryBody` | so | Share what you can offer with neighbors. | La wadaag deriskaaga waxa aad bixin karto. | 2026-10-11 | machine-drafted, needs native review |
+| `pinLocation` | so | Pin location | Goobta calaamadda | 2026-10-11 | machine-drafted, needs native review |
+| `pinSetting` | so | Setting location… | Goobta waa la dejinayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `pinHint` | so | Drag the orange pin on the map or search below | Jiid calaamadda liinta ah ee khariidadda ama hoos ka raadi | 2026-10-11 | machine-drafted, needs native review |
+| `addressLabel` | so | Search for an address | Raadi cinwaan | 2026-10-11 | machine-drafted, needs native review |
+| `addressPlaceholder` | so | Enter address… | Geli cinwaanka… | 2026-10-11 | machine-drafted, needs native review |
+| `addressFind` | so | Find | Raadi | 2026-10-11 | machine-drafted, needs native review |
+| `addressFinding` | so | Searching… | Waa la raadinayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `addressMoved` | so | Pin moved to address | Calaamadda waxaa loo raray cinwaanka | 2026-10-11 | machine-drafted, needs native review |
+| `addressNotFound` | so | Address not found — drag the pin to set location | Cinwaanka lama helin. Jiid calaamadda si aad goobta u dejiso. | 2026-10-11 | machine-drafted, needs native review |
+| `addressFailed` | so | Could not search — drag the pin to set location | Raadintu ma shaqayn. Jiid calaamadda si aad goobta u dejiso. | 2026-10-11 | machine-drafted, needs native review |
+| `placeConfirm` | so | Confirm & Report | Xaqiiji oo soo sheeg | 2026-10-11 | machine-drafted, needs native review |
+| `placing` | so | Placing… | Waa la dhigayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `placeFailed` | so | Couldn’t place the alert. Try again. | Digniinta lama dhigi karin. Mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanks` | so | Thanks — your suggestion is pending review. | Mahadsanid. Soo jeedintaadu waxay sugaysaa dib-u-eegis. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanksBody` | so | Our team will verify and publish it if it meets community guidelines. | Kooxdayadu way xaqiijin doontaa oo way daabici doontaa haddii ay waafaqsan tahay xeerarka bulshada. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestIntro` | so | Know of a resource that’s not on the map? Suggest it and our community team will review it. | Ma taqaan adeeg aan khariidadda ku jirin? Soo jeedi, kooxdayada bulshada ayaa dib u eegi doonta. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCategory` | so | Category | Qaybta | 2026-10-11 | machine-drafted, needs native review |
+| `suggestName` | so | Resource name | Magaca adeegga | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescription` | so | Description | Sharraxaad | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescriptionPlaceholder` | so | Who does it serve? What do they offer? Hours? | Yaa loo adeegaa? Maxay bixiyaan? Saacadaha? | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCount` | so | {n}/500 characters (minimum 10) | {n}/500 xaraf (ugu yaraan 10) | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCity` | so | City | Magaalada | 2026-10-11 | machine-drafted, needs native review |
+| `suggestState` | so | State | Gobolka | 2026-10-11 | machine-drafted, needs native review |
+| `suggestPhone` | so | Phone | Telefoon | 2026-10-11 | machine-drafted, needs native review |
+| `suggestWebsite` | so | Website | Bogga internetka | 2026-10-11 | machine-drafted, needs native review |
+| `optional` | so | (optional) | (ikhtiyaari) | 2026-10-11 | machine-drafted, needs native review |
+| `exampleValue` | so | e.g. {example} | tusaale: {example} | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmit` | so | Submit suggestion | Dir soo jeedinta | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmitting` | so | Submitting… | Waa la dirayaa… | 2026-10-11 | machine-drafted, needs native review |
+| `suggestFailed` | so | Couldn’t send the suggestion. Try again. | Soo jeedinta lama diri karin. Mar kale isku day. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | so | Vote recorded. | Codkaaga waa la diiwaangeliyay. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | so | Dismiss | Xir ogeysiiska | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | so | History loaded. Entries: {n}. | Taariikhda waa la soo raray. Tirada: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | so | Write between 10 and 500 characters. | Qor inta u dhaxaysa 10 iyo 500 xaraf. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | so | Updated by the reporter | Waxaa cusboonaysiiyay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | so | Updated by a moderator | Waxaa cusboonaysiiyay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | so | Marked resolved by the reporter | Waxaa u calaamadeeyay inay xallisantay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | so | Marked resolved by a moderator | Waxaa u calaamadeeyay inay xallisantay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | so | Resolved by the reporter | Waxaa xalliyay qofkii soo sheegay | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | so | Resolved by a moderator | Waxaa xalliyay maamule | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | so | Couldn’t refresh alerts — last updated {time}. | Digniinaha lama cusboonaysiin karin. Markii ugu dambaysay ee la cusboonaysiiyay: {time}. | 2026-10-11 | machine-drafted, needs native review |
+| `typeWeather` | am | Weather Hazard | የአየር ሁኔታ አደጋ | 2026-10-11 | machine-drafted, needs native review |
+| `typeRoadClosure` | am | Road Closure | የተዘጋ መንገድ | 2026-10-11 | machine-drafted, needs native review |
+| `typeSpeeding` | am | Speeding Area | ከፍጥነት በላይ የሚነዳበት ቦታ | 2026-10-11 | machine-drafted, needs native review |
+| `typeGeneral` | am | Safety Alert | የደህንነት ማስጠንቀቂያ | 2026-10-11 | machine-drafted, needs native review |
+| `sevLow` | am | Low | ዝቅተኛ | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerate` | am | Moderate | መካከለኛ | 2026-10-11 | machine-drafted, needs native review |
+| `sevHigh` | am | High | ከፍተኛ | 2026-10-11 | machine-drafted, needs native review |
+| `sevCritical` | am | Critical | አሳሳቢ | 2026-10-11 | machine-drafted, needs native review |
+| `sevLowHint` | am | Low — heads-up | ዝቅተኛ — ለማሳወቅ | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerateHint` | am | Moderate — use caution | መካከለኛ — ይጠንቀቁ | 2026-10-11 | machine-drafted, needs native review |
+| `sevHighHint` | am | High — significant risk | ከፍተኛ — ከባድ ስጋት | 2026-10-11 | machine-drafted, needs native review |
+| `sevCriticalHint` | am | Critical — avoid area | አሳሳቢ — ከአካባቢው ይራቁ | 2026-10-11 | machine-drafted, needs native review |
+| `typeAndSeverity` | am | {type}, {severity} | {type}፣ {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `stateVerified` | am | Verified | የተረጋገጠ | 2026-10-11 | machine-drafted, needs native review |
+| `stateUnverified` | am | Unverified — neighbor report | ያልተረጋገጠ — የጎረቤት ሪፖርት | 2026-10-11 | machine-drafted, needs native review |
+| `stateResolved` | am | Resolved | ተፈትቷል | 2026-10-11 | machine-drafted, needs native review |
+| `stateEnded` | am | No longer listed | ከዝርዝሩ ወጥቷል | 2026-10-11 | machine-drafted, needs native review |
+| `endedBody` | am | This alert is no longer listed. It may have ended or been withdrawn. | ይህ ማስጠንቀቂያ ከዝርዝሩ ወጥቷል። አብቅቶ ወይም ተነስቶ ሊሆን ይችላል። | 2026-10-11 | machine-drafted, needs native review |
+| `reportedAt` | am | Reported {when} | ሪፖርት የተደረገው {when} | 2026-10-11 | machine-drafted, needs native review |
+| `updatedAgo` | am | Updated {age} | የተዘመነው {age} | 2026-10-11 | machine-drafted, needs native review |
+| `expiresAt` | am | Expires {when} | የሚያበቃው {when} | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedAt` | am | Marked resolved {when} | ተፈትቷል ተብሎ የተመለከተው {when} | 2026-10-11 | machine-drafted, needs native review |
+| `shownUntil` | am | Shown as resolved until {when} | እስከ {when} ድረስ ተፈትቷል ተብሎ ይታያል | 2026-10-11 | machine-drafted, needs native review |
+| `stripTitle` | am | Safety alerts | የደህንነት ማስጠንቀቂያዎች | 2026-10-11 | machine-drafted, needs native review |
+| `viewOnMap` | am | View on map | በካርታ ላይ ይመልከቱ | 2026-10-11 | machine-drafted, needs native review |
+| `actionUpdate` | am | Update | አዘምን | 2026-10-11 | machine-drafted, needs native review |
+| `actionResolve` | am | Mark resolved | ተፈትቷል ብለው ያመልክቱ | 2026-10-11 | machine-drafted, needs native review |
+| `actionWithdraw` | am | Withdraw | አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `actionHistory` | am | History | ታሪክ | 2026-10-11 | machine-drafted, needs native review |
+| `close` | am | Close | ዝጋ | 2026-10-11 | machine-drafted, needs native review |
+| `countConfirmed` | am | {n} confirmed still here | {n} አሁንም እንዳለ አረጋግጠዋል | 2026-10-11 | machine-drafted, needs native review |
+| `countGone` | am | {n} reported gone | {n} እንደሌለ አሳውቀዋል | 2026-10-11 | machine-drafted, needs native review |
+| `voteStillHere` | am | Still here | አሁንም አለ | 2026-10-11 | machine-drafted, needs native review |
+| `voteGone` | am | Gone now | አሁን የለም | 2026-10-11 | machine-drafted, needs native review |
+| `voteSending` | am | Sending… | በመላክ ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `voteFailed` | am | Your vote was not counted. Try again. | ድምጽዎ አልተቆጠረም። እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `voteCleared` | am | Neighbors reported this hazard gone, so the alert was cleared. | ጎረቤቶች ይህ አደጋ እንደሌለ ስላሳወቁ ማስጠንቀቂያው ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `guestHint` | am | Create a free account to confirm or clear alerts. | ማስጠንቀቂያዎችን ለማረጋገጥ ወይም ለማንሳት ነፃ መለያ ይፍጠሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `annNew` | am | New safety alert: {type}, {severity}. | አዲስ የደህንነት ማስጠንቀቂያ፦ {type}፣ {severity}። | 2026-10-11 | machine-drafted, needs native review |
+| `annRaised` | am | Safety alert raised to {severity}: {type}. | የደህንነት ማስጠንቀቂያው ወደ {severity} ከፍ ብሏል፦ {type}። | 2026-10-11 | machine-drafted, needs native review |
+| `annUpdated` | am | Safety alert updated: {type}. | የደህንነት ማስጠንቀቂያ ተዘምኗል፦ {type}። | 2026-10-11 | machine-drafted, needs native review |
+| `annResolved` | am | Safety alert resolved: {type}. | የደህንነት ማስጠንቀቂያ ተፈትቷል፦ {type}። | 2026-10-11 | machine-drafted, needs native review |
+| `annEnded` | am | Safety alert no longer listed: {type}. | የደህንነት ማስጠንቀቂያው ከዝርዝሩ ወጥቷል፦ {type}። | 2026-10-11 | machine-drafted, needs native review |
+| `editTitle` | am | Update alert | ማስጠንቀቂያውን አዘምን | 2026-10-11 | machine-drafted, needs native review |
+| `resolveTitle` | am | Mark alert resolved | ማስጠንቀቂያውን ተፈትቷል ብለው ያመልክቱ | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawTitle` | am | Withdraw alert | ማስጠንቀቂያውን አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `loadingAlert` | am | Loading the alert… | ማስጠንቀቂያው በመጫን ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | am | Couldn’t load the alert. | ማስጠንቀቂያውን መጫን አልተቻለም። | 2026-10-11 | machine-drafted, needs native review |
+| `retry` | am | Try again | እንደገና ይሞክሩ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldType` | am | Type of hazard | የአደጋው ዓይነት | 2026-10-11 | machine-drafted, needs native review |
+| `fieldSeverity` | am | Severity | የክብደት ደረጃ | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | am | Description (optional) | መግለጫ (አማራጭ) | 2026-10-11 | machine-drafted, needs native review |
+| `descriptionPlaceholder` | am | Add details neighbors should know… | ጎረቤቶች ማወቅ ያለባቸውን ዝርዝር ያክሉ… | 2026-10-11 | machine-drafted, needs native review |
+| `verifiedNotice` | am | This alert is verified. Any change you save returns it to unverified until a moderator checks it again. | ይህ ማስጠንቀቂያ የተረጋገጠ ነው። የሚያስቀምጡት ማንኛውም ለውጥ አወያይ እንደገና እስኪያጣራው ድረስ ወደ ያልተረጋገጠ ይመልሰዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `expiryHint` | am | Raising the severity restarts the alert’s clock. Lowering it can shorten the time left. | የክብደት ደረጃውን ከፍ ማድረግ የማስጠንቀቂያውን ሰዓት እንደገና ያስጀምራል። ዝቅ ማድረግ የቀረውን ጊዜ ሊያሳጥር ይችላል። | 2026-10-11 | machine-drafted, needs native review |
+| `save` | am | Save changes | ለውጦቹን አስቀምጥ | 2026-10-11 | machine-drafted, needs native review |
+| `saving` | am | Saving… | በማስቀመጥ ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | am | Cancel | ሰርዝ | 2026-10-11 | machine-drafted, needs native review |
+| `savedNotice` | am | Alert updated. | ማስጠንቀቂያው ተዘምኗል። | 2026-10-11 | machine-drafted, needs native review |
+| `savedExpiryNotice` | am | Alert updated. It now expires {when}. | ማስጠንቀቂያው ተዘምኗል። አሁን የሚያበቃው {when} ነው። | 2026-10-11 | machine-drafted, needs native review |
+| `unverifiedNotice` | am | It is unverified until a moderator checks it again. | አወያይ እንደገና እስኪያጣራው ድረስ ያልተረጋገጠ ሆኖ ይቆያል። | 2026-10-11 | machine-drafted, needs native review |
+| `nothingChanged` | am | Nothing was changed. | ምንም አልተቀየረም። | 2026-10-11 | machine-drafted, needs native review |
+| `resolveBody` | am | Neighbors will see this alert as resolved for 6 hours. After that it leaves the map and the feed. A resolved alert cannot be reopened: if the hazard returns, report a new alert. | ጎረቤቶች ይህን ማስጠንቀቂያ ለ6 ሰዓታት ተፈትቷል ተብሎ ያዩታል። ከዚያ በኋላ ከካርታው እና ከምግቡ ይወጣል። የተፈታ ማስጠንቀቂያ እንደገና ሊከፈት አይችልም፦ አደጋው ከተመለሰ አዲስ ማስጠንቀቂያ ሪፖርት ያድርጉ። | 2026-10-11 | machine-drafted, needs native review |
+| `resolveConfirm` | am | Mark resolved | ተፈትቷል ብለው ያመልክቱ | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedNotice` | am | Alert marked resolved. It stays visible as resolved until {when}. | ማስጠንቀቂያው ተፈትቷል ተብሎ ተመልክቷል። እስከ {when} ድረስ ተፈትቷል ተብሎ ይታያል። | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawBody` | am | This takes the alert off the map and the feed for everyone right away. The withdrawal is recorded. | ይህ ማስጠንቀቂያውን ከሁሉም ሰው ካርታ እና ምግብ ላይ ወዲያውኑ ያነሳል። መነሳቱ ይመዘገባል። | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawConfirm` | am | Withdraw alert | ማስጠንቀቂያውን አንሳ | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawnNotice` | am | Alert withdrawn. | ማስጠንቀቂያው ተነስቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `conflictTitle` | am | This alert changed while you had it open | ይህ ማስጠንቀቂያ ከፍተውት ሳለ ተቀይሯል | 2026-10-11 | machine-drafted, needs native review |
+| `conflictBody` | am | A newer version was saved since you opened it. Check it below, then choose what to do. | ከከፈቱት በኋላ አዲስ ስሪት ተቀምጧል። ከታች ይመልከቱት፣ ከዚያ ምን እንደሚደረግ ይምረጡ። | 2026-10-11 | machine-drafted, needs native review |
+| `yourVersion` | am | Your changes | የእርስዎ ለውጦች | 2026-10-11 | machine-drafted, needs native review |
+| `currentVersion` | am | Current version | የአሁኑ ስሪት | 2026-10-11 | machine-drafted, needs native review |
+| `noDescription` | am | No description | መግለጫ የለም | 2026-10-11 | machine-drafted, needs native review |
+| `conflictChoose` | am | Choose what to do | ምን እንደሚደረግ ይምረጡ | 2026-10-11 | machine-drafted, needs native review |
+| `keepMine` | am | Keep my changes | የእኔን ለውጦች አቆይ | 2026-10-11 | machine-drafted, needs native review |
+| `keepMineHint` | am | Save my changes over the current version. | የእኔን ለውጦች በአሁኑ ስሪት ላይ አስቀምጥ። | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrent` | am | Use the current version | የአሁኑን ስሪት ተጠቀም | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrentHint` | am | Discard my changes. | የእኔን ለውጦች ተው። | 2026-10-11 | machine-drafted, needs native review |
+| `resolveAnyway` | am | Mark it resolved anyway | ቢሆንም ተፈትቷል ብለው ያመልክቱ | 2026-10-11 | machine-drafted, needs native review |
+| `leaveAsIs` | am | Leave it as it is | እንዳለ ተወው | 2026-10-11 | machine-drafted, needs native review |
+| `continueLabel` | am | Continue | ቀጥል | 2026-10-11 | machine-drafted, needs native review |
+| `notSavedNotice` | am | Your changes were not saved. The alert shows its current version. | ለውጦችዎ አልተቀመጡም። ማስጠንቀቂያው የአሁኑን ስሪት ያሳያል። | 2026-10-11 | machine-drafted, needs native review |
+| `notResolvedNotice` | am | The alert was left as it is. | ማስጠንቀቂያው እንዳለ ተትቷል። | 2026-10-11 | machine-drafted, needs native review |
+| `notLiveNotice` | am | This alert is no longer active, so nothing was changed. | ይህ ማስጠንቀቂያ አሁን ንቁ አይደለም፣ ስለዚህ ምንም አልተቀየረም። | 2026-10-11 | machine-drafted, needs native review |
+| `nowResolvedNotice` | am | This alert was already marked resolved, so nothing was changed. | ይህ ማስጠንቀቂያ ቀደም ብሎ ተፈትቷል ተብሎ ተመልክቷል፣ ስለዚህ ምንም አልተቀየረም። | 2026-10-11 | machine-drafted, needs native review |
+| `failGuest` | am | Create a free account to report or change safety alerts. | የደህንነት ማስጠንቀቂያዎችን ሪፖርት ለማድረግ ወይም ለመቀየር ነፃ መለያ ይፍጠሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `failNotOwner` | am | Only the member who reported this alert can change it. | ይህን ማስጠንቀቂያ መቀየር የሚችለው ሪፖርት ያደረገው አባል ብቻ ነው። | 2026-10-11 | machine-drafted, needs native review |
+| `failInvalid` | am | Check the alert details and try again. | የማስጠንቀቂያውን ዝርዝር ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `failNetwork` | am | Couldn’t reach FEED. Check your connection and try again. | ከ FEED ጋር መገናኘት አልተቻለም። ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `failUnknown` | am | Something went wrong. Try again. | የሆነ ችግር ተፈጥሯል። እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `historyTitle` | am | Alert history | የማስጠንቀቂያው ታሪክ | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoading` | am | Loading the history… | ታሪኩ በመጫን ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoadFailed` | am | Couldn’t load the history. | ታሪኩን መጫን አልተቻለም። | 2026-10-11 | machine-drafted, needs native review |
+| `historyEmpty` | am | There is no history to show. The alert may have ended. | የሚታይ ታሪክ የለም። ማስጠንቀቂያው አብቅቶ ሊሆን ይችላል። | 2026-10-11 | machine-drafted, needs native review |
+| `histReported` | am | Reported | ሪፖርት ተደርጓል | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdated` | am | Updated | ተዘምኗል | 2026-10-11 | machine-drafted, needs native review |
+| `histResolved` | am | Marked resolved | ተፈትቷል ተብሎ ተመልክቷል | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityRaised` | am | Severity raised to {severity} | የክብደት ደረጃው ወደ {severity} ከፍ ብሏል | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityLowered` | am | Severity lowered to {severity} | የክብደት ደረጃው ወደ {severity} ዝቅ ብሏል | 2026-10-11 | machine-drafted, needs native review |
+| `histTextChanged` | am | Description changed | መግለጫው ተቀይሯል | 2026-10-11 | machine-drafted, needs native review |
+| `histTextRemoved` | am | Description removed | መግለጫው ተወግዷል | 2026-10-11 | machine-drafted, needs native review |
+| `histTypeChanged` | am | Type changed to {type} | ዓይነቱ ወደ {type} ተቀይሯል | 2026-10-11 | machine-drafted, needs native review |
+| `histLocationMoved` | am | Location moved | ቦታው ተቀይሯል | 2026-10-11 | machine-drafted, needs native review |
+| `hazardOpen` | am | Report a hazard or add a resource | አደጋ ሪፖርት ያድርጉ ወይም ግብዓት ያክሉ | 2026-10-11 | machine-drafted, needs native review |
+| `hazardClose` | am | Close safety menu | የደህንነት ምናሌውን ዝጋ | 2026-10-11 | machine-drafted, needs native review |
+| `panelTitle` | am | Safety & Resources | ደህንነት እና ግብዓቶች | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeather` | am | Report weather hazard | የአየር ሁኔታ አደጋ ሪፖርት ያድርጉ | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeatherBody` | am | Ice, flooding, high winds, downed branches, etc. | በረዶ፣ ጎርፍ፣ ኃይለኛ ነፋስ፣ የወደቁ ቅርንጫፎች፣ ወዘተ። | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoad` | am | Report road closure | የተዘጋ መንገድ ሪፖርት ያድርጉ | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoadBody` | am | Blocked road, bridge out, construction, accident. | የተዘጋ መንገድ፣ የተበላሸ ድልድይ፣ ግንባታ፣ አደጋ። | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeeding` | am | Report speeding area | ከፍጥነት በላይ የሚነዳበትን ቦታ ሪፖርት ያድርጉ | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeedingBody` | am | Vehicles exceeding safe speed near pedestrians. | በእግረኞች አቅራቢያ በጣም በፍጥነት የሚሄዱ ተሽከርካሪዎች። | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneral` | am | Report general safety issue | አጠቃላይ የደህንነት ችግር ሪፖርት ያድርጉ | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneralBody` | am | Other safety concern in this area. | በዚህ አካባቢ ያለ ሌላ የደህንነት ስጋት። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntry` | am | Suggest a Resource | ግብዓት ይጠቁሙ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntryBody` | am | Know a resource that’s missing? Let us know. | የጎደለ ግብዓት ያውቃሉ? ያሳውቁን። | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntry` | am | Add yourself as a resource | ራስዎን እንደ ግብዓት ያክሉ | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntryBody` | am | Share what you can offer with neighbors. | ማቅረብ የሚችሉትን ለጎረቤቶችዎ ያጋሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `pinLocation` | am | Pin location | የምልክቱ ቦታ | 2026-10-11 | machine-drafted, needs native review |
+| `pinSetting` | am | Setting location… | ቦታው በመወሰን ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `pinHint` | am | Drag the orange pin on the map or search below | በካርታው ላይ ያለውን ብርቱካናማ ምልክት ይጎትቱ ወይም ከታች ይፈልጉ | 2026-10-11 | machine-drafted, needs native review |
+| `addressLabel` | am | Search for an address | አድራሻ ይፈልጉ | 2026-10-11 | machine-drafted, needs native review |
+| `addressPlaceholder` | am | Enter address… | አድራሻ ያስገቡ… | 2026-10-11 | machine-drafted, needs native review |
+| `addressFind` | am | Find | ፈልግ | 2026-10-11 | machine-drafted, needs native review |
+| `addressFinding` | am | Searching… | በመፈለግ ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `addressMoved` | am | Pin moved to address | ምልክቱ ወደ አድራሻው ተዛውሯል | 2026-10-11 | machine-drafted, needs native review |
+| `addressNotFound` | am | Address not found — drag the pin to set location | አድራሻው አልተገኘም። ቦታውን ለመወሰን ምልክቱን ይጎትቱ። | 2026-10-11 | machine-drafted, needs native review |
+| `addressFailed` | am | Could not search — drag the pin to set location | ፍለጋው አልሰራም። ቦታውን ለመወሰን ምልክቱን ይጎትቱ። | 2026-10-11 | machine-drafted, needs native review |
+| `placeConfirm` | am | Confirm & Report | አረጋግጥ እና ሪፖርት አድርግ | 2026-10-11 | machine-drafted, needs native review |
+| `placing` | am | Placing… | በማስቀመጥ ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `placeFailed` | am | Couldn’t place the alert. Try again. | ማስጠንቀቂያውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanks` | am | Thanks — your suggestion is pending review. | እናመሰግናለን። ጥቆማዎ ግምገማ እየጠበቀ ነው። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanksBody` | am | Our team will verify and publish it if it meets community guidelines. | የማህበረሰቡን መመሪያዎች የሚያሟላ ከሆነ ቡድናችን አረጋግጦ ያትመዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestIntro` | am | Know of a resource that’s not on the map? Suggest it and our community team will review it. | በካርታው ላይ የሌለ ግብዓት ያውቃሉ? ይጠቁሙ፣ የማህበረሰብ ቡድናችን ይገመግመዋል። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCategory` | am | Category | ምድብ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestName` | am | Resource name | የግብዓቱ ስም | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescription` | am | Description | መግለጫ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescriptionPlaceholder` | am | Who does it serve? What do they offer? Hours? | ማንን ያገለግላል? ምን ያቀርባል? የሥራ ሰዓት? | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCount` | am | {n}/500 characters (minimum 10) | {n}/500 ፊደላት (ቢያንስ 10) | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCity` | am | City | ከተማ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestState` | am | State | ግዛት | 2026-10-11 | machine-drafted, needs native review |
+| `suggestPhone` | am | Phone | ስልክ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestWebsite` | am | Website | ድር ጣቢያ | 2026-10-11 | machine-drafted, needs native review |
+| `optional` | am | (optional) | (አማራጭ) | 2026-10-11 | machine-drafted, needs native review |
+| `exampleValue` | am | e.g. {example} | ለምሳሌ፦ {example} | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmit` | am | Submit suggestion | ጥቆማውን ላክ | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmitting` | am | Submitting… | በመላክ ላይ… | 2026-10-11 | machine-drafted, needs native review |
+| `suggestFailed` | am | Couldn’t send the suggestion. Try again. | ጥቆማውን መላክ አልተቻለም። እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | am | Vote recorded. | ድምጽዎ ተመዝግቧል። | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | am | Dismiss | ማሳወቂያውን ዝጋ | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | am | History loaded. Entries: {n}. | ታሪኩ ተጭኗል። ግቤቶች፦ {n}። | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | am | Write between 10 and 500 characters. | ከ10 እስከ 500 ፊደላት ይጻፉ። | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | am | Updated by the reporter | ሪፖርት ያደረገው ሰው አዘምኖታል | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | am | Updated by a moderator | አወያይ አዘምኖታል | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | am | Marked resolved by the reporter | ሪፖርት ያደረገው ሰው ተፈትቷል ብሎ አመልክቷል | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | am | Marked resolved by a moderator | አወያይ ተፈትቷል ብሎ አመልክቷል | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | am | Resolved by the reporter | ሪፖርት ያደረገው ሰው ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | am | Resolved by a moderator | አወያይ ፈትቶታል | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | am | Couldn’t refresh alerts — last updated {time}. | ማስጠንቀቂያዎቹን ማደስ አልተቻለም። ለመጨረሻ ጊዜ የዘመነው፦ {time}። | 2026-10-11 | machine-drafted, needs native review |
+| `typeWeather` | hmn | Weather Hazard | Kev phom sij vim huab cua | 2026-10-11 | machine-drafted, needs native review |
+| `typeRoadClosure` | hmn | Road Closure | Kev raug kaw | 2026-10-11 | machine-drafted, needs native review |
+| `typeSpeeding` | hmn | Speeding Area | Thaj chaw tsav tsheb ceev dhau | 2026-10-11 | machine-drafted, needs native review |
+| `typeGeneral` | hmn | Safety Alert | Lus ceeb toom kev nyab xeeb | 2026-10-11 | machine-drafted, needs native review |
+| `sevLow` | hmn | Low | Qis | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerate` | hmn | Moderate | Nruab nrab | 2026-10-11 | machine-drafted, needs native review |
+| `sevHigh` | hmn | High | Siab | 2026-10-11 | machine-drafted, needs native review |
+| `sevCritical` | hmn | Critical | Loj heev | 2026-10-11 | machine-drafted, needs native review |
+| `sevLowHint` | hmn | Low — heads-up | Qis — qhia kom paub | 2026-10-11 | machine-drafted, needs native review |
+| `sevModerateHint` | hmn | Moderate — use caution | Nruab nrab — ceev faj | 2026-10-11 | machine-drafted, needs native review |
+| `sevHighHint` | hmn | High — significant risk | Siab — muaj kev phom sij loj | 2026-10-11 | machine-drafted, needs native review |
+| `sevCriticalHint` | hmn | Critical — avoid area | Loj heev — zam thaj chaw no | 2026-10-11 | machine-drafted, needs native review |
+| `typeAndSeverity` | hmn | {type}, {severity} | {type}, {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `stateVerified` | hmn | Verified | Tau txheeb xyuas lawm | 2026-10-11 | machine-drafted, needs native review |
+| `stateUnverified` | hmn | Unverified — neighbor report | Tsis tau txheeb xyuas — ib tug neeg zej zog qhia | 2026-10-11 | machine-drafted, needs native review |
+| `stateResolved` | hmn | Resolved | Daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `stateEnded` | hmn | No longer listed | Tsis nyob hauv daim ntawv teev lawm | 2026-10-11 | machine-drafted, needs native review |
+| `endedBody` | hmn | This alert is no longer listed. It may have ended or been withdrawn. | Lo lus ceeb toom no tsis nyob hauv daim ntawv teev lawm. Tej zaum nws tas lawm los yog raug rho tawm. | 2026-10-11 | machine-drafted, needs native review |
+| `reportedAt` | hmn | Reported {when} | Tau qhia {when} | 2026-10-11 | machine-drafted, needs native review |
+| `updatedAgo` | hmn | Updated {age} | Hloov tshiab {age} | 2026-10-11 | machine-drafted, needs native review |
+| `expiresAt` | hmn | Expires {when} | Yuav tas {when} | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedAt` | hmn | Marked resolved {when} | Cim tias daws tau lawm {when} | 2026-10-11 | machine-drafted, needs native review |
+| `shownUntil` | hmn | Shown as resolved until {when} | Yuav qhia tias daws tau lawm mus txog {when} | 2026-10-11 | machine-drafted, needs native review |
+| `stripTitle` | hmn | Safety alerts | Cov lus ceeb toom kev nyab xeeb | 2026-10-11 | machine-drafted, needs native review |
+| `viewOnMap` | hmn | View on map | Saib hauv daim ntawv qhia chaw | 2026-10-11 | machine-drafted, needs native review |
+| `actionUpdate` | hmn | Update | Hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `actionResolve` | hmn | Mark resolved | Cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `actionWithdraw` | hmn | Withdraw | Rho tawm | 2026-10-11 | machine-drafted, needs native review |
+| `actionHistory` | hmn | History | Keeb kwm | 2026-10-11 | machine-drafted, needs native review |
+| `close` | hmn | Close | Kaw | 2026-10-11 | machine-drafted, needs native review |
+| `countConfirmed` | hmn | {n} confirmed still here | {n} tus lees tias tseem muaj | 2026-10-11 | machine-drafted, needs native review |
+| `countGone` | hmn | {n} reported gone | {n} tus qhia tias tsis muaj lawm | 2026-10-11 | machine-drafted, needs native review |
+| `voteStillHere` | hmn | Still here | Tseem muaj | 2026-10-11 | machine-drafted, needs native review |
+| `voteGone` | hmn | Gone now | Tsis muaj lawm | 2026-10-11 | machine-drafted, needs native review |
+| `voteSending` | hmn | Sending… | Tab tom xa… | 2026-10-11 | machine-drafted, needs native review |
+| `voteFailed` | hmn | Your vote was not counted. Try again. | Koj lub suab tsis tau raug suav. Sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `voteCleared` | hmn | Neighbors reported this hazard gone, so the alert was cleared. | Cov neeg zej zog qhia tias qhov kev phom sij no tsis muaj lawm, yog li lo lus ceeb toom raug tshem lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `guestHint` | hmn | Create a free account to confirm or clear alerts. | Tsim ib tus as khauj dawb kom lees los yog tshem tau cov lus ceeb toom. | 2026-10-11 | machine-drafted, needs native review |
+| `annNew` | hmn | New safety alert: {type}, {severity}. | Lus ceeb toom kev nyab xeeb tshiab: {type}, {severity}. | 2026-10-11 | machine-drafted, needs native review |
+| `annRaised` | hmn | Safety alert raised to {severity}: {type}. | Lo lus ceeb toom kev nyab xeeb nce mus rau theem {severity}: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annUpdated` | hmn | Safety alert updated: {type}. | Lo lus ceeb toom kev nyab xeeb tau hloov tshiab: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annResolved` | hmn | Safety alert resolved: {type}. | Lo lus ceeb toom kev nyab xeeb daws tau lawm: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `annEnded` | hmn | Safety alert no longer listed: {type}. | Lo lus ceeb toom kev nyab xeeb tsis nyob hauv daim ntawv teev lawm: {type}. | 2026-10-11 | machine-drafted, needs native review |
+| `editTitle` | hmn | Update alert | Hloov lo lus ceeb toom tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `resolveTitle` | hmn | Mark alert resolved | Cim lo lus ceeb toom tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawTitle` | hmn | Withdraw alert | Rho lo lus ceeb toom tawm | 2026-10-11 | machine-drafted, needs native review |
+| `loadingAlert` | hmn | Loading the alert… | Tab tom thauj lo lus ceeb toom… | 2026-10-11 | machine-drafted, needs native review |
+| `loadFailed` | hmn | Couldn’t load the alert. | Thauj tsis tau lo lus ceeb toom. | 2026-10-11 | machine-drafted, needs native review |
+| `retry` | hmn | Try again | Sim dua | 2026-10-11 | machine-drafted, needs native review |
+| `fieldType` | hmn | Type of hazard | Hom kev phom sij | 2026-10-11 | machine-drafted, needs native review |
+| `fieldSeverity` | hmn | Severity | Theem loj npaum li cas | 2026-10-11 | machine-drafted, needs native review |
+| `fieldDescription` | hmn | Description (optional) | Lus piav qhia (tsis yuam) | 2026-10-11 | machine-drafted, needs native review |
+| `descriptionPlaceholder` | hmn | Add details neighbors should know… | Ntxiv tej yam uas cov neeg zej zog yuav tsum paub… | 2026-10-11 | machine-drafted, needs native review |
+| `verifiedNotice` | hmn | This alert is verified. Any change you save returns it to unverified until a moderator checks it again. | Lo lus ceeb toom no tau txheeb xyuas lawm. Txhua yam kev hloov uas koj khaws yuav ua rau nws rov qab mus ua tsis tau txheeb xyuas mus txog thaum ib tug neeg saib xyuas rov kuaj dua. | 2026-10-11 | machine-drafted, needs native review |
+| `expiryHint` | hmn | Raising the severity restarts the alert’s clock. Lowering it can shorten the time left. | Tsa theem siab dua yuav pib suav lub sij hawm dua tshiab. Txo qis yuav ua tau rau lub sij hawm seem luv dua. | 2026-10-11 | machine-drafted, needs native review |
+| `save` | hmn | Save changes | Khaws cov kev hloov | 2026-10-11 | machine-drafted, needs native review |
+| `saving` | hmn | Saving… | Tab tom khaws… | 2026-10-11 | machine-drafted, needs native review |
+| `cancel` | hmn | Cancel | Tso tseg | 2026-10-11 | machine-drafted, needs native review |
+| `savedNotice` | hmn | Alert updated. | Lo lus ceeb toom tau hloov tshiab lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `savedExpiryNotice` | hmn | Alert updated. It now expires {when}. | Lo lus ceeb toom tau hloov tshiab lawm. Tam sim no nws yuav tas {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `unverifiedNotice` | hmn | It is unverified until a moderator checks it again. | Nws tsis tau txheeb xyuas mus txog thaum ib tug neeg saib xyuas rov kuaj dua. | 2026-10-11 | machine-drafted, needs native review |
+| `nothingChanged` | hmn | Nothing was changed. | Tsis muaj dab tsi hloov. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveBody` | hmn | Neighbors will see this alert as resolved for 6 hours. After that it leaves the map and the feed. A resolved alert cannot be reopened: if the hazard returns, report a new alert. | Cov neeg zej zog yuav pom lo lus ceeb toom no tias daws tau lawm tau 6 teev. Tom qab ntawd nws yuav ploj ntawm daim ntawv qhia chaw thiab ntawm cov ntawv tshaj tawm. Lo lus ceeb toom uas daws tau lawm rov qhib tsis tau: yog qhov kev phom sij rov qab los, qhia ib lo lus ceeb toom tshiab. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveConfirm` | hmn | Mark resolved | Cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedNotice` | hmn | Alert marked resolved. It stays visible as resolved until {when}. | Lo lus ceeb toom raug cim tias daws tau lawm. Nws yuav pom tias daws tau lawm mus txog {when}. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawBody` | hmn | This takes the alert off the map and the feed for everyone right away. The withdrawal is recorded. | Qhov no tshem lo lus ceeb toom ntawm txhua tus daim ntawv qhia chaw thiab cov ntawv tshaj tawm tam sim ntawd. Kev rho tawm raug sau cia. | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawConfirm` | hmn | Withdraw alert | Rho lo lus ceeb toom tawm | 2026-10-11 | machine-drafted, needs native review |
+| `withdrawnNotice` | hmn | Alert withdrawn. | Lo lus ceeb toom raug rho tawm lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `conflictTitle` | hmn | This alert changed while you had it open | Lo lus ceeb toom no hloov thaum koj tseem qhib nws | 2026-10-11 | machine-drafted, needs native review |
+| `conflictBody` | hmn | A newer version was saved since you opened it. Check it below, then choose what to do. | Muaj ib tsab tshiab dua raug khaws txij thaum koj qhib nws. Saib nws hauv qab no, ces xaiv seb yuav ua li cas. | 2026-10-11 | machine-drafted, needs native review |
+| `yourVersion` | hmn | Your changes | Koj cov kev hloov | 2026-10-11 | machine-drafted, needs native review |
+| `currentVersion` | hmn | Current version | Tsab tam sim no | 2026-10-11 | machine-drafted, needs native review |
+| `noDescription` | hmn | No description | Tsis muaj lus piav qhia | 2026-10-11 | machine-drafted, needs native review |
+| `conflictChoose` | hmn | Choose what to do | Xaiv seb yuav ua li cas | 2026-10-11 | machine-drafted, needs native review |
+| `keepMine` | hmn | Keep my changes | Khaws kuv cov kev hloov | 2026-10-11 | machine-drafted, needs native review |
+| `keepMineHint` | hmn | Save my changes over the current version. | Khaws kuv cov kev hloov tso rau saum tsab tam sim no. | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrent` | hmn | Use the current version | Siv tsab tam sim no | 2026-10-11 | machine-drafted, needs native review |
+| `useCurrentHint` | hmn | Discard my changes. | Muab kuv cov kev hloov pov tseg. | 2026-10-11 | machine-drafted, needs native review |
+| `resolveAnyway` | hmn | Mark it resolved anyway | Cia li cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `leaveAsIs` | hmn | Leave it as it is | Cia nws nyob li qub | 2026-10-11 | machine-drafted, needs native review |
+| `continueLabel` | hmn | Continue | Mus ntxiv | 2026-10-11 | machine-drafted, needs native review |
+| `notSavedNotice` | hmn | Your changes were not saved. The alert shows its current version. | Koj cov kev hloov tsis tau raug khaws. Lo lus ceeb toom qhia nws tsab tam sim no. | 2026-10-11 | machine-drafted, needs native review |
+| `notResolvedNotice` | hmn | The alert was left as it is. | Lo lus ceeb toom raug cia nyob li qub. | 2026-10-11 | machine-drafted, needs native review |
+| `notLiveNotice` | hmn | This alert is no longer active, so nothing was changed. | Lo lus ceeb toom no tsis siv lawm, yog li tsis muaj dab tsi hloov. | 2026-10-11 | machine-drafted, needs native review |
+| `nowResolvedNotice` | hmn | This alert was already marked resolved, so nothing was changed. | Lo lus ceeb toom no twb raug cim tias daws tau lawm, yog li tsis muaj dab tsi hloov. | 2026-10-11 | machine-drafted, needs native review |
+| `failGuest` | hmn | Create a free account to report or change safety alerts. | Tsim ib tus as khauj dawb kom qhia los yog hloov tau cov lus ceeb toom kev nyab xeeb. | 2026-10-11 | machine-drafted, needs native review |
+| `failNotOwner` | hmn | Only the member who reported this alert can change it. | Tsuas yog tus tswv cuab uas qhia lo lus ceeb toom no thiaj hloov tau nws. | 2026-10-11 | machine-drafted, needs native review |
+| `failInvalid` | hmn | Check the alert details and try again. | Kuaj cov ntsiab lus ntawm lo lus ceeb toom thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `failNetwork` | hmn | Couldn’t reach FEED. Check your connection and try again. | Txuas tsis tau rau FEED. Kuaj koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `failUnknown` | hmn | Something went wrong. Try again. | Muaj ib yam tsis raug. Sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `historyTitle` | hmn | Alert history | Keeb kwm ntawm lo lus ceeb toom | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoading` | hmn | Loading the history… | Tab tom thauj keeb kwm… | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoadFailed` | hmn | Couldn’t load the history. | Thauj tsis tau keeb kwm. | 2026-10-11 | machine-drafted, needs native review |
+| `historyEmpty` | hmn | There is no history to show. The alert may have ended. | Tsis muaj keeb kwm los qhia. Tej zaum lo lus ceeb toom tas lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `histReported` | hmn | Reported | Tau qhia | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdated` | hmn | Updated | Tau hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `histResolved` | hmn | Marked resolved | Cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityRaised` | hmn | Severity raised to {severity} | Theem nce mus rau {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histSeverityLowered` | hmn | Severity lowered to {severity} | Theem nqis mus rau {severity} | 2026-10-11 | machine-drafted, needs native review |
+| `histTextChanged` | hmn | Description changed | Lus piav qhia tau hloov | 2026-10-11 | machine-drafted, needs native review |
+| `histTextRemoved` | hmn | Description removed | Lus piav qhia raug tshem | 2026-10-11 | machine-drafted, needs native review |
+| `histTypeChanged` | hmn | Type changed to {type} | Hom hloov mus ua {type} | 2026-10-11 | machine-drafted, needs native review |
+| `histLocationMoved` | hmn | Location moved | Qhov chaw tau tsiv | 2026-10-11 | machine-drafted, needs native review |
+| `hazardOpen` | hmn | Report a hazard or add a resource | Qhia ib qho kev phom sij los yog ntxiv ib qho chaw pab | 2026-10-11 | machine-drafted, needs native review |
+| `hazardClose` | hmn | Close safety menu | Kaw daim ntawv xaiv kev nyab xeeb | 2026-10-11 | machine-drafted, needs native review |
+| `panelTitle` | hmn | Safety & Resources | Kev nyab xeeb thiab chaw pab | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeather` | hmn | Report weather hazard | Qhia kev phom sij vim huab cua | 2026-10-11 | machine-drafted, needs native review |
+| `entryWeatherBody` | hmn | Ice, flooding, high winds, downed branches, etc. | Dej khov, dej nyab, cua hlob, ceg ntoo poob, thiab lwm yam. | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoad` | hmn | Report road closure | Qhia kev raug kaw | 2026-10-11 | machine-drafted, needs native review |
+| `entryRoadBody` | hmn | Blocked road, bridge out, construction, accident. | Kev raug thaiv, choj puas, kho kev, tsheb sib tsoo. | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeeding` | hmn | Report speeding area | Qhia thaj chaw tsav tsheb ceev dhau | 2026-10-11 | machine-drafted, needs native review |
+| `entrySpeedingBody` | hmn | Vehicles exceeding safe speed near pedestrians. | Tsheb khiav ceev dhau ze cov neeg taug kev. | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneral` | hmn | Report general safety issue | Qhia teeb meem kev nyab xeeb dav dav | 2026-10-11 | machine-drafted, needs native review |
+| `entryGeneralBody` | hmn | Other safety concern in this area. | Lwm yam kev txhawj txog kev nyab xeeb hauv thaj chaw no. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntry` | hmn | Suggest a Resource | Pom zoo ib qho chaw pab | 2026-10-11 | machine-drafted, needs native review |
+| `suggestEntryBody` | hmn | Know a resource that’s missing? Let us know. | Koj puas paub ib qho chaw pab uas tseem tsis muaj? Qhia rau peb. | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntry` | hmn | Add yourself as a resource | Ntxiv koj tus kheej ua ib qho chaw pab | 2026-10-11 | machine-drafted, needs native review |
+| `addSelfEntryBody` | hmn | Share what you can offer with neighbors. | Qhia rau cov neeg zej zog seb koj pab tau dab tsi. | 2026-10-11 | machine-drafted, needs native review |
+| `pinLocation` | hmn | Pin location | Qhov chaw ntawm tus pin | 2026-10-11 | machine-drafted, needs native review |
+| `pinSetting` | hmn | Setting location… | Tab tom teem qhov chaw… | 2026-10-11 | machine-drafted, needs native review |
+| `pinHint` | hmn | Drag the orange pin on the map or search below | Rub tus pin txiv kab ntxwv hauv daim ntawv qhia chaw los yog nrhiav hauv qab no | 2026-10-11 | machine-drafted, needs native review |
+| `addressLabel` | hmn | Search for an address | Nrhiav ib qho chaw nyob | 2026-10-11 | machine-drafted, needs native review |
+| `addressPlaceholder` | hmn | Enter address… | Sau qhov chaw nyob… | 2026-10-11 | machine-drafted, needs native review |
+| `addressFind` | hmn | Find | Nrhiav | 2026-10-11 | machine-drafted, needs native review |
+| `addressFinding` | hmn | Searching… | Tab tom nrhiav… | 2026-10-11 | machine-drafted, needs native review |
+| `addressMoved` | hmn | Pin moved to address | Tus pin tsiv mus rau qhov chaw nyob lawm | 2026-10-11 | machine-drafted, needs native review |
+| `addressNotFound` | hmn | Address not found — drag the pin to set location | Nrhiav tsis pom qhov chaw nyob. Rub tus pin los teem qhov chaw. | 2026-10-11 | machine-drafted, needs native review |
+| `addressFailed` | hmn | Could not search — drag the pin to set location | Kev nrhiav tsis ua hauj lwm. Rub tus pin los teem qhov chaw. | 2026-10-11 | machine-drafted, needs native review |
+| `placeConfirm` | hmn | Confirm & Report | Lees thiab qhia | 2026-10-11 | machine-drafted, needs native review |
+| `placing` | hmn | Placing… | Tab tom tso… | 2026-10-11 | machine-drafted, needs native review |
+| `placeFailed` | hmn | Couldn’t place the alert. Try again. | Tso tsis tau lo lus ceeb toom. Sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanks` | hmn | Thanks — your suggestion is pending review. | Ua tsaug. Koj cov lus pom zoo tab tom tos kev tshuaj xyuas. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestThanksBody` | hmn | Our team will verify and publish it if it meets community guidelines. | Peb pab neeg yuav txheeb xyuas thiab tshaj tawm yog nws raws li cov cai ntawm zej zog. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestIntro` | hmn | Know of a resource that’s not on the map? Suggest it and our community team will review it. | Koj puas paub ib qho chaw pab uas tsis nyob hauv daim ntawv qhia chaw? Pom zoo nws thiab peb pab neeg zej zog yuav tshuaj xyuas. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCategory` | hmn | Category | Pawg | 2026-10-11 | machine-drafted, needs native review |
+| `suggestName` | hmn | Resource name | Lub npe ntawm qhov chaw pab | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescription` | hmn | Description | Lus piav qhia | 2026-10-11 | machine-drafted, needs native review |
+| `suggestDescriptionPlaceholder` | hmn | Who does it serve? What do they offer? Hours? | Nws pab leej twg? Nws muab dab tsi? Lub sij hawm qhib? | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCount` | hmn | {n}/500 characters (minimum 10) | {n}/500 tus ntawv (tsawg kawg 10) | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCity` | hmn | City | Lub nroog | 2026-10-11 | machine-drafted, needs native review |
+| `suggestState` | hmn | State | Lub xeev | 2026-10-11 | machine-drafted, needs native review |
+| `suggestPhone` | hmn | Phone | Xov tooj | 2026-10-11 | machine-drafted, needs native review |
+| `suggestWebsite` | hmn | Website | Lub vev xaib | 2026-10-11 | machine-drafted, needs native review |
+| `optional` | hmn | (optional) | (tsis yuam) | 2026-10-11 | machine-drafted, needs native review |
+| `exampleValue` | hmn | e.g. {example} | piv txwv: {example} | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmit` | hmn | Submit suggestion | Xa cov lus pom zoo | 2026-10-11 | machine-drafted, needs native review |
+| `suggestSubmitting` | hmn | Submitting… | Tab tom xa… | 2026-10-11 | machine-drafted, needs native review |
+| `suggestFailed` | hmn | Couldn’t send the suggestion. Try again. | Xa tsis tau cov lus pom zoo. Sim dua. | 2026-10-11 | machine-drafted, needs native review |
+| `voteRecorded` | hmn | Vote recorded. | Koj lub suab raug sau cia lawm. | 2026-10-11 | machine-drafted, needs native review |
+| `dismiss` | hmn | Dismiss | Kaw daim ntawv ceeb toom | 2026-10-11 | machine-drafted, needs native review |
+| `historyLoaded` | hmn | History loaded. Entries: {n}. | Keeb kwm tau thauj lawm. Cov nkag: {n}. | 2026-10-11 | machine-drafted, needs native review |
+| `suggestCountInvalid` | hmn | Write between 10 and 500 characters. | Sau li ntawm 10 mus txog 500 tus ntawv. | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByReporter` | hmn | Updated by the reporter | Tus uas qhia tau hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `histUpdatedByModerator` | hmn | Updated by a moderator | Ib tug neeg saib xyuas tau hloov tshiab | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByReporter` | hmn | Marked resolved by the reporter | Tus uas qhia tau cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `histResolvedByModerator` | hmn | Marked resolved by a moderator | Ib tug neeg saib xyuas tau cim tias daws tau lawm | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByReporter` | hmn | Resolved by the reporter | Tus uas qhia tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
+| `resolvedByModerator` | hmn | Resolved by a moderator | Ib tug neeg saib xyuas tau daws lawm | 2026-10-11 | machine-drafted, needs native review |
+| `staleNotice` | hmn | Couldn’t refresh alerts — last updated {time}. | Tsis tuaj yeem hloov tshiab cov lus ceeb toom. Hloov tshiab zaum kawg: {time}. | 2026-10-11 | machine-drafted, needs native review |
+
 ### `lib/i18n-feed-badges.ts`
 
 | Key | Locale | English | Text | Added | Status |

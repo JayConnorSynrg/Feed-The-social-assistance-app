@@ -69,6 +69,8 @@ BEGIN
   ASSERT has_function_privilege('authenticated', 'public.vote_safety_alert(uuid,text)', 'EXECUTE')
      AND NOT has_function_privilege('anon', 'public.vote_safety_alert(uuid,text)', 'EXECUTE'),
     'X0: vote_safety_alert stays authenticated-only';
+  ASSERT pg_get_function_result('public.vote_safety_alert(uuid,text)'::regprocedure) = 'jsonb',
+    'X0: vote_safety_alert answers the public alert shape (jsonb), not the safety_alerts row with its identity columns (20261026600000)';
 
   -- ===================================================================================
   -- X1 — cron: exactly one safety_alerts_expire job every 5 minutes (guarded like the migration).
@@ -90,16 +92,17 @@ BEGIN
   INSERT INTO smoke_seed (id, status, pos, verified, expect)
   SELECT gen_random_uuid(), st, pos, false,
          CASE WHEN st = 'live' AND pos IN ('past', 'now') THEN 'expired' ELSE st END
-    FROM unnest(ARRAY['live', 'expired', 'cleared', 'removed']) st
+    FROM unnest(ARRAY['live', 'expired', 'cleared', 'removed', 'resolved', 'withdrawn']) st   -- + the two statuses of 20261026600000
    CROSS JOIN unnest(ARRAY['past', 'now', 'future']) pos;
   INSERT INTO smoke_seed VALUES (gen_random_uuid(), 'live', 'past', true, 'expired');
 
   INSERT INTO public.safety_alerts (id, alert_type, severity, description, location, status, created_by,
-                                    expires_at, verified, verified_by, verified_at)
+                                    expires_at, verified, verified_by, verified_at, resolved_at, resolved_by_role)
   SELECT s.id, 'general', 1, 'SMOKE expire', ST_SetSRID(ST_MakePoint(-72.58, 44.26), 4326)::geography,
          s.status, v_creator,
          now() + CASE s.pos WHEN 'past' THEN interval '-1 hour' WHEN 'now' THEN interval '0' ELSE interval '1 hour' END,
-         s.verified, CASE WHEN s.verified THEN v_verifier END, CASE WHEN s.verified THEN now() END
+         s.verified, CASE WHEN s.verified THEN v_verifier END, CASE WHEN s.verified THEN now() END,
+         CASE WHEN s.status = 'resolved' THEN now() - interval '10 minutes' END, CASE WHEN s.status = 'resolved' THEN 'owner' END
     FROM smoke_seed s;
 
   SELECT count(*) INTO v_pre FROM public.safety_alerts WHERE status = 'live' AND expires_at <= now();
@@ -150,8 +153,8 @@ BEGIN
   EXCEPTION WHEN others THEN v_state := SQLSTATE; v_err := SQLERRM;
   END;
   RESET ROLE;
-  ASSERT v_err = 'alert is no longer live',
-    'X4a: a vote on a past-expiry alert must be refused as no longer live, got '||COALESCE(v_state || ' ' || v_err, '<accepted>');
+  ASSERT v_err = 'alert is no longer live' AND v_state = 'PT410',
+    'X4a: a vote on a past-expiry alert must be refused as no longer live (the kept sentence, SQLSTATE PT410), got '||COALESCE(v_state || ' ' || v_err, '<accepted>');
   ASSERT NOT EXISTS (SELECT 1 FROM public.safety_alert_votes WHERE alert_id = v_id),
     'X4a: a refused vote must write nothing';
 

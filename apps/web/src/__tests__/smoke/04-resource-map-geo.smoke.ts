@@ -4,13 +4,30 @@
 // Surface: apps/web/src/components/panels/map-panel.tsx
 // Upstream: Auth (M1), PostGIS | Downstream: Safety Alerts (M12), Volunteer (M13)
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
 
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
+// GATE ON THE LEDGER, NOT ON THE STATE (as smoke 24 does). The Release 3 foundation migration
+// (20261026600000_r3_foundation.sql) is applied as its own step and writes its row in
+// supabase_migrations.schema_migrations in the same transaction. While that row is absent the checks below
+// assert what the database is today (or skip, where the object does not exist yet); once it is recorded the
+// Release 3 assertions ALWAYS run. So the suite is green when this file is merged before the migration is
+// applied, and green after it is applied; a later regression fails instead of skipping.
+const R3_FOUNDATION = '20261026600000'
+const R3_GATE_SQL = `
+  SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '${R3_FOUNDATION}') AS r3_applied
+`
+let r3Applied = false
+
 maybeDescribe('04 — Resource Map & Geo (PROD read-only)', () => {
+  beforeAll(async () => {
+    const gate = await queryProd(R3_GATE_SQL)
+    r3Applied = gate[0]?.r3_applied === true
+  })
+
   it('geo RPCs are SECDEF with multi-schema search_path (public, extensions)', async () => {
     // Backend: resources_in_bounds, safety_alerts_in_view, place_safety_alert, set_resource_location
     // Surface: map-panel.tsx → use-viewport-resources.ts:128
@@ -54,9 +71,22 @@ maybeDescribe('04 — Resource Map & Geo (PROD read-only)', () => {
     `)
     expect(rows.length).toBeGreaterThan(0)
     const resultType = rows[0].result_type as string
-    // The RETURNS TABLE must NOT include created_by — only is_mine as the derived boolean
+    // The RETURNS TABLE must NOT include created_by — only is_mine as the derived boolean (both states).
     expect(resultType).not.toContain('created_by')
     expect(resultType).toContain('is_mine')
+    if (!r3Applied) return
+    // 20261026600000: nor verified_by / the raw location; id and the 13 columns the map reads keep their
+    // order, followed by the seven new ones.
+    expect(rows.length, 'exactly one safety_alerts_in_view signature').toBe(1)
+    expect(resultType).not.toContain('verified_by')
+    expect(resultType).not.toContain('location')
+    expect(resultType.startsWith(
+      'TABLE(id uuid, alert_type text, severity integer, description text, lng double precision, lat double precision, ' +
+      'status text, confirm_count integer, clear_count integer, created_at timestamp with time zone, ' +
+      'expires_at timestamp with time zone, verified boolean, is_mine boolean, version integer,'
+    )).toBe(true)
+    expect(resultType).toContain('shown_state text')
+    expect(resultType).toContain('shown_until timestamp with time zone')
   })
 
   it('resources table has RLS enabled', async () => {

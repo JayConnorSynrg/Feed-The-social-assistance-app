@@ -75,7 +75,7 @@ import { buildEventCards, type EventOccurrenceRow } from '@/components/feed/post
 import { postMenuItems } from '@/components/feed/post-actions'
 import { buildPostMenuSections } from '@/components/feed/post-menu-content'
 import { PostCardActions } from '@/components/feed/post-card-actions'
-import type { SafetyAlert } from '@/hooks/use-safety-alerts'
+import type { SafetyAlert } from '@/lib/safety-alert-rpc'
 
 const POST = '11111111-1111-4111-8111-111111111111'
 const ALERT = '22222222-2222-4222-8222-222222222222'
@@ -114,7 +114,13 @@ const alert: SafetyAlert = {
   created_at: '2026-10-08T18:00:00.000Z',
   expires_at: '2026-10-08T21:00:00.000Z',
   verified: false,
+  version: 1,
+  updated_at: null,
+  update_count: 0,
+  resolved_at: null,
 }
+/** The clock the alert surfaces render with: one hour after the alert was reported. */
+const ALERT_NOW = Date.parse('2026-10-08T19:00:00.000Z')
 
 const occ: EventOccurrenceRow = {
   id: 'occ-1',
@@ -178,8 +184,8 @@ function postCardMenu(): string {
 const SURFACES: Record<string, () => string> = {
   post_feed_card: () => postCardMenu(),
   post_page: () => renderToStaticMarkup(h(PostAdminEditLink, { postId: POST, content: 'Need a ride', source: 'post_page' })),
-  alert_feed_strip: () => renderToStaticMarkup(h(SafetyStrip, { alerts: [alert], onViewMap: () => {}, formatAge: () => '1h ago' })),
-  alert_map_popup: () => renderToStaticMarkup(h(SafetyAlertMarker, { alert, onVote: async () => {} })),
+  alert_feed_strip: () => renderToStaticMarkup(h(SafetyStrip, { alerts: [alert], onViewMap: () => {}, now: ALERT_NOW, tz: 'UTC' })),
+  alert_map_popup: () => renderToStaticMarkup(h(SafetyAlertMarker, { alert, onVote: async () => ({ ok: true as const, value: alert, requestId: 'r' }), now: ALERT_NOW, tz: 'UTC' })),
   event_feed_card: () => eventCardWithMenu('feed'),
   event_events_tab: () => eventCardWithMenu('events-tab'),
 }
@@ -268,16 +274,17 @@ describe('surface details', () => {
       { ...alert, id: '22222222-2222-4222-8222-000000000004', alert_type: 'speeding' as const, description: null },
       { ...alert, id: '22222222-2222-4222-8222-000000000005', alert_type: 'general' as const, description: 'Downed line' },
     ]
-    const ages = ['5m ago', '1h ago', '2h ago', '3h ago', '4h ago']
-    let i = 0
-    const html = renderToStaticMarkup(h(SafetyStrip, { alerts, onViewMap: () => {}, formatAge: () => ages[i++ % 5] }))
+    // Reported 5 minutes, then 1, 2, 3 and 4 hours before the strip's clock.
+    const ago = [5 * 60_000, 3600_000, 2 * 3600_000, 3 * 3600_000, 4 * 3600_000]
+    const aged = alerts.map((a, i) => ({ ...a, created_at: new Date(ALERT_NOW - ago[i]).toISOString() }))
+    const html = renderToStaticMarkup(h(SafetyStrip, { alerts: aged, onViewMap: () => {}, now: ALERT_NOW, tz: 'UTC' }))
     const names = [...html.matchAll(/aria-label="Edit in admin: ([^"]*) \(opens/g)].map((m) => m[1])
     expect(names).toHaveLength(5)
     expect(new Set(names).size).toBe(5)
-    expect(names[0]).toMatch(/^Road Closure, 5m ago: Bridge out on Main Street/)
+    expect(names[0]).toMatch(/^Road Closure, 5 minutes ago: Bridge out on Main Street/)
     expect(names[0].split(': ')[1]).toHaveLength(40) // 39 characters + …
-    expect(names[2]).toBe('Weather Hazard, 2h ago')
-    expect(safetyStripItemName('Road Closure', '  Route   4 closed ', '1h ago')).toBe('Road Closure, 1h ago: Route 4 closed')
+    expect(names[2]).toBe('Weather Hazard, 2 hours ago')
+    expect(safetyStripItemName('Road Closure', '  Route   4 closed ', '1 hour ago')).toBe('Road Closure, 1 hour ago: Route 4 closed')
   })
 
   it('map popup: the link is inside the dialog, Tab-reachable, and Escape on the dialog still closes it', () => {

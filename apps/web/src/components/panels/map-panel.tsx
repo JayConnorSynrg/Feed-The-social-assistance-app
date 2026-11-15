@@ -52,6 +52,8 @@ import { SafetyAlertMarker } from '@/components/map/safety-alert-marker'
 import { StagingAlertPin } from '@/components/map'
 import { HazardBubbleMenu } from '@/components/map/hazard-bubble-menu'
 import { useSafetyAlerts } from '@/hooks/use-safety-alerts'
+import { AlertDialogs, MapAlertNotice, useAlertDialog } from '@/components/alerts/alert-dialogs'
+import { staleNoticeText } from '@/components/alerts/alert-edit-model'
 import { logger, logEvent } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/client'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
@@ -673,10 +675,20 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
     enabled: !!bounds && showSnapLayer,
   })
 
-  // Safety alerts layer — live alerts in the current viewport. The bounds state itself: its identity
-  // changes only when the map reports new bounds (a fresh object every render re-ran the hook's
-  // debounce on every render — a refetch loop).
-  const { alerts: safetyAlerts, placeAlert, voteAlert, updateAlert, deleteAlert } = useSafetyAlerts(bounds)
+  // Safety alerts layer — shown alerts (live, and resolved for six hours) in the current viewport.
+  // The hook keys its reads on the four bound numbers, so a re-render never reads again.
+  const { alerts: safetyAlerts, placeAlert, voteAlert, host: alertHost, setEngaged: setAlertEngaged, notice: alertNotice, now: alertsNow, clearNotice: clearAlertNotice, focusMap: focusMapAfterNotice, stale: alertsStale } = useSafetyAlerts(bounds)
+  // Update / Mark resolved / Withdraw / History, opened from a popup (the last outcome's visible line
+  // goes away when the member starts the next action).
+  const alertDialog = useAlertDialog(clearAlertNotice)
+  // An alert left because of what the member did in its popup: focus the map first, then say why.
+  const handleAlertEnded = useCallback(
+    (notice: string) => {
+      alertHost.focusAfterLeave()
+      if (notice) requestAnimationFrame(() => alertHost.announce(notice))
+    },
+    [alertHost],
+  )
 
   // Current map center — used as default pin location for hazard reports
   const currentMapCenter = { lng: viewState.longitude, lat: viewState.latitude }
@@ -701,9 +713,6 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
 
   const handleStagingPinDragEnd = (coords: { lng: number; lat: number }) =>
     setStagingPin((prev) => (prev ? { ...prev, ...coords } : null))
-
-  // currentUserId for owner-gated actions on safety alert markers
-  const currentUserId = profile?.id ?? null
 
   // Map real resources to MapResource interface
   const mapResources: MapResource[] = useMemo(() => {
@@ -773,7 +782,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
   const [focusSession] = useState(
     () =>
       new MapFocusSession({
-        read: (target, signal) => readMapFocusPin(createClient(), target, new Date(), signal),
+        read: (target, signal) => readMapFocusPin(createClient(), target, signal),
         camera: { setUserHasMovedMap, setHasGeocentered },
         onArrive: (target) => {
           // A link arriving from the URL replaces the last miss line and popup target.
@@ -1070,8 +1079,16 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         </div>
       </div>
 
-      {/* Center: Interactive Map */}
-      <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative flex-1 min-w-0 rounded-xl overflow-hidden">
+      {/* Center: Interactive Map, under the line that says what the member's own alert action did. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <MapAlertNotice
+        notice={alertNotice}
+        locale={locale}
+        onDismiss={clearAlertNotice}
+        focusAfterDismiss={focusMapAfterNotice}
+        stale={alertsStale === null ? null : staleNoticeText(alertsStale, locale, alertsNow)}
+      />
+      <div id="map-view-panel" role="tabpanel" aria-labelledby={`map-tab-${viewMode}`} className="relative min-h-0 flex-1 rounded-xl overflow-hidden">
         <MapView
           ref={mapViewRef}
           initialViewState={viewState}
@@ -1150,10 +1167,12 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
             <SafetyAlertMarker
               key={alert.id}
               alert={alert}
+              locale={locale}
+              now={alertsNow}
               onVote={voteAlert}
-              currentUserId={currentUserId}
-              onUpdate={updateAlert}
-              onDelete={deleteAlert}
+              onAction={alertDialog.open}
+              onEngage={setAlertEngaged}
+              onEnded={handleAlertEnded}
               focused={isFocusedPin(focusedPin, 'safety_alert', alert.id)}
             />
           ))}
@@ -1182,6 +1201,14 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         >
           {focusMiss ? mapMemberT(locale, 'focusNotOnMap') : ''}
         </p>
+        <AlertDialogs
+          request={alertDialog.request}
+          locale={locale}
+          surface="map"
+          host={alertHost}
+          onClose={alertDialog.close}
+          returnFocusRef={alertDialog.triggerRef}
+        />
         {/* SNAP food-access layer toggle — top-left, clear of the top-right map controls */}
         <button
           type="button"
@@ -1200,6 +1227,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         {/* Bubble menu — all roles report hazards; providers also add resources */}
         <HazardBubbleMenu
           viewCenter={currentMapCenter}
+          locale={locale}
           onPlaceAlert={placeAlert}
           onAddResource={() => {
             // Delegate to the existing VolunteerResourceFAB by mounting it in open state.
@@ -1217,6 +1245,7 @@ export function MapPanel({ onNavigateToChat }: MapPanelProps) {
         />
         {/* VolunteerResourceFAB kept for providers — controlled via volunteerFabOpen */}
         <VolunteerResourceFAB externalOpen={volunteerFabOpen} onExternalOpenChange={setVolunteerFabOpen} />
+      </div>
       </div>
 
       {/* Right Panel: Resource Details (conditional) */}

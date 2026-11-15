@@ -232,7 +232,7 @@ sleep 0.7
 DB=$RDB $PSQL -At -c "$(AS $C)" -c "SELECT public.submit_content_report('post', '$P13', 'spam')::text" > "$D/c11b" 2>&1
 wait
 F11=$(q "SELECT (SELECT count(*) FROM public.content_reports WHERE content_id = p.id AND status = 'open') || '|' || is_hidden || '|' || COALESCE(hidden_reason, '-') FROM public.posts p WHERE id = '$P13'")
-if grep -q '^2$' "$D/c11a" && grep -q '"hidden": true, "report_count": 3' "$D/c11b" && [ "$F11" = "3|true|community_reports_threshold" ]; then ok C11 "the second report counted 3 and hid the post; open|hidden|reason $F11"
+if grep -q '^2$' "$D/c11a" && grep -q '"hidden": true, "accepted": true, "report_count": 3' "$D/c11b" && [ "$F11" = "3|true|community_reports_threshold" ]; then ok C11 "the second report counted 3 and hid the post; open|hidden|reason $F11"
 else bad C11 "a=$(r "$D/c11a") b=$(r "$D/c11b") open|hidden|reason=$F11"; fi
 
 # ---- C12: a like in flight on a fresh post, then the author's edit

@@ -711,8 +711,11 @@ BEGIN
   ASSERT to_regprocedure('public.ranked_feed(double precision,double precision,integer,real,uuid)') IS NULL,
     'E12: ranked_feed (v1) is dropped (20261026000000)';
   ASSERT (SELECT md5(substring(d FROM position('  visible AS (' IN d) FOR position('  -- EVENTS branch' IN d) - position('  visible AS (' IN d)))
-          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'::regprocedure) d) s)
-         = 'eab880757418ffbd2ddc13566f7032bc', 'E12: ranked_feed_v2 posts branch = W1.3 ranking + deleted-post filter (20261026000000)';
+          FROM (SELECT pg_get_functiondef('public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'::regprocedure) d) s)
+         = '5e94a6696de65a5c784f45c10e166b69',
+    'E12: ranked_feed_v2 posts branch = W1.3 ranking + deleted-post filter (20261026000000) + pin expiry (20261026600000)';
+  ASSERT to_regprocedure('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)') IS NULL,
+    'E12: the five-argument ranked_feed_v2 is gone (one signature, no PostgREST overload)';
   FOR v_viewer IN SELECT * FROM (VALUES
       ('anon', NULL::uuid, false), ('guest', v_guest, true), ('post owner', v_m2, false),
       ('member', v_m1, false), ('platform admin (staff)', v_admin, false)) AS t(label, uid, anon) LOOP
@@ -803,7 +806,7 @@ BEGIN
       'public.admin_save_organization(uuid,jsonb)',
       'public.can_manage_org_photos(text)',
       'public.can_admin_org(uuid)',
-      'public.ranked_feed_v2(double precision,double precision,integer,real,uuid)'] LOOP
+      'public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)'] LOOP
     ASSERT (SELECT p.prosecdef AND array_to_string(p.proconfig, ',') LIKE 'search_path=public%pg_temp%'
             FROM pg_proc p WHERE p.oid = v_fn::regprocedure),
       'E15: '||v_fn||' must be SECURITY DEFINER with a pinned search_path';

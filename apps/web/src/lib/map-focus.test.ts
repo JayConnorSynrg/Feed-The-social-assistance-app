@@ -65,10 +65,21 @@ function ewkb(lng: number, lat: number): string {
 }
 
 interface FakeOptions {
-  /** Simulate a server that ignores .gt() (proves the client re-checks expiry). */
-  ignoreGt?: boolean
+  /** Simulate a reader that applies no rule of its own (proves the client re-checks the shown rule). */
+  readerReturnsAnything?: boolean
   /** Make every read reject. */
   fail?: boolean
+}
+
+/** The reader's own rule (specs/r3-contract.md), on the SERVER's clock: live, or resolved < 6 h ago. */
+function readerShows(row: Row, nowMs: number): boolean {
+  if (row.status === 'live') return Date.parse(String(row.expires_at)) > nowMs
+  return row.status === 'resolved' && row.resolved_at != null && Date.parse(String(row.resolved_at)) > nowMs - 6 * 3600_000
+}
+/** The verdict the server stamps on every row it answers (shown_state). */
+function withVerdict(row: Row, serverNowMs: number): Row {
+  const shown = readerShows(row, serverNowMs)
+  return { ...row, shown_state: !shown ? 'gone' : row.status === 'live' ? 'live' : 'resolved', shown_until: shown ? (row.status === 'live' ? row.expires_at : new Date(Date.parse(String(row.resolved_at)) + 6 * 3600_000).toISOString()) : null }
 }
 
 function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
@@ -98,11 +109,6 @@ function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
           rows = rows.filter((r) => vals.includes(r[col]))
           return builder
         },
-        gt(col: string, val: string) {
-          calls.push(`${table}.gt(${col})`)
-          if (!opts.ignoreGt) rows = rows.filter((r) => Date.parse(String(r[col])) > Date.parse(val))
-          return builder
-        },
         order(col: string) {
           rows = [...rows].sort((a, b) => String(a[col]).localeCompare(String(b[col])))
           return builder
@@ -117,6 +123,27 @@ function fakeClient(tables: Record<string, Row[]>, opts: FakeOptions = {}) {
         },
         then<R>(cb: (r: { data: Row[]; error: null }) => R, rej?: (e: unknown) => R) {
           return result().then(cb, rej)
+        },
+      }
+      return builder
+    },
+    // The alert reader (safety_alerts_in_view): by id, resolved included when asked.
+    rpc(name: string, args: Record<string, unknown>) {
+      calls.push(`${name}.rpc(${JSON.stringify(args)})`)
+      const all = name === 'safety_alerts_in_view' ? (tables.safety_alerts ?? []) : []
+      const rows = all
+        .filter((r) => args.p_alert_id === undefined || r.id === args.p_alert_id)
+        .filter((r) => opts.readerReturnsAnything || (readerShows(r, NOW.getTime()) && (args.p_include_resolved === true || r.status === 'live')))
+        // The server's clock is NOW, whatever the browser's is.
+        .map((r) => withVerdict(r, NOW.getTime()))
+      const builder = {
+        abortSignal(signal: AbortSignal) {
+          calls.push(`${name}.abortSignal`)
+          signals.push(signal)
+          return builder
+        },
+        then<R>(cb: (r: { data: Row[] | null; error: { code: string; message: string } | null }) => R, rej?: (e: unknown) => R) {
+          return (opts.fail ? Promise.reject(new Error('network')) : Promise.resolve({ data: rows, error: null })).then(cb, rej)
         },
       }
       return builder
@@ -139,12 +166,13 @@ const business = (over: Row = {}): Row => ({
   id: B1, org_type: 'business', status: 'approved', is_active: true, location: THERE, resource_id: null, ...over,
 })
 const org = (over: Row = {}): Row => ({ id: O1, org_type: 'food_bank', is_active: true, location: HERE, resource_id: null, ...over })
+/** A row of the alert reader: coordinates as numbers, never a reporter. */
 const alert = (over: Row = {}): Row => ({
-  id: A1, status: 'live', expires_at: '2026-10-08T21:00:00.000Z', location: HERE, ...over,
+  id: A1, alert_type: 'general', severity: 2, status: 'live', expires_at: '2026-10-08T21:00:00.000Z', resolved_at: null, lng: -72.97, lat: 43.61, version: 1, ...over,
 })
 
 const read = (tables: Record<string, Row[]>, kind: 'resource' | 'organization' | 'business' | 'safety_alert', id: string, opts?: FakeOptions) =>
-  readMapFocusPin(fakeClient(tables, opts).client, { kind, id }, NOW)
+  readMapFocusPin(fakeClient(tables, opts).client, { kind, id })
 
 // ---- 1 + 2. Readers ------------------------------------------------------------------------------
 
@@ -220,36 +248,78 @@ describe('readMapFocusPin — business (businesses_in_bounds: business, approved
   })
 })
 
-describe('readMapFocusPin — safety alert (safety_alerts_in_view: live AND expires_at > now)', () => {
-  it('a live, unexpired alert resolves', async () => {
-    expect(await read({ safety_alerts: [alert()] }, 'safety_alert', A1)).toMatchObject({ layer: 'safety_alert', id: A1 })
+describe('readMapFocusPin — safety alert (the alert reader by id: shown = live, or resolved < 6 h ago)', () => {
+  // The fake reader is the server (its clock is NOW); each test sets the browser's clock.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  it('a live, unexpired alert resolves to the reader’s coordinates', async () => {
+    const pin = await read({ safety_alerts: [alert()] }, 'safety_alert', A1)
+    expect(pin).toEqual({ layer: 'safety_alert', id: A1, lng: -72.97, lat: 43.61 })
+  })
+  it('a resolved alert still shown (the map draws it for six hours) resolves too', async () => {
+    const resolved = alert({ status: 'resolved', resolved_at: '2026-10-08T13:00:01.000Z' })
+    expect(await read({ safety_alerts: [resolved] }, 'safety_alert', A1)).toMatchObject({ layer: 'safety_alert', id: A1 })
   })
   it.each([
     ['removed', { status: 'removed' }],
+    ['withdrawn', { status: 'withdrawn' }],
+    ['cleared', { status: 'cleared' }],
     ['expired', { status: 'expired' }],
     ['live but past expires_at (the expiry job has not reached it)', { expires_at: '2026-10-08T18:59:00.000Z' }],
+    ['resolved six hours ago', { status: 'resolved', resolved_at: '2026-10-08T13:00:00.000Z' }],
   ])('%s does not resolve', async (_label, over) => {
     expect(await read({ safety_alerts: [alert(over)] }, 'safety_alert', A1)).toBeNull()
   })
-  it('the expiry is re-checked on the returned row (RLS checks status only)', async () => {
-    // A server that ignored .gt() would return the past-expiry row; the client still refuses it.
-    const past = alert({ expires_at: '2026-10-08T18:59:00.000Z' })
-    expect(await read({ safety_alerts: [past] }, 'safety_alert', A1, { ignoreGt: true })).toBeNull()
+  it.each([
+    ['live but past expires_at', { expires_at: '2026-10-08T18:59:00.000Z' }],
+    ['resolved six hours ago', { status: 'resolved', resolved_at: '2026-10-08T13:00:00.000Z' }],
+    ['removed', { status: 'removed' }],
+  ])('a row the server answers with the verdict "gone" is refused: %s', async (_label, over) => {
+    // A reader that returned the row anyway (marked gone): the client does not land on it.
+    expect(await read({ safety_alerts: [alert(over)] }, 'safety_alert', A1, { readerReturnsAnything: true })).toBeNull()
   })
-  it('the query itself carries both filters', async () => {
+  it.each([
+    ['ten minutes ahead', 10 * 60_000],
+    ['three hours ahead (past the alert’s expiry on this clock)', 3 * 3600_000],
+    ['ten minutes behind', -10 * 60_000],
+    ['a day behind', -24 * 3600_000],
+  ])('the browser clock decides nothing — %s: a pin the server shows is landed on, one it dropped is not', async (_label, skew) => {
+    vi.setSystemTime(NOW.getTime() + skew)
+    // Expires in two hours on the server's clock.
+    expect(await read({ safety_alerts: [alert()] }, 'safety_alert', A1)).toEqual({ layer: 'safety_alert', id: A1, lng: -72.97, lat: 43.61 })
+    const resolved = alert({ status: 'resolved', resolved_at: '2026-10-08T13:05:00.000Z' }) // five minutes of its six hours left
+    expect(await read({ safety_alerts: [resolved] }, 'safety_alert', A1)).toMatchObject({ layer: 'safety_alert', id: A1 })
+    // Expired a minute ago on the server: not returned, so not landed on — even when this clock is a day behind.
+    expect(await read({ safety_alerts: [alert({ expires_at: '2026-10-08T18:59:00.000Z' })] }, 'safety_alert', A1)).toBeNull()
+  })
+  it('an alert without a place on the map does not resolve', async () => {
+    expect(await read({ safety_alerts: [alert({ lng: null, lat: null })] }, 'safety_alert', A1)).toBeNull()
+    expect(await read({ safety_alerts: [alert({ lng: 0, lat: 43.61 })] }, 'safety_alert', A1)).toBeNull()
+  })
+  it('it asks the one reader for that id with resolved alerts included — and never the table', async () => {
     const { client, calls } = fakeClient({ safety_alerts: [alert()] })
-    await readMapFocusPin(client, { kind: 'safety_alert', id: A1 }, NOW)
-    expect(calls).toContain('safety_alerts.eq(status,live)')
-    expect(calls).toContain('safety_alerts.gt(expires_at)')
+    await readMapFocusPin(client, { kind: 'safety_alert', id: A1 })
+    expect(calls).toContain(`safety_alerts_in_view.rpc(${JSON.stringify({ p_alert_id: A1, p_include_resolved: true })})`)
+    expect(calls.filter((c) => c.startsWith('safety_alerts.'))).toEqual([])
   })
 })
 
 describe('readMapFocusPin — the read can be aborted', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
   it('the resource and safety-alert queries carry the session signal', async () => {
     const signal = new AbortController().signal
-    for (const [kind, table] of [['resource', 'resources'], ['safety_alert', 'safety_alerts']] as const) {
+    for (const [kind, table] of [['resource', 'resources'], ['safety_alert', 'safety_alerts_in_view']] as const) {
       const fake = fakeClient({ resources: [resource()], safety_alerts: [alert()] })
-      await readMapFocusPin(fake.client, { kind, id: kind === 'resource' ? R1 : A1 }, NOW, signal)
+      await readMapFocusPin(fake.client, { kind, id: kind === 'resource' ? R1 : A1 }, signal)
       expect(fake.calls, kind).toContain(`${table}.abortSignal`)
       expect(fake.signals[0], kind).toBe(signal)
     }

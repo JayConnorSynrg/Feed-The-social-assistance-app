@@ -2031,6 +2031,55 @@ export type Database = {
           },
         ]
       }
+      petition_updates: {
+        Row: {
+          author_role: string
+          body: string
+          created_at: string
+          created_by: string | null
+          id: number
+          petition_id: string
+        }
+        Insert: {
+          author_role: string
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          petition_id: string
+        }
+        Update: {
+          author_role?: string
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          petition_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "petition_updates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petition_updates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petition_updates_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "petitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       petitions: {
         Row: {
           body: string
@@ -2241,6 +2290,7 @@ export type Database = {
           deleted_at: string | null
           edit_count: number
           edited_at: string | null
+          hidden_reason: string | null
           id: string
           is_hidden: boolean | null
           parent_id: string | null
@@ -2255,6 +2305,7 @@ export type Database = {
           deleted_at?: string | null
           edit_count?: number
           edited_at?: string | null
+          hidden_reason?: string | null
           id?: string
           is_hidden?: boolean | null
           parent_id?: string | null
@@ -2269,6 +2320,7 @@ export type Database = {
           deleted_at?: string | null
           edit_count?: number
           edited_at?: string | null
+          hidden_reason?: string | null
           id?: string
           is_hidden?: boolean | null
           parent_id?: string | null
@@ -2302,6 +2354,90 @@ export type Database = {
           {
             foreignKeyName: "post_comments_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_labels: {
+        Row: {
+          applied_at: string
+          applied_by: string | null
+          id: number
+          label: string
+          post_id: string
+          post_version: number
+          reason: string | null
+          retract_reason: string | null
+          retracted_at: string | null
+          retracted_by: string | null
+          retracted_by_role: string | null
+          source_kind: string | null
+          source_role: string
+        }
+        Insert: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: number
+          label: string
+          post_id: string
+          post_version: number
+          reason?: string | null
+          retract_reason?: string | null
+          retracted_at?: string | null
+          retracted_by?: string | null
+          retracted_by_role?: string | null
+          source_kind?: string | null
+          source_role: string
+        }
+        Update: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: number
+          label?: string
+          post_id?: string
+          post_version?: number
+          reason?: string | null
+          retract_reason?: string | null
+          retracted_at?: string | null
+          retracted_by?: string | null
+          retracted_by_role?: string | null
+          source_kind?: string | null
+          source_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_labels_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_labels_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_labels_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_labels_retracted_by_fkey"
+            columns: ["retracted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_labels_retracted_by_fkey"
+            columns: ["retracted_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
@@ -2394,7 +2530,12 @@ export type Database = {
       }
       posts: {
         Row: {
+          closed_at: string | null
+          closed_reason: string | null
           comment_count: number
+          comments_locked_at: string | null
+          comments_locked_by_role: string | null
+          comments_locked_reason: string | null
           content: string
           created_at: string | null
           deleted_at: string | null
@@ -2408,6 +2549,7 @@ export type Database = {
           image_url: string | null
           is_hidden: boolean | null
           is_pinned: boolean | null
+          labels: string[]
           lang: string | null
           like_count: number
           location: unknown
@@ -2415,6 +2557,7 @@ export type Database = {
           metadata: Json | null
           needs_review_at: string | null
           petition_id: string | null
+          pinned_until: string | null
           post_type: Database["public"]["Enums"]["post_type"]
           resource_id: string | null
           slots_remaining: number | null
@@ -2423,7 +2566,12 @@ export type Database = {
           version: number
         }
         Insert: {
+          closed_at?: string | null
+          closed_reason?: string | null
           comment_count?: number
+          comments_locked_at?: string | null
+          comments_locked_by_role?: string | null
+          comments_locked_reason?: string | null
           content: string
           created_at?: string | null
           deleted_at?: string | null
@@ -2437,6 +2585,7 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          labels?: string[]
           lang?: string | null
           like_count?: number
           location?: unknown
@@ -2444,6 +2593,7 @@ export type Database = {
           metadata?: Json | null
           needs_review_at?: string | null
           petition_id?: string | null
+          pinned_until?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
@@ -2452,7 +2602,12 @@ export type Database = {
           version?: number
         }
         Update: {
+          closed_at?: string | null
+          closed_reason?: string | null
           comment_count?: number
+          comments_locked_at?: string | null
+          comments_locked_by_role?: string | null
+          comments_locked_reason?: string | null
           content?: string
           created_at?: string | null
           deleted_at?: string | null
@@ -2466,6 +2621,7 @@ export type Database = {
           image_url?: string | null
           is_hidden?: boolean | null
           is_pinned?: boolean | null
+          labels?: string[]
           lang?: string | null
           like_count?: number
           location?: unknown
@@ -2473,6 +2629,7 @@ export type Database = {
           metadata?: Json | null
           needs_review_at?: string | null
           petition_id?: string | null
+          pinned_until?: string | null
           post_type?: Database["public"]["Enums"]["post_type"]
           resource_id?: string | null
           slots_remaining?: number | null
@@ -2709,6 +2866,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      resource_opt_in_events: {
+        Row: {
+          actor_id: string | null
+          actor_role: string
+          created_at: string
+          event: string
+          from_status: string | null
+          id: number
+          opt_in_id: string
+          post_id: string
+          seeker_id: string | null
+          to_status: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_role: string
+          created_at?: string
+          event: string
+          from_status?: string | null
+          id?: number
+          opt_in_id: string
+          post_id: string
+          seeker_id?: string | null
+          to_status?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          actor_role?: string
+          created_at?: string
+          event?: string
+          from_status?: string | null
+          id?: number
+          opt_in_id?: string
+          post_id?: string
+          seeker_id?: string | null
+          to_status?: string | null
+        }
+        Relationships: []
       }
       resource_opt_ins: {
         Row: {
@@ -3003,6 +3199,88 @@ export type Database = {
           },
         ]
       }
+      safety_alert_updates: {
+        Row: {
+          actor_id: string | null
+          actor_role: string
+          alert_id: string
+          alert_type: string
+          changed: string[]
+          description: string | null
+          expires_at: string
+          id: number
+          location: unknown
+          msg_type: string
+          note: string | null
+          sent_at: string
+          severity: number
+          severity_change: string
+          status: string
+          supersedes_version: number | null
+          version: number
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_role: string
+          alert_id: string
+          alert_type: string
+          changed?: string[]
+          description?: string | null
+          expires_at: string
+          id?: number
+          location: unknown
+          msg_type: string
+          note?: string | null
+          sent_at?: string
+          severity: number
+          severity_change?: string
+          status: string
+          supersedes_version?: number | null
+          version: number
+        }
+        Update: {
+          actor_id?: string | null
+          actor_role?: string
+          alert_id?: string
+          alert_type?: string
+          changed?: string[]
+          description?: string | null
+          expires_at?: string
+          id?: number
+          location?: unknown
+          msg_type?: string
+          note?: string | null
+          sent_at?: string
+          severity?: number
+          severity_change?: string
+          status?: string
+          supersedes_version?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_alert_updates_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alert_updates_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safety_alert_updates_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "safety_alerts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       safety_alert_votes: {
         Row: {
           alert_id: string
@@ -3060,11 +3338,16 @@ export type Database = {
           expires_at: string
           id: string
           location: unknown
+          resolved_at: string | null
+          resolved_by_role: string | null
           severity: number
           status: string
+          update_count: number
+          updated_at: string | null
           verified: boolean
           verified_at: string | null
           verified_by: string | null
+          version: number
         }
         Insert: {
           alert_type: string
@@ -3076,11 +3359,16 @@ export type Database = {
           expires_at: string
           id?: string
           location: unknown
+          resolved_at?: string | null
+          resolved_by_role?: string | null
           severity: number
           status?: string
+          update_count?: number
+          updated_at?: string | null
           verified?: boolean
           verified_at?: string | null
           verified_by?: string | null
+          version?: number
         }
         Update: {
           alert_type?: string
@@ -3092,11 +3380,16 @@ export type Database = {
           expires_at?: string
           id?: string
           location?: unknown
+          resolved_at?: string | null
+          resolved_by_role?: string | null
           severity?: number
           status?: string
+          update_count?: number
+          updated_at?: string | null
           verified?: boolean
           verified_at?: string | null
           verified_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -3922,6 +4215,10 @@ export type Database = {
         }
         Returns: number
       }
+      add_petition_update: {
+        Args: { p_body: string; p_petition_id: string }
+        Returns: Json
+      }
       addauth: { Args: { "": string }; Returns: boolean }
       addgeometrycolumn:
         | {
@@ -4074,29 +4371,12 @@ export type Database = {
         Returns: Json
       }
       admin_remove_safety_alert: {
-        Args: { p_alert_id: string }
-        Returns: {
-          alert_type: string
-          clear_count: number
-          confirm_count: number
-          created_at: string
-          created_by: string | null
-          description: string | null
-          expires_at: string
-          id: string
-          location: unknown
-          severity: number
-          status: string
-          verified: boolean
-          verified_at: string | null
-          verified_by: string | null
+        Args: {
+          p_alert_id: string
+          p_expected_version?: number
+          p_reason?: string
         }
-        SetofOptions: {
-          from: "*"
-          to: "safety_alerts"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: Json
       }
       admin_resolve_report: {
         Args: {
@@ -4104,6 +4384,10 @@ export type Database = {
           p_expected_version?: number
           p_report_id: string
         }
+        Returns: Json
+      }
+      admin_review_petition: {
+        Args: { p_action: string; p_petition_id: string; p_reason?: string }
         Returns: Json
       }
       admin_save_organization: {
@@ -4114,9 +4398,41 @@ export type Database = {
         Args: { p_comment_id: string; p_hidden: boolean; p_reason?: string }
         Returns: Json
       }
+      admin_set_comments_locked: {
+        Args: {
+          p_expected_version?: number
+          p_locked: boolean
+          p_note?: string
+          p_post_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       admin_set_org_active: {
         Args: { p_active: boolean; p_org_id: string }
         Returns: undefined
+      }
+      admin_set_post_label: {
+        Args: {
+          p_applied: boolean
+          p_expected_version?: number
+          p_ground?: string
+          p_label: string
+          p_post_id: string
+          p_reason?: string
+          p_report_id?: string
+        }
+        Returns: Json
+      }
+      admin_set_post_pinned: {
+        Args: {
+          p_expected_version?: number
+          p_pinned: boolean
+          p_post_id: string
+          p_reason?: string
+          p_until?: string
+        }
+        Returns: Json
       }
       admin_set_tier: {
         Args: {
@@ -4197,29 +4513,8 @@ export type Database = {
         }[]
       }
       admin_verify_safety_alert: {
-        Args: { p_alert_id: string }
-        Returns: {
-          alert_type: string
-          clear_count: number
-          confirm_count: number
-          created_at: string
-          created_by: string | null
-          description: string | null
-          expires_at: string
-          id: string
-          location: unknown
-          severity: number
-          status: string
-          verified: boolean
-          verified_at: string | null
-          verified_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "safety_alerts"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Args: { p_alert_id: string; p_expected_version?: number }
+        Returns: Json
       }
       app_logs_latency_percentiles: {
         Args: { p_window?: string }
@@ -4408,6 +4703,14 @@ export type Database = {
           category: string
           resource_count: number
         }[]
+      }
+      decide_opt_in: {
+        Args: {
+          p_decision: string
+          p_expected_status?: string
+          p_opt_in_id: string
+        }
+        Returns: Json
       }
       delete_own_comment: { Args: { p_comment_id: string }; Returns: Json }
       delete_own_post: { Args: { p_post_id: string }; Returns: Json }
@@ -5049,28 +5352,7 @@ export type Database = {
           p_severity: number
           p_type: string
         }
-        Returns: {
-          alert_type: string
-          clear_count: number
-          confirm_count: number
-          created_at: string
-          created_by: string | null
-          description: string | null
-          expires_at: string
-          id: string
-          location: unknown
-          severity: number
-          status: string
-          verified: boolean
-          verified_at: string | null
-          verified_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "safety_alerts"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: Json
       }
       poll_is_open: { Args: { p_poll_id: string }; Returns: boolean }
       populate_geometry_columns:
@@ -5203,6 +5485,7 @@ export type Database = {
         Args: {
           p_cursor_id?: string
           p_cursor_score?: number
+          p_filter?: string
           p_lat?: number
           p_limit?: number
           p_lng?: number
@@ -5270,6 +5553,14 @@ export type Database = {
         Returns: undefined
       }
       request_id: { Args: never; Returns: string }
+      resolve_safety_alert: {
+        Args: {
+          p_alert_id: string
+          p_expected_version: number
+          p_note?: string
+        }
+        Returns: Json
+      }
       resources_in_bounds: {
         Args: {
           east: number
@@ -5294,12 +5585,34 @@ export type Database = {
           website: string
         }[]
       }
+      safety_alert_history: {
+        Args: { p_alert_id: string }
+        Returns: {
+          actor_role: string
+          alert_type: string
+          changed: string[]
+          description: string
+          expires_at: string
+          lat: number
+          lng: number
+          msg_type: string
+          note: string
+          sent_at: string
+          severity: number
+          severity_change: string
+          supersedes_version: number
+          version: number
+        }[]
+      }
       safety_alerts_in_view: {
         Args: {
-          p_max_lat: number
-          p_max_lng: number
-          p_min_lat: number
-          p_min_lng: number
+          p_alert_id?: string
+          p_include_resolved?: boolean
+          p_limit?: number
+          p_max_lat?: number
+          p_max_lng?: number
+          p_min_lat?: number
+          p_min_lng?: number
         }
         Returns: {
           alert_type: string
@@ -5312,9 +5625,16 @@ export type Database = {
           is_mine: boolean
           lat: number
           lng: number
+          resolved_at: string
+          resolved_by_role: string
           severity: number
+          shown_state: string
+          shown_until: string
           status: string
+          update_count: number
+          updated_at: string
           verified: boolean
+          version: number
         }[]
       }
       search_resources: {
@@ -5348,6 +5668,24 @@ export type Database = {
           p_reason: string
           p_target: string
           p_tier: Database["public"]["Enums"]["admin_tier"]
+        }
+        Returns: Json
+      }
+      set_own_post_label: {
+        Args: {
+          p_applied: boolean
+          p_expected_version?: number
+          p_label: string
+          p_post_id: string
+        }
+        Returns: Json
+      }
+      set_post_closed: {
+        Args: {
+          p_closed: boolean
+          p_expected_version?: number
+          p_post_id: string
+          p_reason?: string
         }
         Returns: Json
       }
@@ -6049,13 +6387,15 @@ export type Database = {
       update_safety_alert: {
         Args: {
           p_alert_id: string
-          p_description: string
-          p_lat: number
-          p_lng: number
-          p_severity: number
-          p_type: string
+          p_description?: string
+          p_expected_version?: number
+          p_lat?: number
+          p_lng?: number
+          p_note?: string
+          p_severity?: number
+          p_type?: string
         }
-        Returns: undefined
+        Returns: Json
       }
       updategeometrysrid: {
         Args: {
@@ -6069,28 +6409,7 @@ export type Database = {
       }
       vote_safety_alert: {
         Args: { p_alert_id: string; p_vote: string }
-        Returns: {
-          alert_type: string
-          clear_count: number
-          confirm_count: number
-          created_at: string
-          created_by: string | null
-          description: string | null
-          expires_at: string
-          id: string
-          location: unknown
-          severity: number
-          status: string
-          verified: boolean
-          verified_at: string | null
-          verified_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "safety_alerts"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: Json
       }
       w1_6a_event_authed_reachable: {
         Args: { p_event: string }
@@ -6138,6 +6457,9 @@ export type Database = {
         | "approval"
         | "denial"
         | "general"
+        | "moderation"
+        | "content_update"
+        | "event_update"
       post_type:
         | "feed"
         | "resource_post"
@@ -6873,6 +7195,9 @@ export const Constants = {
         "approval",
         "denial",
         "general",
+        "moderation",
+        "content_update",
+        "event_update",
       ],
       post_type: [
         "feed",

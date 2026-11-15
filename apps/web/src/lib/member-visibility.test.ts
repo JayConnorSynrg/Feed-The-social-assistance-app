@@ -108,6 +108,29 @@ describe('member map visibility', () => {
     expect(safetyAlertMapVisibility({ status: 'removed', expires_at: '2026-10-09T00:00:00.000Z' }, now)).toEqual({ visible: false, reason: 'hidden' })
   })
 
+  it('safety alert: a row that carries the server’s verdict is judged by it, whatever this clock says', () => {
+    const ahead = new Date('2026-10-09T02:00:00.000Z') // hours past the dates below
+    const behind = new Date('2026-10-07T00:00:00.000Z')
+    const live = { status: 'live', expires_at: '2026-10-08T21:00:00.000Z', shown_state: 'live' }
+    const gone = { status: 'live', expires_at: '2026-10-08T21:00:00.000Z', shown_state: 'gone' }
+    const resolved = { status: 'resolved', expires_at: '2026-10-08T21:00:00.000Z', resolved_at: '2026-10-08T13:00:00.000Z', shown_state: 'resolved' }
+    for (const clock of [ahead, behind]) {
+      expect(safetyAlertMapVisibility(live, clock)).toEqual({ visible: true })
+      expect(safetyAlertMapVisibility(resolved, clock)).toEqual({ visible: true })
+      expect(safetyAlertMapVisibility(gone, clock)).toEqual({ visible: false, reason: 'expired' })
+    }
+  })
+
+  it('safety alert: a resolved alert is on the map for six hours, then expired; cleared and withdrawn are hidden', () => {
+    const now = new Date('2026-10-08T19:00:00.000Z')
+    const resolved = (resolved_at: string) => ({ status: 'resolved', expires_at: '2026-10-09T19:00:00.000Z', resolved_at })
+    expect(safetyAlertMapVisibility(resolved('2026-10-08T13:00:00.001Z'), now)).toEqual({ visible: true })
+    expect(safetyAlertMapVisibility(resolved('2026-10-08T13:00:00.000Z'), now)).toEqual({ visible: false, reason: 'expired' })
+    for (const status of ['cleared', 'withdrawn']) {
+      expect(safetyAlertMapVisibility({ status, expires_at: '2026-10-09T00:00:00.000Z' }, now), status).toEqual({ visible: false, reason: 'hidden' })
+    }
+  })
+
   it('the map control is skipped only when it would repeat the page reason word for word', () => {
     const inactive = { visible: false as const, reason: 'inactive' as const }
     const noLocation = { visible: false as const, reason: 'no_location' as const }

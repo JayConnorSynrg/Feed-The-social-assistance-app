@@ -15,13 +15,28 @@
 // its output (INV-A #2, INV-D), or regresses to a continuous (oracle) distance factor.
 
 import * as fs from 'fs'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { queryProd, isTokenAvailable } from './prod-client'
 
 const skip = !isTokenAvailable()
 const maybeDescribe = skip ? describe.skip : describe
 
-const SIG = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid)"
+// GATE ON THE LEDGER, NOT ON THE STATE (as smoke 24 does). The Release 3 foundation migration
+// (20261026600000_r3_foundation.sql) is applied as its own step and writes its row in
+// supabase_migrations.schema_migrations in the same transaction. While that row is absent the checks below
+// assert what the database is today (or skip, where the object does not exist yet); once it is recorded the
+// Release 3 assertions ALWAYS run. So the suite is green when this file is merged before the migration is
+// applied, and green after it is applied; a later regression fails instead of skipping.
+const R3_FOUNDATION = '20261026600000'
+const R3_GATE_SQL = `
+  SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '${R3_FOUNDATION}') AS r3_applied
+`
+let r3Applied = false
+// The signature follows the ledger: five arguments today, six once 20261026600000 is recorded
+// (p_filter added; DROP + CREATE, never an overload).
+const SIG_BEFORE_R3 = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid)"
+const SIG_R3 = "public.ranked_feed_v2(double precision,double precision,integer,real,uuid,text)"
+let SIG = SIG_R3
 const MGMT_URL = 'https://api.supabase.com/v1/projects/ndtpovonpadugthmcntl/database/query'
 
 function loadTokenForProbe(): string {
@@ -61,6 +76,12 @@ async function probeRolledBack(doBlockSql: string): Promise<string> {
 }
 
 maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
+  beforeAll(async () => {
+    const gate = await queryProd(R3_GATE_SQL)
+    r3Applied = gate[0]?.r3_applied === true
+    SIG = r3Applied ? SIG_R3 : SIG_BEFORE_R3
+  })
+
   it('ranked_feed_v2 is SECURITY DEFINER with a pinned (non-mutable) search_path', async () => {
     // INV-D: SECDEF owned by postgres, search_path = public, pg_temp.
     const rows = await queryProd(`
@@ -96,6 +117,35 @@ maybeDescribe('23 — Ranked Feed RPC (PROD read-only)', () => {
     for (const banned of ['lat', 'lng', 'latitude', 'longitude', 'location', 'geog', 'geom', 'coord', 'dist_km']) {
       expect(sig).not.toContain(banned)
     }
+  })
+
+  it('has exactly one signature in both states; from 20261026600000 it takes six arguments, every one defaulted (the five-argument call still resolves, no PostgREST overload)', async () => {
+    const rows = await queryProd(`
+      SELECT count(*)::int AS signatures,
+             bool_and(p.pronargs = 6 AND p.pronargdefaults = 6) AS all_defaulted,
+             to_regprocedure('public.ranked_feed_v2(double precision,double precision,integer,real,uuid)') IS NULL AS five_arg_gone
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = 'ranked_feed_v2'
+    `)
+    expect(rows[0].signatures).toBe(1)
+    expect(rows[0].five_arg_gone, 'the five-argument signature exists exactly until 20261026600000').toBe(r3Applied)
+    if (!r3Applied) return
+    expect(rows[0].all_defaulted).toBe(true)
+  })
+
+  it('[post-deploy 20261026600000] the Announcements filter returns only pinned posts and org events; an unknown filter returns nothing', async (ctx) => {
+    if (!r3Applied) { ctx.skip(); return }
+    const rows = await queryProd(`
+      SELECT
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'announcements') r
+          WHERE NOT (r.kind = 'event' OR EXISTS (SELECT 1 FROM public.posts p WHERE p.id = r.id AND p.is_pinned AND (p.pinned_until IS NULL OR p.pinned_until > now())))) AS not_announcements,
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'no-such-filter')) AS unknown_filter_rows,
+        (SELECT count(*)::int FROM ranked_feed_v2(p_limit => 1000, p_filter => 'all')) = (SELECT count(*)::int FROM ranked_feed_v2(NULL, NULL, 1000, NULL, NULL)) AS all_is_everything
+    `)
+    expect(rows[0].not_announcements).toBe(0)
+    expect(rows[0].unknown_filter_rows).toBe(0)
+    expect(rows[0].all_is_everything).toBe(true)
   })
 
   it('EXECUTE is granted to anon, authenticated, service_role (INV-D)', async () => {

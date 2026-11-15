@@ -9,6 +9,7 @@
 // is audited on its admin branch; approve_form_template writes a form_template.approve row. The post
 // editing writes (create_post … admin_set_comment_hidden) are listed so each one stays a single
 // privilegedRpc call: its app_logs row and its post_revisions / admin_actions row share request_id.
+// The five member writes on safety alerts are listed for the same reason.
 export const AUDITED_PRIVILEGED = [
   'admin_remove_post',
   'admin_hold_post',
@@ -38,6 +39,14 @@ export const AUDITED_PRIVILEGED = [
   'redact_post_revision',
   'redact_comment_revision',
   'admin_set_comment_hidden',
+  // Safety alerts (Release 3.1): every member write goes through lib/safety-alert-rpc.ts, so each
+  // action leaves one app_logs row (and, for a moderator acting on someone else's alert, the
+  // admin_actions row) under one request id.
+  'place_safety_alert',
+  'update_safety_alert',
+  'resolve_safety_alert',
+  'delete_safety_alert',
+  'vote_safety_alert',
 ]
 
 const QUOTE = "[`'\"]"

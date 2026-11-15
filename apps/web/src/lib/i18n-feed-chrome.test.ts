@@ -259,15 +259,16 @@ describe('feed-panel.tsx wiring', () => {
     }
     // Every tabpanel wrapper in the file is in the table (a new sub-tab cannot go unlisted).
     expect([...panel.matchAll(/role="tabpanel"\s+id="feed-panel-([a-z]+)"/g)].map((m) => m[1]).sort()).toEqual(Object.keys(SUBTABS).sort())
-    // What is still English inside a translated sub-tab keeps its own mark: the Feed tab's safety
-    // strip (below) and text FEED did not write — server and data-layer failures, a stored value
-    // with no label (the *.i18n.test.ts of each surface). "English marks across the member app"
+    // What is still English inside a translated sub-tab keeps its own mark: text FEED did not write —
+    // server and data-layer failures, a stored value with no label (the *.i18n.test.ts of each surface). "English marks across the member app"
     // below counts every fixed mark.
   })
 
   it('inside the Feed tab, what is still English is marked English; what is translated is not', () => {
-    // Still English (Release 3): the safety strip.
-    expect(panel).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">\s*<SafetyStrip\b/)
+    // Translated (Release 3.1): the safety strip carries the viewer language — its English mark is
+    // gone, it gets the locale, and its ages come from relativeAge inside the strip.
+    expect(panel).toMatch(/<div data-testid="feed-safety-region">\s*<SafetyStrip\s+alerts=\{safetyAlerts\}\s+locale=\{locale\}/)
+    expect(panel).not.toMatch(/lang="en"[^>]*data-testid="feed-safety-region"/)
     // Translated (Release 3.5): the follow-error line. The panel hands the hook's sentence to the
     // banner with the viewer language and marks nothing English itself (the banner marks only text
     // FEED did not write — components/feed/follow-error-banner.i18n.test.ts).
@@ -321,7 +322,6 @@ describe('English marks across the member app', () => {
     'components/ui/alert-dialog.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
     'components/ui/select.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
     'components/panels/chat-panel.tsx': { marks: 1, what: '"Retrying…" inside the translated chat error banner' },
-    'components/panels/feed-panel.tsx': { marks: 1, what: 'the safety strip (Release 3, the safety-alert lane)' },
     'components/panels/businesses-panel.tsx': { marks: 2, what: "the data layer's own English text beside a translated sentence (submit failure, photo warning)" },
   }
   // Translated in Release 3.5: each held an island before.
@@ -341,6 +341,7 @@ describe('English marks across the member app', () => {
     'components/panels/messages-panel.tsx',
     'components/panels/petitions-panel.tsx',
     'components/panels/organizations-panel.tsx',
+    'components/panels/feed-panel.tsx',
   ]
 
   it('reads the member app', () => {
@@ -350,7 +351,6 @@ describe('English marks across the member app', () => {
 
   it('what is still English is marked: each listed file holds exactly its marks', () => {
     for (const [file, { marks, what }] of Object.entries(STILL_ENGLISH)) expect([file, fixedMarks(file)], what).toEqual([file, marks])
-    expect(code('components/panels/feed-panel.tsx')).toMatch(/<div lang="en" dir="ltr" data-testid="feed-safety-region">/)
   })
 
   it('what is translated is not marked: no other file holds a fixed English mark', () => {

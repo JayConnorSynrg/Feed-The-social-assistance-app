@@ -26,8 +26,8 @@ import type { FocusKind, FocusTarget } from './deep-link'
 import { parseGeographyPoint } from './business'
 import { fetchApprovedBusinessById } from './business-data'
 import { fetchOrganizationById } from './org-data'
-import { isMapPoint, safetyAlertMapVisibility } from './member-visibility'
-import { whereSafetyAlertLive } from './safety-alert-live'
+import { isMapPoint } from './member-visibility'
+import { readSafetyAlertById } from './safety-alert-rpc'
 
 /** The focus kinds the map brings into view (feed-shell FOCUS_CONSUMERS registers the same four). */
 export type MapFocusKind = Exclude<FocusKind, 'event'>
@@ -64,7 +64,6 @@ interface Result<T> {
 interface FocusQuery extends PromiseLike<Result<Row[]>> {
   abortSignal(signal: AbortSignal): FocusQuery
   eq(column: string, value: unknown): FocusQuery
-  gt(column: string, value: string): FocusQuery
   order(column: string, options: { ascending: boolean }): FocusQuery
   maybeSingle(): PromiseLike<Result<Row>>
 }
@@ -121,16 +120,14 @@ async function readBusinessPin(supabase: SupabaseClient<Database>, id: string): 
   return business ? pinAt('business', id, business.location) : null
 }
 
-/** safety_alerts_in_view: status='live' AND expires_at > now. RLS safety_alerts_select checks status
- *  only, so the expiry is filtered in the query and checked again on the returned row. */
-async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, now: Date, signal: AbortSignal): Promise<MapFocusPin | null> {
-  const { data: alert } = await whereSafetyAlertLive(
-    db(supabase).from('safety_alerts').select('id, location, status, expires_at').abortSignal(signal).eq('id', id),
-    now,
-  ).maybeSingle()
+/** The alert reader by id (lib/safety-alert-rpc.ts), resolved alerts included: the map draws every
+ *  shown alert (live, or resolved less than 6 hours ago), so a link to either lands on its pin. The
+ *  reader returns a row only while the server shows it; no clock of this browser is consulted. */
+async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string, signal: AbortSignal): Promise<MapFocusPin | null> {
+  const alert = await readSafetyAlertById(supabase, id, signal)
   if (!alert) return null
-  const visibility = safetyAlertMapVisibility({ status: String(alert.status), expires_at: String(alert.expires_at) }, now)
-  return visibility.visible ? pinAt('safety_alert', id, alert.location) : null
+  const point = { lng: alert.lng, lat: alert.lat }
+  return isMapPoint(point) ? { layer: 'safety_alert', id, lng: point.lng, lat: point.lat } : null
 }
 
 /** The pin a member's map draws for this target right now, or null (a failed or aborted read counts
@@ -139,7 +136,6 @@ async function readSafetyAlertPin(supabase: SupabaseClient<Database>, id: string
 export async function readMapFocusPin(
   supabase: SupabaseClient<Database>,
   target: { kind: MapFocusKind; id: string },
-  now: Date = new Date(),
   signal: AbortSignal = new AbortController().signal,
 ): Promise<MapFocusPin | null> {
   try {
@@ -151,7 +147,7 @@ export async function readMapFocusPin(
       case 'business':
         return await readBusinessPin(supabase, target.id)
       case 'safety_alert':
-        return await readSafetyAlertPin(supabase, target.id, now, signal)
+        return await readSafetyAlertPin(supabase, target.id, signal)
       default:
         return assertNever(target.kind)
     }

@@ -44,6 +44,9 @@ export async function privilegedRpc<T = unknown>(
   rpcName: string,
   args: Record<string, unknown> = {},
   attrs: Attrs = {},
+  /** Optional: abort the call (e.g. AbortSignal.timeout). An aborted call is recorded as a failure
+   *  and comes back as an error result with no SQLSTATE. */
+  signal?: AbortSignal,
 ): Promise<RpcResult<T> & { requestId: string }> {
   const requestId = newRequestId()
   try {
@@ -53,12 +56,12 @@ export async function privilegedRpc<T = unknown>(
       async () => {
         // supabase.rpc is heavily overloaded by generated types; this file is the ONE controlled
         // boundary that erases the name/arg generics so any privileged RPC can share the plumbing.
-        const builder = (supabase.rpc as unknown as (n: string, a: Record<string, unknown>) => {
-          setHeader?: (k: string, v: string) => unknown
-        })(rpcName, args)
+        type Builder = { setHeader?: (k: string, v: string) => Builder; abortSignal?: (s: AbortSignal) => Builder }
+        const builder = (supabase.rpc as unknown as (n: string, a: Record<string, unknown>) => Builder)(rpcName, args)
         const withHeader =
           typeof builder.setHeader === 'function' ? builder.setHeader('x-request-id', requestId) : builder
-        const res = (await withHeader) as RpcResult<T>
+        const bounded = signal && typeof withHeader.abortSignal === 'function' ? withHeader.abortSignal(signal) : withHeader
+        const res = (await bounded) as RpcResult<T>
         if (res.error) {
           // Throw so withMetric records this as a failure; carry the result to recover it below.
           // `code` carries the SQLSTATE / PostgREST code so the persisted row's error_code is the
