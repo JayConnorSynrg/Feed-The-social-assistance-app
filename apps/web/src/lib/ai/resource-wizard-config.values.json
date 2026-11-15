@@ -1,0 +1,74 @@
+[
+  ["food", [
+    ["assistance-type","multi-select",["SNAP/EBT benefits","food pantries","free meals","WIC program","school meals","community gardens"]],
+    ["household-size","single-select",["1 person","2 people","3 people","4 people","5 people","6 people","7 people","8 or more people"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["housing", [
+    ["assistance-type","multi-select",["emergency shelter","rent assistance","Section 8/housing vouchers","utility bill help","home repair assistance","transitional housing"]],
+    ["situation","single-select",["currently homeless","about to lose housing","needing more affordable housing","needing repairs on current home"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["jobs", [
+    ["assistance-type","multi-select",["job search help","resume and interview coaching","job training programs","unemployment benefits","career counseling","youth employment programs"]],
+    ["experience","single-select",["no work experience","some work experience","an experienced worker","looking for a career change"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["transportation", [
+    ["assistance-type","multi-select",["bus/transit passes","car repair assistance","ride programs","gas vouchers","vehicle donation program","disabled transportation services"]],
+    ["frequency","single-select",["daily for work or school","several times a week","occasionally","a one-time need"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["legal", [
+    ["assistance-type","multi-select",["tenant rights and eviction help","family law assistance","immigration legal help","criminal record expungement","benefits appeals assistance","consumer protection help"]],
+    ["urgency","single-select",["immediate — I have a court date or deadline this week","urgent — within the next month","not urgent, just looking for guidance","just exploring my options"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["healthcare", [
+    ["assistance-type","multi-select",["Medicaid/Medicare enrollment help","free or low-cost clinic access","prescription assistance","mental health services","dental care","vision care"]],
+    ["insurance","single-select",["no insurance","Medicaid","Medicare","private insurance","employer insurance"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["eitc_tax_filing", [
+    ["filing-status","single-select",["single","married filing jointly","married filing separately","head of household","qualifying surviving spouse"]],
+    ["income-range","single-select",["under $17,000","$17,000–$25,000","$25,000–$40,000","$40,000–$57,000","over $57,000"]],
+    ["dependents","single-select",["no qualifying children","1 qualifying child","2 qualifying children","3 or more qualifying children"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["free_legal", [
+    ["legal-issue","multi-select",["eviction or housing court","domestic violence protection order","child custody or support","immigration or DACA","criminal record expungement","benefits denial or appeal"]],
+    ["urgency","single-select",["immediate — court date or deadline this week","urgent — within the next 30 days","not urgent, need general guidance","just exploring options"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["prenatal_natal_care", [
+    ["care-type","multi-select",["prenatal checkups and ultrasounds","WIC nutrition program","birthing center or hospital financial help","postpartum mental health support","newborn care and supplies","lactation and breastfeeding support"]],
+    ["stage","single-select",["currently pregnant — 1st trimester","currently pregnant — 2nd trimester","currently pregnant — 3rd trimester","recently gave birth within the last 3 months","planning a pregnancy"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["waste_disposal", [
+    ["waste-type","multi-select",["bulk item or furniture removal","household hazardous waste disposal","electronics recycling (e-waste)","medical sharps or medication disposal","yard waste or compost","general recycling access"]],
+    ["situation","single-select",["one-time large cleanout","ongoing disposal need","responding to a natural disaster or emergency","moving or eviction cleanup"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["free_camping", [
+    ["camping-type","multi-select",["free dispersed camping on public land","free designated campsites on federal land","safe overnight parking for a vehicle","emergency overnight shelter","long-term camping while awaiting housing"]],
+    ["duration","single-select",["1–2 nights","a few days up to a week","1–4 weeks","more than a month"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]],
+  ["free_goods_donation", [
+    ["goods-type","multi-select",["clothing and shoes","furniture and home goods","baby and children items","electronics and appliances","hygiene and personal care items","school supplies"]],
+    ["household-situation","single-select",["setting up a new home","lost belongings due to fire, flood, or disaster","experiencing financial hardship","transitioning out of shelter or a care facility"]],
+    ["state","single-select",["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]],
+    ["contact","single-select",["phone call","text message","email","in-person visit","no preference"]]
+  ]]
+]

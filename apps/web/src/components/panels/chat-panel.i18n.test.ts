@@ -20,7 +20,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
 
 const { state, spies } = vi.hoisted(() => ({
-  state: { language: 'ko', authed: true, messages: [] as unknown[], isRetrying: false, error: null as string | null, isLoading: false },
+  state: { language: 'ko', authed: true, messages: [] as unknown[], isRetrying: false, error: null as string | null, isLoading: false, panelParams: {} as Record<string, unknown> },
   spies: {
     sendMessage: null as unknown as ReturnType<typeof import('vitest').vi.fn>,
     invoke: null as unknown as ReturnType<typeof import('vitest').vi.fn>,
@@ -37,7 +37,7 @@ vi.mock('@/hooks/use-chat', () => ({
 }))
 vi.mock('@/hooks/use-saved-resources', () => ({ useSavedResources: () => ({ saveResource: vi.fn(async () => true), isResourceSavedByName: () => false }) }))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ functions: { invoke: (...a: unknown[]) => spies.invoke(...a) } }) }))
-vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: {}, setPanelParams: vi.fn(), setActivePanel: vi.fn() }) }))
+vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: state.panelParams, setPanelParams: vi.fn(), setActivePanel: vi.fn() }) }))
 vi.mock('next/link', () => ({ default: (p: { href: string; className?: string; children?: unknown }) => h('a', { href: p.href, className: p.className }, p.children as never) }))
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logEvent: vi.fn(), createOpId: () => 'op' }))
 vi.mock('@/lib/event-time', async (orig) => ({ ...(await orig<object>()), browserTimeZone: () => 'America/New_York' }))
@@ -56,7 +56,7 @@ const strip = markupText
 const attr = (tag: string, name: string) => new RegExp(`${name}="([^"]*)"`).exec(tag)?.[1] ?? null
 
 function html(language: string, over: Partial<typeof state> = {}) {
-  Object.assign(state, { language, authed: true, messages: [], isRetrying: false, error: null, isLoading: false }, over)
+  Object.assign(state, { language, authed: true, messages: [], isRetrying: false, error: null, isLoading: false, panelParams: {} }, over)
   return renderToStaticMarkup(h(ChatPanel))
 }
 /** Each <button>: its own attributes and its visible text. */
@@ -398,5 +398,36 @@ describe('when a guided flow completes, focus is never left on the page body', (
     const { composer, cardEl } = completeFlow(false)
     expect(composer.focus).not.toHaveBeenCalled()
     expect(cardEl.focus).toHaveBeenCalled()
+  })
+})
+
+describe('arriving from the Get Help wizard (P6 W7)', () => {
+  const context = (answers: Record<string, string | string[]>) => JSON.stringify({ category: 'food', answers })
+  function arrive(authed: boolean) {
+    // The first render is busy, so the hand-over waits; the message box is then in place.
+    Object.assign(state, { language: 'ko', authed, messages: [], isLoading: true, panelParams: { wizardContext: context({ 'assistance-type': ['food pantries'], state: 'California', contact: 'email' }) } })
+    const m = mount(() => ChatPanel({}))
+    const composer = { focus: vi.fn(), disabled: !authed }
+    const input = findAll(m.tree(), (el) => typeof el.props.onKeyDown === 'function')[0]
+    ;(input.props.ref as { current: unknown }).current = composer
+    state.isLoading = false
+    m.rerender()
+    return { composer }
+  }
+
+  it('sends the exact message built from the values, and focus goes to the message box', () => {
+    const { composer } = arrive(true)
+    expect(spies.sendMessage).toHaveBeenCalledTimes(1)
+    expect(spies.sendMessage).toHaveBeenCalledWith(
+      'I need help finding Food resources.\n- Type of help: food pantries\n- State: California\n' +
+        'Please suggest relevant local programs and resources for this need.',
+    )
+    expect(composer.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('a disabled message box is not focused (the message is still sent)', () => {
+    const { composer } = arrive(false)
+    expect(spies.sendMessage).toHaveBeenCalledTimes(1)
+    expect(composer.focus).not.toHaveBeenCalled()
   })
 })

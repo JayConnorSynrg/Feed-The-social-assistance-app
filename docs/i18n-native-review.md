@@ -3391,6 +3391,688 @@ step in that test, and the test fails until the list below is regenerated.
 | `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
 | `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-get-help.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `subtitle` | ht | Select a category to get personalized help from the AI assistant. | Chwazi yon kategori pou asistan IA a ka ede w selon bezwen ou. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseOne` | ht | Choose one. | Chwazi youn. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseAll` | ht | Choose all that apply. | Chwazi tout sa ki konsène w. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseAtLeastOne` | ht | Choose at least one to continue. | Chwazi omwen youn pou kontinye. | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | ht | Filter the list | Filtre lis la | 2026-11-15 | machine-drafted, needs native review |
+| `filterNone` | ht | No matches. | Pa gen anyen ki koresponn. | 2026-11-15 | machine-drafted, needs native review |
+| `qStateLocated` | ht | What state are you located in? | Nan ki eta ou ye? | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldPreferBeContacted` | ht | How would you prefer to be contacted? | Ki jan ou pito yo kontakte w? | 2026-11-15 | machine-drafted, needs native review |
+| `oPhoneCall` | ht | Phone call | Apèl telefòn | 2026-11-15 | machine-drafted, needs native review |
+| `oTextMessage` | ht | Text message | Mesaj tèks | 2026-11-15 | machine-drafted, needs native review |
+| `oEmail` | ht | Email | Imèl | 2026-11-15 | machine-drafted, needs native review |
+| `oPersonVisit` | ht | In-person visit | Vizit an pèsòn | 2026-11-15 | machine-drafted, needs native review |
+| `oNoPreference` | ht | No preference | Pa gen preferans | 2026-11-15 | machine-drafted, needs native review |
+| `descFood` | ht | SNAP, food pantries, free meals, and more | SNAP, bank manje, manje gratis, ak plis ankò | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeFoodAssistance` | ht | What type of food assistance are you looking for? | Ki kalite èd manje w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oSnapEbtBenefits` | ht | SNAP / EBT benefits | Benefis SNAP / EBT | 2026-11-15 | machine-drafted, needs native review |
+| `oFoodPantries` | ht | Food pantries | Bank manje | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeMeals` | ht | Free meals | Manje gratis | 2026-11-15 | machine-drafted, needs native review |
+| `oWicProgram` | ht | WIC program | Pwogram WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolMeals` | ht | School meals | Manje lekòl | 2026-11-15 | machine-drafted, needs native review |
+| `oCommunityGardens` | ht | Community gardens | Jaden kominotè | 2026-11-15 | machine-drafted, needs native review |
+| `qManyPeopleHousehold` | ht | How many people are in your household? | Konbyen moun ki nan kay ou? | 2026-11-15 | machine-drafted, needs native review |
+| `o1Person` | ht | 1 person | 1 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o2People` | ht | 2 people | 2 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o3People` | ht | 3 people | 3 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o4People` | ht | 4 people | 4 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o5People` | ht | 5 people | 5 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o6People` | ht | 6 people | 6 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o7People` | ht | 7 people | 7 moun | 2026-11-15 | machine-drafted, needs native review |
+| `o8MorePeople` | ht | 8 or more people | 8 moun oswa plis | 2026-11-15 | machine-drafted, needs native review |
+| `descHousing` | ht | Emergency shelter, rent help, and housing vouchers | Abri dijans, èd pou lwaye, ak koupon lojman | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHousing` | ht | What type of housing help are you looking for? | Ki kalite èd lojman w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyShelter` | ht | Emergency shelter | Abri dijans | 2026-11-15 | machine-drafted, needs native review |
+| `oRentAssistance` | ht | Rent assistance | Èd pou lwaye | 2026-11-15 | machine-drafted, needs native review |
+| `oSection8HousingVouchers` | ht | Section 8 / housing vouchers | Seksyon 8 / koupon lojman | 2026-11-15 | machine-drafted, needs native review |
+| `oUtilityBill` | ht | Utility bill help | Èd pou bòdwo sèvis piblik | 2026-11-15 | machine-drafted, needs native review |
+| `oHomeRepairAssistance` | ht | Home repair assistance | Èd pou repare kay | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitionalHousing` | ht | Transitional housing | Lojman tranzisyon | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesCurrentSituation` | ht | Which best describes your current situation? | Kisa ki pi byen dekri sitiyasyon ou kounye a? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyHomeless` | ht | Currently homeless | San kay kounye a | 2026-11-15 | machine-drafted, needs native review |
+| `oAboutLoseHousing` | ht | About to lose housing | Prèt pou pèdi kay mwen | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedMoreAffordableHousing` | ht | Need more affordable housing | Bezwen yon kay ki pi bon mache | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedRepairsCurrentHome` | ht | Need repairs on current home | Bezwen reparasyon nan kay mwen | 2026-11-15 | machine-drafted, needs native review |
+| `descJobs` | ht | Job search, training programs, and career support | Chèche travay, pwogram fòmasyon, ak sipò pou karyè | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCareer` | ht | What type of career help are you looking for? | Ki kalite èd pou travay w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oJobSearch` | ht | Job search help | Èd pou chèche travay | 2026-11-15 | machine-drafted, needs native review |
+| `oResumeInterviewCoaching` | ht | Resume and interview coaching | Konsèy pou CV ak entèvyou | 2026-11-15 | machine-drafted, needs native review |
+| `oJobTrainingPrograms` | ht | Job training programs | Pwogram fòmasyon pou travay | 2026-11-15 | machine-drafted, needs native review |
+| `oUnemploymentBenefits` | ht | Unemployment benefits | Benefis chomaj | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerCounseling` | ht | Career counseling | Konsèy sou karyè | 2026-11-15 | machine-drafted, needs native review |
+| `oYouthEmploymentPrograms` | ht | Youth employment programs | Pwogram travay pou jèn | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldDescribeWorkExperience` | ht | How would you describe your work experience? | Ki jan ou ta dekri eksperyans travay ou? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoWorkExperienceYet` | ht | No work experience yet | Poko gen eksperyans travay | 2026-11-15 | machine-drafted, needs native review |
+| `oSomeExperience` | ht | Some experience | Kèk eksperyans | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencedWorker` | ht | Experienced worker | Travayè ki gen eksperyans | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerChange` | ht | Looking for a career change | Mwen vle chanje karyè | 2026-11-15 | machine-drafted, needs native review |
+| `descTransportation` | ht | Bus passes, ride programs, and gas assistance | Kat bis, pwogram transpò, ak èd pou gaz | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeTransportation` | ht | What type of transportation help are you looking for? | Ki kalite èd transpò w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oBusTransitPasses` | ht | Bus / transit passes | Kat bis / transpò piblik | 2026-11-15 | machine-drafted, needs native review |
+| `oCarRepairAssistance` | ht | Car repair assistance | Èd pou repare machin | 2026-11-15 | machine-drafted, needs native review |
+| `oRidePrograms` | ht | Ride programs | Pwogram transpò | 2026-11-15 | machine-drafted, needs native review |
+| `oGasVouchers` | ht | Gas vouchers | Koupon gaz | 2026-11-15 | machine-drafted, needs native review |
+| `oVehicleDonationProgram` | ht | Vehicle donation program | Pwogram don machin | 2026-11-15 | machine-drafted, needs native review |
+| `oDisabledTransportation` | ht | Disabled transportation | Transpò pou moun andikape | 2026-11-15 | machine-drafted, needs native review |
+| `qOftenNeedTransportationSupport` | ht | How often do you need transportation support? | Konbyen fwa ou bezwen èd transpò? | 2026-11-15 | machine-drafted, needs native review |
+| `oDailyWorkSchool` | ht | Daily (work / school) | Chak jou (travay / lekòl) | 2026-11-15 | machine-drafted, needs native review |
+| `oSeveralTimesWeek` | ht | Several times a week | Plizyè fwa pa semèn | 2026-11-15 | machine-drafted, needs native review |
+| `oOccasionalTrips` | ht | Occasional trips | Kèk vwayaj de tanzantan | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeNeed` | ht | One-time need | Yon sèl fwa | 2026-11-15 | machine-drafted, needs native review |
+| `descLegal` | ht | Free legal aid for housing, family, and benefits | Èd legal gratis pou lojman, fanmi, ak benefis | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegal` | ht | What type of legal help are you looking for? | Ki kalite èd legal w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oTenantRightsEviction` | ht | Tenant rights / eviction | Dwa lokatè / degèpisman | 2026-11-15 | machine-drafted, needs native review |
+| `oFamilyLaw` | ht | Family law | Dwa fanmi | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigration` | ht | Immigration | Imigrasyon | 2026-11-15 | machine-drafted, needs native review |
+| `oCriminalRecordExpungement` | ht | Criminal record expungement | Efase dosye kriminèl | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsAppeals` | ht | Benefits appeals | Apèl pou benefis | 2026-11-15 | machine-drafted, needs native review |
+| `oConsumerProtection` | ht | Consumer protection | Pwoteksyon konsomatè | 2026-11-15 | machine-drafted, needs native review |
+| `qUrgentLegalSituation` | ht | How urgent is your legal situation? | Ki jan sitiyasyon legal ou ijan? | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateDeadlineThis` | ht | Immediate (court date / deadline this week) | Imedyat (dat tribinal / dat limit semèn sa a) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNextMonth` | ht | Urgent (within the next month) | Ijan (nan mwa k ap vini an) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentJustNeedGuidance` | ht | Not urgent, just need guidance | Pa ijan, mwen jis bezwen konsèy | 2026-11-15 | machine-drafted, needs native review |
+| `oJustExploringMyOptions` | ht | Just exploring my options | M ap jis gade opsyon mwen yo | 2026-11-15 | machine-drafted, needs native review |
+| `descHealthcare` | ht | Free clinics, Medicaid, prescriptions, and mental health | Klinik gratis, Medicaid, medikaman, ak sante mantal | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHealthcare` | ht | What type of healthcare help are you looking for? | Ki kalite èd swen sante w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicaidMedicareEnrollment` | ht | Medicaid / Medicare enrollment | Enskripsyon Medicaid / Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeLowCostClinics` | ht | Free or low-cost clinics | Klinik gratis oswa bon mache | 2026-11-15 | machine-drafted, needs native review |
+| `oPrescriptionAssistance` | ht | Prescription assistance | Èd pou medikaman sou preskripsyon | 2026-11-15 | machine-drafted, needs native review |
+| `oMentalHealthServices` | ht | Mental health services | Sèvis sante mantal | 2026-11-15 | machine-drafted, needs native review |
+| `oDentalCare` | ht | Dental care | Swen dan | 2026-11-15 | machine-drafted, needs native review |
+| `oVisionCare` | ht | Vision care | Swen je | 2026-11-15 | machine-drafted, needs native review |
+| `qCurrentInsuranceStatus` | ht | What is your current insurance status? | Ki sitiyasyon asirans ou kounye a? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoInsurance` | ht | No insurance | Pa gen asirans | 2026-11-15 | machine-drafted, needs native review |
+| `oPrivateInsurance` | ht | Private insurance | Asirans prive | 2026-11-15 | machine-drafted, needs native review |
+| `oEmployerInsurance` | ht | Employer insurance | Asirans patwon | 2026-11-15 | machine-drafted, needs native review |
+| `descEitcTaxFiling` | ht | Free tax prep, EITC refunds, and filing assistance | Preparasyon taks gratis, ranbousman EITC, ak èd pou deklarasyon | 2026-11-15 | machine-drafted, needs native review |
+| `qTaxFilingStatus` | ht | What is your tax filing status? | Ki estati deklarasyon taks ou? | 2026-11-15 | machine-drafted, needs native review |
+| `oSingle` | ht | Single | Selibatè | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingJointly` | ht | Married filing jointly | Marye, deklarasyon ansanm | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingSeparately` | ht | Married filing separately | Marye, deklarasyon separe | 2026-11-15 | machine-drafted, needs native review |
+| `oHeadHousehold` | ht | Head of household | Chèf fanmi | 2026-11-15 | machine-drafted, needs native review |
+| `oQualifyingSurvivingSpouse` | ht | Qualifying surviving spouse | Konjwen ki siviv ki kalifye | 2026-11-15 | machine-drafted, needs native review |
+| `qApproximateAnnualHouseholdIncome` | ht | What is your approximate annual household income? | Konbyen revni anyèl kay ou apeprè? | 2026-11-15 | machine-drafted, needs native review |
+| `qManyQualifyingChildrenDependentsHave` | ht | How many qualifying children or dependents do you have? | Konbyen timoun oswa moun ki depann de ou ki kalifye ou genyen? | 2026-11-15 | machine-drafted, needs native review |
+| `oNone` | ht | None | Okenn | 2026-11-15 | machine-drafted, needs native review |
+| `o1Child` | ht | 1 child | 1 timoun | 2026-11-15 | machine-drafted, needs native review |
+| `o2Children` | ht | 2 children | 2 timoun | 2026-11-15 | machine-drafted, needs native review |
+| `o3MoreChildren` | ht | 3 or more children | 3 timoun oswa plis | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeLegal` | ht | Legal aid clinics, pro bono attorneys, and self-help resources | Klinik èd legal, avoka pro bono, ak resous pou ede tèt ou | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegalIssueNeedWith` | ht | What type of legal issue do you need help with? | Ak ki kalite pwoblèm legal ou bezwen èd? | 2026-11-15 | machine-drafted, needs native review |
+| `oEvictionHousingCourt` | ht | Eviction or housing court | Degèpisman oswa tribinal lojman | 2026-11-15 | machine-drafted, needs native review |
+| `oDomesticViolenceProtectionOrder` | ht | Domestic violence protection order | Lòd pwoteksyon kont vyolans domestik | 2026-11-15 | machine-drafted, needs native review |
+| `oChildCustodySupport` | ht | Child custody or support | Gad timoun oswa pansyon alimantè | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigrationDaca` | ht | Immigration or DACA | Imigrasyon oswa DACA | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsDenialAppeal` | ht | Benefits denial or appeal | Refi oswa apèl pou benefis | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateOrDeadline` | ht | Immediate (court date or deadline this week) | Imedyat (dat tribinal oswa dat limit semèn sa a) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNext30Days` | ht | Urgent (within the next 30 days) | Ijan (nan 30 jou k ap vini yo) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentNeedGeneralGuidance` | ht | Not urgent, need general guidance | Pa ijan, mwen bezwen konsèy jeneral | 2026-11-15 | machine-drafted, needs native review |
+| `descPrenatalNatalCare` | ht | Prenatal visits, WIC, newborn support, and postpartum care | Vizit prenatal, WIC, sipò pou tibebe, ak swen apre akouchman | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeSupport` | ht | What type of support are you looking for? | Ki kalite sipò w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oPrenatalCheckupsUltrasounds` | ht | Prenatal checkups and ultrasounds | Egzamen prenatal ak ekografi | 2026-11-15 | machine-drafted, needs native review |
+| `oWicNutritionProgram` | ht | WIC nutrition program | Pwogram nitrisyon WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oBirthingCenterHospitalFinancial` | ht | Birthing center or hospital financial help | Èd finansye pou sant akouchman oswa lopital | 2026-11-15 | machine-drafted, needs native review |
+| `oPostpartumMentalHealthSupport` | ht | Postpartum mental health support | Sipò sante mantal apre akouchman | 2026-11-15 | machine-drafted, needs native review |
+| `oNewbornCareSupplies` | ht | Newborn care and supplies | Swen ak founiti pou tibebe | 2026-11-15 | machine-drafted, needs native review |
+| `oLactationBreastfeedingSupport` | ht | Lactation / breastfeeding support | Sipò pou bay tete | 2026-11-15 | machine-drafted, needs native review |
+| `qStageDescribesCurrentSituation` | ht | What stage best describes your current situation? | Ki etap ki pi byen dekri sitiyasyon ou kounye a? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant1stTrimester` | ht | Currently pregnant (1st trimester) | Ansent kounye a (1ye trimès) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant2ndTrimester` | ht | Currently pregnant (2nd trimester) | Ansent kounye a (2yèm trimès) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant3rdTrimester` | ht | Currently pregnant (3rd trimester) | Ansent kounye a (3yèm trimès) | 2026-11-15 | machine-drafted, needs native review |
+| `oRecentlyGaveBirthWithin3` | ht | Recently gave birth (within 3 months) | Fèk akouche (nan 3 mwa) | 2026-11-15 | machine-drafted, needs native review |
+| `oPlanningPregnancy` | ht | Planning a pregnancy | M ap planifye yon gwosès | 2026-11-15 | machine-drafted, needs native review |
+| `descWasteDisposal` | ht | Bulk trash pickup, hazardous waste drop-off, and recycling help | Ranmase gwo fatra, depo dechè danjere, ak èd pou resiklaj | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeWasteDisposalNeed` | ht | What type of waste or disposal help do you need? | Ki kalite èd pou fatra oswa jete ou bezwen? | 2026-11-15 | machine-drafted, needs native review |
+| `oBulkItemFurnitureRemoval` | ht | Bulk item or furniture removal | Retire gwo bagay oswa mèb | 2026-11-15 | machine-drafted, needs native review |
+| `oHouseholdHazardousWastePaintChemicals` | ht | Household hazardous waste (paint, chemicals) | Dechè danjere lakay (penti, pwodui chimik) | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsRecyclingEWaste` | ht | Electronics recycling (e-waste) | Resiklaj aparèy elektwonik (dechè elektwonik) | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicalSharpsMedicationDisposal` | ht | Medical sharps or medication disposal | Jete zegwi medikal oswa medikaman | 2026-11-15 | machine-drafted, needs native review |
+| `oYardWasteCompost` | ht | Yard waste or compost | Fatra lakou oswa konpòs | 2026-11-15 | machine-drafted, needs native review |
+| `oGeneralRecyclingAccess` | ht | General recycling access | Aksè jeneral pou resiklaj | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesSituation` | ht | Which best describes your situation? | Kisa ki pi byen dekri sitiyasyon ou? | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeLargeCleanout` | ht | One-time large cleanout | Yon gwo netwayaj yon sèl fwa | 2026-11-15 | machine-drafted, needs native review |
+| `oOngoingDisposalNeed` | ht | Ongoing disposal need | Bezwen jete fatra regilyèman | 2026-11-15 | machine-drafted, needs native review |
+| `oRespondingNaturalDisasterEmergency` | ht | Responding to a natural disaster or emergency | Apre yon dezas natirèl oswa yon ijans | 2026-11-15 | machine-drafted, needs native review |
+| `oMovingEvictionCleanup` | ht | Moving or eviction cleanup | Netwayaj pou demenajman oswa degèpisman | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeCamping` | ht | Free campsites, dispersed camping, and overnight shelters | Kan gratis, kan nan nati, ak abri pou pase nwit | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCampingOvernightShelter` | ht | What type of camping or overnight shelter are you looking for? | Ki kalite kan oswa abri pou nwit w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDispersedPrimitiveCampingPublic` | ht | Free dispersed (primitive) camping on public land | Kan gratis nan nati (primitif) sou tè piblik | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDesignatedCampsitesNationalForest` | ht | Free designated campsites (national forest, BLM) | Kote kan gratis ki deziyen (forè nasyonal, BLM) | 2026-11-15 | machine-drafted, needs native review |
+| `oSafeOvernightParkingVehicle` | ht | Safe overnight parking for a vehicle | Pakin an sekirite pou yon machin pandan nwit | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyOvernightShelter` | ht | Emergency overnight shelter | Abri dijans pou nwit | 2026-11-15 | machine-drafted, needs native review |
+| `oLongTermCampingWhileAwaiting` | ht | Long-term camping while awaiting housing | Kan alontèm pandan m ap tann yon kay | 2026-11-15 | machine-drafted, needs native review |
+| `qLongNeedCampStay` | ht | How long do you need to camp or stay? | Konbyen tan ou bezwen kan oswa rete? | 2026-11-15 | machine-drafted, needs native review |
+| `o12Nights` | ht | 1–2 nights | 1–2 nwit | 2026-11-15 | machine-drafted, needs native review |
+| `oFewDaysUpWeek` | ht | A few days (up to a week) | Kèk jou (jiska yon semèn) | 2026-11-15 | machine-drafted, needs native review |
+| `o14Weeks` | ht | 1–4 weeks | 1–4 semèn | 2026-11-15 | machine-drafted, needs native review |
+| `oMoreThanMonth` | ht | More than a month | Plis pase yon mwa | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeGoodsDonation` | ht | Free clothing, furniture, household items, and donation programs | Rad, mèb, bagay pou kay gratis, ak pwogram don | 2026-11-15 | machine-drafted, needs native review |
+| `qTypesGoods` | ht | What types of goods are you looking for? | Ki kalite bagay w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `oClothingShoes` | ht | Clothing and shoes | Rad ak soulye | 2026-11-15 | machine-drafted, needs native review |
+| `oFurnitureHomeGoods` | ht | Furniture and home goods | Mèb ak bagay pou kay | 2026-11-15 | machine-drafted, needs native review |
+| `oBabyChildrenItems` | ht | Baby and children items | Bagay pou tibebe ak timoun | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsAppliances` | ht | Electronics and appliances | Aparèy elektwonik ak aparèy menaje | 2026-11-15 | machine-drafted, needs native review |
+| `oHygienePersonalCareItems` | ht | Hygiene and personal care items | Pwodui ijyèn ak swen pèsonèl | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolSupplies` | ht | School supplies | Founiti lekòl | 2026-11-15 | machine-drafted, needs native review |
+| `oSettingUpNewHome` | ht | Setting up a new home | M ap enstale nan yon nouvo kay | 2026-11-15 | machine-drafted, needs native review |
+| `oLostBelongingsFireFloodDisaster` | ht | Lost belongings (fire, flood, disaster) | Mwen pèdi afè m (dife, inondasyon, dezas) | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencingFinancialHardship` | ht | Experiencing financial hardship | M gen difikilte finansye | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitioningOutShelterFacility` | ht | Transitioning out of shelter or facility | M ap soti nan yon abri oswa yon sant | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | so | Select a category to get personalized help from the AI assistant. | Dooro qayb si kaaliyaha AI uu kuugu caawiyo si gaar ah. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseOne` | so | Choose one. | Dooro mid. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseAll` | so | Choose all that apply. | Dooro dhammaan kuwa ku khuseeya. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseAtLeastOne` | so | Choose at least one to continue. | Dooro ugu yaraan mid si aad u sii wadato. | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | so | Filter the list | Shaandhee liiska | 2026-11-15 | machine-drafted, needs native review |
+| `filterNone` | so | No matches. | Wax ku habboon lama helin. | 2026-11-15 | machine-drafted, needs native review |
+| `qStateLocated` | so | What state are you located in? | Gobolkee ayaad ku nooshahay? | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldPreferBeContacted` | so | How would you prefer to be contacted? | Sidee ayaad doorbidaysaa in lagula soo xiriiro? | 2026-11-15 | machine-drafted, needs native review |
+| `oPhoneCall` | so | Phone call | Wicitaan taleefan | 2026-11-15 | machine-drafted, needs native review |
+| `oTextMessage` | so | Text message | Fariin qoraal ah | 2026-11-15 | machine-drafted, needs native review |
+| `oEmail` | so | Email | Iimayl | 2026-11-15 | machine-drafted, needs native review |
+| `oPersonVisit` | so | In-person visit | Booqasho fool ka fool ah | 2026-11-15 | machine-drafted, needs native review |
+| `oNoPreference` | so | No preference | Doorbid ma leh | 2026-11-15 | machine-drafted, needs native review |
+| `descFood` | so | SNAP, food pantries, free meals, and more | SNAP, bakhaarada cuntada, cuntooyin bilaash ah, iyo wax kale | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeFoodAssistance` | so | What type of food assistance are you looking for? | Noocee caawimaad cunto ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oSnapEbtBenefits` | so | SNAP / EBT benefits | Gargaarka SNAP / EBT | 2026-11-15 | machine-drafted, needs native review |
+| `oFoodPantries` | so | Food pantries | Bakhaarada cuntada | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeMeals` | so | Free meals | Cuntooyin bilaash ah | 2026-11-15 | machine-drafted, needs native review |
+| `oWicProgram` | so | WIC program | Barnaamijka WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolMeals` | so | School meals | Cuntada dugsiga | 2026-11-15 | machine-drafted, needs native review |
+| `oCommunityGardens` | so | Community gardens | Beero bulsho | 2026-11-15 | machine-drafted, needs native review |
+| `qManyPeopleHousehold` | so | How many people are in your household? | Immisa qof ayaa ku nool gurigaaga? | 2026-11-15 | machine-drafted, needs native review |
+| `o1Person` | so | 1 person | 1 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o2People` | so | 2 people | 2 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o3People` | so | 3 people | 3 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o4People` | so | 4 people | 4 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o5People` | so | 5 people | 5 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o6People` | so | 6 people | 6 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o7People` | so | 7 people | 7 qof | 2026-11-15 | machine-drafted, needs native review |
+| `o8MorePeople` | so | 8 or more people | 8 qof ama ka badan | 2026-11-15 | machine-drafted, needs native review |
+| `descHousing` | so | Emergency shelter, rent help, and housing vouchers | Hoy degdeg ah, caawimaad kiro, iyo foojarada guryaha | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHousing` | so | What type of housing help are you looking for? | Noocee caawimaad guri ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyShelter` | so | Emergency shelter | Hoy degdeg ah | 2026-11-15 | machine-drafted, needs native review |
+| `oRentAssistance` | so | Rent assistance | Caawimaad kiro | 2026-11-15 | machine-drafted, needs native review |
+| `oSection8HousingVouchers` | so | Section 8 / housing vouchers | Qaybta 8 / foojarada guryaha | 2026-11-15 | machine-drafted, needs native review |
+| `oUtilityBill` | so | Utility bill help | Caawimaad biilasha adeegyada | 2026-11-15 | machine-drafted, needs native review |
+| `oHomeRepairAssistance` | so | Home repair assistance | Caawimaad dayactirka guriga | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitionalHousing` | so | Transitional housing | Guri ku-meel-gaar ah | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesCurrentSituation` | so | Which best describes your current situation? | Maxaa sida ugu fiican u qeexaya xaaladdaada hadda? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyHomeless` | so | Currently homeless | Hadda guri la’aan | 2026-11-15 | machine-drafted, needs native review |
+| `oAboutLoseHousing` | so | About to lose housing | Waxaan ku dhow ahay inaan guriga waayo | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedMoreAffordableHousing` | so | Need more affordable housing | Waxaan u baahanahay guri ka jaban | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedRepairsCurrentHome` | so | Need repairs on current home | Gurigayga hadda wuxuu u baahan yahay dayactir | 2026-11-15 | machine-drafted, needs native review |
+| `descJobs` | so | Job search, training programs, and career support | Raadinta shaqo, barnaamijyo tababar, iyo taageero xirfadeed | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCareer` | so | What type of career help are you looking for? | Noocee caawimaad shaqo ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oJobSearch` | so | Job search help | Caawimaad raadinta shaqo | 2026-11-15 | machine-drafted, needs native review |
+| `oResumeInterviewCoaching` | so | Resume and interview coaching | Tababar CV iyo waraysi | 2026-11-15 | machine-drafted, needs native review |
+| `oJobTrainingPrograms` | so | Job training programs | Barnaamijyo tababar shaqo | 2026-11-15 | machine-drafted, needs native review |
+| `oUnemploymentBenefits` | so | Unemployment benefits | Gargaarka shaqo la’aanta | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerCounseling` | so | Career counseling | La-talin xirfadeed | 2026-11-15 | machine-drafted, needs native review |
+| `oYouthEmploymentPrograms` | so | Youth employment programs | Barnaamijyo shaqo dhallinyarada | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldDescribeWorkExperience` | so | How would you describe your work experience? | Sidee u qeexi lahayd khibraddaada shaqo? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoWorkExperienceYet` | so | No work experience yet | Weli khibrad shaqo ma lihi | 2026-11-15 | machine-drafted, needs native review |
+| `oSomeExperience` | so | Some experience | Khibrad yar | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencedWorker` | so | Experienced worker | Shaqaale khibrad leh | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerChange` | so | Looking for a career change | Waxaan doonayaa inaan xirfad beddelo | 2026-11-15 | machine-drafted, needs native review |
+| `descTransportation` | so | Bus passes, ride programs, and gas assistance | Tigidhada baska, barnaamijyo gaadiid, iyo caawimaad shidaal | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeTransportation` | so | What type of transportation help are you looking for? | Noocee caawimaad gaadiid ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oBusTransitPasses` | so | Bus / transit passes | Tigidhada baska / gaadiidka dadweynaha | 2026-11-15 | machine-drafted, needs native review |
+| `oCarRepairAssistance` | so | Car repair assistance | Caawimaad dayactirka baabuurta | 2026-11-15 | machine-drafted, needs native review |
+| `oRidePrograms` | so | Ride programs | Barnaamijyo gaadiid | 2026-11-15 | machine-drafted, needs native review |
+| `oGasVouchers` | so | Gas vouchers | Foojarada shidaalka | 2026-11-15 | machine-drafted, needs native review |
+| `oVehicleDonationProgram` | so | Vehicle donation program | Barnaamijka deeqda baabuurta | 2026-11-15 | machine-drafted, needs native review |
+| `oDisabledTransportation` | so | Disabled transportation | Gaadiidka dadka naafada ah | 2026-11-15 | machine-drafted, needs native review |
+| `qOftenNeedTransportationSupport` | so | How often do you need transportation support? | Intee jeer ayaad u baahan tahay taageero gaadiid? | 2026-11-15 | machine-drafted, needs native review |
+| `oDailyWorkSchool` | so | Daily (work / school) | Maalin kasta (shaqo / dugsi) | 2026-11-15 | machine-drafted, needs native review |
+| `oSeveralTimesWeek` | so | Several times a week | Dhowr jeer usbuucii | 2026-11-15 | machine-drafted, needs native review |
+| `oOccasionalTrips` | so | Occasional trips | Mararka qaarkood | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeNeed` | so | One-time need | Hal mar oo keliya | 2026-11-15 | machine-drafted, needs native review |
+| `descLegal` | so | Free legal aid for housing, family, and benefits | Gargaar sharci oo bilaash ah oo ku saabsan guri, qoys, iyo gargaarro | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegal` | so | What type of legal help are you looking for? | Noocee caawimaad sharci ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oTenantRightsEviction` | so | Tenant rights / eviction | Xuquuqda kireystaha / ka saarid | 2026-11-15 | machine-drafted, needs native review |
+| `oFamilyLaw` | so | Family law | Sharciga qoyska | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigration` | so | Immigration | Socdaalka | 2026-11-15 | machine-drafted, needs native review |
+| `oCriminalRecordExpungement` | so | Criminal record expungement | Tirtiridda diiwaanka dembiga | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsAppeals` | so | Benefits appeals | Racfaanka gargaarka | 2026-11-15 | machine-drafted, needs native review |
+| `oConsumerProtection` | so | Consumer protection | Ilaalinta macaamiisha | 2026-11-15 | machine-drafted, needs native review |
+| `qUrgentLegalSituation` | so | How urgent is your legal situation? | Intee in le’eg ayay degdeg u tahay xaaladdaada sharci? | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateDeadlineThis` | so | Immediate (court date / deadline this week) | Isla markiiba (taariikh maxkamad / waqti kama dambays ah usbuucan) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNextMonth` | so | Urgent (within the next month) | Degdeg (bisha soo socota gudaheed) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentJustNeedGuidance` | so | Not urgent, just need guidance | Ma degdeg aha, kaliya waxaan u baahanahay hagitaan | 2026-11-15 | machine-drafted, needs native review |
+| `oJustExploringMyOptions` | so | Just exploring my options | Kaliya waxaan eegayaa doorashooyinkayga | 2026-11-15 | machine-drafted, needs native review |
+| `descHealthcare` | so | Free clinics, Medicaid, prescriptions, and mental health | Rugaha caafimaadka bilaashka ah, Medicaid, daawooyin, iyo caafimaadka maskaxda | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHealthcare` | so | What type of healthcare help are you looking for? | Noocee caawimaad caafimaad ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicaidMedicareEnrollment` | so | Medicaid / Medicare enrollment | Isdiiwaangelinta Medicaid / Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeLowCostClinics` | so | Free or low-cost clinics | Rugaha caafimaadka bilaash ah ama raqiis ah | 2026-11-15 | machine-drafted, needs native review |
+| `oPrescriptionAssistance` | so | Prescription assistance | Caawimaad daawooyinka la qoro | 2026-11-15 | machine-drafted, needs native review |
+| `oMentalHealthServices` | so | Mental health services | Adeegyada caafimaadka maskaxda | 2026-11-15 | machine-drafted, needs native review |
+| `oDentalCare` | so | Dental care | Daryeelka ilkaha | 2026-11-15 | machine-drafted, needs native review |
+| `oVisionCare` | so | Vision care | Daryeelka indhaha | 2026-11-15 | machine-drafted, needs native review |
+| `qCurrentInsuranceStatus` | so | What is your current insurance status? | Waa maxay xaaladda caymiskaaga hadda? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoInsurance` | so | No insurance | Caymis ma leh | 2026-11-15 | machine-drafted, needs native review |
+| `oPrivateInsurance` | so | Private insurance | Caymis gaar ah | 2026-11-15 | machine-drafted, needs native review |
+| `oEmployerInsurance` | so | Employer insurance | Caymiska loo-shaqeeyaha | 2026-11-15 | machine-drafted, needs native review |
+| `descEitcTaxFiling` | so | Free tax prep, EITC refunds, and filing assistance | Diyaarinta canshuurta bilaash ah, celinta EITC, iyo caawimaad xaraynta | 2026-11-15 | machine-drafted, needs native review |
+| `qTaxFilingStatus` | so | What is your tax filing status? | Waa maxay xaaladdaada xaraynta canshuurta? | 2026-11-15 | machine-drafted, needs native review |
+| `oSingle` | so | Single | Keli | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingJointly` | so | Married filing jointly | Xaas leh, xarayn wadajir ah | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingSeparately` | so | Married filing separately | Xaas leh, xarayn gooni ah | 2026-11-15 | machine-drafted, needs native review |
+| `oHeadHousehold` | so | Head of household | Madaxa qoyska | 2026-11-15 | machine-drafted, needs native review |
+| `oQualifyingSurvivingSpouse` | so | Qualifying surviving spouse | Xaas nool oo u qalma | 2026-11-15 | machine-drafted, needs native review |
+| `qApproximateAnnualHouseholdIncome` | so | What is your approximate annual household income? | Waa imisa qiyaas ahaan dakhliga sanadlaha ah ee qoyskaaga? | 2026-11-15 | machine-drafted, needs native review |
+| `qManyQualifyingChildrenDependentsHave` | so | How many qualifying children or dependents do you have? | Immisa carruur ama dad kugu tiirsan oo u qalma ayaad leedahay? | 2026-11-15 | machine-drafted, needs native review |
+| `oNone` | so | None | Midna | 2026-11-15 | machine-drafted, needs native review |
+| `o1Child` | so | 1 child | 1 ilmo | 2026-11-15 | machine-drafted, needs native review |
+| `o2Children` | so | 2 children | 2 carruur ah | 2026-11-15 | machine-drafted, needs native review |
+| `o3MoreChildren` | so | 3 or more children | 3 carruur ah ama ka badan | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeLegal` | so | Legal aid clinics, pro bono attorneys, and self-help resources | Rugaha gargaarka sharciga, qareenno bilaash ah, iyo ilaha is-caawinta | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegalIssueNeedWith` | so | What type of legal issue do you need help with? | Arrin sharci oo noocee ah ayaad u baahan tahay caawimaad? | 2026-11-15 | machine-drafted, needs native review |
+| `oEvictionHousingCourt` | so | Eviction or housing court | Ka saarid ama maxkamadda guryaha | 2026-11-15 | machine-drafted, needs native review |
+| `oDomesticViolenceProtectionOrder` | so | Domestic violence protection order | Amarka ilaalinta rabshadaha qoyska | 2026-11-15 | machine-drafted, needs native review |
+| `oChildCustodySupport` | so | Child custody or support | Haynta carruurta ama nafaqada | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigrationDaca` | so | Immigration or DACA | Socdaalka ama DACA | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsDenialAppeal` | so | Benefits denial or appeal | Diidmada gargaarka ama racfaan | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateOrDeadline` | so | Immediate (court date or deadline this week) | Isla markiiba (taariikh maxkamad ama waqti kama dambays ah usbuucan) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNext30Days` | so | Urgent (within the next 30 days) | Degdeg (30-ka maalmood ee soo socda gudahooda) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentNeedGeneralGuidance` | so | Not urgent, need general guidance | Ma degdeg aha, waxaan u baahanahay hagitaan guud | 2026-11-15 | machine-drafted, needs native review |
+| `descPrenatalNatalCare` | so | Prenatal visits, WIC, newborn support, and postpartum care | Booqashooyinka uurka, WIC, taageerada dhallaanka, iyo daryeelka dhalmada kadib | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeSupport` | so | What type of support are you looking for? | Noocee taageero ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oPrenatalCheckupsUltrasounds` | so | Prenatal checkups and ultrasounds | Baaritaanka uurka iyo ultrasound | 2026-11-15 | machine-drafted, needs native review |
+| `oWicNutritionProgram` | so | WIC nutrition program | Barnaamijka nafaqada WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oBirthingCenterHospitalFinancial` | so | Birthing center or hospital financial help | Caawimaad lacageed xarunta dhalmada ama isbitaalka | 2026-11-15 | machine-drafted, needs native review |
+| `oPostpartumMentalHealthSupport` | so | Postpartum mental health support | Taageerada caafimaadka maskaxda kadib dhalmada | 2026-11-15 | machine-drafted, needs native review |
+| `oNewbornCareSupplies` | so | Newborn care and supplies | Daryeelka iyo agabka dhallaanka | 2026-11-15 | machine-drafted, needs native review |
+| `oLactationBreastfeedingSupport` | so | Lactation / breastfeeding support | Taageerada naas-nuujinta | 2026-11-15 | machine-drafted, needs native review |
+| `qStageDescribesCurrentSituation` | so | What stage best describes your current situation? | Heerkee ayaa sida ugu fiican u qeexaya xaaladdaada hadda? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant1stTrimester` | so | Currently pregnant (1st trimester) | Hadda uur leh (saddexda bilood ee hore) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant2ndTrimester` | so | Currently pregnant (2nd trimester) | Hadda uur leh (saddexda bilood ee dhexe) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant3rdTrimester` | so | Currently pregnant (3rd trimester) | Hadda uur leh (saddexda bilood ee dambe) | 2026-11-15 | machine-drafted, needs native review |
+| `oRecentlyGaveBirthWithin3` | so | Recently gave birth (within 3 months) | Dhawaan dhalay (3 bilood gudahood) | 2026-11-15 | machine-drafted, needs native review |
+| `oPlanningPregnancy` | so | Planning a pregnancy | Waxaan qorsheynayaa uur | 2026-11-15 | machine-drafted, needs native review |
+| `descWasteDisposal` | so | Bulk trash pickup, hazardous waste drop-off, and recycling help | Qaadista qashinka waaweyn, dhigista qashinka khatarta ah, iyo caawimaad dib-u-warshadeyn | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeWasteDisposalNeed` | so | What type of waste or disposal help do you need? | Noocee caawimaad qashin ama tuurid ah ayaad u baahan tahay? | 2026-11-15 | machine-drafted, needs native review |
+| `oBulkItemFurnitureRemoval` | so | Bulk item or furniture removal | Ka qaadista alaab waaweyn ama alaab guri | 2026-11-15 | machine-drafted, needs native review |
+| `oHouseholdHazardousWastePaintChemicals` | so | Household hazardous waste (paint, chemicals) | Qashinka khatarta ah ee guriga (rinji, kiimikooyin) | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsRecyclingEWaste` | so | Electronics recycling (e-waste) | Dib-u-warshadeynta elektaroonigga (qashinka elektaroonigga) | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicalSharpsMedicationDisposal` | so | Medical sharps or medication disposal | Tuurista irbadaha caafimaadka ama daawooyinka | 2026-11-15 | machine-drafted, needs native review |
+| `oYardWasteCompost` | so | Yard waste or compost | Qashinka beerta ama bacrimin | 2026-11-15 | machine-drafted, needs native review |
+| `oGeneralRecyclingAccess` | so | General recycling access | Helitaanka guud ee dib-u-warshadeynta | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesSituation` | so | Which best describes your situation? | Maxaa sida ugu fiican u qeexaya xaaladdaada? | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeLargeCleanout` | so | One-time large cleanout | Nadiifin weyn oo hal mar ah | 2026-11-15 | machine-drafted, needs native review |
+| `oOngoingDisposalNeed` | so | Ongoing disposal need | Baahi joogto ah oo tuurid | 2026-11-15 | machine-drafted, needs native review |
+| `oRespondingNaturalDisasterEmergency` | so | Responding to a natural disaster or emergency | Ka jawaabid masiibo dabiici ah ama xaalad degdeg ah | 2026-11-15 | machine-drafted, needs native review |
+| `oMovingEvictionCleanup` | so | Moving or eviction cleanup | Nadiifin guri-guuris ama ka saarid | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeCamping` | so | Free campsites, dispersed camping, and overnight shelters | Goobo xero bilaash ah, xero kala firirsan, iyo hoyga habeenkii | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCampingOvernightShelter` | so | What type of camping or overnight shelter are you looking for? | Noocee xero ama hoy habeen ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDispersedPrimitiveCampingPublic` | so | Free dispersed (primitive) camping on public land | Xero bilaash ah oo kala firirsan (dabiici ah) dhulka dadweynaha | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDesignatedCampsitesNationalForest` | so | Free designated campsites (national forest, BLM) | Goobo xero bilaash ah oo loo qoondeeyay (kaynta qaranka, BLM) | 2026-11-15 | machine-drafted, needs native review |
+| `oSafeOvernightParkingVehicle` | so | Safe overnight parking for a vehicle | Baarkin ammaan ah oo habeenkii gaari | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyOvernightShelter` | so | Emergency overnight shelter | Hoy habeen oo degdeg ah | 2026-11-15 | machine-drafted, needs native review |
+| `oLongTermCampingWhileAwaiting` | so | Long-term camping while awaiting housing | Xero muddo dheer inta aan sugayo guri | 2026-11-15 | machine-drafted, needs native review |
+| `qLongNeedCampStay` | so | How long do you need to camp or stay? | Muddo intee le’eg ayaad u baahan tahay inaad xeroysato ama joogto? | 2026-11-15 | machine-drafted, needs native review |
+| `o12Nights` | so | 1–2 nights | 1–2 habeen | 2026-11-15 | machine-drafted, needs native review |
+| `oFewDaysUpWeek` | so | A few days (up to a week) | Dhowr maalmood (ilaa usbuuc) | 2026-11-15 | machine-drafted, needs native review |
+| `o14Weeks` | so | 1–4 weeks | 1–4 usbuuc | 2026-11-15 | machine-drafted, needs native review |
+| `oMoreThanMonth` | so | More than a month | In ka badan bil | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeGoodsDonation` | so | Free clothing, furniture, household items, and donation programs | Dhar, alaab guri, agab guri oo bilaash ah, iyo barnaamijyo deeq | 2026-11-15 | machine-drafted, needs native review |
+| `qTypesGoods` | so | What types of goods are you looking for? | Noocyo alaab ah oo noocee ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `oClothingShoes` | so | Clothing and shoes | Dhar iyo kabo | 2026-11-15 | machine-drafted, needs native review |
+| `oFurnitureHomeGoods` | so | Furniture and home goods | Alaab guri iyo agab guri | 2026-11-15 | machine-drafted, needs native review |
+| `oBabyChildrenItems` | so | Baby and children items | Alaabta ilmaha yar iyo carruurta | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsAppliances` | so | Electronics and appliances | Elektaroonig iyo qalab guri | 2026-11-15 | machine-drafted, needs native review |
+| `oHygienePersonalCareItems` | so | Hygiene and personal care items | Alaabta nadaafadda iyo daryeelka shakhsiga | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolSupplies` | so | School supplies | Agabka dugsiga | 2026-11-15 | machine-drafted, needs native review |
+| `oSettingUpNewHome` | so | Setting up a new home | Waxaan diyaarinayaa guri cusub | 2026-11-15 | machine-drafted, needs native review |
+| `oLostBelongingsFireFloodDisaster` | so | Lost belongings (fire, flood, disaster) | Waxaan waayay hantidayda (dab, daad, masiibo) | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencingFinancialHardship` | so | Experiencing financial hardship | Waxaan la kulmayaa dhibaato dhaqaale | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitioningOutShelterFacility` | so | Transitioning out of shelter or facility | Waxaan ka baxayaa hoy ama xarun | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | am | Select a category to get personalized help from the AI assistant. | ከAI ረዳቱ የተለየ እገዛ ለማግኘት ምድብ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseOne` | am | Choose one. | አንዱን ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseAll` | am | Choose all that apply. | የሚመለከትዎትን ሁሉ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `chooseAtLeastOne` | am | Choose at least one to continue. | ለመቀጠል ቢያንስ አንዱን ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | am | Filter the list | ዝርዝሩን አጣራ | 2026-11-15 | machine-drafted, needs native review |
+| `filterNone` | am | No matches. | የሚዛመድ የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `qStateLocated` | am | What state are you located in? | በየትኛው ግዛት ነው የሚኖሩት? | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldPreferBeContacted` | am | How would you prefer to be contacted? | በምን መንገድ እንዲገናኙዎት ይመርጣሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oPhoneCall` | am | Phone call | የስልክ ጥሪ | 2026-11-15 | machine-drafted, needs native review |
+| `oTextMessage` | am | Text message | የጽሑፍ መልእክት | 2026-11-15 | machine-drafted, needs native review |
+| `oEmail` | am | Email | ኢሜይል | 2026-11-15 | machine-drafted, needs native review |
+| `oPersonVisit` | am | In-person visit | በአካል መገናኘት | 2026-11-15 | machine-drafted, needs native review |
+| `oNoPreference` | am | No preference | ምርጫ የለኝም | 2026-11-15 | machine-drafted, needs native review |
+| `descFood` | am | SNAP, food pantries, free meals, and more | SNAP፣ የምግብ ባንኮች፣ ነፃ ምግብ እና ሌሎችም | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeFoodAssistance` | am | What type of food assistance are you looking for? | ምን ዓይነት የምግብ እርዳታ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oSnapEbtBenefits` | am | SNAP / EBT benefits | የSNAP / EBT ጥቅማጥቅሞች | 2026-11-15 | machine-drafted, needs native review |
+| `oFoodPantries` | am | Food pantries | የምግብ ባንኮች | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeMeals` | am | Free meals | ነፃ ምግብ | 2026-11-15 | machine-drafted, needs native review |
+| `oWicProgram` | am | WIC program | የWIC ፕሮግራም | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolMeals` | am | School meals | የትምህርት ቤት ምግብ | 2026-11-15 | machine-drafted, needs native review |
+| `oCommunityGardens` | am | Community gardens | የማህበረሰብ የአትክልት ቦታዎች | 2026-11-15 | machine-drafted, needs native review |
+| `qManyPeopleHousehold` | am | How many people are in your household? | በቤተሰብዎ ውስጥ ስንት ሰዎች አሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `o1Person` | am | 1 person | 1 ሰው | 2026-11-15 | machine-drafted, needs native review |
+| `o2People` | am | 2 people | 2 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o3People` | am | 3 people | 3 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o4People` | am | 4 people | 4 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o5People` | am | 5 people | 5 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o6People` | am | 6 people | 6 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o7People` | am | 7 people | 7 ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `o8MorePeople` | am | 8 or more people | 8 ወይም ከዚያ በላይ ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `descHousing` | am | Emergency shelter, rent help, and housing vouchers | የአደጋ ጊዜ መጠለያ፣ የኪራይ እገዛ እና የመኖሪያ ቤት ቫውቸሮች | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHousing` | am | What type of housing help are you looking for? | ምን ዓይነት የመኖሪያ ቤት እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyShelter` | am | Emergency shelter | የአደጋ ጊዜ መጠለያ | 2026-11-15 | machine-drafted, needs native review |
+| `oRentAssistance` | am | Rent assistance | የኪራይ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oSection8HousingVouchers` | am | Section 8 / housing vouchers | ክፍል 8 / የመኖሪያ ቤት ቫውቸሮች | 2026-11-15 | machine-drafted, needs native review |
+| `oUtilityBill` | am | Utility bill help | የአገልግሎት ክፍያ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oHomeRepairAssistance` | am | Home repair assistance | የቤት ጥገና እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitionalHousing` | am | Transitional housing | የሽግግር መኖሪያ ቤት | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesCurrentSituation` | am | Which best describes your current situation? | አሁን ያለዎትን ሁኔታ በተሻለ የሚገልጸው የትኛው ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyHomeless` | am | Currently homeless | አሁን ቤት አልባ ነኝ | 2026-11-15 | machine-drafted, needs native review |
+| `oAboutLoseHousing` | am | About to lose housing | ቤቴን ላጣ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedMoreAffordableHousing` | am | Need more affordable housing | ዋጋው ተመጣጣኝ የሆነ ቤት ያስፈልገኛል | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedRepairsCurrentHome` | am | Need repairs on current home | አሁን ያለሁበት ቤት ጥገና ያስፈልገዋል | 2026-11-15 | machine-drafted, needs native review |
+| `descJobs` | am | Job search, training programs, and career support | ሥራ ፍለጋ፣ የሥልጠና ፕሮግራሞች እና የሙያ ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCareer` | am | What type of career help are you looking for? | ምን ዓይነት የሙያ እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oJobSearch` | am | Job search help | የሥራ ፍለጋ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oResumeInterviewCoaching` | am | Resume and interview coaching | የሲቪ እና የቃለ መጠይቅ ሥልጠና | 2026-11-15 | machine-drafted, needs native review |
+| `oJobTrainingPrograms` | am | Job training programs | የሥራ ሥልጠና ፕሮግራሞች | 2026-11-15 | machine-drafted, needs native review |
+| `oUnemploymentBenefits` | am | Unemployment benefits | የሥራ አጥነት ጥቅማጥቅሞች | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerCounseling` | am | Career counseling | የሙያ ምክር | 2026-11-15 | machine-drafted, needs native review |
+| `oYouthEmploymentPrograms` | am | Youth employment programs | የወጣቶች የሥራ ፕሮግራሞች | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldDescribeWorkExperience` | am | How would you describe your work experience? | የሥራ ልምድዎን እንዴት ይገልጹታል? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoWorkExperienceYet` | am | No work experience yet | እስካሁን የሥራ ልምድ የለኝም | 2026-11-15 | machine-drafted, needs native review |
+| `oSomeExperience` | am | Some experience | ትንሽ ልምድ አለኝ | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencedWorker` | am | Experienced worker | ልምድ ያለኝ ሠራተኛ | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerChange` | am | Looking for a career change | ሙያ መቀየር እፈልጋለሁ | 2026-11-15 | machine-drafted, needs native review |
+| `descTransportation` | am | Bus passes, ride programs, and gas assistance | የአውቶቡስ ትኬቶች፣ የመጓጓዣ ፕሮግራሞች እና የነዳጅ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeTransportation` | am | What type of transportation help are you looking for? | ምን ዓይነት የመጓጓዣ እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oBusTransitPasses` | am | Bus / transit passes | የአውቶቡስ / የሕዝብ ማመላለሻ ትኬቶች | 2026-11-15 | machine-drafted, needs native review |
+| `oCarRepairAssistance` | am | Car repair assistance | የመኪና ጥገና እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oRidePrograms` | am | Ride programs | የመጓጓዣ ፕሮግራሞች | 2026-11-15 | machine-drafted, needs native review |
+| `oGasVouchers` | am | Gas vouchers | የነዳጅ ቫውቸሮች | 2026-11-15 | machine-drafted, needs native review |
+| `oVehicleDonationProgram` | am | Vehicle donation program | የተሽከርካሪ ልገሳ ፕሮግራም | 2026-11-15 | machine-drafted, needs native review |
+| `oDisabledTransportation` | am | Disabled transportation | ለአካል ጉዳተኞች መጓጓዣ | 2026-11-15 | machine-drafted, needs native review |
+| `qOftenNeedTransportationSupport` | am | How often do you need transportation support? | የመጓጓዣ ድጋፍ ምን ያህል ጊዜ ያስፈልግዎታል? | 2026-11-15 | machine-drafted, needs native review |
+| `oDailyWorkSchool` | am | Daily (work / school) | በየቀኑ (ሥራ / ትምህርት ቤት) | 2026-11-15 | machine-drafted, needs native review |
+| `oSeveralTimesWeek` | am | Several times a week | በሳምንት ብዙ ጊዜ | 2026-11-15 | machine-drafted, needs native review |
+| `oOccasionalTrips` | am | Occasional trips | አልፎ አልፎ | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeNeed` | am | One-time need | አንድ ጊዜ ብቻ | 2026-11-15 | machine-drafted, needs native review |
+| `descLegal` | am | Free legal aid for housing, family, and benefits | ለመኖሪያ ቤት፣ ለቤተሰብ እና ለጥቅማጥቅሞች ነፃ የሕግ እርዳታ | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegal` | am | What type of legal help are you looking for? | ምን ዓይነት የሕግ እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oTenantRightsEviction` | am | Tenant rights / eviction | የተከራይ መብቶች / ማስለቀቅ | 2026-11-15 | machine-drafted, needs native review |
+| `oFamilyLaw` | am | Family law | የቤተሰብ ሕግ | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigration` | am | Immigration | ኢሚግሬሽን | 2026-11-15 | machine-drafted, needs native review |
+| `oCriminalRecordExpungement` | am | Criminal record expungement | የወንጀል ሪከርድ ማሰረዝ | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsAppeals` | am | Benefits appeals | የጥቅማጥቅም ይግባኞች | 2026-11-15 | machine-drafted, needs native review |
+| `oConsumerProtection` | am | Consumer protection | የሸማቾች ጥበቃ | 2026-11-15 | machine-drafted, needs native review |
+| `qUrgentLegalSituation` | am | How urgent is your legal situation? | የሕግ ጉዳይዎ ምን ያህል አስቸኳይ ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateDeadlineThis` | am | Immediate (court date / deadline this week) | ወዲያውኑ (በዚህ ሳምንት የፍርድ ቤት ቀጠሮ / የጊዜ ገደብ) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNextMonth` | am | Urgent (within the next month) | አስቸኳይ (በሚቀጥለው ወር ውስጥ) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentJustNeedGuidance` | am | Not urgent, just need guidance | አስቸኳይ አይደለም፣ መመሪያ ብቻ ያስፈልገኛል | 2026-11-15 | machine-drafted, needs native review |
+| `oJustExploringMyOptions` | am | Just exploring my options | አማራጮቼን እያየሁ ብቻ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `descHealthcare` | am | Free clinics, Medicaid, prescriptions, and mental health | ነፃ ክሊኒኮች፣ Medicaid፣ መድኃኒቶች እና የአእምሮ ጤና | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHealthcare` | am | What type of healthcare help are you looking for? | ምን ዓይነት የጤና እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicaidMedicareEnrollment` | am | Medicaid / Medicare enrollment | የMedicaid / Medicare ምዝገባ | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeLowCostClinics` | am | Free or low-cost clinics | ነፃ ወይም ዝቅተኛ ዋጋ ያላቸው ክሊኒኮች | 2026-11-15 | machine-drafted, needs native review |
+| `oPrescriptionAssistance` | am | Prescription assistance | የታዘዙ መድኃኒቶች እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oMentalHealthServices` | am | Mental health services | የአእምሮ ጤና አገልግሎቶች | 2026-11-15 | machine-drafted, needs native review |
+| `oDentalCare` | am | Dental care | የጥርስ ሕክምና | 2026-11-15 | machine-drafted, needs native review |
+| `oVisionCare` | am | Vision care | የዓይን ሕክምና | 2026-11-15 | machine-drafted, needs native review |
+| `qCurrentInsuranceStatus` | am | What is your current insurance status? | አሁን ያለዎት የመድን ሁኔታ ምንድን ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoInsurance` | am | No insurance | መድን የለኝም | 2026-11-15 | machine-drafted, needs native review |
+| `oPrivateInsurance` | am | Private insurance | የግል መድን | 2026-11-15 | machine-drafted, needs native review |
+| `oEmployerInsurance` | am | Employer insurance | የአሠሪ መድን | 2026-11-15 | machine-drafted, needs native review |
+| `descEitcTaxFiling` | am | Free tax prep, EITC refunds, and filing assistance | ነፃ የግብር ዝግጅት፣ የEITC ተመላሽ እና የማስታወቂያ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `qTaxFilingStatus` | am | What is your tax filing status? | የግብር ማስታወቂያ ሁኔታዎ ምንድን ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oSingle` | am | Single | ያላገባ | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingJointly` | am | Married filing jointly | ያገባ፣ በጋራ ማስታወቂያ | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingSeparately` | am | Married filing separately | ያገባ፣ በተናጠል ማስታወቂያ | 2026-11-15 | machine-drafted, needs native review |
+| `oHeadHousehold` | am | Head of household | የቤተሰብ ኃላፊ | 2026-11-15 | machine-drafted, needs native review |
+| `oQualifyingSurvivingSpouse` | am | Qualifying surviving spouse | ብቁ የሆነ በሕይወት ያለ የትዳር አጋር | 2026-11-15 | machine-drafted, needs native review |
+| `qApproximateAnnualHouseholdIncome` | am | What is your approximate annual household income? | የቤተሰብዎ ዓመታዊ ገቢ በግምት ምን ያህል ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `qManyQualifyingChildrenDependentsHave` | am | How many qualifying children or dependents do you have? | ስንት ብቁ ልጆች ወይም ጥገኞች አሉዎት? | 2026-11-15 | machine-drafted, needs native review |
+| `oNone` | am | None | የለም | 2026-11-15 | machine-drafted, needs native review |
+| `o1Child` | am | 1 child | 1 ልጅ | 2026-11-15 | machine-drafted, needs native review |
+| `o2Children` | am | 2 children | 2 ልጆች | 2026-11-15 | machine-drafted, needs native review |
+| `o3MoreChildren` | am | 3 or more children | 3 ወይም ከዚያ በላይ ልጆች | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeLegal` | am | Legal aid clinics, pro bono attorneys, and self-help resources | የሕግ እርዳታ ክሊኒኮች፣ በነፃ የሚሠሩ ጠበቆች እና የራስ አገዝ ምንጮች | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegalIssueNeedWith` | am | What type of legal issue do you need help with? | በምን ዓይነት የሕግ ጉዳይ እገዛ ያስፈልግዎታል? | 2026-11-15 | machine-drafted, needs native review |
+| `oEvictionHousingCourt` | am | Eviction or housing court | ማስለቀቅ ወይም የመኖሪያ ቤት ፍርድ ቤት | 2026-11-15 | machine-drafted, needs native review |
+| `oDomesticViolenceProtectionOrder` | am | Domestic violence protection order | የቤት ውስጥ ጥቃት የጥበቃ ትእዛዝ | 2026-11-15 | machine-drafted, needs native review |
+| `oChildCustodySupport` | am | Child custody or support | የልጅ አሳዳጊነት ወይም ቀለብ | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigrationDaca` | am | Immigration or DACA | ኢሚግሬሽን ወይም DACA | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsDenialAppeal` | am | Benefits denial or appeal | የጥቅማጥቅም ውድቅ መደረግ ወይም ይግባኝ | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateOrDeadline` | am | Immediate (court date or deadline this week) | ወዲያውኑ (በዚህ ሳምንት የፍርድ ቤት ቀጠሮ ወይም የጊዜ ገደብ) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNext30Days` | am | Urgent (within the next 30 days) | አስቸኳይ (በሚቀጥሉት 30 ቀናት ውስጥ) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentNeedGeneralGuidance` | am | Not urgent, need general guidance | አስቸኳይ አይደለም፣ አጠቃላይ መመሪያ ያስፈልገኛል | 2026-11-15 | machine-drafted, needs native review |
+| `descPrenatalNatalCare` | am | Prenatal visits, WIC, newborn support, and postpartum care | የቅድመ ወሊድ ክትትል፣ WIC፣ የአራስ ልጅ ድጋፍ እና የድኅረ ወሊድ እንክብካቤ | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeSupport` | am | What type of support are you looking for? | ምን ዓይነት ድጋፍ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oPrenatalCheckupsUltrasounds` | am | Prenatal checkups and ultrasounds | የቅድመ ወሊድ ምርመራ እና አልትራሳውንድ | 2026-11-15 | machine-drafted, needs native review |
+| `oWicNutritionProgram` | am | WIC nutrition program | የWIC የአመጋገብ ፕሮግራም | 2026-11-15 | machine-drafted, needs native review |
+| `oBirthingCenterHospitalFinancial` | am | Birthing center or hospital financial help | ለወሊድ ማዕከል ወይም ለሆስፒታል የገንዘብ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `oPostpartumMentalHealthSupport` | am | Postpartum mental health support | ከወሊድ በኋላ የአእምሮ ጤና ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `oNewbornCareSupplies` | am | Newborn care and supplies | የአራስ ልጅ እንክብካቤ እና አቅርቦቶች | 2026-11-15 | machine-drafted, needs native review |
+| `oLactationBreastfeedingSupport` | am | Lactation / breastfeeding support | የጡት ማጥባት ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `qStageDescribesCurrentSituation` | am | What stage best describes your current situation? | አሁን ያለዎትን ሁኔታ በተሻለ የሚገልጸው የትኛው ደረጃ ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant1stTrimester` | am | Currently pregnant (1st trimester) | አሁን ነፍሰ ጡር (የመጀመሪያው ሦስት ወር) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant2ndTrimester` | am | Currently pregnant (2nd trimester) | አሁን ነፍሰ ጡር (ሁለተኛው ሦስት ወር) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant3rdTrimester` | am | Currently pregnant (3rd trimester) | አሁን ነፍሰ ጡር (ሦስተኛው ሦስት ወር) | 2026-11-15 | machine-drafted, needs native review |
+| `oRecentlyGaveBirthWithin3` | am | Recently gave birth (within 3 months) | በቅርቡ ወልጃለሁ (በ3 ወራት ውስጥ) | 2026-11-15 | machine-drafted, needs native review |
+| `oPlanningPregnancy` | am | Planning a pregnancy | እርግዝና እያቀድኩ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `descWasteDisposal` | am | Bulk trash pickup, hazardous waste drop-off, and recycling help | ትልቅ ቆሻሻ ማንሳት፣ አደገኛ ቆሻሻ ማስረከብ እና የመልሶ መጠቀም እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeWasteDisposalNeed` | am | What type of waste or disposal help do you need? | ምን ዓይነት የቆሻሻ ወይም የማስወገድ እገዛ ያስፈልግዎታል? | 2026-11-15 | machine-drafted, needs native review |
+| `oBulkItemFurnitureRemoval` | am | Bulk item or furniture removal | ትልልቅ ዕቃዎችን ወይም የቤት ዕቃዎችን ማንሳት | 2026-11-15 | machine-drafted, needs native review |
+| `oHouseholdHazardousWastePaintChemicals` | am | Household hazardous waste (paint, chemicals) | አደገኛ የቤት ቆሻሻ (ቀለም፣ ኬሚካሎች) | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsRecyclingEWaste` | am | Electronics recycling (e-waste) | የኤሌክትሮኒክስ መልሶ መጠቀም (ኢ-ቆሻሻ) | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicalSharpsMedicationDisposal` | am | Medical sharps or medication disposal | የሕክምና መርፌዎችን ወይም መድኃኒቶችን ማስወገድ | 2026-11-15 | machine-drafted, needs native review |
+| `oYardWasteCompost` | am | Yard waste or compost | የግቢ ቆሻሻ ወይም ብስባሽ | 2026-11-15 | machine-drafted, needs native review |
+| `oGeneralRecyclingAccess` | am | General recycling access | አጠቃላይ የመልሶ መጠቀም አገልግሎት | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesSituation` | am | Which best describes your situation? | ሁኔታዎን በተሻለ የሚገልጸው የትኛው ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeLargeCleanout` | am | One-time large cleanout | የአንድ ጊዜ ትልቅ ጽዳት | 2026-11-15 | machine-drafted, needs native review |
+| `oOngoingDisposalNeed` | am | Ongoing disposal need | ቀጣይ የማስወገድ ፍላጎት | 2026-11-15 | machine-drafted, needs native review |
+| `oRespondingNaturalDisasterEmergency` | am | Responding to a natural disaster or emergency | ለተፈጥሮ አደጋ ወይም ለአስቸኳይ ሁኔታ ምላሽ | 2026-11-15 | machine-drafted, needs native review |
+| `oMovingEvictionCleanup` | am | Moving or eviction cleanup | የቤት ለውጥ ወይም የማስለቀቅ ጽዳት | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeCamping` | am | Free campsites, dispersed camping, and overnight shelters | ነፃ የካምፕ ቦታዎች፣ ክፍት ካምፕ እና የሌሊት መጠለያዎች | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCampingOvernightShelter` | am | What type of camping or overnight shelter are you looking for? | ምን ዓይነት ካምፕ ወይም የሌሊት መጠለያ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDispersedPrimitiveCampingPublic` | am | Free dispersed (primitive) camping on public land | በሕዝብ መሬት ላይ ነፃ ክፍት (ቀላል) ካምፕ | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDesignatedCampsitesNationalForest` | am | Free designated campsites (national forest, BLM) | ነፃ የተመደቡ የካምፕ ቦታዎች (ብሔራዊ ደን፣ BLM) | 2026-11-15 | machine-drafted, needs native review |
+| `oSafeOvernightParkingVehicle` | am | Safe overnight parking for a vehicle | ለተሽከርካሪ ደኅንነቱ የተጠበቀ የሌሊት ማቆሚያ | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyOvernightShelter` | am | Emergency overnight shelter | የአደጋ ጊዜ የሌሊት መጠለያ | 2026-11-15 | machine-drafted, needs native review |
+| `oLongTermCampingWhileAwaiting` | am | Long-term camping while awaiting housing | ቤት እስኪገኝ ድረስ የረጅም ጊዜ ካምፕ | 2026-11-15 | machine-drafted, needs native review |
+| `qLongNeedCampStay` | am | How long do you need to camp or stay? | ለምን ያህል ጊዜ ካምፕ ማድረግ ወይም መቆየት ያስፈልግዎታል? | 2026-11-15 | machine-drafted, needs native review |
+| `o12Nights` | am | 1–2 nights | 1–2 ሌሊቶች | 2026-11-15 | machine-drafted, needs native review |
+| `oFewDaysUpWeek` | am | A few days (up to a week) | ጥቂት ቀናት (እስከ አንድ ሳምንት) | 2026-11-15 | machine-drafted, needs native review |
+| `o14Weeks` | am | 1–4 weeks | 1–4 ሳምንታት | 2026-11-15 | machine-drafted, needs native review |
+| `oMoreThanMonth` | am | More than a month | ከአንድ ወር በላይ | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeGoodsDonation` | am | Free clothing, furniture, household items, and donation programs | ነፃ ልብስ፣ የቤት ዕቃዎች፣ የቤት አቅርቦቶች እና የልገሳ ፕሮግራሞች | 2026-11-15 | machine-drafted, needs native review |
+| `qTypesGoods` | am | What types of goods are you looking for? | ምን ዓይነት ዕቃዎችን ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `oClothingShoes` | am | Clothing and shoes | ልብስ እና ጫማ | 2026-11-15 | machine-drafted, needs native review |
+| `oFurnitureHomeGoods` | am | Furniture and home goods | የቤት ዕቃዎች እና የቤት አቅርቦቶች | 2026-11-15 | machine-drafted, needs native review |
+| `oBabyChildrenItems` | am | Baby and children items | የሕፃናት እና የልጆች ዕቃዎች | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsAppliances` | am | Electronics and appliances | ኤሌክትሮኒክስ እና የቤት መገልገያዎች | 2026-11-15 | machine-drafted, needs native review |
+| `oHygienePersonalCareItems` | am | Hygiene and personal care items | የንጽሕና እና የግል እንክብካቤ ዕቃዎች | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolSupplies` | am | School supplies | የትምህርት ቤት ቁሳቁሶች | 2026-11-15 | machine-drafted, needs native review |
+| `oSettingUpNewHome` | am | Setting up a new home | አዲስ ቤት እያዘጋጀሁ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `oLostBelongingsFireFloodDisaster` | am | Lost belongings (fire, flood, disaster) | ንብረቴን አጥቻለሁ (እሳት፣ ጎርፍ፣ አደጋ) | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencingFinancialHardship` | am | Experiencing financial hardship | የገንዘብ ችግር እያጋጠመኝ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitioningOutShelterFacility` | am | Transitioning out of shelter or facility | ከመጠለያ ወይም ከተቋም እየወጣሁ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | hmn | Select a category to get personalized help from the AI assistant. | Xaiv ib pawg kom tus pab AI pab koj raws li koj xav tau. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseOne` | hmn | Choose one. | Xaiv ib qho. | 2026-11-15 | machine-drafted, needs native review |
+| `hintChooseAll` | hmn | Choose all that apply. | Xaiv txhua yam uas haum rau koj. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseAtLeastOne` | hmn | Choose at least one to continue. | Xaiv tsawg kawg ib qho kom mus ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | hmn | Filter the list | Lim daim ntawv teev | 2026-11-15 | machine-drafted, needs native review |
+| `filterNone` | hmn | No matches. | Tsis muaj dab tsi phim. | 2026-11-15 | machine-drafted, needs native review |
+| `qStateLocated` | hmn | What state are you located in? | Koj nyob rau lub xeev twg? | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldPreferBeContacted` | hmn | How would you prefer to be contacted? | Koj xav kom lawv tiv tauj koj li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `oPhoneCall` | hmn | Phone call | Hu xov tooj | 2026-11-15 | machine-drafted, needs native review |
+| `oTextMessage` | hmn | Text message | Xa ntawv hauv xov tooj | 2026-11-15 | machine-drafted, needs native review |
+| `oEmail` | hmn | Email | Email | 2026-11-15 | machine-drafted, needs native review |
+| `oPersonVisit` | hmn | In-person visit | Ntsib tim ntsej muag | 2026-11-15 | machine-drafted, needs native review |
+| `oNoPreference` | hmn | No preference | Li cas los tau | 2026-11-15 | machine-drafted, needs native review |
+| `descFood` | hmn | SNAP, food pantries, free meals, and more | SNAP, chaw muab zaub mov, pluas mov dawb, thiab ntau yam ntxiv | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeFoodAssistance` | hmn | What type of food assistance are you looking for? | Koj nrhiav kev pab zaub mov hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oSnapEbtBenefits` | hmn | SNAP / EBT benefits | Kev pab SNAP / EBT | 2026-11-15 | machine-drafted, needs native review |
+| `oFoodPantries` | hmn | Food pantries | Chaw muab zaub mov | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeMeals` | hmn | Free meals | Pluas mov dawb | 2026-11-15 | machine-drafted, needs native review |
+| `oWicProgram` | hmn | WIC program | Kev pab cuam WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolMeals` | hmn | School meals | Pluas mov tom tsev kawm ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `oCommunityGardens` | hmn | Community gardens | Vaj zaub hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `qManyPeopleHousehold` | hmn | How many people are in your household? | Koj tsev neeg muaj pes tsawg tus neeg? | 2026-11-15 | machine-drafted, needs native review |
+| `o1Person` | hmn | 1 person | 1 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o2People` | hmn | 2 people | 2 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o3People` | hmn | 3 people | 3 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o4People` | hmn | 4 people | 4 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o5People` | hmn | 5 people | 5 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o6People` | hmn | 6 people | 6 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o7People` | hmn | 7 people | 7 tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `o8MorePeople` | hmn | 8 or more people | 8 tus neeg los sis ntau dua | 2026-11-15 | machine-drafted, needs native review |
+| `descHousing` | hmn | Emergency shelter, rent help, and housing vouchers | Chaw nyob thaum muaj xwm txheej ceev, kev pab them nqi xauj tsev, thiab daim pib vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHousing` | hmn | What type of housing help are you looking for? | Koj nrhiav kev pab vaj tse hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyShelter` | hmn | Emergency shelter | Chaw nyob thaum muaj xwm txheej ceev | 2026-11-15 | machine-drafted, needs native review |
+| `oRentAssistance` | hmn | Rent assistance | Kev pab them nqi xauj tsev | 2026-11-15 | machine-drafted, needs native review |
+| `oSection8HousingVouchers` | hmn | Section 8 / housing vouchers | Section 8 / daim pib vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `oUtilityBill` | hmn | Utility bill help | Kev pab them nqi hluav taws xob thiab dej | 2026-11-15 | machine-drafted, needs native review |
+| `oHomeRepairAssistance` | hmn | Home repair assistance | Kev pab kho tsev | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitionalHousing` | hmn | Transitional housing | Tsev nyob ib ntus | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesCurrentSituation` | hmn | Which best describes your current situation? | Yam twg piav koj qhov xwm txheej tam sim no zoo tshaj? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyHomeless` | hmn | Currently homeless | Tam sim no tsis muaj tsev nyob | 2026-11-15 | machine-drafted, needs native review |
+| `oAboutLoseHousing` | hmn | About to lose housing | Yuav poob tsev nyob | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedMoreAffordableHousing` | hmn | Need more affordable housing | Xav tau tsev uas pheej yig dua | 2026-11-15 | machine-drafted, needs native review |
+| `oNeedRepairsCurrentHome` | hmn | Need repairs on current home | Lub tsev tam sim no yuav tsum kho | 2026-11-15 | machine-drafted, needs native review |
+| `descJobs` | hmn | Job search, training programs, and career support | Nrhiav haujlwm, kev cob qhia, thiab kev txhawb nqa txoj haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCareer` | hmn | What type of career help are you looking for? | Koj nrhiav kev pab txog haujlwm hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oJobSearch` | hmn | Job search help | Kev pab nrhiav haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `oResumeInterviewCoaching` | hmn | Resume and interview coaching | Kev qhia sau resume thiab xam phaj | 2026-11-15 | machine-drafted, needs native review |
+| `oJobTrainingPrograms` | hmn | Job training programs | Kev cob qhia ua haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `oUnemploymentBenefits` | hmn | Unemployment benefits | Nyiaj pab thaum tsis muaj haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerCounseling` | hmn | Career counseling | Kev sab laj txog txoj haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `oYouthEmploymentPrograms` | hmn | Youth employment programs | Kev pab haujlwm rau cov hluas | 2026-11-15 | machine-drafted, needs native review |
+| `qWouldDescribeWorkExperience` | hmn | How would you describe your work experience? | Koj yuav piav koj txoj kev paub ua haujlwm li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoWorkExperienceYet` | hmn | No work experience yet | Tseem tsis tau muaj kev paub ua haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `oSomeExperience` | hmn | Some experience | Muaj kev paub me ntsis | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencedWorker` | hmn | Experienced worker | Tus neeg ua haujlwm muaj kev paub | 2026-11-15 | machine-drafted, needs native review |
+| `oCareerChange` | hmn | Looking for a career change | Xav hloov txoj haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `descTransportation` | hmn | Bus passes, ride programs, and gas assistance | Daim pib tsheb npav, kev pab caij tsheb, thiab kev pab nqi roj | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeTransportation` | hmn | What type of transportation help are you looking for? | Koj nrhiav kev pab mus los hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oBusTransitPasses` | hmn | Bus / transit passes | Daim pib tsheb npav / tsheb pej xeem | 2026-11-15 | machine-drafted, needs native review |
+| `oCarRepairAssistance` | hmn | Car repair assistance | Kev pab kho tsheb | 2026-11-15 | machine-drafted, needs native review |
+| `oRidePrograms` | hmn | Ride programs | Kev pab caij tsheb | 2026-11-15 | machine-drafted, needs native review |
+| `oGasVouchers` | hmn | Gas vouchers | Daim pib roj tsheb | 2026-11-15 | machine-drafted, needs native review |
+| `oVehicleDonationProgram` | hmn | Vehicle donation program | Kev pub tsheb | 2026-11-15 | machine-drafted, needs native review |
+| `oDisabledTransportation` | hmn | Disabled transportation | Kev mus los rau neeg xiam oob qhab | 2026-11-15 | machine-drafted, needs native review |
+| `qOftenNeedTransportationSupport` | hmn | How often do you need transportation support? | Koj xav tau kev pab mus los ntau npaum li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `oDailyWorkSchool` | hmn | Daily (work / school) | Txhua hnub (haujlwm / tsev kawm ntawv) | 2026-11-15 | machine-drafted, needs native review |
+| `oSeveralTimesWeek` | hmn | Several times a week | Ob peb zaug ib lub lim tiam | 2026-11-15 | machine-drafted, needs native review |
+| `oOccasionalTrips` | hmn | Occasional trips | Qee zaus xwb | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeNeed` | hmn | One-time need | Ib zaug xwb | 2026-11-15 | machine-drafted, needs native review |
+| `descLegal` | hmn | Free legal aid for housing, family, and benefits | Kev pab cai lij choj dawb txog vaj tse, tsev neeg, thiab kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegal` | hmn | What type of legal help are you looking for? | Koj nrhiav kev pab cai lij choj hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oTenantRightsEviction` | hmn | Tenant rights / eviction | Txoj cai ntawm tus xauj tsev / raug ntiab tawm | 2026-11-15 | machine-drafted, needs native review |
+| `oFamilyLaw` | hmn | Family law | Cai lij choj tsev neeg | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigration` | hmn | Immigration | Kev tsiv teb tsaws chaw | 2026-11-15 | machine-drafted, needs native review |
+| `oCriminalRecordExpungement` | hmn | Criminal record expungement | Lwv cov ntaub ntawv ua txhaum cai | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsAppeals` | hmn | Benefits appeals | Kev thov rov xav txog kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `oConsumerProtection` | hmn | Consumer protection | Kev tiv thaiv cov neeg yuav khoom | 2026-11-15 | machine-drafted, needs native review |
+| `qUrgentLegalSituation` | hmn | How urgent is your legal situation? | Koj qhov teeb meem cai lij choj ceev npaum li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateDeadlineThis` | hmn | Immediate (court date / deadline this week) | Tam sim ntawd (hnub mus tsev hais plaub / hnub kawg lub lim tiam no) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNextMonth` | hmn | Urgent (within the next month) | Ceev (hauv lub hli tom ntej) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentJustNeedGuidance` | hmn | Not urgent, just need guidance | Tsis ceev, tsuas xav tau kev qhia xwb | 2026-11-15 | machine-drafted, needs native review |
+| `oJustExploringMyOptions` | hmn | Just exploring my options | Tsuas yog saib kuv cov kev xaiv xwb | 2026-11-15 | machine-drafted, needs native review |
+| `descHealthcare` | hmn | Free clinics, Medicaid, prescriptions, and mental health | Tsev kho mob dawb, Medicaid, tshuaj, thiab kev noj qab haus huv ntawm lub hlwb | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeHealthcare` | hmn | What type of healthcare help are you looking for? | Koj nrhiav kev pab kho mob hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicaidMedicareEnrollment` | hmn | Medicaid / Medicare enrollment | Kev sau npe Medicaid / Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeLowCostClinics` | hmn | Free or low-cost clinics | Tsev kho mob dawb los sis pheej yig | 2026-11-15 | machine-drafted, needs native review |
+| `oPrescriptionAssistance` | hmn | Prescription assistance | Kev pab tshuaj kws kho mob sau | 2026-11-15 | machine-drafted, needs native review |
+| `oMentalHealthServices` | hmn | Mental health services | Kev pab txog lub hlwb | 2026-11-15 | machine-drafted, needs native review |
+| `oDentalCare` | hmn | Dental care | Kev kho hniav | 2026-11-15 | machine-drafted, needs native review |
+| `oVisionCare` | hmn | Vision care | Kev kho qhov muag | 2026-11-15 | machine-drafted, needs native review |
+| `qCurrentInsuranceStatus` | hmn | What is your current insurance status? | Tam sim no koj muaj kev pov hwm li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `oNoInsurance` | hmn | No insurance | Tsis muaj kev pov hwm | 2026-11-15 | machine-drafted, needs native review |
+| `oPrivateInsurance` | hmn | Private insurance | Kev pov hwm ntiag tug | 2026-11-15 | machine-drafted, needs native review |
+| `oEmployerInsurance` | hmn | Employer insurance | Kev pov hwm los ntawm tus tswv haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `descEitcTaxFiling` | hmn | Free tax prep, EITC refunds, and filing assistance | Kev npaj se dawb, nyiaj rov qab EITC, thiab kev pab ua ntawv se | 2026-11-15 | machine-drafted, needs native review |
+| `qTaxFilingStatus` | hmn | What is your tax filing status? | Koj txoj xwm txheej ua ntawv se yog dab tsi? | 2026-11-15 | machine-drafted, needs native review |
+| `oSingle` | hmn | Single | Nyob ib leeg | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingJointly` | hmn | Married filing jointly | Muaj txij nkawm, ua ntawv se ua ke | 2026-11-15 | machine-drafted, needs native review |
+| `oMarriedFilingSeparately` | hmn | Married filing separately | Muaj txij nkawm, ua ntawv se cais | 2026-11-15 | machine-drafted, needs native review |
+| `oHeadHousehold` | hmn | Head of household | Tus thawj tsev neeg | 2026-11-15 | machine-drafted, needs native review |
+| `oQualifyingSurvivingSpouse` | hmn | Qualifying surviving spouse | Tus txij nkawm uas tseem muaj sia nyob tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `qApproximateAnnualHouseholdIncome` | hmn | What is your approximate annual household income? | Koj tsev neeg cov nyiaj tau los ib xyoos kwv yees li pes tsawg? | 2026-11-15 | machine-drafted, needs native review |
+| `qManyQualifyingChildrenDependentsHave` | hmn | How many qualifying children or dependents do you have? | Koj muaj pes tsawg tus menyuam los sis tus neeg vam khom uas tsim nyog? | 2026-11-15 | machine-drafted, needs native review |
+| `oNone` | hmn | None | Tsis muaj | 2026-11-15 | machine-drafted, needs native review |
+| `o1Child` | hmn | 1 child | 1 tus menyuam | 2026-11-15 | machine-drafted, needs native review |
+| `o2Children` | hmn | 2 children | 2 tus menyuam | 2026-11-15 | machine-drafted, needs native review |
+| `o3MoreChildren` | hmn | 3 or more children | 3 tus menyuam los sis ntau dua | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeLegal` | hmn | Legal aid clinics, pro bono attorneys, and self-help resources | Chaw pab cai lij choj, kws lij choj pab dawb, thiab cov khoom siv pab koj tus kheej | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeLegalIssueNeedWith` | hmn | What type of legal issue do you need help with? | Koj xav tau kev pab txog teeb meem cai lij choj hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oEvictionHousingCourt` | hmn | Eviction or housing court | Raug ntiab tawm los sis tsev hais plaub vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `oDomesticViolenceProtectionOrder` | hmn | Domestic violence protection order | Daim ntawv tiv thaiv kev ua phem hauv tsev neeg | 2026-11-15 | machine-drafted, needs native review |
+| `oChildCustodySupport` | hmn | Child custody or support | Kev saib xyuas menyuam los sis nyiaj yug menyuam | 2026-11-15 | machine-drafted, needs native review |
+| `oImmigrationDaca` | hmn | Immigration or DACA | Kev tsiv teb tsaws chaw los sis DACA | 2026-11-15 | machine-drafted, needs native review |
+| `oBenefitsDenialAppeal` | hmn | Benefits denial or appeal | Raug tsis kam pab los sis thov rov xav | 2026-11-15 | machine-drafted, needs native review |
+| `oImmediateCourtDateOrDeadline` | hmn | Immediate (court date or deadline this week) | Tam sim ntawd (hnub mus tsev hais plaub los sis hnub kawg lub lim tiam no) | 2026-11-15 | machine-drafted, needs native review |
+| `oUrgentWithinNext30Days` | hmn | Urgent (within the next 30 days) | Ceev (hauv 30 hnub tom ntej) | 2026-11-15 | machine-drafted, needs native review |
+| `oNotUrgentNeedGeneralGuidance` | hmn | Not urgent, need general guidance | Tsis ceev, xav tau kev qhia dav dav | 2026-11-15 | machine-drafted, needs native review |
+| `descPrenatalNatalCare` | hmn | Prenatal visits, WIC, newborn support, and postpartum care | Kev kuaj thaum cev xeeb tub, WIC, kev pab me nyuam mos, thiab kev saib xyuas tom qab yug me nyuam | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeSupport` | hmn | What type of support are you looking for? | Koj nrhiav kev txhawb nqa hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oPrenatalCheckupsUltrasounds` | hmn | Prenatal checkups and ultrasounds | Kev kuaj cev xeeb tub thiab ultrasound | 2026-11-15 | machine-drafted, needs native review |
+| `oWicNutritionProgram` | hmn | WIC nutrition program | Kev pab zaub mov WIC | 2026-11-15 | machine-drafted, needs native review |
+| `oBirthingCenterHospitalFinancial` | hmn | Birthing center or hospital financial help | Kev pab nyiaj rau chaw yug me nyuam los sis tsev kho mob | 2026-11-15 | machine-drafted, needs native review |
+| `oPostpartumMentalHealthSupport` | hmn | Postpartum mental health support | Kev pab lub hlwb tom qab yug me nyuam | 2026-11-15 | machine-drafted, needs native review |
+| `oNewbornCareSupplies` | hmn | Newborn care and supplies | Kev saib xyuas thiab khoom siv rau me nyuam mos | 2026-11-15 | machine-drafted, needs native review |
+| `oLactationBreastfeedingSupport` | hmn | Lactation / breastfeeding support | Kev pab pub mis niam | 2026-11-15 | machine-drafted, needs native review |
+| `qStageDescribesCurrentSituation` | hmn | What stage best describes your current situation? | Theem twg piav koj qhov xwm txheej tam sim no zoo tshaj? | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant1stTrimester` | hmn | Currently pregnant (1st trimester) | Tab tom xeeb tub (3 lub hlis thawj) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant2ndTrimester` | hmn | Currently pregnant (2nd trimester) | Tab tom xeeb tub (3 lub hlis thib ob) | 2026-11-15 | machine-drafted, needs native review |
+| `oCurrentlyPregnant3rdTrimester` | hmn | Currently pregnant (3rd trimester) | Tab tom xeeb tub (3 lub hlis kawg) | 2026-11-15 | machine-drafted, needs native review |
+| `oRecentlyGaveBirthWithin3` | hmn | Recently gave birth (within 3 months) | Nyuam qhuav yug me nyuam (hauv 3 lub hlis) | 2026-11-15 | machine-drafted, needs native review |
+| `oPlanningPregnancy` | hmn | Planning a pregnancy | Npaj yuav xeeb tub | 2026-11-15 | machine-drafted, needs native review |
+| `descWasteDisposal` | hmn | Bulk trash pickup, hazardous waste drop-off, and recycling help | Kev tuaj khaws khib nyiab loj, chaw muab khib nyiab txaus ntshai, thiab kev pab rov siv dua | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeWasteDisposalNeed` | hmn | What type of waste or disposal help do you need? | Koj xav tau kev pab khib nyiab los sis pov tseg hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oBulkItemFurnitureRemoval` | hmn | Bulk item or furniture removal | Kev tshem khoom loj los sis rooj zaum | 2026-11-15 | machine-drafted, needs native review |
+| `oHouseholdHazardousWastePaintChemicals` | hmn | Household hazardous waste (paint, chemicals) | Khib nyiab txaus ntshai hauv tsev (xim, tshuaj lom neeg) | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsRecyclingEWaste` | hmn | Electronics recycling (e-waste) | Kev rov siv khoom hluav taws xob (e-waste) | 2026-11-15 | machine-drafted, needs native review |
+| `oMedicalSharpsMedicationDisposal` | hmn | Medical sharps or medication disposal | Kev pov tseg koob txhaj tshuaj los sis tshuaj | 2026-11-15 | machine-drafted, needs native review |
+| `oYardWasteCompost` | hmn | Yard waste or compost | Khib nyiab hauv vaj los sis chiv | 2026-11-15 | machine-drafted, needs native review |
+| `oGeneralRecyclingAccess` | hmn | General recycling access | Kev siv chaw rov siv khoom dua | 2026-11-15 | machine-drafted, needs native review |
+| `qDescribesSituation` | hmn | Which best describes your situation? | Yam twg piav koj qhov xwm txheej zoo tshaj? | 2026-11-15 | machine-drafted, needs native review |
+| `oOneTimeLargeCleanout` | hmn | One-time large cleanout | Ntxuav loj ib zaug | 2026-11-15 | machine-drafted, needs native review |
+| `oOngoingDisposalNeed` | hmn | Ongoing disposal need | Xav tau pov tseg tas li | 2026-11-15 | machine-drafted, needs native review |
+| `oRespondingNaturalDisasterEmergency` | hmn | Responding to a natural disaster or emergency | Teb rau kev puas tsuaj los ntawm xwm los sis xwm txheej ceev | 2026-11-15 | machine-drafted, needs native review |
+| `oMovingEvictionCleanup` | hmn | Moving or eviction cleanup | Ntxuav vim tsiv tsev los sis raug ntiab tawm | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeCamping` | hmn | Free campsites, dispersed camping, and overnight shelters | Chaw pw hav zoov dawb, pw hav zoov qhib, thiab chaw nyob ib hmo | 2026-11-15 | machine-drafted, needs native review |
+| `qTypeCampingOvernightShelter` | hmn | What type of camping or overnight shelter are you looking for? | Koj nrhiav chaw pw hav zoov los sis chaw nyob ib hmo hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDispersedPrimitiveCampingPublic` | hmn | Free dispersed (primitive) camping on public land | Pw hav zoov dawb (yooj yim) rau ntawm av pej xeem | 2026-11-15 | machine-drafted, needs native review |
+| `oFreeDesignatedCampsitesNationalForest` | hmn | Free designated campsites (national forest, BLM) | Chaw pw hav zoov dawb uas tau teem tseg (hav zoov teb chaws, BLM) | 2026-11-15 | machine-drafted, needs native review |
+| `oSafeOvernightParkingVehicle` | hmn | Safe overnight parking for a vehicle | Chaw nres tsheb nyab xeeb ib hmo | 2026-11-15 | machine-drafted, needs native review |
+| `oEmergencyOvernightShelter` | hmn | Emergency overnight shelter | Chaw nyob ib hmo thaum muaj xwm txheej ceev | 2026-11-15 | machine-drafted, needs native review |
+| `oLongTermCampingWhileAwaiting` | hmn | Long-term camping while awaiting housing | Pw hav zoov ntev thaum tos tsev nyob | 2026-11-15 | machine-drafted, needs native review |
+| `qLongNeedCampStay` | hmn | How long do you need to camp or stay? | Koj xav pw hav zoov los sis nyob ntev npaum li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `o12Nights` | hmn | 1–2 nights | 1–2 hmo | 2026-11-15 | machine-drafted, needs native review |
+| `oFewDaysUpWeek` | hmn | A few days (up to a week) | Ob peb hnub (txog ib lub lim tiam) | 2026-11-15 | machine-drafted, needs native review |
+| `o14Weeks` | hmn | 1–4 weeks | 1–4 lub lim tiam | 2026-11-15 | machine-drafted, needs native review |
+| `oMoreThanMonth` | hmn | More than a month | Ntau tshaj ib hlis | 2026-11-15 | machine-drafted, needs native review |
+| `descFreeGoodsDonation` | hmn | Free clothing, furniture, household items, and donation programs | Khaub ncaws, rooj zaum, khoom siv hauv tsev dawb, thiab kev pub dawb | 2026-11-15 | machine-drafted, needs native review |
+| `qTypesGoods` | hmn | What types of goods are you looking for? | Koj nrhiav khoom hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `oClothingShoes` | hmn | Clothing and shoes | Khaub ncaws thiab khau | 2026-11-15 | machine-drafted, needs native review |
+| `oFurnitureHomeGoods` | hmn | Furniture and home goods | Rooj zaum thiab khoom siv hauv tsev | 2026-11-15 | machine-drafted, needs native review |
+| `oBabyChildrenItems` | hmn | Baby and children items | Khoom rau me nyuam mos thiab menyuam yaus | 2026-11-15 | machine-drafted, needs native review |
+| `oElectronicsAppliances` | hmn | Electronics and appliances | Khoom hluav taws xob thiab khoom siv hauv tsev | 2026-11-15 | machine-drafted, needs native review |
+| `oHygienePersonalCareItems` | hmn | Hygiene and personal care items | Khoom huv si thiab saib xyuas tus kheej | 2026-11-15 | machine-drafted, needs native review |
+| `oSchoolSupplies` | hmn | School supplies | Khoom siv kawm ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `oSettingUpNewHome` | hmn | Setting up a new home | Npaj lub tsev tshiab | 2026-11-15 | machine-drafted, needs native review |
+| `oLostBelongingsFireFloodDisaster` | hmn | Lost belongings (fire, flood, disaster) | Poob khoom (hluav taws, dej nyab, kev puas tsuaj) | 2026-11-15 | machine-drafted, needs native review |
+| `oExperiencingFinancialHardship` | hmn | Experiencing financial hardship | Muaj teeb meem nyiaj txiag | 2026-11-15 | machine-drafted, needs native review |
+| `oTransitioningOutShelterFacility` | hmn | Transitioning out of shelter or facility | Tawm ntawm chaw nyob ib ntus los sis chaw saib xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `FILTER_MATCHES.other` | ht | {n} matches | {n} rezilta | 2026-11-15 | machine-drafted, needs native review |
+| `FILTER_MATCHES.other` | so | {n} matches | {n} natiijo | 2026-11-15 | machine-drafted, needs native review |
+| `FILTER_MATCHES.one` | am | {n} match | {n} ውጤት | 2026-11-15 | machine-drafted, needs native review |
+| `FILTER_MATCHES.other` | am | {n} matches | {n} ውጤቶች | 2026-11-15 | machine-drafted, needs native review |
+| `FILTER_MATCHES.other` | hmn | {n} matches | {n} qhov phim | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-org-admin.ts`
 
 | Key | Locale | English | Text | Added | Status |
