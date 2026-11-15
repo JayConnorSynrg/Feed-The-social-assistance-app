@@ -201,15 +201,13 @@ export type SubmitOutcome =
 // caller supplies "now" as a minute-of-week integer (day_of_week*1440 + hour*60 + minute) computed
 // in the VIEWER's local zone (see OpenNowPill). No date library, no browser globals — so the
 // midnight-crossing math is unit-testable in the node vitest env. There is no stored tz column;
-// this is best-effort display for a local audience (accepted design residual).
+// this is best-effort display for a local audience (accepted design residual). The words and clock
+// times these states are shown with are in lib/i18n-share.ts (hoursIntervalText, openNowText).
 // ---------------------------------------------------------------------------
 
 /** Minutes in a full week (7 * 24 * 60). */
 const MINUTES_PER_WEEK = 10080
 const MINUTES_PER_DAY = 1440
-
-/** Abbreviated day names indexed by day_of_week (0 = Sunday … 6 = Saturday). */
-export const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
 /**
  * Parse a Postgres `time` string ('HH:MM' or 'HH:MM:SS') to minutes-since-midnight, or null when
@@ -233,36 +231,6 @@ export function schemaOrgTime(t: string): string | null {
   if (min === null) return null
   const capped = Math.min(min, MINUTES_PER_DAY - 1)
   return `${Math.floor(capped / 60).toString().padStart(2, '0')}:${(capped % 60).toString().padStart(2, '0')}`
-}
-
-/**
- * Format minutes-since-midnight (0–1439) as a 12-hour clock label, e.g. 540 → "9:00 AM",
- * 1020 → "5:00 PM", 0 → "12:00 AM". Used by the pill and the hours table.
- */
-export function minuteToClock(minuteOfDay: number): string {
-  const mod = ((minuteOfDay % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
-  const h24 = Math.floor(mod / 60)
-  const m = mod % 60
-  const period = h24 < 12 ? 'AM' : 'PM'
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
-  return `${h12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-/**
- * Format one business_hours row as an interval label, e.g. "9:00 AM – 5:00 PM". 00:00–24:00 reads
- * "Open 24 hours"; an interval that closes before it opens ends the next day and says so; a
- * zero-length interval returns null.
- * Returns null when either endpoint is unparseable (the row is omitted rather than shown broken).
- */
-export function formatHoursInterval(row: BusinessHours): string | null {
-  const open = timeToMinutes(row.open_time)
-  const close = timeToMinutes(row.close_time)
-  if (open === null || close === null) return null
-  if (open === 0 && close === MINUTES_PER_DAY) return 'Open 24 hours'
-  // A zero-length interval (e.g. 00:00–00:00) is not hours at all: omit it (never "(next day)").
-  if (close === open) return null
-  const label = `${minuteToClock(open)} – ${minuteToClock(close)}`
-  return close <= open ? `${label} (next day)` : label
 }
 
 /**
@@ -350,17 +318,6 @@ export function computeOpenNow(
     openDay: Math.floor(openMow / MINUTES_PER_DAY),
     openMinute: openMow % MINUTES_PER_DAY,
   }
-}
-
-/**
- * Render an OpenNowState as the pill label. Open → "Open now · closes 5:00 PM"; closed →
- * "Closed · opens Mon 9:00 AM". Returns null when there is nothing to show (no hours).
- */
-export function formatOpenNow(state: OpenNowState): string | null {
-  if (!state) return null
-  if (state.open && state.always) return 'Open 24 hours'
-  if (state.open) return `Open now · closes ${minuteToClock(state.closeMinute)}`
-  return `Closed · opens ${DAY_NAMES_SHORT[state.openDay]} ${minuteToClock(state.openMinute)}`
 }
 
 /** Truthful UI phase for the submit surface. Note: NO 'live'/'approved' phase exists. */

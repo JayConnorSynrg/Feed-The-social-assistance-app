@@ -122,8 +122,15 @@ No id and no text, including in the error row: it stores a fixed message, not th
 
 ## Member text on the share pages
 
-The share pages' own chrome is English and the page is `lang="en"`. Text with no `lang` attribute
-inherits that, so everything a member wrote says what it is:
+The share pages' own words (headings, buttons, counts, opening hours, the "not found" titles and the
+title / description metadata) are in the visitor's language, chosen by the root layout's one rule:
+the `feed_locale` cookie, else `Accept-Language`, else English (`lib/request-locale.ts`, read on the
+server through `lib/request-locale-server.ts`). Each page's root carries that `lang` and `dir`
+(Arabic right-to-left); the dictionary is `lib/i18n-share.ts`. The pages render per request
+(`Cache-Control: private, no-store`), so one visitor's language is never served to another. The
+preview picture and its description (`og:image:alt`) stay the picture's own English words, and the
+oEmbed response stays English (it is shared by a public cache). Text with no `lang` attribute
+inherits the page's language, so everything a member wrote says what it is:
 
 - **The post's text** (`/s/post` body, `/s/embed` body) carries `lang` from `posts.lang` — the
   author's app language when they posted, the best signal there is, not a detected language — and
@@ -132,10 +139,13 @@ inherits that, so everything a member wrote says what it is:
 - **A petition's title and summary and a linked resource's name** have no recorded language and are
   not the post's text: `lang=""` and `dir="auto"`, never the post's language. (When a petition is
   not approved the widget shows the post's own text instead, with the post's language.)
-- **The author's name** carries `dir="auto"` only.
+- **The author's name** carries `lang=""` (no recorded language) and `dir="auto"`; an avatar beside it has `alt=""`.
+- **A business, organization or resource page's own text** (name, description, address, services,
+  photo captions, eligibility) and **a donate page's name and bio** carry `lang=""` and
+  `dir="auto"`.
 - **A post's photo** on `/s/post` is described by the author's own description (`posts.image_alt`)
   when there is one; its wrapper then carries the post's language (or `lang=""`). Otherwise the
-  description is the page's own "Post image" and no language is set.
+  description is the page's own "Post image" (in the visitor's language) and no language is set.
 
 Neither page shows a hidden post (404), and neither the widget nor oEmbed shows the title or summary
 of a petition that is not approved.

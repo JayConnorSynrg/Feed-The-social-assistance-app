@@ -1,12 +1,22 @@
 'use client'
 
+// apps/web/src/app/(auth)/onboarding/page.tsx
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The five onboarding steps a new member sees right after sign-up, in the member's language
+// (useProfileLocale: the feed_locale cookie, else the browser, until a profile loads). Only labels
+// are translated: the row saved (user_role, needs, zip, phone, preferred_language) holds the same
+// values in every locale. Each step's heading takes focus on Continue and Back; Continue on an
+// unfinished step is aria-disabled and says why in the one always-mounted alert; a failed save shows
+// a translated line (lib/i18n-onboarding.ts) and its existing log row carries the error code only.
+
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuthContext } from '@/providers/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { MapPin, Navigation, Check, ArrowRight, ArrowLeft, Phone, HandHeart, Search, Users, Globe } from 'lucide-react'
 import { logger } from '@/lib/logger'
@@ -14,9 +24,29 @@ import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
 import { normalizeState } from '@/lib/us-states'
 import { LANGUAGES, detectBrowserLanguage } from '@/lib/languages'
 import type { Database } from '@feed/database'
+import { cn } from '@/lib/utils'
+import { dir, t, type Locale } from '@/lib/i18n'
+import { onboardingT, type OnboardingKey } from '@/lib/i18n-onboarding'
+import { assistantT } from '@/lib/i18n-assistant'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * A failure as its log row may carry it: the code (PostgREST's or the SQLSTATE; 'unknown' when there
+ * is none, as before) and the error's class name, never its message — a PostgREST message can quote
+ * the values it was given (ZIP, phone).
+ */
+function codeOnly(err: unknown): { code: string; error: Error } {
+  const raw = (err as { code?: unknown } | null)?.code
+  const code = typeof raw === 'string' && raw ? raw : 'unknown'
+  const name = err instanceof Error ? err.name : 'Error'
+  return { code, error: Object.assign(new Error(code), { name, code }) }
 }
 
 /** Postgres error codes that are deterministic — never retry them. */
@@ -65,44 +95,57 @@ async function withRetry<T>(
 const ROLE_OPTIONS = [
   {
     id: 'seeking',
-    label: 'Seeker',
-    description: 'Find food, housing, healthcare, jobs, and other resources near you',
+    label: 'roleSeeker',
+    description: 'roleSeekerBody',
     icon: Search,
     color: 'border-blue-500 bg-blue-50',
   },
   {
     id: 'providing',
-    label: 'Sourcer',
-    description: 'Share resources, connect people with services, or offer direct support',
+    label: 'roleSourcer',
+    description: 'roleSourcerBody',
     icon: HandHeart,
     color: 'border-green-500 bg-green-50',
   },
   {
     id: 'both',
-    label: 'Both',
-    description: 'I need help in some areas and can offer help in others',
+    label: 'roleBoth',
+    description: 'roleBothBody',
     icon: Users,
     color: 'border-purple-500 bg-purple-50',
   },
-] as const
+] as const satisfies ReadonlyArray<{ id: string; label: OnboardingKey; description: OnboardingKey; icon: unknown; color: string }>
 
 const NEEDS_OPTIONS = [
-  { id: 'food', label: 'Food Assistance', emoji: '🍎' },
-  { id: 'housing', label: 'Housing', emoji: '🏠' },
-  { id: 'healthcare', label: 'Healthcare', emoji: '🏥' },
-  { id: 'employment', label: 'Employment', emoji: '💼' },
-  { id: 'childcare', label: 'Childcare', emoji: '👶' },
-  { id: 'legal', label: 'Legal Aid', emoji: '⚖️' },
-  { id: 'financial', label: 'Financial Help', emoji: '💰' },
-  { id: 'education', label: 'Education', emoji: '📚' },
-] as const
+  { id: 'food', label: 'needFood', emoji: '🍎' },
+  { id: 'housing', label: 'needHousing', emoji: '🏠' },
+  { id: 'healthcare', label: 'needHealthcare', emoji: '🏥' },
+  { id: 'employment', label: 'needEmployment', emoji: '💼' },
+  { id: 'childcare', label: 'needChildcare', emoji: '👶' },
+  { id: 'legal', label: 'needLegal', emoji: '⚖️' },
+  { id: 'financial', label: 'needFinancial', emoji: '💰' },
+  { id: 'education', label: 'needEducation', emoji: '📚' },
+] as const satisfies ReadonlyArray<{ id: string; label: OnboardingKey; emoji: string }>
 
 type UserRole = 'seeking' | 'providing' | 'both'
+
+/** The radio an Arrow key moves to (null: not a moving key). Down / Up are next / previous; Right /
+ *  Left follow the reading direction (in a right-to-left locale Left is next). Wraps around. */
+function nextRadioIndex(key: string, current: number, count: number, locale: Locale): number | null {
+  const rtl = dir(locale) === 'rtl'
+  const forward = key === 'ArrowDown' || key === (rtl ? 'ArrowLeft' : 'ArrowRight')
+  const back = key === 'ArrowUp' || key === (rtl ? 'ArrowRight' : 'ArrowLeft')
+  if (forward) return (current + 1) % count
+  if (back) return (current - 1 + count) % count
+  return null
+}
 type Step = 1 | 2 | 3 | 4 | 5
 
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createClient()
+  const locale = useProfileLocale()
+  const o = (key: OnboardingKey) => onboardingT(locale, key)
   const { user: authUser, loading: authLoading } = useAuthContext()
 
   const [step, setStep] = useState<Step>(1)
@@ -120,10 +163,18 @@ export default function OnboardingPage() {
   const [preferredLanguage, setPreferredLanguage] = useState<string>(() => detectBrowserLanguage())
 
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  // showContinueAnyway becomes true when a write error/timeout occurs so the
-  // user can always escape the phone step.
-  const [showContinueAnyway, setShowContinueAnyway] = useState(false)
+  // The one alert region, always mounted: a failure line or why Continue cannot go on yet.
+  const [alertLine, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const showError = useCallback((text: string | null) => (text ? announce(setAlert, text) : clearAnnouncement(setAlert)), [])
+  // Single flight: set synchronously before the first await, so a second press sends nothing.
+  const busyRef = useRef(false)
+  // Each step's heading takes focus when the step changes (not on the first paint).
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const stepChangedRef = useRef(false)
+  // The action whose save failed, so "Try again" repeats exactly that one (Get Started saves every
+  // answer; Skip for now saves the flag only). It stays set while the retry runs, so the button —
+  // and keyboard focus on it — stays put.
+  const [failedAction, setFailedAction] = useState<'complete' | 'skip' | null>(null)
 
   const [geoLoading, setGeoLoading] = useState(false)
 
@@ -145,11 +196,29 @@ export default function OnboardingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser])
 
+  useEffect(() => {
+    if (!stepChangedRef.current) return
+    headingRef.current?.focus()
+  }, [step])
+
+  const goTo = (next: Step) => {
+    stepChangedRef.current = true
+    showError(null)
+    setStep(next)
+  }
+
+  const roleRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const chooseRole = (index: number) => {
+    setUserRole(ROLE_OPTIONS[index].id as UserRole)
+    showError(null)
+  }
+
   const { getCurrentPosition } = useGeolocation()
 
   const handleUseLocation = useCallback(async () => {
+    if (geoLoading) return
     setGeoLoading(true)
-    setError(null)
+    showError(null)
     try {
       const position = await getCurrentPosition()
       if (position) {
@@ -176,13 +245,16 @@ export default function OnboardingPage() {
         } catch {
           // Geocoding failed but coords are captured — continue without city/zip
         }
+      } else {
+        // Denied, timed out or unsupported: the hook answers null.
+        showError(onboardingT(locale, 'locationFailed'))
       }
     } catch {
-      setError('Could not get your location. Please enter it manually.')
+      showError(onboardingT(locale, 'locationFailed'))
     } finally {
       setGeoLoading(false)
     }
-  }, [getCurrentPosition])
+  }, [getCurrentPosition, geoLoading, showError, locale])
 
   const toggleNeed = (needId: string) => {
     setSelectedNeeds((prev) =>
@@ -217,25 +289,20 @@ export default function OnboardingPage() {
         logger.warn('onboarding.save.ok', { userId, path: 'skip' })
         router.push('/')
       } catch (err: unknown) {
-        const msg = getErrorMessage(err)
-        const code = (err as { code?: string })?.code
-        logger.error('onboarding.save.exhausted', err as Error, {
-          step: 'skip',
-          userId,
-          code: code ?? 'unknown',
-          message: msg,
-        })
-        setError(`Could not save your profile: ${msg}. Please try again.`)
-        setShowContinueAnyway(true)
+        const { code, error } = codeOnly(err)
+        logger.error('onboarding.save.exhausted', error, { step: 'skip', userId, code })
+        showError(onboardingT(locale, 'saveFailed'))
+        setFailedAction('skip')
       }
     },
-    [router, supabase]
+    [router, supabase, showError, locale]
   )
 
   const handleComplete = useCallback(async () => {
+    if (busyRef.current) return
+    busyRef.current = true
     setSubmitting(true)
-    setError(null)
-    setShowContinueAnyway(false)
+    showError(null)
 
     // Hard 10s timeout wrapping the ENTIRE operation — including auth resolution,
     // profile write, and verification. If anything stalls, the user always
@@ -313,7 +380,7 @@ export default function OnboardingPage() {
       }
 
       // Main write with retry (transient failures only; deterministic errors surface immediately).
-      let writeError: { message: string; code?: string } | null = null
+      let writeError: { code: string } | null = null
       let attempt = 0
 
       const doWrite = async () => {
@@ -338,33 +405,21 @@ export default function OnboardingPage() {
         await withRetry(doWrite, { attempts: 3, backoffMs: [500, 1500] })
         writeError = null
       } catch (err: unknown) {
-        const msg = getErrorMessage(err)
-        const code = (err as { code?: string })?.code
-        if (attempt > 1) {
-          // Recovery after retry succeeded on a prior attempt won't reach here,
-          // but log exhaustion for observability.
-          logger.error('onboarding.save.exhausted', err as Error, {
-            step: 'main_write',
-            userId,
-            attempt,
-            code: code ?? 'unknown',
-            message: msg,
-          })
-        } else {
-          logger.error('onboarding.save.failed', err as Error, {
-            step: 'main_write',
-            attempt,
-            userId,
-            code: code ?? 'unknown',
-            message: msg,
-          })
-        }
-        writeError = { message: msg, code: code }
+        const { code, error } = codeOnly(err)
+        // Recovery after retry succeeded on a prior attempt won't reach here, but log
+        // exhaustion for observability.
+        logger.error(attempt > 1 ? 'onboarding.save.exhausted' : 'onboarding.save.failed', error, {
+          step: 'main_write',
+          attempt,
+          userId,
+          code,
+        })
+        writeError = { code }
       }
 
       if (writeError) {
-        setError(`Could not save your profile: ${writeError.message}`)
-        setShowContinueAnyway(true)
+        showError(onboardingT(locale, 'saveFailed'))
+        setFailedAction('complete')
         return
       }
 
@@ -379,11 +434,7 @@ export default function OnboardingPage() {
           .maybeSingle()
 
         if (verifyErr && !isQueryTimeout(verifyErr)) {
-          logger.warn('onboarding.complete.verify_error', {
-            userId,
-            code: verifyErr.code,
-            message: verifyErr.message,
-          })
+          logger.warn('onboarding.complete.verify_error', { userId, code: verifyErr.code })
         }
 
         if (!verify?.onboarding_completed) {
@@ -395,21 +446,14 @@ export default function OnboardingPage() {
             .eq('id', userId)
             .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
           if (retryResult.error) {
-            logger.warn('onboarding.complete.verify_retry_failed', {
-              userId,
-              code: retryResult.error.code,
-              message: retryResult.error.message,
-            })
+            logger.warn('onboarding.complete.verify_retry_failed', { userId, code: retryResult.error.code })
           } else {
             logger.warn('onboarding.save.ok', { userId, path: 'verify_retry' })
           }
         }
       } catch (verifyErr: unknown) {
         // Verification failed — navigate anyway; middleware will catch loops.
-        logger.warn('onboarding.complete.verify_error', {
-          userId,
-          message: getErrorMessage(verifyErr),
-        })
+        logger.warn('onboarding.complete.verify_error', { userId, code: codeOnly(verifyErr).code })
       }
 
       timer.end({ step: 'complete', userId })
@@ -435,24 +479,20 @@ export default function OnboardingPage() {
       if (isAbort || isTimeout) {
         // Abort or hard timeout — the write may have committed server-side.
         // Navigate and let middleware detect any loop.
-        logger.warn(
-          isTimeout ? 'onboarding.complete.timeout' : 'onboarding.complete.outer_abort',
-          { message: msg }
-        )
+        logger.warn(isTimeout ? 'onboarding.complete.timeout' : 'onboarding.complete.outer_abort', {})
         router.push('/')
         return
       }
 
-      logger.error('onboarding.complete.failed', err as Error, {
-        step: 'handleComplete',
-        message: msg,
-      })
-      setError(typeof msg === 'string' ? msg : 'Failed to save. Please try again.')
-      setShowContinueAnyway(true)
+      const { code, error } = codeOnly(err)
+      logger.error('onboarding.complete.failed', error, { step: 'handleComplete', code })
+      showError(onboardingT(locale, 'saveFailed'))
+      setFailedAction('complete')
     } finally {
+      busyRef.current = false
       setSubmitting(false)
     }
-  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, preferredLanguage, router, supabase])
+  }, [authUser, authLoading, phone, userRole, zipCode, city, state, latitude, longitude, selectedNeeds, preferredLanguage, router, supabase, showError, locale])
 
   const handleSkip = useCallback(async () => {
     const userId = userIdRef.current ?? authUser?.id ?? null
@@ -462,22 +502,44 @@ export default function OnboardingPage() {
       router.push('/')
       return
     }
+    if (busyRef.current) return
+    busyRef.current = true
     setSubmitting(true)
-    setError(null)
+    showError(null)
     try {
       await markCompleteAndNavigate(userId)
     } finally {
+      busyRef.current = false
       setSubmitting(false)
     }
-  }, [authUser, authLoading, markCompleteAndNavigate, router])
+  }, [authUser, authLoading, markCompleteAndNavigate, router, showError])
 
   const canProceedStep1 = userRole !== null
   const canProceedStep2 = zipCode.length >= 5 || (latitude !== null && longitude !== null)
   const canProceedStep3 = selectedNeeds.length > 0
   const canProceedStep5 = preferredLanguage.length > 0
 
+  const TOTAL_STEPS = 5
+  const title: Record<Step, OnboardingKey> = {
+    1: 'step1Title',
+    2: 'step2Title',
+    3: userRole === 'providing' ? 'step3TitleProviding' : 'step3TitleSeeking',
+    4: 'step4Title',
+    5: 'step5Title',
+  }
+  const body: Record<Step, OnboardingKey> = { 1: 'step1Body', 2: 'step2Body', 3: 'step3Body', 4: 'step4Body', 5: 'step5Body' }
+  const place = city ? (state ? `${city}, ${state}` : city) : ''
+
+  /** Continue: moves on when the step is complete, else says what is missing (focus stays). */
+  const continueTo = (next: Step, ready: boolean, missing: OnboardingKey) => () => {
+    if (ready) goTo(next)
+    else showError(o(missing))
+  }
+
   return (
     <div
+      lang={locale}
+      dir={dir(locale)}
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
         backgroundImage: 'url(/images/wheat-field-bg.jpg)',
@@ -489,22 +551,21 @@ export default function OnboardingPage() {
 
       <Card className="w-full max-w-lg relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-lime-800">
-            {step === 1 && "I'm here to..."}
-            {step === 2 && 'Where are you located?'}
-            {step === 3 && (userRole === 'providing' ? 'What can you help with?' : 'What do you need help with?')}
-            {step === 4 && 'How can we reach you?'}
-            {step === 5 && 'What language do you prefer?'}
-          </CardTitle>
-          <CardDescription className="text-stone-600">
-            {step === 1 && 'Tell us how you want to use FEED'}
-            {step === 2 && 'This helps us find resources near you'}
-            {step === 3 && 'Select all that apply - you can change this later'}
-            {step === 4 && 'Optional - for appointment reminders and updates'}
-            {step === 5 && 'The AI assistant will greet you in your language'}
-          </CardDescription>
-          {/* Step indicator */}
-          <div className="flex justify-center gap-2 mt-4">
+          <p id="onboarding-step-line" className="text-xs font-medium text-stone-700">
+            {formatMessage(assistantT(locale, 'flowStep'), { current: formatCount(step, locale), total: formatCount(TOTAL_STEPS, locale) })}
+          </p>
+          <h1
+            ref={headingRef}
+            id="onboarding-step-title"
+            tabIndex={-1}
+            aria-describedby="onboarding-step-line"
+            className="text-2xl font-bold leading-tight text-lime-800 outline-none break-words"
+          >
+            {o(title[step])}
+          </h1>
+          <CardDescription className="text-stone-700">{o(body[step])}</CardDescription>
+          {/* Step indicator (the step line above says it in words) */}
+          <div aria-hidden="true" className="flex justify-center gap-2 mt-4">
             {[1, 2, 3, 4, 5].map((s) => (
               <div
                 key={s}
@@ -517,76 +578,94 @@ export default function OnboardingPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {error && (
-            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md space-y-2">
-              <p>{error}</p>
-              {showContinueAnyway && (
-                <button
-                  onClick={async () => {
-                    const userId = userIdRef.current ?? authUser?.id ?? null
-                    if (userId) {
-                      setSubmitting(true)
-                      try {
-                        await markCompleteAndNavigate(userId)
-                      } finally {
-                        setSubmitting(false)
-                      }
-                    } else {
-                      router.push('/')
-                    }
-                  }}
-                  className="underline font-medium text-destructive hover:text-destructive/80"
-                >
-                  Try again
-                </button>
-              )}
-            </div>
+          {/* One alert region, always mounted; each announcement inserts a new node. */}
+          <div
+            role="alert"
+            className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}
+          >
+            <AnnouncementText announcement={alertLine} />
+          </div>
+          {failedAction && (
+            // Repeats exactly the action that failed, with every answer given so far.
+            <button
+              type="button"
+              aria-disabled={submitting}
+              onClick={() => void (failedAction === 'complete' ? handleComplete() : handleSkip())}
+              className="min-h-6 text-sm underline font-medium text-red-800 hover:text-red-900"
+            >
+              {t(locale, 'tryAgain')}
+            </button>
           )}
 
           {/* Step 1: Role Selection */}
           {step === 1 && (
             <div className="space-y-3">
-              {ROLE_OPTIONS.map((role) => {
-                const Icon = role.icon
-                const isSelected = userRole === role.id
-                return (
-                  <button
-                    key={role.id}
-                    onClick={() => setUserRole(role.id as UserRole)}
-                    className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all ${
-                      isSelected
-                        ? role.color
-                        : 'border-stone-200 bg-white/90 hover:border-lime-300'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isSelected ? 'bg-white/80' : 'bg-stone-100'
-                    }`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{role.label}</p>
-                      <p className="text-xs text-stone-500 mt-0.5">{role.description}</p>
-                    </div>
-                    {isSelected && <Check className="w-5 h-5 text-lime-600 flex-shrink-0 mt-1" />}
-                  </button>
-                )
-              })}
+              {/* An APG radio group: one Tab stop (the chosen card, else the first); Arrow keys move and
+                  choose, Left / Right following the reading direction; Space chooses. */}
+              <div role="radiogroup" aria-labelledby="onboarding-step-title" className="space-y-3">
+                {ROLE_OPTIONS.map((role, index) => {
+                  const Icon = role.icon
+                  const isSelected = userRole === role.id
+                  const tabStop = userRole === null ? index === 0 : isSelected
+                  return (
+                    <button
+                      key={role.id}
+                      ref={(node) => { roleRefs.current[index] = node }}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      tabIndex={tabStop ? 0 : -1}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ') {
+                          e.preventDefault()
+                          chooseRole(index)
+                          return
+                        }
+                        const next = nextRadioIndex(e.key, index, ROLE_OPTIONS.length, locale)
+                        if (next === null) return
+                        e.preventDefault()
+                        chooseRole(next)
+                        roleRefs.current[next]?.focus()
+                      }}
+                      onClick={() => chooseRole(index)}
+                      className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-start transition-all ${
+                        isSelected
+                          ? role.color
+                          : 'border-stone-500 bg-white/90 hover:border-lime-700'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? 'bg-white/80' : 'bg-stone-100'
+                      }`}>
+                        <Icon aria-hidden="true" className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{o(role.label)}</p>
+                        <p className="text-xs text-stone-700 mt-0.5">{o(role.description)}</p>
+                      </div>
+                      {isSelected && <Check aria-hidden="true" className="w-5 h-5 text-lime-700 flex-shrink-0 mt-1" />}
+                    </button>
+                  )
+                })}
+              </div>
 
               <Button
-                className="w-full bg-green-600 hover:bg-green-700 text-white mt-4"
-                disabled={!canProceedStep1}
-                onClick={() => setStep(2)}
+                type="button"
+                className={cn('w-full h-auto min-h-9 whitespace-normal mt-4', canProceedStep1 ? 'bg-green-700 hover:bg-green-800 text-white' : 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
+                aria-disabled={!canProceedStep1}
+                onClick={continueTo(2, canProceedStep1, 'chooseRole')}
               >
-                Continue <ArrowRight className="w-4 h-4 ml-2" />
+                {assistantT(locale, 'flowContinue')} <ArrowRight aria-hidden="true" className="w-4 h-4 ms-2 rtl:-scale-x-100" />
               </Button>
 
+              {/* Skips onboarding and opens FEED, as it says. */}
               <button
+                type="button"
                 onClick={handleSkip}
-                disabled={submitting}
-                className="w-full text-center text-sm text-stone-400 hover:text-lime-700 mt-2 transition-colors disabled:opacity-50"
+                aria-disabled={submitting}
+                className="w-full min-h-6 text-center text-sm text-stone-700 underline hover:text-lime-800 mt-2 transition-colors"
               >
-                Find out how to help Feed.
+                {o('skipForNow')}
               </button>
             </div>
           )}
@@ -595,129 +674,139 @@ export default function OnboardingPage() {
           {step === 2 && (
             <div className="space-y-4">
               <Button
+                type="button"
                 variant="outline"
-                className="w-full py-6 border-lime-300 bg-white/90 hover:bg-lime-50"
+                className="w-full h-auto min-h-9 whitespace-normal py-4 border-stone-500 bg-white/90 hover:bg-lime-50"
                 onClick={handleUseLocation}
-                disabled={geoLoading}
+                aria-disabled={geoLoading}
               >
-                <Navigation className={`w-4 h-4 mr-2 ${geoLoading ? 'animate-spin' : ''}`} />
-                {geoLoading ? 'Getting location...' : 'Use my current location'}
+                <Navigation aria-hidden="true" className={`w-4 h-4 me-2 ${geoLoading ? 'animate-spin' : ''}`} />
+                {geoLoading ? o('locating') : o('useLocation')}
               </Button>
 
-              {latitude && longitude && (
-                <div className="flex items-center gap-2 p-3 bg-lime-50 rounded-lg text-sm text-lime-700">
-                  <Check className="w-4 h-4" />
-                  Location detected{city ? `: ${city}${state ? `, ${state}` : ''}` : ''}
-                </div>
-              )}
+              {/* Always mounted, so the detected place is spoken when it appears. */}
+              <div role="status">
+                {geoLoading && <p className="sr-only">{o('locating')}</p>}
+                {!geoLoading && latitude && longitude && (
+                  <div className="flex items-center gap-2 p-3 bg-lime-50 rounded-lg text-sm text-lime-800">
+                    <Check aria-hidden="true" className="w-4 h-4 shrink-0" />
+                    {place ? (
+                      <span>
+                        {splitMessage(o('locationDetectedAt'), 'place')[0]}
+                        <span lang="" dir="auto">{place}</span>
+                        {splitMessage(o('locationDetectedAt'), 'place')[1]}
+                      </span>
+                    ) : (
+                      o('locationDetected')
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-stone-200" />
+                  <span className="w-full border-t border-stone-500" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-stone-50 px-2 text-stone-400">Or enter manually</span>
+                  <span className="bg-stone-50 px-2 text-stone-700">{o('orEnterManually')}</span>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium text-stone-700 mb-1 block">ZIP Code</label>
+                  <label htmlFor="onboarding-zip" className="text-sm font-medium text-stone-800 mb-1 block">{o('zipCode')}</label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                    <MapPin aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" />
                     <Input
+                      id="onboarding-zip"
                       value={zipCode}
                       onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
                       placeholder="90001"
-                      className="pl-10 bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      dir="ltr"
+                      className="ps-10 bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600"
                       maxLength={5}
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-stone-700 mb-1 block">City</label>
+                    <label htmlFor="onboarding-city" className="text-sm font-medium text-stone-800 mb-1 block">{o('city')}</label>
                     <Input
+                      id="onboarding-city"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      placeholder="Los Angeles"
-                      className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400"
+                      placeholder={o('phCity')}
+                      autoComplete="address-level2"
+                      dir="auto"
+                      className="bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-stone-700 mb-1 block">State</label>
+                    <label htmlFor="onboarding-state" className="text-sm font-medium text-stone-800 mb-1 block">{o('stateLabel')}</label>
                     <Input
+                      id="onboarding-state"
                       value={state}
                       onChange={(e) => setState(e.target.value)}
                       placeholder="CA"
-                      className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400"
+                      autoComplete="address-level1"
+                      dir="ltr"
+                      className="bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600"
                       maxLength={2}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep(1)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  disabled={!canProceedStep2}
-                  onClick={() => setStep(3)}
-                >
-                  Continue <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <StepNav
+                back={() => goTo(1)}
+                backLabel={assistantT(locale, 'flowBack')}
+                next={continueTo(3, canProceedStep2, 'chooseLocation')}
+                nextLabel={assistantT(locale, 'flowContinue')}
+                ready={canProceedStep2}
+              />
             </div>
           )}
 
           {/* Step 3: Needs / Offerings */}
           {step === 3 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div role="group" aria-labelledby="onboarding-step-title" className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3">
                 {NEEDS_OPTIONS.map((need) => {
                   const isSelected = selectedNeeds.includes(need.id)
                   return (
                     <button
                       key={need.id}
-                      onClick={() => toggleNeed(need.id)}
-                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        toggleNeed(need.id)
+                        showError(null)
+                      }}
+                      className={`relative p-4 rounded-xl border-2 text-start transition-all ${
                         isSelected
-                          ? 'border-lime-500 bg-lime-50'
-                          : 'border-stone-200 bg-white/90 hover:border-lime-300'
+                          ? 'border-lime-700 bg-lime-50'
+                          : 'border-stone-500 bg-white/90 hover:border-lime-700'
                       }`}
                     >
-                      <span className="text-lg mb-1 block">{need.emoji}</span>
-                      <span className="text-sm font-medium">{need.label}</span>
+                      <span aria-hidden="true" className="text-lg mb-1 block">{need.emoji}</span>
+                      <span className="text-sm font-medium">{o(need.label)}</span>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-lime-600 absolute top-2 right-2" />
+                        <Check aria-hidden="true" className="w-4 h-4 text-lime-700 absolute top-2 end-2" />
                       )}
                     </button>
                   )
                 })}
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep(2)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  disabled={!canProceedStep3}
-                  onClick={() => setStep(4)}
-                >
-                  Continue <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <StepNav
+                back={() => goTo(2)}
+                backLabel={assistantT(locale, 'flowBack')}
+                next={continueTo(4, canProceedStep3, 'chooseNeed')}
+                nextLabel={assistantT(locale, 'flowContinue')}
+                ready={canProceedStep3}
+              />
             </div>
           )}
 
@@ -725,46 +814,43 @@ export default function OnboardingPage() {
           {step === 4 && (
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-stone-700 mb-1 block">
-                  Phone Number <span className="text-stone-400 font-normal">(optional)</span>
+                <label htmlFor="onboarding-phone" className="text-sm font-medium text-stone-800 mb-1 block">
+                  {o('phone')} <span className="text-stone-700 font-normal">{o('optional')}</span>
                 </label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                  <Phone aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" />
                   <Input
+                    id="onboarding-phone"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="(555) 123-4567"
                     type="tel"
-                    className="pl-10 bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400"
+                    autoComplete="tel"
+                    dir="ltr"
+                    aria-describedby="onboarding-phone-hint"
+                    className="ps-10 bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600"
                   />
                 </div>
-                <p className="text-xs text-stone-400 mt-1">
-                  For appointment reminders and important updates only. Never shared.
+                <p id="onboarding-phone-hint" className="text-xs text-stone-700 mt-1">
+                  {o('phoneHint')}
                 </p>
               </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep(3)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => setStep(5)}
-                >
-                  Continue <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <StepNav
+                back={() => goTo(3)}
+                backLabel={assistantT(locale, 'flowBack')}
+                next={() => goTo(5)}
+                nextLabel={assistantT(locale, 'flowContinue')}
+                ready
+              />
 
               <button
+                type="button"
                 onClick={handleSkip}
-                disabled={submitting}
-                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
+                aria-disabled={submitting}
+                className="w-full min-h-6 text-center text-sm text-stone-700 underline hover:text-stone-900"
               >
-                Skip for now
+                {o('skipForNow')}
               </button>
             </div>
           )}
@@ -772,13 +858,16 @@ export default function OnboardingPage() {
           {/* Step 5: Language Preference */}
           {step === 5 && (
             <div className="space-y-4">
+              <label htmlFor="onboarding-language" className="text-sm font-medium text-stone-800 block">{o('languageLabel')}</label>
               <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+                <Globe aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600 pointer-events-none" />
                 <select
+                  id="onboarding-language"
                   data-testid="language-select"
                   value={preferredLanguage}
                   onChange={(e) => setPreferredLanguage(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-lime-300 bg-white/90 text-stone-900 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-lime-400"
+                  aria-describedby="onboarding-language-hint"
+                  className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-stone-500 bg-white/90 text-stone-900 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-lime-700"
                 >
                   {LANGUAGES.map((lang) => (
                     <option key={lang.code} value={lang.code}>
@@ -787,38 +876,61 @@ export default function OnboardingPage() {
                   ))}
                 </select>
               </div>
-              <p className="text-xs text-stone-400">
-                You can change this at any time in Settings.
+              <p id="onboarding-language-hint" className="text-xs text-stone-700">
+                {o('changeLater')}
               </p>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep(4)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
+              <div className="flex flex-wrap gap-3">
+                <Button type="button" variant="outline" className="flex-1 h-auto min-h-9 whitespace-normal border-stone-500" onClick={() => goTo(4)}>
+                  <ArrowLeft aria-hidden="true" className="w-4 h-4 me-2 rtl:-scale-x-100" /> {assistantT(locale, 'flowBack')}
                 </Button>
                 <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  type="button"
+                  className={cn('flex-1 h-auto min-h-9 whitespace-normal', canProceedStep5 ? 'bg-green-700 hover:bg-green-800 text-white' : 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
                   onClick={handleComplete}
-                  disabled={submitting || !canProceedStep5}
+                  aria-disabled={submitting || !canProceedStep5}
                 >
-                  {submitting ? 'Saving...' : 'Get Started'}
+                  {submitting ? o('saving') : o('getStarted')}
                 </Button>
               </div>
 
               <button
+                type="button"
                 onClick={handleSkip}
-                disabled={submitting}
-                className="w-full text-center text-sm text-stone-400 hover:text-stone-600 disabled:opacity-50"
+                aria-disabled={submitting}
+                className="w-full min-h-6 text-center text-sm text-stone-700 underline hover:text-stone-900"
               >
-                Skip for now
+                {o('skipForNow')}
               </button>
             </div>
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+/** Back and Continue under a step. Continue is aria-disabled (stone-200/700) until the step is done. */
+function StepNav({ back, backLabel, next, nextLabel, ready }: {
+  back: () => void
+  backLabel: string
+  next: () => void
+  nextLabel: string
+  ready: boolean
+}) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Button type="button" variant="outline" className="flex-1 h-auto min-h-9 whitespace-normal border-stone-500" onClick={back}>
+        <ArrowLeft aria-hidden="true" className="w-4 h-4 me-2 rtl:-scale-x-100" /> {backLabel}
+      </Button>
+      <Button
+        type="button"
+        className={cn('flex-1 h-auto min-h-9 whitespace-normal', ready ? 'bg-green-700 hover:bg-green-800 text-white' : 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
+        aria-disabled={!ready}
+        onClick={next}
+      >
+        {nextLabel} <ArrowRight aria-hidden="true" className="w-4 h-4 ms-2 rtl:-scale-x-100" />
+      </Button>
     </div>
   )
 }

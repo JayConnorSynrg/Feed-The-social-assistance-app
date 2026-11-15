@@ -4,7 +4,9 @@
 // Mutation-proven unit tests for the two load-bearing pure helpers behind the P4a business
 // surfaces. Cases are chosen to go RED if the invariant clause is removed or inverted.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+vi.mock('./logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 import {
   dedupeResourcesForBusinesses,
   businessLinkedResourceIds,
@@ -13,14 +15,12 @@ import {
   sortByDistanceKm,
   nextSubmitPhase,
   timeToMinutes,
-  minuteToClock,
-  formatHoursInterval,
   computeOpenNow,
-  formatOpenNow,
   schemaOrgTime,
   type Business,
   type BusinessHours,
 } from './business'
+import { clockText, hoursIntervalText, openNowText } from './i18n-share'
 
 function biz(id: string, resource_id: string | null): Business {
   return {
@@ -139,7 +139,7 @@ function mow(day: number, hour: number, minute = 0): number {
   return day * 1440 + hour * 60 + minute
 }
 
-describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
+describe('timeToMinutes / clockText / hoursIntervalText (English)', () => {
   it('parses HH:MM and HH:MM:SS, rejecting malformed / out-of-range', () => {
     expect(timeToMinutes('09:00')).toBe(540)
     expect(timeToMinutes('17:30')).toBe(1050)
@@ -154,23 +154,23 @@ describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
     expect(timeToMinutes(null)).toBeNull()
   })
   it('formats a 12-hour clock with AM/PM and midday/midnight edges', () => {
-    expect(minuteToClock(540)).toBe('9:00 AM')
-    expect(minuteToClock(1020)).toBe('5:00 PM')
-    expect(minuteToClock(0)).toBe('12:00 AM')
-    expect(minuteToClock(720)).toBe('12:00 PM')
+    expect(clockText(540, 'en')).toBe('9:00 AM')
+    expect(clockText(1020, 'en')).toBe('5:00 PM')
+    expect(clockText(0, 'en')).toBe('12:00 AM')
+    expect(clockText(720, 'en')).toBe('12:00 PM')
   })
   it('formats an interval label and omits a malformed row', () => {
-    expect(formatHoursInterval(hrs(1, '09:00', '17:00'))).toBe('9:00 AM – 5:00 PM')
-    expect(formatHoursInterval(hrs(1, '09:00', 'bad'))).toBeNull()
+    expect(hoursIntervalText(hrs(1, '09:00', '17:00'), 'en')).toBe('9:00 AM – 5:00 PM')
+    expect(hoursIntervalText(hrs(1, '09:00', 'bad'), 'en')).toBeNull()
   })
   it('00:00–24:00 reads "Open 24 hours"; an overnight interval says (next day)', () => {
-    expect(formatHoursInterval(hrs(1, '00:00', '24:00'))).toBe('Open 24 hours')
-    expect(formatHoursInterval(hrs(1, '00:00:00', '24:00:00'))).toBe('Open 24 hours')
-    expect(formatHoursInterval(hrs(5, '22:00', '02:00'))).toBe('10:00 PM – 2:00 AM (next day)')
-    expect(formatHoursInterval(hrs(2, '00:01', '00:00'))).toBe('12:01 AM – 12:00 AM (next day)')
+    expect(hoursIntervalText(hrs(1, '00:00', '24:00'), 'en')).toBe('Open 24 hours')
+    expect(hoursIntervalText(hrs(1, '00:00:00', '24:00:00'), 'en')).toBe('Open 24 hours')
+    expect(hoursIntervalText(hrs(5, '22:00', '02:00'), 'en')).toBe('10:00 PM – 2:00 AM (next day)')
+    expect(hoursIntervalText(hrs(2, '00:01', '00:00'), 'en')).toBe('12:01 AM – 12:00 AM (next day)')
     // Zero-length rows (FEED org has six 00:00–00:00 rows) render nothing — never "(next day)".
-    expect(formatHoursInterval(hrs(1, '00:00:00', '00:00:00'))).toBeNull()
-    expect(formatHoursInterval(hrs(3, '09:00', '09:00'))).toBeNull()
+    expect(hoursIntervalText(hrs(1, '00:00:00', '00:00:00'), 'en')).toBeNull()
+    expect(hoursIntervalText(hrs(3, '09:00', '09:00'), 'en')).toBeNull()
   })
   it('JSON-LD times: HH:MM, with end of day emitted as 23:59', () => {
     expect(schemaOrgTime('09:00:00')).toBe('09:00')
@@ -179,35 +179,35 @@ describe('timeToMinutes / minuteToClock / formatHoursInterval', () => {
   })
 })
 
-describe('computeOpenNow / formatOpenNow (W3 open-now, viewer-local minute-of-week)', () => {
+describe('computeOpenNow / openNowText (W3 open-now, viewer-local minute-of-week)', () => {
   it('no hours → null (pill renders nothing)', () => {
     expect(computeOpenNow([], mow(1, 12))).toBeNull()
-    expect(formatOpenNow(null)).toBeNull()
+    expect(openNowText(null, 'en')).toBeNull()
   })
 
   it('open inside a same-day interval reports the close time', () => {
     const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 12))
     expect(state).toEqual({ open: true, closeDay: 1, closeMinute: 1020 })
-    expect(formatOpenNow(state)).toBe('Open now · closes 5:00 PM')
+    expect(openNowText(state, 'en')).toBe('Open now · closes 5:00 PM')
   })
 
   it('closed before opening reports the next open on the same day', () => {
     const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 8))
     expect(state).toEqual({ open: false, openDay: 1, openMinute: 540 })
-    expect(formatOpenNow(state)).toBe('Closed · opens Mon 9:00 AM')
+    expect(openNowText(state, 'en')).toBe('Closed · opens Mon 9:00 AM')
   })
 
   it('closed after the last interval wraps to next week', () => {
     const state = computeOpenNow([hrs(1, '09:00', '17:00')], mow(1, 18))
     expect(state).toEqual({ open: false, openDay: 1, openMinute: 540 })
-    expect(formatOpenNow(state)).toBe('Closed · opens Mon 9:00 AM')
+    expect(openNowText(state, 'en')).toBe('Closed · opens Mon 9:00 AM')
   })
 
   it('an interval crossing midnight keeps the business open past 00:00', () => {
     // Friday 22:00 → 02:00; now is Saturday 01:00 → still open, closes 2:00 AM.
     const state = computeOpenNow([hrs(5, '22:00', '02:00')], mow(6, 1))
     expect(state).toEqual({ open: true, closeDay: 6, closeMinute: 120 })
-    expect(formatOpenNow(state)).toBe('Open now · closes 2:00 AM')
+    expect(openNowText(state, 'en')).toBe('Open now · closes 2:00 AM')
   })
 
   it('a Saturday→Sunday interval covers the earliest minutes of Sunday (week wrap)', () => {
@@ -221,7 +221,7 @@ describe('computeOpenNow / formatOpenNow (W3 open-now, viewer-local minute-of-we
     for (const now of [mow(0, 0), mow(3, 12, 30), mow(6, 23, 59)]) {
       const state = computeOpenNow(allWeek, now)
       expect(state).toEqual({ open: true, always: true })
-      expect(formatOpenNow(state)).toBe('Open 24 hours')
+      expect(openNowText(state, 'en')).toBe('Open 24 hours')
     }
   })
 

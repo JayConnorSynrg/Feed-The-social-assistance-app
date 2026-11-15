@@ -5,7 +5,12 @@ import Image from 'next/image'
 import { Heart, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
-import { tierLabel, type AdminTier } from '@/lib/admin-tier'
+import type { AdminTier } from '@/lib/admin-tier'
+import { roleLabel } from '@/lib/i18n-feed-card'
+import { dir } from '@/lib/i18n'
+import { COMMENTS_COUNT, LIKES_COUNT, shareCount, shareT } from '@/lib/i18n-share'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { requestPageLocale } from '@/lib/request-locale-server'
 import { PostAdminEditLink } from '@/components/feed/post-admin-edit-link'
 import { ogLocaleForLang } from '@/lib/og-locale'
 import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
@@ -37,13 +42,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
   const appUrl = await getAppUrlFromHeaders()
   const post = await readSharedPost(id)
+  // FEED's own words in the visitor's language (the root layout's rule); the post's text as written.
+  const locale = await requestPageLocale()
 
   if (!post) {
-    return { title: 'Post Not Found - FEED' }
+    return { title: shareT(locale, 'postNotFound') }
   }
 
   const user = post.user as { first_name: string | null; username: string | null } | null
-  const authorName = user?.first_name || 'Community Member'
+  const authorName = user?.first_name || shareT(locale, 'communityMember')
+  const title = formatMessage(shareT(locale, 'onFeed'), { name: authorName })
   const description = post.content.length > 160
     ? post.content.slice(0, 157) + '...'
     : post.content
@@ -57,10 +65,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const imageAlt = ogCardAlt(postCardKind(post.post_type))
 
   return {
-    title: `${authorName} on FEED`,
+    title,
     description,
     openGraph: {
-      title: `${authorName} on FEED`,
+      title,
       description,
       type: 'article',
       siteName: 'FEED',
@@ -77,7 +85,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${authorName} on FEED`,
+      title,
       description,
       images: [{ url: `${appUrl}/api/og/post/${id}`, alt: imageAlt }],
     },
@@ -96,6 +104,9 @@ export default async function SharedPostPage({ params }: Props) {
   const post = await readSharedPost(id)
 
   if (!post) notFound()
+
+  const locale = await requestPageLocale()
+  const t = (key: Parameters<typeof shareT>[1]) => shareT(locale, key)
 
   const user = post.user as {
     id: string
@@ -120,14 +131,16 @@ export default async function SharedPostPage({ params }: Props) {
     ? handlesResult.data[0] as { paypal_email: string | null; venmo_username: string | null }
     : { paypal_email: null, venmo_username: null }
 
-  const displayName = user?.first_name || 'Community Member'
+  const displayName = user?.first_name || t('communityMember')
+  const role = user?.admin_tier ? roleLabel(user.admin_tier, locale) : ''
+  const [supportBefore, supportAfter] = splitMessage(t('supportName'), 'name')
   // The author's description of the photo (posts.image_alt), when they wrote one.
   const authorImageAlt = post.image_alt?.trim() || null
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const hasPayment = handles.venmo_username || handles.paypal_email
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" lang={locale} dir={dir(locale)}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-lg bg-lime-600 flex items-center justify-center text-white font-bold text-lg">
@@ -135,7 +148,7 @@ export default async function SharedPostPage({ params }: Props) {
         </div>
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
-          <p className="text-xs text-stone-500">Mutual Aid Resource Sharing</p>
+          <p className="text-xs text-stone-600">{t('tagline')}</p>
         </div>
       </div>
 
@@ -146,7 +159,7 @@ export default async function SharedPostPage({ params }: Props) {
           {user?.avatar_url ? (
             <Image
               src={user.avatar_url}
-              alt={displayName}
+              alt=""
               width={44}
               height={44}
               className="rounded-full"
@@ -158,16 +171,17 @@ export default async function SharedPostPage({ params }: Props) {
           )}
           <div>
             <p className="font-semibold text-stone-800">
-              {/* A name takes its direction from its own letters; the post's language is not the name's. */}
-              <span dir="auto">{displayName}</span>
-              {tierLabel(user?.admin_tier) && (
-                <span className="ml-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
-                  {tierLabel(user?.admin_tier)}
+              {/* A name takes its direction from its own letters and has no recorded language: the post's
+                  language is not the name's, nor is the visitor's. The avatar beside it is decorative. */}
+              <span lang="" dir="auto">{displayName}</span>
+              {role && (
+                <span className="ms-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
+                  {role}
                 </span>
               )}
             </p>
             {user?.username && (
-              <p className="text-sm text-stone-500">@{user.username}</p>
+              <p className="text-sm text-stone-600" dir="ltr">@{user.username}</p>
             )}
           </div>
         </div>
@@ -190,7 +204,7 @@ export default async function SharedPostPage({ params }: Props) {
           <div className="relative aspect-video" lang={authorImageAlt ? (post.lang ?? '') : undefined}>
             <Image
               src={post.image_url}
-              alt={authorImageAlt || 'Post image'}
+              alt={authorImageAlt || t('postImage')}
               fill
               className="object-cover"
               sizes="(max-width: 672px) 100vw, 672px"
@@ -205,14 +219,14 @@ export default async function SharedPostPage({ params }: Props) {
         </div>
 
         {/* Engagement stats */}
-        <div className="flex items-center gap-6 px-4 py-3 border-t border-stone-100 text-stone-500 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 border-t border-stone-100 text-stone-600 text-sm">
           <span className="flex items-center gap-1.5">
-            <Heart className="h-4 w-4" />
-            {likeCount || 0} {likeCount === 1 ? 'like' : 'likes'}
+            <Heart aria-hidden="true" className="h-4 w-4" />
+            {shareCount(LIKES_COUNT, likeCount, locale)}
           </span>
           <span className="flex items-center gap-1.5">
-            <MessageCircle className="h-4 w-4" />
-            {commentCount || 0} {commentCount === 1 ? 'comment' : 'comments'}
+            <MessageCircle aria-hidden="true" className="h-4 w-4" />
+            {shareCount(COMMENTS_COUNT, commentCount, locale)}
           </span>
         </div>
       </div>
@@ -221,14 +235,14 @@ export default async function SharedPostPage({ params }: Props) {
       {hasPayment && (
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-3">
           <h2 className="text-lg font-semibold text-stone-800">
-            Support <span dir="auto">{displayName}</span>
+            {supportBefore}<span lang="" dir="auto">{displayName}</span>{supportAfter}
           </h2>
-          <p className="text-sm text-stone-500">Send direct support through their preferred payment method.</p>
+          <p className="text-sm text-stone-600">{t('supportBody')}</p>
           <div className="flex flex-col sm:flex-row gap-3">
             {handles.venmo_username && (
               <a
                 href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handles.venmo_username)}`}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-3 text-white font-medium hover:bg-[#0070cc] transition-colors"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0070cc] px-4 py-3 text-white font-medium hover:bg-[#005fa8] transition-colors"
               >
                 Venmo @{handles.venmo_username}
               </a>
@@ -251,13 +265,11 @@ export default async function SharedPostPage({ params }: Props) {
       <div className="text-center space-y-3 py-4">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-lime-700 px-8 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
         >
-          Join FEED
+          {t('joinFeed')}
         </a>
-        <p className="text-sm text-stone-500">
-          Find resources, share help, build community.
-        </p>
+        <p className="text-sm text-stone-600">{t('joinBody')}</p>
       </div>
     </div>
   )

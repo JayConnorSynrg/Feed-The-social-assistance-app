@@ -1,8 +1,12 @@
 import type { Metadata } from 'next'
+import { shareT } from '@/lib/i18n-share'
+import { requestPageLocale } from '@/lib/request-locale-server'
 
-export const metadata: Metadata = {
-  title: 'FEED - Mutual Aid Resource Sharing',
-  description: 'Community-powered mutual aid. Share resources, find help, support your neighbors.',
+// The site's title and description in the visitor's language (the root layout's rule). Each page
+// sets its own lang/dir on its root: this wrapper holds no text.
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await requestPageLocale()
+  return { title: shareT(locale, 'siteTitle'), description: shareT(locale, 'siteDescription') }
 }
 
 export default function SocialLayout({

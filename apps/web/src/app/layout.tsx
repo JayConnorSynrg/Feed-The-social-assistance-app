@@ -1,13 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { Providers } from "./providers";
 import { createClient } from "@/lib/supabase/server";
 import type { InitialUser } from "@/providers/auth-provider";
 import { A11Y_PREPAINT_SCRIPT } from "@/lib/accessibility-prefs";
 import { dir, type Locale } from "@/lib/i18n";
-import { LOCALE_COOKIE } from "@/lib/locale-cookie";
-import { requestLocale } from "@/lib/request-locale";
+import { readRequestLocale } from "@/lib/request-locale-server";
 import "./globals.css";
 
 // metadataBase resolves relative og:image / twitter:image URLs to absolute.
@@ -115,23 +114,15 @@ export default async function RootLayout({
     }
   }
 
-  // The language for this render (lib/request-locale.ts, the one rule): the feed_locale cookie
+  // The language for this render (lib/request-locale.ts, the one rule, read by
+  // lib/request-locale-server.ts — the share pages read the same): the feed_locale cookie
   // (lib/locale-cookie.ts), written when a language is chosen and corrected to the profile once it
   // loads; else the browser's Accept-Language. It sets <html lang dir> and the locale translated
   // surfaces render in before the profile arrives (a signed-out page never has one), so the first
   // paint is already in that language. Neither (or the static Capacitor build): English.
-  let initialLocale: Locale | null = null;
-  let initialFromCookie = false;
-  if (process.env.CAPACITOR_BUILD !== 'true') {
-    try {
-      const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
-      const resolved = requestLocale(cookieStore.get(LOCALE_COOKIE)?.value, headerStore.get('accept-language'));
-      initialLocale = resolved.locale;
-      initialFromCookie = resolved.source === 'cookie';
-    } catch {
-      initialLocale = null;
-    }
-  }
+  const resolved = await readRequestLocale();
+  const initialLocale: Locale | null = resolved.locale;
+  const initialFromCookie = resolved.source === 'cookie';
   const documentLocale: Locale = initialLocale ?? "en";
 
   return (
