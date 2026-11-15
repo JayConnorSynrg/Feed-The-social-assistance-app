@@ -9,7 +9,7 @@
 //     or lang="" — unknown — when the post has none, and dir="auto";
 //   - a petition's title and summary and a resource's name have no recorded language: lang="" and
 //     dir="auto", never the post's language;
-//   - the author's name carries dir="auto" only;
+//   - the author's name carries lang="" (no recorded language) and dir="auto";
 //   - a photo is described by the author's own description (posts.image_alt) when there is one, and
 //     its wrapper then carries the post's language.
 // Also: /s/post and /s/embed each make one identical posts query for the metadata and the page, and
@@ -109,7 +109,7 @@ describe('/s/post: the member\'s text keeps its language and direction', () => {
     expect(body).toContain('lang="" dir="auto"')
   })
 
-  it('the author\'s name takes its own direction and is not given the post\'s language', async () => {
+  it('the author\'s name takes its own direction and is marked unknown language, never the post\'s', async () => {
     db.tables = { posts: [post()] }
     rpc.results = { get_donation_handles: [{ paypal_email: null, venmo_username: 'fatima' }] }
     const html = await renderPost()
@@ -118,9 +118,10 @@ describe('/s/post: the member\'s text keeps its language and direction', () => {
     expect(names).toHaveLength(2)
     for (const name of names) {
       expect(name).toContain('dir="auto"')
-      expect(name).not.toContain('lang=')
+      expect(name).toContain('lang=""')
+      expect(name).not.toContain('lang="ar"')
     }
-    expect(html).toContain(`Support <span dir="auto">${AR_NAME}</span>`)
+    expect(html).toContain(`Support <span lang="" dir="auto">${AR_NAME}</span>`)
   })
 })
 

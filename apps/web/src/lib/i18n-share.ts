@@ -27,6 +27,9 @@ import { timeToMinutes, type BusinessHours, type OpenNowState } from './business
 export interface ShareMessages {
   siteTitle: string
   siteDescription: string
+  /** The share pages' 404: an id that is missing, hidden or not public. */
+  notFoundTitle: string
+  notFoundBody: string
   postNotFound: string
   businessNotFound: string
   organizationNotFound: string
@@ -91,6 +94,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   en: {
     siteTitle: 'FEED - Mutual Aid Resource Sharing',
     siteDescription: 'Community-powered mutual aid. Share resources, find help, support your neighbors.',
+    notFoundTitle: "This page isn't available",
+    notFoundBody: 'The link may be out of date, or what it shared is no longer public.',
     postNotFound: 'Post Not Found - FEED',
     businessNotFound: 'Business Not Found - FEED',
     organizationNotFound: 'Organization Not Found - FEED',
@@ -146,6 +151,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   es: {
     siteTitle: 'FEED - Recursos compartidos de ayuda mutua',
     siteDescription: 'Ayuda mutua impulsada por la comunidad. Comparte recursos, encuentra ayuda, apoya a tus vecinos.',
+    notFoundTitle: 'Esta página no está disponible',
+    notFoundBody: 'Es posible que el enlace esté desactualizado o que lo compartido ya no sea público.',
     postNotFound: 'Publicación no encontrada - FEED',
     businessNotFound: 'Negocio no encontrado - FEED',
     organizationNotFound: 'Organización no encontrada - FEED',
@@ -201,6 +208,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   ht: {
     siteTitle: 'FEED - Pataj resous pou èd mityèl',
     siteDescription: 'Èd mityèl kominote a fè. Pataje resous, jwenn èd, sipòte vwazen w.',
+    notFoundTitle: 'Paj sa a pa disponib',
+    notFoundBody: 'Petèt lyen an pa bon ankò, oswa sa li te pataje a pa piblik ankò.',
     postNotFound: 'Nou pa jwenn piblikasyon an - FEED',
     businessNotFound: 'Nou pa jwenn biznis la - FEED',
     organizationNotFound: 'Nou pa jwenn òganizasyon an - FEED',
@@ -256,6 +265,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   vi: {
     siteTitle: 'FEED - Chia sẻ nguồn hỗ trợ tương trợ',
     siteDescription: 'Tương trợ do cộng đồng thực hiện. Chia sẻ nguồn hỗ trợ, tìm sự giúp đỡ, hỗ trợ hàng xóm.',
+    notFoundTitle: 'Trang này không khả dụng',
+    notFoundBody: 'Liên kết có thể đã cũ, hoặc nội dung được chia sẻ không còn công khai.',
     postNotFound: 'Không tìm thấy bài đăng - FEED',
     businessNotFound: 'Không tìm thấy doanh nghiệp - FEED',
     organizationNotFound: 'Không tìm thấy tổ chức - FEED',
@@ -311,6 +322,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   ar: {
     siteTitle: 'FEED - مشاركة موارد المساعدة المتبادلة',
     siteDescription: 'مساعدة متبادلة يقودها المجتمع. شارك الموارد، واعثر على المساعدة، وادعم جيرانك.',
+    notFoundTitle: 'هذه الصفحة غير متاحة',
+    notFoundBody: 'ربما يكون الرابط قديمًا، أو لم يعد ما تمت مشاركته متاحًا للعامة.',
     postNotFound: 'لم يتم العثور على المنشور - FEED',
     businessNotFound: 'لم يتم العثور على النشاط التجاري - FEED',
     organizationNotFound: 'لم يتم العثور على المنظمة - FEED',
@@ -366,6 +379,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   zh: {
     siteTitle: 'FEED - 互助资源共享',
     siteDescription: '社区驱动的互助。分享资源，寻求帮助，支持您的邻居。',
+    notFoundTitle: '此页面不可用',
+    notFoundBody: '链接可能已过期，或分享的内容已不再公开。',
     postNotFound: '未找到帖子 - FEED',
     businessNotFound: '未找到商家 - FEED',
     organizationNotFound: '未找到组织 - FEED',
@@ -421,6 +436,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   so: {
     siteTitle: 'FEED - Wadaagista kheyraadka is-caawinta',
     siteDescription: 'Is-caawin ay bulshadu wado. La wadaag kheyraad, hel caawimo, taageer deriskaaga.',
+    notFoundTitle: 'Boggan lama heli karo',
+    notFoundBody: 'Xiriirku waxaa laga yaabaa inuu duugoobay, ama waxa la wadaagay hadda ma aha mid dadweyne.',
     postNotFound: 'Qoraalka lama helin - FEED',
     businessNotFound: 'Ganacsiga lama helin - FEED',
     organizationNotFound: 'Ururka lama helin - FEED',
@@ -476,6 +493,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   fr: {
     siteTitle: 'FEED - Partage de ressources d’entraide',
     siteDescription: 'L’entraide portée par la communauté. Partagez des ressources, trouvez de l’aide, soutenez vos voisins.',
+    notFoundTitle: 'Cette page n’est pas disponible',
+    notFoundBody: 'Le lien est peut-être périmé, ou ce qu’il partageait n’est plus public.',
     postNotFound: 'Publication introuvable - FEED',
     businessNotFound: 'Commerce introuvable - FEED',
     organizationNotFound: 'Organisation introuvable - FEED',
@@ -531,6 +550,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   pt: {
     siteTitle: 'FEED - Compartilhamento de recursos de ajuda mútua',
     siteDescription: 'Ajuda mútua feita pela comunidade. Compartilhe recursos, encontre ajuda, apoie seus vizinhos.',
+    notFoundTitle: 'Esta página não está disponível',
+    notFoundBody: 'O link pode estar desatualizado ou o conteúdo compartilhado não é mais público.',
     postNotFound: 'Publicação não encontrada - FEED',
     businessNotFound: 'Negócio não encontrado - FEED',
     organizationNotFound: 'Organização não encontrada - FEED',
@@ -586,6 +607,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   ru: {
     siteTitle: 'FEED - Обмен ресурсами взаимопомощи',
     siteDescription: 'Взаимопомощь силами сообщества. Делитесь ресурсами, находите помощь, поддерживайте соседей.',
+    notFoundTitle: 'Эта страница недоступна',
+    notFoundBody: 'Возможно, ссылка устарела или то, чем поделились, больше не общедоступно.',
     postNotFound: 'Публикация не найдена - FEED',
     businessNotFound: 'Бизнес не найден - FEED',
     organizationNotFound: 'Организация не найдена - FEED',
@@ -641,6 +664,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   ko: {
     siteTitle: 'FEED - 상호부조 자원 공유',
     siteDescription: '지역 사회가 함께하는 상호부조. 자원을 나누고, 도움을 찾고, 이웃을 도우세요.',
+    notFoundTitle: '이 페이지를 사용할 수 없습니다',
+    notFoundBody: '링크가 오래되었거나 공유된 내용이 더 이상 공개되지 않습니다.',
     postNotFound: '게시물을 찾을 수 없음 - FEED',
     businessNotFound: '업체를 찾을 수 없음 - FEED',
     organizationNotFound: '단체를 찾을 수 없음 - FEED',
@@ -696,6 +721,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   tl: {
     siteTitle: 'FEED - Pagbabahagi ng tulong para sa bayanihan',
     siteDescription: 'Bayanihang pinapatakbo ng komunidad. Magbahagi ng tulong, maghanap ng tulong, suportahan ang iyong mga kapitbahay.',
+    notFoundTitle: 'Hindi available ang pahinang ito',
+    notFoundBody: 'Maaaring luma na ang link, o hindi na pampubliko ang ibinahagi nito.',
     postNotFound: 'Hindi nahanap ang post - FEED',
     businessNotFound: 'Hindi nahanap ang negosyo - FEED',
     organizationNotFound: 'Hindi nahanap ang organisasyon - FEED',
@@ -751,6 +778,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   am: {
     siteTitle: 'FEED - የመረዳዳት ሀብቶችን መጋራት',
     siteDescription: 'በማህበረሰብ የሚመራ መረዳዳት። ሀብቶችን ያጋሩ፣ እርዳታ ያግኙ፣ ጎረቤቶችዎን ይደግፉ።',
+    notFoundTitle: 'ይህ ገጽ አይገኝም',
+    notFoundBody: 'ሊንኩ ጊዜው ያለፈበት ሊሆን ይችላል፣ ወይም የተጋራው ነገር ከአሁን በኋላ ለሕዝብ ክፍት አይደለም።',
     postNotFound: 'ልጥፉ አልተገኘም - FEED',
     businessNotFound: 'ንግዱ አልተገኘም - FEED',
     organizationNotFound: 'ድርጅቱ አልተገኘም - FEED',
@@ -806,6 +835,8 @@ export const shareMessages: Record<Locale, ShareMessages> = {
   hmn: {
     siteTitle: 'FEED - Kev sib qhia kev pab sib pab',
     siteDescription: 'Kev sib pab uas zej zog coj. Qhia kev pab, nrhiav kev pab, txhawb koj cov neeg zej zog.',
+    notFoundTitle: 'Nplooj ntawv no tsis muaj lawm',
+    notFoundBody: 'Tej zaum txoj kab txuas qub lawm, lossis yam uas tau qhia tsis yog pej xeem lawm.',
     postNotFound: 'Nrhiav tsis tau tsab ntawv - FEED',
     businessNotFound: 'Nrhiav tsis tau lub lag luam - FEED',
     organizationNotFound: 'Nrhiav tsis tau lub koom haum - FEED',
@@ -966,4 +997,9 @@ export function openNowText(state: OpenNowState, locale: Locale): string | null 
     day: weekdayShortText(state.openDay, locale),
     time: clockText(state.openMinute, locale),
   })
+}
+
+/** A day_of_week (0 = Sunday) as the locale's full weekday name, for the short name's <abbr title>. */
+export function weekdayLongText(day: number, locale: Locale): string {
+  return dateTimeFormatter(locale, 'UTC', { weekday: 'long' }).format(SUNDAY_UTC + day * MINUTES_PER_DAY * 60_000)
 }

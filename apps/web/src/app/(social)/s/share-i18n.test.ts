@@ -37,6 +37,10 @@ vi.mock('next/headers', () => ({
   headers: async () => ({ get: (name: string) => (name === 'accept-language' ? h.acceptLanguage : null) }),
 }))
 vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('notFound') } }))
+vi.mock('next/link', async () => {
+  const { createElement: ce } = await vi.importActual<typeof import('react')>('react')
+  return { default: (p: { href: string; className?: string; children?: unknown }) => ce('a', { href: p.href, className: p.className }, p.children as string) }
+})
 vi.mock('next/image', () => ({
   default: (props: { src: string; alt: string }) => createElement('img', { src: props.src, alt: props.alt }),
 }))
@@ -72,6 +76,9 @@ import { shareMessages, shareT } from '@/lib/i18n-share'
 import { ogCardAlt } from '@/lib/og-card-kinds'
 import { decodeEntities } from '@/test/markup-text'
 import SocialLayout, { generateMetadata as layoutMetadata } from '../layout'
+import SocialNotFound from '../not-found'
+import { t } from '@/lib/i18n'
+import { weekdayLongText } from '@/lib/i18n-share'
 import SharedPostPage, { generateMetadata as postMetadata } from './post/[id]/page'
 import EmbedWidgetPage, { generateMetadata as embedMetadata } from './embed/[id]/page'
 import BusinessPage, { generateMetadata as businessMetadata } from './business/[id]/page'
@@ -112,7 +119,7 @@ function seed() {
   }
   h.hours = [{ day_of_week: 1, open_time: '09:00', close_time: '17:00' }]
   h.services = [{ name: 'Tax help', description: 'Free filing', sort_order: 0 }]
-  h.photos = [{ kind: 'gallery', url: 'https://img.example/g.jpg', caption: null, storage_path: 'g1' }]
+  h.photos = [{ kind: 'gallery', url: 'https://img.example/g.jpg', caption: 'Our volunteers', storage_path: 'g1' }]
   h.orgResources = [{ id: 'r1', name: 'Hot meals', category: 'mental_health' }]
 }
 
@@ -328,11 +335,58 @@ describe('Label in Name, all 14 locales', () => {
   })
 })
 
+describe('fix round: names, pictures, weekdays, 404', () => {
+  beforeEach(() => { h.cookie = 'ko' })
+
+  it('/s/post: the name is lang="" in both places; the avatar beside it is decorative (alt="")', async () => {
+    db.tables.posts = [{ ...db.tables.posts[0], user: { id: 'u1', first_name: NAME, username: 'maria', avatar_url: 'https://img.example/a.jpg', admin_tier: null } }]
+    const markup = await html('post')
+    const names = [...markup.matchAll(new RegExp(`<span[^>]*>${NAME}</span>`, 'g'))].map((m) => m[0])
+    expect(names).toHaveLength(2)
+    for (const n of names) expect(n).toContain('lang=""')
+    expect(markup).toContain('<img src="https://img.example/a.jpg" alt=""/>')
+  })
+
+  it('/s/donate: the avatar beside the visible name is decorative (alt="")', async () => {
+    db.tables.profiles = [{ ...db.tables.profiles[0], avatar_url: 'https://img.example/a.jpg' }]
+    expect(await html('donate')).toContain('<img src="https://img.example/a.jpg" alt=""/>')
+  })
+
+  it.each(['business', 'organization'] as const)('/s/%s: a captioned photo is described by photoAlt; the caption stays in the figcaption', async (page) => {
+    const markup = await html(page)
+    const img = markup.match(/<img[^>]*src="https:\/\/img\.example\/g\.jpg"[^>]*>/)![0]
+    expect(decodeEntities(img)).toContain(`alt="${shareT('ko', 'photoAlt').replace('{name}', PLACE)}"`)
+    expect(tagAround(markup, 'Our volunteers')).toMatch(/^<figcaption/)
+  })
+
+  it.each(['business', 'organization'] as const)('/s/%s: each short weekday is an <abbr> titled with the full name', async (page) => {
+    const markup = await html(page)
+    for (let d = 0; d < 7; d++) expect(decodeEntities(markup)).toContain(`<abbr title="${weekdayLongText(d, 'ko')}"`)
+  })
+
+  it.each(['ko', 'ar', 'en'] as const)('%s: the (social) 404 has lang/dir, a heading and a link home in the visitor\'s language', async (locale) => {
+    h.cookie = locale
+    const markup = renderToStaticMarkup(await SocialNotFound())
+    expect(rootTag(markup)).toContain(`lang="${locale}"`)
+    expect(rootTag(markup)).toContain(`dir="${locale === 'ar' ? 'rtl' : 'ltr'}"`)
+    expect(decodeEntities(markup)).toContain(`<h1 class="text-2xl font-bold text-stone-800">${shareT(locale, 'notFoundTitle')}</h1>`)
+    expect(decodeEntities(markup)).toMatch(new RegExp(`<a href="/"[^>]*>${t(locale, 'goHome')}</a>`))
+  })
+})
+
 describe('right-to-left by construction', () => {
   const SOURCES = ['post', 'embed', 'business', 'organization', 'resource', 'donate'].map((p) => `./${p}/[id]/page.tsx`)
   it.each(SOURCES)('%s uses logical properties and mirrors its arrows', (file) => {
     const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
     expect(src).not.toMatch(/\b(ml|mr|pl|pr|left|right)-\d|\btext-(left|right)\b/)
-    for (const m of src.matchAll(/<ArrowRight\b[^>]*>/g)) expect(m[0]).toContain('rtl:-scale-x-100')
+    for (const m of src.matchAll(/<(ArrowRight|ExternalLink)\b[^>]*>/g)) expect(m[0]).toContain('rtl:-scale-x-100')
+  })
+
+  it.each(SOURCES)('%s: white text sits on 4.5:1 backgrounds (lime-700, Venmo #0070cc)', (file) => {
+    const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+    for (const m of src.matchAll(/className="[^"]*\btext-white\b[^"]*"/g)) {
+      if (!/\b(px|py)-/.test(m[0])) continue // the F wordmark tile and initials avatar are not text controls
+      expect(m[0], file).not.toMatch(/bg-lime-600|#008CFF/)
+    }
   })
 })

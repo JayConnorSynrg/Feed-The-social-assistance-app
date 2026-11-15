@@ -139,7 +139,7 @@ inherits the page's language, so everything a member wrote says what it is:
 - **A petition's title and summary and a linked resource's name** have no recorded language and are
   not the post's text: `lang=""` and `dir="auto"`, never the post's language. (When a petition is
   not approved the widget shows the post's own text instead, with the post's language.)
-- **The author's name** carries `dir="auto"` only.
+- **The author's name** carries `lang=""` (no recorded language) and `dir="auto"`; an avatar beside it has `alt=""`.
 - **A business, organization or resource page's own text** (name, description, address, services,
   photo captions, eligibility) and **a donate page's name and bio** carry `lang=""` and
   `dir="auto"`.

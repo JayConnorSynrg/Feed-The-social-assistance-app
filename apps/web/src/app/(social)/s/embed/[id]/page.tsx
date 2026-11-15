@@ -224,7 +224,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
           href={`${appUrl}/#petitions`}
           target="_top"
           rel="noopener"
-          className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"
+          className="inline-block rounded-lg bg-lime-700 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-800 transition-colors"
         >
           {t('signOnFeed')}
         </a>
@@ -287,7 +287,7 @@ export default async function EmbedWidgetPage({ params }: Props) {
           href={`${appUrl}/s/post/${id}`}
           target="_top"
           rel="noopener"
-          className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"
+          className="inline-block rounded-lg bg-lime-700 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-800 transition-colors"
         >
           {t('optInOnFeed')}
         </a>

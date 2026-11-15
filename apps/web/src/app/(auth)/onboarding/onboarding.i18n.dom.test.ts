@@ -22,7 +22,11 @@ import { createRoot, type Root } from 'react-dom/client'
 
 const h = vi.hoisted(() => ({
   updates: [] as Array<Record<string, unknown>>,
-  updateError: null as null | { code: string; message: string },
+  updateError: null as null | { code?: string; message: string },
+  /** Errors for the next updates, one per call, before updateError applies. */
+  updateErrors: [] as Array<null | { code?: string; message: string }>,
+  position: null as null | { coords: { latitude: number; longitude: number } },
+  geoGate: null as null | Promise<void>,
   gate: null as null | Promise<void>,
   router: { push: vi.fn(), refresh: vi.fn(), replace: vi.fn() },
 }))
@@ -30,7 +34,14 @@ const h = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ useRouter: () => h.router }))
 vi.mock('@/providers/auth-provider', () => ({ useAuthContext: () => ({ user: { id: 'user-1' }, loading: false }) }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ profile: null }) }))
-vi.mock('@/hooks/use-geolocation', () => ({ useGeolocation: () => ({ getCurrentPosition: async () => null }) }))
+vi.mock('@/hooks/use-geolocation', () => ({
+  useGeolocation: () => ({
+    getCurrentPosition: async () => {
+      if (h.geoGate) await h.geoGate
+      return h.position
+    },
+  }),
+}))
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), time: () => ({ end: vi.fn(), error: vi.fn() }) },
   logEvent: vi.fn(),
@@ -48,9 +59,10 @@ vi.mock('@/lib/supabase/client', () => {
     from: () => ({
       update: (payload: Record<string, unknown>) => {
         h.updates.push(payload)
+        const error = h.updateErrors.length > 0 ? h.updateErrors.shift()! : h.updateError
         return chain(async () => {
           if (h.gate) await h.gate
-          return { data: null, error: h.updateError }
+          return { data: null, error }
         })
       },
       select: () => chain(async () => ({ data: { onboarding_completed: true }, error: null })),
@@ -77,6 +89,9 @@ let root: Root
 beforeEach(() => {
   h.updates = []
   h.updateError = null
+  h.updateErrors = []
+  h.position = null
+  h.geoGate = null
   h.gate = null
   h.router.push.mockReset()
   h.router.refresh.mockReset()
@@ -246,7 +261,12 @@ describe('a failed save', () => {
     const failed = vi.mocked(logger.error).mock.calls.filter(([event]) => String(event).startsWith('onboarding.'))
     expect(failed).toHaveLength(1)
     expect(failed[0][0]).toBe('onboarding.save.failed')
-    expect(failed[0][1]).toEqual({ code: '42501' })
+    // The row keeps the error's class and code; its message is the code, never the server's text.
+    const logged = failed[0][1] as Error & { code: string }
+    expect(logged).toBeInstanceOf(Error)
+    expect(logged.message).toBe('42501')
+    expect(logged.code).toBe('42501')
+    expect(logged.name).toBe('Error')
     expect(failed[0][2]).toMatchObject({ code: '42501', step: 'main_write' })
     expect(h.router.push).not.toHaveBeenCalled()
   })
@@ -303,7 +323,122 @@ describe('Label in Name, all 14 locales', () => {
       const name = b.getAttribute('aria-label')
       if (name) expect(name.startsWith(visible)).toBe(true)
     }
-    const roleButtons = buttons().filter((b) => b.hasAttribute('aria-pressed'))
+    const roleButtons = buttons().filter((b) => b.getAttribute('role') === 'radio' && b.hasAttribute('aria-checked'))
     expect(roleButtons).toHaveLength(3)
+  })
+})
+
+describe('fix round: location, Try again, the role radio group', () => {
+  const o = (k: Parameters<typeof onboardingT>[1]) => onboardingT('ko', k)
+  async function toStep2() {
+    await render('ko')
+    await press(`${o('roleSeeker')}${o('roleSeekerBody')}`)
+    await press(assistantT('ko', 'flowContinue'))
+  }
+  const statusText = () => (document.querySelector('[role="status"]')?.textContent ?? '').trim()
+
+  it('H1: no position (denied, timed out or unsupported) says locationFailed in the alert', async () => {
+    await toStep2()
+    await press(o('useLocation'))
+    expect(alertText()).toBe(o('locationFailed'))
+  })
+
+  it('while locating, the status line says so; then it names the place', async () => {
+    let release = () => {}
+    h.geoGate = new Promise<void>((r) => { release = r })
+    h.position = { coords: { latitude: 43.6, longitude: -72.97 } }
+    await toStep2()
+    await act(async () => button(o('useLocation')).click())
+    expect(statusText()).toBe(o('locating'))
+    await act(async () => release())
+    await settle()
+    expect(statusText()).toContain('Rutland')
+  })
+
+  it('H2: Try again after a failed Get Started saves every answer again, then opens FEED; focus stays on it', async () => {
+    h.updateErrors = [{ code: '08006', message: 'connection failure' }]
+    await completeAll('ko')
+    expect(alertText()).toContain(o('saveFailed'))
+    const first = { ...h.updates[0] }
+    const retry = button(t('ko', 'tryAgain'))
+    retry.focus()
+    let release = () => {}
+    h.gate = new Promise<void>((r) => { release = r })
+    await act(async () => retry.click())
+    // While the retry runs, the button stays and keeps focus (aria-disabled, never removed).
+    expect(document.activeElement).toBe(retry)
+    expect(retry.isConnected).toBe(true)
+    expect(retry.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => release())
+    await settle()
+    const again = { ...h.updates[1] }
+    delete first.updated_at
+    delete again.updated_at
+    expect(again).toEqual(first)
+    expect(again).toMatchObject({ user_role: 'both', needs: ['food', 'legal'], zip_code: '05701', phone: '555-0100', preferred_language: 'en', onboarding_completed: true })
+    expect(h.router.push).toHaveBeenCalledWith('/')
+  })
+
+  it('H2: Try again after a failed Skip for now repeats the skip (the flag only), then opens FEED', async () => {
+    h.updateErrors = [{ code: '42501', message: 'x' }]
+    await render('ko')
+    await press(o('skipForNow'))
+    expect(alertText()).toBe(o('saveFailed'))
+    expect(h.router.push).not.toHaveBeenCalled()
+    await press(t('ko', 'tryAgain'))
+    expect(h.updates).toHaveLength(2)
+    expect(Object.keys(h.updates[1]).sort()).toEqual(['onboarding_completed', 'updated_at'])
+    expect(h.router.push).toHaveBeenCalledWith('/')
+  })
+
+  it('a failure with no code is logged as code "unknown", as before', async () => {
+    h.updateErrors = [{ message: 'no code here' }]
+    await render('ko')
+    await press(o('skipForNow'))
+    const row = vi.mocked(logger.error).mock.calls.find(([e]) => e === 'onboarding.save.exhausted')!
+    expect(row[2]).toMatchObject({ code: 'unknown', step: 'skip' })
+    expect((row[1] as Error).message).toBe('unknown')
+  })
+
+  function radios() {
+    const group = document.querySelector('[role="radiogroup"]') as HTMLElement
+    expect(group.getAttribute('aria-labelledby')).toBe(heading().id)
+    return [...group.querySelectorAll('[role="radio"]')] as HTMLButtonElement[]
+  }
+  const key = async (el: HTMLElement, k: string) => {
+    await act(async () => { el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })) })
+  }
+
+  it('H3: one Tab stop; Arrow keys move focus and choose; Space chooses', async () => {
+    await render('ko')
+    let r = radios()
+    expect(r.map((x) => x.tabIndex)).toEqual([0, -1, -1])
+    expect(r.map((x) => x.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false'])
+    r[0].focus()
+    await key(r[0], ' ')
+    r = radios()
+    expect(r[0].getAttribute('aria-checked')).toBe('true')
+    await key(r[0], 'ArrowDown')
+    r = radios()
+    expect(document.activeElement).toBe(r[1])
+    expect(r.map((x) => x.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false'])
+    expect(r.map((x) => x.tabIndex)).toEqual([-1, 0, -1])
+    await key(r[1], 'ArrowRight')
+    expect(document.activeElement).toBe(radios()[2])
+    await key(radios()[2], 'ArrowDown')
+    expect(document.activeElement).toBe(radios()[0])
+    await key(radios()[0], 'ArrowUp')
+    expect(document.activeElement).toBe(radios()[2])
+  })
+
+  it('H3, Arabic: ArrowLeft is next and ArrowRight is previous (reading direction)', async () => {
+    await render('ar')
+    const r = radios()
+    r[0].focus()
+    await key(r[0], 'ArrowLeft')
+    expect(document.activeElement).toBe(radios()[1])
+    expect(radios()[1].getAttribute('aria-checked')).toBe('true')
+    await key(radios()[1], 'ArrowRight')
+    expect(document.activeElement).toBe(radios()[0])
   })
 })

@@ -26,7 +26,7 @@ import { businessAttributeLabel, businessCategoryLabel, businessesT } from '@/li
 import { BUSINESS_MARKER_HEX } from '@/lib/map-marker-colors'
 import { OpenNowPill } from '@/components/business/open-now-pill'
 import { dir, type Locale } from '@/lib/i18n'
-import { hoursIntervalText, shareT, weekdayShortText } from '@/lib/i18n-share'
+import { hoursIntervalText, shareT, weekdayLongText, weekdayShortText } from '@/lib/i18n-share'
 import { formatMessage } from '@/lib/format-message'
 import { requestPageLocale } from '@/lib/request-locale-server'
 
@@ -319,10 +319,10 @@ export default async function SharedBusinessPage({ params }: Props) {
                 href={websiteHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex flex-1 min-w-[10rem] items-center justify-center gap-2 rounded-lg bg-lime-600 px-6 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+                className="inline-flex flex-1 min-w-[10rem] items-center justify-center gap-2 rounded-lg bg-lime-700 px-6 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
               >
                 {t('visitWebsite')}
-                <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                <ExternalLink aria-hidden="true" className="h-4 w-4 rtl:-scale-x-100" />
               </a>
             )}
             {business.phone && (
@@ -380,7 +380,7 @@ export default async function SharedBusinessPage({ params }: Props) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.url}
-                      alt={photo.caption ?? named('photoAlt')}
+                      alt={named('photoAlt')}
                       className="aspect-square w-full rounded-lg border border-stone-200 object-cover"
                     />
                     {photo.caption && (
@@ -406,7 +406,9 @@ export default async function SharedBusinessPage({ params }: Props) {
                     .filter((s): s is string => s !== null)
                   return (
                     <div key={dayIndex} className="flex flex-wrap justify-between gap-x-4 px-3 py-2 text-sm">
-                      <dt className="font-medium text-stone-800">{weekdayShortText(dayIndex, locale)}</dt>
+                      <dt className="font-medium text-stone-800">
+                        <abbr title={weekdayLongText(dayIndex, locale)} className="no-underline">{weekdayShortText(dayIndex, locale)}</abbr>
+                      </dt>
                       <dd className="text-end text-stone-700">
                         {intervals.length > 0 ? intervals.join(', ') : businessesT(locale, 'hoursClosed')}
                       </dd>
@@ -462,7 +464,7 @@ export default async function SharedBusinessPage({ params }: Props) {
                       className="inline-flex min-h-6 items-center gap-1.5 text-sm font-medium text-stone-700 underline hover:text-lime-800"
                     >
                       {social.label}
-                      <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+                      <ExternalLink aria-hidden="true" className="h-3.5 w-3.5 rtl:-scale-x-100" />
                     </a>
                   ))}
                 </div>
@@ -476,7 +478,7 @@ export default async function SharedBusinessPage({ params }: Props) {
       <div className="text-center space-y-3 py-4">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-lime-700 px-8 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
         >
           {t('exploreMore')}
         </a>

@@ -159,7 +159,7 @@ export default async function SharedPostPage({ params }: Props) {
           {user?.avatar_url ? (
             <Image
               src={user.avatar_url}
-              alt={displayName}
+              alt=""
               width={44}
               height={44}
               className="rounded-full"
@@ -171,8 +171,9 @@ export default async function SharedPostPage({ params }: Props) {
           )}
           <div>
             <p className="font-semibold text-stone-800">
-              {/* A name takes its direction from its own letters; the post's language is not the name's. */}
-              <span dir="auto">{displayName}</span>
+              {/* A name takes its direction from its own letters and has no recorded language: the post's
+                  language is not the name's, nor is the visitor's. The avatar beside it is decorative. */}
+              <span lang="" dir="auto">{displayName}</span>
               {role && (
                 <span className="ms-2 text-[10px] font-medium text-lime-800 bg-lime-100 rounded-full px-1.5 py-0.5 align-middle">
                   {role}
@@ -234,14 +235,14 @@ export default async function SharedPostPage({ params }: Props) {
       {hasPayment && (
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-3">
           <h2 className="text-lg font-semibold text-stone-800">
-            {supportBefore}<span dir="auto">{displayName}</span>{supportAfter}
+            {supportBefore}<span lang="" dir="auto">{displayName}</span>{supportAfter}
           </h2>
           <p className="text-sm text-stone-600">{t('supportBody')}</p>
           <div className="flex flex-col sm:flex-row gap-3">
             {handles.venmo_username && (
               <a
                 href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handles.venmo_username)}`}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-3 text-white font-medium hover:bg-[#0070cc] transition-colors"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#0070cc] px-4 py-3 text-white font-medium hover:bg-[#005fa8] transition-colors"
               >
                 Venmo @{handles.venmo_username}
               </a>
@@ -264,7 +265,7 @@ export default async function SharedPostPage({ params }: Props) {
       <div className="text-center space-y-3 py-4">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-lime-700 px-8 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
         >
           {t('joinFeed')}
         </a>

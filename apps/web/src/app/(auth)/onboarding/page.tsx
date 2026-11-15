@@ -25,17 +25,28 @@ import { normalizeState } from '@/lib/us-states'
 import { LANGUAGES, detectBrowserLanguage } from '@/lib/languages'
 import type { Database } from '@feed/database'
 import { cn } from '@/lib/utils'
-import { dir, t } from '@/lib/i18n'
+import { dir, t, type Locale } from '@/lib/i18n'
 import { onboardingT, type OnboardingKey } from '@/lib/i18n-onboarding'
 import { assistantT } from '@/lib/i18n-assistant'
 import { formatMessage, splitMessage } from '@/lib/format-message'
 import { formatCount } from '@/lib/i18n-intl'
-import { failureCode } from '@/lib/failure-code'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * A failure as its log row may carry it: the code (PostgREST's or the SQLSTATE; 'unknown' when there
+ * is none, as before) and the error's class name, never its message — a PostgREST message can quote
+ * the values it was given (ZIP, phone).
+ */
+function codeOnly(err: unknown): { code: string; error: Error } {
+  const raw = (err as { code?: unknown } | null)?.code
+  const code = typeof raw === 'string' && raw ? raw : 'unknown'
+  const name = err instanceof Error ? err.name : 'Error'
+  return { code, error: Object.assign(new Error(code), { name, code }) }
 }
 
 /** Postgres error codes that are deterministic — never retry them. */
@@ -117,6 +128,17 @@ const NEEDS_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ id: string; label: OnboardingKey; emoji: string }>
 
 type UserRole = 'seeking' | 'providing' | 'both'
+
+/** The radio an Arrow key moves to (null: not a moving key). Down / Up are next / previous; Right /
+ *  Left follow the reading direction (in a right-to-left locale Left is next). Wraps around. */
+function nextRadioIndex(key: string, current: number, count: number, locale: Locale): number | null {
+  const rtl = dir(locale) === 'rtl'
+  const forward = key === 'ArrowDown' || key === (rtl ? 'ArrowLeft' : 'ArrowRight')
+  const back = key === 'ArrowUp' || key === (rtl ? 'ArrowRight' : 'ArrowLeft')
+  if (forward) return (current + 1) % count
+  if (back) return (current - 1 + count) % count
+  return null
+}
 type Step = 1 | 2 | 3 | 4 | 5
 
 export default function OnboardingPage() {
@@ -149,9 +171,10 @@ export default function OnboardingPage() {
   // Each step's heading takes focus when the step changes (not on the first paint).
   const headingRef = useRef<HTMLHeadingElement>(null)
   const stepChangedRef = useRef(false)
-  // showContinueAnyway becomes true when a write error/timeout occurs so the
-  // user can always escape the phone step.
-  const [showContinueAnyway, setShowContinueAnyway] = useState(false)
+  // The action whose save failed, so "Try again" repeats exactly that one (Get Started saves every
+  // answer; Skip for now saves the flag only). It stays set while the retry runs, so the button —
+  // and keyboard focus on it — stays put.
+  const [failedAction, setFailedAction] = useState<'complete' | 'skip' | null>(null)
 
   const [geoLoading, setGeoLoading] = useState(false)
 
@@ -182,6 +205,12 @@ export default function OnboardingPage() {
     stepChangedRef.current = true
     showError(null)
     setStep(next)
+  }
+
+  const roleRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const chooseRole = (index: number) => {
+    setUserRole(ROLE_OPTIONS[index].id as UserRole)
+    showError(null)
   }
 
   const { getCurrentPosition } = useGeolocation()
@@ -216,6 +245,9 @@ export default function OnboardingPage() {
         } catch {
           // Geocoding failed but coords are captured — continue without city/zip
         }
+      } else {
+        // Denied, timed out or unsupported: the hook answers null.
+        showError(onboardingT(locale, 'locationFailed'))
       }
     } catch {
       showError(onboardingT(locale, 'locationFailed'))
@@ -257,11 +289,10 @@ export default function OnboardingPage() {
         logger.warn('onboarding.save.ok', { userId, path: 'skip' })
         router.push('/')
       } catch (err: unknown) {
-        // The code only: a PostgREST message can quote the values it was given.
-        const code = failureCode(err)
-        logger.error('onboarding.save.exhausted', { code }, { step: 'skip', userId, code })
+        const { code, error } = codeOnly(err)
+        logger.error('onboarding.save.exhausted', error, { step: 'skip', userId, code })
         showError(onboardingT(locale, 'saveFailed'))
-        setShowContinueAnyway(true)
+        setFailedAction('skip')
       }
     },
     [router, supabase, showError, locale]
@@ -272,7 +303,6 @@ export default function OnboardingPage() {
     busyRef.current = true
     setSubmitting(true)
     showError(null)
-    setShowContinueAnyway(false)
 
     // Hard 10s timeout wrapping the ENTIRE operation — including auth resolution,
     // profile write, and verification. If anything stalls, the user always
@@ -375,11 +405,10 @@ export default function OnboardingPage() {
         await withRetry(doWrite, { attempts: 3, backoffMs: [500, 1500] })
         writeError = null
       } catch (err: unknown) {
-        // The code only: a PostgREST message can quote the values it was given.
-        const code = failureCode(err)
+        const { code, error } = codeOnly(err)
         // Recovery after retry succeeded on a prior attempt won't reach here, but log
         // exhaustion for observability.
-        logger.error(attempt > 1 ? 'onboarding.save.exhausted' : 'onboarding.save.failed', { code }, {
+        logger.error(attempt > 1 ? 'onboarding.save.exhausted' : 'onboarding.save.failed', error, {
           step: 'main_write',
           attempt,
           userId,
@@ -390,7 +419,7 @@ export default function OnboardingPage() {
 
       if (writeError) {
         showError(onboardingT(locale, 'saveFailed'))
-        setShowContinueAnyway(true)
+        setFailedAction('complete')
         return
       }
 
@@ -424,7 +453,7 @@ export default function OnboardingPage() {
         }
       } catch (verifyErr: unknown) {
         // Verification failed — navigate anyway; middleware will catch loops.
-        logger.warn('onboarding.complete.verify_error', { userId, code: failureCode(verifyErr) })
+        logger.warn('onboarding.complete.verify_error', { userId, code: codeOnly(verifyErr).code })
       }
 
       timer.end({ step: 'complete', userId })
@@ -455,9 +484,10 @@ export default function OnboardingPage() {
         return
       }
 
-      logger.error('onboarding.complete.failed', { code: failureCode(err) }, { step: 'handleComplete' })
+      const { code, error } = codeOnly(err)
+      logger.error('onboarding.complete.failed', error, { step: 'handleComplete', code })
       showError(onboardingT(locale, 'saveFailed'))
-      setShowContinueAnyway(true)
+      setFailedAction('complete')
     } finally {
       busyRef.current = false
       setSubmitting(false)
@@ -555,26 +585,12 @@ export default function OnboardingPage() {
           >
             <AnnouncementText announcement={alertLine} />
           </div>
-          {showContinueAnyway && (
+          {failedAction && (
+            // Repeats exactly the action that failed, with every answer given so far.
             <button
               type="button"
               aria-disabled={submitting}
-              onClick={async () => {
-                if (busyRef.current) return
-                const userId = userIdRef.current ?? authUser?.id ?? null
-                if (userId) {
-                  busyRef.current = true
-                  setSubmitting(true)
-                  try {
-                    await markCompleteAndNavigate(userId)
-                  } finally {
-                    busyRef.current = false
-                    setSubmitting(false)
-                  }
-                } else {
-                  router.push('/')
-                }
-              }}
+              onClick={() => void (failedAction === 'complete' ? handleComplete() : handleSkip())}
               className="min-h-6 text-sm underline font-medium text-red-800 hover:text-red-900"
             >
               {t(locale, 'tryAgain')}
@@ -584,19 +600,34 @@ export default function OnboardingPage() {
           {/* Step 1: Role Selection */}
           {step === 1 && (
             <div className="space-y-3">
-              <div role="group" aria-labelledby="onboarding-step-title" className="space-y-3">
-                {ROLE_OPTIONS.map((role) => {
+              {/* An APG radio group: one Tab stop (the chosen card, else the first); Arrow keys move and
+                  choose, Left / Right following the reading direction; Space chooses. */}
+              <div role="radiogroup" aria-labelledby="onboarding-step-title" className="space-y-3">
+                {ROLE_OPTIONS.map((role, index) => {
                   const Icon = role.icon
                   const isSelected = userRole === role.id
+                  const tabStop = userRole === null ? index === 0 : isSelected
                   return (
                     <button
                       key={role.id}
+                      ref={(node) => { roleRefs.current[index] = node }}
                       type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => {
-                        setUserRole(role.id as UserRole)
-                        showError(null)
+                      role="radio"
+                      aria-checked={isSelected}
+                      tabIndex={tabStop ? 0 : -1}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ') {
+                          e.preventDefault()
+                          chooseRole(index)
+                          return
+                        }
+                        const next = nextRadioIndex(e.key, index, ROLE_OPTIONS.length, locale)
+                        if (next === null) return
+                        e.preventDefault()
+                        chooseRole(next)
+                        roleRefs.current[next]?.focus()
                       }}
+                      onClick={() => chooseRole(index)}
                       className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-start transition-all ${
                         isSelected
                           ? role.color
@@ -655,7 +686,8 @@ export default function OnboardingPage() {
 
               {/* Always mounted, so the detected place is spoken when it appears. */}
               <div role="status">
-                {latitude && longitude && (
+                {geoLoading && <p className="sr-only">{o('locating')}</p>}
+                {!geoLoading && latitude && longitude && (
                   <div className="flex items-center gap-2 p-3 bg-lime-50 rounded-lg text-sm text-lime-800">
                     <Check aria-hidden="true" className="w-4 h-4 shrink-0" />
                     {place ? (

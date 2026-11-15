@@ -4905,6 +4905,8 @@ step in that test, and the test fails until the list below is regenerated.
 |---|---|---|---|---|---|
 | `siteTitle` | ht | FEED - Mutual Aid Resource Sharing | FEED - Pataj resous pou èd mityèl | 2026-11-15 | machine-drafted, needs native review |
 | `siteDescription` | ht | Community-powered mutual aid. Share resources, find help, support your neighbors. | Èd mityèl kominote a fè. Pataje resous, jwenn èd, sipòte vwazen w. | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | ht | This page isn't available | Paj sa a pa disponib | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | ht | The link may be out of date, or what it shared is no longer public. | Petèt lyen an pa bon ankò, oswa sa li te pataje a pa piblik ankò. | 2026-11-15 | machine-drafted, needs native review |
 | `postNotFound` | ht | Post Not Found - FEED | Nou pa jwenn piblikasyon an - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `businessNotFound` | ht | Business Not Found - FEED | Nou pa jwenn biznis la - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `organizationNotFound` | ht | Organization Not Found - FEED | Nou pa jwenn òganizasyon an - FEED | 2026-11-15 | machine-drafted, needs native review |
@@ -4958,6 +4960,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `closedOpens` | ht | Closed · opens {day} {time} | Fèmen · ouvri {day} a {time} | 2026-11-15 | machine-drafted, needs native review |
 | `siteTitle` | so | FEED - Mutual Aid Resource Sharing | FEED - Wadaagista kheyraadka is-caawinta | 2026-11-15 | machine-drafted, needs native review |
 | `siteDescription` | so | Community-powered mutual aid. Share resources, find help, support your neighbors. | Is-caawin ay bulshadu wado. La wadaag kheyraad, hel caawimo, taageer deriskaaga. | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | so | This page isn't available | Boggan lama heli karo | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | so | The link may be out of date, or what it shared is no longer public. | Xiriirku waxaa laga yaabaa inuu duugoobay, ama waxa la wadaagay hadda ma aha mid dadweyne. | 2026-11-15 | machine-drafted, needs native review |
 | `postNotFound` | so | Post Not Found - FEED | Qoraalka lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `businessNotFound` | so | Business Not Found - FEED | Ganacsiga lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `organizationNotFound` | so | Organization Not Found - FEED | Ururka lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
@@ -5011,6 +5015,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `closedOpens` | so | Closed · opens {day} {time} | Xiran · wuxuu furmayaa {day} {time} | 2026-11-15 | machine-drafted, needs native review |
 | `siteTitle` | am | FEED - Mutual Aid Resource Sharing | FEED - የመረዳዳት ሀብቶችን መጋራት | 2026-11-15 | machine-drafted, needs native review |
 | `siteDescription` | am | Community-powered mutual aid. Share resources, find help, support your neighbors. | በማህበረሰብ የሚመራ መረዳዳት። ሀብቶችን ያጋሩ፣ እርዳታ ያግኙ፣ ጎረቤቶችዎን ይደግፉ። | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | am | This page isn't available | ይህ ገጽ አይገኝም | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | am | The link may be out of date, or what it shared is no longer public. | ሊንኩ ጊዜው ያለፈበት ሊሆን ይችላል፣ ወይም የተጋራው ነገር ከአሁን በኋላ ለሕዝብ ክፍት አይደለም። | 2026-11-15 | machine-drafted, needs native review |
 | `postNotFound` | am | Post Not Found - FEED | ልጥፉ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `businessNotFound` | am | Business Not Found - FEED | ንግዱ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `organizationNotFound` | am | Organization Not Found - FEED | ድርጅቱ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
@@ -5064,6 +5070,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `closedOpens` | am | Closed · opens {day} {time} | ዝግ · {day} በ{time} ይከፈታል | 2026-11-15 | machine-drafted, needs native review |
 | `siteTitle` | hmn | FEED - Mutual Aid Resource Sharing | FEED - Kev sib qhia kev pab sib pab | 2026-11-15 | machine-drafted, needs native review |
 | `siteDescription` | hmn | Community-powered mutual aid. Share resources, find help, support your neighbors. | Kev sib pab uas zej zog coj. Qhia kev pab, nrhiav kev pab, txhawb koj cov neeg zej zog. | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | hmn | This page isn't available | Nplooj ntawv no tsis muaj lawm | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | hmn | The link may be out of date, or what it shared is no longer public. | Tej zaum txoj kab txuas qub lawm, lossis yam uas tau qhia tsis yog pej xeem lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `postNotFound` | hmn | Post Not Found - FEED | Nrhiav tsis tau tsab ntawv - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `businessNotFound` | hmn | Business Not Found - FEED | Nrhiav tsis tau lub lag luam - FEED | 2026-11-15 | machine-drafted, needs native review |
 | `organizationNotFound` | hmn | Organization Not Found - FEED | Nrhiav tsis tau lub koom haum - FEED | 2026-11-15 | machine-drafted, needs native review |

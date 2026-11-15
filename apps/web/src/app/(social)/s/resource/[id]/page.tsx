@@ -196,7 +196,7 @@ export default async function SharedResourcePage({ params }: Props) {
       <div className="text-center space-y-3 py-4">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-lime-700 px-8 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
         >
           {t('viewDetails')}
         </a>

@@ -94,7 +94,7 @@ export default async function DonatePage({ params }: Props) {
         {profile.avatar_url ? (
           <Image
             src={profile.avatar_url}
-            alt={displayName}
+            alt=""
             width={80}
             height={80}
             className="rounded-full mx-auto"
@@ -125,7 +125,7 @@ export default async function DonatePage({ params }: Props) {
           {rawHandles.venmo_username && (
             <a
               href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(rawHandles.venmo_username)}`}
-              className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#008CFF] px-6 py-4 text-white text-lg font-semibold hover:bg-[#0070cc] transition-colors"
+              className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#0070cc] px-6 py-4 text-white text-lg font-semibold hover:bg-[#005fa8] transition-colors"
             >
               {viaBefore}Venmo{viaAfter}
               <span className="text-sm font-normal" dir="ltr">
@@ -150,7 +150,7 @@ export default async function DonatePage({ params }: Props) {
       <div className="text-center space-y-3 py-4">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-lime-700 px-8 py-3 text-white font-semibold hover:bg-lime-800 transition-colors"
         >
           {t('openFeed')}
         </a>
