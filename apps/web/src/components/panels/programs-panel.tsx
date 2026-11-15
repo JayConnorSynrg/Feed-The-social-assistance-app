@@ -45,10 +45,12 @@ import { buildSafeErrorContext } from '@/lib/ai/error-explainer'
 import { dir, type Locale } from '@/lib/i18n'
 import { formatMessage, splitMessage } from '@/lib/format-message'
 import { formatCount } from '@/lib/i18n-intl'
-import { programsT, programsErrorText, savedErrorText, searchErrorText } from '@/lib/i18n-programs'
+import { programsT, programsErrorText, programsFound, savedErrorText, searchErrorText } from '@/lib/i18n-programs'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { usStateOptions } from '@/lib/i18n-us-states'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { focusWithin } from '@/lib/focus-target'
 import { afterLayout, announce, AnnouncementText, focusAfterRowRemoval, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 function CategoryBadge({ category, locale }: { category: string; locale: Locale }) {
@@ -87,6 +89,7 @@ export function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDi
   const [errorMsg, setErrorMsg] = useState<Announcement>(NO_ANNOUNCEMENT)
   // Single flight: a second press while the first share is in flight sends nothing.
   const inFlight = useRef(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const shareInvalid = !content.trim()
 
   const handleShare = async () => {
@@ -116,27 +119,27 @@ export function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDi
     }
   }
 
+  // The Radix dialog supplies the focus trap, Escape and aria-modal. Focus on open goes to the
+  // post box; on close the panel puts it back on the button that opened the dialog (or, after a
+  // share, on the feed), so Radix's own return is turned off.
   return (
-    /* Overlay — stop propagation so clicks inside don't toggle the parent tile */
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="share-to-feed-title"
-      lang={locale}
-      dir={dir(locale)}
-      data-testid="share-to-feed-dialog"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose()
-      }}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="w-full max-w-md bg-[#faf9f6] rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent
+        lang={locale}
+        dir={dir(locale)}
+        hideDefaultClose
+        aria-describedby={undefined}
+        data-testid="share-to-feed-dialog"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          textareaRef.current?.focus()
+        }}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        className="w-[calc(100%-2rem)] max-w-md gap-0 p-0 bg-[#faf9f6] rounded-2xl sm:rounded-2xl shadow-xl border border-stone-200 overflow-hidden"
+      >
         {/* Dialog header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-stone-100">
-          <h2 id="share-to-feed-title" className="font-semibold text-stone-900 text-base">{programsT(locale, 'shareToFeed')}</h2>
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-stone-100">
+          <DialogTitle className="font-semibold text-stone-900 text-base leading-normal tracking-normal">{programsT(locale, 'shareToFeed')}</DialogTitle>
           <button
             type="button"
             onClick={onClose}
@@ -161,6 +164,7 @@ export function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDi
             {programsT(locale, 'shareLabel')}
           </label>
           <textarea
+            ref={textareaRef}
             id="share-content-input"
             data-testid="share-content-input"
             value={content}
@@ -205,8 +209,8 @@ export function ShareToFeedDialog({ resource, onClose, onShared }: ShareToFeedDi
             {programsT(locale, 'share')}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -292,7 +296,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
               {resource.phone && (
                 <a
                   href={`tel:${resource.phone}`}
-                  className="flex items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
+                  className="flex min-h-6 items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Phone aria-hidden="true" className="w-3.5 h-3.5 text-stone-600" />
@@ -302,7 +306,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
               {resource.email && (
                 <a
                   href={`mailto:${resource.email}`}
-                  className="flex items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
+                  className="flex min-h-6 items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Mail aria-hidden="true" className="w-3.5 h-3.5 text-stone-600" />
@@ -314,7 +318,7 @@ function ProgramTile({ resource, isExpanded, onToggle, onSave, isSaved, onStartA
                   href={resource.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
+                  className="flex min-h-6 items-center gap-2 text-sm text-stone-700 hover:text-[#4a5d23] transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Globe aria-hidden="true" className="w-3.5 h-3.5 text-stone-600" />
@@ -462,7 +466,7 @@ function SavedProgramTile({
         {saved.resource_phone && (
           <a
             href={`tel:${saved.resource_phone}`}
-            className="text-xs text-[#4a5d23] hover:underline flex items-center gap-1 mt-0.5"
+            className="text-xs text-[#4a5d23] hover:underline flex min-h-6 items-center gap-1 mt-0.5"
           >
             <Phone aria-hidden="true" className="w-3 h-3" />
             <span dir="ltr">{saved.resource_phone}</span>
@@ -473,7 +477,7 @@ function SavedProgramTile({
             href={saved.resource_website}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-[#4a5d23] hover:underline flex items-center gap-1 mt-0.5"
+            className="text-xs text-[#4a5d23] hover:underline flex min-h-6 items-center gap-1 mt-0.5"
           >
             <Globe aria-hidden="true" className="w-3 h-3" />
             <span dir="ltr" className="truncate max-w-[180px]">{saved.resource_website}</span>
@@ -495,7 +499,7 @@ function SavedProgramTile({
   )
 }
 
-function SavedProgramsTab({ locale, onRemoved }: { locale: Locale; onRemoved: () => void }) {
+function SavedProgramsTab({ locale, onRemoved, onRemoveFailed }: { locale: Locale; onRemoved: () => void; onRemoveFailed: () => void }) {
   const { savedResources, isLoading, error, removeResource } = useSavedResources()
   const [removingId, setRemovingId] = useState<string | null>(null)
   const m = (key: Parameters<typeof programsT>[1]) => programsT(locale, key)
@@ -513,8 +517,11 @@ function SavedProgramsTab({ locale, onRemoved }: { locale: Locale; onRemoved: ()
         const target = next ? document.querySelector<HTMLElement>(`[data-testid="unsave-btn-${next}"]`) : document.getElementById('saved-programs-empty')
         target?.focus()
       })
+    } else {
+      // The row stays, focus stays on its Unsave, and the failure is said in the status line.
+      onRemoveFailed()
     }
-  }, [removeResource, onRemoved, savedResources])
+  }, [removeResource, onRemoved, onRemoveFailed, savedResources])
 
   if (isLoading) {
     return (
@@ -525,7 +532,9 @@ function SavedProgramsTab({ locale, onRemoved }: { locale: Locale; onRemoved: ()
     )
   }
 
-  if (error) {
+  // A failed read with nothing to show takes the panel; a failed remove keeps the list (its line is
+  // said in the panel's status region).
+  if (error && savedResources.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 px-4 text-center">
         <AlertCircle aria-hidden="true" className="w-8 h-8 text-red-700" />
@@ -578,6 +587,8 @@ export function ProgramsPanel() {
   // One always-mounted status line for save / remove results (announce(): one node per result).
   const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const announceRemoved = useCallback(() => announce(setStatus, programsT(locale, 'removedFromPlan')), [locale])
+  const announceRemoveFailed = useCallback(() => announce(setStatus, programsT(locale, 'unsaveFailed')), [locale])
+  const rootRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<ProgramsTab>('browse')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
@@ -640,6 +651,33 @@ export function ProgramsPanel() {
       })
     }
   }, [filters, programs.length, isLoading, isProgramSearchActive])
+
+  // Retry: its button leaves with the error view while the list reloads; once the reload has
+  // settled, focus goes to the search box (else the heading), never to <body>.
+  const retryPhase = useRef<'idle' | 'requested' | 'loading'>('idle')
+  useEffect(() => {
+    if (retryPhase.current === 'requested' && isLoading) retryPhase.current = 'loading'
+    else if (retryPhase.current === 'loading' && !isLoading) {
+      retryPhase.current = 'idle'
+      afterLayout(() => (document.getElementById('programs-search') ?? document.getElementById('programs-title'))?.focus())
+    }
+  }, [isLoading])
+
+  // The list's state — searching / loading, how many were found, nothing found — is said in the one
+  // status line (failures have their own alert). It speaks when the state's words change.
+  const listMessage = useMemo(() => {
+    if (activeTab !== 'browse') return ''
+    if (isProgramSearchActive ? programSearchLoading : isLoading) return programsT(locale, isProgramSearchActive ? 'searching' : 'loadingPrograms')
+    if (isProgramSearchActive ? programSearchError : error) return ''
+    if (!isProgramSearchActive && !filters.state) return ''
+    if (displayItems.length === 0) {
+      return isProgramSearchActive ? formatMessage(programsT(locale, 'noResults'), { query: trimmedProgramSearch }) : programsT(locale, 'noPrograms')
+    }
+    return programsFound(displayItems.length, locale)
+  }, [activeTab, isProgramSearchActive, programSearchLoading, isLoading, programSearchError, error, filters.state, displayItems.length, trimmedProgramSearch, locale])
+  useEffect(() => {
+    if (listMessage) announce(setStatus, listMessage)
+  }, [listMessage])
 
   const handleCategoryFilter = useCallback((category: string | null) => {
     setFilters({ ...filters, category })
@@ -707,13 +745,17 @@ export function ProgramsPanel() {
   }, [sharingResource])
 
   const handleShared = useCallback(() => {
+    // The panel host survives the switch: once the feed has rendered in it, focus goes there (its
+    // h1, else the host itself), never to <body>.
+    const host = rootRef.current?.parentElement ?? null
     setSharingResource(null)
     // Navigate to feed so user sees the post they just shared
     setActivePanel('feed')
+    afterLayout(() => focusWithin(host))
   }, [setActivePanel])
 
   return (
-    <div lang={locale} dir={dir(locale)} className="h-full flex flex-col bg-[#faf9f6]">
+    <div ref={rootRef} lang={locale} dir={dir(locale)} className="h-full flex flex-col bg-[#faf9f6]">
       <p role="status" className="sr-only">
         <AnnouncementText announcement={status} />
       </p>
@@ -729,7 +771,7 @@ export function ProgramsPanel() {
       <div className="flex-shrink-0 px-1 pt-1 pb-3 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-stone-900">{m('title')}</h1>
+            <h1 id="programs-title" tabIndex={-1} className="text-xl font-bold text-stone-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">{m('title')}</h1>
             <p className="text-xs text-stone-600 mt-0.5">{m('subtitle')}</p>
           </div>
         </div>
@@ -765,7 +807,7 @@ export function ProgramsPanel() {
 
       {activeTab === 'saved' ? (
         <div className="flex-1 overflow-y-auto min-h-0 px-1">
-          <SavedProgramsTab locale={locale} onRemoved={announceRemoved} />
+          <SavedProgramsTab locale={locale} onRemoved={announceRemoved} onRemoveFailed={announceRemoveFailed} />
         </div>
       ) : (
         <>
@@ -833,7 +875,7 @@ export function ProgramsPanel() {
                     {display ? resourceCategoryLabel(cat.name, locale) : <span lang="" dir="auto">{cat.name}</span>}
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                       filters.category === cat.name
-                        ? 'bg-white/20 text-white'
+                        ? 'bg-black/20 text-white'
                         : 'bg-stone-100 text-stone-700'
                     }`}>
                       {formatCount(cat.count, locale)}
@@ -863,7 +905,10 @@ export function ProgramsPanel() {
                 <p role="alert" className="text-sm text-stone-700">{programsErrorText(error, locale)}</p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
-                    onClick={() => setFilters({ ...filters })}
+                    onClick={() => {
+                      retryPhase.current = 'requested'
+                      setFilters({ ...filters })
+                    }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-stone-200 text-stone-800 rounded-lg text-sm hover:bg-stone-300 transition-colors"
                   >
                     <RefreshCw aria-hidden="true" className="w-4 h-4" />

@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Shield, AlertCircle, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { authT, type AuthKey } from '@/lib/i18n-auth'
@@ -37,6 +38,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
   const [loading, setLoading] = useState(false)
   const [challengeId, setChallengeId] = useState<string | null>(null)
   const codeInputRef = useRef<HTMLInputElement>(null)
+  const backupInputRef = useRef<HTMLInputElement>(null)
   // Single flight: the 6th-digit auto-submit and Enter can both fire; only the first verifies.
   const inFlight = useRef(false)
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -120,6 +122,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
     if (inFlight.current) return
     if (backupCode.length === 0) {
       setError(a('mfaEnterBackup'))
+      backupInputRef.current?.focus()
       return
     }
 
@@ -151,6 +154,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
     } catch (err) {
       setError(err instanceof Error ? err.message : a('mfaVerifyFailed'))
       setBackupCode('')
+      backupInputRef.current?.focus()
     } finally {
       inFlight.current = false
       setLoading(false)
@@ -277,6 +281,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
               {a('mfaBackupLabel')}
             </label>
             <Input
+              ref={backupInputRef}
               id="mfa-backup-code"
               type="text"
               value={backupCode}
@@ -298,8 +303,8 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
 
           <Button
             onClick={handleVerifyBackupCode}
-            disabled={loading || backupCode.length === 0}
-            className="w-full bg-green-700 hover:bg-green-800 text-white"
+            aria-disabled={loading || backupCode.length === 0}
+            className={cn('w-full bg-green-700 hover:bg-green-800 text-white', backupCode.length === 0 && 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
           >
             {loading ? a('mfaVerifying') : a('mfaVerifyBackup')}
           </Button>
@@ -313,7 +318,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
             }}
             className="w-full border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4 rtl:-scale-x-100" />
             {a('mfaBackToApp')}
           </Button>
         </>

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { logger } from '@/lib/logger'
 import { dir } from '@/lib/i18n'
-import { authT, passwordFailureKey, type AuthKey } from '@/lib/i18n-auth'
+import { authT, passwordTooLong, resetFailureKey, type AuthKey } from '@/lib/i18n-auth'
 import { failureCode } from '@/lib/failure-code'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
@@ -47,6 +47,12 @@ export default function ResetPasswordPage() {
 
     if (newPassword.length < 12) {
       setError(a('passwordTooShort'))
+      return
+    }
+
+    // The limit is in bytes (UTF-8), checked before any call.
+    if (passwordTooLong(newPassword)) {
+      setError(a('passwordTooLong'))
       return
     }
 
@@ -99,7 +105,7 @@ export default function ResetPasswordPage() {
       timer.error(err, { step: 'password_update' })
       const code = failureCode(err)
       logger.warn('auth.password.failed', { code, step: 'reset' })
-      setError(a(passwordFailureKey(code, 'resetFailed')))
+      setError(a(resetFailureKey(code, passwordTooLong(newPassword))))
     } finally {
       setLoading(false)
     }
@@ -181,7 +187,7 @@ export default function ResetPasswordPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-green-700 hover:bg-green-800 text-white font-medium"
+                className="w-full h-auto min-h-9 whitespace-normal bg-green-700 hover:bg-green-800 text-white font-medium"
                 aria-disabled={loading}
               >
                 {loading ? a('updating') : a('updatePassword')}

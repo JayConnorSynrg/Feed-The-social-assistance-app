@@ -408,7 +408,7 @@ function LoginForm() {
 
                 <Button
                   type="submit"
-                  className={cn('w-full bg-green-700 hover:bg-green-800 text-white font-medium', isLimited && UNAVAILABLE)}
+                  className={cn('w-full h-auto min-h-9 whitespace-normal bg-green-700 hover:bg-green-800 text-white font-medium', isLimited && UNAVAILABLE)}
                   aria-disabled={loading || isLimited}
                 >
                   {loading ? a('signingIn') : isLimited ? a('lockedWait') : t(locale, 'signIn')}

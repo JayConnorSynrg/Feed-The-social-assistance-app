@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { logger } from '@/lib/logger'
 import { dir } from '@/lib/i18n'
-import { authT, passwordFailureKey, type AuthKey } from '@/lib/i18n-auth'
+import { authT, forgotFailureKey, type AuthKey } from '@/lib/i18n-auth'
 import { failureCode } from '@/lib/failure-code'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
@@ -72,7 +72,7 @@ export default function ForgotPasswordPage() {
       timer.error(err, { step: 'reset_request' })
       const code = failureCode(err)
       logger.warn('auth.password.failed', { code, step: 'forgot' })
-      setError(a(passwordFailureKey(code, 'forgotFailed')))
+      setError(a(forgotFailureKey(code)))
     } finally {
       setLoading(false)
       // Turnstile tokens are single-use — reset so any retry gets a fresh one.
@@ -151,7 +151,7 @@ export default function ForgotPasswordPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-green-700 hover:bg-green-800 text-white font-medium"
+                className="w-full h-auto min-h-9 whitespace-normal bg-green-700 hover:bg-green-800 text-white font-medium"
                 aria-disabled={loading}
               >
                 {loading ? a('sending') : a('sendResetLink')}

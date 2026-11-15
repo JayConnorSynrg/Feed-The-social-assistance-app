@@ -23,8 +23,8 @@ import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/t
 import { sanitizeInput } from '@/lib/security'
 import { logger } from '@/lib/logger'
 import { t, dir } from '@/lib/i18n'
-import { splitMessage } from '@/lib/format-message'
-import { authT, passwordFeedbackKey, signUpFailureKey, strengthKey, type AuthKey } from '@/lib/i18n-auth'
+import { authT, passwordFeedbackKey, passwordTooLong, signUpFailureKey, strengthKey, type AuthKey } from '@/lib/i18n-auth'
+import { formatMessage, splitMessage } from '@/lib/format-message'
 import { failureCode } from '@/lib/failure-code'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { cn } from '@/lib/utils'
@@ -61,6 +61,8 @@ export default function SignupPage() {
   // The one alert region's text (always mounted on each view; one node per failure).
   const [alertLine, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
   const setError = (text: string | null) => (text ? announce(setAlert, text) : clearAnnouncement(setAlert))
+  // "Check your email": a resend that worked is said in its own always-mounted status line.
+  const [resendStatus, setResendStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const [success, setSuccess] = useState(false)
   // The view switches (form ↔ "Check your email"): focus goes to the new view's heading.
   const checkEmailRef = useRef<HTMLHeadingElement>(null)
@@ -109,6 +111,12 @@ export default function SignupPage() {
     // Validation
     if (password !== confirmPassword) {
       setError(a('passwordsMismatch'))
+      return
+    }
+
+    // The limit is in bytes (UTF-8), checked before any call.
+    if (passwordTooLong(password)) {
+      setError(a('passwordTooLong'))
       return
     }
 
@@ -182,7 +190,7 @@ export default function SignupPage() {
         timer.error(err, { step: 'email_signup' })
         const code = failureCode(err)
         logger.warn('auth.signup.failed', { code, step: 'signup' })
-        setError(a(signUpFailureKey(code)))
+        setError(a(signUpFailureKey(code, 'signupFailed', passwordTooLong(password))))
       } finally {
         setLoading(false)
         // Turnstile tokens are single-use — reset so any retry gets a fresh one.
@@ -213,6 +221,7 @@ export default function SignupPage() {
 
       if (error) throw error
       setError(null)
+      announce(setResendStatus, a('resendSent'))
     } catch (err) {
       const code = failureCode(err)
       logger.warn('auth.signup.failed', { code, step: 'resend' })
@@ -306,6 +315,9 @@ export default function SignupPage() {
             <div role="alert" className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}>
               <AnnouncementText announcement={alertLine} />
             </div>
+            <p role="status" className="text-sm text-green-800">
+              <AnnouncementText announcement={resendStatus} />
+            </p>
             <div className="text-sm text-stone-700 space-y-2 break-words">
               <p>{a('checkSpam')}</p>
               <p><WithEmail template={a('confirmEmailCorrect')} email={email} /></p>
@@ -455,16 +467,19 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 aria-required="true"
-                aria-describedby="password-hint"
+                aria-describedby="password-hint password-strength"
                 readOnly={loading}
                 minLength={12}
                 className={INPUT}
               />
-              <p id="password-hint" className="text-xs text-stone-700">{a('passwordHint')}</p>
-              {/* Password Strength Indicator (the bar is decoration; the word and hints say it) */}
-              {password && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+              <p id="password-hint" className="text-xs text-stone-700">{a('signupPasswordHint')}</p>
+              {/* Password strength. The bar is decoration; the line says it. The line is one polite
+                  live region, always mounted, whose text changes only when the strength word
+                  changes — so it speaks once per change, not per keystroke. The block (line and
+                  hints) also describes the field. */}
+              <div id="password-strength" className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {password && (
                     <div aria-hidden="true" className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
                       <div
                         className="h-full transition-all duration-300"
@@ -474,19 +489,19 @@ export default function SignupPage() {
                         }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-stone-800">
-                      {a(strengthKey(passwordStrength.strength))}
-                    </span>
-                  </div>
-                  {passwordStrength.feedback.length > 0 && (
-                    <ul className="text-xs text-stone-700 space-y-0.5 ms-1">
-                      {passwordStrength.feedback.map((msg) => passwordFeedbackKey(msg)).filter((k): k is AuthKey => k !== null).map((key) => (
-                        <li key={key}>• {a(key)}</li>
-                      ))}
-                    </ul>
                   )}
+                  <span aria-live="polite" aria-atomic="true" className="text-xs font-medium text-stone-800">
+                    {password ? formatMessage(a('passwordStrength'), { strength: a(strengthKey(passwordStrength.strength)) }) : ''}
+                  </span>
                 </div>
-              )}
+                {password && passwordStrength.feedback.length > 0 && (
+                  <ul className="text-xs text-stone-700 space-y-0.5 ms-1">
+                    {passwordStrength.feedback.map((msg) => passwordFeedbackKey(msg)).filter((k): k is AuthKey => k !== null).map((key) => (
+                      <li key={key}>• {a(key)}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -542,7 +557,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className={cn(
-                'w-full bg-green-700 hover:bg-green-800 text-white font-medium',
+                'w-full h-auto min-h-9 whitespace-normal bg-green-700 hover:bg-green-800 text-white font-medium',
                 (isLimited || (password.length > 0 && !passwordStrength.valid)) && UNAVAILABLE
               )}
               aria-disabled={loading || isLimited || (password.length > 0 && !passwordStrength.valid)}

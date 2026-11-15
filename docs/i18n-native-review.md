@@ -1640,6 +1640,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `lastName` | ht | Last name | Non fanmi | 2026-11-15 | machine-drafted, needs native review |
 | `lastNameHint` | ht | Private — shared only with a helper you message | Prive — se sèlman yon moun k ap ede w ou ekri ki wè l | 2026-11-15 | machine-drafted, needs native review |
 | `passwordHint` | ht | At least 12 characters | Omwen 12 karaktè | 2026-11-15 | machine-drafted, needs native review |
+| `signupPasswordHint` | ht | At least 12 characters, with at least three of: lowercase letters, uppercase letters, numbers, symbols (with 16 or more characters, two are enough). Avoid common patterns such as "password" or "123456". | Omwen 12 karaktè, ak omwen twa nan sa yo: lèt miniskil, lèt majiskil, chif, senbòl (avèk 16 karaktè oswa plis, de ase). Evite modèl komen tankou "password" oswa "123456". | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooLong` | ht | This password is too long. The limit is 72 bytes: 72 plain letters and numbers, fewer if you use accented letters, other alphabets or emoji. | Modpas sa a twò long. Limit la se 72 bytes: 72 lèt ak chif senp, mwens si w itilize lèt ak aksan, lòt alfabè oswa emoji. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordStrength` | ht | Password strength: {strength} | Fòs modpas la: {strength} | 2026-11-15 | machine-drafted, needs native review |
+| `resendSent` | ht | We sent another confirmation email. | Nou voye yon lòt imèl konfimasyon. | 2026-11-15 | machine-drafted, needs native review |
 | `confirmPassword` | ht | Confirm password | Konfime modpas la | 2026-11-15 | machine-drafted, needs native review |
 | `strengthWeak` | ht | Weak | Fèb | 2026-11-15 | machine-drafted, needs native review |
 | `strengthFair` | ht | Fair | Pasab | 2026-11-15 | machine-drafted, needs native review |
@@ -1740,6 +1744,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `lastName` | so | Last name | Magaca qoyska | 2026-11-15 | machine-drafted, needs native review |
 | `lastNameHint` | so | Private — shared only with a helper you message | Gaar — waxaa arka oo keliya caawiye aad fariin u dirto | 2026-11-15 | machine-drafted, needs native review |
 | `passwordHint` | so | At least 12 characters | Ugu yaraan 12 xaraf | 2026-11-15 | machine-drafted, needs native review |
+| `signupPasswordHint` | so | At least 12 characters, with at least three of: lowercase letters, uppercase letters, numbers, symbols (with 16 or more characters, two are enough). Avoid common patterns such as "password" or "123456". | Ugu yaraan 12 xaraf, oo leh ugu yaraan saddex ka mid ah: xarfo yaryar, xarfo waaweyn, tirooyin, calaamado (haddii ay yihiin 16 xaraf ama ka badan, laba ayaa ku filan). Iska ilaali qaababka caadiga ah sida "password" ama "123456". | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooLong` | so | This password is too long. The limit is 72 bytes: 72 plain letters and numbers, fewer if you use accented letters, other alphabets or emoji. | Furahan sirta ah aad buu u dheer yahay. Xadku waa 72 bytes: 72 xaraf iyo tiro caadi ah, ka yar haddii aad isticmaasho xarfo calaamado leh, alifbeetooyin kale ama emoji. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordStrength` | so | Password strength: {strength} | Xoogga furaha sirta ah: {strength} | 2026-11-15 | machine-drafted, needs native review |
+| `resendSent` | so | We sent another confirmation email. | Waxaan kuu dirnay iimayl xaqiijin kale. | 2026-11-15 | machine-drafted, needs native review |
 | `confirmPassword` | so | Confirm password | Xaqiiji furaha sirta ah | 2026-11-15 | machine-drafted, needs native review |
 | `strengthWeak` | so | Weak | Daciif | 2026-11-15 | machine-drafted, needs native review |
 | `strengthFair` | so | Fair | Dhexdhexaad | 2026-11-15 | machine-drafted, needs native review |
@@ -1840,6 +1848,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `lastName` | am | Last name | የአባት ስም | 2026-11-15 | machine-drafted, needs native review |
 | `lastNameHint` | am | Private — shared only with a helper you message | የግል — መልእክት ለሚልኩለት ረዳት ብቻ ይታያል | 2026-11-15 | machine-drafted, needs native review |
 | `passwordHint` | am | At least 12 characters | ቢያንስ 12 ቁምፊዎች | 2026-11-15 | machine-drafted, needs native review |
+| `signupPasswordHint` | am | At least 12 characters, with at least three of: lowercase letters, uppercase letters, numbers, symbols (with 16 or more characters, two are enough). Avoid common patterns such as "password" or "123456". | ቢያንስ 12 ቁምፊዎች፣ ከሚከተሉት ቢያንስ ሶስቱን ያካተተ፦ ትናንሽ ፊደላት፣ ትላልቅ ፊደላት፣ ቁጥሮች፣ ምልክቶች (16 ወይም ከዚያ በላይ ቁምፊዎች ከሆኑ ሁለቱ ይበቃሉ)። እንደ "password" ወይም "123456" ያሉ የተለመዱ ቅጦችን ያስወግዱ። | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooLong` | am | This password is too long. The limit is 72 bytes: 72 plain letters and numbers, fewer if you use accented letters, other alphabets or emoji. | ይህ የይለፍ ቃል በጣም ረጅም ነው። ገደቡ 72 ባይት ነው፦ 72 ቀላል የእንግሊዝኛ ፊደላትና ቁጥሮች፤ የአማርኛ ፊደላትን ወይም ኢሞጂ ከተጠቀሙ ያነሰ። | 2026-11-15 | machine-drafted, needs native review |
+| `passwordStrength` | am | Password strength: {strength} | የይለፍ ቃል ጥንካሬ፦ {strength} | 2026-11-15 | machine-drafted, needs native review |
+| `resendSent` | am | We sent another confirmation email. | ሌላ የማረጋገጫ ኢሜይል ልከናል። | 2026-11-15 | machine-drafted, needs native review |
 | `confirmPassword` | am | Confirm password | የይለፍ ቃሉን ያረጋግጡ | 2026-11-15 | machine-drafted, needs native review |
 | `strengthWeak` | am | Weak | ደካማ | 2026-11-15 | machine-drafted, needs native review |
 | `strengthFair` | am | Fair | መካከለኛ | 2026-11-15 | machine-drafted, needs native review |
@@ -1940,6 +1952,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `lastName` | hmn | Last name | Lub xeem | 2026-11-15 | machine-drafted, needs native review |
 | `lastNameHint` | hmn | Private — shared only with a helper you message | Ntiag tug — tsuas yog tus pab koj sib tham nrog pom | 2026-11-15 | machine-drafted, needs native review |
 | `passwordHint` | hmn | At least 12 characters | Tsawg kawg 12 tus ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `signupPasswordHint` | hmn | At least 12 characters, with at least three of: lowercase letters, uppercase letters, numbers, symbols (with 16 or more characters, two are enough). Avoid common patterns such as "password" or "123456". | Tsawg kawg 12 tus ntawv, muaj tsawg kawg peb yam ntawm: ntawv me, ntawv loj, tus lej, cim (yog muaj 16 tus ntawv lossis ntau dua, ob yam txaus lawm). Zam cov qauv uas neeg siv ntau xws li "password" lossis "123456". | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooLong` | hmn | This password is too long. The limit is 72 bytes: 72 plain letters and numbers, fewer if you use accented letters, other alphabets or emoji. | Lo lus zais no ntev dhau. Qhov txwv yog 72 bytes: 72 tus ntawv thiab tus lej yooj yim, tsawg dua yog koj siv cov ntawv muaj cim, lwm hom ntawv lossis emoji. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordStrength` | hmn | Password strength: {strength} | Lo lus zais muaj zog li cas: {strength} | 2026-11-15 | machine-drafted, needs native review |
+| `resendSent` | hmn | We sent another confirmation email. | Peb tau xa dua ib tsab email lees paub. | 2026-11-15 | machine-drafted, needs native review |
 | `confirmPassword` | hmn | Confirm password | Lees paub lo lus zais | 2026-11-15 | machine-drafted, needs native review |
 | `strengthWeak` | hmn | Weak | Tsis muaj zog | 2026-11-15 | machine-drafted, needs native review |
 | `strengthFair` | hmn | Fair | Nruab nrab | 2026-11-15 | machine-drafted, needs native review |
@@ -3800,6 +3816,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `share` | ht | Share | Pataje | 2026-11-15 | machine-drafted, needs native review |
 | `unsave` | ht | Unsave | Retire | 2026-11-15 | machine-drafted, needs native review |
 | `removedFromPlan` | ht | Removed from My Plan. | Retire nan Plan mwen. | 2026-11-15 | machine-drafted, needs native review |
+| `unsaveFailed` | ht | We couldn't remove that program. Please try again. | Nou pa t ka retire pwogram sa a. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
 | `loadingSaved` | ht | Loading saved programs… | N ap chaje pwogram ou sovgade yo… | 2026-11-15 | machine-drafted, needs native review |
 | `savedTimeout` | ht | Saved programs timed out. Please try again. | Pwogram ou sovgade yo pran twòp tan. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
 | `signInToSave` | ht | Sign in to save programs. | Konekte pou w sovgade pwogram. | 2026-11-15 | machine-drafted, needs native review |
@@ -3849,6 +3866,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `share` | so | Share | La wadaag | 2026-11-15 | machine-drafted, needs native review |
 | `unsave` | so | Unsave | Ka saar | 2026-11-15 | machine-drafted, needs native review |
 | `removedFromPlan` | so | Removed from My Plan. | Waa laga saaray Qorshahayga. | 2026-11-15 | machine-drafted, needs native review |
+| `unsaveFailed` | so | We couldn't remove that program. Please try again. | Lama saari karin barnaamijkaas. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
 | `loadingSaved` | so | Loading saved programs… | Barnaamijyada la keydiyay waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
 | `savedTimeout` | so | Saved programs timed out. Please try again. | Barnaamijyada la keydiyay waqti badan bay qaateen. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
 | `signInToSave` | so | Sign in to save programs. | Gal si aad u keydiso barnaamijyo. | 2026-11-15 | machine-drafted, needs native review |
@@ -3898,6 +3916,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `share` | am | Share | አጋራ | 2026-11-15 | machine-drafted, needs native review |
 | `unsave` | am | Unsave | አስወግድ | 2026-11-15 | machine-drafted, needs native review |
 | `removedFromPlan` | am | Removed from My Plan. | ከዕቅዴ ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `unsaveFailed` | am | We couldn't remove that program. Please try again. | ያንን ፕሮግራም ማስወገድ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
 | `loadingSaved` | am | Loading saved programs… | የተቀመጡ ፕሮግራሞች በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
 | `savedTimeout` | am | Saved programs timed out. Please try again. | የተቀመጡ ፕሮግራሞች በጣም ረጅም ጊዜ ወሰዱ። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
 | `signInToSave` | am | Sign in to save programs. | ፕሮግራሞችን ለማስቀመጥ ይግቡ። | 2026-11-15 | machine-drafted, needs native review |
@@ -3947,12 +3966,18 @@ step in that test, and the test fails until the list below is regenerated.
 | `share` | hmn | Share | Qhia | 2026-11-15 | machine-drafted, needs native review |
 | `unsave` | hmn | Unsave | Tshem tawm | 2026-11-15 | machine-drafted, needs native review |
 | `removedFromPlan` | hmn | Removed from My Plan. | Tshem tawm ntawm Kuv Txoj Kev Npaj lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `unsaveFailed` | hmn | We couldn't remove that program. Please try again. | Tshem tsis tau qhov kev pab cuam ntawd. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
 | `loadingSaved` | hmn | Loading saved programs… | Tab tom thauj cov kev pab cuam koj khaws cia… | 2026-11-15 | machine-drafted, needs native review |
 | `savedTimeout` | hmn | Saved programs timed out. Please try again. | Cov kev pab cuam koj khaws cia siv sijhawm ntev dhau. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
 | `signInToSave` | hmn | Sign in to save programs. | Nkag mus kom khaws tau cov kev pab cuam. | 2026-11-15 | machine-drafted, needs native review |
 | `savedFailed` | hmn | Something went wrong with your saved programs. Please try again. | Muaj qee yam yuam kev nrog koj cov kev pab cuam khaws cia. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
 | `savedEmptyTitle` | hmn | No saved programs yet | Tseem tsis tau muaj kev pab cuam khaws cia | 2026-11-15 | machine-drafted, needs native review |
 | `savedEmptyBody` | hmn | Browse programs and tap “{action}” to keep track of the ones that look right for you. | Saib cov kev pab cuam thiab nias “{action}” kom koj taug qab tau cov uas haum rau koj. | 2026-11-15 | machine-drafted, needs native review |
+| `PROGRAMS_FOUND.other` | ht | {n} programs found | {n} pwogram jwenn | 2026-11-15 | machine-drafted, needs native review |
+| `PROGRAMS_FOUND.other` | so | {n} programs found | {n} barnaamij ayaa la helay | 2026-11-15 | machine-drafted, needs native review |
+| `PROGRAMS_FOUND.one` | am | {n} program found | {n} ፕሮግራም ተገኝቷል | 2026-11-15 | machine-drafted, needs native review |
+| `PROGRAMS_FOUND.other` | am | {n} programs found | {n} ፕሮግራሞች ተገኝተዋል | 2026-11-15 | machine-drafted, needs native review |
+| `PROGRAMS_FOUND.other` | hmn | {n} programs found | Nrhiav tau {n} qhov kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
 
 ### `lib/i18n-settings-language.ts`
 

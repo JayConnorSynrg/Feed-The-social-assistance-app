@@ -19,9 +19,13 @@ import {
   authCount,
   authMessages,
   authT,
+  forgotFailureKey,
   oauthErrorKey,
-  passwordFailureKey,
+  passwordBytes,
   passwordFeedbackKey,
+  passwordTooLong,
+  PASSWORD_MAX_BYTES,
+  resetFailureKey,
   signInFailureKey,
   signUpFailureKey,
   strengthKey,
@@ -32,6 +36,15 @@ const LOCALES = Object.keys(messages) as Locale[]
 
 // "Backup code" and "Email address" are written as in English in Tagalog.
 describeDictionaryParity('auth', authMessages, authT, new Set(['Backup code', 'Email address']))
+
+describe('the sign-up password hint states the rule lib/security.ts applies', () => {
+  it('12+ characters with three kinds pass; 16+ with two pass; 12 with two do not', () => {
+    expect(validatePasswordStrength('abcdefghiJK1').valid).toBe(true)
+    expect(validatePasswordStrength('abcdefghijklmnoP').valid).toBe(true)
+    expect(validatePasswordStrength('abcdefghijK1'.replace('1', 'k')).valid).toBe(false)
+    expect(authT('en', 'signupPasswordHint')).toMatch(/12 characters.*three.*16 or more.*two/)
+  })
+})
 
 describe.each([
   ['LOCKED_MINUTES', LOCKED_MINUTES],
@@ -86,10 +99,33 @@ describe('failure lines from codes', () => {
   })
 
   it('password pages', () => {
-    expect(passwordFailureKey('same_password', 'resetFailed')).toBe('samePassword')
-    expect(passwordFailureKey('weak_password', 'resetFailed')).toBe('passwordTooWeak')
-    expect(passwordFailureKey('x', 'resetFailed')).toBe('resetFailed')
-    expect(passwordFailureKey('x', 'forgotFailed')).toBe('forgotFailed')
+    expect(resetFailureKey('same_password')).toBe('samePassword')
+    expect(resetFailureKey('weak_password')).toBe('passwordTooWeak')
+    expect(resetFailureKey('x')).toBe('resetFailed')
+    expect(forgotFailureKey('x')).toBe('forgotFailed')
+    expect(forgotFailureKey('over_email_send_rate_limit')).toBe('emailRateLimited')
+  })
+
+  // Regression guard (PR #256 review): validation_failed was read as "Enter a valid email address"
+  // on every page, including the new-password page, which has no email field.
+  it.each([
+    ['validation_failed', 'resetFailed', resetFailureKey('validation_failed')],
+    ['validation_failed', 'signupFailed', signUpFailureKey('validation_failed')],
+    ['validation_failed', 'forgotFailed', forgotFailureKey('validation_failed')],
+    ['validation_failed', 'signInFailed', signInFailureKey('validation_failed')],
+    ['validation_failed', 'resendFailed', signUpFailureKey('validation_failed', 'resendFailed')],
+  ])('%s → %s (the page\'s general line)', (_code, key, got) => expect(got).toBe(key))
+
+  it('validation_failed with a password over the byte limit → passwordTooLong (sign-up and reset only)', () => {
+    expect(signUpFailureKey('validation_failed', 'signupFailed', true)).toBe('passwordTooLong')
+    expect(resetFailureKey('validation_failed', true)).toBe('passwordTooLong')
+    expect(resetFailureKey('weak_password', true)).toBe('passwordTooWeak')
+  })
+
+  it('the new-password page never names an email, a captcha or an email rate', () => {
+    for (const code of ['email_address_invalid', 'over_email_send_rate_limit', 'captcha_failed', 'validation_failed', 'over_request_rate_limit']) {
+      expect(['emailInvalid', 'emailRateLimited', 'captchaFailed']).not.toContain(resetFailureKey(code))
+    }
   })
 
   it('the OAuth callback codes, unknown → the general line', () => {
@@ -104,6 +140,24 @@ describe('failure lines from codes', () => {
   it('a code that names an Object.prototype member is not a key', () => {
     expect(signInFailureKey('toString')).toBe('signInFailed')
     expect(oauthErrorKey('constructor')).toBe('oauthFailed')
+  })
+})
+
+describe('the password byte limit (UTF-8 bytes, not characters)', () => {
+  it('ASCII: 72 characters are 72 bytes — allowed; 73 are over', () => {
+    expect(PASSWORD_MAX_BYTES).toBe(72)
+    expect(passwordTooLong('a'.repeat(72))).toBe(false)
+    expect(passwordTooLong('a'.repeat(73))).toBe(true)
+  })
+  it('multi-byte characters: fewer characters reach the limit', () => {
+    expect(passwordBytes('Ж')).toBe(2)
+    expect(passwordBytes('한')).toBe(3)
+    expect(passwordBytes('🌾')).toBe(4)
+    expect(passwordTooLong('Ж'.repeat(36))).toBe(false) // 36 characters, 72 bytes
+    expect(passwordTooLong('Ж'.repeat(37))).toBe(true) // 37 characters, 74 bytes
+    expect(passwordTooLong('한'.repeat(25))).toBe(true) // 25 characters, 75 bytes
+    expect(passwordTooLong('🌾'.repeat(18))).toBe(false) // 18 characters, 72 bytes
+    expect(passwordTooLong('🌾'.repeat(18) + 'a')).toBe(true)
   })
 })
 

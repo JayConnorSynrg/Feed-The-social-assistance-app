@@ -14,6 +14,8 @@
 
 import { translate, type Locale } from './i18n'
 import { friendlyErrorT, FRIENDLY_ERROR_SENTENCES } from './i18n-friendly-error'
+import { formatMessage } from './format-message'
+import { formatCount, pluralMessage, type PluralForms } from './i18n-intl'
 
 export interface ProgramsMessages {
   title: string
@@ -59,6 +61,7 @@ export interface ProgramsMessages {
   share: string
   unsave: string
   removedFromPlan: string
+  unsaveFailed: string
   loadingSaved: string
   savedTimeout: string
   signInToSave: string
@@ -114,6 +117,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Share',
     unsave: 'Unsave',
     removedFromPlan: 'Removed from My Plan.',
+    unsaveFailed: "We couldn't remove that program. Please try again.",
     loadingSaved: 'Loading saved programs…',
     savedTimeout: 'Saved programs timed out. Please try again.',
     signInToSave: 'Sign in to save programs.',
@@ -165,6 +169,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Compartir',
     unsave: 'Quitar',
     removedFromPlan: 'Quitado de Mi Plan.',
+    unsaveFailed: "No pudimos quitar ese programa. Inténtalo de nuevo.",
     loadingSaved: 'Cargando programas guardados…',
     savedTimeout: 'Los programas guardados tardaron demasiado. Inténtalo de nuevo.',
     signInToSave: 'Inicia sesión para guardar programas.',
@@ -217,6 +222,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Pataje',
     unsave: 'Retire',
     removedFromPlan: 'Retire nan Plan mwen.',
+    unsaveFailed: "Nou pa t ka retire pwogram sa a. Tanpri eseye ankò.",
     loadingSaved: 'N ap chaje pwogram ou sovgade yo…',
     savedTimeout: 'Pwogram ou sovgade yo pran twòp tan. Tanpri eseye ankò.',
     signInToSave: 'Konekte pou w sovgade pwogram.',
@@ -268,6 +274,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Chia sẻ',
     unsave: 'Bỏ lưu',
     removedFromPlan: 'Đã xóa khỏi Kế hoạch của tôi.',
+    unsaveFailed: "Không thể bỏ lưu chương trình đó. Vui lòng thử lại.",
     loadingSaved: 'Đang tải chương trình đã lưu…',
     savedTimeout: 'Tải chương trình đã lưu quá lâu. Vui lòng thử lại.',
     signInToSave: 'Đăng nhập để lưu chương trình.',
@@ -319,6 +326,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'مشاركة',
     unsave: 'إلغاء الحفظ',
     removedFromPlan: 'تمت الإزالة من خطتي.',
+    unsaveFailed: "تعذّر إزالة هذا البرنامج. يُرجى المحاولة مرة أخرى.",
     loadingSaved: 'جارٍ تحميل البرامج المحفوظة…',
     savedTimeout: 'استغرق تحميل البرامج المحفوظة وقتًا طويلًا. يُرجى المحاولة مرة أخرى.',
     signInToSave: 'سجّل الدخول لحفظ البرامج.',
@@ -370,6 +378,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: '分享',
     unsave: '取消保存',
     removedFromPlan: '已从我的计划中移除。',
+    unsaveFailed: "无法移除该项目。请重试。",
     loadingSaved: '正在加载已保存的项目…',
     savedTimeout: '加载已保存的项目超时。请重试。',
     signInToSave: '登录后即可保存项目。',
@@ -422,6 +431,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'La wadaag',
     unsave: 'Ka saar',
     removedFromPlan: 'Waa laga saaray Qorshahayga.',
+    unsaveFailed: "Lama saari karin barnaamijkaas. Fadlan isku day mar kale.",
     loadingSaved: 'Barnaamijyada la keydiyay waa la soo rarayaa…',
     savedTimeout: 'Barnaamijyada la keydiyay waqti badan bay qaateen. Fadlan isku day mar kale.',
     signInToSave: 'Gal si aad u keydiso barnaamijyo.',
@@ -473,6 +483,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Partager',
     unsave: 'Retirer',
     removedFromPlan: 'Retiré de Mon plan.',
+    unsaveFailed: "Impossible de retirer ce programme. Veuillez réessayer.",
     loadingSaved: 'Chargement des programmes enregistrés…',
     savedTimeout: 'Le chargement des programmes enregistrés a pris trop de temps. Veuillez réessayer.',
     signInToSave: 'Connectez-vous pour enregistrer des programmes.',
@@ -524,6 +535,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Compartilhar',
     unsave: 'Remover',
     removedFromPlan: 'Removido do Meu Plano.',
+    unsaveFailed: "Não foi possível remover esse programa. Tente novamente.",
     loadingSaved: 'Carregando programas salvos…',
     savedTimeout: 'Os programas salvos demoraram demais. Tente novamente.',
     signInToSave: 'Entre para salvar programas.',
@@ -575,6 +587,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Поделиться',
     unsave: 'Убрать',
     removedFromPlan: 'Убрано из Моего плана.',
+    unsaveFailed: "Не удалось убрать эту программу. Попробуйте ещё раз.",
     loadingSaved: 'Загрузка сохранённых программ…',
     savedTimeout: 'Сохранённые программы загружались слишком долго. Попробуйте ещё раз.',
     signInToSave: 'Войдите, чтобы сохранять программы.',
@@ -626,6 +639,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: '공유',
     unsave: '저장 취소',
     removedFromPlan: '내 계획에서 삭제했습니다.',
+    unsaveFailed: "그 프로그램을 삭제하지 못했습니다. 다시 시도해 주세요.",
     loadingSaved: '저장한 프로그램을 불러오는 중…',
     savedTimeout: '저장한 프로그램을 불러오는 시간이 초과되었습니다. 다시 시도해 주세요.',
     signInToSave: '프로그램을 저장하려면 로그인하세요.',
@@ -677,6 +691,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Ibahagi',
     unsave: 'Alisin',
     removedFromPlan: 'Inalis sa Aking Plano.',
+    unsaveFailed: "Hindi maalis ang programang iyon. Pakisubukang muli.",
     loadingSaved: 'Nilo-load ang mga naka-save na programa…',
     savedTimeout: 'Natagalan ang mga naka-save na programa. Pakisubukang muli.',
     signInToSave: 'Mag-sign in para mag-save ng mga programa.',
@@ -729,6 +744,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'አጋራ',
     unsave: 'አስወግድ',
     removedFromPlan: 'ከዕቅዴ ተወግዷል።',
+    unsaveFailed: "ያንን ፕሮግራም ማስወገድ አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
     loadingSaved: 'የተቀመጡ ፕሮግራሞች በመጫን ላይ…',
     savedTimeout: 'የተቀመጡ ፕሮግራሞች በጣም ረጅም ጊዜ ወሰዱ። እባክዎ እንደገና ይሞክሩ።',
     signInToSave: 'ፕሮግራሞችን ለማስቀመጥ ይግቡ።',
@@ -781,6 +797,7 @@ export const programsMessages: Record<Locale, ProgramsMessages> = {
     share: 'Qhia',
     unsave: 'Tshem tawm',
     removedFromPlan: 'Tshem tawm ntawm Kuv Txoj Kev Npaj lawm.',
+    unsaveFailed: "Tshem tsis tau qhov kev pab cuam ntawd. Thov sim dua.",
     loadingSaved: 'Tab tom thauj cov kev pab cuam koj khaws cia…',
     savedTimeout: 'Cov kev pab cuam koj khaws cia siv sijhawm ntev dhau. Thov sim dua.',
     signInToSave: 'Nkag mus kom khaws tau cov kev pab cuam.',
@@ -824,4 +841,27 @@ export function savedErrorText(error: string, locale: Locale): string {
 /** useResourceSearch's error: its timeout sentence, else the general search line. */
 export function searchErrorText(error: Error, locale: Locale): string {
   return programsT(locale, error.message === 'Search timed out. Please try again.' ? 'searchTimeout' : 'searchFailed')
+}
+
+/** The status line once a list has loaded: "12 programs found". */
+export const PROGRAMS_FOUND: Record<Locale, PluralForms> = {
+  en: { one: '{n} program found', other: '{n} programs found' },
+  es: { one: '{n} programa encontrado', other: '{n} programas encontrados' },
+  ht: { other: '{n} pwogram jwenn' },
+  vi: { other: 'Tìm thấy {n} chương trình' },
+  ar: { zero: '{n} برنامج', one: 'برنامج واحد ({n})', two: 'برنامجان ({n})', few: '{n} برامج', many: '{n} برنامجًا', other: '{n} برنامج' },
+  zh: { other: '找到 {n} 个项目' },
+  so: { other: '{n} barnaamij ayaa la helay' },
+  fr: { one: '{n} programme trouvé', other: '{n} programmes trouvés' },
+  pt: { one: '{n} programa encontrado', other: '{n} programas encontrados' },
+  ru: { one: 'Найдена {n} программа', few: 'Найдено {n} программы', many: 'Найдено {n} программ', other: 'Найдено {n} программы' },
+  ko: { other: '프로그램 {n}개를 찾았습니다' },
+  tl: { other: '{n} programa ang nakita' },
+  am: { one: '{n} ፕሮግራም ተገኝቷል', other: '{n} ፕሮግራሞች ተገኝተዋል' },
+  hmn: { other: 'Nrhiav tau {n} qhov kev pab cuam' },
+}
+
+/** "12 programs found" in the locale's plural form and digits. */
+export function programsFound(n: number, locale: Locale): string {
+  return formatMessage(pluralMessage(PROGRAMS_FOUND[locale] ?? PROGRAMS_FOUND.en, n, locale), { n: formatCount(n, locale) })
 }

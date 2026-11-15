@@ -8,7 +8,8 @@
 // authT(locale, key) (English fallback, logged as i18n.translation_fallback); counts with
 // authCount(table, n, locale).
 // A failure line is chosen from the error's CODE (Supabase AuthError.code, lib/failure-code.ts),
-// never from its text, by signInFailureKey / signUpFailureKey / passwordFailureKey; Supabase's own
+// never from its text, by signInFailureKey / signUpFailureKey / forgotFailureKey / resetFailureKey;
+// each page maps only causes it has a field for, and Supabase's own
 // text is never shown. The password-strength hints of lib/security.ts are read as codes
 // (passwordFeedbackKey). The Terms of Service / Privacy Policy row is not here: it stays English
 // until the legal pages exist.
@@ -68,6 +69,10 @@ export interface AuthMessages {
   lastName: string
   lastNameHint: string
   passwordHint: string
+  signupPasswordHint: string
+  passwordTooLong: string
+  passwordStrength: string
+  resendSent: string
   confirmPassword: string
   strengthWeak: string
   strengthFair: string
@@ -174,6 +179,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Last name',
     lastNameHint: 'Private — shared only with a helper you message',
     passwordHint: 'At least 12 characters',
+    signupPasswordHint: "At least 12 characters, with at least three of: lowercase letters, uppercase letters, numbers, symbols (with 16 or more characters, two are enough). Avoid common patterns such as \"password\" or \"123456\".",
+    passwordTooLong: "This password is too long. The limit is 72 bytes: 72 plain letters and numbers, fewer if you use accented letters, other alphabets or emoji.",
+    passwordStrength: "Password strength: {strength}",
+    resendSent: "We sent another confirmation email.",
     confirmPassword: 'Confirm password',
     strengthWeak: 'Weak',
     strengthFair: 'Fair',
@@ -276,6 +285,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Apellido',
     lastNameHint: 'Privado: solo lo ve un ayudante al que escribas',
     passwordHint: 'Al menos 12 caracteres',
+    signupPasswordHint: "Al menos 12 caracteres, con al menos tres de estos: minúsculas, mayúsculas, números, símbolos (con 16 caracteres o más, bastan dos). Evita patrones comunes como \"password\" o \"123456\".",
+    passwordTooLong: "Esta contraseña es demasiado larga. El límite es de 72 bytes: 72 letras y números simples, menos si usas letras con acento, otros alfabetos o emojis.",
+    passwordStrength: "Seguridad de la contraseña: {strength}",
+    resendSent: "Te enviamos otro correo de confirmación.",
     confirmPassword: 'Confirmar contraseña',
     strengthWeak: 'Débil',
     strengthFair: 'Aceptable',
@@ -379,6 +392,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Non fanmi',
     lastNameHint: 'Prive — se sèlman yon moun k ap ede w ou ekri ki wè l',
     passwordHint: 'Omwen 12 karaktè',
+    signupPasswordHint: "Omwen 12 karaktè, ak omwen twa nan sa yo: lèt miniskil, lèt majiskil, chif, senbòl (avèk 16 karaktè oswa plis, de ase). Evite modèl komen tankou \"password\" oswa \"123456\".",
+    passwordTooLong: "Modpas sa a twò long. Limit la se 72 bytes: 72 lèt ak chif senp, mwens si w itilize lèt ak aksan, lòt alfabè oswa emoji.",
+    passwordStrength: "Fòs modpas la: {strength}",
+    resendSent: "Nou voye yon lòt imèl konfimasyon.",
     confirmPassword: 'Konfime modpas la',
     strengthWeak: 'Fèb',
     strengthFair: 'Pasab',
@@ -481,6 +498,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Họ',
     lastNameHint: 'Riêng tư — chỉ người hỗ trợ bạn nhắn tin mới thấy',
     passwordHint: 'Ít nhất 12 ký tự',
+    signupPasswordHint: "Ít nhất 12 ký tự, có ít nhất ba loại: chữ thường, chữ hoa, chữ số, ký hiệu (từ 16 ký tự trở lên thì chỉ cần hai loại). Tránh các kiểu phổ biến như \"password\" hoặc \"123456\".",
+    passwordTooLong: "Mật khẩu này quá dài. Giới hạn là 72 byte: 72 chữ cái và chữ số thông thường, ít hơn nếu bạn dùng chữ có dấu, bảng chữ cái khác hoặc biểu tượng cảm xúc.",
+    passwordStrength: "Độ mạnh mật khẩu: {strength}",
+    resendSent: "Chúng tôi đã gửi thêm một email xác nhận.",
     confirmPassword: 'Xác nhận mật khẩu',
     strengthWeak: 'Yếu',
     strengthFair: 'Trung bình',
@@ -583,6 +604,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'اسم العائلة',
     lastNameHint: 'خاص — لا يظهر إلا لمساعد تراسله',
     passwordHint: '12 حرفًا على الأقل',
+    signupPasswordHint: "12 حرفًا على الأقل، مع ثلاثة على الأقل مما يلي: أحرف صغيرة، أحرف كبيرة، أرقام، رموز (إذا كانت 16 حرفًا أو أكثر يكفي نوعان). تجنّب الأنماط الشائعة مثل \"password\" أو \"123456\".",
+    passwordTooLong: "كلمة المرور هذه طويلة جدًا. الحد الأقصى 72 بايت: 72 حرفًا ورقمًا لاتينيًا بسيطًا، وأقل إذا استخدمت حروفًا عربية أو حروفًا بعلامات أو رموزًا تعبيرية.",
+    passwordStrength: "قوة كلمة المرور: {strength}",
+    resendSent: "أرسلنا رسالة تأكيد أخرى.",
     confirmPassword: 'تأكيد كلمة المرور',
     strengthWeak: 'ضعيفة',
     strengthFair: 'مقبولة',
@@ -685,6 +710,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: '姓氏',
     lastNameHint: '私密——仅与您发消息的帮助者可见',
     passwordHint: '至少 12 个字符',
+    signupPasswordHint: "至少 12 个字符，并包含以下四类中的至少三类：小写字母、大写字母、数字、符号（16 个字符或以上时，两类即可）。避免使用 \"password\" 或 \"123456\" 等常见组合。",
+    passwordTooLong: "此密码太长。上限为 72 字节：最多 72 个普通英文字母和数字；使用中文、带重音的字母或表情符号时，可用的字符更少。",
+    passwordStrength: "密码强度：{strength}",
+    resendSent: "我们已再次发送确认邮件。",
     confirmPassword: '确认密码',
     strengthWeak: '弱',
     strengthFair: '一般',
@@ -788,6 +817,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Magaca qoyska',
     lastNameHint: 'Gaar — waxaa arka oo keliya caawiye aad fariin u dirto',
     passwordHint: 'Ugu yaraan 12 xaraf',
+    signupPasswordHint: "Ugu yaraan 12 xaraf, oo leh ugu yaraan saddex ka mid ah: xarfo yaryar, xarfo waaweyn, tirooyin, calaamado (haddii ay yihiin 16 xaraf ama ka badan, laba ayaa ku filan). Iska ilaali qaababka caadiga ah sida \"password\" ama \"123456\".",
+    passwordTooLong: "Furahan sirta ah aad buu u dheer yahay. Xadku waa 72 bytes: 72 xaraf iyo tiro caadi ah, ka yar haddii aad isticmaasho xarfo calaamado leh, alifbeetooyin kale ama emoji.",
+    passwordStrength: "Xoogga furaha sirta ah: {strength}",
+    resendSent: "Waxaan kuu dirnay iimayl xaqiijin kale.",
     confirmPassword: 'Xaqiiji furaha sirta ah',
     strengthWeak: 'Daciif',
     strengthFair: 'Dhexdhexaad',
@@ -890,6 +923,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Nom',
     lastNameHint: 'Privé — visible seulement par une personne aidante à qui vous écrivez',
     passwordHint: 'Au moins 12 caractères',
+    signupPasswordHint: "Au moins 12 caractères, avec au moins trois de ces types : minuscules, majuscules, chiffres, symboles (à partir de 16 caractères, deux suffisent). Évitez les modèles courants comme \"password\" ou \"123456\".",
+    passwordTooLong: "Ce mot de passe est trop long. La limite est de 72 octets : 72 lettres et chiffres simples, moins avec des lettres accentuées, d’autres alphabets ou des emojis.",
+    passwordStrength: "Robustesse du mot de passe : {strength}",
+    resendSent: "Nous avons envoyé un autre e-mail de confirmation.",
     confirmPassword: 'Confirmer le mot de passe',
     strengthWeak: 'Faible',
     strengthFair: 'Moyen',
@@ -992,6 +1029,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Sobrenome',
     lastNameHint: 'Privado — visível só para quem ajuda você e com quem você conversa',
     passwordHint: 'Pelo menos 12 caracteres',
+    signupPasswordHint: "Pelo menos 12 caracteres, com pelo menos três destes: letras minúsculas, letras maiúsculas, números, símbolos (com 16 caracteres ou mais, dois bastam). Evite padrões comuns como \"password\" ou \"123456\".",
+    passwordTooLong: "Esta senha é longa demais. O limite é de 72 bytes: 72 letras e números simples, menos se você usar letras acentuadas, outros alfabetos ou emojis.",
+    passwordStrength: "Força da senha: {strength}",
+    resendSent: "Enviamos outro e-mail de confirmação.",
     confirmPassword: 'Confirmar senha',
     strengthWeak: 'Fraca',
     strengthFair: 'Razoável',
@@ -1094,6 +1135,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Фамилия',
     lastNameHint: 'Лично — видно только помощнику, которому вы пишете',
     passwordHint: 'Не менее 12 символов',
+    signupPasswordHint: "Не менее 12 символов и хотя бы три типа из четырёх: строчные буквы, заглавные буквы, цифры, символы (при длине от 16 символов достаточно двух). Избегайте распространённых шаблонов вроде \"password\" или \"123456\".",
+    passwordTooLong: "Пароль слишком длинный. Предел — 72 байта: 72 простые латинские буквы и цифры, меньше, если использовать кириллицу, буквы с диакритикой или эмодзи.",
+    passwordStrength: "Надёжность пароля: {strength}",
+    resendSent: "Мы отправили ещё одно письмо с подтверждением.",
     confirmPassword: 'Подтвердите пароль',
     strengthWeak: 'Слабый',
     strengthFair: 'Средний',
@@ -1196,6 +1241,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: '성',
     lastNameHint: '비공개 — 메시지를 주고받는 도우미에게만 보입니다',
     passwordHint: '12자 이상',
+    signupPasswordHint: "12자 이상, 영문 소문자·대문자·숫자·기호 중 세 가지 이상을 넣으세요(16자 이상이면 두 가지면 됩니다). \"password\"나 \"123456\" 같은 흔한 패턴은 피하세요.",
+    passwordTooLong: "비밀번호가 너무 깁니다. 최대 72바이트까지 쓸 수 있습니다. 영문자와 숫자는 72자까지, 한글이나 다른 문자, 이모지를 쓰면 더 적게 쓸 수 있습니다.",
+    passwordStrength: "비밀번호 강도: {strength}",
+    resendSent: "인증 이메일을 다시 보냈습니다.",
     confirmPassword: '비밀번호 확인',
     strengthWeak: '약함',
     strengthFair: '보통',
@@ -1298,6 +1347,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Apelyido',
     lastNameHint: 'Pribado — makikita lang ng helper na kinakausap mo',
     passwordHint: 'Hindi bababa sa 12 character',
+    signupPasswordHint: "Hindi bababa sa 12 character, na may hindi bababa sa tatlo sa: maliliit na titik, malalaking titik, numero, simbolo (kung 16 character o higit pa, sapat na ang dalawa). Iwasan ang karaniwang pattern gaya ng \"password\" o \"123456\".",
+    passwordTooLong: "Masyadong mahaba ang password na ito. Ang limit ay 72 byte: 72 karaniwang titik at numero, mas kaunti kung gagamit ng titik na may tuldik, ibang alpabeto o emoji.",
+    passwordStrength: "Lakas ng password: {strength}",
+    resendSent: "Nagpadala kami ng panibagong email ng kumpirmasyon.",
     confirmPassword: 'Kumpirmahin ang password',
     strengthWeak: 'Mahina',
     strengthFair: 'Katamtaman',
@@ -1401,6 +1454,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'የአባት ስም',
     lastNameHint: 'የግል — መልእክት ለሚልኩለት ረዳት ብቻ ይታያል',
     passwordHint: 'ቢያንስ 12 ቁምፊዎች',
+    signupPasswordHint: "ቢያንስ 12 ቁምፊዎች፣ ከሚከተሉት ቢያንስ ሶስቱን ያካተተ፦ ትናንሽ ፊደላት፣ ትላልቅ ፊደላት፣ ቁጥሮች፣ ምልክቶች (16 ወይም ከዚያ በላይ ቁምፊዎች ከሆኑ ሁለቱ ይበቃሉ)። እንደ \"password\" ወይም \"123456\" ያሉ የተለመዱ ቅጦችን ያስወግዱ።",
+    passwordTooLong: "ይህ የይለፍ ቃል በጣም ረጅም ነው። ገደቡ 72 ባይት ነው፦ 72 ቀላል የእንግሊዝኛ ፊደላትና ቁጥሮች፤ የአማርኛ ፊደላትን ወይም ኢሞጂ ከተጠቀሙ ያነሰ።",
+    passwordStrength: "የይለፍ ቃል ጥንካሬ፦ {strength}",
+    resendSent: "ሌላ የማረጋገጫ ኢሜይል ልከናል።",
     confirmPassword: 'የይለፍ ቃሉን ያረጋግጡ',
     strengthWeak: 'ደካማ',
     strengthFair: 'መካከለኛ',
@@ -1504,6 +1561,10 @@ export const authMessages: Record<Locale, AuthMessages> = {
     lastName: 'Lub xeem',
     lastNameHint: 'Ntiag tug — tsuas yog tus pab koj sib tham nrog pom',
     passwordHint: 'Tsawg kawg 12 tus ntawv',
+    signupPasswordHint: "Tsawg kawg 12 tus ntawv, muaj tsawg kawg peb yam ntawm: ntawv me, ntawv loj, tus lej, cim (yog muaj 16 tus ntawv lossis ntau dua, ob yam txaus lawm). Zam cov qauv uas neeg siv ntau xws li \"password\" lossis \"123456\".",
+    passwordTooLong: "Lo lus zais no ntev dhau. Qhov txwv yog 72 bytes: 72 tus ntawv thiab tus lej yooj yim, tsawg dua yog koj siv cov ntawv muaj cim, lwm hom ntawv lossis emoji.",
+    passwordStrength: "Lo lus zais muaj zog li cas: {strength}",
+    resendSent: "Peb tau xa dua ib tsab email lees paub.",
     confirmPassword: 'Lees paub lo lus zais',
     strengthWeak: 'Tsis muaj zog',
     strengthFair: 'Nruab nrab',
@@ -1633,17 +1694,25 @@ export function authCount(table: Record<Locale, PluralForms>, n: number, locale:
 // class, lib/failure-code.ts); an unknown code reads the page's general line.
 // ---------------------------------------------------------------------------
 
-const COMMON_FAILURES: Record<string, AuthKey> = {
-  captcha_failed: 'captchaFailed',
-  email_address_invalid: 'emailInvalid',
-  validation_failed: 'emailInvalid',
-  over_email_send_rate_limit: 'emailRateLimited',
+/** The most bytes a password may have: bcrypt, behind Supabase Auth, reads only the first 72. */
+export const PASSWORD_MAX_BYTES = 72
+
+/** A password's length in UTF-8 bytes (the unit of the limit), not in characters. */
+export function passwordBytes(password: string): number {
+  return new TextEncoder().encode(password).length
 }
 
+/** True when the password is over the limit (bytes, not characters). */
+export function passwordTooLong(password: string): boolean {
+  return passwordBytes(password) > PASSWORD_MAX_BYTES
+}
+
+// Each page maps only the codes whose line describes something on that page: a line never names a
+// field the page does not have. `validation_failed` is not generic: Supabase sends it for several
+// fields, so it reads the page's general line — except, on the two pages with a new password, when
+// that password is over the byte limit (then it is the cause).
 function failureKey(code: string, own: Record<string, AuthKey>, fallback: AuthKey): AuthKey {
-  if (Object.prototype.hasOwnProperty.call(own, code)) return own[code]
-  if (Object.prototype.hasOwnProperty.call(COMMON_FAILURES, code)) return COMMON_FAILURES[code]
-  return fallback
+  return Object.prototype.hasOwnProperty.call(own, code) ? own[code] : fallback
 }
 
 /** Sign in with email and password. */
@@ -1652,11 +1721,17 @@ export function signInFailureKey(code: string): AuthKey {
     invalid_credentials: 'invalidCredentials',
     email_not_confirmed: 'emailNotConfirmed',
     over_request_rate_limit: 'loginRateLimited',
+    captcha_failed: 'captchaFailed',
+    email_address_invalid: 'emailInvalid',
   }, 'signInFailed')
 }
 
-/** Sign up (and the confirmation email's resend: fallback resendFailed). */
-export function signUpFailureKey(code: string, fallback: AuthKey = 'signupFailed'): AuthKey {
+/**
+ * Sign up, and the confirmation email's resend (fallback resendFailed). `passwordOverLimit`: the
+ * typed password is over PASSWORD_MAX_BYTES (only then does validation_failed mean the password).
+ */
+export function signUpFailureKey(code: string, fallback: AuthKey = 'signupFailed', passwordOverLimit = false): AuthKey {
+  if (code === 'validation_failed' && passwordOverLimit) return 'passwordTooLong'
   return failureKey(code, {
     user_already_exists: 'accountExists',
     email_exists: 'accountExists',
@@ -1664,16 +1739,29 @@ export function signUpFailureKey(code: string, fallback: AuthKey = 'signupFailed
     signup_disabled: 'signupUnavailable',
     email_provider_disabled: 'signupUnavailable',
     over_request_rate_limit: 'signupRateLimited',
+    captcha_failed: 'captchaFailed',
+    email_address_invalid: 'emailInvalid',
+    over_email_send_rate_limit: 'emailRateLimited',
   }, fallback)
 }
 
-/** Forgot password (fallback forgotFailed) and the new-password form (fallback resetFailed). */
-export function passwordFailureKey(code: string, fallback: 'forgotFailed' | 'resetFailed'): AuthKey {
+/** Forgot password: the page has an email field and sends an email. */
+export function forgotFailureKey(code: string): AuthKey {
+  return failureKey(code, {
+    captcha_failed: 'captchaFailed',
+    email_address_invalid: 'emailInvalid',
+    over_email_send_rate_limit: 'emailRateLimited',
+    over_request_rate_limit: 'emailRateLimited',
+  }, 'forgotFailed')
+}
+
+/** Set a new password: the page has only the two password fields (no email, no captcha). */
+export function resetFailureKey(code: string, passwordOverLimit = false): AuthKey {
+  if (code === 'validation_failed' && passwordOverLimit) return 'passwordTooLong'
   return failureKey(code, {
     same_password: 'samePassword',
     weak_password: 'passwordTooWeak',
-    over_request_rate_limit: 'emailRateLimited',
-  }, fallback)
+  }, 'resetFailed')
 }
 
 /** The /auth/callback and /auth/confirm `error` codes → their line; unknown → oauthFailed. */

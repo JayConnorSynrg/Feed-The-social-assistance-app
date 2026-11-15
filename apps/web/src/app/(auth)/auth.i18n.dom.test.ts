@@ -60,7 +60,7 @@ vi.mock('@/hooks/use-rate-limited-action', () => ({
 vi.mock('@/hooks/use-csrf-token', () => ({ useCsrfToken: () => ({ token: 'tok', validate: () => true }) }))
 vi.mock('@/components/auth/turnstile-widget', () => ({ TurnstileWidget: () => null }))
 vi.mock('@/lib/audit-logger', () => ({ logPredefinedEvent: vi.fn() }))
-vi.mock('@/lib/mfa', () => ({ mfaService: { listFactors: async () => [], getAssuranceLevel: async () => 'aal1', createChallenge: async () => 'ch1', verifyChallenge: async () => false } }))
+vi.mock('@/lib/mfa', () => ({ mfaService: { listFactors: async () => [], getAssuranceLevel: async () => 'aal1', createChallenge: async () => 'ch1', verifyChallenge: async () => false, verifyBackupCode: async () => false } }))
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), time: () => ({ end: vi.fn(), error: vi.fn() }) },
   logEvent: vi.fn(),
@@ -416,5 +416,98 @@ describe('the two-factor prompt (translation only)', () => {
     await settle()
     expect(document.querySelectorAll('[role="alert"]')).toHaveLength(1)
     expect(alertText()).toContain(authT('ko', 'mfaInvalidCode'))
+  })
+})
+
+describe('PR #256 review fixes', () => {
+  // 37 × "Ж" (2 bytes each) + "Aa1!" = 41 characters but 78 bytes: over the 72-byte limit while
+  // well under 72 characters, and strong enough to pass the strength rule.
+  const LONG = 'Ж'.repeat(37) + 'Aa1!'
+  const updateCalls = () => h.calls.filter((c) => c[0] === 'updateUser' || c[0] === 'signUp')
+
+  it('sign up: a password over 72 bytes shows passwordTooLong before any Supabase call', async () => {
+    await render(signup, 'ko')
+    type('firstName', 'Ada'); type('email', EMAIL); type('password', LONG); type('confirmPassword', LONG); check('terms')
+    await submit()
+    expect(alertText()).toContain(authT('ko', 'passwordTooLong'))
+    expect(updateCalls()).toHaveLength(0)
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('reset: a password over 72 bytes shows passwordTooLong before any Supabase call', async () => {
+    await render(reset, 'ar')
+    type('new-password', LONG); type('confirm-password', LONG)
+    await submit()
+    expect(alertText()).toContain(authT('ar', 'passwordTooLong'))
+    expect(updateCalls()).toHaveLength(0)
+  })
+
+  it('validation_failed with a password within the limit reads the page\'s general line, never an email line', async () => {
+    h.results.updateUser = { error: supabaseError('validation_failed', 'Unable to validate input') }
+    await render(reset, 'ko'); type('new-password', PASSWORD); type('confirm-password', PASSWORD); await submit()
+    expect(alertText()).toContain(authT('ko', 'resetFailed'))
+    expect(alertText()).not.toContain(authT('ko', 'emailInvalid'))
+    await act(async () => root.render(el('div')))
+    h.results.signUp = { error: supabaseError('validation_failed', 'Unable to validate input') }
+    await signUp('ko')
+    expect(alertText()).toContain(authT('ko', 'signupFailed'))
+  })
+
+  it('F2: the password field is described by the real rule and the strength block; the live line speaks only when the word changes', async () => {
+    await render(signup, 'ko')
+    const pw = byId('password')
+    expect(pw.getAttribute('aria-describedby')).toBe('password-hint password-strength')
+    expect(byId<HTMLElement>('password-hint').textContent).toBe(authT('ko', 'signupPasswordHint'))
+    const live = byId<HTMLElement>('password-strength').querySelector('[aria-live="polite"]') as HTMLElement
+    expect(live).not.toBeNull()
+    let changes = 0
+    const observer = new MutationObserver((records) => { changes += records.length })
+    observer.observe(live, { childList: true, subtree: true, characterData: true })
+    for (const v of ['a', 'ab', 'abc', 'abcd']) type('password', v) // all "weak"
+    type('password', 'abcdefghiJK1!') // strong
+    await Promise.resolve()
+    observer.disconnect()
+    expect(changes).toBe(2) // the line appears once (weak) and changes once (strong): five keystrokes, two updates
+    expect(live.textContent).toContain(authT('ko', 'strengthStrong'))
+  })
+
+  it('F5: submit buttons grow with their words (no clipped label in long languages)', async () => {
+    for (const [page, key] of [[login, null], [signup, 'createAccount'], [forgot, 'sendResetLink'], [reset, 'updatePassword']] as const) {
+      await render(page, 'ru')
+      const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement
+      expect(submitButton.className, String(key)).toMatch(/\bh-auto\b/)
+      expect(submitButton.className).toMatch(/\bmin-h-9\b/)
+      expect(submitButton.className).toMatch(/\bwhitespace-normal\b/)
+      await act(async () => root.render(el('div')))
+    }
+  })
+
+  it('P7: a resend that worked is said in the always-mounted status line', async () => {
+    await signUp('ko')
+    const status = container.querySelector('[role="status"]') as HTMLElement
+    expect(status).not.toBeNull()
+    expect(status.textContent).toBe('')
+    await act(async () => button(authT('ko', 'resendEmail')).click())
+    await settle()
+    expect(status.textContent).toBe(authT('ko', 'resendSent'))
+  })
+
+  it('P4 / F3: backup-code verify is aria-disabled when empty, refocuses the field on failure; the back arrow mirrors in RTL', async () => {
+    await render(() => el(MFAVerify, { factorId: 'f1', onSuccess: () => null }), 'ar')
+    await act(async () => button(authT('ar', 'mfaUseBackup')).click())
+    await settle()
+    const verify = button(authT('ar', 'mfaVerifyBackup'))
+    expect(verify.getAttribute('aria-disabled')).toBe('true')
+    expect(verify.disabled).toBe(false)
+    const back = button(authT('ar', 'mfaBackToApp'))
+    const arrow = back.querySelector('svg') as SVGElement
+    expect(arrow.getAttribute('class')).toMatch(/rtl:-scale-x-100/)
+    expect(arrow.getAttribute('class')).not.toMatch(/\bmr-2\b/)
+    type('mfa-backup-code', 'abcd-1234')
+    verify.focus()
+    await act(async () => verify.click())
+    await settle()
+    expect(alertText()).toContain(authT('ar', 'mfaInvalidBackup'))
+    expect(document.activeElement).toBe(byId('mfa-backup-code'))
   })
 })
