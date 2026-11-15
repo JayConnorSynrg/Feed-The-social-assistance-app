@@ -476,7 +476,7 @@ interface ChatErrorBannerProps {
   isRetrying: boolean
 }
 
-function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
+export function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
   // The viewer's locale, the one every surface reads.
   const locale = useProfileLocale()
   if (!kind) return null

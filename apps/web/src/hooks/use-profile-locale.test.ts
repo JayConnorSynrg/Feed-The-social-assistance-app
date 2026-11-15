@@ -124,23 +124,14 @@ describe('a device choice re-renders every reader', () => {
   })
 })
 
-describe('every surface reads the one locale', () => {
+describe('portalled content keeps a truthful language', () => {
+  // A source guard, on purpose: Radix portals render nothing without a DOM (renderToStaticMarkup
+  // rejects createPortal, and this repo has no DOM renderer). The assistant's language and the
+  // chat error banner are tested by behaviour: use-chat.locale.test.ts,
+  // components/panels/chat-error-banner.lang.test.ts.
   const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 
-  it('the assistant answers in useProfileLocale, with no language rule of its own', () => {
-    const chat = read('./use-chat.ts')
-    expect(chat).toMatch(/useProfileLocale\(\)/)
-    expect(chat).toMatch(/preferredLanguage: localeRef\.current/)
-    expect(chat).not.toMatch(/GUEST_LANGUAGE_KEY|navigator\.language|'hmn'/)
-  })
-
-  it('the chat error banner reads useProfileLocale, not the device', () => {
-    const panel = read('../components/panels/chat-panel.tsx')
-    expect(panel).not.toMatch(/resolveLocale\(/)
-    expect(panel).toMatch(/function ChatErrorBanner[\s\S]*?const locale = useProfileLocale\(\)/)
-  })
-
-  it('portalled content (outside #app-content) is English unless the caller passes its own lang', () => {
+  it('dialog, sheet, alert-dialog and select content are English unless the caller passes its own lang', () => {
     for (const f of ['dialog', 'sheet', 'alert-dialog', 'select']) {
       const src = read(`../components/ui/${f}.tsx`)
       expect(src, f).toMatch(/lang="en"\s+dir="ltr"\s+\{\.\.\.props\}/)

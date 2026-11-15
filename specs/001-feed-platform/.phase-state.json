@@ -938,12 +938,12 @@
       "round7Gates": "type-check 0; eslint 0 errors / 113 warnings; vitest 223 files / 4,809 passed / 14 todo on Node 20.20.2 and 24.21.0 (30s timeout); node --test 63/63; next build ok; own mutants 5/5 red; reviewer's 35: 33 red, J8 and K6 equivalent"
     },
     "feed-p1-language-save": {
-      "status": "BUILT",
+      "status": "REVIEW_FIX_ROUND_1_BUILT",
       "branch": "feature/feed-p1-language-save",
       "base": "origin/develop 08a14f9",
       "migration": null,
       "docs": "docs/observability.md (Language: saves, profile reads and locale changes); docs/i18n-native-review.md",
-      "note": "Language save applies at once and only on success (optimistic + revert; timeout and zero-row are failures); a failed same-user profile re-read keeps the profile; one locale source (useProfileLocale) incl. chat; feed_locale cookie sets <html lang dir> and the pre-profile locale; settings.language.save / auth.profile.read / i18n.locale_changed logged; Language section in 14 locales. DB lane: preferred_language attacl drift (no SELECT for authenticated)."
+      "note": "Language save applies at once and only on success (optimistic + revert; timeout and zero-row are failures); a failed same-user profile re-read keeps the profile; one locale source (useProfileLocale) incl. chat; feed_locale cookie sets <html lang dir> and the pre-profile locale; settings.language.save / auth.profile.read / i18n.locale_changed logged; Language section in 14 locales. DB lane: preferred_language attacl drift (no SELECT for authenticated). Fix round 1: no-profile save reads first or fails visibly with nothing written (no_profile); outcome\u2192message, refreshSession/updateProfile keep, LocaleSync behaviour tested; mid-save read keeps the language; switch mid-save writes no cookie; reviewer mutants A\u2013E RED."
     }
   }
 }
