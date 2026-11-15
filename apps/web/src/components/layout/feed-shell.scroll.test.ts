@@ -43,3 +43,12 @@ describe('card-scroll class wiring', () => {
     expect(feedTab).not.toMatch(/overflow-y-(auto|scroll)/)
   })
 })
+
+describe('mobile bottom nav', () => {
+  it('marks the active tab aria-current="page" and inactive labels are stone-600 (4.5:1 on white)', () => {
+    expect(shell).toContain("aria-current={isActive ? 'page' : undefined}")
+    expect(shell).toContain("isActive ? 'text-[#4a5d23]' : 'text-stone-600'")
+    expect(shell).not.toContain("'text-stone-400'")
+  })
+})
+

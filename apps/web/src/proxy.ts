@@ -102,18 +102,27 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // MFA step-up. A session needs step-up when a verified factor is enrolled (nextLevel aal2) but this
-  // session has not verified it (currentLevel aal1). Only admin surfaces require AAL2
-  // (lib/mfa-routes.ts); members keep using `/` at AAL1.
+  // MFA step-up. A session needs step-up when the user holds a verified factor but this session has
+  // not verified it (aal1). "Holds a verified factor" comes from getUser() — the auth server's answer,
+  // not the session cookie. The session's current level is read only for such users; an error
+  // (thrown, returned, or no level) counts as unknown and fails closed on admin routes. Only admin
+  // surfaces require AAL2 (lib/mfa-routes.ts); members keep using `/` at AAL1.
   let stepUp: 'needed' | 'not_needed' | 'unknown' = 'not_needed'
-  if (user) {
+  const hasVerifiedFactor = (user?.factors ?? []).some((factor) => factor.status === 'verified')
+  if (user && hasVerifiedFactor) {
     try {
-      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      stepUp = data?.nextLevel === 'aal2' && data?.currentLevel === 'aal1' ? 'needed' : 'not_needed'
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      const currentLevel = error ? undefined : data?.currentLevel
+      if (currentLevel === 'aal2') stepUp = 'not_needed'
+      else if (currentLevel === 'aal1') stepUp = 'needed'
+      else {
+        stepUp = 'unknown'
+        log('error', 'proxy.mfa.error', { pathname, error: error?.message ?? 'no assurance level' })
+      }
     } catch (error) {
       stepUp = 'unknown'
       log('error', 'proxy.mfa.error', {
-        pathname: request.nextUrl.pathname,
+        pathname,
         error: error instanceof Error ? error.message : String(error),
       })
     }

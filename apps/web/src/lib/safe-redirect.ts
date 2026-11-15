@@ -18,6 +18,8 @@
  *   - must NOT contain control chars (\x00-\x1f, \x7f)   → browsers strip
  *     embedded TAB/LF/CR then re-evaluate, so `/\t/evil.com` resolves to
  *     https://evil.com/.
+ *   - its normalized pathname must NOT start with '//'  → `/.//evil.com`
+ *     and `/..//evil.com` collapse to `//evil.com`.
  */
 export function safeRelativePath(
   raw: string | null | undefined,
@@ -31,5 +33,8 @@ export function safeRelativePath(
   // Control chars (TAB/LF/CR/NUL/DEL) are themselves the attack vector here:
   // browsers strip them then re-evaluate, so `/\t/evil.com` resolves off-origin.
   if (/[\x00-\x1f\x7f]/.test(raw)) return fallback
+  // Dot segments collapse before the browser reads the path: `/.//evil.com` and `/..//evil.com`
+  // normalize to `//evil.com`, which a later redirect or link resolves off-origin.
+  if (new URL(raw, 'http://x').pathname.startsWith('//')) return fallback
   return raw
 }

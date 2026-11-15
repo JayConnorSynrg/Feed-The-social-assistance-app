@@ -32,3 +32,10 @@ describe('safe-area-pb utility', () => {
     for (const { c } of uses) expect(css).toContain(`@utility ${c}`)
   })
 })
+
+describe('focused controls clear the fixed mobile nav', () => {
+  it('below md, html scroll-padding-bottom is the nav height plus the inset', () => {
+    expect(css).toMatch(/@media \(width < 48rem\)\s*\{\s*html\s*\{\s*scroll-padding-bottom:\s*calc\(5rem \+ env\(safe-area-inset-bottom\)\);/)
+  })
+})
+

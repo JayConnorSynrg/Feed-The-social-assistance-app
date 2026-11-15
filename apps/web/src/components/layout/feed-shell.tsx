@@ -502,8 +502,9 @@ function MobileBottomNav() {
             <button
               key={panel}
               onClick={() => panel && setActivePanel(panel)}
+              aria-current={isActive ? 'page' : undefined}
               className={`flex flex-col items-center p-2 min-w-[60px] ${
-                isActive ? 'text-[#4a5d23]' : 'text-stone-400'
+                isActive ? 'text-[#4a5d23]' : 'text-stone-600'
               }`}
             >
               <Icon className="w-5 h-5" />

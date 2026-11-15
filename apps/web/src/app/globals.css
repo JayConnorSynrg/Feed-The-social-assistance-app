@@ -6,6 +6,13 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Below md the bottom nav is fixed over the page: keep focused controls scrolled clear of it. */
+@media (width < 48rem) {
+  html {
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* FEED Platform Design System */
 
 :root {

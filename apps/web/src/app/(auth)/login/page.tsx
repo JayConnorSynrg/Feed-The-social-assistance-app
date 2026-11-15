@@ -240,16 +240,18 @@ function LoginForm() {
     }
   }
 
-  const handleMFASuccess = async () => {
-    // Admin routes need an aal2 session. A backup code is checked by the app and does not raise the
-    // session to aal2, so an admin destination waits for aal2; otherwise ask for the app code.
-    if (requiresMfa(redirectTo.split(/[?#]/)[0]) && (await mfaService.getAssuranceLevel()) !== 'aal2') {
-      setError('Enter the 6-digit code from your authenticator app to continue.')
-      return
+  // Admin routes need an aal2 session. A backup code is checked by the app and does not raise the
+  // session to aal2, so for an admin destination the backup-code option is hidden (a code would be
+  // consumed and still refused) and navigation waits for aal2. A refusal is returned to MFAVerify,
+  // which shows it in its one alert region.
+  const destinationNeedsAal2 = requiresMfa(redirectTo.split(/[?#]/)[0])
+  const handleMFASuccess = async (): Promise<string | null> => {
+    if (destinationNeedsAal2 && (await mfaService.getAssuranceLevel()) !== 'aal2') {
+      return 'Enter the 6-digit code from your authenticator app to continue.'
     }
-    setError(null)
     router.push(redirectTo)
     router.refresh()
+    return null
   }
 
   const handleMFABack = () => {
@@ -485,16 +487,12 @@ function LoginForm() {
           </>
         ) : (
           <CardContent className="bg-lime-50/30 mx-4 rounded-lg p-4 mt-4">
-            {error && (
-              <p role="alert" className="mb-3 text-sm text-red-900" data-testid="mfa-step-up-error">
-                {error}
-              </p>
-            )}
             {mfaFactorId && (
               <MFAVerify
                 factorId={mfaFactorId}
                 onSuccess={handleMFASuccess}
                 onBack={handleMFABack}
+                allowBackupCode={!destinationNeedsAal2}
               />
             )}
           </CardContent>

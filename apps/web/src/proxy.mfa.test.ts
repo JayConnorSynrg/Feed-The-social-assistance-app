@@ -3,22 +3,35 @@
 // an MFA-enrolled session that has not verified this session is sent to /login?step=mfa from an
 // admin route. Both directions run through the real proxy() with a mocked Supabase client.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NextRequest } from 'next/server'
 
 type Aal = { currentLevel: 'aal1' | 'aal2'; nextLevel: 'aal1' | 'aal2' }
-const state: { aal: Aal | 'error'; signedIn: boolean } = { aal: { currentLevel: 'aal1', nextLevel: 'aal2' }, signedIn: true }
+// state.aal is what the session cookie says; state.factor is what the auth server (getUser) says.
+// By default the server agrees with the cookie (a verified factor iff nextLevel is aal2).
+const state: { aal: Aal | 'error' | 'returned-error'; signedIn: boolean; factor: boolean | null; aalCalls: number } = {
+  aal: { currentLevel: 'aal1', nextLevel: 'aal2' }, signedIn: true, factor: null, aalCalls: 0,
+}
+const serverHasFactor = () => state.factor ?? (typeof state.aal === 'string' || state.aal.nextLevel === 'aal2')
 
 vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({
     auth: {
-      getUser: async () => ({ data: { user: state.signedIn ? { id: 'u1', is_anonymous: false } : null } }),
+      getUser: async () => ({
+        data: {
+          user: state.signedIn
+            ? { id: 'u1', is_anonymous: false, factors: serverHasFactor() ? [{ id: 'f1', status: 'verified' }] : [] }
+            : null,
+        },
+      }),
       mfa: {
         getAuthenticatorAssuranceLevel: async () => {
+          state.aalCalls++
           if (state.aal === 'error') throw new Error('aal lookup failed')
-          return { data: state.aal }
+          if (state.aal === 'returned-error') return { data: null, error: { message: 'aal lookup failed' } }
+          return { data: state.aal, error: null }
         },
       },
     },
@@ -40,7 +53,7 @@ async function hit(path: string) {
 const isMfaRedirect = (r: { status: number; location: string | null }) =>
   r.status === 307 && !!r.location && new URL(r.location).pathname === '/login' && new URL(r.location).searchParams.get('step') === 'mfa'
 
-beforeEach(() => { state.aal = ENROLLED_UNVERIFIED; state.signedIn = true })
+beforeEach(() => { state.aal = ENROLLED_UNVERIFIED; state.signedIn = true; state.factor = null; state.aalCalls = 0 })
 
 describe('members are not asked for MFA', () => {
   it.each([['enrolled, unverified', ENROLLED_UNVERIFIED], ['not enrolled', NOT_ENROLLED], ['verified', VERIFIED]])(
@@ -49,7 +62,7 @@ describe('members are not asked for MFA', () => {
       expect(await hit('/')).toEqual({ status: 200, location: null })
     })
 
-  it.each(['/onboarding', '/federation/directory', '/s/post/abc', '/api/client-log', '/auth/callback'])(
+  it.each(['/onboarding', '/s/post/abc', '/api/client-log', '/api/geocode', '/auth/callback'])(
     'an enrolled, unverified member reaches %s without an MFA redirect', async (path) => {
       expect(isMfaRedirect(await hit(path))).toBe(false)
     })
@@ -63,7 +76,8 @@ describe('members are not asked for MFA', () => {
 })
 
 describe('admin surfaces still require MFA', () => {
-  it.each(['/moderation', '/moderation/org/123', '/federation', '/federation/dashboard', '/federation/sync-config', '/api/admin/users/x/ban'])(
+  it.each(['/moderation', '/moderation/org/123', '/federation', '/federation/dashboard', '/federation/sync-config', '/federation/directory',
+    '/api/admin/users/x/ban', '/api/community-summary'])(
     'an enrolled, unverified session at %s is sent to /login?step=mfa', async (path) => {
       const r = await hit(path)
       expect(isMfaRedirect(r)).toBe(true)
@@ -79,6 +93,8 @@ describe('admin surfaces still require MFA', () => {
 // Every route in the app is classified from the filesystem: admin iff it sits in the (admin)
 // group or under api/admin. A new admin page that the list misses, or a member page it
 // over-matches, turns this red.
+const ADMIN_GATE = /rpc\(\s*['"](is_current_user_admin|current_user_tier|is_org_admin_any)['"]/
+
 describe('requiresMfa matches exactly the admin routes on disk', () => {
   const appDir = fileURLToPath(new URL('./app', import.meta.url))
   const routes: { url: string; admin: boolean }[] = []
@@ -88,7 +104,11 @@ describe('requiresMfa matches exactly the admin routes on disk', () => {
       if (statSync(p).isDirectory()) walk(p)
       else if (/^(page|route)\.tsx?$/.test(name)) {
         const segs = relative(appDir, dir).split(sep).filter(Boolean)
-        const admin = segs[0] === '(admin)' || (segs[0] === 'api' && segs[1] === 'admin')
+        // Admin-only = in the (admin) group, or gated by an admin RPC in the file itself or in a
+        // layout above it (is_current_user_admin / current_user_tier / is_org_admin_any).
+        const gated = [join(dir, name), ...segs.map((_, i) => join(appDir, ...segs.slice(0, i + 1), 'layout.tsx'))]
+          .some((f) => { try { return ADMIN_GATE.test(readFileSync(f, 'utf8')) } catch { return false } })
+        const admin = segs[0] === '(admin)' || gated
         const url = '/' + segs.filter((s) => !/^\(.*\)$/.test(s)).map((s) => (s.startsWith('[') ? 'x' : s)).join('/')
         routes.push({ url, admin })
       }
@@ -98,6 +118,9 @@ describe('requiresMfa matches exactly the admin routes on disk', () => {
 
   it('finds both admin and member routes (control)', () => {
     expect(routes.some((r) => r.admin)).toBe(true)
+    // the gate grep finds the admin pages and APIs outside the (admin) group
+    expect(routes.filter((r) => r.admin && !r.url.startsWith('/moderation')).map((r) => r.url)).toEqual(
+      expect.arrayContaining(['/federation/directory', '/api/community-summary', '/api/admin/users/x/ban']))
     expect(routes.some((r) => !r.admin && r.url === '/')).toBe(true)
   })
 
@@ -143,8 +166,8 @@ describe('MFA step-up prompt at /login?step=mfa', () => {
 })
 
 describe('an unreadable assurance level fails closed', () => {
-  it('an admin route sends to / and / is served', async () => {
-    state.aal = 'error'
+  it.each(['error', 'returned-error'] as const)('%s: an admin route sends to / and / is served', async (kind) => {
+    state.aal = kind
     const r = await hit('/moderation')
     expect(new URL(r.location!).pathname).toBe('/')
     expect(await hit('/')).toEqual({ status: 200, location: null })
@@ -158,6 +181,7 @@ describe('no redirect loop from any assurance level and route', () => {
     ['enrolled, unverified', () => { state.aal = ENROLLED_UNVERIFIED }],
     ['verified', () => { state.aal = VERIFIED }],
     ['aal lookup error', () => { state.aal = 'error' }],
+    ['aal returned error', () => { state.aal = 'returned-error' }],
   ]
   const ROUTES = ['/', '/login', '/login?step=mfa', '/login?step=mfa&redirectTo=%2Fmoderation', '/signup', '/onboarding',
     '/moderation', '/moderation?tab=people', '/federation', '/federation/dashboard', '/federation/directory', '/api/admin/users/x/ban', '/s/post/x']
@@ -186,4 +210,20 @@ describe('no redirect loop from any assurance level and route', () => {
       throw new Error(`no terminal response from ${start}`)
     })
   }
+})
+
+describe('whether the user holds a verified factor comes from the auth server, not the cookie', () => {
+  it('a verified factor on the server with a cookie claiming none still needs step-up', async () => {
+    state.aal = NOT_ENROLLED // cookie: nextLevel aal1
+    state.factor = true // server: verified factor
+    expect(isMfaRedirect(await hit('/moderation'))).toBe(true)
+  })
+
+  it('a member with no factor on the server is never asked, and the cookie is not read', async () => {
+    state.aal = ENROLLED_UNVERIFIED
+    state.factor = false
+    expect(isMfaRedirect(await hit('/moderation'))).toBe(false)
+    expect(await hit('/')).toEqual({ status: 200, location: null })
+    expect(state.aalCalls).toBe(0)
+  })
 })
