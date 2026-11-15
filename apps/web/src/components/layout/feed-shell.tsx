@@ -25,7 +25,6 @@ import {
   Heart,
   Package,
   Leaf,
-  ExternalLink,
   Compass,
   Search,
   ScrollText,
@@ -36,6 +35,10 @@ import { logEvent, logger } from '@/lib/logger'
 import { parseHash, type FocusKind, type FocusTarget } from '@/lib/deep-link'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { resolveFeedSubtab } from '@/components/feed/feed-subtab'
+import { ImpactOverviewCard } from '@/components/layout/impact-overview-card'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { formatDate } from '@/lib/i18n-intl'
+import { dir } from '@/lib/i18n'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -381,8 +384,9 @@ interface WelcomeCardProps {
   userRole: UserRole
 }
 
-function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
-  const today = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+export function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
+  const locale = useProfileLocale()
+  const today = formatDate(new Date().toISOString(), locale, Intl.DateTimeFormat().resolvedOptions().timeZone)
 
   // Honest, role-aware tagline — no fabricated stats. Real impact metrics
   // arrive in a later wave; until then the card welcomes the user warmly.
@@ -403,7 +407,10 @@ function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
         <h3 className="text-lg font-semibold text-stone-800">Welcome back, {userName}!</h3>
         <Leaf className="w-4 h-4 text-[#4a5d23]" />
       </div>
-      <p className="text-xs text-stone-400 mb-6">{today}</p>
+      {/* The card's words are English (#app-content lang="en"); the date is in the member's locale. */}
+      <p className="text-xs text-stone-600 mb-6">
+        <span lang={locale} dir={dir(locale)}>{today}</span>
+      </p>
 
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-base text-stone-700 leading-relaxed">{tagline}</p>
@@ -432,18 +439,9 @@ function MetricsSection({ userRole, userName }: MetricsSectionProps) {
 
       {/* Right Column - 2x2 Grid of metric cards */}
       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
-        {/* Impact overview — real metrics arrive in a later wave. Until then,
-            show an honest neutral state rather than fabricated totals. */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-stone-600">Impact overview</h3>
-            <ExternalLink className="w-4 h-4 text-stone-400" />
-          </div>
-          <p className="text-sm text-stone-500">
-            Community impact metrics are on the way. Explore resources and the
-            community to start making a difference.
-          </p>
-        </div>
+        {/* Impact overview: community_impact_summary(), read once per shell mount
+            (this section is mounted once, under every panel). */}
+        <ImpactOverviewCard surface="overview" />
 
         {/* Quick actions — honest navigation affordance, no fabricated stats. */}
         <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">

@@ -94,8 +94,9 @@ export interface Mounted<T> {
   unmount: () => void
 }
 
-/** Render `render` (which calls one component function) with the mini runtime. */
-export function mount<T>(render: () => T): Mounted<T> {
+/** Render `render` (which calls one component function) with the mini runtime. `strict`: like React's
+ *  StrictMode in development, each effect of the first commit runs, is cleaned up, and runs again. */
+export function mount<T>(render: () => T, { strict = false }: { strict?: boolean } = {}): Mounted<T> {
   const inst: Instance = { slots: [], idx: 0, pending: [], dirty: false }
   const effects = new Map<number, EffectSlot>()
   let out: T
@@ -106,7 +107,12 @@ export function mount<T>(render: () => T): Mounted<T> {
       const prev = effects.get(p.i)
       if (prev && !depsChanged(prev.deps, p.deps)) continue
       if (prev && typeof prev.cleanup === 'function') prev.cleanup()
-      effects.set(p.i, { deps: p.deps, cleanup: p.fn() })
+      let cleanup = p.fn()
+      if (strict && !prev) {
+        if (typeof cleanup === 'function') cleanup()
+        cleanup = p.fn()
+      }
+      effects.set(p.i, { deps: p.deps, cleanup })
     }
   }
   const renderOnce = () => {

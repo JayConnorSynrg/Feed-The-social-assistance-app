@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   graphql_public: {
     Tables: {
@@ -588,6 +588,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      community_impact_rollup: {
+        Row: {
+          contributors: number
+          count: number
+          id: string
+          k_contributors: number
+          metric_id: string
+        }
+        Insert: {
+          contributors?: number
+          count?: number
+          id?: string
+          k_contributors?: number
+          metric_id: string
+        }
+        Update: {
+          contributors?: number
+          count?: number
+          id?: string
+          k_contributors?: number
+          metric_id?: string
+        }
+        Relationships: []
       }
       community_stats: {
         Row: {
@@ -4312,6 +4336,7 @@ export type Database = {
       cleanup_old_login_attempts: { Args: never; Returns: undefined }
       cleanup_old_webhook_logs: { Args: never; Returns: number }
       comment_is_readable: { Args: { p_comment_id: string }; Returns: boolean }
+      community_impact_summary: { Args: never; Returns: Json }
       community_people_fed: {
         Args: { p_end_date?: string; p_start_date?: string }
         Returns: {
