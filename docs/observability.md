@@ -399,6 +399,29 @@ order by created_at desc limit 50;
 
 ---
 
+## Community figures (Impact overview card)
+
+The "Impact overview" card in the shell's metrics strip reads `community_impact_summary()` once per shell mount (`apps/web/src/hooks/use-community-impact.ts`; contract `specs/impact-metrics-contract.md`). Each read writes exactly one wide-event row through `withMetric`; the card writes one `impact.view` row per mount when the figures first show. Labels are enums and counts only. At today's size these rows describe individual people: read them on operator surfaces only, never on a public display.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `impact.summary.fetch.complete` | `surface` (`overview`), `outcome` (`ok`), `suppressed_count`, `request_id` | one read that answered with figures; `duration_ms` in its column; `suppressed_count` = figures showing "Not enough activity yet to share" |
+| `impact.summary.fetch.error` | `surface`, `outcome` (`failed`), `suppressed_count` (0), `request_id`, plus `error_code` / `error_message` | one read that failed (an RPC error, or an answer with no known figure: `error_message = impact_summary_empty`); the card shows the failure sentence and Retry |
+| `impact.view` | `surface`, `suppressed_count` | the figures were shown once on this shell mount |
+
+Reads and failure rate over 7 days:
+
+```sql
+select count(*) filter (where event = 'impact.summary.fetch.complete') as ok,
+       count(*) filter (where event = 'impact.summary.fetch.error')    as failed,
+       percentile_cont(0.95) within group (order by duration_ms)        as p95_ms
+from public.app_logs
+where event in ('impact.summary.fetch.complete', 'impact.summary.fetch.error')
+  and created_at > now() - interval '7 days';
+```
+
+---
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

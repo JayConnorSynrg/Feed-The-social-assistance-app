@@ -25,7 +25,6 @@ import {
   Heart,
   Package,
   Leaf,
-  ExternalLink,
   Compass,
   Search,
   ScrollText,
@@ -36,6 +35,7 @@ import { logEvent, logger } from '@/lib/logger'
 import { parseHash, type FocusKind, type FocusTarget } from '@/lib/deep-link'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { resolveFeedSubtab } from '@/components/feed/feed-subtab'
+import { ImpactOverviewCard } from '@/components/layout/impact-overview-card'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -432,18 +432,9 @@ function MetricsSection({ userRole, userName }: MetricsSectionProps) {
 
       {/* Right Column - 2x2 Grid of metric cards */}
       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr">
-        {/* Impact overview — real metrics arrive in a later wave. Until then,
-            show an honest neutral state rather than fabricated totals. */}
-        <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-stone-600">Impact overview</h3>
-            <ExternalLink className="w-4 h-4 text-stone-400" />
-          </div>
-          <p className="text-sm text-stone-500">
-            Community impact metrics are on the way. Explore resources and the
-            community to start making a difference.
-          </p>
-        </div>
+        {/* Impact overview: community_impact_summary(), read once per shell mount
+            (this section is mounted once, under every panel). */}
+        <ImpactOverviewCard surface="overview" />
 
         {/* Quick actions — honest navigation affordance, no fabricated stats. */}
         <div className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col">

@@ -1456,6 +1456,111 @@ step in that test, and the test fails until the list below is regenerated.
 | `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
 | `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-impact.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `titleReach` | ht | Community reach | Kominote a rive jwenn | 2026-11-14 | machine-drafted, needs native review |
+| `titleImpact` | ht | Community impact | Enpak nan kominote a | 2026-11-14 | machine-drafted, needs native review |
+| `groupDirectory` | ht | In the FEED directory | Nan anyè FEED la | 2026-11-14 | machine-drafted, needs native review |
+| `groupCommunity` | ht | From our community | Nan kominote nou an | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_available` | ht | Resources listed | Resous ki nan lis la | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_curated` | ht | Resources curated locally | Resous moun lokal chwazi | 2026-11-14 | machine-drafted, needs native review |
+| `label_snap_retailers` | ht | SNAP retailers mapped | Magazen SNAP sou kat la | 2026-11-14 | machine-drafted, needs native review |
+| `label_zip_codes_covered` | ht | ZIP codes with a listed resource | Kòd postal ki gen yon resous nan lis la | 2026-11-14 | machine-drafted, needs native review |
+| `label_organizations_listed` | ht | Organizations and businesses listed | Òganizasyon ak biznis ki nan lis la | 2026-11-14 | machine-drafted, needs native review |
+| `label_event_dates_next_30_days` | ht | Event dates in the next 30 days | Dat evènman nan 30 jou k ap vini yo | 2026-11-14 | machine-drafted, needs native review |
+| `label_petition_signers` | ht | People who signed a petition | Moun ki siyen yon petisyon | 2026-11-14 | machine-drafted, needs native review |
+| `label_needs_met` | ht | Needs met (reported by the helper) | Bezwen ki satisfè (dapre moun ki te ede a) | 2026-11-14 | machine-drafted, needs native review |
+| `label_people_served_at_events` | ht | People served at events | Moun ki resevwa sèvis nan evènman yo | 2026-11-14 | machine-drafted, needs native review |
+| `label_alerts_verified` | ht | Safety alerts verified by a moderator | Alèt sekirite yon moderatè verifye | 2026-11-14 | machine-drafted, needs native review |
+| `label_member_resources_approved` | ht | Member resources approved by a moderator | Resous manm yo yon moderatè apwouve | 2026-11-14 | machine-drafted, needs native review |
+| `suppressed` | ht | Not enough activity yet to share | Poko gen ase aktivite pou pataje | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | ht | Loading community figures… | N ap chaje chif kominote a… | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | ht | Couldn't load the community figures right now. Please retry. | Nou pa t kapab chaje chif kominote a kounye a. Eseye ankò. | 2026-11-14 | machine-drafted, needs native review |
+| `retry` | ht | Retry | Eseye ankò | 2026-11-14 | machine-drafted, needs native review |
+| `howWeCount` | ht | How we count | Kijan nou konte | 2026-11-14 | machine-drafted, needs native review |
+| `noteGeneral` | ht | A community figure appears once at least 10 people have contributed to it, rounded down to the nearest 5, so no one can be singled out. Everyone counts, FEED staff included, and figures stay the same when someone deletes their account. | Yon chif kominote parèt lè omwen 10 moun patisipe ladan l, li awondi desann nan senk ki pi pre a, pou pèsonn pa ka idantifye. Tout moun konte, ansanm ak anplwaye FEED yo, e chif yo pa chanje lè yon moun efase kont li. | 2026-11-14 | machine-drafted, needs native review |
+| `noteResources` | ht | Resources listed include public libraries and HUD housing listings imported from public directories. | Resous ki nan lis la gen ladan yo bibliyotèk piblik ak lojman HUD ki soti nan anyè piblik. | 2026-11-14 | machine-drafted, needs native review |
+| `noteNeedsMet` | ht | Needs met are reported by the person who gave the help. | Se moun ki te bay èd la ki rapòte bezwen ki satisfè yo. | 2026-11-14 | machine-drafted, needs native review |
+| `notePeopleServed` | ht | People served counts everyone in each household confirmed at an event check-in, once there are at least 20 confirmed visits. | Moun ki resevwa sèvis konte tout moun nan chak kay ki konfime nan anrejistreman yon evènman, lè gen omwen 20 vizit ki konfime. | 2026-11-14 | machine-drafted, needs native review |
+| `noteEventDates` | ht | Event dates are scheduled dates, not events already held. | Dat evènman yo se dat ki planifye, se pa evènman ki deja fèt. | 2026-11-14 | machine-drafted, needs native review |
+| `titleReach` | so | Community reach | Gaarsiinta bulshada | 2026-11-14 | machine-drafted, needs native review |
+| `titleImpact` | so | Community impact | Saamaynta bulshada | 2026-11-14 | machine-drafted, needs native review |
+| `groupDirectory` | so | In the FEED directory | Tusaha FEED | 2026-11-14 | machine-drafted, needs native review |
+| `groupCommunity` | so | From our community | Bulshadeena | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_available` | so | Resources listed | Kheyraadka liiska ku jira | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_curated` | so | Resources curated locally | Kheyraad gudaha lagu xushay | 2026-11-14 | machine-drafted, needs native review |
+| `label_snap_retailers` | so | SNAP retailers mapped | Dukaamada SNAP ee khariidadda | 2026-11-14 | machine-drafted, needs native review |
+| `label_zip_codes_covered` | so | ZIP codes with a listed resource | Koodhadhka ZIP ee leh kheyraad liiska ku jira | 2026-11-14 | machine-drafted, needs native review |
+| `label_organizations_listed` | so | Organizations and businesses listed | Ururada iyo ganacsiyada liiska ku jira | 2026-11-14 | machine-drafted, needs native review |
+| `label_event_dates_next_30_days` | so | Event dates in the next 30 days | Taariikhaha dhacdooyinka 30-ka maalmood ee soo socda | 2026-11-14 | machine-drafted, needs native review |
+| `label_petition_signers` | so | People who signed a petition | Dadka saxiixay codsi | 2026-11-14 | machine-drafted, needs native review |
+| `label_needs_met` | so | Needs met (reported by the helper) | Baahiyo la daboolay (sida uu sheegay qofka caawiyay) | 2026-11-14 | machine-drafted, needs native review |
+| `label_people_served_at_events` | so | People served at events | Dadka loo adeegay dhacdooyinka | 2026-11-14 | machine-drafted, needs native review |
+| `label_alerts_verified` | so | Safety alerts verified by a moderator | Digniinaha badbaadada ee maamule xaqiijiyay | 2026-11-14 | machine-drafted, needs native review |
+| `label_member_resources_approved` | so | Member resources approved by a moderator | Kheyraadka xubnaha ee maamule ansixiyay | 2026-11-14 | machine-drafted, needs native review |
+| `suppressed` | so | Not enough activity yet to share | Weli ma jiro waxqabad ku filan oo la wadaago | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | so | Loading community figures… | Waa la soo shubayaa tirooyinka bulshada… | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | so | Couldn't load the community figures right now. Please retry. | Hadda lama soo shubi karo tirooyinka bulshada. Isku day mar kale. | 2026-11-14 | machine-drafted, needs native review |
+| `retry` | so | Retry | Isku day mar kale | 2026-11-14 | machine-drafted, needs native review |
+| `howWeCount` | so | How we count | Sida aan u tirinno | 2026-11-14 | machine-drafted, needs native review |
+| `noteGeneral` | so | A community figure appears once at least 10 people have contributed to it, rounded down to the nearest 5, so no one can be singled out. Everyone counts, FEED staff included, and figures stay the same when someone deletes their account. | Tiro bulsho waxay muuqataa marka ugu yaraan 10 qof ay ka qayb qaataan, waxaana loo soo koobaa shanta ugu dhow ee hoose, si aan qofna loo garan. Qof walba waa la tiriyaa, oo ay ku jiraan shaqaalaha FEED, tirooyinkuna isma beddelaan marka qof tirtiro akoonkiisa. | 2026-11-14 | machine-drafted, needs native review |
+| `noteResources` | so | Resources listed include public libraries and HUD housing listings imported from public directories. | Kheyraadka liiska ku jira waxaa ka mid ah maktabadaha dadweynaha iyo guryaha HUD ee laga soo qaaday tusayaasha dadweynaha. | 2026-11-14 | machine-drafted, needs native review |
+| `noteNeedsMet` | so | Needs met are reported by the person who gave the help. | Baahiyaha la daboolay waxaa soo sheega qofka caawimaadda bixiyay. | 2026-11-14 | machine-drafted, needs native review |
+| `notePeopleServed` | so | People served counts everyone in each household confirmed at an event check-in, once there are at least 20 confirmed visits. | Dadka loo adeegay waxay tiriyaan qof kasta oo ka tirsan qoys kasta oo lagu xaqiijiyay diiwaangelinta dhacdo, marka ay jiraan ugu yaraan 20 booqasho oo la xaqiijiyay. | 2026-11-14 | machine-drafted, needs native review |
+| `noteEventDates` | so | Event dates are scheduled dates, not events already held. | Taariikhaha dhacdooyinku waa taariikho la qorsheeyay, ma aha dhacdooyin hore u dhacay. | 2026-11-14 | machine-drafted, needs native review |
+| `titleReach` | am | Community reach | የማኅበረሰብ ተደራሽነት | 2026-11-14 | machine-drafted, needs native review |
+| `titleImpact` | am | Community impact | የማኅበረሰብ ተጽእኖ | 2026-11-14 | machine-drafted, needs native review |
+| `groupDirectory` | am | In the FEED directory | በFEED ማውጫ ውስጥ | 2026-11-14 | machine-drafted, needs native review |
+| `groupCommunity` | am | From our community | ከማኅበረሰባችን | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_available` | am | Resources listed | የተዘረዘሩ ግብዓቶች | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_curated` | am | Resources curated locally | በአካባቢ የተመረጡ ግብዓቶች | 2026-11-14 | machine-drafted, needs native review |
+| `label_snap_retailers` | am | SNAP retailers mapped | በካርታው ላይ ያሉ የSNAP መደብሮች | 2026-11-14 | machine-drafted, needs native review |
+| `label_zip_codes_covered` | am | ZIP codes with a listed resource | የተዘረዘረ ግብዓት ያላቸው ዚፕ ኮዶች | 2026-11-14 | machine-drafted, needs native review |
+| `label_organizations_listed` | am | Organizations and businesses listed | የተዘረዘሩ ድርጅቶችና ንግዶች | 2026-11-14 | machine-drafted, needs native review |
+| `label_event_dates_next_30_days` | am | Event dates in the next 30 days | በሚቀጥሉት 30 ቀናት ውስጥ ያሉ የዝግጅት ቀኖች | 2026-11-14 | machine-drafted, needs native review |
+| `label_petition_signers` | am | People who signed a petition | አቤቱታ የፈረሙ ሰዎች | 2026-11-14 | machine-drafted, needs native review |
+| `label_needs_met` | am | Needs met (reported by the helper) | የተሟሉ ፍላጎቶች (እንደ ረዳው ሰው ሪፖርት) | 2026-11-14 | machine-drafted, needs native review |
+| `label_people_served_at_events` | am | People served at events | በዝግጅቶች አገልግሎት ያገኙ ሰዎች | 2026-11-14 | machine-drafted, needs native review |
+| `label_alerts_verified` | am | Safety alerts verified by a moderator | በአወያይ የተረጋገጡ የደህንነት ማስጠንቀቂያዎች | 2026-11-14 | machine-drafted, needs native review |
+| `label_member_resources_approved` | am | Member resources approved by a moderator | በአወያይ የጸደቁ የአባላት ግብዓቶች | 2026-11-14 | machine-drafted, needs native review |
+| `suppressed` | am | Not enough activity yet to share | ለማጋራት በቂ እንቅስቃሴ ገና የለም | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | am | Loading community figures… | የማኅበረሰብ አሃዞች በመጫን ላይ… | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | am | Couldn't load the community figures right now. Please retry. | የማኅበረሰብ አሃዞችን አሁን መጫን አልተቻለም። እንደገና ይሞክሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `retry` | am | Retry | እንደገና ይሞክሩ | 2026-11-14 | machine-drafted, needs native review |
+| `howWeCount` | am | How we count | እንዴት እንደምንቆጥር | 2026-11-14 | machine-drafted, needs native review |
+| `noteGeneral` | am | A community figure appears once at least 10 people have contributed to it, rounded down to the nearest 5, so no one can be singled out. Everyone counts, FEED staff included, and figures stay the same when someone deletes their account. | የማኅበረሰብ አሃዝ የሚታየው ቢያንስ 10 ሰዎች ሲያበረክቱበት ነው፤ ማንም ሰው ተለይቶ እንዳይታወቅ ወደ ቅርቡ የ5 ብዜት ወደ ታች ይጠጋጋል። የFEED ሠራተኞችን ጨምሮ ሁሉም ይቆጠራሉ፤ አንድ ሰው መለያውን ሲሰርዝም አሃዞቹ አይለወጡም። | 2026-11-14 | machine-drafted, needs native review |
+| `noteResources` | am | Resources listed include public libraries and HUD housing listings imported from public directories. | የተዘረዘሩት ግብዓቶች ከሕዝብ ማውጫዎች የመጡ የሕዝብ ቤተ መጻሕፍትንና የHUD መኖሪያ ቤቶችን ያካትታሉ። | 2026-11-14 | machine-drafted, needs native review |
+| `noteNeedsMet` | am | Needs met are reported by the person who gave the help. | የተሟሉ ፍላጎቶችን ሪፖርት የሚያደርገው እርዳታውን የሰጠው ሰው ነው። | 2026-11-14 | machine-drafted, needs native review |
+| `notePeopleServed` | am | People served counts everyone in each household confirmed at an event check-in, once there are at least 20 confirmed visits. | አገልግሎት ያገኙ ሰዎች በዝግጅት ምዝገባ ላይ የተረጋገጠውን የእያንዳንዱን ቤተሰብ አባላት በሙሉ ይቆጥራል፤ ቢያንስ 20 የተረጋገጡ ጉብኝቶች ሲኖሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `noteEventDates` | am | Event dates are scheduled dates, not events already held. | የዝግጅት ቀኖቹ የታቀዱ ቀኖች ናቸው እንጂ የተካሄዱ ዝግጅቶች አይደሉም። | 2026-11-14 | machine-drafted, needs native review |
+| `titleReach` | hmn | Community reach | Kev ncav cuag zej zog | 2026-11-14 | machine-drafted, needs native review |
+| `titleImpact` | hmn | Community impact | Kev cuam tshuam rau zej zog | 2026-11-14 | machine-drafted, needs native review |
+| `groupDirectory` | hmn | In the FEED directory | Hauv FEED phau ntawv teev npe | 2026-11-14 | machine-drafted, needs native review |
+| `groupCommunity` | hmn | From our community | Los ntawm peb zej zog | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_available` | hmn | Resources listed | Cov kev pab uas muaj npe teev | 2026-11-14 | machine-drafted, needs native review |
+| `label_resources_curated` | hmn | Resources curated locally | Cov kev pab uas hauv zos xaiv | 2026-11-14 | machine-drafted, needs native review |
+| `label_snap_retailers` | hmn | SNAP retailers mapped | Cov khw SNAP nyob rau ntawm daim ntawv qhia chaw | 2026-11-14 | machine-drafted, needs native review |
+| `label_zip_codes_covered` | hmn | ZIP codes with a listed resource | Cov ZIP code uas muaj kev pab teev npe | 2026-11-14 | machine-drafted, needs native review |
+| `label_organizations_listed` | hmn | Organizations and businesses listed | Cov koom haum thiab cov lag luam uas muaj npe teev | 2026-11-14 | machine-drafted, needs native review |
+| `label_event_dates_next_30_days` | hmn | Event dates in the next 30 days | Cov hnub ua kev tshwm sim hauv 30 hnub tom ntej | 2026-11-14 | machine-drafted, needs native review |
+| `label_petition_signers` | hmn | People who signed a petition | Cov neeg uas kos npe rau daim ntawv thov | 2026-11-14 | machine-drafted, needs native review |
+| `label_needs_met` | hmn | Needs met (reported by the helper) | Cov kev xav tau uas tau pab lawm (raws li tus neeg pab qhia) | 2026-11-14 | machine-drafted, needs native review |
+| `label_people_served_at_events` | hmn | People served at events | Cov neeg tau txais kev pab ntawm cov kev tshwm sim | 2026-11-14 | machine-drafted, needs native review |
+| `label_alerts_verified` | hmn | Safety alerts verified by a moderator | Cov lus ceeb toom kev nyab xeeb uas tus saib xyuas lees paub | 2026-11-14 | machine-drafted, needs native review |
+| `label_member_resources_approved` | hmn | Member resources approved by a moderator | Cov kev pab ntawm cov tswv cuab uas tus saib xyuas pom zoo | 2026-11-14 | machine-drafted, needs native review |
+| `suppressed` | hmn | Not enough activity yet to share | Tseem tsis tau muaj kev ua txaus los qhia | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | hmn | Loading community figures… | Tab tom thauj cov lej ntawm zej zog… | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | hmn | Couldn't load the community figures right now. Please retry. | Tam sim no thauj tsis tau cov lej ntawm zej zog. Sim dua. | 2026-11-14 | machine-drafted, needs native review |
+| `retry` | hmn | Retry | Sim dua | 2026-11-14 | machine-drafted, needs native review |
+| `howWeCount` | hmn | How we count | Peb suav li cas | 2026-11-14 | machine-drafted, needs native review |
+| `noteGeneral` | hmn | A community figure appears once at least 10 people have contributed to it, rounded down to the nearest 5, so no one can be singled out. Everyone counts, FEED staff included, and figures stay the same when someone deletes their account. | Ib tus lej ntawm zej zog tshwm thaum muaj tsawg kawg 10 tus neeg koom, thiab muab txo mus rau tus lej uas faib tau los ntawm 5 ze tshaj plaws, kom tsis muaj leej twg raug paub. Txhua tus raug suav, suav nrog cov neeg ua haujlwm FEED, thiab cov lej tsis hloov thaum ib tus neeg rho nws tus account tawm. | 2026-11-14 | machine-drafted, needs native review |
+| `noteResources` | hmn | Resources listed include public libraries and HUD housing listings imported from public directories. | Cov kev pab uas muaj npe teev suav nrog cov tsev qiv ntawv pej xeem thiab cov tsev nyob HUD uas coj los ntawm cov phau ntawv teev npe pej xeem. | 2026-11-14 | machine-drafted, needs native review |
+| `noteNeedsMet` | hmn | Needs met are reported by the person who gave the help. | Cov kev xav tau uas tau pab lawm yog tus neeg uas muab kev pab qhia. | 2026-11-14 | machine-drafted, needs native review |
+| `notePeopleServed` | hmn | People served counts everyone in each household confirmed at an event check-in, once there are at least 20 confirmed visits. | Cov neeg tau txais kev pab suav txhua tus neeg hauv txhua tsev neeg uas tau lees paub thaum sau npe tuaj koom kev tshwm sim, thaum muaj tsawg kawg 20 zaug tuaj uas tau lees paub. | 2026-11-14 | machine-drafted, needs native review |
+| `noteEventDates` | hmn | Event dates are scheduled dates, not events already held. | Cov hnub ua kev tshwm sim yog cov hnub uas teem tseg, tsis yog cov kev tshwm sim uas twb ua tas lawm. | 2026-11-14 | machine-drafted, needs native review |
+
 ### `lib/i18n-settings-language.ts`
 
 | Key | Locale | English | Text | Added | Status |
