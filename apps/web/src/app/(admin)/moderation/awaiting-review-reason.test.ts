@@ -58,7 +58,7 @@ describe('Awaiting review rows show why members cannot see them', () => {
   })
 
   it('the Removed & Held row text (status, date, reason) uses stone-600 for 1.4.3 contrast on stone-100', () => {
-    const block = between(read('reports-queue.tsx'), 'heldPosts.map((post)', 'Authorize Post')
+    const block = between(read('reports-queue.tsx'), 'heldPosts.map((post)', "moderationActionLabel('authorize'")
     expect(block).toContain('gap-2 text-xs text-stone-600')
     expect(block).not.toContain('text-stone-500')
   })

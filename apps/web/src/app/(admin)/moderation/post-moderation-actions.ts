@@ -13,11 +13,17 @@
 // {"current_version", "edited_at", "needs_review"}); the result then carries `conflict` so the caller
 // re-reads the post and the moderator decides on the version members would see. A deleted post
 // answers PT404 post_deleted (hold / authorize).
+//
+// The moderator-facing lines are in the admin's language (lib/i18n-admin-moderation.ts): callers
+// pass their locale; the RPCs, their arguments, the admin_actions rows and the log rows are the
+// same in every language.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@feed/database'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
+import type { Locale } from '@/lib/i18n'
+import { adminModerationT } from '@/lib/i18n-admin-moderation'
 
 export type PostModerationAction = 'remove' | 'hold' | 'authorize'
 
@@ -56,20 +62,15 @@ export type PostModerationResult =
   | { ok: true }
   | { ok: false; message: string; conflict?: ModerationConflict; gone?: true; selfModeration?: true }
 
-/** The moderator-facing line for a version conflict (the admin screens are English). */
-export const MODERATION_CONFLICT_MESSAGE =
-  'The author changed this post since you opened it. The latest version is shown — review it and choose again.'
-
-/** The console's line for a refused self-moderation (the feed shows its translated sibling,
- *  failSelfModeration in lib/i18n-feed-edit.ts). */
-export const SELF_MODERATION_MESSAGE = "You can't moderate your own content — another moderator needs to review it."
-
 /** Map a moderation RPC error to the result (exported for the reports queue's resolve path). */
-export function moderationFailure(error: { code?: string; message: string; details?: string | null }): Exclude<PostModerationResult, { ok: true }> {
+export function moderationFailure(
+  error: { code?: string; message: string; details?: string | null },
+  locale: Locale = 'en',
+): Exclude<PostModerationResult, { ok: true }> {
   // A moderator lifting moderation on their own content (the database refuses it): another
-  // moderator has to review it. English, like the rest of the admin console.
+  // moderator has to review it. (The feed's own sibling line: failSelfModeration, lib/i18n-feed-edit.ts.)
   if (error.code === '42501' && /self_moderation_refused/.test(error.message)) {
-    return { ok: false, message: SELF_MODERATION_MESSAGE, selfModeration: true }
+    return { ok: false, message: adminModerationT(locale, 'failSelf'), selfModeration: true }
   }
   if (error.code === 'PT409') {
     let d: Record<string, unknown> = {}
@@ -80,13 +81,13 @@ export function moderationFailure(error: { code?: string; message: string; detai
     }
     return {
       ok: false,
-      message: MODERATION_CONFLICT_MESSAGE,
+      message: adminModerationT(locale, 'failConflict'),
       conflict: { currentVersion: typeof d.current_version === 'number' ? d.current_version : null, needsReview: d.needs_review === true },
     }
   }
-  if (error.code === 'PT404') return { ok: false, message: 'This post is gone — its author deleted it. Nothing was changed.', gone: true }
+  if (error.code === 'PT404') return { ok: false, message: adminModerationT(locale, 'failGone'), gone: true }
   // The queue has always shown this generic line for a refused RPC (its error is not an Error).
-  return { ok: false, message: 'An error occurred' }
+  return { ok: false, message: adminModerationT(locale, 'errorGeneric') }
 }
 
 /**
@@ -98,17 +99,22 @@ export async function moderatePost(
   supabase: SupabaseClient<Database>,
   action: PostModerationAction,
   postId: string,
-  expectedVersion: number | null = null
+  expectedVersion: number | null = null,
+  locale: Locale = 'en',
 ): Promise<PostModerationResult> {
   try {
     const { error, requestId } = await callAction(supabase, action, postId, expectedVersion)
     if (error) {
       logger.warn('admin.denied', { action: ACTION_LABEL[action], code: error.code ?? 'unknown', request_id: requestId })
-      return moderationFailure(error as { code?: string; message: string; details?: string | null })
+      return moderationFailure(error as { code?: string; message: string; details?: string | null }, locale)
     }
     return { ok: true }
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : 'An error occurred' }
+    // privilegedRpc returns every RPC failure, a network one included (withMetric has then written
+    // its error row and the branch above writes admin.denied), so this is reached only if the call
+    // itself throws before any row exists: one row with the error's class, never its text.
+    logger.warn('admin.denied', { action: ACTION_LABEL[action], code: err instanceof Error ? err.name : 'exception' })
+    return { ok: false, message: adminModerationT(locale, 'errorGeneric') }
   }
 }
 

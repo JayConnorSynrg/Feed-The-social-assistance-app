@@ -13,7 +13,7 @@ export function CommunityTab({ selectedOrgId, locale }: { selectedOrgId: string;
 
   return (
     <div className="space-y-4">
-      <CommunitySummarySection />
+      <CommunitySummarySection locale={locale} />
       <PetitionExportSection locale={locale} />
     </div>
   )

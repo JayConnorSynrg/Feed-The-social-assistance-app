@@ -4,9 +4,10 @@
 // The admin console shell (/moderation): header, organization selector and the tab bar, in the
 // admin's language (lib/i18n-admin-shell.ts; the tier marker is roleLabel, lib/i18n-feed-card.ts).
 // The locale is useProfileLocale(), so the cookie the server rendered with, the profile and the
-// device choice agree from the first paint. Only the header and the tab bar carry that language:
-// each tab's content is marked English (lang="en" dir="ltr") until its own wave translates it, and
-// a translated tab (Events, Organizations, the petition export…) sets its own lang on its root.
+// device choice agree from the first paint. The header, the tab bar and the translated tabs
+// (Moderation, Community, People) carry that language; every other tab's content is marked English
+// (lang="en" dir="ltr") until its own wave translates it, and a translated part inside one (Events,
+// Organizations…) sets its own lang on its root.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutDashboard, Calendar, ShieldAlert, Users, Database, ListChecks, Building2, UserCog, Leaf, type LucideIcon } from 'lucide-react'
@@ -320,12 +321,12 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('moderation') && (
-            <TabsContent value="moderation" lang="en" dir="ltr" className="mt-4">
-              <ModerationTab selectedOrgId={selectedOrgId} viewerId={user?.id ?? null} />
+            <TabsContent value="moderation" lang={locale} dir={dir(locale)} className="mt-4">
+              <ModerationTab selectedOrgId={selectedOrgId} viewerId={user?.id ?? null} locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('community') && (
-            <TabsContent value="community" lang="en" dir="ltr" className="mt-4">
+            <TabsContent value="community" lang={locale} dir={dir(locale)} className="mt-4">
               <CommunityTab selectedOrgId={selectedOrgId} locale={locale} />
             </TabsContent>
           )}
@@ -356,8 +357,8 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('people') && (
-            <TabsContent value="people" lang="en" dir="ltr" className="mt-4">
-              <PeopleTab viewerTier={tier} isFounder={isFounder} />
+            <TabsContent value="people" lang={locale} dir={dir(locale)} className="mt-4">
+              <PeopleTab viewerTier={tier} isFounder={isFounder} locale={locale} />
             </TabsContent>
           )}
         </Tabs>
