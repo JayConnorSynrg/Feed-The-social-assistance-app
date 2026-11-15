@@ -11,7 +11,7 @@
 //   - a loading line, and on a failed read a sentence with Retry.
 // One read per shell mount (useCommunityImpact); one impact.view row when the figures first show.
 
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { useCommunityImpact, type ImpactState, type ImpactSurface } from '@/hooks/use-community-impact'
 import { logEvent } from '@/lib/logger'
@@ -36,29 +36,40 @@ function FigureList({ ids, summary, locale, heading }: { ids: readonly ImpactFig
   return (
     <div>
       <h4 className="text-xs font-semibold uppercase tracking-wide text-stone-600 mb-1">{heading}</h4>
-      <ul className="space-y-1">
+      <dl className="space-y-1">
         {present.map((id) => {
           const value = shownValue(summary[id])
           return (
-            <li key={id} data-figure={id} className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="text-stone-700">{impactT(locale, `label_${id}`)}</span>
+            <div key={id} data-figure={id} className="flex items-baseline justify-between gap-3 text-sm">
+              <dt className="text-stone-700">{impactT(locale, `label_${id}`)}</dt>
               {value === null ? (
-                <span className="text-xs text-stone-600 text-end">{impactT(locale, 'suppressed')}</span>
+                <dd className="text-xs text-stone-600 text-end">{impactT(locale, 'suppressed')}</dd>
               ) : (
-                <span className="font-semibold text-stone-900 tabular-nums">{formatCount(value, locale)}</span>
+                <dd className="font-semibold text-stone-900 tabular-nums">{formatCount(value, locale)}</dd>
               )}
-            </li>
+            </div>
           )
         })}
-      </ul>
+      </dl>
     </div>
   )
 }
 
-/** The card for a given read state (no data access: the container below supplies it). */
-export function ImpactOverview({ state, locale, onRetry }: { state: ImpactState; locale: Locale; onRetry: () => void }) {
+/** The card for a given read state (no data access: the container below supplies it).
+ *  `retried`: the member pressed Retry on this mount. Loading and a first failure are said politely through
+ *  one status region that is always there; only a failure after the member's own Retry is said assertively.
+ *  Retry moves focus to the card title, which stays while the button goes away. */
+export function ImpactOverview({ state, locale, onRetry, retried = false }: { state: ImpactState; locale: Locale; onRetry: () => void; retried?: boolean }) {
   const headingId = useId()
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const title = state.status === 'ready' && cardKind(state.summary) === 'impact' ? impactT(locale, 'titleImpact') : impactT(locale, 'titleReach')
+  const failed = state.status === 'error'
+  const statusText = state.status === 'loading' ? impactT(locale, 'loading') : failed && !retried ? impactT(locale, 'loadFailed') : ''
+  const alertText = failed && retried ? impactT(locale, 'loadFailed') : ''
+  const onRetryClick = () => {
+    onRetry()
+    headingRef.current?.focus()
+  }
 
   return (
     <section
@@ -67,23 +78,19 @@ export function ImpactOverview({ state, locale, onRetry }: { state: ImpactState;
       dir={dir(locale)}
       className="bg-[#f8f6f1] rounded-xl p-4 border border-stone-200/50 shadow-sm min-h-[120px] flex flex-col gap-3"
     >
-      <h3 id={headingId} className="text-sm font-medium text-stone-600">{title}</h3>
+      <h3 id={headingId} ref={headingRef} tabIndex={-1} className="text-sm font-medium text-stone-600">{title}</h3>
 
-      {state.status === 'loading' && (
-        <p role="status" className="text-sm text-stone-600">{impactT(locale, 'loading')}</p>
-      )}
+      <p role="status" className={statusText ? 'text-sm text-stone-700' : 'sr-only'}>{statusText}</p>
+      <p role="alert" className={alertText ? 'text-sm text-stone-700' : 'sr-only'}>{alertText}</p>
 
-      {state.status === 'error' && (
-        <div className="flex flex-col items-start gap-2">
-          <p role="alert" className="text-sm text-stone-700">{impactT(locale, 'loadFailed')}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="text-sm font-medium text-[#4a5d23] hover:text-[#3d4d1c] underline underline-offset-2"
-          >
-            {impactT(locale, 'retry')}
-          </button>
-        </div>
+      {failed && (
+        <button
+          type="button"
+          onClick={onRetryClick}
+          className="self-start min-h-6 inline-flex items-center text-sm font-medium text-[#4a5d23] hover:text-[#3d4d1c] underline underline-offset-2"
+        >
+          {impactT(locale, 'retry')}
+        </button>
       )}
 
       {state.status === 'ready' && (
@@ -91,7 +98,7 @@ export function ImpactOverview({ state, locale, onRetry }: { state: ImpactState;
           <FigureList ids={DIRECTORY_FIGURE_IDS} summary={state.summary} locale={locale} heading={impactT(locale, 'groupDirectory')} />
           <FigureList ids={COMMUNITY_FIGURE_IDS} summary={state.summary} locale={locale} heading={impactT(locale, 'groupCommunity')} />
           <details className="text-xs text-stone-600">
-            <summary className="cursor-pointer font-medium text-stone-700">{impactT(locale, 'howWeCount')}</summary>
+            <summary className="cursor-pointer py-1 font-medium text-stone-700">{impactT(locale, 'howWeCount')}</summary>
             <div className="mt-1 space-y-1">
               {NOTE_KEYS.map((key) => (
                 <p key={key}>{impactT(locale, key)}</p>
@@ -106,7 +113,7 @@ export function ImpactOverview({ state, locale, onRetry }: { state: ImpactState;
 
 export function ImpactOverviewCard({ surface = 'overview' }: { surface?: ImpactSurface }) {
   const locale = useProfileLocale()
-  const { state, retry } = useCommunityImpact(surface)
+  const { state, retry, retried } = useCommunityImpact(surface)
 
   // A mount reaches 'ready' once (Retry is offered only after a failure), so this writes one row per mount.
   useEffect(() => {
@@ -114,5 +121,5 @@ export function ImpactOverviewCard({ surface = 'overview' }: { surface?: ImpactS
     logEvent('impact.view', { surface, suppressed_count: suppressedCount(state.summary) })
   }, [state, surface])
 
-  return <ImpactOverview state={state} locale={locale} onRetry={retry} />
+  return <ImpactOverview state={state} locale={locale} onRetry={retry} retried={retried} />
 }

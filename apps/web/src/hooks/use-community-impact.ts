@@ -43,7 +43,7 @@ export async function fetchCommunityImpact(surface: ImpactSurface): Promise<Impa
   }
 }
 
-export function useCommunityImpact(surface: ImpactSurface = 'overview'): { state: ImpactState; retry: () => void } {
+export function useCommunityImpact(surface: ImpactSurface = 'overview'): { state: ImpactState; retry: () => void; retried: boolean } {
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<ImpactState>({ status: 'loading' })
   // The read for the current attempt, shared by every effect run of this mount.
@@ -65,5 +65,5 @@ export function useCommunityImpact(surface: ImpactSurface = 'overview'): { state
     setAttempt((a) => a + 1)
   }, [])
 
-  return { state, retry }
+  return { state, retry, retried: attempt > 0 }
 }

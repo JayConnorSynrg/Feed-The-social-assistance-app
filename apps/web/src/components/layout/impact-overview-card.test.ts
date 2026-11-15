@@ -54,7 +54,7 @@ vi.mock('@/hooks/use-profile-locale', () => ({ useProfileLocale: () => 'en' }))
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
-import { mount } from '@/test/mini-react'
+import { mount, findAll } from '@/test/mini-react'
 import { ImpactOverview, ImpactOverviewCard } from './impact-overview-card'
 import { useCommunityImpact, type ImpactState } from '@/hooks/use-community-impact'
 import { formatCount } from '@/lib/i18n-intl'
@@ -78,12 +78,13 @@ const TODAY = {
   member_resources_approved: fig(null),
 }
 
-const html = (state: ImpactState, locale: Parameters<typeof ImpactOverview>[0]['locale'] = 'en') =>
-  renderToStaticMarkup(createElement(ImpactOverview, { state, locale, onRetry: () => {} })).replace(/&#x27;/g, "'")
+const html = (state: ImpactState, locale: Parameters<typeof ImpactOverview>[0]['locale'] = 'en', retried = false) =>
+  renderToStaticMarkup(createElement(ImpactOverview, { state, locale, onRetry: () => {}, retried })).replace(/&#x27;/g, "'")
 const ready = (summary: ImpactSummary): ImpactState => ({ status: 'ready', summary })
 const en = impactMessages.en
 const count = (s: string, needle: string) => s.split(needle).length - 1
-const liOf = (s: string, id: string) => s.match(new RegExp(`<li data-figure="${id}"[^>]*>(.*?)</li>`))?.[1] ?? ''
+const liOf = (s: string, id: string) => s.match(new RegExp(`<div data-figure="${id}"[^>]*>(.*?)</div>`))?.[1] ?? ''
+const regionText = (s: string, role: 'status' | 'alert') => s.match(new RegExp(`<p role="${role}"[^>]*>(.*?)</p>`))?.[1]
 
 beforeEach(() => {
   h.calls.length = 0
@@ -167,18 +168,58 @@ describe('in the reader language', () => {
 })
 
 describe('loading and failure', () => {
-  it('loading: a status line, no figures', () => {
+  it('one status region is always there (loading, failed, shown) and one alert region, so each change is heard', () => {
+    for (const state of [{ status: 'loading' }, { status: 'error' }, ready(TODAY)] as ImpactState[]) {
+      for (const retried of [false, true]) {
+        const out = html(state, 'en', retried)
+        expect(count(out, 'role="status"'), `${state.status} ${retried}`).toBe(1)
+        expect(count(out, 'role="alert"'), `${state.status} ${retried}`).toBe(1)
+      }
+    }
+  })
+
+  it('loading: said in the status region, no figures', () => {
     const out = html({ status: 'loading' })
-    expect(out).toContain(`<p role="status"`)
-    expect(out).toContain(en.loading)
+    expect(regionText(out, 'status')).toBe(en.loading)
+    expect(regionText(out, 'alert')).toBe('')
     expect(out).not.toContain('data-figure')
   })
 
-  it('failed: the failure sentence as an alert and a Retry button, never server text', () => {
+  it('the first, automatic failure is said politely (status), never as an alert, with a Retry button', () => {
     const out = html({ status: 'error' })
-    expect(out).toContain(`<p role="alert"`)
-    expect(out).toContain(en.loadFailed)
+    expect(regionText(out, 'status')).toBe(en.loadFailed)
+    expect(regionText(out, 'alert')).toBe('')
     expect(out).toMatch(new RegExp(`<button type="button"[^>]*>${en.retry}</button>`))
+  })
+
+  it('a failure after the member pressed Retry is said assertively (alert) and only there', () => {
+    const out = html({ status: 'error' }, 'en', true)
+    expect(regionText(out, 'alert')).toBe(en.loadFailed)
+    expect(regionText(out, 'status')).toBe('')
+  })
+
+  it('Retry keeps the member in the card: focus moves to the card title, which stays mounted', () => {
+    const onRetry = vi.fn()
+    const m = mount(() => ImpactOverview({ state: { status: 'error' }, locale: 'en', onRetry }))
+    const heading = findAll(m.tree(), (el) => el.type === 'h3')[0]
+    expect(heading.props.tabIndex).toBe(-1)
+    const focus = vi.fn()
+    ;(heading.props.ref as { current: unknown }).current = { focus }
+    const button = findAll(m.tree(), (el) => el.type === 'button')[0]
+    ;(button.props.onClick as () => void)()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    expect(focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('the card hands the hook\'s Retry state to the view (a failure after Retry is the alert)', async () => {
+    h.replies.push({ data: null, error: { code: '42501', message: 'x' } }, { data: null, error: { code: '42501', message: 'x' } })
+    const m = mount(() => ImpactOverviewCard({ surface: 'overview' }))
+    await m.flush()
+    expect((m.tree().props as { retried: boolean }).retried).toBe(false)
+    ;(m.tree().props as { onRetry: () => void }).onRetry()
+    m.rerender()
+    await m.flush()
+    expect((m.tree().props as { state: ImpactState; retried: boolean })).toMatchObject({ state: { status: 'error' }, retried: true })
   })
 })
 
@@ -199,6 +240,15 @@ describe('one read per shell mount', () => {
     await m.flush()
     for (const p of ['map', 'feed']) switchTo(p)
     expect(h.calls).toEqual(['community_impact_summary'])
+    expect(m.tree().state.status).toBe('ready')
+  })
+
+  it('React development double-run of the effect (StrictMode) still makes one RPC call', async () => {
+    h.replies.push({ data: TODAY, error: null }, { data: TODAY, error: null })
+    const m = mount(() => useCommunityImpact('overview'), { strict: true })
+    await m.flush()
+    expect(h.calls).toEqual(['community_impact_summary'])
+    expect(h.rows).toHaveLength(1)
     expect(m.tree().state.status).toBe('ready')
   })
 

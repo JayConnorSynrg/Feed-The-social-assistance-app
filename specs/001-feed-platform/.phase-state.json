@@ -955,15 +955,15 @@
       "reviewFixRound": "On 0f2e497: MFA prompt keyboard/screen-reader complete (label, hint, one alert, aria-invalid, one-time-code, readOnly, focus return, form + single flight, 4.5:1 buttons); backup codes hidden for admin destinations; mobile nav stone-600 + aria-current; scroll-padding-bottom; AAL returned error fails closed; factor from getUser().factors; /api/community-summary + /federation/directory MFA routes; dot-segment // rejected."
     },
     "feed-p3-impact-v1": {
-      "status": "SQL_BUILT_MIGRATION_NOT_APPLIED",
+      "status": "A11Y_FIX_ROUND_BUILT_MIGRATION_NOT_APPLIED",
       "branch": "feature/feed-p3-impact-v1",
       "base": "origin/develop 5973158",
       "migration": "supabase/migrations/20261027500000_community_impact_v1.sql (not applied to prod)",
       "contract": "specs/impact-metrics-contract.md",
       "docs": "docs/observability.md (Community figures); docs/i18n-native-review.md",
-      "note": "Step 2 of 2. Migration 20261027500000 (expand only): community_impact_rollup (counts only, RLS on, no policy, no client grant), community_impact_carry_departed() statement trigger on engagement_events (carries only rows whose actor left auth.users; a failed carry is logged and never blocks the deletion), community_impact_summary() (SECDEF, STABLE, pinned search_path; EXECUTE anon + authenticated, not PUBLIC). Preflight refuses 55000; ledger row in the same transaction; no realtime change. Prod BEGIN ... ROLLBACK rehearsal: schema fingerprint unchanged; catalog figures equal direct counts. types.ts = prod regen + the rehearsed migration delta; the rpc cast is gone. Merge only after the owner confirms the prod apply.",
-      "checklistRow": "1.6.37",
-      "smoke": "supabase/tests/community_impact.smoke.sql (68 PASS on native PG17, develop chain + migration)"
+      "note": "Step 2 of 2, on 553e6fe (PR #251). Migration 20261027500000 (expand only): community_impact_rollup (metric, month, count, contributors, k_contributors; counts only, RLS on, no policy, no client grant), community_impact_carry_departed() as one row-level BEFORE DELETE trigger on auth.users (every deletion path is a DELETE FROM auth.users; before the row goes its ledger rows, check-ins and is_anonymous are readable): carries the account's ledger rows per metric and month, and its account-only event identity for people_served_at_events; k_contributors gets +1 only for a non-guest account, so guests add to values but open no k; a failed carry is logged and never blocks the deletion; preflight refuses another BEFORE DELETE row trigger on auth.users. community_impact_summary() (SECDEF, STABLE, pinned search_path; EXECUTE anon + authenticated, not PUBLIC): k = distinct non-guest contributors + carried k_contributors; household identity = household_key or a member account, never a fallback id. types.ts = prod regen + migration delta; the rpc cast is gone. Client a11y fix round: Retry focuses the card title (h3 tabIndex -1); one always-mounted status region (loading / first failure) and an alert region used only for a failure after the member's Retry; figures as dl/dt/dd; Retry min-h-6, summary py-1; WelcomeCard date stone-600 in the member's locale (formatDate); StrictMode double-run test proves the single-flight read. Merge only after the owner confirms the prod apply.",
+      "checklistRow": "1.6.39",
+      "smoke": "supabase/tests/community_impact.smoke.sql (92 PASS / 0 FAIL on native PG17, develop chain + migration)"
     }
   }
 }
