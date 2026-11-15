@@ -968,7 +968,9 @@
       "branch": "feature/feed-p6-w1-first-screen-admin-tabs",
       "base": "origin/develop 7540113",
       "migration": null,
-      "note": "P6 translations wave 1: the AI Assistant landing panel and its guided flows, Home (Overview), and the admin shell header/selector/tab bar in the viewer's language (lib/i18n-assistant.ts 125 keys, lib/i18n-overview.ts 27, lib/i18n-admin-shell.ts 13; 14 locales; 660 native-review rows). Admin shell reads useProfileLocale(). Settings placeholder tab removed; ?tab=settings opens the default tab with one admin.deeplink.resolve {kind: tab, outcome: invalid} row. Options answer with value, prompts unchanged. 24 mutants red."
+      "note": "P6 translations wave 1: the AI Assistant landing panel and its guided flows, Home (Overview), and the admin shell header/selector/tab bar in the viewer's language (lib/i18n-assistant.ts 125 keys, lib/i18n-overview.ts 27, lib/i18n-admin-shell.ts 13; 14 locales; 660 native-review rows). Admin shell reads useProfileLocale(). Settings placeholder tab removed; ?tab=settings opens the default tab with one admin.deeplink.resolve {kind: tab, outcome: invalid} row. Options answer with value, prompts unchanged. 24 mutants red.",
+      "pr": 253,
+      "reviewFixRound": "On 9e7a6dc: eligibility never screens an unrecognised state (lib/eligibility-screening.ts unknown_state; translated notice; 2-letter code asked in 14 locales); bubble/placeholder/timestamp contrast; guided flow keyed steps, question focus, Cancel focus return, named option groups, visible hint; resource row wraps at 360px; role=log with whole-reply announcements; IME-safe Enter; isolated model name; QuickTag aria-pressed; tab panel and org selector focus rings. 22 mutants red."
     }
   }
 }

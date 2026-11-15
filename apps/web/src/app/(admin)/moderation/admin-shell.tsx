@@ -266,7 +266,7 @@ export function AdminShell() {
               value={selectedOrgId}
               aria-label={adminShellT(locale, 'organization')}
               onChange={e => handleOrgChange(e.target.value)}
-              className="w-full text-sm border border-stone-200 rounded-lg px-3 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
+              className="w-full text-sm border border-stone-200 rounded-lg px-3 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand"
             >
               <option value="all">{adminShellT(locale, 'allOrganizations')}</option>
               {orgs.map(org => (

@@ -324,8 +324,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `ecWic` | ht | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
 | `ecHousingAssistance` | ht | Housing assistance | Èd pou lojman | 2026-11-15 | machine-drafted, needs native review |
 | `ecNone` | ht | None of these | Okenn nan yo | 2026-11-15 | machine-drafted, needs native review |
-| `ecStateQ` | ht | What state do you live in? | Nan ki eta ou rete? | 2026-11-15 | machine-drafted, needs native review |
-| `ecStatePh` | ht | Enter state name or abbreviation | Antre non eta a oswa abrevyasyon l | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | ht | What state do you live in? Use its 2-letter code. | Nan ki eta ou rete? Sèvi ak kòd 2 lèt li. | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | ht | For example: CA, NY, VT | Pa egzanp: CA, NY, VT | 2026-11-15 | machine-drafted, needs native review |
+| `stateNotRecognised` | ht | We couldn’t recognise the state {state}, so nothing was checked. Start Check Eligibility again and enter the 2-letter state code, for example CA, NY or VT. | Nou pa t rekonèt eta {state} la, kidonk nou pa t verifye anyen. Rekòmanse Verifye kalifikasyon epi antre kòd 2 lèt eta a, pa egzanp CA, NY oswa VT. | 2026-11-15 | machine-drafted, needs native review |
+| `conversation` | ht | Conversation | Konvèsasyon | 2026-11-15 | machine-drafted, needs native review |
 | `fhName` | ht | Form Help | Èd ak fòm | 2026-11-15 | machine-drafted, needs native review |
 | `fhDescription` | ht | Get help understanding and completing benefit applications | Jwenn èd pou konprann epi ranpli aplikasyon pou benefis | 2026-11-15 | machine-drafted, needs native review |
 | `fhFormQ` | ht | Which form or application do you need help with? | Ak ki fòm oswa aplikasyon ou bezwen èd? | 2026-11-15 | machine-drafted, needs native review |
@@ -449,8 +451,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `ecWic` | so | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
 | `ecHousingAssistance` | so | Housing assistance | Kaalmada guryaha | 2026-11-15 | machine-drafted, needs native review |
 | `ecNone` | so | None of these | Midna kuma jiro | 2026-11-15 | machine-drafted, needs native review |
-| `ecStateQ` | so | What state do you live in? | Gobolkee ayaad ku nooshahay? | 2026-11-15 | machine-drafted, needs native review |
-| `ecStatePh` | so | Enter state name or abbreviation | Geli magaca gobolka ama soo gaabintiisa | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | so | What state do you live in? Use its 2-letter code. | Gobolkee ayaad ku nooshahay? Isticmaal koodhkiisa 2-xaraf ah. | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | so | For example: CA, NY, VT | Tusaale: CA, NY, VT | 2026-11-15 | machine-drafted, needs native review |
+| `stateNotRecognised` | so | We couldn’t recognise the state {state}, so nothing was checked. Start Check Eligibility again and enter the 2-letter state code, for example CA, NY or VT. | Ma aqoonsan karin gobolka {state}, sidaas darteed waxba lama hubin. Dib u bilow Hubi u-qalmitaanka oo geli koodhka gobolka ee 2-xaraf ah, tusaale CA, NY ama VT. | 2026-11-15 | machine-drafted, needs native review |
+| `conversation` | so | Conversation | Wada-hadal | 2026-11-15 | machine-drafted, needs native review |
 | `fhName` | so | Form Help | Caawimaad foom | 2026-11-15 | machine-drafted, needs native review |
 | `fhDescription` | so | Get help understanding and completing benefit applications | Hel caawimaad aad ku fahanto oo aad ku buuxiso codsiyada gargaarka | 2026-11-15 | machine-drafted, needs native review |
 | `fhFormQ` | so | Which form or application do you need help with? | Foomkee ama codsigee ayaad caawimaad uga baahan tahay? | 2026-11-15 | machine-drafted, needs native review |
@@ -574,8 +578,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `ecWic` | am | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
 | `ecHousingAssistance` | am | Housing assistance | የመኖሪያ ቤት ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
 | `ecNone` | am | None of these | ከእነዚህ ውስጥ የለም | 2026-11-15 | machine-drafted, needs native review |
-| `ecStateQ` | am | What state do you live in? | በየትኛው ግዛት ይኖራሉ? | 2026-11-15 | machine-drafted, needs native review |
-| `ecStatePh` | am | Enter state name or abbreviation | የግዛቱን ስም ወይም ምህጻረ ቃል ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | am | What state do you live in? Use its 2-letter code. | በየትኛው ግዛት ይኖራሉ? ባለ 2 ፊደል ኮዱን ይጠቀሙ። | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | am | For example: CA, NY, VT | ለምሳሌ፦ CA፣ NY፣ VT | 2026-11-15 | machine-drafted, needs native review |
+| `stateNotRecognised` | am | We couldn’t recognise the state {state}, so nothing was checked. Start Check Eligibility again and enter the 2-letter state code, for example CA, NY or VT. | ግዛቱን {state} ልናውቀው አልቻልንም፣ ስለዚህ ምንም አልተረጋገጠም። ብቁነትን ያረጋግጡ የሚለውን እንደገና ይጀምሩ እና ባለ 2 ፊደል የግዛት ኮድ ያስገቡ፣ ለምሳሌ CA፣ NY ወይም VT። | 2026-11-15 | machine-drafted, needs native review |
+| `conversation` | am | Conversation | ውይይት | 2026-11-15 | machine-drafted, needs native review |
 | `fhName` | am | Form Help | የቅጽ እገዛ | 2026-11-15 | machine-drafted, needs native review |
 | `fhDescription` | am | Get help understanding and completing benefit applications | የጥቅማ ጥቅም ማመልከቻዎችን ለመረዳት እና ለመሙላት እገዛ ያግኙ | 2026-11-15 | machine-drafted, needs native review |
 | `fhFormQ` | am | Which form or application do you need help with? | በየትኛው ቅጽ ወይም ማመልከቻ እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
@@ -699,8 +705,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `ecWic` | hmn | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
 | `ecHousingAssistance` | hmn | Housing assistance | Kev pab vaj tse | 2026-11-15 | machine-drafted, needs native review |
 | `ecNone` | hmn | None of these | Tsis muaj ib yam | 2026-11-15 | machine-drafted, needs native review |
-| `ecStateQ` | hmn | What state do you live in? | Koj nyob lub xeev twg? | 2026-11-15 | machine-drafted, needs native review |
-| `ecStatePh` | hmn | Enter state name or abbreviation | Sau lub npe xeev lossis lub npe luv | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | hmn | What state do you live in? Use its 2-letter code. | Koj nyob lub xeev twg? Siv nws tus lej 2 tsab ntawv. | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | hmn | For example: CA, NY, VT | Piv txwv: CA, NY, VT | 2026-11-15 | machine-drafted, needs native review |
+| `stateNotRecognised` | hmn | We couldn’t recognise the state {state}, so nothing was checked. Start Check Eligibility again and enter the 2-letter state code, for example CA, NY or VT. | Peb tsis paub lub xeev {state}, yog li tsis tau kuaj dab tsi. Pib Kuaj seb koj tsim nyog dua thiab sau lub xeev tus lej 2 tsab ntawv, piv txwv CA, NY lossis VT. | 2026-11-15 | machine-drafted, needs native review |
+| `conversation` | hmn | Conversation | Kev sib tham | 2026-11-15 | machine-drafted, needs native review |
 | `fhName` | hmn | Form Help | Kev pab sau ntawv | 2026-11-15 | machine-drafted, needs native review |
 | `fhDescription` | hmn | Get help understanding and completing benefit applications | Tau kev pab kom nkag siab thiab sau cov ntawv thov txiaj ntsig | 2026-11-15 | machine-drafted, needs native review |
 | `fhFormQ` | hmn | Which form or application do you need help with? | Koj xav tau kev pab nrog daim ntawv twg? | 2026-11-15 | machine-drafted, needs native review |

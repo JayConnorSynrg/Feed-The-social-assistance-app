@@ -125,6 +125,13 @@ describe('the admin shell in the admin’s language', () => {
     }
   })
 
+  it('keyboard focus is visible: the organization selector and each tab panel show a brand ring', () => {
+    const out = html('en')
+    expect(out).toMatch(/<select[^>]*focus:ring-2 focus:ring-brand/)
+    const panels = [...out.matchAll(/<div([^>]*role="tabpanel"[^>]*)>/g)].map((m) => m[1])
+    for (const p of panels) expect(p).toMatch(/focus-visible:ring-2 focus-visible:ring-brand/)
+  })
+
   it('the Settings placeholder is gone', () => {
     const out = html('en')
     expect(out).not.toMatch(/coming soon/i)

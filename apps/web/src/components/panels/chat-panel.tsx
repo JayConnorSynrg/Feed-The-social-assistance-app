@@ -28,6 +28,7 @@ import { assistantT, type AssistantKey } from '@/lib/i18n-assistant'
 import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
 import { formatClock } from '@/lib/i18n-intl'
 import { browserTimeZone } from '@/lib/event-time'
+import { buildScreeningRequest } from '@/lib/eligibility-screening'
 import { logger } from '@/lib/logger'
 
 // ============================================
@@ -39,16 +40,19 @@ interface FlowCardProps {
   title: string
   description: string
   onClick?: () => void
+  /** The card's button, so focus can come back to it when its guided flow is cancelled. */
+  buttonRef?: (el: HTMLButtonElement | null) => void
 }
 
-function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardProps) {
+function FlowCard({ icon: Icon, iconBg, title, description, onClick, buttonRef }: FlowCardProps) {
   return (
     <button
+      ref={buttonRef}
       onClick={onClick}
       className="flex flex-col items-start p-4 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-primary/50 hover:bg-[#f5f3ee] transition-all text-start group shadow-sm"
     >
       <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center mb-3`}>
-        <Icon className="w-5 h-5" />
+        <Icon aria-hidden="true" className="w-5 h-5" />
       </div>
       <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">
         {title}
@@ -82,13 +86,14 @@ function QuickTag({ label, icon: Icon, onClick, isActive }: QuickTagProps) {
   return (
     <button
       onClick={onClick}
+      aria-pressed={isActive ?? false}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
         isActive
           ? 'bg-[#4a5d23] text-white'
           : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
       }`}
     >
-      <Icon className="w-4 h-4" />
+      <Icon aria-hidden="true" className="w-4 h-4" />
       {label}
     </button>
   )
@@ -173,9 +178,11 @@ function parseMessageContent(
           key={`resource-${match.index}`}
           className="my-2 p-3 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 transition-colors"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-base text-stone-900 truncate">{name}</h4>
+          {/* Wraps: on a narrow screen or with long button words the actions move under the name,
+              which stays whole (no sideways scroll). */}
+          <div className="flex flex-wrap items-start gap-2">
+            <div className="flex-1 min-w-[10rem]">
+              <h4 className="font-semibold text-base text-stone-900 break-words">{name}</h4>
               {address && <p className="text-sm text-stone-600 mt-0.5">{address}</p>}
               {phone && phone !== 'N/A' && phone !== 'null' && (
                 <a
@@ -186,7 +193,7 @@ function parseMessageContent(
                 </a>
               )}
             </div>
-            <div lang={locale} dir={dir(locale)} className="flex gap-1 flex-shrink-0">
+            <div lang={locale} dir={dir(locale)} className="flex flex-wrap gap-1">
               {applyUrl && applyUrl !== 'N/A' && applyUrl !== 'null' && applyUrl !== 'undefined' && (
                 <a
                   href={applyUrl.startsWith('http') ? applyUrl : `https://${applyUrl}`}
@@ -324,60 +331,6 @@ interface EligibilityProgram {
   description: string
 }
 
-/** Map guided-flow answers to the benefits-screening edge function request shape. */
-function buildScreeningRequest(answers: Record<string, string>) {
-  // household-size: '1' | '2' | '3' | '4' | '5' | '6+'
-  const householdSize = answers['household-size'] === '6+' ? 6 : parseInt(answers['household-size'] ?? '1', 10)
-
-  // income: bucket string → midpoint annual income
-  const incomeMap: Record<string, number> = {
-    '0': 0,
-    'under-1000': 6000,
-    '1000-2000': 18000,
-    '2000-3000': 30000,
-    '3000-4000': 42000,
-    '4000-5000': 54000,
-    'over-5000': 72000,
-  }
-  const annualIncome = incomeMap[answers['income'] ?? '0'] ?? 0
-
-  // state: text field — normalize to 2-letter abbreviation
-  const stateRaw = (answers['state'] ?? '').trim().toUpperCase()
-  // If already 2 chars, use as-is; otherwise try to match name → abbr via common map
-  const STATE_ABBR: Record<string, string> = {
-    VERMONT: 'VT', 'NEW YORK': 'NY', CALIFORNIA: 'CA', TEXAS: 'TX',
-    FLORIDA: 'FL', ILLINOIS: 'IL', PENNSYLVANIA: 'PA', OHIO: 'OH',
-    GEORGIA: 'GA', 'NORTH CAROLINA': 'NC', MICHIGAN: 'MI', 'NEW JERSEY': 'NJ',
-    VIRGINIA: 'VA', WASHINGTON: 'WA', ARIZONA: 'AZ', MASSACHUSETTS: 'MA',
-    TENNESSEE: 'TN', INDIANA: 'IN', MISSOURI: 'MO', MARYLAND: 'MD',
-    WISCONSIN: 'WI', COLORADO: 'CO', MINNESOTA: 'MN', 'SOUTH CAROLINA': 'SC',
-    ALABAMA: 'AL', LOUISIANA: 'LA', KENTUCKY: 'KY', OREGON: 'OR',
-    OKLAHOMA: 'OK', CONNECTICUT: 'CT', UTAH: 'UT', NEVADA: 'NV',
-    IOWA: 'IA', ARKANSAS: 'AR', MISSISSIPPI: 'MS', KANSAS: 'KS',
-    'NEW MEXICO': 'NM', NEBRASKA: 'NE', 'WEST VIRGINIA': 'WV', IDAHO: 'ID',
-    HAWAII: 'HI', 'NEW HAMPSHIRE': 'NH', MAINE: 'ME', MONTANA: 'MT',
-    'RHODE ISLAND': 'RI', DELAWARE: 'DE', 'SOUTH DAKOTA': 'SD',
-    'NORTH DAKOTA': 'ND', ALASKA: 'AK', 'DISTRICT OF COLUMBIA': 'DC',
-    DC: 'DC', WYOMING: 'WY',
-  }
-  const state = stateRaw.length === 2 ? stateRaw : (STATE_ABBR[stateRaw] ?? 'VT')
-
-  const hasChildren = answers['children'] === 'yes'
-  const isDisabled = (answers['employment'] ?? '') === 'disability'
-
-  // Default age to 35 — the flow doesn't collect age directly
-  return {
-    household_size: isNaN(householdSize) || householdSize < 1 ? 1 : householdSize,
-    annual_income: annualIncome,
-    state,
-    age: 35,
-    has_children: hasChildren,
-    is_disabled: isDisabled,
-  }
-}
-
-
-
 // ============================================
 // CHAT MESSAGE COMPONENT
 // ============================================
@@ -423,12 +376,14 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
           isUser
-            ? 'bg-primary text-primary-foreground rounded-ee-md'
+            ? 'bg-brand text-white rounded-ee-md'
             : 'bg-muted rounded-es-md'
         }`}
       >
-        {/* The member's or the assistant's own words: their own direction, no page language. */}
-        <div lang="" dir="auto" className="text-base">
+        {/* The member's or the assistant's own words: their own direction, no page language. While a
+            reply streams it is hidden from assistive technology (the list below re-adds it whole
+            when it completes), so a screen reader never reads it token by token. */}
+        <div lang="" dir="auto" aria-hidden={message.isStreaming ? true : undefined} className="text-base">
           {message.content
             ? parseMessageContent(message.content, {
                 onSave: onSaveResource ? handleSave : undefined,
@@ -453,13 +408,13 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
         )}
         <div className="flex items-center gap-2 mt-1">
           {message.timestamp && (
-            <p className={`text-[10px] ${isUser ? 'text-primary-foreground/70' : 'text-stone-500'}`}>
+            <p className={`text-[10px] ${isUser ? 'text-white/80' : 'text-stone-600'}`}>
               {formatClock(message.timestamp.toISOString(), locale, browserTimeZone())}
             </p>
           )}
           {message.model && !isUser && (
-            <p className="text-[10px] text-stone-500">
-              {formatMessage(assistantT(locale, 'viaModel'), { model: message.model.split('/').pop() ?? '' })}
+            <p className="text-[10px] text-stone-600">
+              {formatMessage(assistantT(locale, 'viaModel'), { model: isolate(message.model.split('/').pop() ?? '') })}
             </p>
           )}
         </div>
@@ -533,6 +488,21 @@ export function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerPr
 }
 
 // ============================================
+// UNKNOWN STATE — the eligibility check did not run
+// ============================================
+/** Shown when Check Eligibility ends on a state FEED cannot read: nothing was screened or sent. */
+function UnknownStateNotice({ state, locale }: { state: string; locale: Locale }) {
+  const [before, after] = splitMessage(assistantT(locale, 'stateNotRecognised'), 'state')
+  return (
+    <p role="alert" data-testid="unknown-state-notice" className="w-full p-3 rounded-md border border-amber-300 bg-amber-50 text-sm text-amber-900">
+      {before}
+      <bdi lang="" dir="auto">{state}</bdi>
+      {after}
+    </p>
+  )
+}
+
+// ============================================
 // SIGN IN PROMPT
 // ============================================
 function SignInPrompt({ locale }: { locale: Locale }) {
@@ -585,14 +555,27 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   // Guard flag for errorContext — prevents double-send on re-render
   const errorExplainSentRef = useRef(false)
 
-  const handleFlowSelect = (flow: GuidedFlow) => setSelectedFlow(flow)
+  const handleFlowSelect = (flow: GuidedFlow) => {
+    setUnknownState(null)
+    setSelectedFlow(flow)
+  }
+  // The state the member typed when it was not one FEED can read (the notice under the cards).
+  const [unknownState, setUnknownState] = useState<string | null>(null)
 
   const handleFlowComplete = useCallback(async (answers: Record<string, string>, aiResponse: string) => {
     setSelectedFlow(null)
+    setUnknownState(null)
 
     // Eligibility-checker flow: invoke the benefits-screening edge function
     if (answers['household-size'] !== undefined && answers['state'] !== undefined) {
-      const reqBody = buildScreeningRequest(answers)
+      const built = buildScreeningRequest(answers)
+      // Not a state FEED can read: nothing is screened and nothing is sent; the member is told, in
+      // their language, to enter the 2-letter code (never a guessed state in its place).
+      if (!built.ok) {
+        setUnknownState(answers['state'].trim())
+        return
+      }
+      const reqBody = built.request
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30_000)
@@ -659,7 +642,19 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     }
   }, [sendMessage, setActivePanel])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFlowCancel = () => setSelectedFlow(null)
+  // Cancel returns focus to the card that opened the flow (it is mounted again with the greeting).
+  const cardRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const launcherRef = useRef<string | null>(null)
+  const returnFocusRef = useRef<string | null>(null)
+  const handleFlowCancel = () => {
+    returnFocusRef.current = launcherRef.current
+    setSelectedFlow(null)
+  }
+  useEffect(() => {
+    if (selectedFlow || !returnFocusRef.current) return
+    cardRefs.current[returnFocusRef.current]?.focus()
+    returnFocusRef.current = null
+  }, [selectedFlow])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -766,6 +761,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   }
 
   const handleFeatureClick = (feature: string) => {
+    launcherRef.current = feature
     if (feature === 'resources' && onNavigateToMap) {
       onNavigateToMap()
     } else if (feature === 'resources') {
@@ -798,6 +794,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   }
 
   const sendLabel = assistantT(locale, 'sendMessage')
+  const streaming = messages.some((m) => m.isStreaming)
   const quickTag = (tag: (typeof QUICK_TAGS)[number]) => (
     <QuickTag
       key={tag.id}
@@ -833,6 +830,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
               title={assistantT(locale, 'cardResourcesTitle')}
               description={assistantT(locale, 'cardResourcesBody')}
               onClick={() => handleFeatureClick('resources')}
+              buttonRef={(el) => { cardRefs.current['resources'] = el }}
             />
             <FlowCard
               icon={CheckCircle}
@@ -840,6 +838,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
               title={assistantT(locale, 'cardEligibilityTitle')}
               description={assistantT(locale, 'cardEligibilityBody')}
               onClick={() => handleFeatureClick('eligibility')}
+              buttonRef={(el) => { cardRefs.current['eligibility'] = el }}
             />
             <FlowCard
               icon={FileText}
@@ -847,8 +846,11 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
               title={assistantT(locale, 'cardFormsTitle')}
               description={assistantT(locale, 'cardFormsBody')}
               onClick={() => handleFeatureClick('forms')}
+              buttonRef={(el) => { cardRefs.current['forms'] = el }}
             />
           </div>
+
+          {unknownState !== null && <UnknownStateNotice state={unknownState} locale={locale} />}
 
           {!isAuthenticated && <SignInPrompt locale={locale} />}
 
@@ -866,11 +868,11 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
                 placeholder={assistantT(locale, isAuthenticated ? 'inputPlaceholder' : 'inputPlaceholderGuest')}
                 aria-label={assistantT(locale, isAuthenticated ? 'inputPlaceholder' : 'inputPlaceholderGuest')}
                 dir="auto"
-                className="pe-12 py-6 rounded-xl bg-[#f8f6f1] border-stone-200"
+                className="pe-12 py-6 rounded-xl bg-[#f8f6f1] border-stone-200 placeholder:text-stone-600"
                 disabled={!isAuthenticated}
               />
               <Button
@@ -896,10 +898,23 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
         // ============================================
         <>
           {/* Chat Messages */}
-          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4">
+          {/* A log: a new message is announced politely. A streaming reply is announced once, when it
+              completes — its bubble is hidden from assistive technology while streaming (aria-busy
+              on the log as well) and is re-keyed on completion, so the finished reply is one
+              addition. Word-by-word announcements of a streamed reply are unusable with a screen
+              reader; one complete reply is what a sighted reader acts on too. */}
+          <div
+            ref={messagesContainerRef}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-busy={streaming}
+            aria-label={assistantT(locale, 'conversation')}
+            className="flex-1 overflow-y-auto py-4"
+          >
             {messages.map((msg) => (
               <ChatMessageView
-                key={msg.id}
+                key={`${msg.id}${msg.isStreaming ? ':streaming' : ''}`}
                 message={msg}
                 onQuickReply={sendMessage}
                 onSaveResource={saveResource}
@@ -909,6 +924,12 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             ))}
             <div ref={messagesEndRef} />
           </div>
+
+          {unknownState !== null && (
+            <div className="px-4 pb-2">
+              <UnknownStateNotice state={unknownState} locale={locale} />
+            </div>
+          )}
 
           {/* Reconnecting indicator */}
           {isRetrying && (
@@ -932,11 +953,11 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
                 placeholder={assistantT(locale, 'replyPlaceholder')}
                 aria-label={assistantT(locale, 'replyPlaceholder')}
                 dir="auto"
-                className="pe-12 py-4 rounded-xl"
+                className="pe-12 py-4 rounded-xl placeholder:text-stone-600"
               />
               {isLoading ? (
                 <Button

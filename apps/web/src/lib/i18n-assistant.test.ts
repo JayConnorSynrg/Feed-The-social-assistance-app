@@ -107,6 +107,40 @@ Please provide 2-3 specific resources with names, addresses, contact info, and a
     )
   })
 
+  it('the form-help prompt is byte-for-byte the English prompt, filled with values and the member’s words', () => {
+    expect(
+      buildAIPrompt(formHelpFlow, {
+        'form-type': 'snap',
+        'help-type': 'section',
+        'section-name': 'Ingresos',
+        'specific-question': '¿Cuenta el dinero en efectivo?',
+        status: 'in-progress',
+      }),
+    ).toBe(`Help the user with their benefits application:
+
+Form Details:
+- Form type: snap
+- Help needed: section
+- Section (if applicable): Ingresos
+- Question text (if applicable): {{question-text}}
+- Specific question (if applicable): ¿Cuenta el dinero en efectivo?
+- Application status: in-progress
+
+Please provide:
+1. Clear, simple explanation based on what they need help with
+2. If they need documents, list what they typically need
+3. Tips for avoiding common mistakes
+4. Reassurance that they can ask follow-up questions`)
+  })
+
+  it('the state question asks for the 2-letter code, with an example, in every language', () => {
+    for (const locale of LOCALES) {
+      expect(assistantT(locale, 'ecStatePh'), locale).toMatch(/CA.{1,3}NY.{1,3}VT/)
+      expect(assistantT(locale, 'ecStateQ'), locale).toMatch(/2|두|двух|两|حرفين/)
+      expect(assistantT(locale, 'stateNotRecognised'), locale).toMatch(/CA.{1,10}NY.{1,10}VT/)
+    }
+  })
+
   it('the eligibility flow still sends nothing itself', () => {
     expect(eligibilityCheckerFlow.skipDirectSend).toBe(true)
     expect(buildAIPrompt(eligibilityCheckerFlow, { state: 'VT' })).toBeNull()

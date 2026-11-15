@@ -5,7 +5,7 @@
 // Every word is in the viewer's language (lib/i18n-assistant.ts) and the card is marked with it; an
 // option answers with its `value`, so what is sent never depends on the language.
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useId, useRef } from 'react'
 import {
   type GuidedFlow,
   type FlowStep,
@@ -33,6 +33,8 @@ interface StepComponentProps {
   onAnswer: (answer: string) => void
   isLoading?: boolean
   locale: Locale
+  /** The id of the step's question heading: the options' group and the input are named by it. */
+  questionId: string
 }
 
 /** An option's words: its decorative emoji (hidden from screen readers) and its label. */
@@ -45,7 +47,10 @@ function OptionText({ option, locale }: { option: NonNullable<FlowStep['options'
   )
 }
 
-export function StepComponent({ step, onAnswer, isLoading, locale }: StepComponentProps) {
+// Mounted once per step (keyed by step id in GuidedFlowComponent), so what was typed or picked on
+// one step never carries into the next.
+export function StepComponent({ step, onAnswer, isLoading, locale, questionId }: StepComponentProps) {
+  const hintId = useId()
   const [textValue, setTextValue] = useState('')
   const [selectedOptions, setSelectedOptions] = useState<string[]>([])
 
@@ -66,7 +71,7 @@ export function StepComponent({ step, onAnswer, isLoading, locale }: StepCompone
 
   if (step.type === 'select') {
     return (
-      <div className="space-y-2">
+      <div role="group" aria-labelledby={questionId} className="space-y-2">
         {step.options?.map(option => (
           <button
             key={option.value}
@@ -83,7 +88,7 @@ export function StepComponent({ step, onAnswer, isLoading, locale }: StepCompone
 
   if (step.type === 'multiselect') {
     return (
-      <div className="space-y-2">
+      <div role="group" aria-labelledby={questionId} className="space-y-2">
         {step.options?.map(option => {
           const isSelected = selectedOptions.includes(option.value)
           return (
@@ -118,15 +123,23 @@ export function StepComponent({ step, onAnswer, isLoading, locale }: StepCompone
     )
   }
 
-  // Text, location, number inputs
+  // Text, location, number inputs. The hint is text on screen (not only a placeholder that vanishes
+  // as the member types) and describes the input.
+  const hint = step.placeholder ? assistantT(locale, step.placeholder) : null
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {hint && (
+        <p id={hintId} className="text-sm text-stone-600">
+          {hint}
+        </p>
+      )}
       <Input
         type={step.type === 'number' ? 'number' : 'text'}
         value={textValue}
         onChange={e => setTextValue(e.target.value)}
-        placeholder={step.placeholder ? assistantT(locale, step.placeholder) : undefined}
-        aria-label={assistantT(locale, step.question)}
+        placeholder={hint ?? undefined}
+        aria-labelledby={questionId}
+        aria-describedby={hint ? hintId : undefined}
         dir="auto"
         disabled={isLoading}
         min={step.validation?.min}
@@ -160,6 +173,13 @@ export function GuidedFlowComponent({
   const locale = useProfileLocale()
 
   const currentStep = flow.steps[currentStepIndex]
+  const questionId = useId()
+  // Focus moves to the question whenever the step changes (opening the flow, an answer, Back), so a
+  // keyboard or screen-reader user starts each step at its question.
+  const questionRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    questionRef.current?.focus()
+  }, [currentStepIndex])
   const isLastStep = currentStepIndex === flow.steps.length - 1
 
   const handleAnswer = useCallback(
@@ -262,9 +282,13 @@ export function GuidedFlowComponent({
           </div>
         ) : (
           <>
-            <h3 className="font-medium mb-4">{assistantT(locale, currentStep.question)}</h3>
+            <h3 ref={questionRef} id={questionId} tabIndex={-1} className="font-medium mb-4 outline-none">
+              {assistantT(locale, currentStep.question)}
+            </h3>
 
             <StepComponent
+              key={currentStep.id}
+              questionId={questionId}
               step={currentStep}
               onAnswer={handleAnswer}
               isLoading={isLoading || isProcessing}
