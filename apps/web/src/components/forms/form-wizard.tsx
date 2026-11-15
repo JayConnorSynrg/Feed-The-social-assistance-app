@@ -51,7 +51,11 @@ const AUTOCOMPLETE: Record<string, string> = {
   middle_name: 'additional-name',
   email: 'email',
   phone: 'tel',
+  alt_phone: 'tel',
   date_of_birth: 'bday',
+  suffix: 'honorific-suffix',
+  gender: 'sex',
+  preferred_language: 'language',
 }
 
 /** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
@@ -253,6 +257,10 @@ function StepFields({
                   <Select
                     value={formField.value as string}
                     onValueChange={(v) => { if (!disabled) formField.onChange(v) }}
+                    // Radix renders a hidden native <select> inside the step's <form>; the token
+                    // goes on it (the field name stays the template's).
+                    autoComplete={AUTOCOMPLETE[field.name]}
+                    name={field.name}
                   >
                     {/* The chosen option and the template's placeholder are English; FEED's own
                         "Select..." prompt is the member's language. */}
@@ -654,7 +662,8 @@ export function FormWizard({
 
   // Focus: the form's heading when the wizard opens (the button that opened it has gone), the
   // step's heading each time the step changes.
-  const ready = !templateLoading && !submissionHook.loading
+  // Continuing a draft: wait for the draft itself as well, so focus lands on the form's heading.
+  const ready = !templateLoading && !submissionHook.loading && !(existingSubmissionId && !submissionHook.submission)
   useEffect(() => {
     // Wait for the form itself: while the template or the draft loads, a spinner stands in.
     if (!template || !ready) return
@@ -863,15 +872,20 @@ export function FormWizard({
                 locale={locale}
               />
             ) : currentSection ? (
-              <StepFields
-                section={currentSection}
-                allFields={allFields}
-                register={register}
-                control={control}
-                errors={errors}
-                disabled={isSubmitting || isSaving}
-                locale={locale}
-              />
+              // A <form> around the step's fields only so browsers group them for autofill (and
+              // Radix renders the dropdowns' native <select> carrying their autocomplete token).
+              // It never submits: no submit button, and Enter / submit are swallowed.
+              <form id="form-wizard-step" noValidate onSubmit={(e) => e.preventDefault()}>
+                <StepFields
+                  section={currentSection}
+                  allFields={allFields}
+                  register={register}
+                  control={control}
+                  errors={errors}
+                  disabled={isSubmitting || isSaving}
+                  locale={locale}
+                />
+              </form>
             ) : null}
           </div>
 

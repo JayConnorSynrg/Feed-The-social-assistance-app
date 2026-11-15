@@ -453,3 +453,15 @@ describe('fix round: results said once, labels, encrypted rows, repeated failure
     expect(document.activeElement).toBe(input)
   })
 })
+
+describe('final round: search', () => {
+  it('the search field has a persistent, visible label in the member language', async () => {
+    await render('ko')
+    const input = container.querySelector('input[type="search"]') as HTMLInputElement
+    const label = container.querySelector(`label[for="${input.id}"]`)
+    expect(label?.textContent).toBe(documentsT('ko', 'searchLabel'))
+    expect(label?.classList.contains('sr-only')).toBe(false)
+    expect(input.getAttribute('aria-label')).toBeNull()
+  })
+})
+

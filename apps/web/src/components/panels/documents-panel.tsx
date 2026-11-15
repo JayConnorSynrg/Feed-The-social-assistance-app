@@ -207,13 +207,14 @@ function DocumentsHeader({ documentCount, searchQuery, onSearchChange, locale, h
         </span>
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar — a persistent, visible label */}
+      <Label htmlFor="documents-search" className="mb-1 block text-sm text-stone-800">{t('searchLabel')}</Label>
       <div className="relative">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" aria-hidden="true" />
         <Input
+          id="documents-search"
           ref={searchRef}
           type="search"
-          aria-label={t('searchLabel')}
           placeholder={t('searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}

@@ -38,6 +38,8 @@ const h = vi.hoisted(() => ({
   draftOk: true,
   subLoading: false,
   subsLoading: false,
+  unlockHold: false,
+  submission: null as null | Record<string, unknown>,
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -58,6 +60,7 @@ vi.mock('@/contexts/vault-context', () => ({
     },
     unlock: async (pw: string) => {
       h.unlockArgs.push(pw)
+      if (h.unlockHold) await new Promise(() => {})
       if (!h.unlockOk) h.vaultError = 'Incorrect password'
       return h.unlockOk
     },
@@ -74,6 +77,7 @@ vi.mock('@/hooks/use-vault-form-submission', () => ({
     saveDraft: async (data: unknown) => { h.drafts.push(JSON.parse(JSON.stringify(data))); return h.draftOk },
     submitForm: async (...args: unknown[]) => { h.submits.push(JSON.parse(JSON.stringify(args))); return h.submitOk },
     loading: h.subLoading,
+    submission: h.submission,
     error: h.submitOk ? null : 'insert or update on table "form_submissions" violates foreign key constraint',
   }),
   useUserSubmissions: () => ({ submissions: h.submissions, loading: h.subsLoading, error: null, refresh: async () => {} }),
@@ -158,6 +162,8 @@ beforeEach(() => {
   h.draftOk = true
   h.subLoading = false
   h.subsLoading = false
+  h.unlockHold = false
+  h.submission = null
   vi.mocked(logger.warn).mockClear()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -632,3 +638,42 @@ describe('fix round: the annotator', () => {
     expect(document.getElementById(fill.getAttribute('aria-describedby')!)?.textContent).toBe(formsT('ko', 'fillFromProfileHint'))
   })
 })
+
+// ── PR #259 final round ──────────────────────────────────────────────────────────────────────
+describe('final round', () => {
+  it('B5: the dropdowns carry autofill tokens on Radix’s native select; alt_phone is tel', async () => {
+    await render('ko', el(FormWizard, { templateId: snapApplicationTemplate.id, onComplete: vi.fn(), onCancel: vi.fn() }))
+    expect(document.querySelector('select[name="suffix"]')?.getAttribute('autocomplete')).toBe('honorific-suffix')
+    expect(document.querySelector('select[name="gender"]')?.getAttribute('autocomplete')).toBe('sex')
+    await act(async () => byTestId('form-next-button').click())
+    await settle()
+    expect(document.querySelector('input[name="alt_phone"]')?.getAttribute('autocomplete')).toBe('tel')
+    remount()
+    await render('ko', el(FormWizard, { templateId: 'medicaid-application-v1', onComplete: vi.fn(), onCancel: vi.fn() }))
+    for (let i = 0; i < 4 && !document.querySelector('select[name="preferred_language"]'); i++) {
+      await act(async () => byTestId('form-next-button').click())
+      await settle()
+    }
+    expect(document.querySelector('select[name="preferred_language"]')?.getAttribute('autocomplete')).toBe('language')
+  })
+
+  it('M7: two presses while an unlock is in flight send it once', async () => {
+    h.unlockHold = true
+    await render('ko', el(VaultUnlockModal, { open: true, onOpenChange: vi.fn(), mode: 'unlock' }))
+    await type(byTestId('vault-unlock-password-input') as HTMLInputElement, 'correct horse battery')
+    await act(async () => byTestId('vault-unlock-submit-button').click())
+    await act(async () => byTestId('vault-unlock-submit-button').click())
+    await settle()
+    expect(h.unlockArgs).toHaveLength(1)
+  })
+
+  it('B2: continuing a draft, focus waits for the draft, then lands on the form’s heading', async () => {
+    const node = () => el(FormWizard, { templateId: snapApplicationTemplate.id, existingSubmissionId: 'sub1', onComplete: vi.fn(), onCancel: vi.fn() })
+    await render('ko', node())
+    expect(document.activeElement).not.toBe(byTestId('form-wizard-title'))
+    h.submission = { id: 'sub1' }
+    await render('ko', node())
+    expect(document.activeElement).toBe(byTestId('form-wizard-title'))
+  })
+})
+

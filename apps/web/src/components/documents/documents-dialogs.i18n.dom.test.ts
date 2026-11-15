@@ -285,3 +285,24 @@ describe('fix round: the viewer', () => {
   })
 })
 
+describe('final round: notes', () => {
+  it('M6: a failed notes save shows no “Saved”, one alert, one code-only row', async () => {
+    h.actionOk = false
+    await render('ko', detail())
+    const area = dialog().querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'Traer identificación y recibos')
+      area.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const alertEl = document.querySelector('[data-testid="resource-detail-alert"]')!
+    const w = watchRegion(alertEl)
+    const save = [...dialog().querySelectorAll('button')].find((b) => b.textContent?.trim() === documentsT('ko', 'saveNotes'))!
+    await act(async () => save.click())
+    await settle()
+    w.stop()
+    expect(dialog().textContent).not.toContain(documentsT('ko', 'notesSaved'))
+    expect(w.inserted).toEqual([documentsT('ko', 'detailFailed')])
+    expect(vi.mocked(logger.warn).mock.calls).toEqual([['error_surface.shown', { surface: 'resource-detail', kind: 'notes_save', locale: 'ko' }]])
+  })
+})
+

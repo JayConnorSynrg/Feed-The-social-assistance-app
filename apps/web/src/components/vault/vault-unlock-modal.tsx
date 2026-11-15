@@ -73,9 +73,20 @@ export function VaultUnlockModal({
   const tooShort = mode === 'setup' && password.length < 12
   const unavailable = loading || !password || mismatch || tooShort
 
+  // Single flight: a second press (or Enter) while an attempt is in flight sends nothing.
+  const inFlight = useRef(false)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (loading) return
+    if (loading || inFlight.current) return
+    inFlight.current = true
+    try {
+      await submitOnce()
+    } finally {
+      inFlight.current = false
+    }
+  }
+
+  const submitOnce = async () => {
     clearError()
 
     if (!password) {

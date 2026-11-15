@@ -49,3 +49,21 @@ describe('theme tokens', () => {
     }
   })
 })
+
+describe('focus ring', () => {
+  it('--ring is the primary green and stays ≥ 3:1 on white and on cream (#faf9f6)', () => {
+    expect(token('ring')).toEqual(token('primary'))
+    const ring = rgb(token('ring'))
+    expect(ratio(ring, [255, 255, 255])).toBeGreaterThanOrEqual(3)
+    expect(ratio(ring, [0xfa, 0xf9, 0xf6])).toBeGreaterThanOrEqual(3)
+  })
+
+  it('packages/ui/tokens/colors.ts carries the same light values', () => {
+    const src = readFileSync(fileURLToPath(new URL('../../../../packages/ui/tokens/colors.ts', import.meta.url)), 'utf8')
+    for (const name of ['primary', 'primary-foreground', 'destructive', 'destructive-foreground', 'ring']) {
+      const [h, s, l] = token(name)
+      expect(src, name).toContain(`'--${name}': '${h} ${+(s * 100).toFixed(1)}% ${+(l * 100).toFixed(1)}%'`)
+    }
+  })
+})
+
