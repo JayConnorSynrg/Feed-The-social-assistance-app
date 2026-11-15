@@ -125,6 +125,7 @@ describe('org Overview: repeating events ending within 30 days', () => {
         state: 'ready',
         notice: '',
         orgId: 'org-1',
+        locale: 'en',
         onRetry: () => {},
         onExtended: () => {},
       }),
@@ -140,7 +141,7 @@ describe('org Overview: repeating events ending within 30 days', () => {
 
   it('a failed load is an error with Try again, not an empty list', () => {
     const html = renderToStaticMarkup(
-      h(EndingSoonView, { series: null, state: 'error', notice: '', orgId: 'org-1', onRetry: () => {}, onExtended: () => {} }),
+      h(EndingSoonView, { series: null, state: 'error', notice: '', orgId: 'org-1', locale: 'en', onRetry: () => {}, onExtended: () => {} }),
     )
     expect(html).toContain('role="alert"')
     expect(html).toContain('Try again')

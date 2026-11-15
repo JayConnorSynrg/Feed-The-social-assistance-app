@@ -39,12 +39,13 @@ describe('focus after "Try again"', () => {
         h(OrgOverviewView, {
           state,
           counts: state === 'ready' ? { members: 1, activeEvents: 2, upcomingDates: 3, checkinsLast30Days: 4 } : null,
+          locale: 'en',
           onRetry: () => {},
         })
       )
       expect(html, state).toMatch(/<h2 id="org-overview-heading" tabindex="-1"[^>]*>This organization at a glance<\/h2>/)
-      // English-only section: marked so it reads left-to-right inside a right-to-left page.
-      expect(html, state).toMatch(/^<section lang="en" dir="ltr"/)
+      // P6 W4: translated, so no English mark (the page root carries the admin's language).
+      expect(html, state).toMatch(/^<section aria-labelledby="org-overview-heading"/)
     }
   })
 })
@@ -54,7 +55,7 @@ describe('ending-soon list: loading and "Try again"', () => {
     const { EndingSoonView } = await import('./org-overview')
     for (const state of ['loading', 'ready', 'error'] as const) {
       const html = renderToStaticMarkup(
-        h(EndingSoonView, { series: state === 'ready' ? [] : null, state, notice: '', orgId: 'o', onRetry: () => {}, onExtended: () => {} }),
+        h(EndingSoonView, { series: state === 'ready' ? [] : null, state, notice: '', orgId: 'o', locale: 'en', onRetry: () => {}, onExtended: () => {} }),
       )
       expect(html, state).toMatch(/<h2 id="org-ending-soon-heading" tabindex="-1"/)
       if (state === 'loading') expect(html).toMatch(/<p [^>]*aria-live="polite"[^>]*>.*Loading…<\/p>/)

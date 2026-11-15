@@ -180,7 +180,7 @@ function fakeDoc(present: Record<string, { focus: () => void }>) {
 describe('ManageResourcesTab — "Edit in admin" landing', () => {
   it('found: reads the resource by id (approved only) and opens THAT resource in the edit dialog', async () => {
     setUrl(`?tab=manage&focus=resource:${ID}`)
-    const html = await harness.settle(h(ManageResourcesTab))
+    const html = await harness.settle(h(ManageResourcesTab, { locale: 'en' }))
 
     expect(resourceReads()).toHaveLength(1)
     expect(resourceReads()[0].eq).toEqual([
@@ -208,7 +208,7 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
 
   it('closing a link-opened dialog keeps focus in the tab: its row Edit button when listed, else the Manage tab trigger', async () => {
     setUrl(`?tab=manage&focus=resource:${ID}`)
-    await harness.settle(h(ManageResourcesTab))
+    await harness.settle(h(ManageResourcesTab, { locale: 'en' }))
     const onCloseAutoFocus = (lastDialog() as unknown as { onCloseAutoFocus?: CloseFocus }).onCloseAutoFocus
     expect(typeof onCloseAutoFocus).toBe('function')
 
@@ -230,7 +230,7 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
   it('not_found (missing, pending or rejected): one row, a plain notice, dialog closed, list usable', async () => {
     readResult.current = async () => ({ data: null, error: null })
     setUrl(`?tab=manage&focus=resource:${ID}`)
-    const html = await harness.settle(h(ManageResourcesTab))
+    const html = await harness.settle(h(ManageResourcesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([{ kind: 'resource', outcome: 'not_found', tab: 'manage' }])
     expect(html).toMatch(/<p role="status" class="flex-1">That resource couldn&#x27;t be found, or it isn&#x27;t editable here/)
     expect(html).toContain('data-dialog-open="false"')
@@ -242,7 +242,7 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     for (const focus of ['resource:12345', `business:${ID}`]) {
       harness.reset()
       setUrl(`?tab=manage&focus=${focus}`)
-      const html = await harness.settle(h(ManageResourcesTab))
+      const html = await harness.settle(h(ManageResourcesTab, { locale: 'en' }))
       expect(html).toContain('<p role="status" class="sr-only"></p>')
     }
     expect(resolveRows()).toEqual([])
@@ -255,8 +255,8 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     readResult.current = () => new Promise((r) => (resolveRead = r))
     setUrl(`?tab=manage&focus=resource:${ID}`)
     // Pass 1 claims the focus; pass 2 starts the by-id read; the tab unmounts while it is in flight.
-    await harness.render(h(ManageResourcesTab))
-    await harness.render(h(ManageResourcesTab))
+    await harness.render(h(ManageResourcesTab, { locale: 'en' }))
+    await harness.render(h(ManageResourcesTab, { locale: 'en' }))
     expect(resourceReads()).toHaveLength(1)
     harness.unmount()
     await new Promise((r) => setTimeout(r, 0))
@@ -264,14 +264,14 @@ describe('ManageResourcesTab — "Edit in admin" landing', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(resolveRows()).toEqual([{ kind: 'resource', outcome: 'abandoned', tab: 'manage' }])
     // The late answer set nothing: rendering the kept state again still shows the dialog closed.
-    const html = await harness.render(h(ManageResourcesTab))
+    const html = await harness.render(h(ManageResourcesTab, { locale: 'en' }))
     expect(html).toContain('data-dialog-open="false"')
     expect(dialogProps.every((p) => p.open === false)).toBe(true)
   })
 
   it('I3 — no focus param: the list loads as before, no by-id read, no resolve row, URL untouched', async () => {
     setUrl('?tab=manage')
-    const html = await harness.settle(h(ManageResourcesTab))
+    const html = await harness.settle(h(ManageResourcesTab, { locale: 'en' }))
     expect(rpcCalls).toEqual([
       {
         fn: 'admin_list_resources',

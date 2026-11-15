@@ -3329,7 +3329,3 @@ export const orgFormMessages: Record<Locale, OrgFormMessages> = {
 export function orgFormT(locale: Locale, key: keyof OrgFormMessages): string {
   return translate(orgFormMessages, locale, key)
 }
-
-// formatMessage lives in lib/format-message.ts (its one definition). This re-export serves the
-// moderation pages still reading it from here; new code imports it from './format-message'.
-export { formatMessage } from './format-message'

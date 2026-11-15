@@ -9,20 +9,26 @@
 // "Repeating events ending soon" lists this organization's series whose last date is within 30
 // days (or passed), each with "Repeat for 6 more months"; an extended series leaves the list, so
 // focus moves to the list's heading and the status line says until when it now repeats.
+// P6 W4: the admin's language (lib/i18n-org-admin.ts, lib/i18n-event-forms.ts), dates and numbers
+// in its locale; series titles keep their own (lang="" dir="auto").
 
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { eventFormT, formatMessage } from '@/lib/i18n-event-forms'
+import { eventFormT } from '@/lib/i18n-event-forms'
+import { formatMessage } from '@/lib/format-message'
 import { formatCalendarDate } from '@/lib/event-time'
+import type { Locale } from '@/lib/i18n'
+import { formatCount } from '@/lib/i18n-intl'
+import { orgAdminT, type OrgAdminMessages } from '@/lib/i18n-org-admin'
 import { ExtendSeriesButton } from '../extend-series-button'
 import { fetchEndingSoon, fetchOrgOverview, type EndingSoonSeries, type OrgOverviewCounts } from './org-overview-data'
 
-const TILES: Array<{ key: keyof OrgOverviewCounts; label: string }> = [
-  { key: 'activeEvents', label: 'Active events' },
-  { key: 'upcomingDates', label: 'Event dates, next 30 days' },
-  { key: 'checkinsLast30Days', label: 'Check-ins, last 30 days' },
-  { key: 'members', label: 'Members' },
+const TILES: Array<{ key: keyof OrgOverviewCounts; label: keyof OrgAdminMessages }> = [
+  { key: 'activeEvents', label: 'tileActiveEvents' },
+  { key: 'upcomingDates', label: 'tileUpcomingDates' },
+  { key: 'checkinsLast30Days', label: 'tileCheckins' },
+  { key: 'members', label: 'tileMembers' },
 ]
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -42,7 +48,7 @@ export function focusAfterRetry(
   return true
 }
 
-export function OrgOverview({ orgId }: { orgId: string }) {
+export function OrgOverview({ orgId, locale }: { orgId: string; locale: Locale }) {
   const supabase = useMemo(() => createClient(), [])
   const [counts, setCounts] = useState<OrgOverviewCounts | null>(null)
   const [state, setState] = useState<LoadState>('loading')
@@ -76,6 +82,7 @@ export function OrgOverview({ orgId }: { orgId: string }) {
       <OrgOverviewView
         counts={counts}
         state={state}
+        locale={locale}
         headingRef={headingRef}
         onRetry={() => {
           retryPending.current = true
@@ -83,12 +90,12 @@ export function OrgOverview({ orgId }: { orgId: string }) {
           setRetry((n) => n + 1)
         }}
       />
-      <EndingSoonSection orgId={orgId} />
+      <EndingSoonSection orgId={orgId} locale={locale} />
     </div>
   )
 }
 
-function EndingSoonSection({ orgId }: { orgId: string }) {
+function EndingSoonSection({ orgId, locale }: { orgId: string; locale: Locale }) {
   const supabase = useMemo(() => createClient(), [])
   const [series, setSeries] = useState<EndingSoonSeries[] | null>(null)
   const [state, setState] = useState<LoadState>('loading')
@@ -123,6 +130,7 @@ function EndingSoonSection({ orgId }: { orgId: string }) {
       notice={notice}
       headingRef={headingRef}
       orgId={orgId}
+      locale={locale}
       onRetry={() => {
         retryPending.current = true
         setState('loading')
@@ -130,7 +138,7 @@ function EndingSoonSection({ orgId }: { orgId: string }) {
       }}
       onStart={() => setNotice('')}
       onExtended={(until) => {
-        setNotice(formatMessage(eventFormT('en', 'seriesExtended'), { date: formatCalendarDate(until.slice(0, 10), 'en') }))
+        setNotice(formatMessage(eventFormT(locale, 'seriesExtended'), { date: formatCalendarDate(until.slice(0, 10), locale) }))
         // The extended series leaves this list (it now ends six months out): continue from the heading.
         headingRef.current?.focus()
         setReload((n) => n + 1)
@@ -144,6 +152,7 @@ export function EndingSoonView({
   state,
   notice,
   orgId,
+  locale,
   onRetry,
   onStart,
   onExtended,
@@ -153,20 +162,21 @@ export function EndingSoonView({
   state: LoadState
   notice: string
   orgId: string
+  locale: Locale
   onRetry: () => void
   onStart?: () => void
   onExtended: (until: string) => void
   headingRef?: Ref<HTMLHeadingElement>
 }) {
   return (
-    <section lang="en" dir="ltr" aria-labelledby="org-ending-soon-heading">
+    <section aria-labelledby="org-ending-soon-heading">
       <h2
         id="org-ending-soon-heading"
         ref={headingRef}
         tabIndex={-1}
         className="mb-3 rounded-sm text-base font-semibold text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
-        Repeating events ending in the next 30 days
+        {orgAdminT(locale, 'endingTitle')}
       </h2>
       <p role="status" className="mb-2 text-sm text-lime-800">
         {notice}
@@ -174,21 +184,21 @@ export function EndingSoonView({
       {state === 'loading' ? (
         <p className="flex items-center gap-2 text-sm text-stone-600" aria-live="polite">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Loading…
+          {orgAdminT(locale, 'loading')}
         </p>
       ) : state === 'error' || !series ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-sm text-red-700">Could not load the repeating events that end soon.</p>
+          <p className="text-sm text-red-700">{orgAdminT(locale, 'endingFailed')}</p>
           <button
             type="button"
             onClick={onRetry}
             className="inline-flex min-h-9 items-center rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           >
-            Try again
+            {orgAdminT(locale, 'tryAgain')}
           </button>
         </div>
       ) : series.length === 0 ? (
-        <p className="text-sm text-stone-700">No repeating event ends in the next 30 days.</p>
+        <p className="text-sm text-stone-700">{orgAdminT(locale, 'endingEmpty')}</p>
       ) : (
         <ul className="divide-y divide-stone-100 rounded-2xl border border-stone-200 bg-white px-4">
           {series.map((s) => {
@@ -197,20 +207,20 @@ export function EndingSoonView({
             return (
               <li key={s.eventId} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
-                  <p id={titleId} className="text-sm font-medium text-stone-900">
+                  <p id={titleId} lang="" dir="auto" className="text-sm font-medium text-stone-900">
                     {s.title}
                   </p>
                   <p id={endId} className="text-xs text-stone-700">
                     {s.lastDate && s.remaining > 0
-                      ? formatMessage(eventFormT('en', 'seriesEndingSoon'), { date: formatCalendarDate(s.lastDate, 'en') })
-                      : eventFormT('en', 'seriesEnded')}
+                      ? formatMessage(eventFormT(locale, 'seriesEndingSoon'), { date: formatCalendarDate(s.lastDate, locale) })
+                      : eventFormT(locale, 'seriesEnded')}
                   </p>
                 </div>
                 <ExtendSeriesButton
                   eventId={s.eventId}
                   orgId={orgId}
                   title={s.title}
-                  locale="en"
+                  locale={locale}
                   describedBy={endId}
                   onStart={onStart}
                   onExtended={(r) => onExtended(r.until)}
@@ -227,48 +237,60 @@ export function EndingSoonView({
 export function OrgOverviewView({
   counts,
   state,
+  locale,
   onRetry,
   headingRef,
 }: {
   counts: OrgOverviewCounts | null
   state: LoadState
+  locale: Locale
   onRetry: () => void
   headingRef?: Ref<HTMLHeadingElement>
 }) {
   return (
-    <section lang="en" dir="ltr" aria-labelledby="org-overview-heading">
+    <section aria-labelledby="org-overview-heading">
       <h2
         id="org-overview-heading"
         ref={headingRef}
         tabIndex={-1}
         className="mb-3 rounded-sm text-base font-semibold text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
-        This organization at a glance
+        {orgAdminT(locale, 'overviewTitle')}
       </h2>
-      <OverviewBody counts={counts} state={state} onRetry={onRetry} />
+      <OverviewBody counts={counts} state={state} locale={locale} onRetry={onRetry} />
     </section>
   )
 }
 
-function OverviewBody({ counts, state, onRetry }: { counts: OrgOverviewCounts | null; state: LoadState; onRetry: () => void }) {
+function OverviewBody({
+  counts,
+  state,
+  locale,
+  onRetry,
+}: {
+  counts: OrgOverviewCounts | null
+  state: LoadState
+  locale: Locale
+  onRetry: () => void
+}) {
   if (state === 'loading') {
     return (
       <p className="flex items-center gap-2 p-6 text-sm text-stone-600" aria-live="polite">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        Loading overview…
+        {orgAdminT(locale, 'overviewLoading')}
       </p>
     )
   }
   if (state === 'error' || !counts) {
     return (
       <div role="alert" className="flex flex-col items-start gap-3 rounded-2xl border border-stone-200 bg-white p-6">
-        <p className="text-sm text-red-700">Could not load this organization’s numbers.</p>
+        <p className="text-sm text-red-700">{orgAdminT(locale, 'overviewFailed')}</p>
         <button
           type="button"
           onClick={onRetry}
           className="inline-flex min-h-9 items-center rounded-lg border border-stone-500 bg-white px-3 text-sm font-medium text-stone-800 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
         >
-          Try again
+          {orgAdminT(locale, 'tryAgain')}
         </button>
       </div>
     )
@@ -277,8 +299,8 @@ function OverviewBody({ counts, state, onRetry }: { counts: OrgOverviewCounts | 
     <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {TILES.map((t) => (
         <div key={t.key} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <dt className="text-xs font-medium text-stone-600">{t.label}</dt>
-          <dd className="mt-1 text-2xl font-semibold text-stone-900">{counts[t.key]}</dd>
+          <dt className="text-xs font-medium text-stone-600">{orgAdminT(locale, t.label)}</dt>
+          <dd className="mt-1 text-2xl font-semibold text-stone-900">{formatCount(counts[t.key], locale)}</dd>
         </div>
       ))}
     </dl>

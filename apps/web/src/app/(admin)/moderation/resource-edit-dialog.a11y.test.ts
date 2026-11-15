@@ -74,9 +74,10 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 describe('ResourceEditDialog accessibility', () => {
   it('all 12 labels name their control (for = id), each id unique', async () => {
     const html = await harness.settle(
-      h(ResourceEditDialog, { open: true, resource, mode: 'edit', onOpenChange: () => {}, onSaved: () => {} })
+      h(ResourceEditDialog, { open: true, resource, mode: 'edit', locale: 'en', onOpenChange: () => {}, onSaved: () => {} })
     )
-    const labels = [...html.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]+)<\/label>/g)].map((m) => ({ id: m[1], text: m[2] }))
+    // The label's own words (the Name label also says "(required)" in a nested span).
+    const labels = [...html.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]+?)\s*(?:<span>[^<]*<\/span>)?<\/label>/g)].map((m) => ({ id: m[1], text: m[2].trim() }))
     expect(labels.map((l) => l.text)).toEqual([
       'Name', 'Description', 'Category', 'Status', 'Service mode', 'Address', 'City', 'State', 'ZIP', 'Phone', 'Email', 'Website',
     ])
@@ -91,7 +92,7 @@ describe('ResourceEditDialog accessibility', () => {
   it("passes the caller's onCloseAutoFocus to DialogContent", async () => {
     const onCloseAutoFocus = vi.fn()
     await harness.settle(
-      h(ResourceEditDialog, { open: true, resource, mode: 'edit', onOpenChange: () => {}, onSaved: () => {}, onCloseAutoFocus })
+      h(ResourceEditDialog, { open: true, resource, mode: 'edit', locale: 'en', onOpenChange: () => {}, onSaved: () => {}, onCloseAutoFocus })
     )
     expect(contentProps.at(-1)?.onCloseAutoFocus).toBe(onCloseAutoFocus)
   })

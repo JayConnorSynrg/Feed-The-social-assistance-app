@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { createClient } from '@/lib/supabase/client'
 import { privilegedRpc } from '@/lib/privileged-action'
 import { logger } from '@/lib/logger'
+import { failureCode } from '@/lib/failure-code'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
 import { DESTRUCTIVE_BUTTON_CLASS, canResolveReportsOn, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
@@ -68,12 +69,6 @@ export function focusAfterRemoval(
   return groupsLeft === 0 && heldIds.length === 0 ? { kind: 'empty' } : { kind: 'held' }
 }
 
-/** The code of a failed read for the log row: PostgREST's own code, else the error's class. */
-function failureCode(err: unknown): string {
-  const code = (err as { code?: unknown } | null)?.code
-  if (typeof code === 'string' && code) return code
-  return err instanceof Error ? err.name : 'unknown'
-}
 
 interface HeldPost {
   id: string

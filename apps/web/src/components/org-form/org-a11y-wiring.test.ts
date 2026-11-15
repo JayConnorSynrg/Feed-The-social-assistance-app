@@ -80,8 +80,10 @@ describe('org screens a11y wiring', () => {
     expect(list).toMatch(/<Menu\.Content\s+lang=\{locale\}/)
   })
 
-  it('the English-only member roster is marked lang="en"', () => {
-    expect(read('app/(admin)/moderation/orgs-section.tsx')).toMatch(/<div lang="en"( dir="ltr")? className="rounded-xl border/)
+  it('the member roster carries the admin’s language (P6 W4: no longer an English island)', () => {
+    const src = read('app/(admin)/moderation/orgs-section.tsx')
+    expect(src).toMatch(/<div lang=\{locale\} dir=\{dir\(locale\)\} className="rounded-xl border/)
+    expect(src).not.toMatch(/lang="en"/)
   })
 
   it('the pin map shows its instructions, describes itself with them, and translates Mapbox controls', () => {
@@ -114,11 +116,10 @@ describe('org screens a11y wiring', () => {
     expect(setAttribute).toHaveBeenCalledWith('aria-hidden', 'true')
   })
 
-  it('the English roster is lang="en" dir="ltr", including its portaled role lists', () => {
+  it('the roster’s portaled role lists carry the admin’s language and direction too', () => {
     const list = read('app/(admin)/moderation/orgs-section.tsx')
-    expect(list).toMatch(/<div lang="en" dir="ltr" className="rounded-xl border/)
-    const roster = list.slice(list.indexOf('<div lang="en" dir="ltr"'))
-    expect(roster.match(/<SelectContent lang="en">/g)).toHaveLength(2)
+    const roster = list.slice(list.indexOf('<div lang={locale} dir={dir(locale)} className="rounded-xl border'))
+    expect(roster.match(/<SelectContent lang=\{locale\} dir=\{dir\(locale\)\}>/g)).toHaveLength(2)
     expect(roster).not.toMatch(/<SelectContent>/)
   })
 

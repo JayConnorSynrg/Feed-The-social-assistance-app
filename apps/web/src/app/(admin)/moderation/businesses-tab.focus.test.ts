@@ -139,6 +139,7 @@ vi.mock('@/lib/supabase/client', () => {
 import { harness } from '@/test-utils/ssr-hook-harness'
 import { BusinessesTab } from './businesses-tab'
 import { BUSINESS_NOT_SAVED_MESSAGE } from '@/lib/business-data'
+import { decodeEntities } from '@/test/markup-text'
 
 const ready = (tier: AdminEditViewer['tier']): AdminEditViewer => ({ status: 'ready', tier, adminOrgIds: null })
 
@@ -180,7 +181,7 @@ beforeEach(() => {
 describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
   it('platform admin: opens THAT business row in edit mode, scrolled into view, Name focused', async () => {
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(editFormsOpen(html)).toEqual([ID])
     expect(html).toContain('value="Corner Cafe"')
     // The focused Name field is described by its row's heading (the business being edited).
@@ -196,11 +197,11 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
   it('waits for the tier: nothing settles while the viewer is loading', async () => {
     viewerRef.current = { status: 'loading', tier: null, adminOrgIds: null }
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    let html = await harness.settle(h(BusinessesTab))
+    let html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([])
     expect(editFormsOpen(html)).toEqual([])
     viewerRef.current = ready('platform_admin')
-    html = await harness.settle(h(BusinessesTab))
+    html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'found', tab: 'businesses' }])
     expect(editFormsOpen(html)).toEqual([ID])
   })
@@ -209,11 +210,11 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     let release!: () => void
     listCalls.gate = new Promise<void>((r) => (release = r))
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    let html = await harness.settle(h(BusinessesTab))
+    let html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([])
     expect(editFormsOpen(html)).toEqual([])
     release()
-    html = await harness.settle(h(BusinessesTab))
+    html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'found', tab: 'businesses' }])
     expect(editFormsOpen(html)).toEqual([ID])
   })
@@ -223,23 +224,23 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
     listCalls.pendingGate = new Promise<void>((r) => (releasePending = r))
     viewerRef.current = ready('resource_admin')
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    const first = await harness.render(h(BusinessesTab))
+    const first = await harness.render(h(BusinessesTab, { locale: 'en' }))
     expect(first).toContain('animate-spin')
     expect(first).toContain('<p role="status" class="sr-only"></p>')
     // The approved list and tier are in while the pending queue still spins: the notice arrives now.
-    let html = await harness.settle(h(BusinessesTab))
+    let html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(html).toContain('animate-spin')
     expect(html).toMatch(/<p role="status" class="flex-1">Only platform admins can edit businesses\.<\/p>/)
     releasePending()
-    html = await harness.settle(h(BusinessesTab))
+    html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(html).not.toContain('animate-spin')
-    expect(html).toMatch(/^<div class="space-y-8"><div class="[^"]*"><p role="status" class="flex-1">Only platform admins/)
+    expect(html).toMatch(/^<div class="space-y-8" lang="en" dir="ltr"><div class="[^"]*"><p role="status" class="flex-1">Only platform admins/)
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'not_found', tab: 'businesses' }])
   })
 
   it('not_found: an id not in the approved list -> one row, a notice, nothing opened', async () => {
     setUrl('?tab=businesses&focus=business:33333333-3333-4333-8333-333333333333')
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'not_found', tab: 'businesses' }])
     expect(html).toContain('That business couldn&#x27;t be found')
     expect(editFormsOpen(html)).toEqual([])
@@ -248,7 +249,7 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
   it('a resource admin sees the tab but cannot save a business -> one not_found row, a plain line, nothing opened', async () => {
     viewerRef.current = ready('resource_admin')
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'not_found', tab: 'businesses' }])
     expect(html).toContain('Only platform admins can edit businesses.')
     expect(editFormsOpen(html)).toEqual([])
@@ -257,7 +258,7 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
 
   it('a malformed focus is the shell gate\'s (invalid): the tab writes nothing', async () => {
     setUrl('?tab=businesses&focus=business:nope')
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(resolveRows()).toEqual([])
     expect(editFormsOpen(html)).toEqual([])
     expect(replaceState).not.toHaveBeenCalled()
@@ -266,7 +267,7 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
   it('abandoned: the tab unmounts while still waiting for the tier -> one abandoned row', async () => {
     viewerRef.current = { status: 'loading', tier: null, adminOrgIds: null }
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    await harness.settle(h(BusinessesTab))
+    await harness.settle(h(BusinessesTab, { locale: 'en' }))
     harness.unmount()
     await new Promise((r) => setTimeout(r, 0))
     expect(resolveRows()).toEqual([{ kind: 'business', outcome: 'abandoned', tab: 'businesses' }])
@@ -274,7 +275,7 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
 
   it('I3 — no focus param: nothing opens, no row, URL untouched', async () => {
     setUrl('?tab=businesses')
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(editFormsOpen(html)).toEqual([])
     expect(resolveRows()).toEqual([])
     expect(replaceState).not.toHaveBeenCalled()
@@ -284,16 +285,16 @@ describe('BusinessesTab — "Edit in admin" landing (I2)', () => {
 })
 
 describe('BusinessesTab — saves never report success when nothing was saved (I3)', () => {
-  it('an UPDATE that changed 0 rows: "Save failed", the form stays open, an error row, no reload', async () => {
+  it('an UPDATE that changed 0 rows: the not-saved line, the form stays open, an error row, no reload', async () => {
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    await harness.settle(h(BusinessesTab))
+    await harness.settle(h(BusinessesTab, { locale: 'en' }))
     updateResult.current = { data: [], error: null }
     lastButton('Save')!.onClick!()
-    const html = await harness.settle(h(BusinessesTab))
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
     expect(updates).toHaveLength(1)
     expect(updates[0].eq).toEqual(['id', ID])
     expect(updates[0].select).toBe('id')
-    expect(html).toContain(`Save failed: ${BUSINESS_NOT_SAVED_MESSAGE}`)
+    expect(decodeEntities(html)).toContain(BUSINESS_NOT_SAVED_MESSAGE)
     expect(editFormsOpen(html)).toEqual([ID])
     expect(metrics).toContainEqual({ event: 'business.admin.update.error' })
     expect(errors).toContain('admin.business.update')
@@ -302,10 +303,10 @@ describe('BusinessesTab — saves never report success when nothing was saved (I
 
   it('an UPDATE that changed the row: the form closes and the list reloads', async () => {
     setUrl(`?tab=businesses&focus=business:${ID}`)
-    await harness.settle(h(BusinessesTab))
+    await harness.settle(h(BusinessesTab, { locale: 'en' }))
     lastButton('Save')!.onClick!()
-    const html = await harness.settle(h(BusinessesTab))
-    expect(html).not.toContain('Save failed')
+    const html = await harness.settle(h(BusinessesTab, { locale: 'en' }))
+    expect(decodeEntities(html)).not.toContain(BUSINESS_NOT_SAVED_MESSAGE)
     expect(editFormsOpen(html)).toEqual([])
     expect(metrics).toContainEqual({ event: 'business.admin.update.complete' })
     expect(listCalls.count).toBe(2)

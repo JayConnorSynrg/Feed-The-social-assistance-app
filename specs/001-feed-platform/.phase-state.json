@@ -982,6 +982,13 @@
       "pr": 254,
       "reviewFixRound": "On f47ac3a: People keeps the table during re-reads, returns focus to the row select, announces Tier updated in one always-mounted status, shows refusals in an always-mounted alert inside the dialog, required reason, aria-disabled single-flight Apply, visible labels, stone-500 borders; reports queue has one always-mounted status and alert in every state and moves focus to the next card toggle / Removed & Held heading / empty heading after a row leaves (focusAfterRemoval); chevron fixed name + aria-expanded + aria-controls. 19 mutants red.",
       "reviewFixRound2": "On c1559dd: Tier updated announced once after both dialog close and re-read in either order (grant spent after announcing); failed re-read after a grant keeps rows; queue-driven re-read holds the linked post status text; toggle aria-describedby on author/excerpt. 8 mutants red."
+    },
+    "feed-p6-w4-admin-resources-orgs": {
+      "status": "BUILT_PR_OPEN",
+      "branch": "feature/feed-p6-w4-admin-resources-orgs",
+      "base": "origin/develop 48aeab0",
+      "migration": null,
+      "note": "P6 translations wave 4: admin Resources (Discover, review queue, bulk approve), the resource edit / approve dialog and address box, Manage, Businesses, the Edit in admin miss line, and the organization admin page / Overview / Your organizations index / roster / check-in kiosk in the admin's language; 7 English islands removed; org shell on useProfileLocale(). UGC lang=\"\" dir=\"auto\". RPCs, arguments, audit reasons and log rows unchanged in en/ko/ar (test). Translated failure lines; new code-only rows admin.resources.load_failed, admin.resource.discover_failed, admin.resource.list_failed, admin.org.members_failed, admin.checkin.kiosk.failed. Always-mounted status/alert lines, computed focus after row removal, post-close announcements, aria-disabled busy buttons, 4.5:1 / 3:1 contrast, 360px wrap. lib/failure-code.ts; i18n-org-forms formatMessage re-export removed. Dictionaries lib/i18n-admin-resources.ts (120 keys + 5 count tables), lib/i18n-org-admin.ts (61 keys + 3 count tables); 766 native-review rows."
     }
   }
 }

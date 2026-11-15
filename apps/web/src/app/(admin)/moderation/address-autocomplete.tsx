@@ -18,6 +18,8 @@ import { logger, logEvent } from '@/lib/logger'
 import { suggestAddressesV6, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
 import { buildAutocompleteEvent } from './resource-edit-save'
 import { createDebouncedRunner, type DebouncedRunner } from '@/lib/debounced-runner'
+import type { Locale } from '@/lib/i18n'
+import { adminResourcesT } from '@/lib/i18n-admin-resources'
 
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LEN = 3
@@ -32,10 +34,12 @@ export interface AddressAutocompleteProps {
   className?: string
   /** The input's id, so a <Label htmlFor> names it. */
   id?: string
+  /** The admin's language (placeholder and the suggestion list's name). */
+  locale: Locale
 }
 
 export function AddressAutocomplete({
-  value, onChange, onSelect, disabled, className, id,
+  value, onChange, onSelect, disabled, className, id, locale,
 }: AddressAutocompleteProps) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([])
@@ -179,11 +183,12 @@ export function AddressAutocomplete({
           aria-autocomplete="list"
           aria-activedescendant={activeId}
           autoComplete="off"
-          className={className ?? 'text-stone-900'}
-          placeholder="Start typing an address…"
+          className={className ?? 'text-stone-900 placeholder:text-stone-500'}
+          placeholder={adminResourcesT(locale, 'addressPlaceholder')}
+          dir="auto"
         />
         {loading && (
-          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-stone-400"
+          <Loader2 className="absolute end-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-stone-500"
             aria-hidden="true" />
         )}
       </div>
@@ -192,6 +197,7 @@ export function AddressAutocomplete({
         <ul
           id={listboxId}
           role="listbox"
+          aria-label={adminResourcesT(locale, 'addressSuggestions')}
           className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg"
         >
           {suggestions.map((s, i) => (
@@ -208,8 +214,9 @@ export function AddressAutocomplete({
                 i === active ? 'bg-lime-50 text-stone-900' : 'text-stone-700'
               }`}
             >
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" aria-hidden="true" />
-              <span className="truncate">{s.label}</span>
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-500" aria-hidden="true" />
+              {/* Mapbox's place text, in whatever language it comes in. */}
+              <span lang="" dir="auto" className="truncate">{s.label}</span>
             </li>
           ))}
         </ul>
