@@ -1,5 +1,17 @@
 'use client'
 
+// apps/web/src/components/forms/form-wizard.tsx
+//
+// P6 W9: the wizard's own words — the step line, Back / Next / Review / Submit Application / Cancel,
+// the autofill banner, the review note, Yes / No, the select prompt, the address part labels and
+// the e-signature prompt and consent line — are in the member's language (lib/i18n-forms.ts), with
+// lang/dir on the root. A template's own text (its name, section headings and descriptions, field
+// labels, hints, placeholders and option labels) mirrors official English forms and stays as
+// written, marked lang="en" (owner decision pending). What the member types is their own text.
+// Field names, option values, autofill keys and the submitted data are the same in every language.
+// Focus: the form's heading when it opens, each step's heading when the step changes; Back, Next
+// and Submit stay focusable while busy (aria-disabled, a press does nothing).
+
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { ChevronLeft, ChevronRight, CheckCircle, Loader2, Info } from 'lucide-react'
@@ -23,6 +35,32 @@ import { useVault } from '@/contexts/vault-context'
 import { useAuth } from '@/hooks/use-auth'
 import { mapProfileToAutofill } from '@/lib/form-field-mapper'
 import { logger } from '@/lib/logger'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { formsT, type FormsKey } from '@/lib/i18n-forms'
+import { cn } from '@/lib/utils'
+import { OFFICIAL_ENGLISH } from '@/lib/official-english'
+import { AnnouncementText, announce, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+/** The browser's autofill token for a personal field, by its (unchanged) field name. */
+const AUTOCOMPLETE: Record<string, string> = {
+  first_name: 'given-name',
+  last_name: 'family-name',
+  middle_name: 'additional-name',
+  email: 'email',
+  phone: 'tel',
+  alt_phone: 'tel',
+  date_of_birth: 'bday',
+  suffix: 'honorific-suffix',
+  gender: 'sex',
+  preferred_language: 'language',
+}
+
+/** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
+const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
+const INPUT = 'border-stone-500 text-stone-900 placeholder:text-stone-600'
 
 export interface FormWizardProps {
   templateId: string
@@ -43,64 +81,98 @@ function getInputType(type: FormFieldSchema['type']): string {
   }
 }
 
+/** The label's "required" mark: a visible star, and the word in the member's language for a
+ *  screen reader (the label around it is the template's English). */
+function RequiredMark({ locale }: { locale: Locale }) {
+  return (
+    <>
+      <span className="text-red-700 ms-1" aria-hidden="true">*</span>
+      <span className="sr-only" lang={locale} dir={dir(locale)}> ({formsT(locale, 'requiredMark')})</span>
+    </>
+  )
+}
+
+/** A review value and its language: the template's option label is English, Yes / No are the
+ *  member's language, anything typed is the member's own text. */
+/** Nothing entered: empty, unset, or an address with no part filled in. */
+function isUnanswered(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).every((v) => v === undefined || v === null || v === '')
+  return false
+}
+
+function reviewValue(field: FormFieldSchema, value: unknown, locale: Locale): { text: string; lang: string } {
+  if (value === undefined || value === null || value === '') return { text: '—', lang: '' }
+  if (field.sensitive) return { text: '••••••••', lang: '' }
+  if (typeof value === 'object' && value !== null) {
+    const addr = value as Record<string, string>
+    return {
+      text: [addr.line1, addr.line2, addr.city, addr.state, addr.zip].filter(Boolean).join(', '),
+      lang: '',
+    }
+  }
+  if (typeof value === 'boolean') return { text: formsT(locale, value ? 'yes' : 'no'), lang: locale }
+  if (field.options) {
+    const opt = field.options.find((o) => o.value === String(value))
+    return opt ? { text: opt.label, lang: OFFICIAL_ENGLISH.lang } : { text: String(value), lang: '' }
+  }
+  return { text: String(value), lang: '' }
+}
+
 function ReviewStep({
   sections,
   allFields,
   values,
+  locale,
 }: {
   sections: FormSection[]
   allFields: FormFieldSchema[]
   values: Record<string, unknown>
+  locale: Locale
 }) {
   const fieldMap = new Map(allFields.map((f) => [f.name, f]))
-
-  function formatValue(field: FormFieldSchema, value: unknown): string {
-    if (value === undefined || value === null || value === '') return '—'
-    if (field.sensitive) return '••••••••'
-    if (typeof value === 'object' && value !== null) {
-      const addr = value as Record<string, string>
-      return [addr.line1, addr.line2, addr.city, addr.state, addr.zip]
-        .filter(Boolean)
-        .join(', ')
-    }
-    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-    if (field.options) {
-      const opt = field.options.find((o) => o.value === String(value))
-      return opt ? opt.label : String(value)
-    }
-    return String(value)
-  }
+  const [before, after] = splitMessage(formsT(locale, 'reviewIntro'), 'back')
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-[#f0ede6] rounded-xl border border-stone-200">
-        <p className="text-sm text-stone-700">
-          Review your answers before submitting. Use the Back button to make corrections.
+      <div className="p-4 bg-[#f0ede6] rounded-xl border border-stone-300">
+        <p className="text-sm text-stone-800">
+          {before}{formsT(locale, 'back')}{after}
         </p>
       </div>
       {sections.map((section) => {
         const sectionFields = section.fields
           .map((id) => allFields.find((f) => f.id === id))
           .filter((f): f is FormFieldSchema => f !== undefined)
-          .filter((f) => values[f.name] !== undefined && values[f.name] !== '')
+          // Answered fields, and every required one (unanswered shows "—" and says so).
+          .filter((f) => f.required || (values[f.name] !== undefined && values[f.name] !== ''))
 
         if (sectionFields.length === 0) return null
 
         return (
           <div key={section.id} className="space-y-3">
-            <h3 className="font-semibold text-sm text-stone-900 border-b border-stone-200 pb-1.5">
+            <h3 className="font-semibold text-sm text-stone-900 border-b border-stone-300 pb-1.5" {...OFFICIAL_ENGLISH}>
               {section.title}
             </h3>
             <dl className="space-y-2">
               {sectionFields.map((field) => {
                 const f = fieldMap.get(field.name)
                 if (!f) return null
+                const shown = reviewValue(f, values[f.name], locale)
+                const unanswered = isUnanswered(values[f.name])
                 return (
-                  <div key={field.id} className="flex flex-col gap-0.5">
-                    <dt className="text-xs text-stone-500">{f.label}</dt>
-                    <dd className="text-sm text-stone-900 font-medium">
-                      {formatValue(f, values[f.name])}
-                    </dd>
+                  <div key={field.id} className="flex flex-col gap-0.5" data-unanswered={unanswered || undefined}>
+                    <dt className="text-xs text-stone-700" {...OFFICIAL_ENGLISH}>{f.label}</dt>
+                    {unanswered ? (
+                      <dd className="text-sm text-stone-900 font-medium">
+                        <span aria-hidden="true">—</span>{' '}
+                        <span className="text-xs font-normal text-red-700">{formsT(locale, 'notAnswered')}</span>
+                      </dd>
+                    ) : (
+                      <dd className="text-sm text-stone-900 font-medium" lang={shown.lang} dir={shown.lang === OFFICIAL_ENGLISH.lang ? OFFICIAL_ENGLISH.dir : shown.lang === locale ? dir(locale) : 'auto'}>
+                        {shown.text}
+                      </dd>
+                    )}
                   </div>
                 )
               })}
@@ -121,6 +193,7 @@ function StepFields({
   control,
   errors,
   disabled,
+  locale,
 }: {
   section: FormSection
   allFields: FormFieldSchema[]
@@ -128,10 +201,23 @@ function StepFields({
   control: FormMethods['control']
   errors: FormMethods['formState']['errors']
   disabled: boolean
+  locale: Locale
 }) {
+  const t = (key: FormsKey) => formsT(locale, key)
   const sectionFieldDefs = section.fields
     .map((id) => allFields.find((f) => f.id === id))
     .filter((f): f is FormFieldSchema => f !== undefined)
+  // Each field's label, hint and placeholder are the template's (official English) text.
+  const req = (field: FormFieldSchema) => (field.required ? { required: true, 'aria-required': true as const } : {})
+  const hintId = (field: FormFieldSchema) => (field.helpText ? `${field.id}-hint` : undefined)
+  const hint = (field: FormFieldSchema, className = 'text-xs text-stone-700') =>
+    field.helpText ? <p id={`${field.id}-hint`} className={className} {...OFFICIAL_ENGLISH}>{field.helpText}</p> : null
+  const fieldLabel = (field: FormFieldSchema, { htmlFor, id, className }: { htmlFor?: string; id?: string; className?: string } = {}) => (
+    <Label htmlFor={htmlFor} id={id} className={className}>
+      <span {...OFFICIAL_ENGLISH}>{field.label}</span>
+      {field.required && <RequiredMark locale={locale} />}
+    </Label>
+  )
 
   return (
     <div className="space-y-5">
@@ -141,19 +227,21 @@ function StepFields({
         if (field.type === 'textarea') {
           return (
             <div key={field.id} className="space-y-2">
-              <Label htmlFor={field.id}>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
+              {fieldLabel(field, { htmlFor: field.id })}
               <textarea
                 id={field.id}
                 placeholder={field.placeholder}
-                disabled={disabled}
-                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                readOnly={disabled}
+                aria-disabled={disabled || undefined}
+                lang=""
+                dir="auto"
+                aria-describedby={hintId(field)}
+                {...req(field)}
+                className="flex min-h-[100px] w-full rounded-md border border-stone-500 bg-background px-3 py-2 text-sm text-stone-900 ring-offset-background placeholder:text-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 {...register(field.name)}
               />
-              {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {hint(field)}
+              {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
             </div>
           )
         }
@@ -161,21 +249,30 @@ function StepFields({
         if (field.type === 'select' || field.type === 'multiselect') {
           return (
             <div key={field.id} className="space-y-2">
-              <Label htmlFor={field.id}>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
+              {fieldLabel(field, { htmlFor: field.id })}
               <Controller
                 name={field.name}
                 control={control}
                 render={({ field: formField }) => (
                   <Select
                     value={formField.value as string}
-                    onValueChange={formField.onChange}
-                    disabled={disabled}
+                    onValueChange={(v) => { if (!disabled) formField.onChange(v) }}
+                    // Radix renders a hidden native <select> inside the step's <form>; the token
+                    // goes on it (the field name stays the template's).
+                    autoComplete={AUTOCOMPLETE[field.name]}
+                    name={field.name}
                   >
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder={field.placeholder || 'Select...'} />
+                    {/* The chosen option and the template's placeholder are English; FEED's own
+                        "Select..." prompt is the member's language. */}
+                    <SelectTrigger
+                      id={field.id}
+                      aria-disabled={disabled || undefined}
+                      aria-describedby={hintId(field)}
+                      aria-required={field.required || undefined}
+                      {...(formField.value || field.placeholder ? OFFICIAL_ENGLISH : { lang: locale, dir: dir(locale) })}
+                      className="border-stone-500"
+                    >
+                      <SelectValue placeholder={field.placeholder || t('selectPlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
                       {field.options?.map((option) => (
@@ -187,8 +284,8 @@ function StepFields({
                   </Select>
                 )}
               />
-              {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {hint(field)}
+              {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
             </div>
           )
         }
@@ -196,7 +293,7 @@ function StepFields({
         if (field.type === 'checkbox') {
           return (
             <div key={field.id} className="space-y-2">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <Controller
                   name={field.name}
                   control={control}
@@ -204,18 +301,17 @@ function StepFields({
                     <Checkbox
                       id={field.id}
                       checked={formField.value as boolean}
-                      onCheckedChange={formField.onChange}
-                      disabled={disabled}
+                      onCheckedChange={(v) => { if (!disabled) formField.onChange(v) }}
+                      aria-disabled={disabled || undefined}
+                      aria-describedby={hintId(field)}
+                      aria-required={field.required || undefined}
                     />
                   )}
                 />
-                <Label htmlFor={field.id} className="font-normal cursor-pointer">
-                  {field.label}
-                  {field.required && <span className="text-destructive ml-1">*</span>}
-                </Label>
+                {fieldLabel(field, { htmlFor: field.id, className: 'font-normal cursor-pointer' })}
               </div>
-              {field.helpText && <p className="text-xs text-muted-foreground pl-6">{field.helpText}</p>}
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {hint(field, 'text-xs text-stone-700 ps-6')}
+              {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
             </div>
           )
         }
@@ -223,28 +319,33 @@ function StepFields({
         if (field.type === 'radio') {
           return (
             <div key={field.id} className="space-y-3">
-              <Label>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
+              {fieldLabel(field, { id: `${field.id}-label` })}
               <Controller
                 name={field.name}
                 control={control}
                 render={({ field: formField }) => (
-                  <div className="space-y-2">
+                  // An APG radio group of native radios: one Tab stop, arrow keys move and choose.
+                  <div
+                    role="radiogroup"
+                    aria-labelledby={`${field.id}-label`}
+                    aria-describedby={hintId(field)}
+                    aria-required={field.required || undefined}
+                    className="space-y-2"
+                  >
                     {field.options?.map((option) => (
-                      <div key={option.value} className="flex items-center space-x-2">
+                      <div key={option.value} className="flex items-center gap-2">
                         <input
                           type="radio"
                           id={`${field.id}-${option.value}`}
                           name={field.name}
                           value={option.value}
                           checked={formField.value === option.value}
-                          onChange={() => formField.onChange(option.value)}
-                          disabled={disabled || option.disabled}
-                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                          onChange={() => { if (!disabled) formField.onChange(option.value) }}
+                          aria-disabled={disabled || undefined}
+                          disabled={option.disabled}
+                          className="h-5 w-5 border-stone-500 text-primary focus:ring-primary"
                         />
-                        <Label htmlFor={`${field.id}-${option.value}`} className="font-normal cursor-pointer">
+                        <Label htmlFor={`${field.id}-${option.value}`} className="font-normal cursor-pointer min-h-6 flex items-center" {...OFFICIAL_ENGLISH}>
                           {option.label}
                         </Label>
                       </div>
@@ -252,93 +353,111 @@ function StepFields({
                   </div>
                 )}
               />
-              {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {hint(field)}
+              {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
             </div>
           )
         }
 
         if (field.type === 'address') {
           const addressErrors = errors[field.name] as Record<string, { message?: string }> | undefined
-          return (
-            <div key={field.id} className="space-y-4">
-              <Label>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
+          // The address parts' labels are FEED's (the member's language); each stays visible.
+          const part = (key: 'line1' | 'line2' | 'city' | 'state' | 'zip', label: FormsKey, required: boolean, extra?: { maxLength?: number; autoComplete?: string }) => (
+            <div className="space-y-1">
+              <Label htmlFor={`${field.id}-${key}`} className="text-xs text-stone-800">
+                {t(label)}
+                {required && field.required && <RequiredMark locale={locale} />}
               </Label>
+              <Input
+                id={`${field.id}-${key}`}
+                readOnly={disabled}
+                aria-disabled={disabled || undefined}
+                className={INPUT}
+                lang=""
+                dir="auto"
+                {...(required && field.required ? { required: true, 'aria-required': true as const } : {})}
+                {...extra}
+                {...register(`${field.name}.${key}` as Parameters<FormMethods['register']>[0])}
+              />
+              {addressErrors?.[key]?.message && <p className="text-sm text-red-700 mt-1" {...OFFICIAL_ENGLISH}>{addressErrors[key]!.message}</p>}
+            </div>
+          )
+          return (
+            <fieldset key={field.id} className="space-y-4" aria-describedby={hintId(field)}>
+              <legend className="text-sm font-medium leading-none">
+                <span {...OFFICIAL_ENGLISH}>{field.label}</span>
+                {field.required && <RequiredMark locale={locale} />}
+              </legend>
               <div className="space-y-3">
-                <div>
-                  <Input placeholder="Street Address" disabled={disabled} {...register(`${field.name}.line1` as Parameters<FormMethods['register']>[0])} />
-                  {addressErrors?.line1?.message && <p className="text-sm text-destructive mt-1">{addressErrors.line1.message}</p>}
-                </div>
-                <Input placeholder="Apt, Suite, Unit (optional)" disabled={disabled} {...register(`${field.name}.line2` as Parameters<FormMethods['register']>[0])} />
-                <div className="grid grid-cols-6 gap-3">
-                  <div className="col-span-3">
-                    <Input placeholder="City" disabled={disabled} {...register(`${field.name}.city` as Parameters<FormMethods['register']>[0])} />
-                    {addressErrors?.city?.message && <p className="text-sm text-destructive mt-1">{addressErrors.city.message}</p>}
-                  </div>
-                  <div className="col-span-1">
-                    <Input placeholder="State" maxLength={2} disabled={disabled} {...register(`${field.name}.state` as Parameters<FormMethods['register']>[0])} />
-                    {addressErrors?.state?.message && <p className="text-sm text-destructive mt-1">{addressErrors.state.message}</p>}
-                  </div>
-                  <div className="col-span-2">
-                    <Input placeholder="ZIP Code" disabled={disabled} {...register(`${field.name}.zip` as Parameters<FormMethods['register']>[0])} />
-                    {addressErrors?.zip?.message && <p className="text-sm text-destructive mt-1">{addressErrors.zip.message}</p>}
-                  </div>
+                {part('line1', 'street', true, { autoComplete: 'address-line1' })}
+                {part('line2', 'line2', false, { autoComplete: 'address-line2' })}
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className="sm:col-span-3">{part('city', 'city', true, { autoComplete: 'address-level2' })}</div>
+                  <div className="sm:col-span-1">{part('state', 'state', true, { maxLength: 2, autoComplete: 'address-level1' })}</div>
+                  <div className="sm:col-span-2">{part('zip', 'zip', true, { autoComplete: 'postal-code' })}</div>
                 </div>
               </div>
-              {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-            </div>
+              {hint(field)}
+            </fieldset>
           )
         }
 
         if (field.type === 'signature') {
           return (
             <div key={field.id} className="space-y-2">
-              <Label htmlFor={field.id}>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
+              {fieldLabel(field, { htmlFor: field.id })}
               <Controller
                 name={field.name}
                 control={control}
                 render={({ field: formField }) => (
-                  <div className="border rounded-md p-4 bg-muted/30">
+                  <div className="border border-stone-500 rounded-md p-4 bg-muted/30">
                     <Input
                       id={field.id}
                       type="text"
-                      placeholder="Type your full legal name"
-                      className="font-signature text-xl italic"
-                      disabled={disabled}
+                      placeholder={t('signaturePlaceholder')}
+                      className={cn('font-signature text-xl italic', INPUT)}
+                      readOnly={disabled}
+                      aria-disabled={disabled || undefined}
+                      lang=""
+                      dir="auto"
+                      autoComplete="name"
+                      aria-describedby={[hintId(field), `${field.id}-consent`].filter(Boolean).join(' ')}
+                      {...req(field)}
                       value={(formField.value as string) || ''}
                       onChange={formField.onChange}
                     />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      By typing your name above, you are signing this document electronically.
+                    <p className="text-xs text-stone-700 mt-2" id={`${field.id}-consent`}>
+                      {t('signatureConsent')}
                     </p>
+                    {/* The template's own certification text (official English). */}
+                    {hint(field, 'text-xs text-stone-700 mt-2')}
                   </div>
                 )}
               />
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
             </div>
           )
         }
 
         return (
           <div key={field.id} className="space-y-2">
-            <Label htmlFor={field.id}>
-              {field.label}
-              {field.required && <span className="text-destructive ml-1">*</span>}
-            </Label>
+            {fieldLabel(field, { htmlFor: field.id })}
             <Input
               id={field.id}
               type={getInputType(field.type)}
               placeholder={field.placeholder}
-              disabled={disabled}
+              readOnly={disabled}
+              aria-disabled={disabled || undefined}
+              autoComplete={AUTOCOMPLETE[field.name]}
+              lang=""
+              dir="auto"
+              className={INPUT}
+              aria-describedby={hintId(field)}
+              {...req(field)}
               {...register(field.name)}
             />
-            {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {hint(field)}
+            {error && <p className="text-sm text-red-700" {...OFFICIAL_ENGLISH}>{error}</p>}
           </div>
         )
       })}
@@ -357,6 +476,13 @@ export function FormWizard({
   const { profile: profileData } = useVaultSecureProfile()
   const { isUnlocked, registerPreLockFlush } = useVault()
   const { user, profile: publicProfile } = useAuth()
+  const locale = useProfileLocale()
+  const t = (key: FormsKey) => formsT(locale, key)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const [submitAlert, setSubmitAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const stepFocusReady = useRef(false)
 
   const [currentStep, setCurrentStep] = useState(0)
   const [isReviewStep, setIsReviewStep] = useState(false)
@@ -534,8 +660,23 @@ export function FormWizard({
     return getVisibleFields(sectionFieldDefs, formValues).map((f) => f.name)
   }, [currentSection, allFields, getValues])
 
+  // Focus: the form's heading when the wizard opens (the button that opened it has gone), the
+  // step's heading each time the step changes.
+  // Continuing a draft: wait for the draft itself as well, so focus lands on the form's heading.
+  const ready = !templateLoading && !submissionHook.loading && !(existingSubmissionId && !submissionHook.submission)
+  useEffect(() => {
+    // Wait for the form itself: while the template or the draft loads, a spinner stands in.
+    if (!template || !ready) return
+    if (!stepFocusReady.current) {
+      stepFocusReady.current = true
+      titleRef.current?.focus()
+      return
+    }
+    stepHeadingRef.current?.focus()
+  }, [template, ready, currentStep, isReviewStep])
+
   const handleNext = useCallback(async () => {
-    if (!template || sections.length === 0) return
+    if (!template || sections.length === 0 || isSaving || isSubmitting) return
 
     const sectionFieldNames = getSectionFieldNames()
     const valid = await trigger(sectionFieldNames as (keyof WizardFormValues & string)[])
@@ -551,11 +692,19 @@ export function FormWizard({
     })
 
     setIsSaving(true)
+    announce(setStatus, formsT(locale, 'savingDraft'))
     const data = getValues() as Record<string, unknown>
-    await submissionHook.saveDraft(data)
+    const saved = await submissionHook.saveDraft(data)
     setIsSaving(false)
 
-    logger.info('forms.wizard.draft_saved', { templateId, step: currentStep + 1 })
+    if (saved) {
+      logger.info('forms.wizard.draft_saved', { templateId, step: currentStep + 1 })
+    } else {
+      // The answers stay in the form; the member hears that the save did not happen. The hook
+      // writes no row for this: one code-only row.
+      announce(setSubmitAlert, formsT(locale, 'draftSaveFailed'))
+      logger.warn('error_surface.shown', { surface: 'form-wizard', kind: 'draft_save_failed', locale })
+    }
 
     stepStartTimeRef.current = Date.now()
 
@@ -564,9 +713,10 @@ export function FormWizard({
     } else {
       setCurrentStep((s) => s + 1)
     }
-  }, [template, sections, currentStep, getSectionFieldNames, trigger, getValues, submissionHook, templateId, totalSteps, isLastContentStep])
+  }, [template, sections, currentStep, getSectionFieldNames, trigger, getValues, submissionHook, templateId, totalSteps, isLastContentStep, isSaving, isSubmitting, locale])
 
   const handleBack = useCallback(() => {
+    if (isSaving || isSubmitting) return
     if (isReviewStep) {
       setIsReviewStep(false)
       return
@@ -582,11 +732,14 @@ export function FormWizard({
       setCurrentStep((s) => s - 1)
       stepStartTimeRef.current = Date.now()
     }
-  }, [isReviewStep, currentStep, templateId, totalSteps])
+  }, [isReviewStep, currentStep, templateId, totalSteps, isSaving, isSubmitting])
 
   const handleSubmit = useCallback(async () => {
+    if (isSubmitting) return
     setIsSubmitting(true)
     setSubmitError(null)
+    setSubmitAlert((prev) => (prev.text ? { text: '', seq: prev.seq } : prev))
+    announce(setStatus, formsT(locale, 'submitting'))
 
     try {
       const data = getValues() as Record<string, unknown>
@@ -607,6 +760,8 @@ export function FormWizard({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed'
       setSubmitError(msg)
+      // The member reads the translated line; the hook's or server's text is never shown.
+      announce(setSubmitAlert, formsT(locale, 'submitFailed'))
       logger.error('forms.wizard.submit_error', new Error(msg), {
         templateId,
         step: isReviewStep ? 'review' : String(currentStep + 1),
@@ -614,32 +769,34 @@ export function FormWizard({
     } finally {
       setIsSubmitting(false)
     }
-  }, [getValues, allFields, submissionHook, templateId, onComplete, isReviewStep, currentStep])
+  }, [getValues, allFields, submissionHook, templateId, onComplete, isReviewStep, currentStep, isSubmitting, locale])
 
   if (templateLoading || submissionHook.loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
-        <p className="text-sm text-muted-foreground">Loading form...</p>
+      <div className="h-full flex flex-col items-center justify-center gap-3" lang={locale} dir={dir(locale)} role="status">
+        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" aria-hidden="true" />
+        <p className="text-sm text-stone-700">{t('loadingForm')}</p>
       </div>
     )
   }
 
   if (templateError || !template) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
-        <p className="text-sm text-stone-700 font-medium">Failed to load form</p>
-        <p className="text-xs text-muted-foreground">{templateError ?? 'Template not found'}</p>
-        <Button variant="outline" size="sm" onClick={onCancel}>Go Back</Button>
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center" lang={locale} dir={dir(locale)}>
+        <div role="alert">
+          <p className="text-sm text-stone-800 font-medium">{t('loadFormFailed')}</p>
+          <p className="text-xs text-stone-700">{t('templateNotFound')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onCancel} className="border-stone-500">{t('goBack')}</Button>
       </div>
     )
   }
 
   if (sections.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
-        <p className="text-sm text-stone-700 font-medium">This form has no sections defined.</p>
-        <Button variant="outline" size="sm" onClick={onCancel}>Go Back</Button>
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center" lang={locale} dir={dir(locale)}>
+        <p className="text-sm text-stone-800 font-medium">{t('noSections')}</p>
+        <Button variant="outline" size="sm" onClick={onCancel} className="border-stone-500">{t('goBack')}</Button>
       </div>
     )
   }
@@ -648,24 +805,30 @@ export function FormWizard({
   const displayTotal = totalSteps + 1
   const hasAutofillData = profileData !== null && allFields.some((f) => f.autofillKey)
 
+  const busy = isSaving || isSubmitting
+  const backUnavailable = (currentStep === 0 && !isReviewStep) || busy
+
   return (
-    <div data-testid="form-wizard-container" className="h-full flex flex-col">
+    <div data-testid="form-wizard-container" className="h-full flex flex-col" lang={locale} dir={dir(locale)}>
+      <p role="status" className="sr-only" data-testid="form-wizard-status">
+        <AnnouncementText announcement={status} />
+      </p>
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 data-testid="form-wizard-title" className="text-xl font-bold text-stone-900">{template.name}</h1>
-              <p className="text-sm text-stone-500 mt-0.5">
-                Step {displayStep} of {displayTotal}
-                {isReviewStep ? ' — Review & Submit' : currentSection ? ` — ${currentSection.title}` : ''}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h1 data-testid="form-wizard-title" ref={titleRef} tabIndex={-1} className="text-xl font-bold text-stone-900 focus:outline-hidden" {...OFFICIAL_ENGLISH}>{template.name}</h1>
+              <p className="text-sm text-stone-700 mt-0.5" data-testid="form-wizard-step">
+                {formatMessage(t('stepOf'), { step: formatCount(displayStep, locale), total: formatCount(displayTotal, locale) })}
+                {isReviewStep ? <> — {t('reviewSubmit')}</> : currentSection ? <> — <span {...OFFICIAL_ENGLISH}>{currentSection.title}</span></> : null}
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={onCancel} className="text-stone-500">
-              Cancel
+            <Button variant="ghost" size="sm" onClick={onCancel} className="text-stone-700">
+              {t('cancel')}
             </Button>
           </div>
 
-          <div className="flex gap-1">
+          <div className="flex gap-1" aria-hidden="true">
             {Array.from({ length: displayTotal }).map((_, i) => (
               <div
                 key={i}
@@ -674,27 +837,29 @@ export function FormWizard({
                     ? 'bg-[#4a5d23]'
                     : i === displayStep - 1
                     ? 'bg-[#4a5d23]/60'
-                    : 'bg-stone-200'
+                    : 'bg-stone-300'
                 }`}
               />
             ))}
           </div>
 
           {currentStep === 0 && !isReviewStep && hasAutofillData && (
-            <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-              <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-blue-700">
-                Your profile data has been pre-filled where available. Review and update as needed.
+            <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-300 rounded-xl" data-testid="form-autofill-banner">
+              <Info className="w-4 h-4 text-blue-800 mt-0.5 flex-shrink-0" aria-hidden="true" />
+              <p className="text-xs text-blue-900">
+                {t('autofillBanner')}
               </p>
             </div>
           )}
 
-          <div className="p-5 bg-[#faf9f6] border border-stone-200 rounded-xl">
-            {!isReviewStep && currentSection && (
+          <div className="p-5 bg-[#faf9f6] border border-stone-300 rounded-xl">
+            {isReviewStep ? (
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-5 font-semibold text-stone-900 focus:outline-hidden">{t('reviewSubmit')}</h2>
+            ) : currentSection && (
               <div className="mb-5">
-                <h2 className="font-semibold text-stone-900">{currentSection.title}</h2>
+                <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-stone-900 focus:outline-hidden" {...OFFICIAL_ENGLISH}>{currentSection.title}</h2>
                 {currentSection.description && (
-                  <p className="text-sm text-stone-600 mt-1">{currentSection.description}</p>
+                  <p className="text-sm text-stone-700 mt-1" {...OFFICIAL_ENGLISH}>{currentSection.description}</p>
                 )}
               </div>
             )}
@@ -704,36 +869,45 @@ export function FormWizard({
                 sections={sections}
                 allFields={allFields}
                 values={getValues() as Record<string, unknown>}
+                locale={locale}
               />
             ) : currentSection ? (
-              <StepFields
-                section={currentSection}
-                allFields={allFields}
-                register={register}
-                control={control}
-                errors={errors}
-                disabled={isSubmitting || isSaving}
-              />
+              // A <form> around the step's fields only so browsers group them for autofill (and
+              // Radix renders the dropdowns' native <select> carrying their autocomplete token).
+              // It never submits: no submit button, and Enter / submit are swallowed.
+              <form id="form-wizard-step" noValidate onSubmit={(e) => e.preventDefault()}>
+                <StepFields
+                  section={currentSection}
+                  allFields={allFields}
+                  register={register}
+                  control={control}
+                  errors={errors}
+                  disabled={isSubmitting || isSaving}
+                  locale={locale}
+                />
+              </form>
             ) : null}
           </div>
 
-          {submitError && (
-            <p className="text-sm text-destructive text-center">{submitError}</p>
-          )}
+          {/* Always mounted, so a failed submission is announced; never the server's text. */}
+          <p role="alert" className="text-sm text-red-700 text-center" data-testid="form-submit-alert" data-failed={submitError ? 'true' : undefined}>
+            <AnnouncementText announcement={submitAlert} />
+          </p>
         </div>
       </div>
 
-      <div className="border-t border-stone-200 bg-white px-4 py-4">
+      <div className="border-t border-stone-300 bg-white px-4 py-4">
         <div className="max-w-2xl mx-auto flex gap-3">
           <Button
             type="button"
             variant="outline"
             onClick={handleBack}
-            disabled={currentStep === 0 && !isReviewStep}
-            className="flex-1"
+            aria-disabled={backUnavailable}
+            className={cn('flex-1 border-stone-500', backUnavailable && UNAVAILABLE)}
+            data-testid="form-back-button"
           >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Back
+            <ChevronLeft className="w-4 h-4 me-1 rtl:-scale-x-100" aria-hidden="true" />
+            {t('back')}
           </Button>
 
           {isReviewStep ? (
@@ -741,24 +915,26 @@ export function FormWizard({
               data-testid="form-submit-button"
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex-1 bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
+              aria-disabled={isSubmitting}
+              aria-busy={isSubmitting || undefined}
+              className={cn('flex-1 bg-[#4a5d23] hover:bg-[#3d4d1c] text-white', isSubmitting && UNAVAILABLE)}
             >
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              <CheckCircle className="w-4 h-4 mr-1.5" />
-              Submit Application
+              {isSubmitting && <Loader2 className="w-4 h-4 me-2 animate-spin" aria-hidden="true" />}
+              <CheckCircle className="w-4 h-4 me-1.5" aria-hidden="true" />
+              {t('submitApplication')}
             </Button>
           ) : (
             <Button
               data-testid="form-next-button"
               type="button"
               onClick={handleNext}
-              disabled={isSaving}
-              className="flex-1 bg-[#4a5d23] hover:bg-[#3d4d1c] text-white"
+              aria-disabled={isSaving}
+              aria-busy={isSaving || undefined}
+              className={cn('flex-1 bg-[#4a5d23] hover:bg-[#3d4d1c] text-white', isSaving && UNAVAILABLE)}
             >
-              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isLastContentStep ? 'Review' : 'Next'}
-              <ChevronRight className="w-4 h-4 ml-1" />
+              {isSaving && <Loader2 className="w-4 h-4 me-2 animate-spin" aria-hidden="true" />}
+              {isLastContentStep ? t('review') : t('next')}
+              <ChevronRight className="w-4 h-4 ms-1 rtl:-scale-x-100" aria-hidden="true" />
             </Button>
           )}
         </div>

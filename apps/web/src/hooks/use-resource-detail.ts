@@ -178,8 +178,10 @@ export function useResourceDetail(savedResourceId: string | null) {
   }, [fetchAll])
 
   // ── Tasks ──
-  const addTask = useCallback(async (title: string) => {
-    if (!savedResourceId || !user?.id || !title.trim()) return
+  // The task / date / file actions resolve true when the change was saved, false otherwise (the
+  // dialog announces the result; `error` keeps the message, which the dialog never shows).
+  const addTask = useCallback(async (title: string): Promise<boolean> => {
+    if (!savedResourceId || !user?.id || !title.trim()) return false
     const clean = title.trim()
     try {
       const { ciphertext, iv } = await encrypt(clean)
@@ -198,14 +200,16 @@ export function useResourceDetail(savedResourceId: string | null) {
       if (error) throw new Error(error.message)
       // Display the cleartext locally; the DB holds ciphertext + placeholder.
       setTasks(prev => [...prev, { ...data, title: clean }])
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add task')
+      return false
     }
   }, [supabase, savedResourceId, user?.id, tasks.length, encrypt])
 
-  const toggleTask = useCallback(async (taskId: string) => {
+  const toggleTask = useCallback(async (taskId: string): Promise<boolean> => {
     const task = tasks.find(t => t.id === taskId)
-    if (!task) return
+    if (!task) return false
     const toggled = !task.is_completed
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: toggled } : t))
     try {
@@ -214,27 +218,31 @@ export function useResourceDetail(savedResourceId: string | null) {
         .update({ is_completed: toggled })
         .eq('id', taskId)
       if (error) throw new Error(error.message)
+      return true
     } catch (err) {
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: task.is_completed } : t))
       setError(err instanceof Error ? err.message : 'Failed to update task')
+      return false
     }
   }, [supabase, tasks])
 
-  const deleteTask = useCallback(async (taskId: string) => {
+  const deleteTask = useCallback(async (taskId: string): Promise<boolean> => {
     const prev = tasks
     setTasks(p => p.filter(t => t.id !== taskId))
     try {
       const { error } = await supabase.from('saved_resource_tasks').delete().eq('id', taskId)
       if (error) throw new Error(error.message)
+      return true
     } catch (err) {
       setTasks(prev)
       setError(err instanceof Error ? err.message : 'Failed to delete task')
+      return false
     }
   }, [supabase, tasks])
 
   // ── Events ──
-  const addEvent = useCallback(async (title: string, eventDate: string, eventTime?: string) => {
-    if (!savedResourceId || !user?.id || !title.trim() || !eventDate) return
+  const addEvent = useCallback(async (title: string, eventDate: string, eventTime?: string): Promise<boolean> => {
+    if (!savedResourceId || !user?.id || !title.trim() || !eventDate) return false
     const clean = title.trim()
     try {
       const { ciphertext, iv } = await encrypt(clean)
@@ -253,26 +261,30 @@ export function useResourceDetail(savedResourceId: string | null) {
         .single()
       if (error) throw new Error(error.message)
       setEvents(prev => [...prev, { ...data, title: clean }].sort((a, b) => a.event_date.localeCompare(b.event_date)))
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add event')
+      return false
     }
   }, [supabase, savedResourceId, user?.id, encrypt])
 
-  const deleteEvent = useCallback(async (eventId: string) => {
+  const deleteEvent = useCallback(async (eventId: string): Promise<boolean> => {
     const prev = events
     setEvents(p => p.filter(e => e.id !== eventId))
     try {
       const { error } = await supabase.from('saved_resource_events').delete().eq('id', eventId)
       if (error) throw new Error(error.message)
+      return true
     } catch (err) {
       setEvents(prev)
       setError(err instanceof Error ? err.message : 'Failed to delete event')
+      return false
     }
   }, [supabase, events])
 
   // ── Documents ──
-  const uploadDocument = useCallback(async (file: File) => {
-    if (!savedResourceId || !user?.id) return
+  const uploadDocument = useCallback(async (file: File): Promise<boolean> => {
+    if (!savedResourceId || !user?.id) return false
     const filePath = `resource-docs/${user.id}/${savedResourceId}/${crypto.randomUUID()}_${file.name}`
     try {
       const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file)
@@ -295,23 +307,27 @@ export function useResourceDetail(savedResourceId: string | null) {
         .single()
       if (insertError) throw new Error(insertError.message)
       setDocuments(prev => [{ ...data, file_name: file.name }, ...prev])
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload file')
+      return false
     }
   }, [supabase, savedResourceId, user?.id, encrypt])
 
-  const deleteDocument = useCallback(async (docId: string) => {
+  const deleteDocument = useCallback(async (docId: string): Promise<boolean> => {
     const doc = documents.find(d => d.id === docId)
-    if (!doc) return
+    if (!doc) return false
     const prev = documents
     setDocuments(p => p.filter(d => d.id !== docId))
     try {
       await supabase.storage.from('documents').remove([doc.file_path])
       const { error } = await supabase.from('saved_resource_documents').delete().eq('id', docId)
       if (error) throw new Error(error.message)
+      return true
     } catch (err) {
       setDocuments(prev)
       setError(err instanceof Error ? err.message : 'Failed to delete file')
+      return false
     }
   }, [supabase, documents])
 
@@ -321,8 +337,8 @@ export function useResourceDetail(savedResourceId: string | null) {
   }, [supabase])
 
   // ── Notes ──
-  const updateNotes = useCallback(async (newNotes: string) => {
-    if (!savedResourceId) return
+  const updateNotes = useCallback(async (newNotes: string): Promise<boolean> => {
+    if (!savedResourceId) return false
     try {
       if (newNotes.trim() === '') {
         // Clearing notes — wipe both ciphertext and plaintext.
@@ -344,8 +360,10 @@ export function useResourceDetail(savedResourceId: string | null) {
         if (error) throw new Error(error.message)
       }
       setNotes(newNotes)
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save notes')
+      return false
     }
   }, [supabase, savedResourceId, encrypt])
 
