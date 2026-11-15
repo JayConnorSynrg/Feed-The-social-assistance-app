@@ -395,13 +395,13 @@ export function ReportsQueue({
                     ))}
                   </div>
                   {group.post_author && (
-                    <CardTitle className="mt-2 text-sm font-medium text-stone-500">
+                    <CardTitle id={`report-author-${group.content_id}`} className="mt-2 text-sm font-medium text-stone-500">
                       {adminModerationT(locale, 'authorLabel')}{' '}
                       <span lang="" dir="auto">{group.post_author}</span>
                     </CardTitle>
                   )}
                   {group.post_content && (
-                    <CardDescription lang="" dir="auto" className="mt-1 line-clamp-2 break-words">
+                    <CardDescription id={`report-excerpt-${group.content_id}`} lang="" dir="auto" className="mt-1 line-clamp-2 break-words">
                       {group.post_content}
                     </CardDescription>
                   )}
@@ -426,6 +426,11 @@ export function ReportsQueue({
                   className="min-h-[44px] shrink-0"
                   aria-expanded={isExpanded}
                   aria-controls={`reports-${group.content_id}`}
+                  aria-describedby={
+                    [group.post_author && `report-author-${group.content_id}`, group.post_content && `report-excerpt-${group.content_id}`]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                   aria-label={adminModerationT(locale, 'reportDetails')}
                   data-testid={`toggle-reports-${group.content_id}`}
                   onClick={() =>

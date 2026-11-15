@@ -126,9 +126,11 @@ export interface FocusedPostViewProps {
   viewerId?: string | null
   /** The admin's language (the panel's words, dates and its lang / dir). */
   locale?: Locale
+  /** The status region's text when the panel holds it still (a re-read after the queue acted). */
+  statusText?: string | null
 }
 
-export function FocusedPostView({ state, processing, lastAction = null, error, onAction, onDismiss, headingRef, viewerId = null, locale = 'en' }: FocusedPostViewProps) {
+export function FocusedPostView({ state, processing, lastAction = null, error, onAction, onDismiss, headingRef, viewerId = null, locale = 'en', statusText = null }: FocusedPostViewProps) {
   return (
     <section
       aria-labelledby="focused-post-title"
@@ -155,7 +157,7 @@ export function FocusedPostView({ state, processing, lastAction = null, error, o
           action's result change only its text, so screen readers announce every step. */}
       <p role="status" data-testid="focused-post-status" className="mt-2 flex items-center gap-2 text-sm font-medium text-stone-800">
         {state.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-        {focusedPostStatusText(state, lastAction, locale)}
+        {statusText ?? focusedPostStatusText(state, lastAction, locale)}
       </p>
 
       {state.status === 'found' && (
@@ -264,9 +266,19 @@ export function FocusedPost({
   const [processing, setProcessing] = useState<PostModerationAction | null>(null)
   const [lastAction, setLastAction] = useState<PostModerationAction | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A re-read after the queue below acted keeps the status region's text as it was: the queue
+  // announces its own result, so the panel does not announce a second one.
+  const [heldStatus, setHeldStatus] = useState<string | null>(null)
+  const shownStatus = useRef('')
   const inFlight = useRef(false)
   const loadedOnce = useRef(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
+
+  // The text the status region shows now (read when a re-read holds it still).
+  const statusNow = heldStatus ?? focusedPostStatusText(state, lastAction, locale)
+  useEffect(() => {
+    shownStatus.current = statusNow
+  }, [statusNow])
 
   useEffect(() => {
     if (!session) return
@@ -281,7 +293,9 @@ export function FocusedPost({
         requestAnimationFrame(() => headingRef.current?.focus())
         return
       }
-      // A re-read after the queue changed a post: take its answer, drop the stale action line.
+      // A re-read after the queue changed a post: take its answer (the actions follow it), drop the
+      // stale action line — and hold the status region's text still.
+      setHeldStatus(shownStatus.current)
       setState(next)
       setLastAction(null)
     })
@@ -297,6 +311,8 @@ export function FocusedPost({
     if (state.status !== 'found' || inFlight.current || !postActionsFor(state.post, viewerId).includes(action)) return
     inFlight.current = true
     const post = state.post
+    // The panel's own action: its status region speaks again.
+    setHeldStatus(null)
     setProcessing(action)
     setError(null)
     // The version on screen: if the author edited the post since, the RPC refuses (conflict) and the
@@ -333,6 +349,7 @@ export function FocusedPost({
       headingRef={headingRef}
       viewerId={viewerId}
       locale={locale}
+      statusText={heldStatus}
     />
   )
 }

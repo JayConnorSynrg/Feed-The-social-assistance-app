@@ -89,7 +89,20 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
   const searchId = useId()
   const reasonId = useId()
 
-  const load = useCallback(async (q: string) => {
+  // "Tier updated" waits for BOTH the dialog to have fully closed (the page is no longer aria-hidden;
+  // onCloseAutoFocus) and the re-read to have finished, in either order; whichever comes second
+  // announces it, exactly once.
+  const grantPending = useRef(false)
+  const grantClosed = useRef(false)
+  const grantLoaded = useRef(false)
+  const announceGrantWhenReady = () => {
+    if (!grantPending.current || !grantClosed.current || !grantLoaded.current) return
+    grantPending.current = false
+    setAnnouncement(adminPeopleT(locale, 'tierUpdated'))
+  }
+
+  /** keepRows: a re-read after a change keeps the rows on screen if it fails (select and focus survive). */
+  const load = useCallback(async (q: string, keepRows = false) => {
     setLoading(true)
     setError(false)
     const supabase = createClient()
@@ -97,7 +110,7 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
     if (error) {
       logger.warn('admin.people.list_failed', { code: error.code })
       setError(true)
-      setPeople([])
+      if (!keepRows) setPeople([])
     } else {
       setPeople((data as Person[]) ?? [])
     }
@@ -150,11 +163,15 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
           to: pending.option.value,
           request_id: requestId,
         })
+        grantPending.current = true
+        grantClosed.current = false
+        grantLoaded.current = false
         closeDialog()
-        // The rows stay while the list re-reads; then the result is announced (focus is back on
-        // the row's select: onCloseAutoFocus below).
-        await load(search)
-        setAnnouncement(adminPeopleT(locale, 'tierUpdated'))
+        // The rows stay while the list re-reads (and if it fails); focus returns to the row's select
+        // in onCloseAutoFocus. The result is announced once both are done.
+        await load(search, true)
+        grantLoaded.current = true
+        announceGrantWhenReady()
       }
     } catch {
       logger.warn('admin.denied', { action: 'tier.set', code: 'exception' })
@@ -308,6 +325,8 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
               e.preventDefault()
               target.focus()
             }
+            grantClosed.current = true
+            announceGrantWhenReady()
           }}
         >
           <DialogHeader>

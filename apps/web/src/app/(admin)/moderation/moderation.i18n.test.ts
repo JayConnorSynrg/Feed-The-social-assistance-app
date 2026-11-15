@@ -41,7 +41,14 @@ const h = vi.hoisted(() => ({
   holdList: false,
   release: null as null | (() => void),
   frames: [] as Array<() => void>,
+  listError: false,
+  focusSession: false,
+  focusRow: null as unknown,
+  reloadKey: 0,
+  session: { focus: { kind: 'post', id: '11111111-1111-4111-8111-111111111111' }, resolve: () => {} },
 }))
+
+vi.mock('./use-admin-focus', () => ({ useAdminFocusSession: () => (h.focusSession ? h.session : null) }))
 
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -83,7 +90,7 @@ function rpcBuilder(fn: string, args: unknown) {
       if (fn === 'admin_list_people') {
         if (h.holdList) {
           h.holdList = false
-          return new Promise<Reply>((r) => (h.release = () => r({ data: h.people, error: null }))).then(res, rej)
+          return new Promise<Reply>((r) => (h.release = () => r(h.listError ? { data: null, error: { code: '57014' } } : { data: h.people, error: null }))).then(res, rej)
         }
         return Promise.resolve({ data: h.people, error: null }).then(res, rej)
       }
@@ -100,6 +107,7 @@ const client = {
     const chain: Record<string, unknown> = {}
     for (const m of ['select', 'order', 'limit', 'in', 'gte']) chain[m] = () => chain
     chain.eq = (c: string, v: unknown) => ((filters[c] = v), chain)
+    chain.maybeSingle = () => ({ then: (res: (v: Reply) => unknown) => Promise.resolve({ data: h.focusRow, error: null }).then(res) })
     chain.then = (res: (v: Reply) => unknown, rej?: (e: unknown) => unknown) => {
       if (table === 'content_reports') {
         if (h.emptyQueue) return Promise.resolve({ data: [], error: null }).then(res, rej)
@@ -143,7 +151,7 @@ import { markupText } from '@/test/markup-text'
 import { TabsContent, TabsList, TabsTrigger, Tabs } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ReportsQueue, focusAfterRemoval } from './reports-queue'
-import { FocusedPostView, type FocusedPostRow } from './focused-post'
+import { FocusedPost, FocusedPostView, type FocusedPostRow } from './focused-post'
 import { moderatePost, type PostModerationAction } from './post-moderation-actions'
 import { ModerationTab } from './moderation-tab'
 import { PeopleTab } from './people-tab'
@@ -170,6 +178,10 @@ beforeEach(() => {
   h.holdList = false
   h.release = null
   h.frames.length = 0
+  h.listError = false
+  h.focusSession = false
+  h.focusRow = null
+  h.reloadKey = 0
   vi.mocked(logger.warn).mockClear()
   vi.mocked(logger.info).mockClear()
   vi.stubGlobal('window', { location: { search: '' } })
@@ -662,12 +674,12 @@ describe('the People tab keeps the admin’s place (B1, B2, H2)', () => {
     ;(findAll(tree, (e) => e.type === 'select')[0].props.ref as (n: unknown) => void)(select)
     apply(tree)
     tree = await c.flush()
-    expect(textOf(tree, 'people-status')).toBe(adminPeopleT('ko', 'tierUpdated'))
     const content = findAll(tree, (e) => e.type === DialogContent)[0]
     const preventDefault = vi.fn()
     ;(content.props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault })
     expect(select.focus).toHaveBeenCalledTimes(1)
     expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(textOf(c.rerender(), 'people-status')).toBe(adminPeopleT('ko', 'tierUpdated'))
   })
 
   it('Cancel also returns focus to the row’s select', async () => {
@@ -828,5 +840,143 @@ describe('the reports queue keeps the admin’s place (B3, H1)', () => {
     expect(textOf(tree, 'reports-queue-error')).toBe(adminModerationT('ko', 'errorGeneric'))
     expect(textOf(tree, 'reports-queue-status')).toBe('')
     expect(byTestId(tree, `remove-post-${POST}`)).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// Round 2 (PR #254): "Tier updated" once, after close AND re-read; a queue-driven re-read leaves
+// the linked post's status still; each card toggle is described by its post
+// ---------------------------------------------------------------------------------------------
+
+describe('"Tier updated" is announced once, after the dialog has closed and the re-read has finished', () => {
+  async function grant() {
+    h.rpcReply = { data: { ok: true }, error: null }
+    const c = mount(() => PeopleTab({ viewerTier: 'platform_admin', isFounder: true, locale: 'ko' }))
+    let tree = await c.flush()
+    ;(findAll(tree, (e) => e.type === 'select')[0].props.onChange as (e: unknown) => void)({ target: { value: 'community_moderator' } })
+    tree = c.rerender()
+    ;(findAll(tree, (e) => e.type === 'textarea')[0].props.onChange as (e: unknown) => void)({ target: { value: 'Trusted helper' } })
+    tree = c.rerender()
+    h.holdList = true
+    ;(byTestId(tree, 'people-apply')[0].props.onClick as () => void)()
+    tree = await c.flush()
+    expect(h.release).not.toBeNull()
+    return c
+  }
+  const closeDone = (c: ReturnType<typeof mount>) =>
+    (findAll(c.tree(), (e) => e.type === DialogContent)[0].props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: () => {} })
+  /** Every distinct text the status region showed, in order (one entry per change). */
+  function watchStatus(c: ReturnType<typeof mount>) {
+    const seen: string[] = []
+    const look = () => {
+      const t = String(textOf(c.tree(), 'people-status') ?? '')
+      if (t !== (seen.at(-1) ?? '')) seen.push(t)
+    }
+    return { seen, look }
+  }
+  const updated = adminPeopleT('ko', 'tierUpdated')
+
+  it('the re-read finishes first, then the dialog closes: announced once, at the close', async () => {
+    const c = await grant()
+    const { seen, look } = watchStatus(c)
+    look()
+    h.release!()
+    await c.flush()
+    look()
+    expect(textOf(c.tree(), 'people-status')).toBe('') // re-read done, dialog still closing: silent
+    closeDone(c)
+    c.rerender()
+    look()
+    await c.flush()
+    look()
+    expect(seen.filter((t) => t === updated)).toHaveLength(1)
+    expect(textOf(c.tree(), 'people-status')).toBe(updated)
+  })
+
+  it('the dialog closes first, then the re-read finishes: announced once, at the re-read', async () => {
+    const c = await grant()
+    const { seen, look } = watchStatus(c)
+    closeDone(c)
+    c.rerender()
+    look()
+    expect(textOf(c.tree(), 'people-status')).toBe('') // closed, list still re-reading: silent
+    h.release!()
+    await c.flush()
+    look()
+    // A second close event (Radix may fire focus handling again) announces nothing new.
+    closeDone(c)
+    c.rerender()
+    look()
+    expect(seen.filter((t) => t === updated)).toHaveLength(1)
+    expect(textOf(c.tree(), 'people-status')).toBe(updated)
+  })
+
+  it('after one announced grant, opening and cancelling the dialog again announces nothing (the grant is spent)', async () => {
+    const c = await grant()
+    h.release!()
+    await c.flush()
+    closeDone(c)
+    expect(textOf(c.rerender(), 'people-status')).toBe(updated)
+    ;(findAll(c.tree(), (e) => e.type === 'select')[0].props.onChange as (e: unknown) => void)({ target: { value: 'community_moderator' } })
+    expect(textOf(c.rerender(), 'people-status')).toBe('')
+    ;(findAll(c.tree(), (e) => e.type === 'button' && e.props.children === adminPeopleT('ko', 'cancel'))[0].props.onClick as () => void)()
+    c.rerender()
+    closeDone(c)
+    expect(textOf(c.rerender(), 'people-status')).toBe('')
+  })
+
+  it('a Cancel close never announces', async () => {
+    const c = mount(() => PeopleTab({ viewerTier: 'platform_admin', isFounder: true, locale: 'ko' }))
+    let tree = await c.flush()
+    ;(findAll(tree, (e) => e.type === 'select')[0].props.onChange as (e: unknown) => void)({ target: { value: 'community_moderator' } })
+    tree = c.rerender()
+    ;(findAll(tree, (e) => e.type === 'button' && e.props.children === adminPeopleT('ko', 'cancel'))[0].props.onClick as () => void)()
+    c.rerender()
+    closeDone(c)
+    expect(textOf(c.rerender(), 'people-status')).toBe('')
+  })
+
+  it('a failed re-read after a successful grant keeps the rows (the select survives) and still announces once', async () => {
+    const c = await grant()
+    h.listError = true // the held re-read answers with an error
+    closeDone(c)
+    h.release!()
+    await c.flush()
+    const tree = c.tree()
+    expect(findAll(tree, (e) => e.type === 'select')).toHaveLength(1)
+    expect(textOf(tree, 'people-status')).toBe(updated)
+    expect(warn()).toContainEqual(['admin.people.list_failed', { code: '57014' }])
+  })
+})
+
+describe('a re-read the queue triggers leaves the linked post’s status region still', () => {
+  it('after its own Remove the panel says so; a later queue-driven re-read does not change that text', async () => {
+    h.focusSession = true
+    h.focusRow = { ...FOUND, author: null }
+    const c = mount(() => FocusedPost({ reloadKey: h.reloadKey, locale: 'ko' }))
+    let tree = await c.flush()
+    const status = () => markupText(html(c.tree()).match(/<p role="status"[^>]*>([\s\S]*?)<\/p>/)![1])
+    expect(status()).toContain(adminModerationT('ko', 'statusVisible'))
+    ;((tree as ReactElement<{ onAction: (a: PostModerationAction) => void }>).props.onAction)('remove')
+    tree = await c.flush()
+    const afterAction = status()
+    expect(afterAction).toContain(adminModerationT('ko', 'doneRemove'))
+    // The queue below acted on another post: the panel re-reads (its post comes back held).
+    h.focusRow = { ...FOUND, author: null, is_hidden: true, hidden_reason: 'hold_for_review' }
+    h.reloadKey += 1
+    c.rerender()
+    await c.flush()
+    expect(status()).toBe(afterAction)
+    // Its actions follow the re-read post (a held post offers Authorize).
+    expect(html(c.tree())).toContain('data-testid="focused-authorize-post"')
+  })
+})
+
+describe('each card’s Report details toggle is described by its post', () => {
+  it('aria-describedby names the card’s excerpt, which exists', async () => {
+    const { tree } = await openQueue('ko')
+    const toggle = byTestId(tree, `toggle-reports-${POST}`)[0]
+    expect(toggle.props['aria-describedby']).toBe(`report-excerpt-${POST}`)
+    expect(findAll(tree, (e) => e.props.id === `report-excerpt-${POST}`)).toHaveLength(1)
   })
 })
