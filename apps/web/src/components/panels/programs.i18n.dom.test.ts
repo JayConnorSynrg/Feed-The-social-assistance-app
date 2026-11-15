@@ -254,13 +254,22 @@ describe('PR #256 review fixes', () => {
     await expand()
     await act(async () => (container.querySelector('[data-testid="share-to-feed-btn-p1"]') as HTMLButtonElement).click())
     await settle()
-    await act(async () => (document.querySelector('[data-testid="share-to-feed-submit"]') as HTMLButtonElement).click())
-    await settle()
+    // A frame that comes before React's next scheduled render (as it can in a browser): the switch
+    // must already be committed when focus is placed (flushSync), or focus lands on the outgoing
+    // Programs heading and drops to <body> when it unmounts.
+    const raf = window.requestAnimationFrame
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) => { queueMicrotask(() => cb(0)); return 0 }) as typeof raf
+    try {
+      await act(async () => (document.querySelector('[data-testid="share-to-feed-submit"]') as HTMLButtonElement).click())
+      await settle()
+    } finally {
+      window.requestAnimationFrame = raf
+    }
     expect(document.activeElement?.tagName).toBe('H1')
     expect(document.activeElement?.textContent).toBe('Feed')
   })
 
-  it('P1: Retry — once the reload settles, focus is on the search box (the Retry button is gone)', async () => {
+  it('P1 / R3: Retry — as soon as the reload starts (its button leaves), focus is on the search box, and stays there', async () => {
     h.error = 'Failed to load programs. Please try again.'
     await render('ko')
     const retry = buttonByText(programsT('ko', 'retry')) as HTMLButtonElement
@@ -269,6 +278,8 @@ describe('PR #256 review fixes', () => {
     expect(h.setFilters).toHaveBeenCalled()
     h.isLoading = true
     await render('ko')
+    expect(buttonByText(programsT('ko', 'retry'))).toBeUndefined()
+    expect(document.activeElement).toBe(container.querySelector('#programs-search'))
     h.isLoading = false
     h.error = null
     await render('ko')

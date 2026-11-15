@@ -127,6 +127,13 @@ export function useResourceSearch({
       return
     }
 
+    // A new query supersedes whatever is shown: the search is pending from the keystroke, not from
+    // when the debounce fires, and a search still in flight for an older query is dropped (its
+    // answer would describe a query the box no longer holds). So `loading` is false only when
+    // `results` are the answer for exactly the current query — no caller reads "no results" for a
+    // query that has not been searched yet (Browse Programs' status line, the map's empty state).
+    if (abortControllerRef.current) abortControllerRef.current.abort()
+    setLoading(true)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     timeoutRef.current = setTimeout(() => {
       runSearch(trimmed)

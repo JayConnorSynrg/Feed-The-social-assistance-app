@@ -8,6 +8,7 @@
 // dir="ltr". The hooks and their queries are unchanged; their English messages are read as codes.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import {
   CheckCircle2,
   ChevronDown,
@@ -652,14 +653,13 @@ export function ProgramsPanel() {
     }
   }, [filters, programs.length, isLoading, isProgramSearchActive])
 
-  // Retry: its button leaves with the error view while the list reloads; once the reload has
-  // settled, focus goes to the search box (else the heading), never to <body>.
-  const retryPhase = useRef<'idle' | 'requested' | 'loading'>('idle')
+  // Retry: its button leaves with the error view as soon as the reload starts, so at that moment
+  // focus goes to the search box (else the heading), never to <body>.
+  const retryPending = useRef(false)
   useEffect(() => {
-    if (retryPhase.current === 'requested' && isLoading) retryPhase.current = 'loading'
-    else if (retryPhase.current === 'loading' && !isLoading) {
-      retryPhase.current = 'idle'
-      afterLayout(() => (document.getElementById('programs-search') ?? document.getElementById('programs-title'))?.focus())
+    if (retryPending.current && isLoading) {
+      retryPending.current = false
+      ;(document.getElementById('programs-search') ?? document.getElementById('programs-title'))?.focus()
     }
   }, [isLoading])
 
@@ -748,9 +748,12 @@ export function ProgramsPanel() {
     // The panel host survives the switch: once the feed has rendered in it, focus goes there (its
     // h1, else the host itself), never to <body>.
     const host = rootRef.current?.parentElement ?? null
-    setSharingResource(null)
-    // Navigate to feed so user sees the post they just shared
-    setActivePanel('feed')
+    // Commit the switch now, so the focus below lands on the feed and not on this panel's heading.
+    flushSync(() => {
+      setSharingResource(null)
+      // Navigate to feed so user sees the post they just shared
+      setActivePanel('feed')
+    })
     afterLayout(() => focusWithin(host))
   }, [setActivePanel])
 
@@ -906,7 +909,7 @@ export function ProgramsPanel() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={() => {
-                      retryPhase.current = 'requested'
+                      retryPending.current = true
                       setFilters({ ...filters })
                     }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-stone-200 text-stone-800 rounded-lg text-sm hover:bg-stone-300 transition-colors"
