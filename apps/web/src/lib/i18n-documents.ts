@@ -86,7 +86,6 @@ export interface DocumentsMessages {
   vaultLocked: string
   vaultLockedBody: string
   unlockVault: string
-  chooseFile: string
   dropHere: string
   uploadTitle: string
   uploadHint: string
@@ -172,6 +171,14 @@ export interface DocumentsMessages {
   postsFailed: string
   communityMember: string
   detailFailed: string
+  annotationsSaved: string
+  pdfSaved: string
+  taskAdded: string
+  taskDeleted: string
+  eventAdded: string
+  eventDeleted: string
+  fileUploaded: string
+  fileDeleted: string
 }
 
 export type DocumentsKey = keyof DocumentsMessages
@@ -244,7 +251,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Vault Locked',
     vaultLockedBody: 'Unlock your vault to upload encrypted documents',
     unlockVault: 'Unlock Vault',
-    chooseFile: 'Choose a document to upload',
     dropHere: 'Drop file here',
     uploadTitle: 'Upload Encrypted Document',
     uploadHint: 'Drag and drop or click to browse. Files are encrypted before upload.',
@@ -330,6 +336,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'We couldn’t load community posts.',
     communityMember: 'Community Member',
     detailFailed: 'Something went wrong. Please try again.',
+    annotationsSaved: 'Changes saved.',
+    pdfSaved: 'PDF saved to My Documents.',
+    taskAdded: 'Task added.',
+    taskDeleted: 'Task deleted.',
+    eventAdded: 'Date added.',
+    eventDeleted: 'Date deleted.',
+    fileUploaded: 'File uploaded.',
+    fileDeleted: 'File deleted.',
   },
   es: {
     sectionsLabel: 'Secciones de Documentos y formularios',
@@ -398,7 +412,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Bóveda bloqueada',
     vaultLockedBody: 'Desbloquea tu bóveda para subir documentos cifrados',
     unlockVault: 'Desbloquear bóveda',
-    chooseFile: 'Elige un documento para subir',
     dropHere: 'Suelta el archivo aquí',
     uploadTitle: 'Subir documento cifrado',
     uploadHint: 'Arrastra y suelta o haz clic para buscar. Los archivos se cifran antes de subirse.',
@@ -484,6 +497,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'No pudimos cargar las publicaciones de la comunidad.',
     communityMember: 'Miembro de la comunidad',
     detailFailed: 'Algo salió mal. Inténtalo de nuevo.',
+    annotationsSaved: 'Cambios guardados.',
+    pdfSaved: 'PDF guardado en Mis documentos.',
+    taskAdded: 'Tarea agregada.',
+    taskDeleted: 'Tarea eliminada.',
+    eventAdded: 'Fecha agregada.',
+    eventDeleted: 'Fecha eliminada.',
+    fileUploaded: 'Archivo subido.',
+    fileDeleted: 'Archivo eliminado.',
   },
   fr: {
     sectionsLabel: 'Sections Documents et formulaires',
@@ -552,7 +573,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Coffre verrouillé',
     vaultLockedBody: 'Déverrouillez votre coffre pour téléverser des documents chiffrés',
     unlockVault: 'Déverrouiller le coffre',
-    chooseFile: 'Choisir un document à téléverser',
     dropHere: 'Déposez le fichier ici',
     uploadTitle: 'Téléverser un document chiffré',
     uploadHint: 'Glissez-déposez ou cliquez pour parcourir. Les fichiers sont chiffrés avant l’envoi.',
@@ -638,6 +658,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Nous n’avons pas pu charger les publications de la communauté.',
     communityMember: 'Membre de la communauté',
     detailFailed: 'Un problème est survenu. Réessayez.',
+    annotationsSaved: 'Modifications enregistrées.',
+    pdfSaved: 'PDF enregistré dans Mes documents.',
+    taskAdded: 'Tâche ajoutée.',
+    taskDeleted: 'Tâche supprimée.',
+    eventAdded: 'Date ajoutée.',
+    eventDeleted: 'Date supprimée.',
+    fileUploaded: 'Fichier envoyé.',
+    fileDeleted: 'Fichier supprimé.',
   },
   pt: {
     sectionsLabel: 'Seções de Documentos e formulários',
@@ -706,7 +734,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Cofre bloqueado',
     vaultLockedBody: 'Desbloqueie seu cofre para enviar documentos criptografados',
     unlockVault: 'Desbloquear cofre',
-    chooseFile: 'Escolha um documento para enviar',
     dropHere: 'Solte o arquivo aqui',
     uploadTitle: 'Enviar documento criptografado',
     uploadHint: 'Arraste e solte ou clique para procurar. Os arquivos são criptografados antes do envio.',
@@ -792,6 +819,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Não conseguimos carregar as publicações da comunidade.',
     communityMember: 'Membro da comunidade',
     detailFailed: 'Algo deu errado. Tente novamente.',
+    annotationsSaved: 'Alterações salvas.',
+    pdfSaved: 'PDF salvo em Meus documentos.',
+    taskAdded: 'Tarefa adicionada.',
+    taskDeleted: 'Tarefa excluída.',
+    eventAdded: 'Data adicionada.',
+    eventDeleted: 'Data excluída.',
+    fileUploaded: 'Arquivo enviado.',
+    fileDeleted: 'Arquivo excluído.',
   },
   ht: {
     sectionsLabel: 'Seksyon Dokiman ak fòmilè',
@@ -860,7 +895,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Kòf la fèmen',
     vaultLockedBody: 'Debloke kòf ou pou voye dokiman chifre',
     unlockVault: 'Debloke kòf la',
-    chooseFile: 'Chwazi yon dokiman pou voye',
     dropHere: 'Lage fichye a isit la',
     uploadTitle: 'Voye yon dokiman chifre',
     uploadHint: 'Trennen epi lage oswa klike pou chèche. Fichye yo chifre anvan yo voye yo.',
@@ -946,6 +980,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Nou pa t ka chaje piblikasyon kominote a.',
     communityMember: 'Manm kominote a',
     detailFailed: 'Gen yon bagay ki pa mache. Tanpri eseye ankò.',
+    annotationsSaved: 'Chanjman yo sere.',
+    pdfSaved: 'PDF la sere nan Dokiman mwen yo.',
+    taskAdded: 'Travay la ajoute.',
+    taskDeleted: 'Travay la efase.',
+    eventAdded: 'Dat la ajoute.',
+    eventDeleted: 'Dat la efase.',
+    fileUploaded: 'Fichye a voye.',
+    fileDeleted: 'Fichye a efase.',
   },
   vi: {
     sectionsLabel: 'Các mục Tài liệu và biểu mẫu',
@@ -1014,7 +1056,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Kho đã khóa',
     vaultLockedBody: 'Mở khóa kho của bạn để tải lên tài liệu đã mã hóa',
     unlockVault: 'Mở khóa kho',
-    chooseFile: 'Chọn tài liệu để tải lên',
     dropHere: 'Thả tệp vào đây',
     uploadTitle: 'Tải lên tài liệu đã mã hóa',
     uploadHint: 'Kéo và thả hoặc nhấp để chọn. Tệp được mã hóa trước khi tải lên.',
@@ -1100,6 +1141,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Chúng tôi không tải được bài đăng của cộng đồng.',
     communityMember: 'Thành viên cộng đồng',
     detailFailed: 'Đã xảy ra lỗi. Vui lòng thử lại.',
+    annotationsSaved: 'Đã lưu thay đổi.',
+    pdfSaved: 'Đã lưu PDF vào Tài liệu của tôi.',
+    taskAdded: 'Đã thêm việc.',
+    taskDeleted: 'Đã xóa việc.',
+    eventAdded: 'Đã thêm ngày.',
+    eventDeleted: 'Đã xóa ngày.',
+    fileUploaded: 'Đã tải tệp lên.',
+    fileDeleted: 'Đã xóa tệp.',
   },
   ar: {
     sectionsLabel: 'أقسام المستندات والنماذج',
@@ -1168,7 +1217,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'الخزنة مقفلة',
     vaultLockedBody: 'افتح خزنتك لرفع مستندات مشفّرة',
     unlockVault: 'فتح الخزنة',
-    chooseFile: 'اختر مستندًا لرفعه',
     dropHere: 'أفلت الملف هنا',
     uploadTitle: 'رفع مستند مشفّر',
     uploadHint: 'اسحب وأفلت أو انقر للتصفح. تُشفَّر الملفات قبل الرفع.',
@@ -1254,6 +1302,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'تعذّر علينا تحميل منشورات المجتمع.',
     communityMember: 'عضو في المجتمع',
     detailFailed: 'حدث خطأ ما. يُرجى المحاولة مرة أخرى.',
+    annotationsSaved: 'تم حفظ التغييرات.',
+    pdfSaved: 'تم حفظ ملف PDF في مستنداتي.',
+    taskAdded: 'تمت إضافة المهمة.',
+    taskDeleted: 'تم حذف المهمة.',
+    eventAdded: 'تمت إضافة التاريخ.',
+    eventDeleted: 'تم حذف التاريخ.',
+    fileUploaded: 'تم رفع الملف.',
+    fileDeleted: 'تم حذف الملف.',
   },
   zh: {
     sectionsLabel: '文件和表格分区',
@@ -1322,7 +1378,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: '保险库已锁定',
     vaultLockedBody: '解锁您的保险库以上传加密文件',
     unlockVault: '解锁保险库',
-    chooseFile: '选择要上传的文件',
     dropHere: '将文件拖放到这里',
     uploadTitle: '上传加密文件',
     uploadHint: '拖放文件或点击浏览。文件会在上传前加密。',
@@ -1408,6 +1463,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: '无法加载社区帖子。',
     communityMember: '社区成员',
     detailFailed: '出了点问题。请重试。',
+    annotationsSaved: '更改已保存。',
+    pdfSaved: 'PDF 已保存到“我的文件”。',
+    taskAdded: '任务已添加。',
+    taskDeleted: '任务已删除。',
+    eventAdded: '日期已添加。',
+    eventDeleted: '日期已删除。',
+    fileUploaded: '文件已上传。',
+    fileDeleted: '文件已删除。',
   },
   so: {
     sectionsLabel: 'Qaybaha Dukumentiyada iyo foomamka',
@@ -1476,7 +1539,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Khasnadda waa xiran tahay',
     vaultLockedBody: 'Fur khasnaddaada si aad u soo geliso dukumentiyo la sireeyay',
     unlockVault: 'Fur khasnadda',
-    chooseFile: 'Dooro dukumenti aad soo gelinayso',
     dropHere: 'Halkan ku dhig faylka',
     uploadTitle: 'Soo geli dukumenti la sireeyay',
     uploadHint: 'Jiid oo dhig ama guji si aad u raadiso. Faylasha waa la sireeyaa ka hor inta aan la soo gelin.',
@@ -1562,6 +1624,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Ma aanan soo rari karin qoraallada bulshada.',
     communityMember: 'Xubin bulshada ka mid ah',
     detailFailed: 'Wax ayaa qaldamay. Fadlan isku day mar kale.',
+    annotationsSaved: 'Isbeddellada waa la kaydiyay.',
+    pdfSaved: 'PDF-ka waxaa lagu kaydiyay Dukumentiyadayda.',
+    taskAdded: 'Hawsha waa la daray.',
+    taskDeleted: 'Hawsha waa la tirtiray.',
+    eventAdded: 'Taariikhda waa la daray.',
+    eventDeleted: 'Taariikhda waa la tirtiray.',
+    fileUploaded: 'Faylka waa la soo geliyay.',
+    fileDeleted: 'Faylka waa la tirtiray.',
   },
   ru: {
     sectionsLabel: 'Разделы «Документы и формы»',
@@ -1630,7 +1700,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Хранилище заблокировано',
     vaultLockedBody: 'Разблокируйте хранилище, чтобы загружать зашифрованные документы',
     unlockVault: 'Разблокировать хранилище',
-    chooseFile: 'Выберите документ для загрузки',
     dropHere: 'Перетащите файл сюда',
     uploadTitle: 'Загрузить зашифрованный документ',
     uploadHint: 'Перетащите файл или нажмите, чтобы выбрать. Файлы шифруются перед загрузкой.',
@@ -1716,6 +1785,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Не удалось загрузить публикации сообщества.',
     communityMember: 'Участник сообщества',
     detailFailed: 'Что-то пошло не так. Попробуйте ещё раз.',
+    annotationsSaved: 'Изменения сохранены.',
+    pdfSaved: 'PDF сохранён в «Мои документы».',
+    taskAdded: 'Задача добавлена.',
+    taskDeleted: 'Задача удалена.',
+    eventAdded: 'Дата добавлена.',
+    eventDeleted: 'Дата удалена.',
+    fileUploaded: 'Файл загружен.',
+    fileDeleted: 'Файл удалён.',
   },
   ko: {
     sectionsLabel: '문서 및 양식 섹션',
@@ -1784,7 +1861,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: '보관함 잠김',
     vaultLockedBody: '암호화된 문서를 업로드하려면 보관함 잠금을 해제하세요',
     unlockVault: '보관함 잠금 해제',
-    chooseFile: '업로드할 문서 선택',
     dropHere: '여기에 파일을 놓으세요',
     uploadTitle: '암호화된 문서 업로드',
     uploadHint: '끌어다 놓거나 클릭해 찾아보세요. 파일은 업로드 전에 암호화됩니다.',
@@ -1870,6 +1946,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: '커뮤니티 게시물을 불러올 수 없습니다.',
     communityMember: '커뮤니티 회원',
     detailFailed: '문제가 발생했습니다. 다시 시도하세요.',
+    annotationsSaved: '변경 사항을 저장했습니다.',
+    pdfSaved: 'PDF를 내 문서에 저장했습니다.',
+    taskAdded: '할 일을 추가했습니다.',
+    taskDeleted: '할 일을 삭제했습니다.',
+    eventAdded: '날짜를 추가했습니다.',
+    eventDeleted: '날짜를 삭제했습니다.',
+    fileUploaded: '파일을 업로드했습니다.',
+    fileDeleted: '파일을 삭제했습니다.',
   },
   tl: {
     sectionsLabel: 'Mga seksyon ng Mga dokumento at form',
@@ -1938,7 +2022,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Naka-lock ang vault',
     vaultLockedBody: 'I-unlock ang iyong vault para makapag-upload ng mga naka-encrypt na dokumento',
     unlockVault: 'I-unlock ang vault',
-    chooseFile: 'Pumili ng dokumentong ia-upload',
     dropHere: 'Ihulog dito ang file',
     uploadTitle: 'Mag-upload ng naka-encrypt na dokumento',
     uploadHint: 'I-drag at ihulog o i-click para maghanap. Ine-encrypt ang mga file bago i-upload.',
@@ -2024,6 +2107,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Hindi namin ma-load ang mga post ng komunidad.',
     communityMember: 'Miyembro ng komunidad',
     detailFailed: 'May nangyaring mali. Pakisubukang muli.',
+    annotationsSaved: 'Na-save ang mga pagbabago.',
+    pdfSaved: 'Na-save ang PDF sa Aking mga dokumento.',
+    taskAdded: 'Naidagdag ang gawain.',
+    taskDeleted: 'Nabura ang gawain.',
+    eventAdded: 'Naidagdag ang petsa.',
+    eventDeleted: 'Nabura ang petsa.',
+    fileUploaded: 'Na-upload ang file.',
+    fileDeleted: 'Nabura ang file.',
   },
   am: {
     sectionsLabel: 'የሰነዶች እና ቅጾች ክፍሎች',
@@ -2092,7 +2183,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'ካዝናው ተቆልፏል',
     vaultLockedBody: 'የተመሰጠሩ ሰነዶችን ለመስቀል ካዝናዎን ይክፈቱ',
     unlockVault: 'ካዝናውን ክፈት',
-    chooseFile: 'የሚሰቀል ሰነድ ይምረጡ',
     dropHere: 'ፋይሉን እዚህ ይጣሉ',
     uploadTitle: 'የተመሰጠረ ሰነድ ስቀል',
     uploadHint: 'ጎትተው ይጣሉ ወይም ለማሰስ ጠቅ ያድርጉ። ፋይሎች ከመሰቀላቸው በፊት ይመሰጠራሉ።',
@@ -2178,6 +2268,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'የማህበረሰብ ልጥፎችን መጫን አልቻልንም።',
     communityMember: 'የማህበረሰብ አባል',
     detailFailed: 'የሆነ ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ።',
+    annotationsSaved: 'ለውጦቹ ተቀምጠዋል።',
+    pdfSaved: 'PDF በሰነዶቼ ውስጥ ተቀምጧል።',
+    taskAdded: 'ተግባሩ ታክሏል።',
+    taskDeleted: 'ተግባሩ ተሰርዟል።',
+    eventAdded: 'ቀኑ ታክሏል።',
+    eventDeleted: 'ቀኑ ተሰርዟል።',
+    fileUploaded: 'ፋይሉ ተሰቅሏል።',
+    fileDeleted: 'ፋይሉ ተሰርዟል።',
   },
   hmn: {
     sectionsLabel: 'Cov ntu Ntaub ntawv thiab daim foos',
@@ -2246,7 +2344,6 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     vaultLocked: 'Lub thawv xauv kaw lawm',
     vaultLockedBody: 'Qhib koj lub thawv xauv kom xa tau ntaub ntawv uas muab zais',
     unlockVault: 'Qhib lub thawv xauv',
-    chooseFile: 'Xaiv ib daim ntaub ntawv los xa',
     dropHere: 'Muab cov ntaub ntawv tso rau ntawm no',
     uploadTitle: 'Xa ntaub ntawv uas muab zais',
     uploadHint: 'Rub thiab tso lossis nias los nrhiav. Cov ntaub ntawv raug muab zais ua ntej xa.',
@@ -2332,6 +2429,14 @@ export const documentsMessages: Record<Locale, DocumentsMessages> = {
     postsFailed: 'Peb thauj tsis tau cov lus tshaj tawm ntawm zej zog.',
     communityMember: 'Tswv cuab hauv zej zog',
     detailFailed: 'Muaj ib yam tsis raug. Thov sim dua.',
+    annotationsSaved: 'Khaws cov kev hloov lawm.',
+    pdfSaved: 'Khaws daim PDF rau hauv Kuv cov ntaub ntawv lawm.',
+    taskAdded: 'Ntxiv txoj hauj lwm lawm.',
+    taskDeleted: 'Rho txoj hauj lwm tawm lawm.',
+    eventAdded: 'Ntxiv hnub lawm.',
+    eventDeleted: 'Rho hnub tawm lawm.',
+    fileUploaded: 'Xa daim ntaub ntawv lawm.',
+    fileDeleted: 'Rho daim ntaub ntawv tawm lawm.',
   },
 }
 
@@ -2340,7 +2445,7 @@ export function documentsT(locale: Locale, key: DocumentsKey): string {
 }
 
 /** The folder values a document row stores (and 'all', the panel's own "every folder"). */
-export type DocumentFolder = 'all' | 'id' | 'income' | 'residence' | 'medical' | 'forms' | 'other'
+type DocumentFolder = 'all' | 'id' | 'income' | 'residence' | 'medical' | 'forms' | 'other'
 
 const FOLDER_KEYS: Record<DocumentFolder, DocumentsKey> = {
   all: 'catAll',

@@ -44,7 +44,9 @@ vi.mock('@/contexts/vault-context', () => ({
 }))
 vi.mock('@/hooks/use-encrypted-upload', () => ({
   useEncryptedUpload: () => ({
-    downloadFile: vi.fn(), downloadForEdit: vi.fn(), updateAnnotations: vi.fn(),
+    downloadFile: vi.fn(),
+    downloadForEdit: async (id: string) => { h.calls.push(['downloadForEdit', id]); return { sourceFile: new File(['%PDF'], 'x.pdf', { type: 'application/pdf' }), annotations: [] } },
+    updateAnnotations: async (id: string, annotations: unknown) => { h.calls.push(['updateAnnotations', id, annotations]) },
     renameEncrypted: async (id: string, name: string) => { h.calls.push(['renameEncrypted', id, name]) },
     deleteFile: async (id: string) => {
       h.calls.push(['deleteFile', id])
@@ -73,8 +75,17 @@ vi.mock('@/lib/document-encryption', () => ({ decryptString: async () => 'decryp
 vi.mock('@/hooks/use-pdf-annotation', () => ({ exportFlattened: vi.fn() }))
 vi.mock('@/components/documents/resource-detail-dialog', () => ({ ResourceDetailDialog: () => null }))
 vi.mock('@/components/documents/pdf-document-viewer-dynamic', () => ({ PdfDocumentViewer: () => null }))
-vi.mock('@/components/forms/pdf-annotator-dynamic', () => ({ PdfAnnotator: () => null }))
-vi.mock('./forms-panel', () => ({ FormsPanel: () => null }))
+vi.mock('@/components/forms/pdf-annotator-dynamic', async () => {
+  const { createElement } = await import('react')
+  return {
+    PdfAnnotator: ({ onSave }: { onSave: (d: { sourceBytes: Uint8Array; annotations: unknown[] }) => Promise<void> }) =>
+      createElement('button', { type: 'button', 'data-testid': 'stub-annotator-save', onClick: () => void onSave({ sourceBytes: new Uint8Array([1]), annotations: [] }) }, 'save'),
+  }
+})
+vi.mock('./forms-panel', async () => {
+  const { createElement } = await import('react')
+  return { FormsPanel: ({ onPdfSaved }: { onPdfSaved?: () => void }) => createElement('button', { type: 'button', 'data-testid': 'stub-forms-saved', onClick: () => onPdfSaved?.() }, 'saved') }
+})
 
 import { InitialLocaleContext } from '@/hooks/use-profile-locale'
 import { messages, type Locale } from '@/lib/i18n'
@@ -348,5 +359,97 @@ describe('keyboard, focus and announcements', () => {
     w.stop()
     expect(w.inserted).toEqual([documentsT('ko', 'uploaded')])
     expect(document.activeElement).toBe(container.querySelector('[data-testid="encrypted-upload-input"]'))
+  })
+})
+
+// ── PR #259 fix round ────────────────────────────────────────────────────────────────────────
+describe('fix round: results said once, labels, encrypted rows, repeated failures', () => {
+  const statusOf = () => container.querySelector('[data-testid="documents-status"]')!
+
+  it('H1: saving annotations returns to the list and says “Changes saved.” once', async () => {
+    await render('ko')
+    await act(async () => (container.querySelector('[data-document-id="d1"] [data-testid="doc-edit-btn"]') as HTMLButtonElement).click())
+    await settle()
+    await act(async () => (container.querySelector('[data-testid="stub-annotator-save"]') as HTMLButtonElement).click())
+    await settle()
+    expect(h.calls).toContainEqual(['updateAnnotations', 'd1', []])
+    const status = statusOf()
+    expect(status.textContent).toBe(documentsT('ko', 'annotationsSaved'))
+    expect(status.querySelectorAll('span')).toHaveLength(1)
+    expect(document.activeElement).toBe(menuButton('d1'))
+  })
+
+  it('H1: a PDF saved from Applications is said in the panel’s status line', async () => {
+    await render('ko')
+    await act(async () => (container.querySelector('#docs-tab-applications') as HTMLButtonElement).click())
+    await settle()
+    const w = watch(statusOf())
+    await act(async () => (container.querySelector('[data-testid="stub-forms-saved"]') as HTMLButtonElement).click())
+    await settle()
+    w.stop()
+    expect(w.inserted).toEqual([documentsT('ko', 'pdfSaved')])
+  })
+
+  it('B6: the upload chooser is named by its visible title', async () => {
+    await render('ko')
+    const input = container.querySelector('[data-testid="encrypted-upload-input"]') as HTMLInputElement
+    expect(input.getAttribute('aria-label')).toBe(documentsT('ko', 'uploadTitle'))
+    expect(container.textContent).toContain(documentsT('ko', 'uploadTitle'))
+  })
+
+  it('L2: the same failure twice is said twice (a new node each time)', async () => {
+    h.deleteFails = true
+    await render('ko')
+    const w = watch(container.querySelector('[data-testid="documents-alert"]')!)
+    for (let i = 0; i < 2; i++) {
+      await openMenu('d1')
+      await choose('doc-delete-btn')
+      await act(async () => (document.querySelector('[data-testid="delete-document-confirm"]') as HTMLButtonElement).click())
+      await settle()
+    }
+    w.stop()
+    expect(w.inserted.filter((x) => x.includes(documentsT('ko', 'deleteFailed')))).toHaveLength(2)
+  })
+
+  it('an encrypted document: rename sends the same id and name in en and ko; with the vault locked it says why', async () => {
+    const encRow = { ...ROW('e1', 'Encrypted document', 'id'), is_encrypted: true, encrypted_original_name: 'c1', encrypted_name_iv: 'iv1' }
+    const run = async (l: Locale) => {
+      h.rows = [encRow]
+      await render(l)
+      await openMenu('e1')
+      await choose('doc-rename-btn')
+      const input = document.querySelector('[data-testid="rename-input"]') as HTMLInputElement
+      expect(input.value).toBe('decrypted')
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Pasaporte.pdf')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => (document.querySelector('[data-testid="rename-submit-btn"]') as HTMLButtonElement).click())
+      await settle()
+      act(() => root.unmount())
+      root = createRoot(container)
+    }
+    await run('en')
+    await run('ko')
+    expect(h.calls.filter((c) => c[0] === 'renameEncrypted')).toEqual([['renameEncrypted', 'e1', 'Pasaporte.pdf'], ['renameEncrypted', 'e1', 'Pasaporte.pdf']])
+    expect(h.calls.some((c) => c[0] === 'updateDocument')).toBe(false)
+  })
+
+  it('an encrypted document with the vault locked: rename is not sent; the dialog says to unlock', async () => {
+    h.unlocked = false
+    h.rows = [{ ...ROW('e1', 'Encrypted document', 'id'), is_encrypted: true, encrypted_original_name: 'c1', encrypted_name_iv: 'iv1' }]
+    await render('ko')
+    await openMenu('e1')
+    await choose('doc-rename-btn')
+    const input = document.querySelector('[data-testid="rename-input"]') as HTMLInputElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Pasaporte.pdf')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => (document.querySelector('[data-testid="rename-submit-btn"]') as HTMLButtonElement).click())
+    await settle()
+    expect(h.calls.some((c) => c[0] === 'renameEncrypted')).toBe(false)
+    expect(document.getElementById('rename-document-error')?.textContent).toBe(documentsT('ko', 'renameLocked'))
+    expect(document.activeElement).toBe(input)
   })
 })

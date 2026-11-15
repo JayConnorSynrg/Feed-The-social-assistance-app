@@ -44,6 +44,16 @@ import { cn } from '@/lib/utils'
 import { OFFICIAL_ENGLISH } from '@/lib/official-english'
 import { AnnouncementText, announce, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
+/** The browser's autofill token for a personal field, by its (unchanged) field name. */
+const AUTOCOMPLETE: Record<string, string> = {
+  first_name: 'given-name',
+  last_name: 'family-name',
+  middle_name: 'additional-name',
+  email: 'email',
+  phone: 'tel',
+  date_of_birth: 'bday',
+}
+
 /** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
 const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
 const INPUT = 'border-stone-500 text-stone-900 placeholder:text-stone-600'
@@ -80,7 +90,14 @@ function RequiredMark({ locale }: { locale: Locale }) {
 
 /** A review value and its language: the template's option label is English, Yes / No are the
  *  member's language, anything typed is the member's own text. */
-export function reviewValue(field: FormFieldSchema, value: unknown, locale: Locale): { text: string; lang: string } {
+/** Nothing entered: empty, unset, or an address with no part filled in. */
+function isUnanswered(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).every((v) => v === undefined || v === null || v === '')
+  return false
+}
+
+function reviewValue(field: FormFieldSchema, value: unknown, locale: Locale): { text: string; lang: string } {
   if (value === undefined || value === null || value === '') return { text: '—', lang: '' }
   if (field.sensitive) return { text: '••••••••', lang: '' }
   if (typeof value === 'object' && value !== null) {
@@ -123,7 +140,8 @@ function ReviewStep({
         const sectionFields = section.fields
           .map((id) => allFields.find((f) => f.id === id))
           .filter((f): f is FormFieldSchema => f !== undefined)
-          .filter((f) => values[f.name] !== undefined && values[f.name] !== '')
+          // Answered fields, and every required one (unanswered shows "—" and says so).
+          .filter((f) => f.required || (values[f.name] !== undefined && values[f.name] !== ''))
 
         if (sectionFields.length === 0) return null
 
@@ -137,12 +155,20 @@ function ReviewStep({
                 const f = fieldMap.get(field.name)
                 if (!f) return null
                 const shown = reviewValue(f, values[f.name], locale)
+                const unanswered = isUnanswered(values[f.name])
                 return (
-                  <div key={field.id} className="flex flex-col gap-0.5">
+                  <div key={field.id} className="flex flex-col gap-0.5" data-unanswered={unanswered || undefined}>
                     <dt className="text-xs text-stone-700" {...OFFICIAL_ENGLISH}>{f.label}</dt>
-                    <dd className="text-sm text-stone-900 font-medium" lang={shown.lang} dir={shown.lang === OFFICIAL_ENGLISH.lang ? OFFICIAL_ENGLISH.dir : shown.lang === locale ? dir(locale) : 'auto'}>
-                      {shown.text}
-                    </dd>
+                    {unanswered ? (
+                      <dd className="text-sm text-stone-900 font-medium">
+                        <span aria-hidden="true">—</span>{' '}
+                        <span className="text-xs font-normal text-red-700">{formsT(locale, 'notAnswered')}</span>
+                      </dd>
+                    ) : (
+                      <dd className="text-sm text-stone-900 font-medium" lang={shown.lang} dir={shown.lang === OFFICIAL_ENGLISH.lang ? OFFICIAL_ENGLISH.dir : shown.lang === locale ? dir(locale) : 'auto'}>
+                        {shown.text}
+                      </dd>
+                    )}
                   </div>
                 )
               })}
@@ -201,7 +227,8 @@ function StepFields({
               <textarea
                 id={field.id}
                 placeholder={field.placeholder}
-                disabled={disabled}
+                readOnly={disabled}
+                aria-disabled={disabled || undefined}
                 lang=""
                 dir="auto"
                 aria-describedby={hintId(field)}
@@ -225,13 +252,13 @@ function StepFields({
                 render={({ field: formField }) => (
                   <Select
                     value={formField.value as string}
-                    onValueChange={formField.onChange}
-                    disabled={disabled}
+                    onValueChange={(v) => { if (!disabled) formField.onChange(v) }}
                   >
                     {/* The chosen option and the template's placeholder are English; FEED's own
                         "Select..." prompt is the member's language. */}
                     <SelectTrigger
                       id={field.id}
+                      aria-disabled={disabled || undefined}
                       aria-describedby={hintId(field)}
                       aria-required={field.required || undefined}
                       {...(formField.value || field.placeholder ? OFFICIAL_ENGLISH : { lang: locale, dir: dir(locale) })}
@@ -266,8 +293,8 @@ function StepFields({
                     <Checkbox
                       id={field.id}
                       checked={formField.value as boolean}
-                      onCheckedChange={formField.onChange}
-                      disabled={disabled}
+                      onCheckedChange={(v) => { if (!disabled) formField.onChange(v) }}
+                      aria-disabled={disabled || undefined}
                       aria-describedby={hintId(field)}
                       aria-required={field.required || undefined}
                     />
@@ -305,8 +332,9 @@ function StepFields({
                           name={field.name}
                           value={option.value}
                           checked={formField.value === option.value}
-                          onChange={() => formField.onChange(option.value)}
-                          disabled={disabled || option.disabled}
+                          onChange={() => { if (!disabled) formField.onChange(option.value) }}
+                          aria-disabled={disabled || undefined}
+                          disabled={option.disabled}
                           className="h-5 w-5 border-stone-500 text-primary focus:ring-primary"
                         />
                         <Label htmlFor={`${field.id}-${option.value}`} className="font-normal cursor-pointer min-h-6 flex items-center" {...OFFICIAL_ENGLISH}>
@@ -334,7 +362,8 @@ function StepFields({
               </Label>
               <Input
                 id={`${field.id}-${key}`}
-                disabled={disabled}
+                readOnly={disabled}
+                aria-disabled={disabled || undefined}
                 className={INPUT}
                 lang=""
                 dir="auto"
@@ -379,7 +408,8 @@ function StepFields({
                       type="text"
                       placeholder={t('signaturePlaceholder')}
                       className={cn('font-signature text-xl italic', INPUT)}
-                      disabled={disabled}
+                      readOnly={disabled}
+                      aria-disabled={disabled || undefined}
                       lang=""
                       dir="auto"
                       autoComplete="name"
@@ -408,7 +438,9 @@ function StepFields({
               id={field.id}
               type={getInputType(field.type)}
               placeholder={field.placeholder}
-              disabled={disabled}
+              readOnly={disabled}
+              aria-disabled={disabled || undefined}
+              autoComplete={AUTOCOMPLETE[field.name]}
               lang=""
               dir="auto"
               className={INPUT}
@@ -622,15 +654,17 @@ export function FormWizard({
 
   // Focus: the form's heading when the wizard opens (the button that opened it has gone), the
   // step's heading each time the step changes.
+  const ready = !templateLoading && !submissionHook.loading
   useEffect(() => {
-    if (!template) return
+    // Wait for the form itself: while the template or the draft loads, a spinner stands in.
+    if (!template || !ready) return
     if (!stepFocusReady.current) {
       stepFocusReady.current = true
       titleRef.current?.focus()
       return
     }
     stepHeadingRef.current?.focus()
-  }, [template, currentStep, isReviewStep])
+  }, [template, ready, currentStep, isReviewStep])
 
   const handleNext = useCallback(async () => {
     if (!template || sections.length === 0 || isSaving || isSubmitting) return
@@ -651,10 +685,17 @@ export function FormWizard({
     setIsSaving(true)
     announce(setStatus, formsT(locale, 'savingDraft'))
     const data = getValues() as Record<string, unknown>
-    await submissionHook.saveDraft(data)
+    const saved = await submissionHook.saveDraft(data)
     setIsSaving(false)
 
-    logger.info('forms.wizard.draft_saved', { templateId, step: currentStep + 1 })
+    if (saved) {
+      logger.info('forms.wizard.draft_saved', { templateId, step: currentStep + 1 })
+    } else {
+      // The answers stay in the form; the member hears that the save did not happen. The hook
+      // writes no row for this: one code-only row.
+      announce(setSubmitAlert, formsT(locale, 'draftSaveFailed'))
+      logger.warn('error_surface.shown', { surface: 'form-wizard', kind: 'draft_save_failed', locale })
+    }
 
     stepStartTimeRef.current = Date.now()
 

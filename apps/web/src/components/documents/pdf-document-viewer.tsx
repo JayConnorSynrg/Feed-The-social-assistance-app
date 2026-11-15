@@ -40,6 +40,7 @@ import { documentsT, type DocumentsKey } from '@/lib/i18n-documents'
 import { formatMessage } from '@/lib/format-message'
 import { formatCount } from '@/lib/i18n-intl'
 import { failureCode } from '@/lib/failure-code'
+import { announce, AnnouncementText, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 // Version-matched worker — reuse same path as pdf-annotator.tsx
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
@@ -70,6 +71,16 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
   const [isLoadingBytes, setIsLoadingBytes] = useState(false)
   // Track when react-pdf Document starts rendering so we can emit load duration
   const pdfRenderStartRef = useRef<number>(0)
+  // Each page's wrapper (Prev / Next scroll to it) and the status line that says which page.
+  const pageRefs = useRef(new Map<number, HTMLDivElement>())
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const goToPage = useCallback((page: number) => {
+    const next = Math.min(Math.max(1, page), numPages || 1)
+    setCurrentPage(next)
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    pageRefs.current.get(next)?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    announce(setStatus, formatMessage(documentsT(locale, 'pageOf'), { page: formatCount(next, locale), total: formatCount(numPages, locale) }))
+  }, [numPages, locale])
 
   const isPdf = file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf')
   const isImage = file?.type?.startsWith('image/')
@@ -186,6 +197,11 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
           </div>
         </DialogHeader>
 
+        {/* Always mounted: a failure that appears is spoken; the page Prev / Next moved to too. */}
+        <div role="alert" className="sr-only" data-testid="document-viewer-alert">{loadError ? t(loadError) : ''}</div>
+        <p role="status" className="sr-only" data-testid="document-viewer-status">
+          <AnnouncementText announcement={status} />
+        </p>
         {/* Content */}
         <div className="flex-1 overflow-auto bg-stone-100 min-h-0">
           {isLoadingBytes ? (
@@ -195,7 +211,7 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
             </div>
           ) : loadError ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <p className="text-sm text-red-700 mb-4" role="alert">{t(loadError)}</p>
+              <p className="text-sm text-red-700 mb-4">{t(loadError)}</p>
               {file && (
                 <a
                   href={URL.createObjectURL(file)}
@@ -220,7 +236,12 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
                 }
               >
                 {Array.from({ length: numPages }, (_, i) => (
-                  <div key={i + 1} className="mb-4 shadow-md">
+                  <div
+                    key={i + 1}
+                    className="mb-4 shadow-md"
+                    data-page={i + 1}
+                    ref={(node) => { if (node) pageRefs.current.set(i + 1, node); else pageRefs.current.delete(i + 1) }}
+                  >
                     <Page
                       pageNumber={i + 1}
                       width={Math.min(
@@ -265,7 +286,7 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => { if (currentPage > 1) goToPage(currentPage - 1) }}
               aria-disabled={currentPage <= 1}
               className="h-8 w-8 aria-disabled:text-stone-500 aria-disabled:cursor-not-allowed"
               aria-label={t('previousPage')}
@@ -278,7 +299,7 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+              onClick={() => { if (currentPage < numPages) goToPage(currentPage + 1) }}
               aria-disabled={currentPage >= numPages}
               className="h-8 w-8 aria-disabled:text-stone-500 aria-disabled:cursor-not-allowed"
               aria-label={t('nextPage')}

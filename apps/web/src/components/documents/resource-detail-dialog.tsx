@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   CheckSquare, Calendar, FileText, StickyNote, Plus, Trash2, Download,
   MapPin, Phone, ExternalLink, Loader2, Upload, Check, MessageSquare, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,6 +33,7 @@ import { formatMessage } from '@/lib/format-message'
 import { failureCode } from '@/lib/failure-code'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
+import { announce, AnnouncementText, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 // P6 W9: the dialog's words are in the member's language (lib/i18n-documents.ts), with lang/dir on
 // the portalled content; the category through resourceCategoryLabel (one source for every surface);
@@ -109,8 +111,17 @@ function ResourcePosts({ resourceId, locale }: ResourcePostsProps) {
     fetchPosts()
   }, [fetchPosts])
 
+  // The failure line's region is always the first child, mounted in every state, so a failure
+  // that appears is spoken.
+  const shell = (content: React.ReactNode, failure: React.ReactNode = null) => (
+    <>
+      <div role="alert" data-testid="resource-posts-alert">{failure}</div>
+      {content}
+    </>
+  )
+
   if (loading) {
-    return (
+    return shell(
       <div className="flex items-center justify-center py-4">
         <Loader2 className="w-4 h-4 animate-spin text-stone-600" aria-hidden="true" />
       </div>
@@ -118,18 +129,18 @@ function ResourcePosts({ resourceId, locale }: ResourcePostsProps) {
   }
 
   if (error) {
-    return <p className="text-xs text-red-700 py-2" role="alert">{t(error)}</p>
+    return shell(null, <p className="text-xs text-red-700 py-2">{t(error)}</p>)
   }
 
   if (posts.length === 0) {
-    return (
+    return shell(
       <p className="text-sm text-stone-700 text-center py-3">
         {t('noPosts')}
       </p>
     )
   }
 
-  return (
+  return shell(
     <div data-testid="resource-posts-list" className="space-y-3">
       {posts.map((post) => (
         <div
@@ -186,11 +197,28 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
   const eventInputRef = useRef<HTMLInputElement>(null)
   const uploadButtonRef = useRef<HTMLButtonElement>(null)
 
-  // A failure from the hook: the member reads the translated line; one code-only row per failure.
+  // One always-mounted status line for results and one alert line for failures (keyed nodes:
+  // an identical repeat is spoken again).
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const [alert, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  /** Say the result of one action: the done line, or the failure line plus one code-only row
+   *  (the hook writes none). */
+  const report = (ok: boolean, done: DocumentsKey, kind: string) => {
+    if (ok) {
+      announce(setStatus, t(done))
+      return
+    }
+    announce(setAlert, t('detailFailed'))
+    logger.warn('error_surface.shown', { surface: 'resource-detail', kind, locale })
+  }
+  // A failed load of the dialog (each load ends with isLoading false): the same line, one row.
   useEffect(() => {
-    if (error) logger.warn('error_surface.shown', { surface: 'resource-detail', kind: 'action_failed', locale })
+    if (error && !isLoading) {
+      announce(setAlert, t('detailFailed'))
+      logger.warn('error_surface.shown', { surface: 'resource-detail', kind: 'load_failed', locale })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [error])
+  }, [isLoading])
 
   // Sync notes from hook to local state
   useState(() => { setLocalNotes(notes) })
@@ -204,8 +232,9 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
       taskInputRef.current?.focus()
       return
     }
-    await addTask(newTask)
-    setNewTask('')
+    const ok = await addTask(newTask)
+    if (ok) setNewTask('')
+    report(ok, 'taskAdded', 'task_add')
     taskInputRef.current?.focus()
   }
 
@@ -214,10 +243,13 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
       eventInputRef.current?.focus()
       return
     }
-    await addEvent(newEventTitle, newEventDate, newEventTime || undefined)
-    setNewEventTitle('')
-    setNewEventDate('')
-    setNewEventTime('')
+    const ok = await addEvent(newEventTitle, newEventDate, newEventTime || undefined)
+    if (ok) {
+      setNewEventTitle('')
+      setNewEventDate('')
+      setNewEventTime('')
+    }
+    report(ok, 'eventAdded', 'event_add')
     eventInputRef.current?.focus()
   }
 
@@ -225,8 +257,9 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
     const file = e.target.files?.[0]
     if (!file) return
     setIsUploading(true)
-    await uploadDocument(file)
+    const ok = await uploadDocument(file)
     setIsUploading(false)
+    report(ok, 'fileUploaded', 'file_upload')
     if (fileInputRef.current) fileInputRef.current.value = ''
     uploadButtonRef.current?.focus()
   }
@@ -243,7 +276,11 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
 
   const handleSaveNotes = async () => {
     if (localNotes === notes) return
-    await updateNotes(localNotes)
+    const ok = await updateNotes(localNotes)
+    if (!ok) {
+      report(false, 'notesSaved', 'notes_save')
+      return
+    }
     setNotesSaved(true)
     setTimeout(() => setNotesSaved(false), 2000)
   }
@@ -342,13 +379,14 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                   <CheckSquare className="w-4 h-4" aria-hidden="true" /> {t('tasks')}
                 </h3>
                 <div className="border border-stone-200 rounded-xl bg-white p-4 space-y-3">
+                  <Label htmlFor="resource-new-task" className="text-xs text-stone-800">{t('newTask')}</Label>
                   <div className="flex gap-2">
                     <Input
+                      id="resource-new-task"
                       ref={taskInputRef}
                       value={newTask}
                       onChange={(e) => setNewTask(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-                      aria-label={t('newTask')}
                       placeholder={t('addTaskPlaceholder')}
                       lang=""
                       dir="auto"
@@ -366,7 +404,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                         <div key={task.id} className="flex items-center gap-3">
                           <Checkbox
                             checked={task.is_completed ?? false}
-                            onCheckedChange={() => toggleTask(task.id)}
+                            onCheckedChange={async () => { if (!(await toggleTask(task.id))) report(false, 'notesSaved', 'task_toggle') }}
                             aria-labelledby={`task-title-${task.id}`}
                           />
                           <span id={`task-title-${task.id}`} lang="" dir="auto" className={`flex-1 text-sm ${task.is_completed ? 'line-through text-stone-600' : 'text-stone-800'}`}>
@@ -374,7 +412,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                           </span>
                           <button
                             type="button"
-                            onClick={async () => { await deleteTask(task.id); taskInputRef.current?.focus() }}
+                            onClick={async () => { report(await deleteTask(task.id), 'taskDeleted', 'task_delete'); taskInputRef.current?.focus() }}
                             aria-label={t('deleteTask')}
                             aria-describedby={`task-title-${task.id}`}
                             className={iconButton}
@@ -394,31 +432,40 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                   <Calendar className="w-4 h-4" aria-hidden="true" /> {t('schedule')}
                 </h3>
                 <div className="border border-stone-200 rounded-xl bg-white p-4 space-y-3">
-                  <div className="flex gap-2 flex-wrap">
-                    <Input
-                      ref={eventInputRef}
-                      value={newEventTitle}
-                      onChange={(e) => setNewEventTitle(e.target.value)}
-                      aria-label={t('eventTitle')}
-                      placeholder={t('eventTitlePlaceholder')}
-                      lang=""
-                      dir="auto"
-                      className="flex-1 min-w-[150px] border-stone-500 text-stone-900 placeholder:text-stone-600"
-                    />
-                    <input
-                      type="date"
-                      value={newEventDate}
-                      onChange={(e) => setNewEventDate(e.target.value)}
-                      aria-label={t('eventDate')}
-                      className="px-3 py-2 border border-stone-500 rounded-md text-sm text-stone-900 bg-white"
-                    />
-                    <input
-                      type="time"
-                      value={newEventTime}
-                      onChange={(e) => setNewEventTime(e.target.value)}
-                      aria-label={t('eventTime')}
-                      className="px-3 py-2 border border-stone-500 rounded-md text-sm text-stone-900 bg-white"
-                    />
+                  <div className="flex gap-2 flex-wrap items-end">
+                    <div className="flex-1 min-w-[150px] space-y-1">
+                      <Label htmlFor="resource-event-title" className="text-xs text-stone-800">{t('eventTitle')}</Label>
+                      <Input
+                        id="resource-event-title"
+                        ref={eventInputRef}
+                        value={newEventTitle}
+                        onChange={(e) => setNewEventTitle(e.target.value)}
+                        placeholder={t('eventTitlePlaceholder')}
+                        lang=""
+                        dir="auto"
+                        className="border-stone-500 text-stone-900 placeholder:text-stone-600"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="resource-event-date" className="text-xs text-stone-800">{t('eventDate')}</Label>
+                      <input
+                        id="resource-event-date"
+                        type="date"
+                        value={newEventDate}
+                        onChange={(e) => setNewEventDate(e.target.value)}
+                        className="block px-3 py-2 border border-stone-500 rounded-md text-sm text-stone-900 bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="resource-event-time" className="text-xs text-stone-800">{t('eventTime')}</Label>
+                      <input
+                        id="resource-event-time"
+                        type="time"
+                        value={newEventTime}
+                        onChange={(e) => setNewEventTime(e.target.value)}
+                        className="block px-3 py-2 border border-stone-500 rounded-md text-sm text-stone-900 bg-white"
+                      />
+                    </div>
                     <Button size="sm" onClick={handleAddEvent} aria-disabled={eventIncomplete} aria-label={t('addEvent')} className={cn(addButton, eventIncomplete && UNAVAILABLE)}>
                       <Plus className="w-4 h-4" aria-hidden="true" />
                     </Button>
@@ -441,7 +488,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                           <span id={`event-title-${event.id}`} className="flex-1 text-sm text-stone-800" lang="" dir="auto">{event.title}</span>
                           <button
                             type="button"
-                            onClick={async () => { await deleteEvent(event.id); eventInputRef.current?.focus() }}
+                            onClick={async () => { report(await deleteEvent(event.id), 'eventDeleted', 'event_delete'); eventInputRef.current?.focus() }}
                             aria-label={t('deleteEvent')}
                             aria-describedby={`event-title-${event.id}`}
                             className={iconButton}
@@ -508,7 +555,7 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                           </button>
                           <button
                             type="button"
-                            onClick={async () => { await deleteDocument(doc.id); uploadButtonRef.current?.focus() }}
+                            onClick={async () => { report(await deleteDocument(doc.id), 'fileDeleted', 'file_delete'); uploadButtonRef.current?.focus() }}
                             aria-label={t('deleteAttachment')}
                             aria-describedby={`file-name-${doc.id}`}
                             className={iconButton}
@@ -562,12 +609,11 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
         )}
 
         {/* Always mounted, so a new failure is announced; never the database's text. */}
-        <div role="alert" data-testid="resource-detail-alert">
-          {error && (
-            <div className="mx-6 mb-4 bg-red-50 border border-red-300 rounded-lg p-3 text-sm text-red-800">
-              {t('detailFailed')}
-            </div>
-          )}
+        <p role="status" className="sr-only" data-testid="resource-detail-status">
+          <AnnouncementText announcement={status} />
+        </p>
+        <div role="alert" data-testid="resource-detail-alert" className={alert.text ? 'mx-6 mb-4 bg-red-50 border border-red-300 rounded-lg p-3 text-sm text-red-800' : undefined}>
+          <AnnouncementText announcement={alert} />
         </div>
       </DialogContent>
     </Dialog>

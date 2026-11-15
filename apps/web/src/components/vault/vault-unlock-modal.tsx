@@ -62,6 +62,9 @@ export function VaultUnlockModal({
   // A press with something missing: the reason is shown under the field and focus moves there.
   const [hint, setHint] = useState<DocumentsKey | null>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+  // Each failed attempt takes a new number: the alert's node is replaced, so an identical failure
+  // (a second wrong password) is spoken again.
+  const [failSeq, setFailSeq] = useState(0)
   const confirmRef = useRef<HTMLInputElement>(null)
 
   // Determine mode based on setup status
@@ -107,6 +110,7 @@ export function VaultUnlockModal({
       } catch (err) {
         // The context keeps the message; the member reads the translated line. One code-only row.
         logger.warn('error_surface.shown', { surface: 'vault-setup', kind: failureCode(err), locale })
+        setFailSeq((n) => n + 1)
         passwordRef.current?.focus()
       }
     } else {
@@ -121,10 +125,13 @@ export function VaultUnlockModal({
           // (encrypted-upload, documents-panel) close it via onSuccess callback,
           // not via onOpenChange, so they are unaffected.
         } else {
+          // A wrong password: focus stays in the field, the alert says why.
+          setFailSeq((n) => n + 1)
           passwordRef.current?.focus()
         }
       } catch {
         // Error is handled by context
+        setFailSeq((n) => n + 1)
         passwordRef.current?.focus()
       }
     }
@@ -179,7 +186,7 @@ export function VaultUnlockModal({
             {/* Always mounted, so a new failure is announced. */}
             <div role="alert" data-testid="vault-unlock-alert">
               {errorText && (
-                <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errorText}</p>
+                <p key={failSeq} className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errorText}</p>
               )}
             </div>
 
@@ -193,7 +200,8 @@ export function VaultUnlockModal({
                 placeholder={mode === 'setup' ? t('createPasswordPlaceholder') : t('enterPasswordPlaceholder')}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); if (hint !== 'passwordMismatch') setHint(null) }}
-                disabled={loading}
+                readOnly={loading}
+                aria-disabled={loading || undefined}
                 required
                 aria-required="true"
                 aria-invalid={passwordHint ? true : undefined}
@@ -220,7 +228,8 @@ export function VaultUnlockModal({
                   placeholder={t('confirmPasswordPlaceholder')}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={loading}
+                  readOnly={loading}
+                  aria-disabled={loading || undefined}
                   required
                   aria-required="true"
                   aria-invalid={confirmHint ? true : undefined}

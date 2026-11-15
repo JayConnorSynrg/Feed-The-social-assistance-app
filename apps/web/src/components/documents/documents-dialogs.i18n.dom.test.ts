@@ -17,6 +17,9 @@ import { createRoot, type Root } from 'react-dom/client'
 
 const h = vi.hoisted(() => ({
   error: null as string | null,
+  actionOk: true,
+  pdfPages: 0,
+  pdfLoaded: false,
   postsError: null as null | { code: string; message: string },
   unlocked: true,
 }))
@@ -33,8 +36,9 @@ vi.mock('@/hooks/use-resource-detail', () => ({
     events: [{ id: 'e1', title: 'Cita', event_date: '2026-11-20', event_time: '10:30:00' }],
     documents: [{ id: 'f1', file_name: 'carta.pdf', file_path: 'x/y', file_size: 1572864 }],
     notes: 'Traer identificación',
-    addTask: vi.fn(), toggleTask: vi.fn(), deleteTask: vi.fn(), addEvent: vi.fn(), deleteEvent: vi.fn(),
-    uploadDocument: vi.fn(), deleteDocument: vi.fn(), getDocumentUrl: vi.fn(), updateNotes: vi.fn(),
+    addTask: async () => h.actionOk, toggleTask: async () => h.actionOk, deleteTask: async () => h.actionOk,
+    addEvent: async () => h.actionOk, deleteEvent: async () => h.actionOk,
+    uploadDocument: async () => h.actionOk, deleteDocument: async () => h.actionOk, getDocumentUrl: vi.fn(), updateNotes: async () => h.actionOk,
     completedTasks: 0, totalTasks: 1, progress: 0, isLoading: false, error: h.error,
   }),
 }))
@@ -49,7 +53,12 @@ vi.mock('@/lib/supabase/client', () => {
 })
 vi.mock('react-pdf', () => ({
   pdfjs: { GlobalWorkerOptions: {} },
-  Document: ({ onLoadError }: { onLoadError?: (e: Error) => void }) => {
+  Document: ({ onLoadError, onLoadSuccess, children }: { onLoadError?: (e: Error) => void; onLoadSuccess?: (d: { numPages: number }) => void; children?: unknown }) => {
+    if (h.pdfPages) {
+      // react-pdf reports a load once per document.
+      if (!h.pdfLoaded) { h.pdfLoaded = true; queueMicrotask(() => onLoadSuccess?.({ numPages: h.pdfPages })) }
+      return children ?? null
+    }
     onLoadError?.(new Error('InvalidPDFException: Invalid PDF structure at offset 1024'))
     return null
   },
@@ -84,6 +93,9 @@ Blob.prototype.arrayBuffer ??= function (this: Blob) {
 
 beforeEach(() => {
   h.error = null
+  h.actionOk = true
+  h.pdfPages = 0
+  h.pdfLoaded = false
   h.postsError = null
   h.unlocked = true
   vi.mocked(logger.warn).mockClear()
@@ -153,7 +165,7 @@ describe('a saved resource’s detail dialog', () => {
     expect(dialog().textContent).toContain(documentsT('ko', 'postsFailed'))
     expect(document.body.textContent).not.toMatch(/duplicate key|permission denied/)
     expect(vi.mocked(logger.warn).mock.calls).toEqual([
-      ['error_surface.shown', { surface: 'resource-detail', kind: 'action_failed', locale: 'ko' }],
+      ['error_surface.shown', { surface: 'resource-detail', kind: 'load_failed', locale: 'ko' }],
       ['error_surface.shown', { surface: 'resource-posts', kind: '42501', locale: 'ko' }],
     ])
   })
@@ -183,3 +195,93 @@ describe('the vault guard', () => {
     expect(container.textContent).not.toContain('secret')
   })
 })
+
+// ── PR #259 fix round ────────────────────────────────────────────────────────────────────────
+const typeIn = async (input: HTMLInputElement, value: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+const watchRegion = (region: Element) => {
+  const inserted: string[] = []
+  const o = new MutationObserver((rs) => { for (const r of rs) for (const n of r.addedNodes) inserted.push(n.textContent ?? '') })
+  o.observe(region, { childList: true, subtree: true })
+  return { inserted, stop: () => o.disconnect() }
+}
+
+describe('fix round: the detail dialog', () => {
+  it('H3: the task and date inputs have visible, persistent labels', async () => {
+    await render('ko', detail())
+    for (const [id, key] of [['resource-new-task', 'newTask'], ['resource-event-title', 'eventTitle'], ['resource-event-date', 'eventDate'], ['resource-event-time', 'eventTime']] as const) {
+      const label = document.querySelector(`label[for="${id}"]`)
+      expect(label?.textContent, id).toBe(documentsT('ko', key))
+      expect(label?.classList.contains('sr-only'), id).toBe(false)
+      expect(document.getElementById(id)?.getAttribute('aria-label'), id).toBeNull()
+    }
+  })
+
+  it('H1: adding and deleting a task, a date and a file are each said once in the status line', async () => {
+    await render('ko', detail())
+    const status = document.querySelector('[data-testid="resource-detail-status"]')!
+    const w = watchRegion(status)
+    await typeIn(document.getElementById('resource-new-task') as HTMLInputElement, 'Llevar recibos')
+    await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'addTask')}"]`) as HTMLButtonElement).click())
+    await settle()
+    await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'deleteTask')}"]`) as HTMLButtonElement).click())
+    await settle()
+    await typeIn(document.getElementById('resource-event-title') as HTMLInputElement, 'Cita')
+    await typeIn(document.getElementById('resource-event-date') as HTMLInputElement, '2026-11-30')
+    await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'addEvent')}"]`) as HTMLButtonElement).click())
+    await settle()
+    await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'deleteEvent')}"]`) as HTMLButtonElement).click())
+    await settle()
+    const file = dialog().querySelector('input[type="file"]') as HTMLInputElement
+    Object.defineProperty(file, 'files', { value: [new File(['x'], 'carta.pdf')], configurable: true })
+    await act(async () => file.dispatchEvent(new Event('change', { bubbles: true })))
+    await settle()
+    await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'deleteAttachment')}"]`) as HTMLButtonElement).click())
+    await settle()
+    w.stop()
+    expect(w.inserted).toEqual(['taskAdded', 'taskDeleted', 'eventAdded', 'eventDeleted', 'fileUploaded', 'fileDeleted'].map((k) => documentsT('ko', k as never)))
+  })
+
+  it('L2: the same failed action twice is said twice, with one code-only row each', async () => {
+    h.actionOk = false
+    await render('ko', detail())
+    const w = watchRegion(document.querySelector('[data-testid="resource-detail-alert"]')!)
+    for (let i = 0; i < 2; i++) {
+      await act(async () => (dialog().querySelector(`button[aria-label="${documentsT('ko', 'deleteTask')}"]`) as HTMLButtonElement).click())
+      await settle()
+    }
+    w.stop()
+    expect(w.inserted).toEqual([documentsT('ko', 'detailFailed'), documentsT('ko', 'detailFailed')])
+    expect(vi.mocked(logger.warn).mock.calls).toEqual([
+      ['error_surface.shown', { surface: 'resource-detail', kind: 'task_delete', locale: 'ko' }],
+      ['error_surface.shown', { surface: 'resource-detail', kind: 'task_delete', locale: 'ko' }],
+    ])
+  })
+})
+
+describe('fix round: the viewer', () => {
+  it('L8: Next and Previous scroll to that page and say which page it is', async () => {
+    h.pdfPages = 3
+    const scrolled: string[] = []
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this.getAttribute('data-page') ?? '') }
+    const file = new File(['%PDF'], 'tres.pdf', { type: 'application/pdf' })
+    await render('ko', el(PdfDocumentViewer, { open: true, onOpenChange: vi.fn(), file }))
+    await settle()
+    const status = document.querySelector('[data-testid="document-viewer-status"]')!
+    const next = document.querySelector(`button[aria-label="${documentsT('ko', 'nextPage')}"]`) as HTMLButtonElement
+    await act(async () => next.click())
+    await act(async () => next.click())
+    await act(async () => next.click())
+    const prev = document.querySelector(`button[aria-label="${documentsT('ko', 'previousPage')}"]`) as HTMLButtonElement
+    await act(async () => prev.click())
+    expect(scrolled).toEqual(['2', '3', '2'])
+    expect(status.textContent).toBe('3페이지 중 2페이지')
+    expect(next.getAttribute('aria-disabled')).toBe('false')
+    expect(document.querySelector('[data-testid="document-viewer-alert"]')?.getAttribute('role')).toBe('alert')
+  })
+})
+

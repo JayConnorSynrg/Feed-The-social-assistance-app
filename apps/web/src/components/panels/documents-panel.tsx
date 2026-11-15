@@ -298,7 +298,7 @@ function FolderChoice({ activeCategory, onCategoryChange, documentCounts, locale
               <config.icon className="w-4 h-4" aria-hidden="true" />
             )}
             <span className={sidebar ? 'flex-1 text-sm font-medium' : undefined}>{documentCategoryLabel(category, locale)}</span>
-            <span className={cn('px-1.5 py-0.5 rounded-full text-xs font-medium', isActive ? 'bg-white/20 text-white' : 'bg-stone-200 text-stone-800')}>
+            <span className={cn('px-1.5 py-0.5 rounded-full text-xs font-medium', isActive ? 'bg-black/20 text-white' : 'bg-stone-200 text-stone-800')}>
               {formatCount(count, locale)}
             </span>
             {sidebar && isActive && <ChevronRight className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />}
@@ -325,7 +325,7 @@ interface DocumentCardProps {
   isDownloading?: boolean
 }
 
-export function DocumentCard({ document, locale, onView, onDownload, onEdit, onDelete, onRename, onMove, menuTriggerRef, isDownloading = false }: DocumentCardProps) {
+function DocumentCard({ document, locale, onView, onDownload, onEdit, onDelete, onRename, onMove, menuTriggerRef, isDownloading = false }: DocumentCardProps) {
   const t = (key: DocumentsKey) => documentsT(locale, key)
   const titleId = `doc-title-${document.id}`
 
@@ -513,7 +513,7 @@ interface RenameDialogProps {
   returnFocus: () => HTMLElement | null | undefined
 }
 
-export function RenameDocumentDialog({ doc, locale, onClose, onSubmit, returnFocus }: RenameDialogProps) {
+function RenameDocumentDialog({ doc, locale, onClose, onSubmit, returnFocus }: RenameDialogProps) {
   const t = (key: DocumentsKey) => documentsT(locale, key)
   const [draft, setDraft] = useState(doc?.name ?? '')
   const [busy, setBusy] = useState(false)
@@ -618,7 +618,7 @@ interface DeleteDialogProps {
   returnFocus: () => HTMLElement | null | undefined
 }
 
-export function DeleteDocumentDialog({ doc, locale, onClose, onConfirm, returnFocus }: DeleteDialogProps) {
+function DeleteDocumentDialog({ doc, locale, onClose, onConfirm, returnFocus }: DeleteDialogProps) {
   const t = (key: DocumentsKey) => documentsT(locale, key)
   const [busy, setBusy] = useState(false)
   const inFlight = useRef(false)
@@ -739,7 +739,14 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
   const [renameDoc, setRenameDoc] = useState<Document | null>(null)
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null)
   // The panel's own failure line (load, open, move, delete); the hook's line is read as a code.
-  const [panelError, setPanelError] = useState<DocumentsKey | null>(null)
+  const [panelError, setPanelErrorKey] = useState<DocumentsKey | null>(null)
+  // Each failure takes a new number: the alert's node is replaced, so an identical failure is
+  // spoken again.
+  const [failSeq, setFailSeq] = useState(0)
+  const setPanelError = useCallback((key: DocumentsKey | null) => {
+    setPanelErrorKey(key)
+    if (key) setFailSeq((n) => n + 1)
+  }, [])
   const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   // Ref for the EncryptedUpload zone so the empty-state button can move to it
   const uploadZoneRef = useRef<HTMLDivElement>(null)
@@ -929,7 +936,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [downloadFile, downloadForEdit])
+  }, [downloadFile, downloadForEdit, setPanelError])
 
   const handleDownload = useCallback(async (doc: Document) => {
     if (!isUnlockedRef.current) {
@@ -975,7 +982,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [downloadFile, downloadForEdit])
+  }, [downloadFile, downloadForEdit, setPanelError])
 
   const handleEdit = useCallback(async (doc: Document) => {
     if (!isUnlockedRef.current) {
@@ -1003,7 +1010,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
     } finally {
       setDownloadingId(null)
     }
-  }, [downloadForEdit])
+  }, [downloadForEdit, setPanelError])
 
   // Autofill values — derived from public profile + vault profile.
   // Recomputed whenever any source changes; passed to PdfAnnotator.
@@ -1110,9 +1117,12 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
         setDocuments(rows.map(mapDocumentRow))
       }
     }
-    // Back on the list: focus the edited document's menu button, else the heading.
+    // Back on the list: focus the edited document's menu button, else the heading; the save is
+    // said once in the status line.
     focusAfter(() => menuTriggers.current.get(savedId), () => headingRef.current)
-  }, [editingDoc, updateAnnotations, user?.id])
+    afterLayout(() => announce(setStatus, t('annotationsSaved')))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingDoc, updateAnnotations, user?.id, locale])
 
   const handleEditCancel = useCallback(() => {
     const id = editingDoc?.id
@@ -1285,7 +1295,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
       {/* The failure line: always mounted, so each new failure is announced. */}
       <div role="alert" data-testid="documents-alert">
         {errorText && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800" data-testid="doc-download-error">
+          <div key={failSeq} className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800" data-testid="doc-download-error">
             <span>{errorText}</span>
             <button type="button" onClick={dismissError} className="shrink-0 min-h-6 px-2 text-sm font-medium underline">
               {t('dismiss')}
@@ -1304,7 +1314,7 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
           tabIndex={0}
           className="flex-1 min-h-0"
         >
-          <FormsPanel />
+          <FormsPanel onPdfSaved={() => afterLayout(() => announce(setStatus, t('pdfSaved')))} />
         </div>
       ) : viewMode === 'documents' ? (
         <div
@@ -1356,7 +1366,8 @@ export function DocumentsPanel({ userId }: DocumentsPanelProps) {
                   searchQuery={searchQuery}
                   locale={locale}
                   onUploadClick={() => {
-                    uploadZoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                    uploadZoneRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
                     uploadZoneRef.current?.querySelector<HTMLElement>('input[type="file"], button')?.focus({ preventScroll: true })
                   }}
                 />

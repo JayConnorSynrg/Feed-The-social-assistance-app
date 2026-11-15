@@ -2089,7 +2089,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `vaultLocked` | ht | Vault Locked | Kòf la fèmen | 2026-11-15 | machine-drafted, needs native review |
 | `vaultLockedBody` | ht | Unlock your vault to upload encrypted documents | Debloke kòf ou pou voye dokiman chifre | 2026-11-15 | machine-drafted, needs native review |
 | `unlockVault` | ht | Unlock Vault | Debloke kòf la | 2026-11-15 | machine-drafted, needs native review |
-| `chooseFile` | ht | Choose a document to upload | Chwazi yon dokiman pou voye | 2026-11-15 | machine-drafted, needs native review |
 | `dropHere` | ht | Drop file here | Lage fichye a isit la | 2026-11-15 | machine-drafted, needs native review |
 | `uploadTitle` | ht | Upload Encrypted Document | Voye yon dokiman chifre | 2026-11-15 | machine-drafted, needs native review |
 | `uploadHint` | ht | Drag and drop or click to browse. Files are encrypted before upload. | Trennen epi lage oswa klike pou chèche. Fichye yo chifre anvan yo voye yo. | 2026-11-15 | machine-drafted, needs native review |
@@ -2175,6 +2174,14 @@ step in that test, and the test fails until the list below is regenerated.
 | `postsFailed` | ht | We couldn’t load community posts. | Nou pa t ka chaje piblikasyon kominote a. | 2026-11-15 | machine-drafted, needs native review |
 | `communityMember` | ht | Community Member | Manm kominote a | 2026-11-15 | machine-drafted, needs native review |
 | `detailFailed` | ht | Something went wrong. Please try again. | Gen yon bagay ki pa mache. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `annotationsSaved` | ht | Changes saved. | Chanjman yo sere. | 2026-11-15 | machine-drafted, needs native review |
+| `pdfSaved` | ht | PDF saved to My Documents. | PDF la sere nan Dokiman mwen yo. | 2026-11-15 | machine-drafted, needs native review |
+| `taskAdded` | ht | Task added. | Travay la ajoute. | 2026-11-15 | machine-drafted, needs native review |
+| `taskDeleted` | ht | Task deleted. | Travay la efase. | 2026-11-15 | machine-drafted, needs native review |
+| `eventAdded` | ht | Date added. | Dat la ajoute. | 2026-11-15 | machine-drafted, needs native review |
+| `eventDeleted` | ht | Date deleted. | Dat la efase. | 2026-11-15 | machine-drafted, needs native review |
+| `fileUploaded` | ht | File uploaded. | Fichye a voye. | 2026-11-15 | machine-drafted, needs native review |
+| `fileDeleted` | ht | File deleted. | Fichye a efase. | 2026-11-15 | machine-drafted, needs native review |
 | `sectionsLabel` | so | Documents & Forms sections | Qaybaha Dukumentiyada iyo foomamka | 2026-11-15 | machine-drafted, needs native review |
 | `tabDocuments` | so | My Documents | Dukumentiyadayda | 2026-11-15 | machine-drafted, needs native review |
 | `tabApplications` | so | Applications | Codsiyada | 2026-11-15 | machine-drafted, needs native review |
@@ -2241,7 +2248,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `vaultLocked` | so | Vault Locked | Khasnadda waa xiran tahay | 2026-11-15 | machine-drafted, needs native review |
 | `vaultLockedBody` | so | Unlock your vault to upload encrypted documents | Fur khasnaddaada si aad u soo geliso dukumentiyo la sireeyay | 2026-11-15 | machine-drafted, needs native review |
 | `unlockVault` | so | Unlock Vault | Fur khasnadda | 2026-11-15 | machine-drafted, needs native review |
-| `chooseFile` | so | Choose a document to upload | Dooro dukumenti aad soo gelinayso | 2026-11-15 | machine-drafted, needs native review |
 | `dropHere` | so | Drop file here | Halkan ku dhig faylka | 2026-11-15 | machine-drafted, needs native review |
 | `uploadTitle` | so | Upload Encrypted Document | Soo geli dukumenti la sireeyay | 2026-11-15 | machine-drafted, needs native review |
 | `uploadHint` | so | Drag and drop or click to browse. Files are encrypted before upload. | Jiid oo dhig ama guji si aad u raadiso. Faylasha waa la sireeyaa ka hor inta aan la soo gelin. | 2026-11-15 | machine-drafted, needs native review |
@@ -2327,6 +2333,14 @@ step in that test, and the test fails until the list below is regenerated.
 | `postsFailed` | so | We couldn’t load community posts. | Ma aanan soo rari karin qoraallada bulshada. | 2026-11-15 | machine-drafted, needs native review |
 | `communityMember` | so | Community Member | Xubin bulshada ka mid ah | 2026-11-15 | machine-drafted, needs native review |
 | `detailFailed` | so | Something went wrong. Please try again. | Wax ayaa qaldamay. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `annotationsSaved` | so | Changes saved. | Isbeddellada waa la kaydiyay. | 2026-11-15 | machine-drafted, needs native review |
+| `pdfSaved` | so | PDF saved to My Documents. | PDF-ka waxaa lagu kaydiyay Dukumentiyadayda. | 2026-11-15 | machine-drafted, needs native review |
+| `taskAdded` | so | Task added. | Hawsha waa la daray. | 2026-11-15 | machine-drafted, needs native review |
+| `taskDeleted` | so | Task deleted. | Hawsha waa la tirtiray. | 2026-11-15 | machine-drafted, needs native review |
+| `eventAdded` | so | Date added. | Taariikhda waa la daray. | 2026-11-15 | machine-drafted, needs native review |
+| `eventDeleted` | so | Date deleted. | Taariikhda waa la tirtiray. | 2026-11-15 | machine-drafted, needs native review |
+| `fileUploaded` | so | File uploaded. | Faylka waa la soo geliyay. | 2026-11-15 | machine-drafted, needs native review |
+| `fileDeleted` | so | File deleted. | Faylka waa la tirtiray. | 2026-11-15 | machine-drafted, needs native review |
 | `sectionsLabel` | am | Documents & Forms sections | የሰነዶች እና ቅጾች ክፍሎች | 2026-11-15 | machine-drafted, needs native review |
 | `tabDocuments` | am | My Documents | ሰነዶቼ | 2026-11-15 | machine-drafted, needs native review |
 | `tabApplications` | am | Applications | ማመልከቻዎች | 2026-11-15 | machine-drafted, needs native review |
@@ -2393,7 +2407,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `vaultLocked` | am | Vault Locked | ካዝናው ተቆልፏል | 2026-11-15 | machine-drafted, needs native review |
 | `vaultLockedBody` | am | Unlock your vault to upload encrypted documents | የተመሰጠሩ ሰነዶችን ለመስቀል ካዝናዎን ይክፈቱ | 2026-11-15 | machine-drafted, needs native review |
 | `unlockVault` | am | Unlock Vault | ካዝናውን ክፈት | 2026-11-15 | machine-drafted, needs native review |
-| `chooseFile` | am | Choose a document to upload | የሚሰቀል ሰነድ ይምረጡ | 2026-11-15 | machine-drafted, needs native review |
 | `dropHere` | am | Drop file here | ፋይሉን እዚህ ይጣሉ | 2026-11-15 | machine-drafted, needs native review |
 | `uploadTitle` | am | Upload Encrypted Document | የተመሰጠረ ሰነድ ስቀል | 2026-11-15 | machine-drafted, needs native review |
 | `uploadHint` | am | Drag and drop or click to browse. Files are encrypted before upload. | ጎትተው ይጣሉ ወይም ለማሰስ ጠቅ ያድርጉ። ፋይሎች ከመሰቀላቸው በፊት ይመሰጠራሉ። | 2026-11-15 | machine-drafted, needs native review |
@@ -2479,6 +2492,14 @@ step in that test, and the test fails until the list below is regenerated.
 | `postsFailed` | am | We couldn’t load community posts. | የማህበረሰብ ልጥፎችን መጫን አልቻልንም። | 2026-11-15 | machine-drafted, needs native review |
 | `communityMember` | am | Community Member | የማህበረሰብ አባል | 2026-11-15 | machine-drafted, needs native review |
 | `detailFailed` | am | Something went wrong. Please try again. | የሆነ ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `annotationsSaved` | am | Changes saved. | ለውጦቹ ተቀምጠዋል። | 2026-11-15 | machine-drafted, needs native review |
+| `pdfSaved` | am | PDF saved to My Documents. | PDF በሰነዶቼ ውስጥ ተቀምጧል። | 2026-11-15 | machine-drafted, needs native review |
+| `taskAdded` | am | Task added. | ተግባሩ ታክሏል። | 2026-11-15 | machine-drafted, needs native review |
+| `taskDeleted` | am | Task deleted. | ተግባሩ ተሰርዟል። | 2026-11-15 | machine-drafted, needs native review |
+| `eventAdded` | am | Date added. | ቀኑ ታክሏል። | 2026-11-15 | machine-drafted, needs native review |
+| `eventDeleted` | am | Date deleted. | ቀኑ ተሰርዟል። | 2026-11-15 | machine-drafted, needs native review |
+| `fileUploaded` | am | File uploaded. | ፋይሉ ተሰቅሏል። | 2026-11-15 | machine-drafted, needs native review |
+| `fileDeleted` | am | File deleted. | ፋይሉ ተሰርዟል። | 2026-11-15 | machine-drafted, needs native review |
 | `sectionsLabel` | hmn | Documents & Forms sections | Cov ntu Ntaub ntawv thiab daim foos | 2026-11-15 | machine-drafted, needs native review |
 | `tabDocuments` | hmn | My Documents | Kuv cov ntaub ntawv | 2026-11-15 | machine-drafted, needs native review |
 | `tabApplications` | hmn | Applications | Cov ntawv thov | 2026-11-15 | machine-drafted, needs native review |
@@ -2545,7 +2566,6 @@ step in that test, and the test fails until the list below is regenerated.
 | `vaultLocked` | hmn | Vault Locked | Lub thawv xauv kaw lawm | 2026-11-15 | machine-drafted, needs native review |
 | `vaultLockedBody` | hmn | Unlock your vault to upload encrypted documents | Qhib koj lub thawv xauv kom xa tau ntaub ntawv uas muab zais | 2026-11-15 | machine-drafted, needs native review |
 | `unlockVault` | hmn | Unlock Vault | Qhib lub thawv xauv | 2026-11-15 | machine-drafted, needs native review |
-| `chooseFile` | hmn | Choose a document to upload | Xaiv ib daim ntaub ntawv los xa | 2026-11-15 | machine-drafted, needs native review |
 | `dropHere` | hmn | Drop file here | Muab cov ntaub ntawv tso rau ntawm no | 2026-11-15 | machine-drafted, needs native review |
 | `uploadTitle` | hmn | Upload Encrypted Document | Xa ntaub ntawv uas muab zais | 2026-11-15 | machine-drafted, needs native review |
 | `uploadHint` | hmn | Drag and drop or click to browse. Files are encrypted before upload. | Rub thiab tso lossis nias los nrhiav. Cov ntaub ntawv raug muab zais ua ntej xa. | 2026-11-15 | machine-drafted, needs native review |
@@ -2631,6 +2651,14 @@ step in that test, and the test fails until the list below is regenerated.
 | `postsFailed` | hmn | We couldn’t load community posts. | Peb thauj tsis tau cov lus tshaj tawm ntawm zej zog. | 2026-11-15 | machine-drafted, needs native review |
 | `communityMember` | hmn | Community Member | Tswv cuab hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
 | `detailFailed` | hmn | Something went wrong. Please try again. | Muaj ib yam tsis raug. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `annotationsSaved` | hmn | Changes saved. | Khaws cov kev hloov lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `pdfSaved` | hmn | PDF saved to My Documents. | Khaws daim PDF rau hauv Kuv cov ntaub ntawv lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `taskAdded` | hmn | Task added. | Ntxiv txoj hauj lwm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `taskDeleted` | hmn | Task deleted. | Rho txoj hauj lwm tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `eventAdded` | hmn | Date added. | Ntxiv hnub lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `eventDeleted` | hmn | Date deleted. | Rho hnub tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `fileUploaded` | hmn | File uploaded. | Xa daim ntaub ntawv lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `fileDeleted` | hmn | File deleted. | Rho daim ntaub ntawv tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `DOCUMENTS_FILE_COUNT.other` | ht | {n} files | {n} fichye | 2026-11-15 | machine-drafted, needs native review |
 | `DOCUMENTS_FILE_COUNT.one` | so | {n} file | {n} fayl | 2026-11-15 | machine-drafted, needs native review |
 | `DOCUMENTS_FILE_COUNT.other` | so | {n} files | {n} fayl | 2026-11-15 | machine-drafted, needs native review |
@@ -4104,6 +4132,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `renderingPages` | ht | Rendering pages... | N ap montre paj yo... | 2026-11-15 | machine-drafted, needs native review |
 | `removeTextBox` | ht | Remove text box | Retire bwat tèks la | 2026-11-15 | machine-drafted, needs native review |
 | `pageLabel` | ht | Page {n} | Paj {n} | 2026-11-15 | machine-drafted, needs native review |
+| `applicationSubmitted` | ht | Application submitted. | Demann lan voye. | 2026-11-15 | machine-drafted, needs native review |
+| `draftSaveFailed` | ht | We couldn’t save your answers. They are still here; please try again. | Nou pa t ka sere repons ou yo. Yo toujou la; tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `notAnswered` | ht | Not answered | Pa reponn | 2026-11-15 | machine-drafted, needs native review |
+| `statusExpired` | ht | Expired | Ekspire | 2026-11-15 | machine-drafted, needs native review |
 | `title` | so | Forms & Applications | Foomamka iyo codsiyada | 2026-11-15 | machine-drafted, needs native review |
 | `subtitle` | so | Apply for benefits, assistance programs, and community resources. | Codso gargaar, barnaamijyo caawimo iyo kheyraadka bulshada. | 2026-11-15 | machine-drafted, needs native review |
 | `fillPdf` | so | Fill PDF Form | Buuxi foom PDF ah | 2026-11-15 | machine-drafted, needs native review |
@@ -4207,6 +4239,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `renderingPages` | so | Rendering pages... | Bogagga ayaa la muujinayaa... | 2026-11-15 | machine-drafted, needs native review |
 | `removeTextBox` | so | Remove text box | Ka saar sanduuqa qoraalka | 2026-11-15 | machine-drafted, needs native review |
 | `pageLabel` | so | Page {n} | Bogga {n} | 2026-11-15 | machine-drafted, needs native review |
+| `applicationSubmitted` | so | Application submitted. | Codsiga waa la diray. | 2026-11-15 | machine-drafted, needs native review |
+| `draftSaveFailed` | so | We couldn’t save your answers. They are still here; please try again. | Ma aanan kaydin karin jawaabahaaga. Weli halkan bay yaallaan; fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `notAnswered` | so | Not answered | Lama jawaabin | 2026-11-15 | machine-drafted, needs native review |
+| `statusExpired` | so | Expired | Wakhtigiisu wuu dhacay | 2026-11-15 | machine-drafted, needs native review |
 | `title` | am | Forms & Applications | ቅጾች እና ማመልከቻዎች | 2026-11-15 | machine-drafted, needs native review |
 | `subtitle` | am | Apply for benefits, assistance programs, and community resources. | ለጥቅማ ጥቅሞች፣ ለድጋፍ ፕሮግራሞች እና ለማህበረሰብ ግብዓቶች ያመልክቱ። | 2026-11-15 | machine-drafted, needs native review |
 | `fillPdf` | am | Fill PDF Form | የPDF ቅጽ ሙላ | 2026-11-15 | machine-drafted, needs native review |
@@ -4310,6 +4346,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `renderingPages` | am | Rendering pages... | ገጾቹ እየታዩ ነው... | 2026-11-15 | machine-drafted, needs native review |
 | `removeTextBox` | am | Remove text box | የጽሑፍ ሳጥኑን አስወግድ | 2026-11-15 | machine-drafted, needs native review |
 | `pageLabel` | am | Page {n} | ገጽ {n} | 2026-11-15 | machine-drafted, needs native review |
+| `applicationSubmitted` | am | Application submitted. | ማመልከቻው ተልኳል። | 2026-11-15 | machine-drafted, needs native review |
+| `draftSaveFailed` | am | We couldn’t save your answers. They are still here; please try again. | መልሶችዎን ማስቀመጥ አልቻልንም። አሁንም እዚህ አሉ፤ እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `notAnswered` | am | Not answered | አልተመለሰም | 2026-11-15 | machine-drafted, needs native review |
+| `statusExpired` | am | Expired | ጊዜው አልፏል | 2026-11-15 | machine-drafted, needs native review |
 | `title` | hmn | Forms & Applications | Cov foos thiab ntawv thov | 2026-11-15 | machine-drafted, needs native review |
 | `subtitle` | hmn | Apply for benefits, assistance programs, and community resources. | Thov cov txiaj ntsim, kev pab cuam thiab kev pab hauv zej zog. | 2026-11-15 | machine-drafted, needs native review |
 | `fillPdf` | hmn | Fill PDF Form | Sau daim foos PDF | 2026-11-15 | machine-drafted, needs native review |
@@ -4413,6 +4453,10 @@ step in that test, and the test fails until the list below is regenerated.
 | `renderingPages` | hmn | Rendering pages... | Tab tom qhia cov nplooj ntawv... | 2026-11-15 | machine-drafted, needs native review |
 | `removeTextBox` | hmn | Remove text box | Tshem lub thawv ntawv | 2026-11-15 | machine-drafted, needs native review |
 | `pageLabel` | hmn | Page {n} | Nplooj {n} | 2026-11-15 | machine-drafted, needs native review |
+| `applicationSubmitted` | hmn | Application submitted. | Xa daim ntawv thov lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `draftSaveFailed` | hmn | We couldn’t save your answers. They are still here; please try again. | Peb khaws tsis tau koj cov lus teb. Lawv tseem nyob ntawm no; thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `notAnswered` | hmn | Not answered | Tsis tau teb | 2026-11-15 | machine-drafted, needs native review |
+| `statusExpired` | hmn | Expired | Tas sij hawm lawm | 2026-11-15 | machine-drafted, needs native review |
 | `FORMS_MORE_DOCUMENTS.other` | ht | +{n} more documents | +{n} lòt dokiman | 2026-11-15 | machine-drafted, needs native review |
 | `FORMS_MORE_DOCUMENTS.one` | so | +{n} more document | +{n} dukumenti oo kale | 2026-11-15 | machine-drafted, needs native review |
 | `FORMS_MORE_DOCUMENTS.other` | so | +{n} more documents | +{n} dukumenti oo kale | 2026-11-15 | machine-drafted, needs native review |

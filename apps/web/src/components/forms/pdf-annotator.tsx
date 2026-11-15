@@ -523,7 +523,12 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
   // The failure line's key (never the text pdf.js, pdf-lib or the server wrote).
   const [saveError, setSaveError] = useState<FormsKey | null>(null)
   const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  // Each failure takes a new number: the alert's node is replaced, so a repeat is spoken again.
+  const [failSeq, setFailSeq] = useState(0)
   const sizeRefs = useRef<(HTMLButtonElement | null)[]>([])
+  // Once the PDF has loaded, focus starts on the first tool (the control that opened the
+  // annotator has gone). A stable callback ref: it runs once, when the toolbar mounts.
+  const focusOnMount = useCallback((node: HTMLButtonElement | null) => { node?.focus() }, [])
   const [isFilling, setIsFilling] = useState(false)
   const [fillResult, setFillResult] = useState<{ filled: number; total: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -566,11 +571,13 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
   const handleDocumentLoadError = useCallback((err: Error) => {
     logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
     setSaveError('renderFailed')
+    setFailSeq((n) => n + 1)
   }, [pdfBytes?.length])
 
   const handlePageLoadError = useCallback((err: Error) => {
     logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
     setSaveError('renderFailed')
+    setFailSeq((n) => n + 1)
   }, [pdfBytes?.length])
 
   const handleSave = useCallback(async () => {
@@ -583,6 +590,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
       await onSave(result)
     } catch {
       setSaveError('saveFailed')
+      setFailSeq((n) => n + 1)
     }
   }, [annotations.length, savePdf, scale, onSave, isSaving])
 
@@ -644,6 +652,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
     } catch (err) {
       logger.error('pdf.autofill.error', err)
       setSaveError('fillFailed')
+      setFailSeq((n) => n + 1)
     } finally {
       setIsFilling(false)
     }
@@ -689,6 +698,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
       </p>
       <div role="toolbar" aria-label={t('toolbarLabel')} className="flex items-center gap-2 px-4 py-3 bg-stone-100 border-b border-stone-300 flex-wrap">
         <Button
+          ref={focusOnMount}
           size="sm"
           variant={isPlacementMode ? 'default' : 'outline'}
           onClick={() => setIsPlacementMode(prev => !prev)}
@@ -719,9 +729,10 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
               <Wand2 className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
             )}
             {t('fillFromProfile')}
-            <span id="pdf-fill-hint" className="sr-only">{t('fillFromProfileHint')}</span>
           </Button>
         )}
+        {/* The button's description, outside it, so it is read once (not as part of its name). */}
+        {autofillValues && <span id="pdf-fill-hint" className="sr-only">{t('fillFromProfileHint')}</span>}
 
         <div className="flex items-center gap-1">
           <span className="text-xs text-stone-700 me-1" id="pdf-text-size-label">{t('textSize')}</span>
@@ -761,7 +772,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
         )}
 
         <span role="alert" className="text-xs text-red-700" data-testid="pdf-annotator-alert">
-          {saveError ? t(saveError) : ''}
+          {saveError ? <span key={failSeq}>{t(saveError)}</span> : null}
         </span>
 
         <Button

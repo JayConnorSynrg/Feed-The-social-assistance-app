@@ -1020,8 +1020,11 @@
       "branch": "feature/feed-p6-w9-documents-forms",
       "base": "origin/develop 56ca3dd",
       "migration": null,
-      "note": "P6 translations wave 9: Documents & Forms chrome in 14 locales (tabs, My Documents, folders, card actions, rename/move/delete as Radix dialogs, upload zone, vault prompts, viewer, saved-resource detail, Applications hub, wizard chrome, signature UI, annotator toolbar). SNAP/Medicaid official text unchanged and marked English via lib/official-english.ts (282 rendered strings, 228 unique; owner decision pending). No hook/crypto/payload change; en vs ko outbound identical (tests). Translated failures; code-only error_surface.shown only where no row existed. Always-mounted status/alert lines, focus never dropped, aria-disabled, required+aria-required, UGC lang=\"\" dir=\"auto\", APG radio groups, RTL arrows. Dictionaries lib/i18n-documents.ts (152 + 1 count table), lib/i18n-forms.ts (103 + 2 count tables); 1,038 native-review rows. 23 mutants red.",
-      "pr": 259
+      "note": "P6 translations wave 9: Documents & Forms chrome in 14 locales (tabs, My Documents, folders, card actions, rename/move/delete as Radix dialogs, upload zone, vault prompts, viewer, saved-resource detail, Applications hub, wizard chrome, signature UI, annotator toolbar). SNAP/Medicaid official text unchanged and marked English via lib/official-english.ts (282 rendered strings, 228 unique; owner decision pending). No hook/crypto/payload change; en vs ko outbound identical (tests). Translated failures; code-only error_surface.shown only where no row existed. Always-mounted status/alert lines, focus never dropped, aria-disabled, required+aria-required, UGC lang=\"\" dir=\"auto\", APG radio groups, RTL arrows. Dictionaries lib/i18n-documents.ts (152 + 1 count table), lib/i18n-forms.ts (103 + 2 count tables); 1,038 native-review rows. 23 mutants red. Fix round (on bed85c3): spinner on first load only, submitted announced + focus to Submitted; wizard focus waits for the draft; annotator focuses its first tool; vault fields readOnly while busy, wrong password keeps focus; autocomplete tokens; upload named by its title; --primary #4a5d23 / --destructive red-700 app-wide (contrast test); results announced (annotations, PDF save, detail actions, failed draft save); Review shows unanswered required fields; visible date/task labels; keyed alerts; live submission_status enum. 21 mutants red. Follow-up I1: annotator keyboard placement/move/resize (dedicated PR).",
+      "pr": 259,
+      "followUps": [
+        "I1: PDF annotator text boxes \u2014 keyboard placement, move and resize (dedicated PR)"
+      ]
     }
   }
 }

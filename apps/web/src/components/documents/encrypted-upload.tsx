@@ -43,6 +43,8 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
   const [isDragging, setIsDragging] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  // Each failed upload takes a new number: the alert's node is replaced and spoken again.
+  const [failSeq, setFailSeq] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadButtonRef = useRef<HTMLButtonElement>(null)
   const inFlight = useRef(false)
@@ -128,6 +130,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
       }, 3000)
     } catch {
       // document.upload.error is written by the hook; the alert line shows the translated failure.
+      setFailSeq((n) => n + 1)
       afterLayout(() => uploadButtonRef.current?.focus())
     } finally {
       inFlight.current = false
@@ -226,7 +229,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
           onChange={handleFileSelect}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           accept=".pdf,.jpg,.jpeg,.png,.webp"
-          aria-label={t('chooseFile')}
+          aria-label={t('uploadTitle')}
           aria-describedby="encrypted-upload-hint"
           disabled={isUploading}
           data-testid="encrypted-upload-input"
@@ -304,7 +307,7 @@ export function EncryptedUpload({ category, onUploadComplete, className = '' }: 
       {/* Error Message — always mounted, so a new failure is announced */}
       <div role="alert" data-testid="upload-alert">
         {errorText && (
-          <div className="mt-4 p-3 bg-red-50 rounded-lg flex items-start gap-2">
+          <div key={failSeq} className="mt-4 p-3 bg-red-50 rounded-lg flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
               <p className="text-sm font-medium text-red-900">{t('uploadFailed')}</p>

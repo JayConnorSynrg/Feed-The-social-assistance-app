@@ -18,6 +18,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, createElement as el } from 'react'
+import { readFileSync } from 'node:fs'
 import { createRoot, type Root } from 'react-dom/client'
 
 const h = vi.hoisted(() => ({
@@ -32,6 +33,11 @@ const h = vi.hoisted(() => ({
   submissions: [] as Array<Record<string, unknown>>,
   deleteError: null as null | { code: string; message: string },
   locale: 'en' as string,
+  vaultLoading: false,
+  unlockOk: true,
+  draftOk: true,
+  subLoading: false,
+  subsLoading: false,
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -44,13 +50,17 @@ vi.mock('@/hooks/use-auth', () => ({
 }))
 vi.mock('@/contexts/vault-context', () => ({
   useVault: () => ({
-    isUnlocked: true, isSetup: false, loading: false, error: h.vaultError,
+    isUnlocked: true, isSetup: false, loading: h.vaultLoading, error: h.vaultError,
     clearError: () => { h.vaultError = null },
     setup: async (pw: string) => {
       h.setupArgs.push(pw)
       if (h.setupFails) { h.vaultError = 'OperationError: wrapKey failed for key ab12'; const e = new Error('wrapKey failed for key ab12'); e.name = 'OperationError'; throw e }
     },
-    unlock: async (pw: string) => { h.unlockArgs.push(pw); return true },
+    unlock: async (pw: string) => {
+      h.unlockArgs.push(pw)
+      if (!h.unlockOk) h.vaultError = 'Incorrect password'
+      return h.unlockOk
+    },
     registerPreLockFlush: () => () => {},
   }),
 }))
@@ -61,22 +71,29 @@ vi.mock('@/hooks/use-vault-form-submission', () => ({
   useVaultFormSubmission: () => ({
     createDraft: async () => 'sub1',
     loadSubmission: vi.fn(),
-    saveDraft: async (data: unknown) => { h.drafts.push(JSON.parse(JSON.stringify(data))) },
+    saveDraft: async (data: unknown) => { h.drafts.push(JSON.parse(JSON.stringify(data))); return h.draftOk },
     submitForm: async (...args: unknown[]) => { h.submits.push(JSON.parse(JSON.stringify(args))); return h.submitOk },
-    loading: false,
+    loading: h.subLoading,
     error: h.submitOk ? null : 'insert or update on table "form_submissions" violates foreign key constraint',
   }),
-  useUserSubmissions: () => ({ submissions: h.submissions, loading: false, error: null, refresh: async () => {} }),
+  useUserSubmissions: () => ({ submissions: h.submissions, loading: h.subsLoading, error: null, refresh: async () => {} }),
 }))
 vi.mock('@/components/layout/feed-shell', () => ({ usePanelContext: () => ({ panelParams: {}, setPanelParams: vi.fn(), setActivePanel: vi.fn() }) }))
-vi.mock('@/hooks/use-encrypted-upload', () => ({ useEncryptedUpload: () => ({ uploadFile: vi.fn() }) }))
+vi.mock('@/hooks/use-encrypted-upload', () => ({ useEncryptedUpload: () => ({ uploadFile: async () => ({ documentId: 'd9' }) }) }))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     storage: { from: () => ({ list: async () => ({ data: [], error: null }), download: async () => ({ data: null, error: null }) }) },
     from: () => ({ delete: () => ({ eq: async () => ({ error: h.deleteError }) }) }),
   }),
 }))
-vi.mock('@/components/forms/pdf-annotator-dynamic', () => ({ PdfAnnotator: () => null }))
+vi.mock('@/components/forms/pdf-annotator-dynamic', async () => {
+  const { createElement } = await import('react')
+  return {
+    // A stand-in annotator: one Save button that hands back what the real one would.
+    PdfAnnotator: ({ onSave }: { onSave: (d: { sourceBytes: Uint8Array; annotations: unknown[] }) => Promise<void> }) =>
+      createElement('button', { type: 'button', 'data-testid': 'stub-save-pdf', onClick: () => void onSave({ sourceBytes: new Uint8Array([37]), annotations: [] }) }, 'save'),
+  }
+})
 vi.mock('react-pdf', () => ({
   pdfjs: { GlobalWorkerOptions: {} },
   Document: ({ children }: { children?: unknown }) => children ?? null,
@@ -111,7 +128,7 @@ import { allTemplates, snapApplicationTemplate } from '@/lib/form-templates'
 import { GOVERNMENT_FORMS } from '@/lib/government-forms'
 import { FormWizard } from './form-wizard'
 import { PdfAnnotator } from './pdf-annotator'
-import { FormsPanel } from '@/components/panels/forms-panel'
+import { FormsPanel, mapSubmissionStatus } from '@/components/panels/forms-panel'
 import { VaultUnlockModal } from '@/components/vault/vault-unlock-modal'
 
 const LOCALES = Object.keys(messages) as Locale[]
@@ -136,6 +153,11 @@ beforeEach(() => {
   h.setText = []
   h.submissions = []
   h.deleteError = null
+  h.vaultLoading = false
+  h.unlockOk = true
+  h.draftOk = true
+  h.subLoading = false
+  h.subsLoading = false
   vi.mocked(logger.warn).mockClear()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -435,5 +457,178 @@ describe('the PDF annotator', () => {
     expect(h.setText).toEqual(enFields)
     expect(en).toEqual(['Filled 6 of 7 fields'])
     expect(ko).toEqual(['입력란 7개 중 6개를 채웠습니다'])
+  })
+})
+
+// ── PR #259 fix round: focus, announcements, autofill tokens, review, busy fields ──────────────
+const watchRegion = (region: Element) => {
+  const inserted: string[] = []
+  const o = new MutationObserver((rs) => { for (const r of rs) for (const n of r.addedNodes) inserted.push(n.textContent ?? '') })
+  o.observe(region, { childList: true, subtree: true })
+  return { inserted, stop: () => o.disconnect() }
+}
+
+describe('fix round: the wizard', () => {
+  const wizard = () => el(FormWizard, { templateId: snapApplicationTemplate.id, onComplete: vi.fn(), onCancel: vi.fn() })
+
+  it('B2: while the draft loads the heading is not there; once it has loaded, focus is on the form’s heading', async () => {
+    h.subLoading = true
+    await render('ko', wizard())
+    expect(byTestId('form-wizard-title')).toBeNull()
+    h.subLoading = false
+    await render('ko', wizard())
+    expect(document.activeElement).toBe(byTestId('form-wizard-title'))
+  })
+
+  it('B5: personal fields carry autofill tokens by field name; the names are unchanged', async () => {
+    await render('ko', wizard())
+    const tokens: Record<string, string> = { first_name: 'given-name', last_name: 'family-name', middle_name: 'additional-name', date_of_birth: 'bday' }
+    for (const [name, token] of Object.entries(tokens)) {
+      const input = document.querySelector(`input[name="${name}"]`) as HTMLInputElement
+      expect(input, name).not.toBeNull()
+      expect(input.getAttribute('autocomplete'), name).toBe(token)
+    }
+    // Step 2 holds email and phone.
+    await act(async () => byTestId('form-next-button').click())
+    await settle()
+    expect((document.querySelector('input[name="email"]') as HTMLInputElement).getAttribute('autocomplete')).toBe('email')
+    expect((document.querySelector('input[name="phone"]') as HTMLInputElement).getAttribute('autocomplete')).toBe('tel')
+  })
+
+  it('L6: the wizard’s fields use readOnly / aria-disabled, never disabled, while busy', async () => {
+    await render('ko', wizard())
+    // Source guard over the step fields (a live busy state needs a held save; the attribute is the contract).
+    const src = readFileSync(`${process.cwd()}/src/components/forms/form-wizard.tsx`, 'utf8')
+    expect(src).not.toMatch(/disabled=\{disabled\}/)
+    expect(src.match(/readOnly=\{disabled\}/g)?.length).toBeGreaterThanOrEqual(4)
+    expect((document.getElementById('middle_name') as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('H1: a failed draft save on Next is said in the alert line, once per failure, with one code-only row each', async () => {
+    h.draftOk = false
+    await render('ko', wizard())
+    const w = watchRegion(byTestId('form-submit-alert'))
+    await act(async () => byTestId('form-next-button').click())
+    await settle()
+    await act(async () => byTestId('form-next-button').click())
+    await settle()
+    w.stop()
+    expect(w.inserted).toEqual([formsT('ko', 'draftSaveFailed'), formsT('ko', 'draftSaveFailed')])
+    const rows = vi.mocked(logger.warn).mock.calls.filter((c) => c[0] === 'error_surface.shown')
+    expect(rows).toEqual([
+      ['error_surface.shown', { surface: 'form-wizard', kind: 'draft_save_failed', locale: 'ko' }],
+      ['error_surface.shown', { surface: 'form-wizard', kind: 'draft_save_failed', locale: 'ko' }],
+    ])
+  })
+
+  it('H2: on Review an unanswered required field shows “—” and says it is not answered', async () => {
+    await render('ko', wizard())
+    for (let i = 0; i < 9 && !byTestId('form-submit-button'); i++) {
+      await act(async () => byTestId('form-next-button').click())
+      await settle()
+    }
+    const unanswered = [...document.querySelectorAll('[data-unanswered]')] as HTMLElement[]
+    expect(unanswered.length).toBeGreaterThan(0)
+    const gender = unanswered.find((n) => n.querySelector('dt')?.textContent === 'Gender')!
+    expect(gender.querySelector('dd')?.textContent).toBe(`— ${formsT('ko', 'notAnswered')}`)
+    expect(gender.querySelector('dd [aria-hidden="true"]')?.textContent).toBe('—')
+    // An answered field is not marked.
+    expect(unanswered.some((n) => n.querySelector('dt')?.textContent === 'First Name')).toBe(false)
+  })
+})
+
+describe('fix round: the hub', () => {
+  it('B1: a refresh keeps the tabs and the status line mounted (no spinner after the first load)', async () => {
+    await render('ko', el(FormsPanel))
+    const tab = document.getElementById('forms-tab-submitted') as HTMLButtonElement
+    tab.focus()
+    h.subsLoading = true
+    await render('ko', el(FormsPanel))
+    expect(document.getElementById('forms-tab-submitted')).toBe(tab)
+    expect(document.activeElement).toBe(tab)
+    expect(byTestId('forms-status')).not.toBeNull()
+    expect(document.body.textContent).not.toContain(formsT('ko', 'checking'))
+  })
+
+  it('B1: after a submission, “submitted” is said once and focus is on the Submitted tab', async () => {
+    await render('ko', el(FormsPanel))
+    const start = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === formsT('ko', 'startApplication'))!
+    await act(async () => start.click())
+    await settle()
+    for (let i = 0; i < 9 && !byTestId('form-submit-button'); i++) {
+      await act(async () => byTestId('form-next-button').click())
+      await settle()
+    }
+    h.subsLoading = true
+    await act(async () => byTestId('form-submit-button').click())
+    await settle()
+    h.subsLoading = false
+    const status = byTestId('forms-status')
+    await render('ko', el(FormsPanel))
+    expect(document.activeElement).toBe(document.getElementById('forms-tab-submitted'))
+    expect(status.textContent).toBe(formsT('ko', 'applicationSubmitted'))
+    expect(status.querySelectorAll('span')).toHaveLength(1)
+  })
+
+  it('H1: saving a filled PDF tells the host, which announces it', async () => {
+    const onPdfSaved = vi.fn()
+    await render('ko', el(FormsPanel, { onPdfSaved }))
+    const input = document.querySelector('input[type="file"][accept="application/pdf"]') as HTMLInputElement
+    Object.defineProperty(input, 'files', { value: [new File(['%PDF'], 'w9.pdf', { type: 'application/pdf' })], configurable: true })
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })))
+    await settle()
+    await act(async () => byTestId('stub-save-pdf').click())
+    await settle()
+    expect(onPdfSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('mapSubmissionStatus covers the live enum', () => {
+    expect(['draft', 'in_progress', 'submitted', 'under_review', 'approved', 'denied', 'pending_info', 'expired'].map(mapSubmissionStatus))
+      .toEqual(['pending', 'pending', 'pending', 'under-review', 'approved', 'denied', 'needs-info', 'expired'])
+  })
+})
+
+describe('fix round: the vault prompt', () => {
+  it('B4: while busy the fields are readOnly + aria-disabled (focus stays), never disabled', async () => {
+    h.vaultLoading = true
+    await render('ko', el(VaultUnlockModal, { open: true, onOpenChange: vi.fn(), mode: 'unlock' }))
+    const pw = byTestId('vault-unlock-password-input') as HTMLInputElement
+    expect(pw.disabled).toBe(false)
+    expect(pw.readOnly).toBe(true)
+    expect(pw.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('B4: a wrong password keeps focus in the field; a second one is said again; unlock sends the same password in en and ko', async () => {
+    h.unlockOk = false
+    await render('ko', el(VaultUnlockModal, { open: true, onOpenChange: vi.fn(), mode: 'unlock' }))
+    const pw = byTestId('vault-unlock-password-input') as HTMLInputElement
+    await type(pw, 'wrong horse battery')
+    const w = watchRegion(byTestId('vault-unlock-alert'))
+    for (let i = 0; i < 2; i++) {
+      await act(async () => byTestId('vault-unlock-submit-button').click())
+      await settle()
+    }
+    w.stop()
+    expect(document.activeElement).toBe(pw)
+    expect(w.inserted.filter((x) => x === documentsT('ko', 'incorrectPassword'))).toHaveLength(2)
+    remount()
+    h.unlockOk = true
+    h.vaultError = null
+    await render('en', el(VaultUnlockModal, { open: true, onOpenChange: vi.fn(), mode: 'unlock' }))
+    await type(byTestId('vault-unlock-password-input') as HTMLInputElement, 'wrong horse battery')
+    await act(async () => byTestId('vault-unlock-submit-button').click())
+    await settle()
+    expect(h.unlockArgs).toEqual(['wrong horse battery', 'wrong horse battery', 'wrong horse battery'])
+  })
+})
+
+describe('fix round: the annotator', () => {
+  it('B3: once loaded, focus is on the first tool; the Fill from Profile hint is its description, not its name', async () => {
+    await render('ko', el(PdfAnnotator, { file: new File(['%PDF'], 'f.pdf', { type: 'application/pdf' }), onSave: async () => {}, onCancel: vi.fn(), autofillValues: { first_name: 'Ana' } }))
+    const first = byTestId('pdf-annotator').querySelector('[role="toolbar"] button') as HTMLButtonElement
+    expect(document.activeElement).toBe(first)
+    const fill = byTestId('pdf-fill-from-profile-btn')
+    expect(fill.textContent?.trim()).toBe(formsT('ko', 'fillFromProfile'))
+    expect(document.getElementById(fill.getAttribute('aria-describedby')!)?.textContent).toBe(formsT('ko', 'fillFromProfileHint'))
   })
 })

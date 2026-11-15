@@ -123,6 +123,10 @@ export interface FormsMessages {
   renderingPages: string
   removeTextBox: string
   pageLabel: string
+  applicationSubmitted: string
+  draftSaveFailed: string
+  notAnswered: string
+  statusExpired: string
 }
 
 export type FormsKey = keyof FormsMessages
@@ -232,6 +236,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Rendering pages...',
     removeTextBox: 'Remove text box',
     pageLabel: 'Page {n}',
+    applicationSubmitted: 'Application submitted.',
+    draftSaveFailed: 'We couldn’t save your answers. They are still here; please try again.',
+    notAnswered: 'Not answered',
+    statusExpired: 'Expired',
   },
   es: {
     title: 'Formularios y solicitudes',
@@ -337,6 +345,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Mostrando las páginas...',
     removeTextBox: 'Quitar cuadro de texto',
     pageLabel: 'Página {n}',
+    applicationSubmitted: 'Solicitud enviada.',
+    draftSaveFailed: 'No pudimos guardar tus respuestas. Siguen aquí; inténtalo de nuevo.',
+    notAnswered: 'Sin responder',
+    statusExpired: 'Vencido',
   },
   fr: {
     title: 'Formulaires et demandes',
@@ -442,6 +454,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Affichage des pages...',
     removeTextBox: 'Retirer la zone de texte',
     pageLabel: 'Page {n}',
+    applicationSubmitted: 'Demande envoyée.',
+    draftSaveFailed: 'Nous n’avons pas pu enregistrer vos réponses. Elles sont toujours là ; réessayez.',
+    notAnswered: 'Sans réponse',
+    statusExpired: 'Expiré',
   },
   pt: {
     title: 'Formulários e solicitações',
@@ -547,6 +563,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Exibindo as páginas...',
     removeTextBox: 'Remover caixa de texto',
     pageLabel: 'Página {n}',
+    applicationSubmitted: 'Solicitação enviada.',
+    draftSaveFailed: 'Não conseguimos salvar suas respostas. Elas continuam aqui; tente novamente.',
+    notAnswered: 'Sem resposta',
+    statusExpired: 'Expirado',
   },
   ht: {
     title: 'Fòmilè ak demann',
@@ -652,6 +672,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'N ap montre paj yo...',
     removeTextBox: 'Retire bwat tèks la',
     pageLabel: 'Paj {n}',
+    applicationSubmitted: 'Demann lan voye.',
+    draftSaveFailed: 'Nou pa t ka sere repons ou yo. Yo toujou la; tanpri eseye ankò.',
+    notAnswered: 'Pa reponn',
+    statusExpired: 'Ekspire',
   },
   vi: {
     title: 'Biểu mẫu và đơn đăng ký',
@@ -757,6 +781,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Đang hiển thị các trang...',
     removeTextBox: 'Xóa ô văn bản',
     pageLabel: 'Trang {n}',
+    applicationSubmitted: 'Đã gửi đơn.',
+    draftSaveFailed: 'Chúng tôi không lưu được câu trả lời của bạn. Chúng vẫn còn ở đây; vui lòng thử lại.',
+    notAnswered: 'Chưa trả lời',
+    statusExpired: 'Đã hết hạn',
   },
   ar: {
     title: 'النماذج والطلبات',
@@ -862,6 +890,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'جارٍ عرض الصفحات...',
     removeTextBox: 'إزالة مربع النص',
     pageLabel: 'الصفحة {n}',
+    applicationSubmitted: 'تم إرسال الطلب.',
+    draftSaveFailed: 'تعذّر علينا حفظ إجاباتك. لا تزال هنا؛ يُرجى المحاولة مرة أخرى.',
+    notAnswered: 'لم تتم الإجابة',
+    statusExpired: 'منتهي الصلاحية',
   },
   zh: {
     title: '表格和申请',
@@ -967,6 +999,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: '正在显示页面...',
     removeTextBox: '移除文本框',
     pageLabel: '第 {n} 页',
+    applicationSubmitted: '申请已提交。',
+    draftSaveFailed: '无法保存您的回答。回答仍在这里，请重试。',
+    notAnswered: '未回答',
+    statusExpired: '已过期',
   },
   so: {
     title: 'Foomamka iyo codsiyada',
@@ -1072,6 +1108,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Bogagga ayaa la muujinayaa...',
     removeTextBox: 'Ka saar sanduuqa qoraalka',
     pageLabel: 'Bogga {n}',
+    applicationSubmitted: 'Codsiga waa la diray.',
+    draftSaveFailed: 'Ma aanan kaydin karin jawaabahaaga. Weli halkan bay yaallaan; fadlan isku day mar kale.',
+    notAnswered: 'Lama jawaabin',
+    statusExpired: 'Wakhtigiisu wuu dhacay',
   },
   ru: {
     title: 'Формы и заявления',
@@ -1177,6 +1217,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Показываем страницы...',
     removeTextBox: 'Удалить текстовое поле',
     pageLabel: 'Страница {n}',
+    applicationSubmitted: 'Заявление отправлено.',
+    draftSaveFailed: 'Не удалось сохранить ответы. Они остались на месте; попробуйте ещё раз.',
+    notAnswered: 'Нет ответа',
+    statusExpired: 'Срок истёк',
   },
   ko: {
     title: '양식 및 신청서',
@@ -1282,6 +1326,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: '페이지를 표시하는 중...',
     removeTextBox: '텍스트 상자 삭제',
     pageLabel: '{n}페이지',
+    applicationSubmitted: '신청서를 제출했습니다.',
+    draftSaveFailed: '답변을 저장하지 못했습니다. 답변은 그대로 있으니 다시 시도하세요.',
+    notAnswered: '답변 안 함',
+    statusExpired: '만료됨',
   },
   tl: {
     title: 'Mga form at aplikasyon',
@@ -1387,6 +1435,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Ipinapakita ang mga pahina...',
     removeTextBox: 'Alisin ang text box',
     pageLabel: 'Pahina {n}',
+    applicationSubmitted: 'Naisumite ang aplikasyon.',
+    draftSaveFailed: 'Hindi namin mai-save ang mga sagot mo. Nandito pa rin ang mga ito; pakisubukang muli.',
+    notAnswered: 'Hindi nasagot',
+    statusExpired: 'Nag-expire',
   },
   am: {
     title: 'ቅጾች እና ማመልከቻዎች',
@@ -1492,6 +1544,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'ገጾቹ እየታዩ ነው...',
     removeTextBox: 'የጽሑፍ ሳጥኑን አስወግድ',
     pageLabel: 'ገጽ {n}',
+    applicationSubmitted: 'ማመልከቻው ተልኳል።',
+    draftSaveFailed: 'መልሶችዎን ማስቀመጥ አልቻልንም። አሁንም እዚህ አሉ፤ እባክዎ እንደገና ይሞክሩ።',
+    notAnswered: 'አልተመለሰም',
+    statusExpired: 'ጊዜው አልፏል',
   },
   hmn: {
     title: 'Cov foos thiab ntawv thov',
@@ -1597,6 +1653,10 @@ export const formsMessages: Record<Locale, FormsMessages> = {
     renderingPages: 'Tab tom qhia cov nplooj ntawv...',
     removeTextBox: 'Tshem lub thawv ntawv',
     pageLabel: 'Nplooj {n}',
+    applicationSubmitted: 'Xa daim ntawv thov lawm.',
+    draftSaveFailed: 'Peb khaws tsis tau koj cov lus teb. Lawv tseem nyob ntawm no; thov sim dua.',
+    notAnswered: 'Tsis tau teb',
+    statusExpired: 'Tas sij hawm lawm',
   },
 }
 

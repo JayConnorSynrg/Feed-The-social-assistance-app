@@ -23,15 +23,17 @@
   --card-foreground: 222.2 84% 4.9%;
   --popover: 0 0% 100%;
   --popover-foreground: 222.2 84% 4.9%;
-  --primary: 142.1 76.2% 36.3%;
-  --primary-foreground: 355.7 100% 97.3%;
+  /* The brand green #4a5d23 (7.3:1 with white text; 5.7:1 at the /90 hover); was green-600, 3.0:1. */
+  --primary: 79.7 45.3% 25.1%;
+  --primary-foreground: 0 0% 100%;
   --secondary: 24.6 95% 53.1%;
   --secondary-foreground: 60 9.1% 97.8%;
   --muted: 210 40% 96.1%;
   --muted-foreground: 215.4 16.3% 46.9%;
   --accent: 174.7 72.4% 40%;
   --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
+  /* red-700 #b91c1c (6.2:1 with the near-white text; 5.3:1 at the /90 hover); was red-500, 3.6:1. */
+  --destructive: 0 73.7% 41.8%;
   --destructive-foreground: 210 40% 98%;
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;

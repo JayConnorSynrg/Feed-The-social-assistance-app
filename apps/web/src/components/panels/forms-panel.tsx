@@ -69,7 +69,7 @@ import { estimatedTimeText, formsCategoryLabel, formsMoreDocuments, formsT, govC
 import { nextTabIndex } from '@/components/feed/feed-chrome'
 import { cn } from '@/lib/utils'
 import { OFFICIAL_ENGLISH } from '@/lib/official-english'
-import { afterLayout, announce, AnnouncementText, focusAfterRowRemoval, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+import { afterLayout, announce, AnnouncementText, clearAnnouncement, focusAfterRowRemoval, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 // ============================================
 // TYPES
@@ -78,6 +78,8 @@ type TabType = 'available' | 'in-progress' | 'submitted'
 
 interface FormsPanelProps {
   userId?: string
+  /** A filled PDF was saved to My Documents (the hub then switches there): the host announces it. */
+  onPdfSaved?: () => void
 }
 
 interface FormTemplate {
@@ -103,7 +105,7 @@ interface FormSubmission {
   templateId: string
   templateName: string
   submittedAt: Date
-  status: 'pending' | 'under-review' | 'approved' | 'denied' | 'needs-info'
+  status: 'pending' | 'under-review' | 'approved' | 'denied' | 'needs-info' | 'expired'
   category: FormTemplate['category']
 }
 
@@ -157,13 +159,21 @@ function adaptTemplate(row: FormTemplateWithMeta): FormTemplate {
   }
 }
 
-function mapSubmissionStatus(status: string): FormSubmission['status'] {
+/** The live submission_status enum (draft, in_progress, submitted, under_review, approved, denied,
+ *  pending_info, expired) plus the older values some rows still carry (processing, rejected,
+ *  archived). */
+export function mapSubmissionStatus(status: string): FormSubmission['status'] {
   switch (status) {
     case 'draft': return 'pending'
+    case 'in_progress': return 'pending'
     case 'submitted': return 'pending'
+    case 'under_review': return 'under-review'
     case 'processing': return 'under-review'
     case 'approved': return 'approved'
+    case 'denied': return 'denied'
     case 'rejected': return 'denied'
+    case 'pending_info': return 'needs-info'
+    case 'expired': return 'expired'
     case 'archived': return 'approved'
     default: return 'pending'
   }
@@ -211,7 +221,7 @@ const CATEGORY_COLORS: Record<FormTemplate['category'], string> = {
   healthcare: 'bg-blue-100 text-blue-700',
   housing: 'bg-orange-100 text-orange-700',
   utilities: 'bg-yellow-100 text-yellow-700',
-  food: 'bg-green-100 text-green-700',
+  food: 'bg-green-100 text-green-800',
 }
 
 const STATUS_CONFIG: Record<FormSubmission['status'], { color: string; icon: React.ElementType; label: FormsKey }> = {
@@ -220,6 +230,7 @@ const STATUS_CONFIG: Record<FormSubmission['status'], { color: string; icon: Rea
   'approved': { color: 'text-green-800', icon: CheckCircle, label: 'statusApproved' },
   'denied': { color: 'text-red-700', icon: AlertCircle, label: 'statusDenied' },
   'needs-info': { color: 'text-orange-800', icon: AlertCircle, label: 'statusNeedsInfo' },
+  'expired': { color: 'text-stone-700', icon: Clock, label: 'statusExpired' },
 }
 
 /** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
@@ -346,7 +357,7 @@ function FormInProgressCard({ form, onContinue, onDelete, locale }: FormInProgre
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{form.templateName || formsT(locale, 'submissionFallback')}</h3>
+            <h3 id={nameId} className="font-medium text-sm truncate">{form.templateName ? <span {...OFFICIAL_ENGLISH}>{form.templateName}</span> : formsT(locale, 'submissionFallback')}</h3>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
               {formsCategoryLabel(form.category, locale)}
             </span>
@@ -431,7 +442,7 @@ function SubmissionCard({ submission, onView, locale }: SubmissionCardProps) {
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{submission.templateName || formsT(locale, 'submissionFallback')}</h3>
+            <h3 id={nameId} className="font-medium text-sm truncate">{submission.templateName ? <span {...OFFICIAL_ENGLISH}>{submission.templateName}</span> : formsT(locale, 'submissionFallback')}</h3>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
               {formsCategoryLabel(submission.category, locale)}
             </span>
@@ -504,7 +515,7 @@ function TabButton({ label, tabId, panelId, count, isActive, onClick, onKeyDown,
       {label}
       <span className={`px-1.5 py-0.5 rounded-full text-xs ${
         isActive
-          ? 'bg-white/20 text-white'
+          ? 'bg-black/20 text-white'
           : 'bg-stone-300/50 text-stone-800'
       }`}>
         {count}
@@ -543,7 +554,7 @@ const GOV_CATEGORY_COLORS: Record<string, string> = {
   housing: 'bg-orange-100 text-orange-700',
   veteran: 'bg-blue-100 text-blue-700',
   disability: 'bg-purple-100 text-purple-700',
-  food: 'bg-green-100 text-green-700',
+  food: 'bg-green-100 text-green-800',
 }
 
 interface GovernmentFormCardProps {
@@ -627,7 +638,7 @@ const FORMS_TABS: { key: TabType; label: FormsKey; panelId: string }[] = [
   { key: 'submitted', label: 'tabSubmitted', panelId: 'forms-panel-submitted' },
 ]
 
-export function FormsPanel({ userId }: FormsPanelProps) {
+export function FormsPanel({ userId, onPdfSaved }: FormsPanelProps) {
   const locale = useProfileLocale()
   const t = (key: FormsKey) => formsT(locale, key)
   const [activeTab, setActiveTab] = useState<TabType>('available')
@@ -635,7 +646,11 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const deleteInFlight = useRef(false)
-  const [deleteError, setDeleteError] = useState<FormsKey | null>(null)
+  // The delete-draft dialog's failure line (a keyed node: a repeated failure is spoken again).
+  const [deleteAlert, setDeleteAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  // Each failure shown in a region takes a new number, so its node is replaced and spoken again.
+  const [failSeq, setFailSeq] = useState(0)
+  const failed = () => setFailSeq((n) => n + 1)
   const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -697,12 +712,17 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   const isLoading = templatesLoading || submissionsLoading
   const error = templatesError || submissionsError
+  // The spinner is for the first load only: a later refresh keeps the tabs, the list and the
+  // status line mounted, so focus and announcements survive it.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(!isLoading)
+  if (!isLoading && !hasLoadedOnce) setHasLoadedOnce(true)
 
-  // The hooks write no row for a failed read: one code-only row each time a failure appears.
+  // The hooks write no row for a failed read: one code-only row per failed load (each load ends
+  // with loading false, so an identical failure after a retry is written again).
   useEffect(() => {
-    if (error) logger.warn('error_surface.shown', { surface: 'forms', kind: 'load_failed', locale })
+    if (error && !isLoading) logger.warn('error_surface.shown', { surface: 'forms', kind: 'load_failed', locale })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [error])
+  }, [error, isLoading])
 
   // Deep-link from programs panel: open the correct template directly
   useEffect(() => {
@@ -748,7 +768,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   // The draft the dialog was opened for, kept after the dialog's state clears (focus returns to it).
   const confirmDeleteIdRef = useRef<string | null>(null)
   const handleDeleteDraft = (formId: string) => {
-    setDeleteError(null)
+    clearAnnouncement(setDeleteAlert)
     confirmDeleteIdRef.current = formId
     setConfirmDeleteId(formId)
   }
@@ -767,7 +787,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       if (deleteFailure) {
         // No row is written for this path elsewhere: one code-only row.
         logger.warn('error_surface.shown', { surface: 'forms', kind: failureCode(deleteFailure), locale })
-        setDeleteError('draftDeleteFailed')
+        announce(setDeleteAlert, t('draftDeleteFailed'))
         return
       }
       draftDeletedRef.current = true
@@ -795,8 +815,12 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     returnTo.current = null
     setWizardState({ mode: 'list' })
     setActiveTab('submitted')
-    // The new submission is on the Submitted tab: focus goes to that tab.
-    afterLayout(() => tabRefs.current[2]?.focus())
+    // The new submission is on the Submitted tab: focus goes to that tab, and the result is said
+    // once in the status line (mounted with the list, empty, before the words arrive).
+    afterLayout(() => {
+      tabRefs.current[2]?.focus()
+      announce(setStatus, t('applicationSubmitted'))
+    })
     await refreshSubmissions()
   }
 
@@ -882,6 +906,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         // This branch wrote no row: one code-only row (the catch below writes gov_forms.download.error).
         logger.warn('error_surface.shown', { surface: 'government-forms', kind: error ? failureCode(error) : 'no_data', locale })
         setGovFormsError(form.formNumber)
+        failed()
         return
       }
 
@@ -891,6 +916,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       setWizardState({ mode: 'gov-pdf', file, fileName, govForm: form })
     } catch (err) {
       setGovFormsError(form.formNumber)
+      failed()
       logger.error('gov_forms.download.error', err, { storagePath: form.storagePath })
     } finally {
       setGovFormDownloading(null)
@@ -917,8 +943,10 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       // preventing the P3 assertion (Documents heading visible) from passing.
       setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
       setActivePanel('documents')
+      onPdfSaved?.()
     } catch (err) {
       setPdfSaveError('pdfSaveFailed')
+      failed()
       logger.error('pdf.save.error', err, { fileName })
       // Do NOT navigate — stay on annotator so user can retry
     }
@@ -972,7 +1000,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         <VaultGuard onDismiss={handlePdfCancel}>
           <div role="alert" data-testid="pdf-save-alert">
             {pdfSaveError && (
-              <div className="px-4 py-2 bg-red-50 border-b border-red-300">
+              <div key={failSeq} className="px-4 py-2 bg-red-50 border-b border-red-300">
                 <p className="text-xs text-red-800">{t(pdfSaveError)}</p>
               </div>
             )}
@@ -1003,7 +1031,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         <VaultGuard onDismiss={handlePdfCancel}>
           <div role="alert" data-testid="pdf-save-alert">
             {pdfSaveError && (
-              <div className="px-4 py-2 bg-red-50 border-b border-red-300">
+              <div key={failSeq} className="px-4 py-2 bg-red-50 border-b border-red-300">
                 <p className="text-xs text-red-800">{t(pdfSaveError)}</p>
               </div>
             )}
@@ -1088,7 +1116,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     )
   }
 
-  if (isLoading) {
+  if (isLoading && !hasLoadedOnce) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3" lang={locale} dir={dir(locale)} role="status">
         <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" aria-hidden="true" />
@@ -1097,28 +1125,10 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     )
   }
 
-  if (error) {
-    const friendly = getFriendlyErrorMessage(error, '')
-    const body = Object.prototype.hasOwnProperty.call(FRIENDLY_ERROR_SENTENCES, friendly)
-      ? friendlyErrorT(locale, FRIENDLY_ERROR_SENTENCES[friendly])
-      : t('loadFailedBody')
-    return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center" lang={locale} dir={dir(locale)}>
-        <AlertCircle className="w-8 h-8 text-orange-700" aria-hidden="true" />
-        <div role="alert">
-          <p className="text-sm text-stone-800 font-medium">{t('loadFailed')}</p>
-          <p className="text-xs text-stone-700">{body}</p>
-        </div>
-        <button
-          type="button"
-          onClick={refreshSubmissions}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors mt-1"
-        >
-          {t('tryAgain')}
-        </button>
-      </div>
-    )
-  }
+  const friendlyLoad = error ? getFriendlyErrorMessage(error, '') : ''
+  const loadFailedBody = Object.prototype.hasOwnProperty.call(FRIENDLY_ERROR_SENTENCES, friendlyLoad)
+    ? friendlyErrorT(locale, FRIENDLY_ERROR_SENTENCES[friendlyLoad])
+    : t('loadFailedBody')
 
   const [noInProgressBefore, noInProgressAfter] = splitMessage(t('noInProgressBody'), 'tab')
 
@@ -1158,6 +1168,26 @@ export function FormsPanel({ userId }: FormsPanelProps) {
             <FilePlus className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
             {t('fillPdf')}
           </Button>
+        </div>
+
+        {/* A failed read of the submissions: always mounted, so each failed load is spoken; the
+            tabs and the forms stay in place. */}
+        <div role="alert" data-testid="forms-load-alert">
+          {error && (
+            <div key={failSeq} className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-300 bg-orange-50 p-3">
+              <div>
+                <p className="text-sm text-stone-800 font-medium">{t('loadFailed')}</p>
+                <p className="text-xs text-stone-700">{loadFailedBody}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshSubmissions()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
+              >
+                {t('tryAgain')}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tab Navigation */}
@@ -1242,7 +1272,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                   {govFormsError && (() => {
                     const [before, after] = splitMessage(t('govLoadFailed'), 'form')
                     return (
-                      <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-300 rounded-lg">
+                      <div key={failSeq} className="mb-3 px-3 py-2 bg-orange-50 border border-orange-300 rounded-lg">
                         <p className="text-xs text-orange-900">{before}<bdi {...OFFICIAL_ENGLISH}>{govFormsError}</bdi>{after}</p>
                       </div>
                     )
@@ -1336,7 +1366,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
             <DialogDescription className="text-stone-700">{t('deleteDraftBody')}</DialogDescription>
           </DialogHeader>
           <p role="alert" className="text-sm text-red-700" data-testid="delete-draft-alert">
-            {deleteError ? t(deleteError) : ''}
+            <AnnouncementText announcement={deleteAlert} />
           </p>
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" onClick={() => { if (!deleteInFlight.current) setConfirmDeleteId(null) }} className="border-stone-500">
